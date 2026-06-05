@@ -1,6 +1,8 @@
 plugins {
+    // AGP 9 compiles Kotlin itself (built-in Kotlin support), so the standalone
+    // org.jetbrains.kotlin.android plugin is no longer applied. The Compose
+    // compiler plugin is still applied explicitly.
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
@@ -29,23 +31,16 @@ android {
         }
     }
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
     }
+}
 
-    // This project keeps Kotlin sources under src/<set>/kotlin rather than .../java.
-    sourceSets["main"].kotlin.srcDir("src/main/kotlin")
-    sourceSets["test"].kotlin.srcDir("src/test/kotlin")
-    sourceSets["androidTest"].kotlin.srcDir("src/androidTest/kotlin")
+// Single source of truth for the JVM target. The toolchain pins JDK 17 for both
+// Java and Kotlin compilation and lets Gradle auto-provision it (via the Foojay
+// resolver in settings.gradle.kts) when it isn't installed locally.
+kotlin {
+    jvmToolchain(17)
 }
 
 dependencies {

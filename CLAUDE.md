@@ -9,7 +9,8 @@ Native Android client for Deferno, built with Kotlin and Jetpack Compose.
 - **Build:** Gradle (Kotlin DSL) with a version catalog at `gradle/libs.versions.toml`
 - **Min / target / compile SDK:** 26 / 35 / 35
 - **Application ID:** `com.circuitstitch.deferno`
-- **JDK:** 17 (toolchain). Use Android Studio's bundled JDK, or a JDK 17 install, to run Gradle.
+- **JDK:** 17 (toolchain). You don't need JDK 17 installed — the Gradle Daemon JVM toolchain (`gradle/gradle-daemon-jvm.properties`) and the project toolchain (`kotlin { jvmToolchain(17) }`) auto-provision Eclipse Temurin 17 via the Foojay resolver. Launch Gradle with any JDK that can run Gradle 9.5.1 (17–25), e.g. Android Studio's bundled JDK.
+- **Kotlin:** compiled by AGP's built-in Kotlin support (AGP 9+) — there is no `org.jetbrains.kotlin.android` plugin; only the Compose compiler plugin is applied explicitly.
 
 ## Layout
 
@@ -39,7 +40,7 @@ Kotlin sources live under `src/<set>/kotlin` (not `.../java`).
 ./gradlew lint                   # Android Lint
 ```
 
-The first `./gradlew` run downloads Gradle 8.11.1 and all dependencies, so it needs network access. Android Studio: **Open** this directory and let it sync.
+The first `./gradlew` run downloads Gradle 9.5.1, a Temurin JDK 17 toolchain, and all dependencies, so it needs network access. Android Studio: **Open** this directory and let it sync.
 
 ## Conventions
 
