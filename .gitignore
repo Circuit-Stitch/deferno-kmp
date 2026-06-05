@@ -1,0 +1,63 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java/Kotlin class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+release/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (SDK path, etc.) — machine-specific, never commit
+local.properties
+
+# Log/OS files
+*.log
+.DS_Store
+
+# Android Studio / IntelliJ
+*.iml
+.idea/*
+# Keep a couple of shareable IDE settings if you choose to commit them later:
+!.idea/codeStyles/
+!.idea/inspectionProfiles/
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/deploymentTargetSelector.xml
+.idea/deploymentTargetDropDown.xml
+.idea/misc.xml
+captures/
+
+# NDK
+.externalNativeBuild/
+.cxx/
+
+# Keystores and signing — never commit secrets
+*.jks
+*.keystore
+keystore.properties
+
+# Google Services / Firebase (often contains keys — opt in per-project)
+# google-services.json
+
+# Kotlin
+.kotlin/
+
+# Profiling
+*.hprof

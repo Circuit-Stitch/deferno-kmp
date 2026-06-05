@@ -1,0 +1,8 @@
+<resources>
+    <!--
+      Base application theme used before Compose takes over the window. Compose drives
+      all in-app colours via DefernoTheme; this only needs to provide a sensible
+      no-action-bar window background for launch.
+    -->
+    <style name="Theme.Deferno" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

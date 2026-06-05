@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup and device-transfer rules for API 31+.
+  https://developer.android.com/guide/topics/data/autobackup
+-->
+<data-extraction-rules>
+    <cloud-backup>
+    </cloud-backup>
+</data-extraction-rules>
