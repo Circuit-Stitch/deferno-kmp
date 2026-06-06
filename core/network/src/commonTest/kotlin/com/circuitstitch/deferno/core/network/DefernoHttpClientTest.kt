@@ -212,37 +212,63 @@ class DefernoHttpClientTest {
         assertIs<ApiError.Transport>(failure.error)
     }
 
-    // --- AC (ADR-0005): version-window gate ---
+    // --- AC (ADR-0005, #18): version-window gate with the force-upgrade signal split ---
 
     @Test
-    fun rejectsEnvelopeVersionAboveTheSupportedWindow() = runTest {
+    fun versionAboveMaxIsAForceUpgradeSignal() = runTest {
+        // A server version ABOVE the window (0.2 while [0.1..0.1]) is an unknown breaking major the
+        // client can't parse safely → ForceUpgrade, so a caller can show "update required" (#18).
         val client = client { respondJson("""{"version":"0.2","data":{"id":"abc"}}""") }
 
         val result = client.requestApi<Probe>()
 
-        assertEquals(ApiResult.Failure(ApiError.UnsupportedVersion("0.2")), result)
+        assertEquals(
+            ApiResult.Failure(ApiError.UnsupportedVersion("0.2", ApiError.UnsupportedVersion.Kind.ForceUpgrade)),
+            result,
+        )
     }
 
     @Test
-    fun rejectsUnparseableEnvelopeVersion() = runTest {
+    fun versionBelowMinIsUnsupportedNotForceUpgrade() = runTest {
+        // A server version BELOW the window (0.0) is too old to map — degrade/refuse, not upgrade.
+        val client = client { respondJson("""{"version":"0.0","data":{"id":"abc"}}""") }
+
+        val result = client.requestApi<Probe>()
+
+        assertEquals(
+            ApiResult.Failure(ApiError.UnsupportedVersion("0.0", ApiError.UnsupportedVersion.Kind.Unsupported)),
+            result,
+        )
+    }
+
+    @Test
+    fun unparseableVersionIsUnparseableKind() = runTest {
+        // A non-`major.minor` version can't be placed against the window at all (#18: logged-as-
+        // unknown signal) → Unparseable, distinct from a known-but-out-of-window version.
         val client = client { respondJson("""{"version":"garbage","data":{"id":"abc"}}""") }
 
         val result = client.requestApi<Probe>()
 
-        assertEquals(ApiResult.Failure(ApiError.UnsupportedVersion("garbage")), result)
+        assertEquals(
+            ApiResult.Failure(ApiError.UnsupportedVersion("garbage", ApiError.UnsupportedVersion.Kind.Unparseable)),
+            result,
+        )
     }
 
     @Test
     fun rejectsOutOfWindowVersionEvenWhenThePayloadShapeAlsoChanged() = runTest {
         // The realistic breaking bump: a new major changes BOTH the version AND the data shape
         // (here `id` becomes an object, incompatible with Probe). The version must be read before
-        // `data` is bound, so this stays UnsupportedVersion — not a generic Transport/parse error
-        // (ADR-0005: withhold possibly-misparsed data).
+        // `data` is bound, so this stays a ForceUpgrade UnsupportedVersion — not a generic
+        // Transport/parse error (ADR-0005: withhold possibly-misparsed data).
         val client = client { respondJson("""{"version":"0.2","data":{"id":{"nested":true}}}""") }
 
         val result = client.requestApi<Probe>()
 
-        assertEquals(ApiResult.Failure(ApiError.UnsupportedVersion("0.2")), result)
+        assertEquals(
+            ApiResult.Failure(ApiError.UnsupportedVersion("0.2", ApiError.UnsupportedVersion.Kind.ForceUpgrade)),
+            result,
+        )
     }
 
     // --- test helpers ---
