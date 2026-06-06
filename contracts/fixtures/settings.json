@@ -1,0 +1,12 @@
+{
+  "version": "0.1",
+  "data": {
+    "global_done_visibility_seconds": 259200,
+    "dashboard_done_visibility_seconds": 86400,
+    "theme_family": "deferno",
+    "theme_mode": "light",
+    "time_zone": "America/Los_Angeles",
+    "tracking_enabled": true,
+    "drag_and_drop_enabled": true
+  }
+}

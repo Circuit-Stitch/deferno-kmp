@@ -24,8 +24,9 @@ deferrals. Already decided elsewhere: per-Account **encrypted DB** (SQLCipher), 
   (the source of truth). OS-level backup/transfer is **reserved**: if added it must retain encryption
   across devices via a **user-passphrase-derived key** (since device-bound keys can't leave the
   device) — not precluded.
-- **Lifecycle:** secure-wipe (DB + token + keys) on Account removal; **retain** the encrypted cache on
-  a mere `401` (re-auth, don't wipe); never log tokens/PII.
+- **Lifecycle:** secure-wipe (DB + token + keys) on Account removal — **and revoke the PAT
+  server-side** (`DELETE /auth/tokens/{id}`, ADR-0012); **retain** the encrypted cache on a mere
+  `401` (re-auth, don't wipe); never log tokens/PII.
 
 **Considered & rejected.** Certificate pinning in v1 (ops burden > benefit for now); third-party
 analytics/crash SDKs (privacy).

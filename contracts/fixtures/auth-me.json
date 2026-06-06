@@ -1,0 +1,13 @@
+{
+  "version": "0.1",
+  "data": {
+    "id": "1d35f62e-eed9-44de-96e8-e61a307af83f",
+    "username": "sampleuser",
+    "display_name": "Sample User",
+    "role": "admin",
+    "personal_org_id": "ebca93e5-d663-4624-9fe9-c5361b5b4390",
+    "org_slug": "u-e4h2qk",
+    "is_admin": false,
+    "console_url": "https://auth2.defernowork.com/ui/console"
+  }
+}

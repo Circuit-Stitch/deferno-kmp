@@ -40,3 +40,36 @@ These three are routinely conflated; in this client they are kept distinct:
   filters what you see *inside* the [[Active Account]]; it never crosses accounts.
 - **User** *(inherited, backend)* — the server-side identity (`GET /auth/me`) an Account authenticates
   as. One Account ⇄ one backend User.
+
+### Item state (disambiguating "status")
+
+The API overloads `status` across three unrelated axes (and ships six wire enums with inconsistent
+casing). The client names them distinctly and condenses them in the DTO→domain mapper; the wire
+DTOs stay faithful, the domain types are clean.
+
+**Working state**:
+A [[Task]]'s progress through its own lifecycle — Open, In-progress, In-review, Done, Dropped.
+_Avoid_: status, task status.
+
+**Definition state**:
+The "light switch" on a recurring definition ([[Habit]]/[[Chore]]/[[Event]]) — whether it is live or
+shelved: Active or Archived. (The API also carries `in-review`; retained faithfully but its meaning
+is unresolved.) This is the state of the *definition*, never of any single firing.
+_Avoid_: status, DefStatus, archived flag.
+
+**Occurrence state**:
+How one dated firing (an [[Occurrence]]) of a recurring definition went — Scheduled, In-progress,
+Done (with on-time / late punctuality), Skipped, Missed. The client only ever *writes* a coarse
+action (start / complete / skip); the finer read states — Scheduled, Missed, and the on-time/late
+split — are **server-derived**.
+_Avoid_: status, OccurrenceStatus, done_on_time/done_late.
+
+### Credentials
+
+**Personal access token (PAT)**:
+The opaque bearer credential an [[Account]] stores in its secure vault and sends as `Authorization:
+Bearer`. The **durable native-client credential**: OAuth/PKCE (when built) is only one way to *mint*
+one, not a credential the client persists (ADR-0012). Minted/revoked via the web client's User
+Settings or `…/auth/tokens`.
+_Avoid_: access token, OAuth token, session token, API key. (The wire/spec name is "API token"; the
+product term is **PAT**.)
