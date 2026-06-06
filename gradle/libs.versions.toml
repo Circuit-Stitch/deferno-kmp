@@ -14,6 +14,21 @@ kotlinInjectAnvil = "0.1.7"
 # here — the first shared-core module that needs reactive observation.
 coroutines = "1.11.0"
 turbine = "1.2.1"
+# Multiplatform date/time (issues #18/#21/#22): the domain model carries RFC3339 instants
+# (nanosecond precision on the wire) and date-keyed Plan rows, and the DTO→domain mapper +
+# repository reconcile parse/format them. kotlinx-datetime is the KMP-standard Instant/LocalDate.
+kotlinxDatetime = "0.6.2"
+# Local source-of-truth database (issue #21, ADR-0001). SQLDelight 2.3.2 is the first stable
+# release with the Android Gradle Plugin 9 new-DSL fixes (#6139/#6140) this project's
+# `com.android.kotlin.multiplatform.library` target needs. Drivers are per-target: android-driver,
+# sqlite-driver (JdbcSqliteDriver — JVM + the in-memory commonTest path), native-driver (iOS).
+sqldelight = "2.3.2"
+# Per-Account at-rest encryption (issue #21, ADR-0002/0009). Android: the maintained
+# `net.zetetic:sqlcipher-android` (the older `android-database-sqlcipher` is deprecated) + the
+# androidx SupportSQLite contract it plugs into. iOS encryption rides SQLiter's encryptionConfig
+# (transitive via native-driver); the JVM in-memory test driver is unencrypted by design.
+sqlcipherAndroid = "4.7.1"
+androidxSqlite = "2.4.0"
 # Desktop (JVM) OS keychain for the secure-storage vault (ADR-0009, issue #13): macOS
 # Keychain / Windows Credential Store / Linux Secret Service, via JNA. Desktop-only — the
 # Android (Keystore) and iOS (Keychain) actuals use their in-platform APIs, no dependency.
@@ -72,6 +87,20 @@ kotlin-inject-anvil-compiler = { group = "software.amazon.lastmile.kotlin.inject
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
+kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
+
+# Local database (issue #21). commonMain: the runtime + the coroutines Flow extensions
+# (`asFlow`/`mapToList`) the repositories observe through (ADR-0001 observe-via-Flow). Per-target
+# drivers: android-driver (androidMain), sqlite-driver/JdbcSqliteDriver (jvmMain + the in-memory
+# commonTest driver), native-driver (iosMain). Android SQLCipher actual: sqlcipher-android + the
+# androidx SupportSQLite contract it implements.
+sqldelight-runtime = { group = "app.cash.sqldelight", name = "runtime", version.ref = "sqldelight" }
+sqldelight-coroutines-extensions = { group = "app.cash.sqldelight", name = "coroutines-extensions", version.ref = "sqldelight" }
+sqldelight-android-driver = { group = "app.cash.sqldelight", name = "android-driver", version.ref = "sqldelight" }
+sqldelight-sqlite-driver = { group = "app.cash.sqldelight", name = "sqlite-driver", version.ref = "sqldelight" }
+sqldelight-native-driver = { group = "app.cash.sqldelight", name = "native-driver", version.ref = "sqldelight" }
+sqlcipher-android = { group = "net.zetetic", name = "sqlcipher-android", version.ref = "sqlcipherAndroid" }
+androidx-sqlite = { group = "androidx.sqlite", name = "sqlite", version.ref = "androidxSqlite" }
 
 # Desktop OS keychain (jvmMain only) for the secure-storage vault (issue #13).
 java-keyring = { group = "com.github.javakeyring", name = "java-keyring", version.ref = "javaKeyring" }
@@ -109,4 +138,7 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+# SQLDelight schema codegen (issue #21). Applied per-module via alias in core/database — same
+# pattern as kotlin-serialization in core/network — since only that module hosts the database.
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
 # skie = { id = "co.touchlab.skie", version.ref = "skie" }   # deferred — see [versions] note

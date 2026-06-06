@@ -60,5 +60,11 @@ object CoverageConfig {
         // actuals above. The engine-agnostic client config + envelope mapping (commonMain) ARE
         // measured, via the MockEngine tests.
         "com.circuitstitch.deferno.core.network.platform",
+        // Per-target database driver factories (issue #21): SQLCipher (Android), SQLiter
+        // encryption (iOS), and the JdbcSqliteDriver file driver (desktop) all open a real,
+        // platform-bound database and run only on a device / Apple target / desktop — exercised
+        // by integration, not the headless gate (ADR-0006). The schema, queries, and the
+        // in-memory test driver (commonMain/commonTest) ARE measured.
+        "com.circuitstitch.deferno.core.database.driver",
     )
 }
