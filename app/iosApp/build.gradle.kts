@@ -37,7 +37,8 @@ kotlin {
             implementation(project(":feature:auth"))
             implementation(project(":feature:tasks"))
             implementation(project(":feature:plan"))
-            implementation(project(":core:designsystem"))
+            // No :core:designsystem — it's a Compose UI module (Android + desktop). The iOS
+            // View layer is SwiftUI with its own design system in the Xcode project (ADR-0004).
         }
     }
 }

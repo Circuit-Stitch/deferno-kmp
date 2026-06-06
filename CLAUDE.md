@@ -32,9 +32,8 @@ app/
   androidApp/                         ← Android application (Jetpack Compose host)
     src/main/kotlin/com/circuitstitch/deferno/
       DefernoApplication.kt           ← Application entry point
-      MainActivity.kt                 ← single Compose-host activity
-      ui/theme/                       ← Compose theme (Color/Type/Theme)
-    src/main/res/                     ← resources (strings, themes, vector launcher icons)
+      MainActivity.kt                 ← single Compose-host activity (uses core/designsystem DefernoTheme)
+    src/main/res/                     ← resources (strings, themes, adaptive launcher icons: flame foreground + monochrome)
   desktopApp/                         ← Compose Desktop (JVM) entry point
   iosApp/                             ← iOS umbrella framework (Kotlin) + Xcode project (added on macOS)
 docs/adr/                             ← architecture decision records
@@ -45,7 +44,10 @@ gradle/libs.versions.toml             ← single source of truth for dependency 
 Each `core/*` and `feature/*` module is a KMP library (Android + JVM + iOS targets) applied via the
 `deferno.kmp.library` convention plugin; its own build file supplies only the android `namespace` and
 its module dependencies. Kotlin sources live under `src/<sourceSet>/kotlin` (`commonMain`, `commonTest`,
-`androidMain`, `iosMain`, …) — not `.../java`.
+`androidMain`, `iosMain`, …) — not `.../java`. The one exception is `core/designsystem`: it's a Compose
+UI library (`deferno.compose.library`) targeting only the Compose platforms (Android + JVM/desktop) —
+no iOS, since the iOS View is SwiftUI (ADR-0003/0004). Feature slices keep iOS and confine Compose to
+`androidMain`, so they depend on `core/designsystem` from `androidMain`, not `commonMain`.
 
 The convention plugins (`build-logic/src/main/kotlin/`, ADR-0004) are small and composable:
 
@@ -55,6 +57,8 @@ The convention plugins (`build-logic/src/main/kotlin/`, ADR-0004) are small and 
 - `deferno.coverage.aggregation` — the coverage *gate*: applied at the root, aggregates `core/*`+`feature/*` via `kover(project(...))` and enforces the merged ~85–90% bound (plus a "must be measured" floor so a hollowed-out gate can't pass vacuously). Run via `:koverVerify` (in CI).
 - `deferno.kmp.library` — composes `deferno.android` + `deferno.coverage`; applied by every `core/*`/`feature/*` module.
 - `deferno.di` — kotlin-inject + anvil DI wiring (KSP plugin + DI runtimes + per-target processors); composed onto `deferno.kmp.library` by modules that host or contribute DI bindings (currently `core/di`).
+- `deferno.compose` — applies the two Compose Gradle plugins (Compose Multiplatform runtime + `compose {}`/Resources DSL, and the Kotlin Compose *compiler* plugin). Composed onto a module that holds Composable code; deps stay in each module's build file (commonMain for a shared UI library, `androidMain` for a feature slice's Android Views — ADR-0004).
+- `deferno.compose.library` — a Compose UI *library* on the Compose platforms only: **Android + JVM/desktop, no iOS** (the iOS View is SwiftUI with its own design system, ADR-0003/0004; Compose Multiplatform 1.11 also dropped the deprecated `iosX64` variant). Sibling of `deferno.kmp.library` minus iOS, plus `deferno.compose`. Applied by `core/designsystem`.
 - `deferno.contract-fixtures` — embeds the captured `contracts/fixtures/*.json` into a module's `commonTest` as a generated `ContractFixtures` object (Gradle task `generateContractFixtures`) so the golden-envelope harness loads them on every KMP target with no runtime file IO (#19); applies no external plugin, composed onto modules that host the harness (currently `core/network`).
 - `deferno.android.application` — `app/androidApp` (SDK levels + toolchain from `ProjectConfig`).
 - `deferno.jvm.application` — `app/desktopApp` (Kotlin/JVM + toolchain). It deliberately omits Gradle's built-in `application` plugin: the app is Compose Desktop (ADR-0003) and `compose.desktop.application {}` supplies `run`/`mainClass`/packaging — applying both would duplicate them.
