@@ -17,12 +17,37 @@ kotlin {
 
             // StateFlow for the observable Active Account + accounts list (ADR-0001, issue #14).
             implementation(libs.kotlinx.coroutines.core)
+
+            // The repository layer (#22) wraps the SQLDelight `DefernoDatabase` directly: the
+            // SQLDelight runtime supplies the `Transacter`/`Query` types the local store touches,
+            // and the coroutines extensions supply `Query.asFlow().mapToList(...)` — the
+            // observe-via-Flow-only seam (ADR-0001). core:database hides these as `implementation`,
+            // so the repository module declares them itself.
+            implementation(libs.sqldelight.runtime)
+            implementation(libs.sqldelight.coroutines.extensions)
+            // The remote sources (#22) call `HttpClient.requestApi` from core:network, which is
+            // again `implementation`-scoped there, so the Ktor client core is declared here too.
+            implementation(libs.ktor.client.core)
         }
 
         commonTest.dependencies {
-            // Flow test stack (ADR-0006): runTest + Turbine for the AccountManager emission tests.
+            // Flow test stack (ADR-0006): runTest + Turbine for the AccountManager emission tests
+            // and the reconcile/hydration/observe tests (#22).
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.turbine)
+
+            // MockEngine + JSON content negotiation drive the KtorTaskRemoteSource tests over the
+            // same `requestApi` envelope pipeline that ships, with no real network (#22, ADR-0006).
+            implementation(libs.ktor.client.mock)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
+        }
+
+        // The real-SQL integration test (#22, ADR-0006 JVM-fast path): build a `DefernoDatabase`
+        // over an in-memory JdbcSqliteDriver and prove the SqlDelight local store round-trips
+        // through real SQLite. The commonTest fakes prove the reconcile/hydration algorithm.
+        jvmTest.dependencies {
+            implementation(libs.sqldelight.sqlite.driver)
         }
     }
 }
