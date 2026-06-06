@@ -49,6 +49,14 @@ object CoverageConfig {
         "com.circuitstitch.deferno.core.secure.AndroidKeystoreSecretVault*",
         "com.circuitstitch.deferno.core.secure.KeychainSecretVault*",
         "com.circuitstitch.deferno.core.secure.DesktopSecretVault*",
+        // Compose @Composable glue (ADR-0006: "thin UI glue"; Views are screenshot-tested, not
+        // unit-tested on the headless JVM gate). The design-system colour *tokens* ARE measured
+        // (designsystem commonTest); the @Composable theme + typography builders that resolve fonts
+        // in composition are not. `*ComposableSingletons*` is the Compose-compiler-generated holder
+        // for composable lambdas (every Compose file gets one) — never hand-written logic.
+        "com.circuitstitch.deferno.core.designsystem.theme.ThemeKt",
+        "com.circuitstitch.deferno.core.designsystem.theme.TypeKt",
+        "*ComposableSingletons*",
     )
 
     /** Package globs excluded from coverage (generated DI contribution hints + platform glue). */

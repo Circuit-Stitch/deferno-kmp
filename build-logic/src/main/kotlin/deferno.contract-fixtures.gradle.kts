@@ -119,3 +119,12 @@ pluginManager.withPlugin("org.jetbrains.kotlin.multiplatform") {
         .sourceSets.named("commonTest")
         .configure { kotlin.srcDir(generateContractFixtures) }
 }
+
+// `kotlin.srcDir(<taskProvider>)` establishes the implicit task dependency for the Kotlin *compile*
+// tasks, but AGP's Android lint enumerates the same commonTest source dirs WITHOUT picking it up —
+// so `./gradlew check` (which runs lint) fails Gradle's task-output validation ("uses this output …
+// without declaring a dependency") on `generate*LintModel` / `lintAnalyze*`. Make every lint task in
+// this module run after the generator. `configureEach` on the live, name-filtered collection also
+// catches the lint tasks AGP registers later; in a jvm-only module it matches nothing (harmless).
+tasks.matching { it.name.contains("lint", ignoreCase = true) }
+    .configureEach { dependsOn(generateContractFixtures) }
