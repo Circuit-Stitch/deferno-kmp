@@ -44,6 +44,14 @@ kotlin {
 }
 
 dependencies {
+    // Shared KMP feature slices (resolve to their Android variants). Empty shells
+    // for now — their Android Compose Views land alongside the shared presentation
+    // in each feature's androidMain (ADR-0004).
+    implementation(project(":feature:auth"))
+    implementation(project(":feature:tasks"))
+    implementation(project(":feature:plan"))
+    implementation(project(":core:designsystem"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

@@ -23,10 +23,15 @@ network access. Open the project in **Android Studio** (Open → select this dir
 Gradle sync finish, or from the command line:
 
 ```sh
-./gradlew assembleDebug     # build the debug APK
-./gradlew installDebug      # install on a connected device/emulator
-./gradlew test              # run local unit tests
+./gradlew build                          # build + test every module (Android/JVM; iOS klibs)
+./gradlew :app:androidApp:assembleDebug  # build the debug APK
+./gradlew :app:androidApp:installDebug   # install on a connected device/emulator
+./gradlew check                          # run local unit tests (commonTest on JVM + Android host)
 ```
+
+> iOS klibs cross-compile on any host, but running iOS tests and linking the iOS framework require
+> macOS (ADR-0006); on Linux/Windows those tasks self-disable. Build the iOS app from the
+> `app/iosApp` Xcode project on a Mac.
 
 If Gradle can't find your SDK, create a `local.properties` (Android Studio writes this for you):
 
@@ -38,18 +43,23 @@ sdk.dir=/path/to/Android/Sdk
 
 ## Project structure
 
-| Path                          | Purpose                                            |
-| ----------------------------- | -------------------------------------------------- |
-| `app/`                        | The application module                             |
-| `app/src/main/kotlin/`        | Kotlin sources (`com.circuitstitch.deferno`)       |
-| `app/src/main/res/`           | Resources                                          |
-| `gradle/libs.versions.toml`   | Dependency version catalog                         |
-| `docs/adr/`                   | Architecture decision records                      |
-| `docs/agents/`                | Agent-skill configuration                          |
+Multi-module Kotlin Multiplatform per [ADR-0004](docs/adr/0004-module-structure-nia-hybrid.md):
 
-> This is the initial Android scaffold. It migrates to the hybrid `core/*` · `feature/*` ·
-> `app/{androidApp,iosApp,desktopApp}` layout described in
-> [ADR-0004](docs/adr/0004-module-structure-nia-hybrid.md) as the shared core lands.
+| Path                          | Purpose                                                              |
+| ----------------------------- | ------------------------------------------------------------------- |
+| `core/*`                      | Shared KMP foundations — `model`, `common`, `network`, `database`, `secure`, `data`, `domain`, `designsystem` |
+| `feature/*`                   | Shared KMP feature slices — `auth`, `tasks`, `plan`                 |
+| `app/androidApp/`             | Android application (Jetpack Compose host)                          |
+| `app/desktopApp/`             | Compose Desktop (JVM) entry point                                   |
+| `app/iosApp/`                 | iOS umbrella framework (Kotlin) + Xcode project (added on macOS)    |
+| `build-logic/`                | Convention plugins (`deferno.kmp.library`) — composite build        |
+| `gradle/libs.versions.toml`   | Dependency version catalog                                          |
+| `docs/adr/`                   | Architecture decision records                                       |
+| `docs/agents/`                | Agent-skill configuration                                           |
+
+Each `core/*` and `feature/*` module is a KMP library with `commonMain`/`commonTest` source sets and
+Android, JVM, and iOS targets. The modules are scaffolded shells today (they compile and resolve);
+real code lands feature by feature.
 
 ## Key facts
 

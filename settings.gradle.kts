@@ -1,4 +1,6 @@
 pluginManagement {
+    // Convention plugins (deferno.kmp.library, …) live in the build-logic composite build.
+    includeBuild("build-logic")
     repositories {
         google {
             content {
@@ -28,4 +30,23 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Deferno"
-include(":app")
+
+// Shared Kotlin Multiplatform core (ADR-0004): layered foundations (declared in ADR order).
+include(":core:model")
+include(":core:common")
+include(":core:network")
+include(":core:database")
+include(":core:secure")
+include(":core:data")
+include(":core:domain")
+include(":core:designsystem")
+
+// Feature slices: each owns its shared Decompose component + ViewModel + state.
+include(":feature:auth")
+include(":feature:tasks")
+include(":feature:plan")
+
+// Per-platform application entry points.
+include(":app:androidApp")
+include(":app:desktopApp")
+include(":app:iosApp")
