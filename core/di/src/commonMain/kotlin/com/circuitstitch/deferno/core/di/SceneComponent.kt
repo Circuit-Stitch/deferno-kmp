@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.di
 
+import com.circuitstitch.deferno.core.model.Account
 import me.tatarka.inject.annotations.Component
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
@@ -29,8 +30,9 @@ abstract class SceneComponent(
 ) {
     abstract val sceneScaffold: SceneScaffold
 
-    // Re-exposed from AccountScope (one level up).
-    abstract val accountScaffold: AccountScaffold
+    // Re-exposed from AccountScope (one level up): the Active Account this scene is bound to,
+    // proving Account context is resolvable per scene scope (ADR-0008 G3).
+    abstract val activeAccount: Account
 }
 
 @CreateComponent

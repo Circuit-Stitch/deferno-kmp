@@ -1,18 +1,6 @@
 package com.circuitstitch.deferno.core.secure
 
-import kotlin.jvm.JvmInline
-
-/**
- * Stable identifier of an Account (ADR-0002) — the key under which that Account's bearer
- * token is vaulted. The Account is the hard isolation boundary: each one's secret is stored,
- * read, and wiped independently, and nothing ever crosses between them.
- */
-@JvmInline
-value class AccountId(val value: String) {
-    init {
-        require(value.isNotBlank()) { "AccountId must not be blank" }
-    }
-}
+import com.circuitstitch.deferno.core.model.AccountId
 
 /**
  * Capability port for at-rest secrets (ADR-0009): holds one bearer token per [AccountId] in
