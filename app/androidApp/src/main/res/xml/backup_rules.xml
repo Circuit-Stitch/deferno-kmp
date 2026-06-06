@@ -4,4 +4,11 @@
   https://developer.android.com/guide/topics/data/autobackup
 -->
 <full-backup-content>
+    <!--
+      The secure-storage vault (core/secure: AndroidKeystoreSecretVault) is a device-bound
+      cache, NOT backed up (ADR-0009): its AES key is non-exportable in the AndroidKeyStore,
+      so restored ciphertext is undecryptable and a new device re-authenticates. Keep this
+      path in sync with AndroidKeystoreSecretVault.DEFAULT_PREFS_NAME ("deferno_secure_vault").
+    -->
+    <exclude domain="sharedpref" path="deferno_secure_vault.xml"/>
 </full-backup-content>

@@ -40,6 +40,15 @@ object CoverageConfig {
         // (@MergeComponent(AppScope::class), @SingleIn(...)) and are never instantiated, so
         // their synthetic <init> can't be covered without a hollow test. Not logic.
         "com.circuitstitch.deferno.core.di.*Scope",
+        // Platform secure-storage actuals (issue #13): real crypto / OS-keychain access that
+        // runs only on a device, an Apple target, or a desktop OS — exercised by instrumented
+        // & native tests, not the headless JVM gate (ADR-0006). The SecretVault contract and
+        // its in-memory fake ARE measured (commonMain, via the round-trip tests). The trailing
+        // `*` also excludes each actual's nested/synthetic classes (its `Companion`, a `by lazy`
+        // lambda, etc.); it does not match the measured `InMemorySecretVault` / `SecretVault`.
+        "com.circuitstitch.deferno.core.secure.AndroidKeystoreSecretVault*",
+        "com.circuitstitch.deferno.core.secure.KeychainSecretVault*",
+        "com.circuitstitch.deferno.core.secure.DesktopSecretVault*",
     )
 
     /** Package globs excluded from coverage (generated DI contribution hints). */
