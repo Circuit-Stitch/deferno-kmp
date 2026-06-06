@@ -1,6 +1,11 @@
-# Deferno for Android
+# Deferno Client
 
-Native Android client for Deferno — Kotlin + Jetpack Compose.
+The native Deferno client — **Android first**, with iOS and desktop to follow over a shared
+Kotlin Multiplatform core. The UI is genuinely native per platform (Jetpack Compose on Android,
+SwiftUI on iOS, Compose Desktop on desktop); everything down through presentation and navigation
+is shared Kotlin (Decompose). See [ADR-0003](docs/adr/0003-kmp-shared-presentation-native-ui.md)
+and [ADR-0004](docs/adr/0004-module-structure-nia-hybrid.md) for the architecture and target
+module layout. The build instructions below are for the Android target — the first to land.
 
 ## Requirements
 
@@ -42,11 +47,16 @@ sdk.dir=/path/to/Android/Sdk
 | `docs/adr/`                   | Architecture decision records                      |
 | `docs/agents/`                | Agent-skill configuration                          |
 
+> This is the initial Android scaffold. It migrates to the hybrid `core/*` · `feature/*` ·
+> `app/{androidApp,iosApp,desktopApp}` layout described in
+> [ADR-0004](docs/adr/0004-module-structure-nia-hybrid.md) as the shared core lands.
+
 ## Key facts
 
+- **Architecture:** shared Kotlin Multiplatform core (models, networking, persistence, sync, presentation + navigation) with native UI per platform — see [ADR-0003](docs/adr/0003-kmp-shared-presentation-native-ui.md)
 - **Application ID:** `com.circuitstitch.deferno`
 - **minSdk / targetSdk / compileSdk:** 26 / 35 / 35
-- **UI:** Jetpack Compose (Material 3)
+- **Android UI:** Jetpack Compose (Material 3)
 - **Build:** Gradle 9.5.1 + AGP 9.2.1 (Kotlin compiled by AGP's built-in Kotlin support — there is no
   separate `org.jetbrains.kotlin.android` plugin)
 - **Code style:** shared Kotlin `KOTLIN_OFFICIAL` settings live in `.idea/codeStyles/`

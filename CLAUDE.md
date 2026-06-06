@@ -1,6 +1,9 @@
-# Deferno (Android)
+# Deferno (KMP)
 
-Native Android client for Deferno, built with Kotlin and Jetpack Compose.
+Native Deferno client built on Kotlin Multiplatform — **Android first**, with iOS and desktop to
+follow over a shared core (genuinely native UI per platform). See `CONTEXT.md` and
+`docs/adr/0003`–`0004` for the architecture; the stack below describes the Android target, the
+first to land.
 
 ## Stack
 
@@ -52,7 +55,7 @@ The first `./gradlew` run downloads Gradle 9.5.1, a Temurin JDK 17 toolchain, an
 
 ### Issue tracker
 
-Issues and PRDs live as GitHub issues in `Circuit-Stitch/deferno-android` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
+Issues and PRDs live as GitHub issues in `Circuit-Stitch/deferno-kmp` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

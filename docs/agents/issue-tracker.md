@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and PRDs for this repo live as GitHub issues in `Circuit-Stitch/deferno-android`. Use the `gh` CLI for all operations.
+Issues and PRDs for this repo live as GitHub issues in `Circuit-Stitch/deferno-kmp`. Use the `gh` CLI for all operations.
 
 ## Conventions
 
