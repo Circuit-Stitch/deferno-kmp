@@ -19,3 +19,18 @@ A request with an **invalid/expired bearer returns `HTTP 401` with an *empty bod
 `ErrorEnvelope` the spec advertises. The reader must therefore **synthesize an error from the HTTP
 status** whenever the body is absent or unparseable, and only parse `ErrorEnvelope` when a body
 exists. This is the mandatory negative test; see `../CONTRACT-NOTES.md` → "Error model".
+
+## How the harness loads them (#19)
+
+These files are the single source of truth for the contract-fixture harness in `core/network`
+(`ContractFixtureParseTest`). They are **not** read at runtime: the `deferno.contract-fixtures`
+convention plugin embeds each file verbatim into a generated `ContractFixtures` object on the
+`commonTest` source set (Gradle task `generateContractFixtures`), so the harness loads every fixture
+on **every KMP target — JVM, Android host, and iOS — with no platform file IO.** Each fixture is fed
+through the *shipping* read path (the tolerant reader + envelope/version handling in `requestApi`)
+and asserted against its wire DTO.
+
+Because the embedding is regenerated from these files, **re-capturing a fixture flows straight into
+the test**: a breaking shape change surfaces as a failing parse, and a completeness guard fails the
+build if a newly-captured fixture has no wired parse handler. (Contrast `../refresh.sh`, which is the
+on-demand drift check for the *OpenAPI spec* — a reviewable `git diff`, not a CI gate.)

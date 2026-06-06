@@ -55,6 +55,7 @@ The convention plugins (`build-logic/src/main/kotlin/`, ADR-0004) are small and 
 - `deferno.coverage.aggregation` — the coverage *gate*: applied at the root, aggregates `core/*`+`feature/*` via `kover(project(...))` and enforces the merged ~85–90% bound (plus a "must be measured" floor so a hollowed-out gate can't pass vacuously). Run via `:koverVerify` (in CI).
 - `deferno.kmp.library` — composes `deferno.android` + `deferno.coverage`; applied by every `core/*`/`feature/*` module.
 - `deferno.di` — kotlin-inject + anvil DI wiring (KSP plugin + DI runtimes + per-target processors); composed onto `deferno.kmp.library` by modules that host or contribute DI bindings (currently `core/di`).
+- `deferno.contract-fixtures` — embeds the captured `contracts/fixtures/*.json` into a module's `commonTest` as a generated `ContractFixtures` object (Gradle task `generateContractFixtures`) so the golden-envelope harness loads them on every KMP target with no runtime file IO (#19); applies no external plugin, composed onto modules that host the harness (currently `core/network`).
 - `deferno.android.application` — `app/androidApp` (SDK levels + toolchain from `ProjectConfig`).
 - `deferno.jvm.application` — `app/desktopApp` (Kotlin/JVM + toolchain). It deliberately omits Gradle's built-in `application` plugin: the app is Compose Desktop (ADR-0003) and `compose.desktop.application {}` supplies `run`/`mainClass`/packaging — applying both would duplicate them.
 
