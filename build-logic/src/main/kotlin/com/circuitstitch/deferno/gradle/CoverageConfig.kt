@@ -51,8 +51,14 @@ object CoverageConfig {
         "com.circuitstitch.deferno.core.secure.DesktopSecretVault*",
     )
 
-    /** Package globs excluded from coverage (generated DI contribution hints). */
+    /** Package globs excluded from coverage (generated DI contribution hints + platform glue). */
     val EXCLUDED_PACKAGES: List<String> = listOf(
         "amazon.lastmile.inject", // anvil contribution-hint classes
+        // Per-target Ktor engine providers (issue #17): real OkHttp/Darwin engine creation
+        // runs only on a device / desktop / Apple target and is exercised by integration, not
+        // the headless MockEngine gate (ADR-0006) — same rationale as the secure-storage
+        // actuals above. The engine-agnostic client config + envelope mapping (commonMain) ARE
+        // measured, via the MockEngine tests.
+        "com.circuitstitch.deferno.core.network.platform",
     )
 }

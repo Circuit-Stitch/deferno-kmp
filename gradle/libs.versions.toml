@@ -18,6 +18,13 @@ turbine = "1.2.1"
 # Keychain / Windows Credential Store / Linux Secret Service, via JNA. Desktop-only — the
 # Android (Keystore) and iOS (Keychain) actuals use their in-platform APIs, no dependency.
 javaKeyring = "1.0.4"
+# Networking (issue #17): the shared Ktor HTTP client (bearer auth + Envelope mapping) and
+# kotlinx.serialization for the wire DTOs. Ktor's engines are per-target (OkHttp on
+# Android/JVM, Darwin on iOS) over one commonMain client config; MockEngine drives the tests.
+# kotlinx.serialization's *compiler* plugin is pinned to `kotlin` (it ships in the Kotlin
+# distribution); only the runtime is versioned here.
+ktor = "3.5.0"
+kotlinxSerialization = "1.11.0"
 coreKtx = "1.15.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -69,6 +76,18 @@ turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine
 # Desktop OS keychain (jvmMain only) for the secure-storage vault (issue #13).
 java-keyring = { group = "com.github.javakeyring", name = "java-keyring", version.ref = "javaKeyring" }
 
+# Networking (issue #17). commonMain: the engine-agnostic client core + ContentNegotiation
+# wired to kotlinx.serialization JSON. Per-target engines: OkHttp (androidMain + jvmMain),
+# Darwin (iosMain). commonTest: MockEngine, the in-process engine the success/error-path
+# tests issue requests against (no real network, ADR-0006 JVM-fast path).
+ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
+ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-darwin = { group = "io.ktor", name = "ktor-client-darwin", version.ref = "ktor" }
+ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref = "ktor" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+
 # Gradle-plugin artifacts on the build-logic classpath (so convention plugins can
 # apply + type-safely configure AGP and the Kotlin Multiplatform plugin).
 android-gradlePlugin = { group = "com.android.tools.build", name = "gradle", version.ref = "agp" }
@@ -84,6 +103,9 @@ android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+# kotlinx.serialization compiler plugin (issue #17) — ships in the Kotlin distribution, so
+# pinned to `kotlin`. Applied per-module (like kotlin-compose), not via a convention plugin.
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
