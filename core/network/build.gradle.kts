@@ -4,6 +4,9 @@ plugins {
     // (issue #17). Applied per-module via alias — same pattern as kotlin-compose in the
     // app modules — since only the modules with @Serializable types need it.
     alias(libs.plugins.kotlin.serialization)
+    // Embeds the captured contracts/fixtures/*.json into commonTest so the golden-envelope
+    // contract-fixture harness (#19) loads them on every KMP target with no runtime file IO.
+    id("deferno.contract-fixtures")
 }
 
 kotlin {
