@@ -1,0 +1,30 @@
+-- One ordered slot of a daily plan (ADR-0001, issue #21). The daily plan (`GET /tasks/plan`) is an
+-- ordered, date+timezone-scoped list referencing Tasks by id, so a plan row is keyed by
+-- `(plan_date, tz, position)` and points at a `task_id` in `taskEntity`. Reconciled as a full
+-- snapshot per `(plan_date, tz)` (#22): delete the day's entries, re-insert the fresh ordered set,
+-- in one transaction. `plan_date` is an ISO date string (e.g. `2026-06-06`); `task_id` is the
+-- referenced Task's UUID (the Task row may be reconciled independently / may not yet be hydrated).
+CREATE TABLE dailyPlanEntry (
+    plan_date TEXT NOT NULL,
+    tz        TEXT NOT NULL,
+    position  INTEGER NOT NULL,
+    task_id   TEXT NOT NULL,
+    PRIMARY KEY (plan_date, tz, position)
+);
+
+-- The plan-by-day index (issue #21): `(plan_date, tz, position)` matches the queries' full
+-- `WHERE plan_date = ? AND tz = ?` filter and supplies the `ORDER BY position`, so a per-day read
+-- is satisfied straight from the index without rescanning other timezones on the same date.
+CREATE INDEX dailyPlanEntry_date_tz_position ON dailyPlanEntry(plan_date, tz, position);
+
+selectPlan:
+SELECT * FROM dailyPlanEntry WHERE plan_date = ? AND tz = ? ORDER BY position;
+
+insertEntry:
+INSERT OR REPLACE INTO dailyPlanEntry(plan_date, tz, position, task_id) VALUES (?, ?, ?, ?);
+
+deletePlan:
+DELETE FROM dailyPlanEntry WHERE plan_date = ? AND tz = ?;
+
+deleteAll:
+DELETE FROM dailyPlanEntry;

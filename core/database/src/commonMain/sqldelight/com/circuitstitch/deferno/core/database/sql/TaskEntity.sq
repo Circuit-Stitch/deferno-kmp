@@ -1,0 +1,74 @@
+-- The local source-of-truth Task table (ADR-0001, issue #21). Columns mirror the DOMAIN Task
+-- (ADR-0011: schema modelled from domain types, not the wire). Everything is a primitive SQL
+-- type (TEXT/INTEGER/REAL) so the generated `DefernoDatabase` needs no column adapters and the
+-- in-memory test driver constructs adapter-free; the row<->domain conversion (enums, instants,
+-- the labels/child_ids lists, the pinned/Boolean) is done in Kotlin in core:data (#22).
+--
+-- `id` is the backend UUID and the reconcile key. `deleted_at` is the soft-delete tombstone
+-- (kept, not purged, so a full-snapshot reconcile is idempotent — ADR-0001 LWW). `hydration_state`
+-- records summary-vs-full so an opened Task can be hydrated on demand and a summary refresh never
+-- downgrades a full row. The full-only enrichment (`owner_org_id`, `description`, `next_task_id`)
+-- is null until hydrated.
+CREATE TABLE taskEntity (
+    id              TEXT NOT NULL PRIMARY KEY,
+    org_slug        TEXT NOT NULL,
+    owner_org_id    TEXT,
+    ref             TEXT,
+    sequence        INTEGER,
+    title           TEXT NOT NULL,
+    working_state   TEXT NOT NULL,
+    labels          TEXT NOT NULL DEFAULT '',
+    parent_id       TEXT,
+    child_ids       TEXT NOT NULL DEFAULT '',
+    complete_by     TEXT,
+    productive      REAL,
+    desire          REAL,
+    pinned          INTEGER NOT NULL DEFAULT 0,
+    date_created    TEXT NOT NULL,
+    finished_at     TEXT,
+    deleted_at      TEXT,
+    hydration_state TEXT NOT NULL,
+    description     TEXT,
+    next_task_id    TEXT
+);
+
+-- Sync/query indexes (issue #21): Org filter (ADR-0002), working-state filtering, the parent_id
+-- children lookup, and the tombstone scan the reconcile walks.
+CREATE INDEX taskEntity_owner_org_id ON taskEntity(owner_org_id);
+CREATE INDEX taskEntity_working_state ON taskEntity(working_state);
+CREATE INDEX taskEntity_parent_id ON taskEntity(parent_id);
+CREATE INDEX taskEntity_deleted_at ON taskEntity(deleted_at);
+
+-- All rows, including tombstones (the reconcile needs to see tombstones). Observed as a Flow.
+selectAll:
+SELECT * FROM taskEntity;
+
+-- Live (non-tombstoned) rows — the UI-facing list (ADR-0001 observe-via-Flow).
+selectAllActive:
+SELECT * FROM taskEntity WHERE deleted_at IS NULL ORDER BY sequence;
+
+selectById:
+SELECT * FROM taskEntity WHERE id = ?;
+
+-- Just the ids — the reconcile loads these to diff against a fresh snapshot and delete the
+-- locally-present-but-absent rows in Kotlin (avoids the empty `NOT IN ()` footgun).
+selectAllIds:
+SELECT id FROM taskEntity;
+
+selectChildren:
+SELECT * FROM taskEntity WHERE parent_id = ? AND deleted_at IS NULL ORDER BY sequence;
+
+-- Full-row upsert by id (reconcile + hydrate). Caller (#22) is responsible for merging full-only
+-- fields off an existing row before writing a summary, so a summary refresh never clobbers them.
+insertOrReplace:
+INSERT OR REPLACE INTO taskEntity(
+    id, org_slug, owner_org_id, ref, sequence, title, working_state, labels, parent_id, child_ids,
+    complete_by, productive, desire, pinned, date_created, finished_at, deleted_at, hydration_state,
+    description, next_task_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM taskEntity WHERE id = ?;
+
+deleteAll:
+DELETE FROM taskEntity;
