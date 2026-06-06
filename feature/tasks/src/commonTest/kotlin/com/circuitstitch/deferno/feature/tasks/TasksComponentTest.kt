@@ -1,0 +1,93 @@
+package com.circuitstitch.deferno.feature.tasks
+
+import com.arkivanov.decompose.DefaultComponentContext
+import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.model.TaskId
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+
+private fun TestScope.tasksComponent(
+    repo: FakeTaskRepository,
+    output: (TasksComponent.Output) -> Unit = {},
+) = DefaultTasksComponent(
+    componentContext = DefaultComponentContext(LifecycleRegistry()),
+    taskRepository = repo,
+    output = output,
+    coroutineContext = StandardTestDispatcher(testScheduler),
+)
+
+/** The co-resident slot model (ADR-0007): list is always present; detail and tree are slots that can
+ *  hold a child alongside it (and each other), driven by intents — never a push/pop stack. */
+class TasksComponentTest {
+
+    private fun repo() = FakeTaskRepository(
+        listOf(
+            task("root"),
+            task("c1", parentId = "root", sequence = 1),
+            task("b"),
+        ),
+    )
+
+    @Test
+    fun listSelectionOpensTheCoResidentDetailSlot() = runTest {
+        val component = tasksComponent(repo())
+
+        assertNull(component.detail.value.child, "no detail before a selection")
+
+        component.list.onTaskClicked(TaskId("root"))
+
+        // detail is now active *alongside* the always-present list — co-resident, not a replacement.
+        assertEquals(TaskId("root"), component.detail.value.child?.instance?.taskId)
+        assertNotNull(component.list)
+
+        // selecting another task re-points the same slot
+        component.list.onTaskClicked(TaskId("b"))
+        assertEquals(TaskId("b"), component.detail.value.child?.instance?.taskId)
+    }
+
+    @Test
+    fun detailOpensTheTreeSlotCoResidentlyThenBothDismiss() = runTest {
+        val component = tasksComponent(repo())
+        component.list.onTaskClicked(TaskId("root"))
+        val detail = assertNotNull(component.detail.value.child?.instance)
+
+        detail.onShowTreeClicked()
+
+        // list + detail + tree are all co-resident now.
+        assertEquals(TaskId("root"), component.tree.value.child?.instance?.rootId)
+        assertNotNull(component.detail.value.child, "detail stays open alongside the tree")
+
+        component.tree.value.child?.instance?.onCloseClicked()
+        assertNull(component.tree.value.child)
+
+        detail.onCloseClicked()
+        assertNull(component.detail.value.child)
+    }
+
+    @Test
+    fun selectingATreeChildOpensThatChildsDetail() = runTest {
+        val component = tasksComponent(repo())
+        component.list.onTaskClicked(TaskId("root"))
+        component.detail.value.child?.instance?.onShowTreeClicked()
+
+        component.tree.value.child?.instance?.onChildClicked(TaskId("c1"))
+
+        assertEquals(TaskId("c1"), component.detail.value.child?.instance?.taskId)
+    }
+
+    @Test
+    fun addToPlanIntentBubblesUpToTheHost() = runTest {
+        val outputs = mutableListOf<TasksComponent.Output>()
+        val component = tasksComponent(repo(), outputs::add)
+        component.list.onTaskClicked(TaskId("root"))
+
+        component.detail.value.child?.instance?.onAddToPlanClicked()
+
+        assertEquals(listOf<TasksComponent.Output>(TasksComponent.Output.AddToPlanRequested(TaskId("root"))), outputs)
+    }
+}
