@@ -20,6 +20,7 @@ sealed interface ApiResult<out T> {
  *   or any unparseable error body): synthesized from the HTTP [Status.status] alone.
  * - [UnsupportedVersion] — a 2xx whose envelope `version` is outside the supported window
  *   ([SupportedApiVersions]); the payload is withheld rather than risk misparsing it (ADR-0005).
+ *   Its [UnsupportedVersion.Kind] is the typed out-of-window signal (#18) — see there.
  * - [Transport] — no usable HTTP response at all: connection / timeout / TLS failure, a
  *   cleartext request the [CleartextGuard] blocked ([CleartextNotPermittedException]), or a
  *   success body that failed to deserialize.
@@ -31,8 +32,23 @@ sealed interface ApiError {
     /** A non-2xx with no parseable [ErrorEnvelope] body — synthesized from the status. */
     data class Status(val status: Int, val message: String) : ApiError
 
-    /** A 2xx whose envelope `version` is outside [SupportedApiVersions] (ADR-0005). */
-    data class UnsupportedVersion(val version: String) : ApiError
+    /**
+     * A 2xx whose envelope `version` is outside [SupportedApiVersions] (ADR-0005). The [kind]
+     * distinguishes the three out-of-window cases that ADR-0005's policy treats differently (#18),
+     * so a caller can react correctly instead of collapsing them into one opaque failure:
+     *
+     * - [Kind.ForceUpgrade] — server `version` **above** [SupportedApiVersions.MAX]: an unknown
+     *   breaking major the client can't parse safely → drive a "force upgrade / update required" gate.
+     * - [Kind.Unsupported] — server `version` **below** [SupportedApiVersions.MIN]: too old to map →
+     *   degrade/refuse.
+     * - [Kind.Unparseable] — `version` is not `major.minor` at all, so it can't be placed against the
+     *   window → treat as malformed (ADR-0005: unknown versions are logged so we know to ship an
+     *   adapter; there is no logging framework in commonMain, so carrying this typed [kind] *is* the
+     *   signal).
+     */
+    data class UnsupportedVersion(val version: String, val kind: Kind) : ApiError {
+        enum class Kind { ForceUpgrade, Unsupported, Unparseable }
+    }
 
     /** No usable response: I/O, TLS, blocked cleartext, or a body that failed to parse. */
     data class Transport(val cause: Throwable) : ApiError

@@ -158,9 +158,22 @@ private suspend fun <T> HttpResponse.toApiResult(
         } catch (e: SerializationException) {
             return ApiResult.Failure(ApiError.Transport(e))
         }
+        // ADR-0005 out-of-window policy, with the typed signal #18 needs: above MAX is an unknown
+        // breaking major → ForceUpgrade; below MIN is too old → Unsupported; not major.minor at all
+        // → Unparseable. The Kind lets a caller force-upgrade vs degrade vs treat-as-malformed.
         val version = ApiVersion.parseOrNull(rawVersion)
-        if (version == null || !SupportedApiVersions.supports(version)) {
-            return ApiResult.Failure(ApiError.UnsupportedVersion(rawVersion))
+        if (version == null) {
+            return ApiResult.Failure(
+                ApiError.UnsupportedVersion(rawVersion, ApiError.UnsupportedVersion.Kind.Unparseable),
+            )
+        }
+        if (!SupportedApiVersions.supports(version)) {
+            val kind = if (version > SupportedApiVersions.MAX) {
+                ApiError.UnsupportedVersion.Kind.ForceUpgrade
+            } else {
+                ApiError.UnsupportedVersion.Kind.Unsupported
+            }
+            return ApiResult.Failure(ApiError.UnsupportedVersion(rawVersion, kind))
         }
         // In-window: now bind `data`. A failure here is a genuinely malformed in-window body.
         val envelope = try {
