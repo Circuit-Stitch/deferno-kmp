@@ -1,12 +1,33 @@
 package com.circuitstitch.deferno.desktop
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.application
+
 /**
- * Desktop (JVM) application entry point — scaffold placeholder (issue #8).
+ * Desktop (JVM) Compose entry point (issue #12).
  *
- * The real Compose Desktop window, hosting the shared Decompose navigation tree,
- * lands in a later UI issue (ADR-0003: desktop View = Compose Desktop). For now this
- * exists so the `:app:desktopApp` module builds and runs on the JVM target.
+ * Launches a stub window. The real window — hosting the shared Decompose navigation tree
+ * (ADR-0003: desktop View = Compose Desktop) — lands alongside the feature UIs. Runs on
+ * any desktop host via `./gradlew :app:desktopApp:run`.
  */
-fun main() {
-    println("Deferno desktop — scaffold. UI lands in a later issue.")
+fun main() = application {
+    Window(onCloseRequest = ::exitApplication, title = "Deferno") {
+        MaterialTheme {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Deferno desktop",
+                        style = MaterialTheme.typography.headlineMedium,
+                    )
+                }
+            }
+        }
+    }
 }

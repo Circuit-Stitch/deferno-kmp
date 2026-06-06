@@ -17,8 +17,18 @@ kotlin {
         target.binaries.framework {
             baseName = "Deferno"
             isStatic = true
-            // When features expose Swift-facing APIs, switch these to `export(...)`
-            // (with `api(...)` below) so SKIE can bridge them into idiomatic Swift.
+            // Public declarations of THIS module (e.g. IosGreeting in iosMain) already
+            // land in the generated Deferno.framework header for Swift to call. To also
+            // surface public APIs from the feature/core *dependencies*, switch their
+            // `implementation(...)` below to `export(...)` (and have those modules declare
+            // the deps `api(...)` so they're transitively exportable).
+            //
+            // SKIE (ADR-0003) — which bridges Flow/suspend/sealed into idiomatic Swift —
+            // is deliberately NOT applied yet: no released SKIE supports Kotlin 2.4.0 as
+            // of 2026-06, and SKIE's configuration-time version check would fail Gradle
+            // sync on every host. When a 2.4.0-compatible SKIE ships, apply
+            // `alias(libs.plugins.skie)` (see gradle/libs.versions.toml) and export the
+            // feature components here.
         }
     }
 

@@ -55,7 +55,7 @@ The convention plugins (`build-logic/src/main/kotlin/`, ADR-0004) are small and 
 - `deferno.kmp.library` — composes `deferno.android` + `deferno.coverage`; applied by every `core/*`/`feature/*` module.
 - `deferno.di` — kotlin-inject + anvil DI wiring (KSP plugin + DI runtimes + per-target processors); composed onto `deferno.kmp.library` by modules that host or contribute DI bindings (currently `core/di`).
 - `deferno.android.application` — `app/androidApp` (SDK levels + toolchain from `ProjectConfig`).
-- `deferno.jvm.application` — `app/desktopApp` (Kotlin/JVM + `application` + toolchain).
+- `deferno.jvm.application` — `app/desktopApp` (Kotlin/JVM + toolchain). It deliberately omits Gradle's built-in `application` plugin: the app is Compose Desktop (ADR-0003) and `compose.desktop.application {}` supplies `run`/`mainClass`/packaging — applying both would duplicate them.
 
 `ProjectConfig` holds the SDK levels + JVM toolchain shared across them. `app/iosApp` is a bespoke
 iOS-only framework and stays a hand-written build file.

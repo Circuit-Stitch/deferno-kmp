@@ -48,6 +48,12 @@ captures/
 .externalNativeBuild/
 .cxx/
 
+# Xcode (iOS app — the .xcodeproj is created on macOS and may be committed; keep the
+# user/machine-specific cruft out of it). See app/iosApp/README.md.
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
 # Keystores and signing — never commit secrets
 *.jks
 *.keystore
