@@ -14,6 +14,7 @@ first to land.
 - **Application ID:** `com.circuitstitch.deferno`
 - **JDK:** 17 (toolchain). You don't need JDK 17 installed — the Gradle Daemon JVM toolchain (`gradle/gradle-daemon-jvm.properties`) and the project toolchain (`ProjectConfig.JVM_TOOLCHAIN`, applied via the convention plugins) auto-provision Eclipse Temurin 17 via the Foojay resolver. Launch Gradle with any JDK that can run Gradle 9.5.1 (17–25), e.g. Android Studio's bundled JDK.
 - **Kotlin:** compiled by AGP's built-in Kotlin support (AGP 9+) — there is no `org.jetbrains.kotlin.android` plugin; only the Compose compiler plugin is applied explicitly.
+- **DI:** kotlin-inject + kotlin-inject-anvil — compile-time, KMP, via KSP (ADR-0003). The scope layering (process/app → Account → scene, ADR-0008) lives in `core/di`; the `deferno.di` convention wires the runtimes + per-target KSP processors into a shared module. KSP2 is version-decoupled from the Kotlin compiler, so `ksp = 2.3.9` pairs with Kotlin 2.4.0 (no `<kotlin>-<ksp>` suffix).
 - **Coverage:** Kover (ADR-0006) on every shared module via the `deferno.coverage` convention. The ~85–90% CI gate is not wired into `check` yet — it lands with CI.
 
 ## Layout
@@ -24,6 +25,7 @@ Multi-module KMP per ADR-0004 (`core/*` foundations → `feature/*` slices → p
 build-logic/                          ← composable convention plugins — composite build
 core/                                 ← shared KMP foundations
   model · common · network · database · secure · data · domain · designsystem
+  di/                                 ← compile-time DI scope graph (process/app → Account → scene, ADR-0008)
 feature/                              ← shared KMP feature slices (Decompose component + ViewModel + state)
   auth · tasks · plan
 app/
@@ -51,6 +53,7 @@ The convention plugins (`build-logic/src/main/kotlin/`, ADR-0004) are small and 
 - `deferno.android` — adds the KMP Android library target + SDK levels (composes `deferno.kmp`).
 - `deferno.coverage` — Kover with the shared-core exclusions.
 - `deferno.kmp.library` — composes `deferno.android` + `deferno.coverage`; applied by every `core/*`/`feature/*` module.
+- `deferno.di` — kotlin-inject + anvil DI wiring (KSP plugin + DI runtimes + per-target processors); composed onto `deferno.kmp.library` by modules that host or contribute DI bindings (currently `core/di`).
 - `deferno.android.application` — `app/androidApp` (SDK levels + toolchain from `ProjectConfig`).
 - `deferno.jvm.application` — `app/desktopApp` (Kotlin/JVM + `application` + toolchain).
 

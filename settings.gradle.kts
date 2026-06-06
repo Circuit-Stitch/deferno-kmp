@@ -40,6 +40,7 @@ include(":core:secure")
 include(":core:data")
 include(":core:domain")
 include(":core:designsystem")
+include(":core:di")
 
 // Feature slices: each owns its shared Decompose component + ViewModel + state.
 include(":feature:auth")

@@ -16,6 +16,7 @@ dependencies {
     compileOnly(libs.android.gradlePlugin)
     compileOnly(libs.kotlin.gradlePlugin)
     compileOnly(libs.kover.gradlePlugin)
+    compileOnly(libs.ksp.gradlePlugin)
 }
 
 // Match the project JDK toolchain (see kotlin { jvmToolchain(17) } in modules).

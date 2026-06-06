@@ -16,10 +16,17 @@ kover {
         filters {
             excludes {
                 // Exclude generated + boilerplate so the gate measures real logic
-                // (ADR-0006). Add SQLDelight / kotlin-inject / serialization generated
-                // packages here as those modules gain code; thin UI glue lives in the
-                // Views and is screenshot-tested instead.
+                // (ADR-0006). Add SQLDelight / serialization generated packages here as
+                // those modules gain code; thin UI glue lives in the Views and is
+                // screenshot-tested instead.
                 classes("*.BuildConfig")
+
+                // kotlin-inject + kotlin-inject-anvil generated DI graph (issue #10):
+                classes(
+                    "*KotlinInject*",    // anvil merged components + kotlin-inject component impls
+                    "*CreateComponent*", // anvil @CreateComponent (KMP create) factories
+                )
+                packages("amazon.lastmile.inject") // anvil contribution-hint classes
             }
         }
     }
