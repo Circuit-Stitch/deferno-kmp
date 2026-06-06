@@ -1,4 +1,5 @@
 import com.circuitstitch.deferno.gradle.ProjectConfig
+import org.gradle.api.tasks.testing.Test
 
 // KMP foundation convention: the cross-platform target set, the JVM toolchain, and
 // the commonTest framework — everything that is *not* Android-specific (ADR-0004).
@@ -27,4 +28,25 @@ kotlin {
             implementation(kotlin("test"))
         }
     }
+}
+
+// Surface the staging API base URL + personal access token (PAT) from the gitignored
+// root `local.properties` to unit tests as system properties, so a live integration
+// test (e.g. the /auth/me tracer, #20) can hit a real backend without committing the
+// token. Absent-safe: blank when the keys are missing, so CI and other devs are never
+// blocked — such tests skip themselves (e.g. `assumeTrue(token.isNotBlank())`).
+// Read via `providers.fileContents` to stay configuration-cache compatible and to
+// re-run when the token changes. See ADR-0012 + `contracts/CONTRACT-NOTES.md`.
+val localProperties = providers.fileContents(
+    rootProject.layout.projectDirectory.file("local.properties"),
+).asText.orElse("")
+
+tasks.withType<Test>().configureEach {
+    fun localProperty(key: String): String =
+        localProperties.get().lineSequence()
+            .firstOrNull { it.startsWith("$key=") }
+            ?.substringAfter('=')?.trim().orEmpty()
+
+    systemProperty("deferno.staging.baseUrl", localProperty("deferno.staging.baseUrl"))
+    systemProperty("deferno.staging.apiToken", localProperty("deferno.staging.apiToken"))
 }

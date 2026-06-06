@@ -15,8 +15,17 @@ the client to tolerate that evolution rather than break on it.
   a **supported window `[min..max]`**, and routes `data` through the version-appropriate DTO→domain
   mapper. It ships **present-but-empty** (single pass-through) and earns its first adapter only at the
   next breaking bump.
-- **Floor = 0.2:** no client ever shipped on 0.1, so v1 targets `0.2` as min/max; **no `0.1→0.2`
-  back-compat** is carried.
+- **Floor = 0.1 (amended 2026-06-06):** the supported window opens at `0.1` — the version the live
+  backend actually serves (staging confirmed: `GET /auth/me` → `{"version":"0.1", …}`). `min = max =
+  0.1` today; widen to include `0.2` once
+  [Kyle-Falconer/Deferno#300](https://github.com/Kyle-Falconer/Deferno/issues/300) lands and
+  declares `0.2` honestly. The floor is a single bumpable constant.
+  _Superseded reasoning:_ this ADR originally set the floor at `0.2` ("no client ever shipped on
+  0.1"). That held for *clients*, but the *server* serves `0.1` in dev/staging today and #300 has
+  not landed — so a `0.2` gate would make the client's own envelope reader reject every real
+  response (the tracer would pass auth, then fail the version check). We develop against the version
+  that exists and widen the window as the backend advances; capture **0.1** fixtures, not
+  aspirational `0.2` ones.
 - **Out-of-window policy:** server version **above** max (an unknown breaking major) ⇒ **force-upgrade
   gate** ("update required"), since a breaking shape can't be safely parsed; below min ⇒ degrade/refuse.
   Unknown versions are logged so we know when to ship an adapter.
