@@ -14,6 +14,12 @@ kotlinInjectAnvil = "0.1.7"
 # here — the first shared-core module that needs reactive observation.
 coroutines = "1.11.0"
 turbine = "1.2.1"
+# Shared presentation (ADR-0003/0007, #25): Decompose models the component tree + navigation
+# (co-resident list/detail/tree slots) in commonMain — shared with iOS (via SKIE later); only the
+# View is native. Decompose api-exposes Essenty (Lifecycle, StateKeeper), so the single `decompose`
+# dependency also brings the lifecycle primitives the components + tests use. Decompose/Essenty core
+# is plain Kotlin (no compiler plugin) and still publishes iosX64, so the iOS klibs keep building.
+decompose = "3.5.0"
 # Multiplatform date/time (issues #18/#21/#22): the domain model carries RFC3339 instants
 # (nanosecond precision on the wire) and date-keyed Plan rows, and the DTO→domain mapper +
 # repository reconcile parse/format them. kotlinx-datetime is the KMP-standard Instant/LocalDate.
@@ -88,6 +94,10 @@ kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
+
+# Shared presentation: Decompose (component tree + slot navigation) for feature commonMain (#25).
+# `decompose` api-exposes the Essenty Lifecycle/StateKeeper used by the components and their tests.
+decompose = { group = "com.arkivanov.decompose", name = "decompose", version.ref = "decompose" }
 
 # Local database (issue #21). commonMain: the runtime + the coroutines Flow extensions
 # (`asFlow`/`mapToList`) the repositories observe through (ADR-0001 observe-via-Flow). Per-target
