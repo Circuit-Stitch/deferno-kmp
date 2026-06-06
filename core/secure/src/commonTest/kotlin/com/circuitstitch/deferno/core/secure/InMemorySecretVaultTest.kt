@@ -1,9 +1,9 @@
 package com.circuitstitch.deferno.core.secure
 
+import com.circuitstitch.deferno.core.model.AccountId
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 /**
@@ -65,11 +65,5 @@ class InMemorySecretVaultTest {
         vault.deleteBearerToken(accountA)
         assertNull(vault.getBearerToken(accountA))
         assertEquals("token-b", vault.getBearerToken(accountB))
-    }
-
-    @Test
-    fun accountIdRejectsBlankValues() {
-        assertFailsWith<IllegalArgumentException> { AccountId("") }
-        assertFailsWith<IllegalArgumentException> { AccountId("   ") }
     }
 }

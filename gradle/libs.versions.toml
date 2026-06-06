@@ -8,6 +8,12 @@ kover = "0.9.8"
 ksp = "2.3.9"
 kotlinInject = "0.9.0"
 kotlinInjectAnvil = "0.1.7"
+# Reactive core (issue #14, AccountManager): kotlinx-coroutines supplies StateFlow for the
+# observable Active Account + accounts list (ADR-0001 observe-via-Flow-only; ADR-0003 Flow-based
+# presentation). Turbine + coroutines-test are the commonTest Flow stack (ADR-0006). First wired
+# here — the first shared-core module that needs reactive observation.
+coroutines = "1.11.0"
+turbine = "1.2.1"
 # Desktop (JVM) OS keychain for the secure-storage vault (ADR-0009, issue #13): macOS
 # Keychain / Windows Credential Store / Linux Secret Service, via JNA. Desktop-only — the
 # Android (Keystore) and iOS (Keychain) actuals use their in-platform APIs, no dependency.
@@ -54,6 +60,11 @@ kotlin-inject-compiler = { group = "me.tatarka.inject", name = "kotlin-inject-co
 kotlin-inject-anvil-runtime = { group = "software.amazon.lastmile.kotlin.inject.anvil", name = "runtime", version.ref = "kotlinInjectAnvil" }
 kotlin-inject-anvil-runtimeOptional = { group = "software.amazon.lastmile.kotlin.inject.anvil", name = "runtime-optional", version.ref = "kotlinInjectAnvil" }
 kotlin-inject-anvil-compiler = { group = "software.amazon.lastmile.kotlin.inject.anvil", name = "compiler", version.ref = "kotlinInjectAnvil" }
+
+# Reactive core + Flow test stack (issue #14): StateFlow in commonMain; runTest + Turbine in commonTest.
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 
 # Desktop OS keychain (jvmMain only) for the secure-storage vault (issue #13).
 java-keyring = { group = "com.github.javakeyring", name = "java-keyring", version.ref = "javaKeyring" }

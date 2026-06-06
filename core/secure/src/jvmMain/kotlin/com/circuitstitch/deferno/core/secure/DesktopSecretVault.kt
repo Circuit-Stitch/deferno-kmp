@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.secure
 
+import com.circuitstitch.deferno.core.model.AccountId
 import com.github.javakeyring.BackendNotSupportedException
 import com.github.javakeyring.Keyring
 import com.github.javakeyring.PasswordAccessException

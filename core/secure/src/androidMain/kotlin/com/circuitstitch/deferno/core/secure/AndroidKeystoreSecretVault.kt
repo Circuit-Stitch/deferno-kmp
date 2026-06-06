@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import com.circuitstitch.deferno.core.model.AccountId
 import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.KeyStore

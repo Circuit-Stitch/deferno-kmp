@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.core.secure
 
+import com.circuitstitch.deferno.core.model.AccountId
+
 /**
  * Non-persistent [SecretVault] backed by an in-memory map — the fake that lets the auth and
  * Account logic above it run on the pure-JVM fast path (ADR-0006), plus a stand-in for

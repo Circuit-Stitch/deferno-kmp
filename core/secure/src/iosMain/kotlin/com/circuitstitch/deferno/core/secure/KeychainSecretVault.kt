@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.secure
 
+import com.circuitstitch.deferno.core.model.AccountId
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
