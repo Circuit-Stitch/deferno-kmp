@@ -7,6 +7,10 @@ plugins {
 // Apple-only module — no android/jvm targets. Klibs cross-compile on any host;
 // linking the framework binary happens on a macOS runner (ADR-0006).
 kotlin {
+    // Keep in lockstep with ProjectConfig.JVM_TOOLCHAIN (the build's source of truth,
+    // used by the deferno.* conventions). This bespoke iOS-only framework module can't
+    // apply those conventions (different target set, no jvm()), and a dedicated
+    // convention for a single module isn't earned yet (ADR-0004).
     jvmToolchain(17)
 
     listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->

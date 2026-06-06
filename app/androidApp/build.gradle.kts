@@ -1,19 +1,16 @@
 plugins {
-    // AGP 9 compiles Kotlin itself (built-in Kotlin support), so the standalone
-    // org.jetbrains.kotlin.android plugin is no longer applied. The Compose
-    // compiler plugin is still applied explicitly.
-    alias(libs.plugins.android.application)
+    // SDK levels + JVM toolchain come from the deferno.android.application convention
+    // (shared with the library modules via ProjectConfig). The Compose compiler plugin
+    // is applied explicitly; AGP 9 compiles Kotlin itself, so no kotlin-android plugin.
+    id("deferno.android.application")
     alias(libs.plugins.kotlin.compose)
 }
 
 android {
     namespace = "com.circuitstitch.deferno"
-    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.circuitstitch.deferno"
-        minSdk = 26
-        targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
 
@@ -34,13 +31,6 @@ android {
     buildFeatures {
         compose = true
     }
-}
-
-// Single source of truth for the JVM target. The toolchain pins JDK 17 for both
-// Java and Kotlin compilation and lets Gradle auto-provision it (via the Foojay
-// resolver in settings.gradle.kts) when it isn't installed locally.
-kotlin {
-    jvmToolchain(17)
 }
 
 dependencies {

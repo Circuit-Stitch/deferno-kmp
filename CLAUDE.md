@@ -9,18 +9,19 @@ first to land.
 
 - **Language:** Kotlin
 - **UI:** Jetpack Compose (Material 3)
-- **Build:** Gradle (Kotlin DSL) with a version catalog at `gradle/libs.versions.toml`
-- **Min / target / compile SDK:** 26 / 35 / 35
+- **Build:** Gradle (Kotlin DSL) with a version catalog at `gradle/libs.versions.toml` and `build-logic` convention plugins
+- **Min / target / compile SDK:** 26 / 35 / 35 — defined once in `build-logic` `ProjectConfig` (the source of truth)
 - **Application ID:** `com.circuitstitch.deferno`
-- **JDK:** 17 (toolchain). You don't need JDK 17 installed — the Gradle Daemon JVM toolchain (`gradle/gradle-daemon-jvm.properties`) and the project toolchain (`kotlin { jvmToolchain(17) }`) auto-provision Eclipse Temurin 17 via the Foojay resolver. Launch Gradle with any JDK that can run Gradle 9.5.1 (17–25), e.g. Android Studio's bundled JDK.
+- **JDK:** 17 (toolchain). You don't need JDK 17 installed — the Gradle Daemon JVM toolchain (`gradle/gradle-daemon-jvm.properties`) and the project toolchain (`ProjectConfig.JVM_TOOLCHAIN`, applied via the convention plugins) auto-provision Eclipse Temurin 17 via the Foojay resolver. Launch Gradle with any JDK that can run Gradle 9.5.1 (17–25), e.g. Android Studio's bundled JDK.
 - **Kotlin:** compiled by AGP's built-in Kotlin support (AGP 9+) — there is no `org.jetbrains.kotlin.android` plugin; only the Compose compiler plugin is applied explicitly.
+- **Coverage:** Kover (ADR-0006) on every shared module via the `deferno.coverage` convention. The ~85–90% CI gate is not wired into `check` yet — it lands with CI.
 
 ## Layout
 
 Multi-module KMP per ADR-0004 (`core/*` foundations → `feature/*` slices → per-platform `app/*`):
 
 ```
-build-logic/                          ← convention plugins (deferno.kmp.library) — composite build
+build-logic/                          ← composable convention plugins — composite build
 core/                                 ← shared KMP foundations
   model · common · network · database · secure · data · domain · designsystem
 feature/                              ← shared KMP feature slices (Decompose component + ViewModel + state)
@@ -44,12 +45,25 @@ Each `core/*` and `feature/*` module is a KMP library (Android + JVM + iOS targe
 its module dependencies. Kotlin sources live under `src/<sourceSet>/kotlin` (`commonMain`, `commonTest`,
 `androidMain`, `iosMain`, …) — not `.../java`.
 
+The convention plugins (`build-logic/src/main/kotlin/`, ADR-0004) are small and composable:
+
+- `deferno.kmp` — cross-platform targets (`jvm()` + iOS) + JVM toolchain + `commonTest` framework.
+- `deferno.android` — adds the KMP Android library target + SDK levels (composes `deferno.kmp`).
+- `deferno.coverage` — Kover with the shared-core exclusions.
+- `deferno.kmp.library` — composes `deferno.android` + `deferno.coverage`; applied by every `core/*`/`feature/*` module.
+- `deferno.android.application` — `app/androidApp` (SDK levels + toolchain from `ProjectConfig`).
+- `deferno.jvm.application` — `app/desktopApp` (Kotlin/JVM + `application` + toolchain).
+
+`ProjectConfig` holds the SDK levels + JVM toolchain shared across them. `app/iosApp` is a bespoke
+iOS-only framework and stays a hand-written build file.
+
 ## Common commands
 
 ```sh
 ./gradlew build                            # build + test everything (Android/JVM; iOS klibs cross-compile)
 ./gradlew check                            # all unit tests: commonTest on JVM + Android host
 ./gradlew :core:model:jvmTest              # one module's commonTest on the JVM-fast path
+./gradlew :core:model:koverHtmlReport      # coverage report for one module (Kover)
 ./gradlew :app:androidApp:assembleDebug    # build the debug APK
 ./gradlew :app:androidApp:installDebug     # build + install on a connected device/emulator
 ./gradlew :app:androidApp:connectedAndroidTest  # instrumented tests (needs a device/emulator)
@@ -65,7 +79,7 @@ Android Studio: **Open** this directory and let it sync.
 ## Conventions
 
 - New dependencies go through `gradle/libs.versions.toml`, referenced as `libs.*` — don't hard-code versions in module build files.
-- Shared, cross-platform code is a KMP library under `core/*` (the right layer) or a vertical slice under `feature/*`; a new shared KMP module applies the `deferno.kmp.library` convention plugin. v1 keeps granularity small (ADR-0004) — modules earn further splitting rather than being split pre-emptively.
+- Shared, cross-platform code is a KMP library under `core/*` (the right layer) or a vertical slice under `feature/*`; a new shared KMP module applies the `deferno.kmp.library` convention plugin (app entry points use `deferno.android.application` / `deferno.jvm.application`). Build config (SDK levels, toolchain) belongs in `build-logic` (`ProjectConfig` + the convention plugins), not in module build files. v1 keeps granularity small (ADR-0004) — modules earn further splitting rather than being split pre-emptively.
 - Keep secrets (keystores, `google-services.json`, API keys) out of git — see `.gitignore`.
 
 ## Agent skills

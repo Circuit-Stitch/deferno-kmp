@@ -12,7 +12,8 @@ module layout. The build instructions below are for the Android target — the f
 - **Any JDK that runs Gradle 9.5.1 (JDK 17–25)** to launch the build — the Android Studio bundled
   JDK works out of the box. You don't need to install JDK 17 yourself: the build targets JDK 17 via
   a Gradle Daemon JVM toolchain (`gradle/gradle-daemon-jvm.properties`) and the project toolchain
-  (`kotlin { jvmToolchain(17) }`), and auto-provisions Eclipse Temurin 17 on first run.
+  (`ProjectConfig.JVM_TOOLCHAIN`, applied via the `build-logic` convention plugins), and
+  auto-provisions Eclipse Temurin 17 on first run.
 - **Android SDK** with platform 35 and build-tools (install via Android Studio's SDK Manager).
 - A device or emulator running **Android 8.0 (API 26)** or newer.
 
@@ -27,6 +28,7 @@ Gradle sync finish, or from the command line:
 ./gradlew :app:androidApp:assembleDebug  # build the debug APK
 ./gradlew :app:androidApp:installDebug   # install on a connected device/emulator
 ./gradlew check                          # run local unit tests (commonTest on JVM + Android host)
+./gradlew :core:model:koverHtmlReport    # coverage report for a module (Kover, ADR-0006)
 ```
 
 > iOS klibs cross-compile on any host, but running iOS tests and linking the iOS framework require
@@ -52,7 +54,7 @@ Multi-module Kotlin Multiplatform per [ADR-0004](docs/adr/0004-module-structure-
 | `app/androidApp/`             | Android application (Jetpack Compose host)                          |
 | `app/desktopApp/`             | Compose Desktop (JVM) entry point                                   |
 | `app/iosApp/`                 | iOS umbrella framework (Kotlin) + Xcode project (added on macOS)    |
-| `build-logic/`                | Convention plugins (`deferno.kmp.library`) — composite build        |
+| `build-logic/`                | Composable convention plugins (`deferno.kmp`/`.android`/`.coverage`/`.kmp.library` + app plugins) — composite build |
 | `gradle/libs.versions.toml`   | Dependency version catalog                                          |
 | `docs/adr/`                   | Architecture decision records                                       |
 | `docs/agents/`                | Agent-skill configuration                                           |

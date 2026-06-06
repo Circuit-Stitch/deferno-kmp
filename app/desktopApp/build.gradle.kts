@@ -1,10 +1,6 @@
 plugins {
-    alias(libs.plugins.kotlin.jvm)
-    application
-}
-
-kotlin {
-    jvmToolchain(17)
+    // Kotlin/JVM + application + the shared JVM toolchain (from ProjectConfig).
+    id("deferno.jvm.application")
 }
 
 application {
