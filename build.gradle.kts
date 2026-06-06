@@ -13,4 +13,9 @@ plugins {
     alias(libs.plugins.compose.multiplatform) apply false
     alias(libs.plugins.kover) apply false
     alias(libs.plugins.ksp) apply false
+
+    // The repo root is Kover's aggregation point: this convention applies Kover here and
+    // enforces the merged shared-core coverage gate (ADR-0006, issue #11). Kover stays
+    // `apply false` above so it also lands on every subproject's classpath (the INVARIANT).
+    id("deferno.coverage.aggregation")
 }
