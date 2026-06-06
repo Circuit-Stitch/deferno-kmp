@@ -15,7 +15,7 @@ first to land.
 - **JDK:** 17 (toolchain). You don't need JDK 17 installed — the Gradle Daemon JVM toolchain (`gradle/gradle-daemon-jvm.properties`) and the project toolchain (`ProjectConfig.JVM_TOOLCHAIN`, applied via the convention plugins) auto-provision Eclipse Temurin 17 via the Foojay resolver. Launch Gradle with any JDK that can run Gradle 9.5.1 (17–25), e.g. Android Studio's bundled JDK.
 - **Kotlin:** compiled by AGP's built-in Kotlin support (AGP 9+) — there is no `org.jetbrains.kotlin.android` plugin; only the Compose compiler plugin is applied explicitly.
 - **DI:** kotlin-inject + kotlin-inject-anvil — compile-time, KMP, via KSP (ADR-0003). The scope layering (process/app → Account → scene, ADR-0008) lives in `core/di`; the `deferno.di` convention wires the runtimes + per-target KSP processors into a shared module. KSP2 is version-decoupled from the Kotlin compiler, so `ksp = 2.3.9` pairs with Kotlin 2.4.0 (no `<kotlin>-<ksp>` suffix).
-- **Coverage:** Kover (ADR-0006) on every shared module via the `deferno.coverage` convention. The ~85–90% CI gate is not wired into `check` yet — it lands with CI.
+- **Coverage:** Kover (ADR-0006) on every shared module via the `deferno.coverage` convention. The hard ~85–90% gate runs over the *merged* shared-core report (`deferno.coverage.aggregation`, applied at the root): CI runs `:koverVerify` on every PR. It's deliberately not wired into `check` — measure logic, not boilerplate, so generated DI/serialization code and never-instantiated DI scope markers are excluded (see `CoverageConfig`).
 
 ## Layout
 
@@ -51,7 +51,8 @@ The convention plugins (`build-logic/src/main/kotlin/`, ADR-0004) are small and 
 
 - `deferno.kmp` — cross-platform targets (`jvm()` + iOS) + JVM toolchain + `commonTest` framework.
 - `deferno.android` — adds the KMP Android library target + SDK levels (composes `deferno.kmp`).
-- `deferno.coverage` — Kover with the shared-core exclusions.
+- `deferno.coverage` — Kover with the shared-core exclusions (`CoverageConfig`) on each module's own report.
+- `deferno.coverage.aggregation` — the coverage *gate*: applied at the root, aggregates `core/*`+`feature/*` via `kover(project(...))` and enforces the merged ~85–90% bound (plus a "must be measured" floor so a hollowed-out gate can't pass vacuously). Run via `:koverVerify` (in CI).
 - `deferno.kmp.library` — composes `deferno.android` + `deferno.coverage`; applied by every `core/*`/`feature/*` module.
 - `deferno.di` — kotlin-inject + anvil DI wiring (KSP plugin + DI runtimes + per-target processors); composed onto `deferno.kmp.library` by modules that host or contribute DI bindings (currently `core/di`).
 - `deferno.android.application` — `app/androidApp` (SDK levels + toolchain from `ProjectConfig`).
@@ -67,6 +68,8 @@ iOS-only framework and stays a hand-written build file.
 ./gradlew check                            # all unit tests: commonTest on JVM + Android host
 ./gradlew :core:model:jvmTest              # one module's commonTest on the JVM-fast path
 ./gradlew :core:model:koverHtmlReport      # coverage report for one module (Kover)
+./gradlew :koverVerify                     # the merged shared-core coverage gate (what CI enforces)
+./gradlew :koverHtmlReport                 # merged shared-core coverage report (build/reports/kover/html)
 ./gradlew :app:androidApp:assembleDebug    # build the debug APK
 ./gradlew :app:androidApp:installDebug     # build + install on a connected device/emulator
 ./gradlew :app:androidApp:connectedAndroidTest  # instrumented tests (needs a device/emulator)

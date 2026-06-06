@@ -1,0 +1,76 @@
+# JVM-fast path CI (ADR-0006, issue #11). Every PR compiles + tests the shared KMP core
+# on the JVM-fast path (commonTest on JVM + Android host unit tests) and enforces the
+# Kover coverage gate over the merged shared core. iOS link/test tasks self-disable on a
+# Linux runner (ADR-0006); the macOS/iOS job is a deliberate follow-up, not part of #11.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel superseded runs on a PR branch; never cancel an in-flight push to main.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Least privilege: this workflow only reads the repo.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, test & coverage gate (JVM-fast)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # Temurin (Adoptium) 17 is exactly the toolchain the build pins
+      # (ProjectConfig.JVM_TOOLCHAIN / gradle-daemon-jvm.properties). Gradle auto-detects
+      # this JDK as the daemon + project toolchain, so Foojay does NOT download a second
+      # JDK in CI — the launch JVM, daemon JVM, and compile toolchain are all this 17.
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Validates the wrapper JAR (built in since v4) and caches the Gradle user home —
+      # write on main, read-only on PRs, automatically. Pinned to v4 (MIT): the v6 cache
+      # provider is proprietary for private repos. To persist the configuration cache
+      # across runs, add a GRADLE_ENCRYPTION_KEY secret and pass it as cache-encryption-key.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # The Android SDK (ANDROID_HOME / ANDROID_SDK_ROOT) is preinstalled on ubuntu-latest,
+      # so AGP's host unit-test compilation needs no setup-android step and no
+      # local.properties. `check` runs commonTest on JVM + the Android host tests + lint;
+      # `:koverVerify` is the merged shared-core coverage gate (deferno.coverage.aggregation).
+      - name: Build, test & verify coverage
+        run: ./gradlew check :koverVerify --stacktrace
+
+      # Generate the merged HTML report even when the gate fails, so a coverage drop is
+      # easy to diagnose from the uploaded artifact.
+      - name: Generate Kover coverage report
+        if: ${{ !cancelled() }}
+        run: ./gradlew :koverHtmlReport --stacktrace
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/build/test-results/**/*.xml"
+          if-no-files-found: warn
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kover-coverage-report
+          path: "**/build/reports/kover/**"
+          if-no-files-found: warn
