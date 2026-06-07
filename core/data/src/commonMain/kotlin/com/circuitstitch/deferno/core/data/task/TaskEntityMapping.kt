@@ -6,7 +6,7 @@ import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /**
  * The row<->domain conversion for the Task cache (ADR-0001, #22). core:database deliberately keeps

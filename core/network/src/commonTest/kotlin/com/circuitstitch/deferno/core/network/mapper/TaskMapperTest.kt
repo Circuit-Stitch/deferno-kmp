@@ -8,7 +8,7 @@ import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
 import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
 import com.circuitstitch.deferno.core.network.dto.TaskSummaryDto
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

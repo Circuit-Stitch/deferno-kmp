@@ -14,7 +14,7 @@ import com.circuitstitch.deferno.feature.tasks.TaskTreeComponent
 import com.circuitstitch.deferno.feature.tasks.TaskTreeState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /**
  * Test doubles + fixtures for the feature Views (#27). The Views are rendered through their public

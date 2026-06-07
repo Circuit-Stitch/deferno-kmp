@@ -22,8 +22,12 @@ turbine = "1.2.1"
 decompose = "3.5.0"
 # Multiplatform date/time (issues #18/#21/#22): the domain model carries RFC3339 instants
 # (nanosecond precision on the wire) and date-keyed Plan rows, and the DTO→domain mapper +
-# repository reconcile parse/format them. kotlinx-datetime is the KMP-standard Instant/LocalDate.
-kotlinxDatetime = "0.6.2"
+# repository reconcile parse/format them. 0.7 moved `Instant`/`Clock` to the stdlib
+# (`kotlin.time.Instant`, a deprecated typealias remains in `kotlinx.datetime`); the model imports
+# `kotlin.time.Instant` directly and kotlinx-datetime still supplies `LocalDate`/`TimeZone` + the
+# parse/format. Pinning 0.6.2 while a JVM/desktop Compose target dragged 0.7.x onto the runtime
+# crashed at launch with `ClassNotFoundException: kotlinx.datetime.Instant` (#49).
+kotlinxDatetime = "0.7.1"
 # Local source-of-truth database (issue #21, ADR-0001). SQLDelight 2.3.2 is the first stable
 # release with the Android Gradle Plugin 9 new-DSL fixes (#6139/#6140) this project's
 # `com.android.kotlin.multiplatform.library` target needs. Drivers are per-target: android-driver,
