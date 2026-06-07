@@ -24,9 +24,20 @@ deferrals. Already decided elsewhere: per-Account **encrypted DB** (SQLCipher), 
   (the source of truth). OS-level backup/transfer is **reserved**: if added it must retain encryption
   across devices via a **user-passphrase-derived key** (since device-bound keys can't leave the
   device) — not precluded.
+- **DB encryption key storage:** each per-Account SQLCipher passphrase lives in a **dedicated
+  device-bound secure store, separate from the bearer-token `SecretVault`** (its own Keystore alias +
+  backup-excluded prefs on Android), generated as a fresh random key on first use per Account. Kept
+  separate from the token vault **deliberately**: generalizing `SecretVault` into a multi-secret store
+  would churn a small, already-audited crypto surface across every platform, so a focused
+  `DatabaseKeyProvider` leaves the token path untouched. The DB key is **disposable like the cache it
+  protects** — loss (new device / corruption) deletes the stale per-Account DB and re-syncs, mirroring
+  the token store's re-auth-on-miss posture. iOS/desktop providers land with their DB encryption; for
+  where this sits in the DI graph, see ADR-0014.
 - **Lifecycle:** secure-wipe (DB + token + keys) on Account removal — **and revoke the PAT
   server-side** (`DELETE /auth/tokens/{id}`, ADR-0012); **retain** the encrypted cache on a mere
   `401` (re-auth, don't wipe); never log tokens/PII.
 
 **Considered & rejected.** Certificate pinning in v1 (ops burden > benefit for now); third-party
-analytics/crash SDKs (privacy).
+analytics/crash SDKs (privacy); generalizing `SecretVault` into a keyed multi-secret store to also hold
+DB keys (avoided to keep the audited token-vault surface unchanged — revisit if a third secret type
+appears).

@@ -13,6 +13,10 @@ later. This ADR records the deferral *and* the guardrails that keep it a localiz
   window/scene gets its own Decompose component-tree root**; the **data layer** (repositories,
   SQLDelight, sync engine, `AccountManager`, secure vault) are **process-global singletons shared
   across scenes**, while **presentation is scene-scoped**. The DI scopes are structured this way now.
+  *(Refined by ADR-0014: the cross-Account infrastructure here — `AccountManager`, the secure vault, the
+  network client — stays process-global, but **repositories, SQLDelight, and the sync engine are
+  per-Account `AccountScope`**, torn down and rebuilt on Active-Account switch, to honour the ADR-0002
+  isolation boundary.)*
 - **(G3) Account context is scene-scoped, not a hard global** — a future window can show a different
   [[Active Account]]. v1 behaves as one Active Account, but the seam exists.
 - **(G4) Per-scene lifecycle** (Decompose/Essenty per tree) — no single-foreground assumption; support
