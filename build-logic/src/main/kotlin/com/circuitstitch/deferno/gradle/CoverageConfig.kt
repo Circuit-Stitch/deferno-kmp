@@ -33,6 +33,15 @@ object CoverageConfig {
         // kotlin-inject + kotlin-inject-anvil generated DI graph (issue #10):
         "*KotlinInject*",    // anvil merged components + kotlin-inject component impls
         "*CreateComponent*", // anvil @CreateComponent (KMP create) factories
+        // The distributed @ContributesTo binding modules (issue #68, ADR-0014): each is an interface
+        // of @Provides one-liners naming how an impl is constructed (the AppScope spine + the
+        // per-Account data layer). Pure DI wiring — "measure logic, not boilerplate" — run only when
+        // the real graph is built (the app), not the headless JVM gate. Named `*Bindings` by
+        // convention; the merged graph they feed IS compile-validated on every target.
+        "*Bindings",
+        // The desktop/iOS no-op AccountDataStore (issue #68): a do-nothing binding for platforms with
+        // no separate per-Account data-wipe yet. No logic to measure; a test would be hollow.
+        "com.circuitstitch.deferno.core.data.account.NoOpAccountDataStore",
         // Kotlin interface default-method JVM bridges — compiler artifacts, never invoked
         // (the real provider on the interface is what runs), so uncoverable boilerplate.
         "*DefaultImpls",

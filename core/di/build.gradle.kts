@@ -26,7 +26,10 @@ kotlin {
             api(project(":core:data"))
             // `api`: DefernoEnvironment appears in createAppComponent's public signature.
             api(project(":core:network"))
-            implementation(project(":core:database"))
+            // `api`: CommandExecutor is re-exposed on AccountComponent's public surface.
+            api(project(":core:domain"))
+            // `api`: AccountDatabaseFactory is re-exposed on AppComponent for the child AccountScope.
+            api(project(":core:database"))
             implementation(project(":core:secure"))
         }
     }

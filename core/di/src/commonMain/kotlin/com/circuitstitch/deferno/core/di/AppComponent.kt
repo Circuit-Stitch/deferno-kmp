@@ -2,6 +2,10 @@ package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
+import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
+import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
+import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
+import com.circuitstitch.deferno.core.database.AccountDatabaseFactory
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.AppScope
 import com.circuitstitch.deferno.core.scopes.PlatformContext
@@ -55,6 +59,19 @@ abstract class AppComponent(
      * HttpClient → BearerTokenProvider → AccountContext chain at compile time.
      */
     abstract val authRepository: AuthRepository
+
+    // --- Bindings re-exposed for the child AccountScope (ADR-0014) ---
+    // kotlin-inject-anvil does not auto-propagate a parent's contributed @Provides into a child merge;
+    // a child (AccountComponent, via @Component val app) can only consume parent bindings the parent
+    // exposes as accessors. These AppScope bindings feed the per-Account data layer one scope down:
+    // the offline-first repositories pull through the shared remote sources, the outbox replays through
+    // the shared sender, and the per-Account DB is opened by the platform AccountDatabaseFactory (which
+    // closes over the host Context / databases dir / key provider inside AppScope). They are plumbing,
+    // not part of the app-facing surface — the app uses AccountComponent.taskRepository et al.
+    abstract val taskRemoteSource: TaskRemoteSource
+    abstract val planRemoteSource: PlanRemoteSource
+    abstract val outboxRequestSender: OutboxRequestSender
+    abstract val accountDatabaseFactory: AccountDatabaseFactory
 }
 
 // Creation from common code (KMP); anvil generates the per-platform `actual`. One

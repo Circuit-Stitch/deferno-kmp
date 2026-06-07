@@ -1,5 +1,8 @@
 plugins {
     id("deferno.kmp.library")
+    // This module contributes the AccountScope CommandExecutor binding (ADR-0007/0014) via a
+    // @ContributesTo module, so it hosts kotlin-inject + anvil.
+    id("deferno.di")
 }
 
 kotlin {
@@ -9,6 +12,8 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            // The DI scope markers (AccountScope) the @ContributesTo CommandExecutor binding references.
+            api(project(":core:scopes"))
             // The command registry (#26, ADR-0007) is pure-data commands + a dispatch executor.
             // core:model supplies TaskId/Task/WorkingState (and kotlinx-datetime's LocalDate, via its
             // `api`) named in the public command signatures; core:data supplies the TaskWriter/PlanWriter

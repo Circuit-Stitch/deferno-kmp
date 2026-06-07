@@ -1,5 +1,9 @@
 package com.circuitstitch.deferno.core.di
 
+import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
+import com.circuitstitch.deferno.core.data.plan.PlanRepository
+import com.circuitstitch.deferno.core.data.task.TaskRepository
+import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.scopes.AccountScope
 import me.tatarka.inject.annotations.Component
@@ -33,6 +37,22 @@ abstract class AccountComponent(
 ) {
     // Re-exposed from AppScope to show parent-scoped bindings resolve through a child.
     abstract val appScaffold: AppScaffold
+
+    /**
+     * The per-Account data layer (ADR-0014). The scene builds its ViewModels over these; the whole
+     * subtree (this Account's encrypted DB + stores + repositories + outbox) is rebuilt when the
+     * Active Account switches, because this component is disposed + recreated for the new Account.
+     * Exposing them also anchors anvil's compile-time validation of the entire AccountScope chain
+     * (DB → driver → key/Context/databasesDir, repositories → AppScope remote sources).
+     */
+    abstract val taskRepository: TaskRepository
+    abstract val planRepository: PlanRepository
+
+    /** The command-registry dispatch site (ADR-0007) over this Account's write seams. */
+    abstract val commandExecutor: CommandExecutor
+
+    /** The offline outbox replay engine (#23) for this Account; the app drives [OutboxProcessor.flush]. */
+    abstract val outboxProcessor: OutboxProcessor
 }
 
 @CreateComponent

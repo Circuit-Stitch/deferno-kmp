@@ -56,6 +56,21 @@ fun createDefernoDatabase(factory: SqlDriverFactory): DefernoDatabase =
     DefernoDatabase(factory.create())
 
 /**
+ * Opens the [DefernoDatabase] for a given Account (ADR-0008/0014). A **platform-neutral** seam so the
+ * per-Account database can be built one DI scope down ([com.circuitstitch.deferno.core.scopes.AccountScope])
+ * while the *host* dependencies the driver needs — the Android `Context`, the desktop databases dir,
+ * the per-Account key provider — are captured once in the process-global
+ * [com.circuitstitch.deferno.core.scopes.AppScope] binding that produces this factory. AppScope binds
+ * a platform implementation (closing over those host deps); AccountScope calls [create] with the
+ * Active Account's id. This keeps the platform-specific [SqlDriverFactory] inputs out of the child
+ * scope, whose only Account-specific input is the [AccountId] itself.
+ */
+fun interface AccountDatabaseFactory {
+    /** Opens (creating/migrating as needed) the [DefernoDatabase] for [account]. */
+    fun create(account: AccountId): DefernoDatabase
+}
+
+/**
  * The on-disk database file name for [account] — `deferno-<id>.db`. Per-Account naming is half of
  * the hard isolation boundary (the per-Account key is the other half, ADR-0002); each Account's
  * data lives in a physically separate file.
