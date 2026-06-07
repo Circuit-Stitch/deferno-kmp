@@ -26,6 +26,9 @@ class FakePlanLocalStore(
     override fun observePlan(date: LocalDate, tz: String): Flow<List<TaskId>> =
         plans.map { it[PlanKey(date, tz)] ?: emptyList() }
 
+    override suspend fun currentPlan(date: LocalDate, tz: String): List<TaskId> =
+        plans.value[PlanKey(date, tz)] ?: emptyList()
+
     override suspend fun replacePlan(date: LocalDate, tz: String, taskIds: List<TaskId>) {
         plans.value = plans.value + (PlanKey(date, tz) to taskIds)
     }

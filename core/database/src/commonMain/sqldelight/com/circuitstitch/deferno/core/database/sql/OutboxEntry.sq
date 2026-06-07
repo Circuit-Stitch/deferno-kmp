@@ -1,0 +1,53 @@
+-- The offline write-path outbox (ADR-0001, issue #23): a durable FIFO queue of intent-based,
+-- idempotent mutations applied optimistically to the local cache and replayed to the server when
+-- connectivity returns (last-writer-wins). Persisted (not in-memory) so an offline write survives
+-- process death — the local SQLDelight database is the single source of truth (ADR-0001).
+--
+-- A row stores the ALREADY-COMPUTED wire request (`method` + `path` + `body`), not a serialized
+-- domain intent: replay re-sends the stored `body` bytes verbatim, which is what makes replay
+-- perfectly idempotent (#23). `body` is the rendered JSON object string for a PATCH/POST, or NULL
+-- for a bodiless DELETE. `path` is the request's path segments joined with `\n` (segments never
+-- contain newlines), mirroring the `labels`/`child_ids` encoding in `taskEntity`.
+--
+-- `seq INTEGER PRIMARY KEY AUTOINCREMENT` is the FIFO key. AUTOINCREMENT (not a plain rowid) is
+-- load-bearing: it guarantees a *monotonic, never-reused* seq even after the head of the queue is
+-- deleted, so replay order can never regress below an already-dispatched entry. `attempts` +
+-- `next_attempt_at` carry the retry/backoff state (an entry is "ready" when `next_attempt_at <= now`);
+-- `created_at` is an audit field for diagnostics. The processor (#23) reads the queue in `seq` order
+-- and applies the readiness/backoff/head-of-line policy in Kotlin (kept out of SQL so it is unit-
+-- testable against the in-memory fake on the ADR-0006 JVM-fast path).
+CREATE TABLE outboxEntry (
+    seq             INTEGER PRIMARY KEY AUTOINCREMENT,
+    target          TEXT NOT NULL,
+    method          TEXT NOT NULL,
+    path            TEXT NOT NULL,
+    body            TEXT,
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT NOT NULL,
+    created_at      TEXT NOT NULL
+);
+
+-- The whole queue in FIFO order — the processor pulls this and walks it head-first (#23).
+selectAllInOrder:
+SELECT * FROM outboxEntry ORDER BY seq;
+
+-- Append a mutation to the tail. `seq` is assigned by AUTOINCREMENT; a fresh entry starts at
+-- attempts = 0 with next_attempt_at = now (ready to dispatch immediately).
+enqueue:
+INSERT INTO outboxEntry(target, method, path, body, attempts, next_attempt_at, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- Drop a dispatched (succeeded / terminally-rejected / attempts-exhausted) entry from the queue.
+deleteBySeq:
+DELETE FROM outboxEntry WHERE seq = ?;
+
+-- Record a retryable failure: bump the attempt count and schedule the next attempt (backoff).
+markRetry:
+UPDATE outboxEntry SET attempts = ?, next_attempt_at = ? WHERE seq = ?;
+
+-- The pending count — the size of the unsynced-writes queue (diagnostics / a future UI badge).
+count:
+SELECT count(*) FROM outboxEntry;
+
+deleteAll:
+DELETE FROM outboxEntry;

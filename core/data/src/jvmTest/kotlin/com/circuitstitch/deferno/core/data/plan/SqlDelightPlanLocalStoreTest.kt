@@ -56,6 +56,16 @@ class SqlDelightPlanLocalStoreTest {
     }
 
     @Test
+    fun currentPlanReadsTheOrderedSnapshotForTheWritePath() = runTest {
+        // The non-Flow read the offline write path (#23) uses to apply a plan mutation optimistically.
+        val store = SqlDelightPlanLocalStore(newDb(), Dispatchers.Default)
+        assertEquals(emptyList(), store.currentPlan(date, tz)) // empty day
+        store.replacePlan(date, tz, listOf(TaskId("c"), TaskId("a"), TaskId("b")))
+
+        assertEquals(listOf(TaskId("c"), TaskId("a"), TaskId("b")), store.currentPlan(date, tz))
+    }
+
+    @Test
     fun replacePlanIsAFullPerDayReplace() = runTest {
         val store = SqlDelightPlanLocalStore(newDb(), Dispatchers.Default)
         store.replacePlan(date, tz, listOf(TaskId("old1"), TaskId("old2")))
