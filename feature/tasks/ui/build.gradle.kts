@@ -31,6 +31,15 @@ kotlin {
         androidMain.dependencies {
             implementation(project(":feature:tasks"))
             implementation(libs.decompose.extensions.compose)
+            // Adaptive list/detail Panes (#29, ADR-0007 tier-2): the Android-native `TasksScreen`
+            // renders the co-resident detail/tree slots as 1 or 2 panes by window size class via M3
+            // `ListDetailPaneScaffold` (+ `currentWindowAdaptiveInfo()` for the continuous width metric,
+            // ADR-0008 G1). These androidx adaptive artifacts are Android-only (the desktop two-pane in
+            // jvmMain uses CMP `BoxWithConstraints` instead). They carry an explicit version (this is a
+            // Compose *Multiplatform* module with no androidx Compose BOM) pinned to what the app shell's
+            // BOM resolves, so both compile against the same adaptive API.
+            implementation(libs.androidx.material3.adaptive)
+            implementation(libs.androidx.material3.adaptive.layout)
         }
         // The desktop-native screen: a large-screen two-pane list + detail/tree layout (ADR-0007's
         // tier-2 "1 or 2 panes by size class") — the desktop counterpart of the Android single-pane

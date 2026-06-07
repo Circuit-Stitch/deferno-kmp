@@ -36,17 +36,19 @@ import com.circuitstitch.deferno.feature.tasks.TaskTreeComponent
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 
 /**
- * The Tasks screen, desktop edition. Where the Android screen is **single-pane** (it renders only
- * [TasksComponent.activePane]), the desktop screen leans into the large screen: when there is room it
- * shows a **two-pane list + detail/tree** layout — the ADR-0007 tier-2 "1 or 2 panes by size class"
- * vision, the desktop's best self rather than the phone layout stretched.
+ * The Tasks screen, desktop edition — the desktop counterpart of the adaptive Android `TasksScreen`
+ * (#29). Both render the component's co-resident slots as **1 or 2 panes by window size class** (the
+ * ADR-0007 tier-2 "1 or 2 panes" vision, each platform's best self rather than the phone layout
+ * stretched): Android via M3 `ListDetailPaneScaffold`, desktop via `BoxWithConstraints` here — when
+ * there is room the list pins on the left and the most-recently-foregrounded co-resident slot fills
+ * the right.
  *
  * It is adaptive off the continuous available width (ADR-0008 G1 — never a device-type check): at
- * [TasksTwoPaneMinWidth]+ the list stays pinned on the left while the most-recently-foregrounded
- * co-resident slot fills the right; narrower, it collapses to the same single-pane behaviour as
- * Android. The component owns all state ([detail]/[tree] are co-resident slots, [activePane] their
- * recency), so resizing across the breakpoint never drops what's open (G5). It reuses the slice's
- * shared commonMain atoms ([TaskRow], [PaneHeader], [WorkingStateBadge], [LoadingStrip], [EmptyState]).
+ * [TasksTwoPaneMinWidth]+ it shows two panes; narrower, it collapses to a single pane — the same
+ * compact fold as the Android screen. The component owns all state ([detail]/[tree] are co-resident
+ * slots, [activePane] their recency), so resizing across the breakpoint never drops what's open (G5).
+ * It reuses the slice's shared commonMain atoms ([TaskRow], [PaneHeader], [WorkingStateBadge],
+ * [LoadingStrip], [EmptyState]).
  */
 @Composable
 fun TasksDesktopScreen(component: TasksComponent, modifier: Modifier = Modifier) {
@@ -70,7 +72,7 @@ fun TasksDesktopScreen(component: TasksComponent, modifier: Modifier = Modifier)
             }
         } else {
             // One pane: render the most-recently-foregrounded slot, falling back to the list — the
-            // same precedence as the Android single-pane host (TasksScreen.kt).
+            // same precedence as the Android screen's compact fold (TasksScreen.kt).
             when {
                 activePane == TaskPane.Tree && tree != null -> TaskTreePane(tree)
                 activePane == TaskPane.Detail && detail != null -> TaskDetailPane(detail)
