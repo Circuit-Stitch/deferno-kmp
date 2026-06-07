@@ -50,6 +50,7 @@ include(":feature:plan")
 // Per-slice Compose Views (#27): a UI submodule on the Compose platforms only (Android + desktop,
 // no iOS — iOS is SwiftUI). Kept separate from the slice's logic module because the Compose compiler
 // plugin is module-wide and would break the logic module's iOS compilation (ADR-0004).
+include(":feature:auth:ui")
 include(":feature:tasks:ui")
 include(":feature:plan:ui")
 

@@ -16,14 +16,21 @@ package com.circuitstitch.deferno.core.network
  * Callers build endpoint paths *onto* [baseUrl] (it already carries the `/api` prefix) with
  * `url { appendPathSegments(...) }` rather than passing absolute strings, so the `/api` prefix
  * and host come from here and only the path is per-endpoint.
+ *
+ * **The trailing slash is load-bearing.** Ktor's `defaultRequest { url(baseUrl) }` resolves each
+ * request URL *relative* to [baseUrl] (RFC 3986 reference resolution). A base ending in `/api`
+ * treats `api` as a file, so appending `auth/me` resolves to `…/auth/me` — the `/api` prefix is
+ * silently dropped and the request hits the web frontend (it returns the SPA's HTML, not the API).
+ * Ending the base in `/api/` makes `api/` a directory, so the path appends as `…/api/auth/me`.
+ * Verified live against staging (#20); a regression test pins it in `DefernoHttpClientTest`.
  */
 enum class DefernoEnvironment(val baseUrl: String) {
-    /** Production: `https://api.deferno.app/api` (spec `servers`). */
-    Production("https://api.deferno.app/api"),
+    /** Production: `https://api.deferno.app/api/` (spec `servers`; trailing slash — see class doc). */
+    Production("https://api.deferno.app/api/"),
 
-    /** Staging: `https://app2.defernowork.com/api` (verified, envelope `version: 0.1`). */
-    Staging("https://app2.defernowork.com/api"),
+    /** Staging: `https://app2.defernowork.com/api/` (verified, envelope `version: 0.1`). */
+    Staging("https://app2.defernowork.com/api/"),
 
-    /** Local development: `http://localhost:3000/api` (loopback cleartext, spec `servers`). */
-    Local("http://localhost:3000/api"),
+    /** Local development: `http://localhost:3000/api/` (loopback cleartext, spec `servers`). */
+    Local("http://localhost:3000/api/"),
 }
