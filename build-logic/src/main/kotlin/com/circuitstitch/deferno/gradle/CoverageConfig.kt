@@ -49,6 +49,12 @@ object CoverageConfig {
         "com.circuitstitch.deferno.core.secure.AndroidKeystoreSecretVault*",
         "com.circuitstitch.deferno.core.secure.KeychainSecretVault*",
         "com.circuitstitch.deferno.core.secure.DesktopSecretVault*",
+        // Platform account-storage actuals (issue #68): the SharedPreferences-backed roster and the
+        // Android per-Account data-wipe both touch device storage, exercised by instrumented tests,
+        // not the headless gate (same rationale as the secure-storage actuals). The AccountRegistry
+        // contract and the roster (de)serialization (AccountRosterCodec, commonTest) ARE measured.
+        "com.circuitstitch.deferno.core.data.account.SharedPreferencesAccountRegistry*",
+        "com.circuitstitch.deferno.core.data.account.AndroidAccountDataStore*",
         // Compose @Composable glue (ADR-0006: "thin UI glue"; Views are screenshot-tested, not
         // unit-tested on the headless JVM gate). The design-system colour *tokens* ARE measured
         // (designsystem commonTest); the @Composable theme + typography builders that resolve fonts
@@ -72,7 +78,8 @@ object CoverageConfig {
         // encryption (iOS), and the JdbcSqliteDriver file driver (desktop) all open a real,
         // platform-bound database and run only on a device / Apple target / desktop — exercised
         // by integration, not the headless gate (ADR-0006). The schema, queries, and the
-        // in-memory test driver (commonMain/commonTest) ARE measured.
+        // in-memory test driver (commonMain/commonTest) ARE measured. The Android DB-key provider
+        // (AndroidDatabaseKeyProvider, issue #68) lives here too — device crypto, instrumented-tested.
         "com.circuitstitch.deferno.core.database.driver",
         // Feature Compose Views (#27): the thin state-renderers in each slice's `:feature:*:ui`
         // module (Android screens in androidMain + reusable atoms in commonMain). They hold no

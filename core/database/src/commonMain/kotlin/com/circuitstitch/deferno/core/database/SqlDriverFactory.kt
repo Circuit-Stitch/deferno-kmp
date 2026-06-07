@@ -37,6 +37,20 @@ fun interface DatabaseKeyProvider {
     fun databaseKey(account: AccountId): String
 }
 
+/**
+ * A [DatabaseKeyProvider] that can also **destroy** an Account's key — the wipe side of the
+ * per-Account key lifecycle (ADR-0002/0009). The production provider mints + persists keys on first
+ * use; account removal ([com.circuitstitch.deferno.core.data.account.AccountDataStore]) calls
+ * [deleteKey] alongside deleting the per-Account database file.
+ */
+interface DatabaseKeyStore : DatabaseKeyProvider {
+    /** Destroys [account]'s stored database key. A no-op if none is stored. */
+    fun deleteKey(account: AccountId)
+}
+
+/** Signals that the platform key store could not complete an operation. Never carries the key. */
+class DatabaseKeyException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
 /** Builds the typed [DefernoDatabase] over a driver from [factory]. */
 fun createDefernoDatabase(factory: SqlDriverFactory): DefernoDatabase =
     DefernoDatabase(factory.create())

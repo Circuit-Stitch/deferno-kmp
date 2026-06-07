@@ -12,8 +12,17 @@
           AndroidKeystoreSecretVault.DEFAULT_PREFS_NAME ("deferno_secure_vault").
         -->
         <exclude domain="sharedpref" path="deferno_secure_vault.xml"/>
+        <!--
+          Per-Account DB keys (AndroidDatabaseKeyProvider) + account roster
+          (SharedPreferencesAccountRegistry): device-bound caches excluded from OS backup (ADR-0009)
+          — non-exportable keys, so a restored device re-authenticates + re-syncs.
+        -->
+        <exclude domain="sharedpref" path="deferno_db_keys.xml"/>
+        <exclude domain="sharedpref" path="deferno_account_roster.xml"/>
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="deferno_secure_vault.xml"/>
+        <exclude domain="sharedpref" path="deferno_db_keys.xml"/>
+        <exclude domain="sharedpref" path="deferno_account_roster.xml"/>
     </device-transfer>
 </data-extraction-rules>
