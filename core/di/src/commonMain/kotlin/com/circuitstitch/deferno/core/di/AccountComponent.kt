@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.scopes.AccountScope
 import me.tatarka.inject.annotations.Component
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.MergeComponent

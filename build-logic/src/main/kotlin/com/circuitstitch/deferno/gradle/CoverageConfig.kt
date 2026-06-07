@@ -36,10 +36,12 @@ object CoverageConfig {
         // Kotlin interface default-method JVM bridges — compiler artifacts, never invoked
         // (the real provider on the interface is what runs), so uncoverable boilerplate.
         "*DefaultImpls",
-        // DI scope-key marker objects (ADR-0008): they exist only as annotation arguments
-        // (@MergeComponent(AppScope::class), @SingleIn(...)) and are never instantiated, so
-        // their synthetic <init> can't be covered without a hollow test. Not logic.
-        "com.circuitstitch.deferno.core.di.*Scope",
+        // DI scope-key marker objects (ADR-0008, in core:scopes): they exist only as annotation
+        // arguments (@MergeComponent(AppScope::class), @SingleIn(...)) and are never instantiated,
+        // so their synthetic <init> can't be covered without a hollow test. PlatformContext is a
+        // per-platform host handle (Context / databases dir) — a data holder, no logic. Not measured.
+        "com.circuitstitch.deferno.core.scopes.*Scope",
+        "com.circuitstitch.deferno.core.scopes.PlatformContext*",
         // Platform secure-storage actuals (issue #13): real crypto / OS-keychain access that
         // runs only on a device, an Apple target, or a desktop OS — exercised by instrumented
         // & native tests, not the headless JVM gate (ADR-0006). The SecretVault contract and
