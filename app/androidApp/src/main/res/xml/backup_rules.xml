@@ -11,4 +11,13 @@
       path in sync with AndroidKeystoreSecretVault.DEFAULT_PREFS_NAME ("deferno_secure_vault").
     -->
     <exclude domain="sharedpref" path="deferno_secure_vault.xml"/>
+    <!--
+      Per-Account database keys (core/database: AndroidDatabaseKeyProvider) and the account roster
+      (core/data: SharedPreferencesAccountRegistry) are device-bound caches, NOT backed up
+      (ADR-0009): the DB keys' AES wrapping key is non-exportable, and a restored device
+      re-authenticates + re-syncs rather than carrying ciphertext / orphaned accounts across. Keep
+      these paths in sync with AndroidDatabaseKeyProvider / SharedPreferencesAccountRegistry prefs.
+    -->
+    <exclude domain="sharedpref" path="deferno_db_keys.xml"/>
+    <exclude domain="sharedpref" path="deferno_account_roster.xml"/>
 </full-backup-content>

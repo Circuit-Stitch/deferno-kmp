@@ -15,8 +15,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * Account through.
  *
  * The StateFlows are an in-memory read model written through on every mutation alongside the
- * [registry] (the source of truth). The roster starts empty; once a persistent [AccountRegistry]
- * lands, a startup load of an existing roster into the StateFlows arrives with it (and its caller).
+ * [registry] (the source of truth). They start empty; [load] hydrates them from the [registry] at
+ * startup, so a persistent registry's roster + Active Account survive a cold start (ADR-0014).
  *
  * Not thread-safe; drive it from a single context (as its in-memory collaborators require).
  */
@@ -59,6 +59,8 @@ class DefaultAccountManager(
         registry.setActive(id)
         syncFromRegistry()
     }
+
+    override suspend fun load() = syncFromRegistry()
 
     /** Re-reads the roster + active selection from the [registry] into the StateFlows. */
     private suspend fun syncFromRegistry() {

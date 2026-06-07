@@ -37,7 +37,9 @@ sqldelight = "2.3.2"
 # `net.zetetic:sqlcipher-android` (the older `android-database-sqlcipher` is deprecated) + the
 # androidx SupportSQLite contract it plugs into. iOS encryption rides SQLiter's encryptionConfig
 # (transitive via native-driver); the JVM in-memory test driver is unencrypted by design.
-sqlcipherAndroid = "4.7.1"
+# Keep recent: this artifact vendors its own native `CursorWindow`, and older versions (e.g. 4.7.1)
+# SIGSEGV in `CursorWindow::putBlobOrString` on newer Android (16 KB pages, API 35+ / canary) — #68.
+sqlcipherAndroid = "4.16.0"
 androidxSqlite = "2.4.0"
 # Desktop (JVM) OS keychain for the secure-storage vault (ADR-0009, issue #13): macOS
 # Keychain / Windows Credential Store / Linux Secret Service, via JNA. Desktop-only — the

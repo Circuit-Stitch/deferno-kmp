@@ -33,13 +33,24 @@ object CoverageConfig {
         // kotlin-inject + kotlin-inject-anvil generated DI graph (issue #10):
         "*KotlinInject*",    // anvil merged components + kotlin-inject component impls
         "*CreateComponent*", // anvil @CreateComponent (KMP create) factories
+        // The distributed @ContributesTo binding modules (issue #68, ADR-0014): each is an interface
+        // of @Provides one-liners naming how an impl is constructed (the AppScope spine + the
+        // per-Account data layer). Pure DI wiring — "measure logic, not boilerplate" — run only when
+        // the real graph is built (the app), not the headless JVM gate. Named `*Bindings` by
+        // convention; the merged graph they feed IS compile-validated on every target.
+        "*Bindings",
+        // The desktop/iOS no-op AccountDataStore (issue #68): a do-nothing binding for platforms with
+        // no separate per-Account data-wipe yet. No logic to measure; a test would be hollow.
+        "com.circuitstitch.deferno.core.data.account.NoOpAccountDataStore",
         // Kotlin interface default-method JVM bridges — compiler artifacts, never invoked
         // (the real provider on the interface is what runs), so uncoverable boilerplate.
         "*DefaultImpls",
-        // DI scope-key marker objects (ADR-0008): they exist only as annotation arguments
-        // (@MergeComponent(AppScope::class), @SingleIn(...)) and are never instantiated, so
-        // their synthetic <init> can't be covered without a hollow test. Not logic.
-        "com.circuitstitch.deferno.core.di.*Scope",
+        // DI scope-key marker objects (ADR-0008, in core:scopes): they exist only as annotation
+        // arguments (@MergeComponent(AppScope::class), @SingleIn(...)) and are never instantiated,
+        // so their synthetic <init> can't be covered without a hollow test. PlatformContext is a
+        // per-platform host handle (Context / databases dir) — a data holder, no logic. Not measured.
+        "com.circuitstitch.deferno.core.scopes.*Scope",
+        "com.circuitstitch.deferno.core.scopes.PlatformContext*",
         // Platform secure-storage actuals (issue #13): real crypto / OS-keychain access that
         // runs only on a device, an Apple target, or a desktop OS — exercised by instrumented
         // & native tests, not the headless JVM gate (ADR-0006). The SecretVault contract and
@@ -49,6 +60,12 @@ object CoverageConfig {
         "com.circuitstitch.deferno.core.secure.AndroidKeystoreSecretVault*",
         "com.circuitstitch.deferno.core.secure.KeychainSecretVault*",
         "com.circuitstitch.deferno.core.secure.DesktopSecretVault*",
+        // Platform account-storage actuals (issue #68): the SharedPreferences-backed roster and the
+        // Android per-Account data-wipe both touch device storage, exercised by instrumented tests,
+        // not the headless gate (same rationale as the secure-storage actuals). The AccountRegistry
+        // contract and the roster (de)serialization (AccountRosterCodec, commonTest) ARE measured.
+        "com.circuitstitch.deferno.core.data.account.SharedPreferencesAccountRegistry*",
+        "com.circuitstitch.deferno.core.data.account.AndroidAccountDataStore*",
         // Compose @Composable glue (ADR-0006: "thin UI glue"; Views are screenshot-tested, not
         // unit-tested on the headless JVM gate). The design-system colour *tokens* ARE measured
         // (designsystem commonTest); the @Composable theme + typography builders that resolve fonts
@@ -72,7 +89,8 @@ object CoverageConfig {
         // encryption (iOS), and the JdbcSqliteDriver file driver (desktop) all open a real,
         // platform-bound database and run only on a device / Apple target / desktop — exercised
         // by integration, not the headless gate (ADR-0006). The schema, queries, and the
-        // in-memory test driver (commonMain/commonTest) ARE measured.
+        // in-memory test driver (commonMain/commonTest) ARE measured. The Android DB-key provider
+        // (AndroidDatabaseKeyProvider, issue #68) lives here too — device crypto, instrumented-tested.
         "com.circuitstitch.deferno.core.database.driver",
         // Feature Compose Views (#27): the thin state-renderers in each slice's `:feature:*:ui`
         // module (Android screens in androidMain + reusable atoms in commonMain). They hold no

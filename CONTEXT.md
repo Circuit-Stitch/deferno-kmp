@@ -108,7 +108,9 @@ The **root container above all [[Destination]]s**, in one of two states by auth 
 the **Auth shell** (pre-[[Account]]: sign-in, MFA challenge, account picker — no Org scope, no nav
 suite) and the **Main shell** (post-Account: hosts the Destinations, scoped to the [[Active Account]]
 + active [[Workspace]]). Login is never a Destination. The Auth shell is re-entered from the Main
-shell for [[Account switch]] / add-account.
+shell only for **add-account or re-authentication**; a plain [[Account switch]] to an Account whose
+[[Personal access token (PAT)]] is already stored happens **in place** (a Main-shell switcher →
+`switchTo`, no Auth shell, no re-auth).
 _Avoid_: screen, root view.
 
 **Dashboard** *(client)*:

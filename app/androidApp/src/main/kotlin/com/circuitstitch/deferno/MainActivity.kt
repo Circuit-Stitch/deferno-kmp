@@ -10,50 +10,44 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.arkivanov.decompose.retainedComponent
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.core.di.createAccountComponent
+import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
-import com.circuitstitch.deferno.shell.RootComponent
 import com.circuitstitch.deferno.shell.RootShell
-import com.circuitstitch.deferno.shell.StubAuthGate
 import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 
 /**
- * Single Compose-host activity. It builds **one [RootComponent] per scene** (ADR-0008 G2/G3) over the
- * process-global stub repositories from [DefernoApplication], and renders the navigation shell
- * (Auth ↔ Main → Destination graph, ADR-0013) — replacing the throwaway demo host (#27).
- *
- * TODO(DI): source the RootComponent and its dependencies from the DI scene graph (ADR-0008).
+ * Single Compose-host activity. It builds **one [com.circuitstitch.deferno.shell.RootComponent] per
+ * scene** (ADR-0008 G2/G3) over the process-global [com.circuitstitch.deferno.core.di.AppComponent]
+ * from [DefernoApplication], and renders the navigation shell (Auth ↔ Main → Destination graph,
+ * ADR-0013). The Active Account drives the shell; the Main shell is built over a per-Account
+ * [com.circuitstitch.deferno.core.di.AccountComponent] (ADR-0014).
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val app = application as DefernoApplication
-        val taskRepository = app.taskRepository
-        val planRepository = app.planRepository
+        val appComponent = app.appComponent
 
         // Retained across configuration changes so shell + Destination navigation survives rotation
-        // (Decompose Android integration). The factory runs once per scene; the process-global repos
-        // are captured from the Application so rotation never rebuilds the data layer (G2).
+        // (Decompose Android integration). The factory runs once per scene; the process-global
+        // AppComponent is captured so rotation never rebuilds the data layer (G2). The default
+        // coroutine context (Dispatchers.Main) drives the Active-Account collector + navigation.
         val root = retainedComponent { componentContext ->
             val timeZone = TimeZone.currentSystemDefault()
             DefaultRootComponent(
                 componentContext = componentContext,
-                authGate = StubAuthGate(),
-                taskRepository = taskRepository,
-                planRepository = planRepository,
+                accountManager = appComponent.accountManager,
+                // Build the per-Account data layer for an Active Account from the DI graph (ADR-0014).
+                accountSession = { account ->
+                    AccountComponentSession(createAccountComponent(appComponent, account))
+                },
+                onSignIn = app::signInDevAccount,
                 today = Clock.System.todayIn(timeZone),
                 timeZone = timeZone.id,
-                output = { output ->
-                    when (output) {
-                        // Stub mirror of a Tasks "add to plan" into the in-memory plan (the real Plan
-                        // write is a domain command that arrives with DI / the API). Uses the concrete
-                        // stub repos' snapshot/add — replaced when DI provides real repositories.
-                        is RootComponent.Output.AddToPlanRequested ->
-                            planRepository.add(taskRepository.snapshot(output.id))
-                    }
-                },
             )
         }
 

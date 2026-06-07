@@ -8,8 +8,9 @@ import com.arkivanov.decompose.ComponentContext
  * are **never** [[Destination]]s and never appear in the Main shell.
  *
  * For now this is a placeholder with a single [onSignInClicked] action (the real sign-in / MFA /
- * account-picker navigation arrives with #15); it simply asks the [AuthGate] to complete sign-in so
- * the shell boundary is demonstrable. It is intentionally Compose-free (the View renders it).
+ * account-picker navigation arrives with #15); it simply invokes the host's sign-in callback (the
+ * dev-PAT seeding placeholder, #68) so the shell boundary is demonstrable. It is intentionally
+ * Compose-free (the View renders it).
  */
 interface AuthShellComponent {
     /** Complete the (stubbed) Auth flow → the [RootComponent] swaps to the Main shell. */

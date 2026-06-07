@@ -21,7 +21,7 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 /**
  * The root View (ADR-0013): renders whichever [[Shell]] the [RootComponent] has foreground — the Auth
  * shell (pre-[[Account]]) or the Main shell (the Destination graph). The shell swaps reactively as the
- * [AuthGate] flips; this View is a pure renderer of that single active child.
+ * Active Account changes; this View is a pure renderer of that single active child.
  */
 @Composable
 fun RootShell(component: RootComponent, modifier: Modifier = Modifier) {

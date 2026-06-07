@@ -33,6 +33,7 @@ rootProject.name = "Deferno"
 
 // Shared Kotlin Multiplatform core (ADR-0004): layered foundations (declared in ADR order).
 include(":core:model")
+include(":core:scopes")
 include(":core:common")
 include(":core:network")
 include(":core:database")

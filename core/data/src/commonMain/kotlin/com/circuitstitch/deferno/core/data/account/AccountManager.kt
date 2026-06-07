@@ -48,4 +48,11 @@ interface AccountManager : AccountContext {
      * [IllegalArgumentException] if [id] is not a registered Account.
      */
     suspend fun switchTo(id: AccountId)
+
+    /**
+     * Hydrates the observable [accounts] / [activeAccount] from the durable [AccountRegistry]. Call
+     * once at startup, before the UI reads them, so a persisted roster + Active Account are reflected
+     * on a cold start (ADR-0014) — a no-op with an empty or in-memory registry.
+     */
+    suspend fun load()
 }

@@ -7,22 +7,31 @@ import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.router.stack.replaceAll
 import com.arkivanov.decompose.value.Value
 import com.arkivanov.essenty.lifecycle.doOnDestroy
-import com.circuitstitch.deferno.core.data.plan.PlanRepository
-import com.circuitstitch.deferno.core.data.task.TaskRepository
+import com.circuitstitch.deferno.core.data.account.AccountManager
+import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlin.coroutines.CoroutineContext
-import kotlinx.coroutines.Dispatchers
 
 /**
- * The per-scene navigation root (ADR-0013 / ADR-0008 G2): a two-state [[Shell]] selected by auth
- * state. It swaps its single child between the **Auth shell** (pre-[[Account]]) and the **Main shell**
- * (post-Account) as the [AuthGate] flips — re-entrant in both directions, so fast user switching /
- * sign-out drop back to Auth and a completed sign-in returns to Main (account isolation, ADR-0002).
+ * The per-scene navigation root (ADR-0013 / ADR-0008 / ADR-0014): a two-state [[Shell]] selected by
+ * the **Active Account**. It shows the **Auth shell** (pre-[[Account]]) when there is none and the
+ * **Main shell** (post-Account) when one is active, swapping reactively as the [AccountManager]'s
+ * `activeAccount` changes — first sign-in, sign-out, and fast user switching all flow through it.
  *
- * One root is instantiated **per scene/window** (G2/G3); the data layer it is handed
- * ([TaskRepository], [PlanRepository]) is a process-global singleton shared across scenes, while this
- * presentation tree and the [AuthGate] are scene-scoped. It is Compose-free — the View renders it.
+ * The Main shell is keyed by the Active Account's id ([Config.Main]), so switching A→B re-keys the
+ * child, which rebuilds the per-Account data layer ([AccountSession], from a fresh
+ * [com.circuitstitch.deferno.core.di.AccountComponent]) for the new Account — the per-Account
+ * isolation boundary enforced structurally by the scope graph (ADR-0002/0014). Switching needs no
+ * re-auth: every Account's PAT already lives in the AppScope vault (ADR-0012).
+ *
+ * One root per scene/window (ADR-0008 G2/G3). It is Compose-free — the View renders it.
  */
 interface RootComponent {
     /** The active shell (exactly one of [Child.Auth] / [Child.Main]). */
@@ -35,52 +44,55 @@ interface RootComponent {
         class Auth(val component: AuthShellComponent) : Child
         class Main(val component: MainShellComponent) : Child
     }
-
-    sealed interface Output {
-        /** A Tasks "add to plan" intent bubbled from the Main shell for the host to mirror. */
-        data class AddToPlanRequested(val id: TaskId) : Output
-    }
 }
 
 class DefaultRootComponent(
     componentContext: ComponentContext,
-    private val authGate: AuthGate,
-    private val taskRepository: TaskRepository,
-    private val planRepository: PlanRepository,
+    private val accountManager: AccountManager,
+    private val accountSession: (Account) -> AccountSession,
+    private val onSignIn: () -> Unit,
     private val today: LocalDate,
     private val timeZone: String,
-    private val output: (RootComponent.Output) -> Unit = {},
-    private val coroutineContext: CoroutineContext = Dispatchers.Default,
+    coroutineContext: CoroutineContext = Dispatchers.Main,
 ) : RootComponent, ComponentContext by componentContext {
+
+    private val scope = CoroutineScope(coroutineContext + SupervisorJob())
+        .also { s -> lifecycle.doOnDestroy { s.cancel() } }
 
     private sealed interface Config {
         data object Auth : Config
-        data object Main : Config
+
+        /** The Main shell bound to the Active Account; its id re-keys the child on a switch. */
+        data class Main(val accountId: String) : Config
     }
 
     private val navigation = StackNavigation<Config>()
+
+    /** The foreground Main child's session, used to apply per-Account writes (add-to-plan). */
+    private var activeSession: AccountSession? = null
 
     override val stack: Value<ChildStack<*, RootComponent.Child>> =
         childStack(
             source = navigation,
             serializer = null,
-            initialConfiguration = configFor(authGate.signedIn.value),
+            initialConfiguration = configFor(accountManager.activeAccount.value),
             key = "ShellStack",
             handleBackButton = false, // back is routed via onBackClicked(), not a stack pop
             childFactory = ::createChild,
         )
 
     init {
-        // Follow the gate: when auth state changes, swap shells. `replaceAll` retains the child if the
-        // target shell is already active (config equality), so the immediate on-subscribe emission and
-        // any no-op change don't rebuild the current shell.
-        val cancellation = authGate.signedIn.subscribe { signedIn ->
-            val target = configFor(signedIn)
-            if (stack.value.active.configuration != target) {
-                navigation.replaceAll(target)
+        // Follow the Active Account: swap shells (and re-key the Main child per Account) as it changes.
+        // replaceAll retains the child when the target config is unchanged (data-class equality), so a
+        // no-op emission doesn't rebuild the current shell.
+        scope.launch {
+            accountManager.activeAccount.collect { account ->
+                val target = configFor(account)
+                if (stack.value.active.configuration != target) {
+                    navigation.replaceAll(target)
+                }
             }
         }
-        lifecycle.doOnDestroy(cancellation::cancel)
     }
 
     override fun onBackClicked(): Boolean =
@@ -91,34 +103,60 @@ class DefaultRootComponent(
 
     private fun createChild(config: Config, childContext: ComponentContext): RootComponent.Child =
         when (config) {
-            Config.Auth ->
+            Config.Auth -> {
+                activeSession = null
                 RootComponent.Child.Auth(
-                    DefaultAuthShellComponent(
-                        componentContext = childContext,
-                        onSignIn = authGate::signIn,
-                    ),
+                    DefaultAuthShellComponent(componentContext = childContext, onSignIn = onSignIn),
                 )
+            }
 
-            Config.Main ->
+            is Config.Main -> {
+                // The Active Account this Main child is keyed to. It is in the roster by construction
+                // (the config came from an emitted activeAccount), so a miss is a broken invariant.
+                val account = accountManager.accounts.value.first { it.id.value == config.accountId }
+                val session = accountSession(account)
+                activeSession = session
+                // Pull this Account's tasks + today's plan into the local cache on open / switch
+                // (offline-first: the repositories swallow failures, leaving the cache intact). The
+                // Views observe the local DB, so this is what surfaces real data on first open.
+                scope.launch { session.taskRepository.refresh() }
+                scope.launch { session.planRepository.refreshPlan(today, timeZone) }
                 RootComponent.Child.Main(
                     DefaultMainShellComponent(
                         componentContext = childContext,
-                        taskRepository = taskRepository,
-                        planRepository = planRepository,
+                        taskRepository = session.taskRepository,
+                        planRepository = session.planRepository,
                         today = today,
                         timeZone = timeZone,
+                        accounts = accountManager.accounts,
+                        activeAccount = accountManager.activeAccount,
+                        onSwitchAccount = ::switchAccount,
                         output = ::onMainOutput,
-                        coroutineContext = coroutineContext,
+                        coroutineContext = scope.coroutineContext,
                     ),
                 )
+            }
         }
 
     private fun onMainOutput(output: MainShellComponent.Output) {
         when (output) {
-            is MainShellComponent.Output.AddToPlanRequested ->
-                this.output(RootComponent.Output.AddToPlanRequested(output.id))
+            // Add-to-plan applies through the Active Account's offline write path (optimistic apply +
+            // outbox enqueue), not a host mirror — the real per-Account command (ADR-0001/0007/0014).
+            is MainShellComponent.Output.AddToPlanRequested -> onAddToPlan(output.id)
         }
     }
 
-    private fun configFor(signedIn: Boolean): Config = if (signedIn) Config.Main else Config.Auth
+    private fun onAddToPlan(taskId: TaskId) {
+        val session = activeSession ?: return
+        scope.launch { session.addToPlan(taskId, today, timeZone) }
+    }
+
+    private fun switchAccount(id: AccountId) {
+        // Re-points the Active Account; the activeAccount collector above re-keys the Main child for
+        // the new Account. No re-auth — the PAT is already vaulted (ADR-0002/0012).
+        scope.launch { accountManager.switchTo(id) }
+    }
+
+    private fun configFor(account: Account?): Config =
+        if (account != null) Config.Main(account.id.value) else Config.Auth
 }

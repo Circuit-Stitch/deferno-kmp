@@ -8,15 +8,19 @@ import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
+import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.feature.plan.DefaultPlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.TaskPane
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.LocalDate
 import kotlin.coroutines.CoroutineContext
-import kotlinx.coroutines.Dispatchers
 
 /**
  * The **Main shell** (ADR-0013): the post-[[Account]] surface that hosts the **Destination graph**.
@@ -51,6 +55,13 @@ interface MainShellComponent {
      */
     fun onBack(): Boolean
 
+    /** The Accounts on this device + the Active one, for the in-shell account switcher (ADR-0014). */
+    val accounts: StateFlow<List<Account>>
+    val activeAccount: StateFlow<Account?>
+
+    /** Switch the Active Account — re-keys the shell for the new Account, no re-auth (ADR-0002/0012). */
+    fun switchAccount(id: AccountId)
+
     /** A live Destination instance, tagged with which [Destination] it is so the View can render it. */
     sealed interface DestinationChild {
         val destination: Destination
@@ -76,11 +87,16 @@ class DefaultMainShellComponent(
     private val planRepository: PlanRepository,
     private val today: LocalDate,
     private val timeZone: String,
+    override val accounts: StateFlow<List<Account>> = MutableStateFlow(emptyList()),
+    override val activeAccount: StateFlow<Account?> = MutableStateFlow(null),
+    private val onSwitchAccount: (AccountId) -> Unit = {},
     private val output: (MainShellComponent.Output) -> Unit = {},
     private val coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : MainShellComponent, ComponentContext by componentContext {
 
     override val destinations: List<Destination> = Destination.entries
+
+    override fun switchAccount(id: AccountId) = onSwitchAccount(id)
 
     // Plain-data configs (serializer = null → no state restoration wired in v1, matching the feature
     // components). One per Destination; equality is what `bringToFront` matches to retain a child.

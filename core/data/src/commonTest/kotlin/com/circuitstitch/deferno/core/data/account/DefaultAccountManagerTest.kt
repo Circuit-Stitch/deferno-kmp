@@ -184,6 +184,26 @@ class DefaultAccountManagerTest {
         assertEquals(accountA, manager.activeAccount.value)
     }
 
+    // --- startup load: persisted roster hydrates the observable state (ADR-0014) ---
+
+    @Test
+    fun loadHydratesObservableStateFromThePersistedRegistry() = runTest {
+        // Simulate a roster persisted by a previous process, behind the same registry.
+        registry.put(accountA)
+        registry.put(accountB)
+        registry.setActive(accountB.id)
+
+        // A freshly-built manager over that registry starts empty until loaded.
+        val freshManager = DefaultAccountManager(registry, vault, dataStore)
+        assertTrue(freshManager.accounts.value.isEmpty())
+        assertNull(freshManager.activeAccount.value)
+
+        freshManager.load()
+
+        assertContentEquals(listOf(accountA, accountB), freshManager.accounts.value)
+        assertEquals(accountB, freshManager.activeAccount.value)
+    }
+
     // --- AC#3: switching re-points repositories + secure store (via the AccountContext seam) ---
 
     @Test
