@@ -47,12 +47,12 @@ android {
 }
 
 dependencies {
-    // The demo host (#27, TEMPORARY): the Tasks + Plan Android Compose Views over in-memory sample
-    // data, wired in src/main/.../demo until auth + DI provide the real scene graph. Android-only —
-    // a native desktop/iOS shell is its own follow-up, not this phone layout stretched (ADR-0007).
-    // core:designsystem provides DefernoTheme for the Compose host. feature:auth:ui carries the #20
-    // tracer's minimal /auth/me screen, exercised by the Compose UI interaction tests in src/test
-    // (AuthScreenInteractionTest).
+    // The navigation shell (#55, ADR-0013): the RootComponent (Auth ↔ Main shells) + Main shell's
+    // Destination graph (NavigationSuiteScaffold) live in src/main/.../shell over the shared Decompose
+    // components + Android Views. Android-only — a native desktop/iOS shell is its own follow-up, not
+    // this phone layout stretched (ADR-0007). It is backed by the in-memory stub repositories +
+    // SampleData under src/main/.../demo (TEMPORARY until DI lands, ADR-0008). core:designsystem
+    // provides DefernoTheme for the Compose host.
     implementation(project(":feature:tasks"))
     implementation(project(":feature:tasks:ui"))
     implementation(project(":feature:plan"))
@@ -79,6 +79,10 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    // The navigation shell (#55): NavigationSuiteScaffold + the window-size-class metric it adapts to.
+    implementation(libs.androidx.material3.adaptive.navigation.suite)
+    implementation(libs.androidx.material3.adaptive)
+    implementation(libs.androidx.material.icons.core)
 
     // JVM-fast unit + screenshot tests for the Views (#27): Robolectric runs the Compose UI tests +
     // Roborazzi screenshots without a device, rendering the Views through their public
