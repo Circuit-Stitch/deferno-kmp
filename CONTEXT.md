@@ -16,7 +16,9 @@ One Deferno identity the person has signed into the app — its own credentials 
 password), its own bearer token, and its own [[Org]] memberships. The unit the person adds,
 removes, and switches between. Accounts are **fully isolated** from one another: no data, auth,
 or visibility ever crosses between them.
-_Avoid_: profile, login, user (a "user" is the backend identity an Account signs in *as*), workspace.
+_Avoid_: login, user (a "user" is the backend identity an Account signs in *as*), workspace; and do
+**not** call the Account a "profile" — the [[Profile]] Destination renders the [[User]]'s identity (a
+different thing), and account controls merely sit alongside it.
 
 **Active Account**:
 The Account a window is showing and syncing — conceptually **one per window** (a single window in
@@ -89,11 +91,15 @@ _Avoid_: using "view" for a navigable place (that is a [[Destination]]) or for t
 [[Workspace]] (the backend reserves "view" for that concept) — "View" here is **only** the renderer.
 
 **Destination**:
-A **top-level navigable place** in the [[Main shell]], switched laterally via the nav suite (Plan,
-Calendar, Agenda, [[Dashboard]], All Tasks, Tasks, [[Workspace]]s, Groups, Profile, Permissions,
-Settings, …). Switching between Destinations is **state-preserving**: each keeps its own drill-down
-stack (multiple back stacks, ADR-0007 tier 1). "All Tasks" is the rendering of the backend
-[[Personal org]].
+A **top-level navigable place** in the [[Main shell]], switched laterally via the nav suite. The
+**v1 set is Plan, Calendar, Tasks, Profile, Settings** (Plan is the home Destination). **Workspaces,
+[[Group]]s, Permissions, Agenda, and [[Dashboard]] are reserved for later** — kept in this glossary
+but not built in v1: Workspaces/Groups/Permissions are blocked on the backend's future **Groups
+subsystem ("Spec 2")** — there is no Workspace, org-listing, or permissions API today, and a user has
+exactly one knowable [[Org]] (`personal_org_id`). Switching between Destinations is
+**state-preserving**: each keeps its own drill-down stack (multiple back stacks, ADR-0007 tier 1).
+There is no separate "All Tasks" destination: it is simply **Tasks scoped to the Personal
+[[Workspace]]** (the [[Personal org]]) — degenerate in v1, where that is the only Org.
 _Avoid_: view, screen, tab, page.
 
 **Pane**:
@@ -119,12 +125,38 @@ It summarizes across **all** Orgs and **ignores** the active [[Workspace]] scope
 does. Distinct from a [[Workspace]], which *selects* scope rather than summarizing.
 _Avoid_: workspace, home, board.
 
-**Workspace** *(client rendering of the backend concept)*:
-The backend's [[Workspace]] — a per-user saved view scoping a curated set of [[Org]]s and their items
-— rendered in this client as a [[Destination]] (to manage/switch Workspaces) and as the **active
-scope** the Org-scoped Destinations honour. The definition is owned by the backend `CONTEXT.md`; this
-entry only records how the client surfaces it.
+**Profile** *(client)*:
+The [[Destination]] that renders the **display identity of the [[User]]** the [[Active Account]] signs
+in as — avatar, name, `@handle`, email, and the Orgs the User belongs to (`/auth/me`). The
+**[[Account]] controls co-located** on this screen — which Account is active, this device's
+[[Personal access token (PAT)]], **Sign out** — are *not* "the profile"; they sit alongside the
+identity. Distinct from the **avatar account switcher** (the quick-switch surface on every
+Destination's app bar): Profile is the full identity-and-management hub reached via More, the switcher
+is the fast [[Account switch]].
+_Avoid_: account (the switching unit, a different thing), settings (app preferences, a separate
+[[Destination]]), the avatar switcher.
+
+**Workspace** *(deferred — client rendering of a future backend concept)*:
+A per-user saved view scoping a curated set of [[Org]]s and their items — *intended* to be rendered
+in this client as a [[Destination]] (to manage/switch Workspaces) and as the **active scope** the
+Org-scoped Destinations honour. **Not built in v1:** the backend exposes no Workspace API and no
+org-listing endpoint, so the client cannot enumerate Orgs to scope, and the inline "workspace
+selector" is omitted (a user has one knowable [[Org]]). Arrives with the backend Groups subsystem
+("Spec 2"). The definition is owned by the backend `CONTEXT.md`; this entry records how the client
+*will* surface it.
 _Avoid_: dashboard (that is the global overview [[Destination]], a different thing), view, board, lens.
+
+**Group** *(deferred — client term for a shared Org with people)*:
+The client-facing rendering of a **shared (non-personal) [[Org]]** together with **its members and
+their roles** (Owner / Admin / Member) — the *people* side of an Org. The Personal org is **never** a
+Group (it has no other members). One Account may belong to several Groups. **Not built in v1:** the
+backend's `group_id` is reserved and ignored ("future Groups subsystem, Spec 2"), and there is no
+member/role/invite API; `UserRole` is only a system-wide `user|admin`, not a per-Group role. The
+**Permissions** Destination (group → member roles) is the management surface for this and is likewise
+deferred.
+_Avoid_: Org (a Group is a shared Org *surfaced with its people*; Org is the ownership-boundary term),
+[[Workspace]] (a Workspace *selects a set of* Orgs/Groups; a Group *is* one), team, household (those
+are example Group names, not the type).
 
 ### Commands
 
