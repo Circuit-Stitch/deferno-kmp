@@ -7,11 +7,11 @@ import com.circuitstitch.deferno.core.model.WorkingState
 import kotlin.time.Instant
 
 /**
- * TEMPORARY (#27) in-memory sample content backing the navigation shell (#55), so the Tasks + Plan
- * Destinations have something to render before auth/DI provide a real account graph. Deliberately
- * small and calm (design-principles.md): a couple of pinned/active items, one parent that decomposes
- * into steps, and a short daily plan. Replace this — and the whole `demo/` package under
- * app/androidApp — when DI lands (ADR-0008).
+ * In-memory sample content **for the shell + Compose-View tests** (#27/#55): the Tasks + Plan
+ * Destinations render this through the [DemoTaskRepository] / [DemoPlanRepository] test fakes.
+ * Deliberately small and calm (design-principles.md): a couple of pinned/active items, one parent
+ * that decomposes into steps, and a short daily plan. The real app reads its data from the
+ * DI-provided repositories (#68, ADR-0014); this stays a test fixture.
  */
 internal object SampleData {
 

@@ -25,21 +25,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
-import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
-import com.arkivanov.essenty.lifecycle.LifecycleRegistry
-import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
-import com.circuitstitch.deferno.demo.DemoPlanRepository
-import com.circuitstitch.deferno.demo.DemoTaskRepository
-import com.circuitstitch.deferno.demo.SampleData
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksScreen
-import kotlinx.datetime.LocalDate
 
 /**
  * The **Main shell** View (ADR-0013): a Material 3 `NavigationSuiteScaffold` hosting the
@@ -154,22 +146,3 @@ private val Destination.icon: ImageVector
         Destination.Plan -> Icons.Filled.DateRange
         Destination.Tasks -> Icons.AutoMirrored.Filled.List
     }
-
-@Preview
-@Composable
-private fun MainShellPreview() {
-    // A real Main shell over the in-memory stub data, so the preview shows the nav suite + the Plan
-    // Destination it opens into. (@Preview is IDE-only — never executed by the build or tests.)
-    val component = remember {
-        DefaultMainShellComponent(
-            componentContext = DefaultComponentContext(LifecycleRegistry()),
-            taskRepository = DemoTaskRepository(SampleData.tasks),
-            planRepository = DemoPlanRepository(
-                SampleData.planTaskIds.mapNotNull { id -> SampleData.tasks.firstOrNull { it.id == id } },
-            ),
-            today = LocalDate(2026, 6, 6),
-            timeZone = "UTC",
-        )
-    }
-    DefernoTheme { MainShell(component) }
-}

@@ -12,11 +12,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.datetime.LocalDate
 
 /**
- * TEMPORARY (#27) in-memory [TaskRepository] backing the navigation shell (#55). Honors the
+ * In-memory [TaskRepository] **test fake** for the shell + Compose-View tests (#27/#55). Honors the
  * offline-first contract shape (reads are local Flows; [hydrate] upgrades a summary row to full —
  * #22) without any network or database: [refresh] is a no-op because the data is already local, and
- * [hydrate] fills in a sample description so opening a Task visibly demonstrates the summary → full
- * upgrade. Replaced by the DI-provided process-global repository when DI lands (ADR-0008 G2).
+ * [hydrate] fills in a sample description so a Task opens with full content. The real app uses the
+ * DI-provided OfflineTaskRepository (#68, ADR-0014); this stays a test fixture.
  */
 internal class DemoTaskRepository(initial: List<Task>) : TaskRepository {
     private val tasks = MutableStateFlow(initial)
@@ -50,9 +50,9 @@ internal class DemoTaskRepository(initial: List<Task>) : TaskRepository {
 }
 
 /**
- * TEMPORARY (#27) in-memory [PlanRepository] backing the navigation shell (#55). [observePlan] ignores
- * `date`/`tz` (a single demo day) and [refreshPlan] is a no-op; [add] lets the shell mirror an "add to
- * plan" intent so the Plan Destination updates live. Replaced by the DI-provided repository (ADR-0008).
+ * In-memory [PlanRepository] **test fake** for the shell + Compose-View tests (#27/#55). [observePlan]
+ * ignores `date`/`tz` (a single demo day) and [refreshPlan] is a no-op; [add] lets a test mirror an
+ * "add to plan" intent. The real app uses the DI-provided OfflinePlanRepository (#68, ADR-0014).
  */
 internal class DemoPlanRepository(initial: List<Task>) : PlanRepository {
     private val plan = MutableStateFlow(initial)
