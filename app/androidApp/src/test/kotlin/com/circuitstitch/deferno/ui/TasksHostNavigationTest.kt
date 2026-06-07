@@ -15,6 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Regression test for the single-pane drill-in bug (#27, review findings #1+#2). The detail and tree
@@ -23,10 +24,13 @@ import org.robolectric.RobolectricTestRunner
  * Drilling from the tree into a child opens the child's detail while the tree slot stays open; a naive
  * tree-wins precedence would keep the tree on top and the child tap would look like it did nothing.
  *
- * This drives a real [DefaultTasksComponent] over an in-memory repository on [Dispatchers.Unconfined]
- * (so the state flows resolve synchronously) and exercises the whole path through the rendered UI.
+ * Pinned to a **compact** width (`@Config`) so the adaptive `TasksScreen` (#29) folds to a single Pane
+ * — the regression this guards lives in that fold; the two-pane behaviour is covered by
+ * [TasksAdaptivePaneTest]. It drives a real [DefaultTasksComponent] over an in-memory repository on
+ * [Dispatchers.Unconfined] (so the state flows resolve synchronously) through the rendered UI.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "w400dp-h800dp")
 class TasksHostNavigationTest {
 
     @get:Rule

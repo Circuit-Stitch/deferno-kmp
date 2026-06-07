@@ -69,6 +69,12 @@ composeMultiplatform = "1.11.1"
 # uses) instead of `material-icons-extended` (≈37 MB) the desktop distribution would otherwise
 # bundle for two glyphs — the same `material-icons-core` choice the Android shell makes.
 composeIcons = "1.7.3"
+# Material 3 adaptive (window-size-class layout): the nav suite (#55) + the tier-2 list/detail
+# Panes (#29). app/androidApp gets these via the Compose BOM, but :feature:tasks:ui is a Compose
+# *Multiplatform* module with no androidx BOM, so the artifacts it uses (`adaptive` +
+# `adaptive-layout`) need an explicit version here. Pinned to what BOM 2026.05.01 resolves (1.2.0),
+# so the app and the feature module compile against the same adaptive API.
+material3Adaptive = "1.2.0"
 # Screenshot + Android-on-JVM testing for the Android Compose Views (#27). Roborazzi renders
 # Compose screenshots through Robolectric on the JVM (no device) — the CI JVM-fast path
 # (ADR-0006); Robolectric also drives the Compose UI interaction tests. The Roborazzi Gradle
@@ -98,10 +104,17 @@ androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 # Adaptive navigation shell (#55, ADR-0013/0007): NavigationSuiteScaffold adapts bottom-bar → rail →
 # drawer by window size class, and `currentWindowAdaptiveInfo()` supplies the continuous width metric
-# the mapping reads (ADR-0008 G1 — never device-type checks). Both groups are managed by the Compose
-# BOM above (no explicit version). `material-icons-core` supplies the nav-suite item icons.
+# the mapping reads (ADR-0008 G1 — never device-type checks). `material-icons-core` supplies the
+# nav-suite item icons. `navigation-suite` is `androidx.compose.material3` (BOM-managed, app-only);
+# `adaptive` is pinned (see `material3Adaptive`) so :feature:tasks:ui can use it without the BOM.
 androidx-material3-adaptive-navigation-suite = { group = "androidx.compose.material3", name = "material3-adaptive-navigation-suite" }
-androidx-material3-adaptive = { group = "androidx.compose.material3.adaptive", name = "adaptive" }
+androidx-material3-adaptive = { group = "androidx.compose.material3.adaptive", name = "adaptive", version.ref = "material3Adaptive" }
+# Tier-2 list/detail Panes (#29, ADR-0007): `ListDetailPaneScaffold` + the directive/value helpers
+# (`calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth`, `calculateThreePaneScaffoldValue`,
+# `AnimatedPane`) that render the co-resident slots as 1 or 2 panes by window size class. Android-only
+# (the Android counterpart of the desktop `BoxWithConstraints` two-pane + the iOS `NavigationSplitView`,
+# #28). Pinned (`material3Adaptive`) — used from :feature:tasks:ui, which has no androidx Compose BOM.
+androidx-material3-adaptive-layout = { group = "androidx.compose.material3.adaptive", name = "adaptive-layout", version.ref = "material3Adaptive" }
 androidx-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
 # The desktop (Compose Multiplatform) counterpart of `androidx-material-icons-core`: the JetBrains
 # Material icon set the desktop nav rail/drawer renders. The `-desktop` artifact is the concrete JVM
