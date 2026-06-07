@@ -32,5 +32,14 @@ kotlin {
             implementation(project(":feature:tasks"))
             implementation(libs.decompose.extensions.compose)
         }
+        // The desktop-native screen: a large-screen two-pane list + detail/tree layout (ADR-0007's
+        // tier-2 "1 or 2 panes by size class") — the desktop counterpart of the Android single-pane
+        // screen, not that phone layout stretched. It reuses the commonMain atoms (TaskRow,
+        // PaneHeader, …) — `internal`, but visible here because jvmMain shares this module — and
+        // renders the same shared Decompose components via `subscribeAsState()`.
+        jvmMain.dependencies {
+            implementation(project(":feature:tasks"))
+            implementation(libs.decompose.extensions.compose)
+        }
     }
 }

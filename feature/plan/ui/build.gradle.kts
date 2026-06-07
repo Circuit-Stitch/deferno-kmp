@@ -26,5 +26,11 @@ kotlin {
         androidMain.dependencies {
             implementation(project(":feature:plan"))
         }
+        // The desktop-native Plan screen: renders the shared PlanComponent, reusing the commonMain
+        // atoms (PlanTaskRow, EmptyPlan, …) — `internal`, but visible here because jvmMain shares
+        // this module. The desktop counterpart of the Android screen (ADR-0007), not it stretched.
+        jvmMain.dependencies {
+            implementation(project(":feature:plan"))
+        }
     }
 }
