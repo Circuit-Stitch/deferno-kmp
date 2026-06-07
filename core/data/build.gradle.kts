@@ -2,6 +2,11 @@ plugins {
     id("deferno.kmp.library")
 }
 
+// The live `/auth/me` tracer (StagingAuthMeIntegrationTest, #20) reads `deferno.staging.baseUrl` /
+// `deferno.staging.apiToken` as test system properties. Those are already surfaced from the gitignored
+// `local.properties` to every Test task by the `deferno.kmp` convention plugin (config-cache-safe via
+// `providers.fileContents`), so no per-module wiring is needed here — the test skips itself when blank.
+
 kotlin {
     android {
         namespace = "com.circuitstitch.deferno.core.data"

@@ -26,3 +26,16 @@ value class OrgId(val value: String) {
         require(value.isNotBlank()) { "OrgId must not be blank" }
     }
 }
+
+/**
+ * The backend User's UUID (`GET /auth/me` → `id`, CONTEXT.md → "User"). One [Account] authenticates
+ * as exactly one backend [User], so this is the server-side identity, **not** the client-side
+ * [AccountId] partition key (the two are distinct — an Account is the hard isolation boundary, a User
+ * is who it signs in as). Carried as a faithful, non-blank copy of the wire `id`.
+ */
+@JvmInline
+value class UserId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "UserId must not be blank" }
+    }
+}

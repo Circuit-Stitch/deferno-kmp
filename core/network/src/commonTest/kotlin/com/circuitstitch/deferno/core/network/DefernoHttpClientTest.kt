@@ -9,6 +9,7 @@ import io.ktor.client.request.HttpResponseData
 import io.ktor.client.request.url
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.appendPathSegments
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.Serializable
@@ -112,6 +113,22 @@ class DefernoHttpClientTest {
         val failure = assertIs<ApiResult.Failure>(result)
         val transport = assertIs<ApiError.Transport>(failure.error)
         assertIs<CleartextNotPermittedException>(transport.cause)
+    }
+
+    @Test
+    fun appendsEndpointPathOntoTheApiPrefixedBaseUrl() = runTest {
+        // The base URL carries the `/api` prefix and a trailing slash; an endpoint appends its path
+        // onto it. Without the trailing slash, Ktor's relative resolution drops `/api` and the request
+        // misses the API entirely (verified live against staging, #20) — this pins `/api/...` for every
+        // environment so a dropped slash regresses here rather than only at runtime.
+        DefernoEnvironment.entries.forEach { environment ->
+            var captured: HttpRequestData? = null
+            val client = client(environment = environment) { req -> captured = req; respondJson(okEnvelope) }
+
+            client.requestApi<Probe> { url { appendPathSegments("auth", "me") } }
+
+            assertEquals("/api/auth/me", captured?.url?.encodedPath, "wrong path for ${environment.name}")
+        }
     }
 
     @Test

@@ -13,9 +13,19 @@ class DefernoEnvironmentTest {
 
     @Test
     fun baseUrlsMatchTheVerifiedContract() {
-        assertEquals("https://api.deferno.app/api", DefernoEnvironment.Production.baseUrl)
-        assertEquals("https://app2.defernowork.com/api", DefernoEnvironment.Staging.baseUrl)
-        assertEquals("http://localhost:3000/api", DefernoEnvironment.Local.baseUrl)
+        // Trailing slash is required so appended paths keep the `/api` prefix (see DefernoEnvironment).
+        assertEquals("https://api.deferno.app/api/", DefernoEnvironment.Production.baseUrl)
+        assertEquals("https://app2.defernowork.com/api/", DefernoEnvironment.Staging.baseUrl)
+        assertEquals("http://localhost:3000/api/", DefernoEnvironment.Local.baseUrl)
+    }
+
+    @Test
+    fun everyBaseUrlEndsWithATrailingSlashSoTheApiPrefixSurvivesPathAppending() {
+        // The load-bearing invariant (#20): without the trailing slash, Ktor's relative resolution
+        // drops `/api` when a request appends its path. Pinned here so no env can regress it.
+        DefernoEnvironment.entries.forEach { env ->
+            assertTrue(env.baseUrl.endsWith("/api/"), "${env.name} (${env.baseUrl}) must end with /api/")
+        }
     }
 
     @Test

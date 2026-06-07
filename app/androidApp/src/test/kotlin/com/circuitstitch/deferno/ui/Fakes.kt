@@ -1,9 +1,14 @@
 package com.circuitstitch.deferno.ui
 
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.User
+import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.feature.auth.AuthComponent
+import com.circuitstitch.deferno.feature.auth.AuthState
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
@@ -117,4 +122,25 @@ internal class FakePlanComponent(initial: PlanState) : PlanComponent {
 
     override fun onTaskClicked(id: TaskId) { clicked += id }
     override fun onRefresh() { refreshCount++ }
+}
+
+/** A sample signed-in identity for the #20 auth screen fixtures (mirrors contracts/fixtures/auth-me.json). */
+internal val sampleUser = User(
+    id = UserId("1d35f62e-eed9-44de-96e8-e61a307af83f"),
+    username = "sampleuser",
+    displayName = "Sample User",
+    role = "admin",
+    personalOrgId = OrgId("ebca93e5-d663-4624-9fe9-c5361b5b4390"),
+    orgSlug = "u-e4h2qk",
+    isAdmin = false,
+    consoleUrl = "https://auth2.defernowork.com/ui/console",
+)
+
+internal class FakeAuthComponent(initial: AuthState) : AuthComponent {
+    private val _state = MutableStateFlow(initial)
+    override val state: StateFlow<AuthState> = _state
+    var retryCount = 0
+        private set
+
+    override fun onRetry() { retryCount++ }
 }

@@ -79,7 +79,8 @@ object CoverageConfig {
         // business logic — they read the component's StateFlow/slots and call its methods — and are
         // exercised by Compose UI tests + Roborazzi screenshots, not the headless JVM coverage gate
         // (same rationale as the designsystem theme above, ADR-0006). The shared Decompose components
-        // driving them ARE measured (feature commonTest, #25).
+        // driving them ARE measured (feature commonTest, #25/#20).
+        "com.circuitstitch.deferno.feature.auth.ui",
         "com.circuitstitch.deferno.feature.tasks.ui",
         "com.circuitstitch.deferno.feature.plan.ui",
     )

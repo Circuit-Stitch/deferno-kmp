@@ -50,12 +50,15 @@ dependencies {
     // The demo host (#27, TEMPORARY): the Tasks + Plan Android Compose Views over in-memory sample
     // data, wired in src/main/.../demo until auth + DI provide the real scene graph. Android-only —
     // a native desktop/iOS shell is its own follow-up, not this phone layout stretched (ADR-0007).
-    // feature:auth is still a shell; core:designsystem provides DefernoTheme for the Compose host.
+    // core:designsystem provides DefernoTheme for the Compose host. feature:auth:ui carries the #20
+    // tracer's minimal /auth/me screen, exercised by the Compose UI interaction tests in src/test
+    // (AuthScreenInteractionTest).
     implementation(project(":feature:tasks"))
     implementation(project(":feature:tasks:ui"))
     implementation(project(":feature:plan"))
     implementation(project(":feature:plan:ui"))
     implementation(project(":feature:auth"))
+    implementation(project(":feature:auth:ui"))
     implementation(project(":core:model"))
     implementation(project(":core:data"))
     implementation(project(":core:designsystem"))
