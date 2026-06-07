@@ -74,5 +74,13 @@ object CoverageConfig {
         // by integration, not the headless gate (ADR-0006). The schema, queries, and the
         // in-memory test driver (commonMain/commonTest) ARE measured.
         "com.circuitstitch.deferno.core.database.driver",
+        // Feature Compose Views (#27): the thin state-renderers in each slice's `:feature:*:ui`
+        // module (Android screens in androidMain + reusable atoms in commonMain). They hold no
+        // business logic — they read the component's StateFlow/slots and call its methods — and are
+        // exercised by Compose UI tests + Roborazzi screenshots, not the headless JVM coverage gate
+        // (same rationale as the designsystem theme above, ADR-0006). The shared Decompose components
+        // driving them ARE measured (feature commonTest, #25).
+        "com.circuitstitch.deferno.feature.tasks.ui",
+        "com.circuitstitch.deferno.feature.plan.ui",
     )
 }

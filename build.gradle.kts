@@ -15,6 +15,9 @@ plugins {
     alias(libs.plugins.kover) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.sqldelight) apply false
+    // Applied directly (per-module alias) by app/androidApp, which hosts the screenshot tests (#27),
+    // so it lands here `apply false` to reach that module's classpath — same as sqldelight above.
+    alias(libs.plugins.roborazzi) apply false
 
     // The repo root is Kover's aggregation point: this convention applies Kover here and
     // enforces the merged shared-core coverage gate (ADR-0006, issue #11). Kover stays

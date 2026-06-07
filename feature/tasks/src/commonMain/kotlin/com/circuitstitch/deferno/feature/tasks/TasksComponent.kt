@@ -7,11 +7,22 @@ import com.arkivanov.decompose.router.slot.SlotNavigation
 import com.arkivanov.decompose.router.slot.activate
 import com.arkivanov.decompose.router.slot.childSlot
 import com.arkivanov.decompose.router.slot.dismiss
+import com.arkivanov.decompose.value.MutableValue
 import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.CoroutineContext
+
+/**
+ * Which pane was **most recently brought to the foreground**. The slots ([TasksComponent.detail],
+ * [TasksComponent.tree]) are co-resident — more than one can be open at once — so this records their
+ * activation *recency* as shared navigation state. A single-pane View renders exactly this pane; a
+ * two-pane View can ignore it, or use it to decide which co-resident slot fills its second pane. It
+ * is owned by the component (not the View) so it survives configuration changes and so back-handling
+ * and rendering read one source of truth.
+ */
+enum class TaskPane { List, Detail, Tree }
 
 /**
  * The Tasks feature root (ADR-0007). It models the list, detail, and tree as **co-resident slots**,
@@ -21,13 +32,17 @@ import kotlin.coroutines.CoroutineContext
  *
  * Navigation is intent-driven: child components emit `Output`s, which this root turns into slot
  * activation/dismissal (selecting a list row opens the detail slot; the detail's "show tree" opens
- * the tree slot; a tree child opens that child's detail). Cross-feature intents (add-to-plan) are
+ * the tree slot; a tree child opens that child's detail). Each activation also updates [activePane]
+ * (the recency a single-pane View renders / back dismisses). Cross-feature intents (add-to-plan) are
  * re-emitted via this component's own [Output] for the app host to route.
  */
 interface TasksComponent {
     val list: TaskListComponent
     val detail: Value<ChildSlot<*, TaskDetailComponent>>
     val tree: Value<ChildSlot<*, TaskTreeComponent>>
+
+    /** The most-recently-foregrounded pane (see [TaskPane]); updated as slots activate/dismiss. */
+    val activePane: Value<TaskPane>
 
     sealed interface Output {
         data class AddToPlanRequested(val id: TaskId) : Output
@@ -48,6 +63,9 @@ class DefaultTasksComponent(
 
     private val detailNavigation = SlotNavigation<DetailConfig>()
     private val treeNavigation = SlotNavigation<TreeConfig>()
+
+    private val _activePane = MutableValue(TaskPane.List)
+    override val activePane: Value<TaskPane> = _activePane
 
     override val list: TaskListComponent =
         DefaultTaskListComponent(
@@ -91,14 +109,24 @@ class DefaultTasksComponent(
 
     private fun onListOutput(output: TaskListComponent.Output) {
         when (output) {
-            is TaskListComponent.Output.TaskSelected -> detailNavigation.activate(DetailConfig(output.id))
+            is TaskListComponent.Output.TaskSelected -> {
+                detailNavigation.activate(DetailConfig(output.id))
+                _activePane.value = TaskPane.Detail
+            }
         }
     }
 
     private fun onDetailOutput(output: TaskDetailComponent.Output) {
         when (output) {
-            TaskDetailComponent.Output.Closed -> detailNavigation.dismiss()
-            is TaskDetailComponent.Output.TreeRequested -> treeNavigation.activate(TreeConfig(output.id))
+            TaskDetailComponent.Output.Closed -> {
+                detailNavigation.dismiss()
+                // The foreground pane closed — fall back to whatever co-resident slot remains.
+                _activePane.value = if (tree.value.child != null) TaskPane.Tree else TaskPane.List
+            }
+            is TaskDetailComponent.Output.TreeRequested -> {
+                treeNavigation.activate(TreeConfig(output.id))
+                _activePane.value = TaskPane.Tree
+            }
             is TaskDetailComponent.Output.AddToPlanRequested ->
                 this.output(TasksComponent.Output.AddToPlanRequested(output.id))
         }
@@ -106,9 +134,15 @@ class DefaultTasksComponent(
 
     private fun onTreeOutput(output: TaskTreeComponent.Output) {
         when (output) {
-            TaskTreeComponent.Output.Closed -> treeNavigation.dismiss()
+            TaskTreeComponent.Output.Closed -> {
+                treeNavigation.dismiss()
+                _activePane.value = if (detail.value.child != null) TaskPane.Detail else TaskPane.List
+            }
             // Drilling into a child opens its detail alongside the list (co-resident), not a new stack.
-            is TaskTreeComponent.Output.ChildSelected -> detailNavigation.activate(DetailConfig(output.id))
+            is TaskTreeComponent.Output.ChildSelected -> {
+                detailNavigation.activate(DetailConfig(output.id))
+                _activePane.value = TaskPane.Detail
+            }
         }
     }
 }

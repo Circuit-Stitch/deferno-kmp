@@ -12,19 +12,18 @@ kotlin {
             implementation(project(":core:model"))
             implementation(project(":core:domain"))
             implementation(project(":core:data"))
-            // Shared Decompose component + state for the daily Plan (#25).
-            implementation(libs.decompose)
-            implementation(libs.kotlinx.coroutines.core)
+            // `api`, not `implementation`: `PlanComponent`/`DefaultPlanComponent` expose Decompose
+            // (`ComponentContext`) and coroutines `StateFlow` in their public API, so View consumers
+            // (`:feature:plan:ui`) must see them.
+            api(libs.decompose)
+            api(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.datetime)
         }
         commonTest.dependencies {
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.turbine)
         }
-        // The design system is Compose (Android + desktop), not iOS — so the Android Views
-        // depend on it from androidMain, never from the iOS-targeting commonMain (ADR-0004).
-        androidMain.dependencies {
-            implementation(project(":core:designsystem"))
-        }
+        // The Compose Views for this slice live in the sibling `:feature:plan:ui` module (Compose
+        // platforms only, no iOS) — see the note in feature/tasks/build.gradle.kts.
     }
 }
