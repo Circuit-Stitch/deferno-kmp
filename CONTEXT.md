@@ -123,3 +123,21 @@ The backend's [[Workspace]] — a per-user saved view scoping a curated set of [
 scope** the Org-scoped Destinations honour. The definition is owned by the backend `CONTEXT.md`; this
 entry only records how the client surfaces it.
 _Avoid_: dashboard (that is the global overview [[Destination]], a different thing), view, board, lens.
+
+### Commands
+
+**Command** *(client)*:
+A first-class, pure-data **user intent** (ADR-0007) — *complete*, *add to plan*, *rename*, … — that a
+[[View]], the AI agent, or an OS intent issues and the [[Command registry]] routes to a single [[Task]]
+write action. The **single binding surface** every input modality shares: keyboard shortcuts, context
+menus (right-click / long-press), drag-and-drop, agents, and OS intents (Android App Actions, iOS App
+Intents / Siri) — defined and tested once in the core, never re-derived per platform.
+_Avoid_: action, event, handler; **Mutation** (the wire-level outbox intent a Command *dispatches to*,
+ADR-0001 — a Command is the user-facing verb, a Mutation is its replayable HTTP effect).
+
+**Command registry** *(client)*:
+The shared, enumerable **catalog of every [[Command]]** plus the one place each maps to its action —
+what a command palette lists, a context menu filters, and the agent / OS-intent layer binds to. It sits
+above the offline-first write seam, so issuing a Command applies optimistically and enqueues for replay
+(ADR-0001). It is not a UI; the [[View]]s and the agent are its *clients*.
+_Avoid_: dispatcher, bus, controller, menu.
