@@ -40,11 +40,14 @@ jobs:
           java-version: "17"
 
       # Validates the wrapper JAR (built in since v4) and caches the Gradle user home —
-      # write on main, read-only on PRs, automatically. Pinned to v4 (MIT): the v6 cache
-      # provider is proprietary for private repos. To persist the configuration cache
-      # across runs, add a GRADLE_ENCRYPTION_KEY secret and pass it as cache-encryption-key.
+      # write on main, read-only on PRs, automatically. Pinned to v5 (#37): the last fully
+      # MIT-licensed major and the first on the Node 24 runtime. v6 splits caching into a
+      # proprietary gradle-actions-caching component (the default), so it's avoided on this
+      # private repo; v5 uses the GitHub Actions cache exclusively and has no cache-provider
+      # input — don't add one. To persist the configuration cache across runs, add a
+      # GRADLE_ENCRYPTION_KEY secret and pass it as cache-encryption-key.
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       # The Android SDK (ANDROID_HOME / ANDROID_SDK_ROOT) is preinstalled on ubuntu-latest,
       # so AGP's host unit-test compilation needs no setup-android step and no
@@ -59,9 +62,11 @@ jobs:
         if: ${{ !cancelled() }}
         run: ./gradlew :koverHtmlReport --stacktrace
 
+      # Pinned to v7 (#37) for the Node 24 runtime — note upload-artifact v5 still defaults
+      # to Node 20; v6 was the first to default to node24 and v7 is the latest MIT major.
       - name: Upload test results
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: "**/build/test-results/**/*.xml"
@@ -69,7 +74,7 @@ jobs:
 
       - name: Upload coverage report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kover-coverage-report
           path: "**/build/reports/kover/**"
