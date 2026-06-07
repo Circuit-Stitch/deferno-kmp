@@ -11,6 +11,30 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
+// Surface dev-account PATs from the gitignored root local.properties into the *debug* BuildConfig
+// (#68, ADR-0012): a developer pastes one or more PATs and the app seeds those Accounts on first run,
+// so it shows real staging data without committing a token. Absent-safe (blank when unset) and
+// debug-only — a release build's fields are empty, so no PAT can ship. Read via providers.fileContents
+// to stay configuration-cache compatible (same pattern as the deferno.kmp Test wiring).
+//
+// Format (local.properties):
+//   deferno.dev.accounts=work:Work:<PAT1>;personal:Personal:<PAT2>   (id:label:token, ';'-separated)
+// Back-compat: a lone deferno.staging.apiToken (already used by the #20 integration test) seeds one
+// "Dev (staging)" account, so an existing setup needs no change. See DevAccounts for the parser.
+val localProperties = providers.fileContents(
+    rootProject.layout.projectDirectory.file("local.properties"),
+).asText.orElse("")
+
+fun localProperty(key: String): String =
+    localProperties.get().lineSequence()
+        .firstOrNull { it.startsWith("$key=") }
+        ?.substringAfter('=')?.trim().orEmpty()
+
+// Render a Java string literal for buildConfigField (escape backslash + quote; PATs are single-line
+// base64url/JWT, so no newline handling is needed).
+fun stringLiteral(value: String): String =
+    "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
 android {
     namespace = "com.circuitstitch.deferno"
 
@@ -23,6 +47,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Dev PAT login placeholder (#68): seed Accounts from local.properties on debug builds.
+            buildConfigField("String", "DEV_ACCOUNTS", stringLiteral(localProperty("deferno.dev.accounts")))
+            buildConfigField("String", "DEV_STAGING_TOKEN", stringLiteral(localProperty("deferno.staging.apiToken")))
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -30,11 +59,15 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // No PAT ever ships in a release build (#68 phase 5 verifies this).
+            buildConfigField("String", "DEV_ACCOUNTS", "\"\"")
+            buildConfigField("String", "DEV_STAGING_TOKEN", "\"\"")
         }
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     testOptions {
