@@ -94,6 +94,11 @@ dependencies {
     implementation(project(":feature:auth:ui"))
     implementation(project(":core:model"))
     implementation(project(":core:data"))
+    // The compile-time DI graph (#68, ADR-0014): the app builds AppComponent at startup and an
+    // AccountComponent per Active Account; core:domain supplies the CommandExecutor + AddToPlan command
+    // the shell drives for the offline write path.
+    implementation(project(":core:di"))
+    implementation(project(":core:domain"))
     implementation(project(":core:designsystem"))
     // Decompose: `retainedComponent { }` builds the demo root so it survives configuration changes
     // (rotation) + back-press routing; `subscribeAsState()` observes the tab/slots from Compose.
