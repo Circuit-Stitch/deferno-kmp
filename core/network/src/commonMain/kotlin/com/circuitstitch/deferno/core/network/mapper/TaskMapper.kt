@@ -7,7 +7,7 @@ import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
 import com.circuitstitch.deferno.core.network.dto.TaskSummaryDto
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /**
  * The DTO→domain `Task` mapping — the "condense at the edge" core of ADR-0011 (#18). The wire DTOs'
@@ -110,6 +110,6 @@ fun ItemView.asTaskOrNull(): Task? = when (this) {
 /**
  * Parses an RFC3339 timestamp string to an [Instant], or `null` when absent. Centralised so every
  * Task timestamp field ([TaskSummaryDto.completeBy]/[TaskDetailDto.finishedAt]/`deleted_at`/…) goes
- * through the same `kotlinx.datetime` parse.
+ * through the same `kotlin.time.Instant` parse.
  */
 private fun String?.toInstantOrNull(): Instant? = this?.let(Instant::parse)

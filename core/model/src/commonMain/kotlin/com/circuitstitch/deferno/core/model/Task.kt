@@ -1,6 +1,6 @@
 package com.circuitstitch.deferno.core.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /**
  * A Task as the rest of the app sees it — the clean domain projection of the wire `task` DTO

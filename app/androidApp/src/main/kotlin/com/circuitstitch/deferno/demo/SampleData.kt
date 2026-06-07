@@ -4,7 +4,7 @@ import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /**
  * TEMPORARY (#27) in-memory sample content for the demo host, so the Tasks + Plan Views have

@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /**
  * In-memory [TaskRepository] for component tests. Reads are a [MutableStateFlow] the tests mutate;
