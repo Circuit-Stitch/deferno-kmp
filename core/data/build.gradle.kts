@@ -1,5 +1,8 @@
 plugins {
     id("deferno.kmp.library")
+    // This module contributes the bulk of the AppScope spine + AccountScope data layer (ADR-0014)
+    // via distributed @ContributesTo modules, so it hosts kotlin-inject + anvil.
+    id("deferno.di")
 }
 
 // The live `/auth/me` tracer (StagingAuthMeIntegrationTest, #20) reads `deferno.staging.baseUrl` /
@@ -19,6 +22,8 @@ kotlin {
             implementation(project(":core:network"))
             implementation(project(":core:database"))
             implementation(project(":core:secure"))
+            // The DI scope markers (App/Account scope) the @ContributesTo bindings reference.
+            api(project(":core:scopes"))
 
             // StateFlow for the observable Active Account + accounts list (ADR-0001, issue #14).
             implementation(libs.kotlinx.coroutines.core)

@@ -3,6 +3,9 @@ plugins {
     // SQLDelight schema codegen (issue #21). Applied per-module via alias — same pattern as
     // kotlin-serialization in core/network — since only this module hosts the database.
     alias(libs.plugins.sqldelight)
+    // This module contributes the AppScope DatabaseKeyStore + AccountScope SqlDriverFactory
+    // bindings (ADR-0014) via distributed @ContributesTo modules, so it hosts kotlin-inject + anvil.
+    id("deferno.di")
 }
 
 kotlin {
@@ -14,6 +17,8 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":core:model"))
             implementation(project(":core:common"))
+            // The DI scope markers (App/Account scope) the @ContributesTo bindings reference.
+            api(project(":core:scopes"))
 
             // SQLDelight runtime + the coroutines Flow extensions the repositories observe the
             // DB through (ADR-0001 observe-via-Flow-only). The driver itself is per-target.

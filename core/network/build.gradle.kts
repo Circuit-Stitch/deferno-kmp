@@ -7,6 +7,9 @@ plugins {
     // Embeds the captured contracts/fixtures/*.json into commonTest so the golden-envelope
     // contract-fixture harness (#19) loads them on every KMP target with no runtime file IO.
     id("deferno.contract-fixtures")
+    // This module contributes the AppScope HttpClient binding (ADR-0014) via a @ContributesTo
+    // module, so it hosts kotlin-inject + anvil.
+    id("deferno.di")
 }
 
 kotlin {
@@ -18,10 +21,14 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":core:model"))
             implementation(project(":core:common"))
+            // The DI scope markers (AppScope) the @ContributesTo HttpClient binding references.
+            api(project(":core:scopes"))
 
             // Engine-agnostic Ktor client + JSON content negotiation, and the
             // kotlinx.serialization runtime the Envelope DTOs + tolerant reader use.
-            implementation(libs.ktor.client.core)
+            // `api`: HttpClient is part of this module's public surface (DefernoHttpClient returns it,
+            // and the AppScope NetworkBindings binds it), so it must reach the core:di merge site.
+            api(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.kotlinx.serialization.json)
