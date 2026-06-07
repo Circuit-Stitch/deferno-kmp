@@ -62,6 +62,13 @@ composeBom = "2026.05.01"
 # `kotlin-compose` plugin below (pinned to `kotlin`); that compiler plugin is what keeps
 # CM Kotlin-2.4.0-safe, so no CM release has to certify 2.4.0 by name.
 composeMultiplatform = "1.11.1"
+# Compose Material icon set for the desktop nav suite (rail/drawer). The JetBrains
+# `org.jetbrains.compose.material` icon artifacts are version-decoupled from the Compose
+# Multiplatform plugin (they stopped tracking it in lockstep at 1.7.x) — 1.7.3 is what CM 1.11.1
+# resolves them to. We take the small `material-icons-core` (the two icons the desktop nav suite
+# uses) instead of `material-icons-extended` (≈37 MB) the desktop distribution would otherwise
+# bundle for two glyphs — the same `material-icons-core` choice the Android shell makes.
+composeIcons = "1.7.3"
 # Screenshot + Android-on-JVM testing for the Android Compose Views (#27). Roborazzi renders
 # Compose screenshots through Robolectric on the JVM (no device) — the CI JVM-fast path
 # (ADR-0006); Robolectric also drives the Compose UI interaction tests. The Roborazzi Gradle
@@ -96,6 +103,11 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 androidx-material3-adaptive-navigation-suite = { group = "androidx.compose.material3", name = "material3-adaptive-navigation-suite" }
 androidx-material3-adaptive = { group = "androidx.compose.material3.adaptive", name = "adaptive" }
 androidx-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
+# The desktop (Compose Multiplatform) counterpart of `androidx-material-icons-core`: the JetBrains
+# Material icon set the desktop nav rail/drawer renders. The `-desktop` artifact is the concrete JVM
+# variant (app/desktopApp is a plain Kotlin/JVM module, not KMP, so it takes the platform jar
+# directly rather than relying on Gradle-metadata variant selection).
+compose-material-icons-core = { group = "org.jetbrains.compose.material", name = "material-icons-core-desktop", version.ref = "composeIcons" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
