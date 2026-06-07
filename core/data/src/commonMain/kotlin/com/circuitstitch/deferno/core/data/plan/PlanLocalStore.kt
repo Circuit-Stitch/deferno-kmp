@@ -20,6 +20,16 @@ interface PlanLocalStore {
     fun observePlan(date: LocalDate, tz: String): Flow<List<TaskId>>
 
     /**
+     * A one-shot snapshot of the ordered [TaskId]s for `(date, tz)` — the non-`Flow` read the offline
+     * write path needs (#23): an optimistic plan mutation (add/remove/reorder) reads the current
+     * order, transforms it, and [replacePlan]s the result. Distinct from [observePlan] (the reactive
+     * UI stream) the way [com.circuitstitch.deferno.core.data.task.TaskLocalStore.get] is distinct
+     * from `observe`. A point-in-time read: a concurrent [replacePlan] may make the snapshot stale,
+     * but the post-flush reconcile (ADR-0001 LWW) corrects any divergence.
+     */
+    suspend fun currentPlan(date: LocalDate, tz: String): List<TaskId>
+
+    /**
      * Replaces the whole day's plan with [taskIds] in order — the per-day full-snapshot reconcile
      * (ADR-0001): delete the day's existing entries then re-insert the fresh ordered set, atomically,
      * so the day never reads as half-reconciled.

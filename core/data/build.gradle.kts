@@ -33,6 +33,12 @@ kotlin {
             // The remote sources (#22) call `HttpClient.requestApi` from core:network, which is
             // again `implementation`-scoped there, so the Ktor client core is declared here too.
             implementation(libs.ktor.client.core)
+
+            // The offline outbox (#23) builds each intent's minimal PATCH/POST body as a `JsonObject`
+            // (never emitting an absent field — ADR-0011) and renders it to the stored request string.
+            // Only the kotlinx.serialization runtime is needed (no @Serializable classes here, so no
+            // compiler plugin); core:network keeps its serialization dep `implementation`-scoped.
+            implementation(libs.kotlinx.serialization.json)
         }
 
         commonTest.dependencies {

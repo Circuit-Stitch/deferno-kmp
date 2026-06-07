@@ -31,6 +31,22 @@ fun TaskStatusWire.toWorkingState(): WorkingState = when (this) {
 }
 
 /**
+ * [WorkingState] → its wire `TaskStatus` token — the **write** direction (ADR-0011 "the wire casing
+ * lives only in `core:network`", #23). The offline outbox's `SetWorkingState` intent (`core:data`)
+ * emits a minimal `{"status": "<token>"}` PATCH body and must use the exact hyphenated wire casing
+ * (`in-progress`/`in-review`), not the domain PascalCase. Total and explicit so a new [WorkingState]
+ * value forces a token decision here rather than silently shipping a wrong status. Inverse of
+ * [TaskStatusWire.toWorkingState].
+ */
+fun WorkingState.toWireToken(): String = when (this) {
+    WorkingState.Open -> "open"
+    WorkingState.InProgress -> "in-progress"
+    WorkingState.InReview -> "in-review"
+    WorkingState.Done -> "done"
+    WorkingState.Dropped -> "dropped"
+}
+
+/**
  * `DefStatus` → [DefinitionState]. [DefStatusWire.Unknown] degrades to [DefinitionState.Active] so a
  * recurring definition with an additive status keeps firing rather than silently switching off.
  */

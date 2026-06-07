@@ -31,6 +31,16 @@ class StatusMapperTest {
     }
 
     @Test
+    fun workingStateMapsToWireToken() {
+        // The write direction (#23): exact hyphenated wire casing, inverse of toWorkingState.
+        assertEquals("open", WorkingState.Open.toWireToken())
+        assertEquals("in-progress", WorkingState.InProgress.toWireToken())
+        assertEquals("in-review", WorkingState.InReview.toWireToken())
+        assertEquals("done", WorkingState.Done.toWireToken())
+        assertEquals("dropped", WorkingState.Dropped.toWireToken())
+    }
+
+    @Test
     fun defStatusWireMapsToDefinitionState() {
         assertEquals(DefinitionState.Active, DefStatusWire.Active.toDefinitionState())
         assertEquals(DefinitionState.InReview, DefStatusWire.InReview.toDefinitionState())

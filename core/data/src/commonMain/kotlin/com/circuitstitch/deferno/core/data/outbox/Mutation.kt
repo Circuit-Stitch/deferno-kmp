@@ -1,0 +1,198 @@
+package com.circuitstitch.deferno.core.data.outbox
+
+import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.network.mapper.toWireToken
+import kotlinx.datetime.LocalDate
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlin.time.Instant
+
+/**
+ * The offline write-path intent set (ADR-0001, ADR-0011, #23): the deliverable
+ * **intent → endpoint → minimal-body table**, modelled as a sealed type rather than a generic
+ * "update DTO". A `Mutation` is transient — it exists only long enough to (a) apply optimistically to
+ * the local cache and (b) produce the [OutboxRequest] the outbox persists and replays.
+ *
+ * **Intent-based, not patch-from-X-to-Y (ADR-0001 LWW).** Each intent names *what changed*
+ * (`SetWorkingState(Done)`), not a diff, so replaying it is idempotent and two intents over
+ * independent fields (status vs title) never clobber each other.
+ *
+ * **Minimal, never-absent bodies (ADR-0011).** [toRequest] builds a `JsonObject` carrying *only* the
+ * keys the intent changes and renders it to a string sent verbatim. A nullable field's intent emits
+ * an explicit `null` to mean **"clear it"** (`ClearDeadline` → `{"complete_by":null}`); a set emits
+ * the value; **no intent ever emits an absent field**, so a missing value can never clobber a server
+ * field. (The omit-only `oneOf` `status` is only ever *set*, never cleared.)
+ *
+ * The table:
+ *
+ * | Intent | Method + endpoint | Minimal body |
+ * |---|---|---|
+ * | [SetWorkingState] | `PATCH tasks/{id}` | `{"status":"<open\|in-progress\|in-review\|done\|dropped>"}` |
+ * | [Rename] | `PATCH tasks/{id}` | `{"title":"…"}` |
+ * | [SetDeadline] | `PATCH tasks/{id}` | `{"complete_by":"<rfc3339>"}` |
+ * | [ClearDeadline] | `PATCH tasks/{id}` | `{"complete_by":null}` |
+ * | [SetDescription] | `PATCH tasks/{id}` | `{"description":"…"}` |
+ * | [ClearDescription] | `PATCH tasks/{id}` | `{"description":null}` |
+ * | [SetLabels] | `PATCH tasks/{id}` | `{"labels":[…]}` |
+ * | [SetPinned] | `PATCH tasks/{id}` | `{"pinned":<bool>}` |
+ * | [DeleteTask] | `DELETE tasks/{id}` | *(no body; soft-delete)* |
+ * | [PlanAdd] | `POST tasks/plan/add` | `{"task_id":"…","date":"…","tz":"…"}` |
+ * | [PlanRemove] | `POST tasks/plan/remove` | `{"task_id":"…","date":"…","tz":"…"}` |
+ * | [PlanReorder] | `POST tasks/plan/reorder` | `{"task_ids":[…],"date":"…","tz":"…"}` |
+ *
+ * **Deliberately out of scope at envelope v0.1.** *Create* intents (`POST /tasks`) — offline-create
+ * has no server idempotency key / client-id echo to reconcile a client-temp id against the server's
+ * assigned UUID, so a replay would duplicate (ADR-0001's reconcile keys on `id`). *Occurrence* writes
+ * (`SetOccurrence`) — there is no Habit/Chore/Event domain entity or cache to apply optimistically
+ * against yet (the #18 mapper returns `null` for those `ItemView` variants). Both are deferred until
+ * the API / domain model supports them; every intent here mutates an **existing** entity (stable
+ * server UUID), which is what makes replay-safe + reconcile-clean.
+ */
+sealed interface Mutation {
+
+    /**
+     * A coarse partition key for the entity this intent targets — `task:{id}` or `plan:{date}:{tz}`.
+     * Stored on the outbox row for diagnostics/observability; the FIFO replay order is the global
+     * enqueue sequence (not partitioned by target) so strict ordering is preserved across entities.
+     */
+    val target: String
+
+    /** The minimal, idempotent wire request this intent replays (the table above). */
+    fun toRequest(): OutboxRequest
+}
+
+/**
+ * A [Mutation] against a single existing [Task]. Carries the pure optimistic transform [applyTo] the
+ * writer applies to the cached row the instant the user acts (ADR-0001 optimistic apply) — before the
+ * request ever reaches the server.
+ */
+sealed interface TaskMutation : Mutation {
+    val taskId: TaskId
+    override val target: String get() = "task:${taskId.value}"
+
+    /**
+     * The optimistic local effect — a **pure** transform of the cached [task] (no side effects, no
+     * exceptions). It must be replay-safe: `applyTo(applyTo(t)) == applyTo(t)`, mirroring the
+     * idempotence of the wire intent, so a double-apply (e.g. a re-enqueue) never compounds.
+     */
+    fun applyTo(task: Task): Task
+}
+
+/**
+ * A [Mutation] against one day's plan *ordering* for `(date, tz)`. The plan store holds only the
+ * ordered ids (#22); [applyTo] is the pure transform of that order the writer applies optimistically.
+ */
+sealed interface PlanMutation : Mutation {
+    val date: LocalDate
+    val tz: String
+    override val target: String get() = "plan:$date:$tz"
+
+    /** The optimistic local effect on the day's ordered ids — **pure** and idempotent. */
+    fun applyTo(order: List<TaskId>): List<TaskId>
+}
+
+// --- Task intents ---
+
+/** Set a Task's [WorkingState] (`open`/`in-progress`/`in-review`/`done`/`dropped`). */
+data class SetWorkingState(override val taskId: TaskId, val state: WorkingState) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(workingState = state)
+    override fun toRequest(): OutboxRequest = patchTask(taskId) { put("status", state.toWireToken()) }
+}
+
+/** Rename a Task. */
+data class Rename(override val taskId: TaskId, val title: String) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(title = title)
+    override fun toRequest(): OutboxRequest = patchTask(taskId) { put("title", title) }
+}
+
+/** Set a Task's deadline. */
+data class SetDeadline(override val taskId: TaskId, val completeBy: Instant) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(completeBy = completeBy)
+    override fun toRequest(): OutboxRequest = patchTask(taskId) { put("complete_by", completeBy.toString()) }
+}
+
+/** Clear a Task's deadline — `null` means "clear it" (ADR-0011), distinct from omit. */
+data class ClearDeadline(override val taskId: TaskId) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(completeBy = null)
+    override fun toRequest(): OutboxRequest = patchTask(taskId) { put("complete_by", JsonNull) }
+}
+
+/** Set a Task's description body. */
+data class SetDescription(override val taskId: TaskId, val description: String) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(description = description)
+    override fun toRequest(): OutboxRequest = patchTask(taskId) { put("description", description) }
+}
+
+/** Clear a Task's description — explicit `null` = "clear it". */
+data class ClearDescription(override val taskId: TaskId) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(description = null)
+    override fun toRequest(): OutboxRequest = patchTask(taskId) { put("description", JsonNull) }
+}
+
+/** Replace a Task's labels. (An empty list clears them; the field is always present, never absent.) */
+data class SetLabels(override val taskId: TaskId, val labels: List<String>) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(labels = labels)
+    override fun toRequest(): OutboxRequest = patchTask(taskId) {
+        putJsonArray("labels") { labels.forEach { add(it) } }
+    }
+}
+
+/** Pin or unpin a Task. */
+data class SetPinned(override val taskId: TaskId, val pinned: Boolean) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(pinned = pinned)
+    override fun toRequest(): OutboxRequest = patchTask(taskId) { put("pinned", pinned) }
+}
+
+/**
+ * Soft-delete a Task (`DELETE tasks/{id}`, no body — the server tombstones it). The optimistic effect
+ * is a local tombstone at [deletedAt] (the writer passes its `now`), so the row drops out of the
+ * active list immediately; the post-flush reconcile then converges on the server's tombstone (or its
+ * absence from the snapshot — either way the row stays deleted locally, ADR-0001 LWW).
+ */
+data class DeleteTask(override val taskId: TaskId, val deletedAt: Instant) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(deletedAt = deletedAt)
+    override fun toRequest(): OutboxRequest = OutboxRequest(OutboxMethod.Delete, listOf("tasks", taskId.value))
+}
+
+// --- Plan intents ---
+
+/** Add a Task to a day's plan (idempotent: a no-op locally if already present). */
+data class PlanAdd(val taskId: TaskId, override val date: LocalDate, override val tz: String) : PlanMutation {
+    override fun applyTo(order: List<TaskId>): List<TaskId> = if (taskId in order) order else order + taskId
+    override fun toRequest(): OutboxRequest = postPlan("add") {
+        put("task_id", taskId.value); put("date", date.toString()); put("tz", tz)
+    }
+}
+
+/** Remove a Task from a day's plan (idempotent: a no-op locally if already absent). */
+data class PlanRemove(val taskId: TaskId, override val date: LocalDate, override val tz: String) : PlanMutation {
+    override fun applyTo(order: List<TaskId>): List<TaskId> = order - taskId
+    override fun toRequest(): OutboxRequest = postPlan("remove") {
+        put("task_id", taskId.value); put("date", date.toString()); put("tz", tz)
+    }
+}
+
+/** Set a day's plan to an exact order (idempotent: replays to the same order). */
+data class PlanReorder(val taskIds: List<TaskId>, override val date: LocalDate, override val tz: String) : PlanMutation {
+    override fun applyTo(order: List<TaskId>): List<TaskId> = taskIds
+    override fun toRequest(): OutboxRequest = postPlan("reorder") {
+        putJsonArray("task_ids") { taskIds.forEach { add(it.value) } }
+        put("date", date.toString()); put("tz", tz)
+    }
+}
+
+// --- minimal-body builders (the "never emit an absent field" rule lives here) ---
+
+/** A `PATCH tasks/{id}` whose body is exactly the keys [build] sets — nothing absent (ADR-0011). */
+private fun patchTask(id: TaskId, build: JsonObjectBuilder.() -> Unit): OutboxRequest =
+    OutboxRequest(OutboxMethod.Patch, listOf("tasks", id.value), buildJsonObject(build).toString())
+
+/** A `POST tasks/plan/{action}` whose body is exactly the keys [build] sets. */
+private fun postPlan(action: String, build: JsonObjectBuilder.() -> Unit): OutboxRequest =
+    OutboxRequest(OutboxMethod.Post, listOf("tasks", "plan", action), buildJsonObject(build).toString())

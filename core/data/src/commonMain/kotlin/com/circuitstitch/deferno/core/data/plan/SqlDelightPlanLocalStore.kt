@@ -32,6 +32,9 @@ class SqlDelightPlanLocalStore(
             .mapToList(dispatcher)
             .map { rows -> rows.map { TaskId(it.task_id) } }
 
+    override suspend fun currentPlan(date: LocalDate, tz: String): List<TaskId> =
+        queries.selectPlan(date.toString(), tz).executeAsList().map { TaskId(it.task_id) }
+
     override suspend fun replacePlan(date: LocalDate, tz: String, taskIds: List<TaskId>) {
         val planDate = date.toString()
         db.transaction {
