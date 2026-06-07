@@ -12,19 +12,20 @@ kotlin {
             implementation(project(":core:model"))
             implementation(project(":core:domain"))
             implementation(project(":core:data"))
-            // Shared Decompose components + ViewModels/state (#25). Decompose api-exposes Essenty.
-            implementation(libs.decompose)
-            implementation(libs.kotlinx.coroutines.core)
+            // `api`, not `implementation`: the component interfaces expose Decompose types (`Value`,
+            // `ChildSlot`, `ComponentContext`) and coroutines `StateFlow` in their public signatures,
+            // so View consumers (`:feature:tasks:ui`) must see them. Decompose api-exposes Essenty.
+            api(libs.decompose)
+            api(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.turbine)
             implementation(libs.kotlinx.datetime) // construct Task fixtures (dateCreated: Instant)
         }
-        // The design system is Compose (Android + desktop), not iOS — so the Android Views
-        // depend on it from androidMain, never from the iOS-targeting commonMain (ADR-0004).
-        androidMain.dependencies {
-            implementation(project(":core:designsystem"))
-        }
+        // The Compose Views for this slice live in the sibling `:feature:tasks:ui` module — a
+        // Compose UI library on the Compose platforms only (Android + desktop, no iOS). The Compose
+        // *compiler* plugin can't be applied here because this module also targets iOS (SwiftUI,
+        // ADR-0004), and the compiler demands a Compose runtime the iOS classpath must not carry.
     }
 }

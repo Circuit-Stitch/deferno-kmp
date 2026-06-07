@@ -42,10 +42,16 @@ include(":core:domain")
 include(":core:designsystem")
 include(":core:di")
 
-// Feature slices: each owns its shared Decompose component + ViewModel + state.
+// Feature slices: each owns its shared Decompose component + ViewModel + state (commonMain + iOS).
 include(":feature:auth")
 include(":feature:tasks")
 include(":feature:plan")
+
+// Per-slice Compose Views (#27): a UI submodule on the Compose platforms only (Android + desktop,
+// no iOS — iOS is SwiftUI). Kept separate from the slice's logic module because the Compose compiler
+// plugin is module-wide and would break the logic module's iOS compilation (ADR-0004).
+include(":feature:tasks:ui")
+include(":feature:plan:ui")
 
 // Per-platform application entry points.
 include(":app:androidApp")

@@ -81,6 +81,32 @@ class TasksComponentTest {
     }
 
     @Test
+    fun activePaneTracksTheMostRecentlyForegroundedSlotAcrossADrillIn() = runTest {
+        val component = tasksComponent(repo())
+        assertEquals(TaskPane.List, component.activePane.value, "starts on the list")
+
+        component.list.onTaskClicked(TaskId("root"))
+        assertEquals(TaskPane.Detail, component.activePane.value)
+
+        component.detail.value.child?.instance?.onShowTreeClicked()
+        assertEquals(TaskPane.Tree, component.activePane.value)
+
+        // Drilling into a tree child re-foregrounds detail (the #27 single-pane drill-in invariant),
+        // even though the tree slot stays co-resident behind it.
+        component.tree.value.child?.instance?.onChildClicked(TaskId("c1"))
+        assertEquals(TaskPane.Detail, component.activePane.value)
+        assertNotNull(component.tree.value.child, "tree stays open beneath the child's detail")
+
+        // Closing the foreground (child) detail reveals the still-open tree — not the list.
+        component.detail.value.child?.instance?.onCloseClicked()
+        assertEquals(TaskPane.Tree, component.activePane.value)
+
+        // Closing the tree (nothing else open) falls back to the list.
+        component.tree.value.child?.instance?.onCloseClicked()
+        assertEquals(TaskPane.List, component.activePane.value)
+    }
+
+    @Test
     fun addToPlanIntentBubblesUpToTheHost() = runTest {
         val outputs = mutableListOf<TasksComponent.Output>()
         val component = tasksComponent(repo(), outputs::add)

@@ -58,6 +58,13 @@ composeBom = "2026.05.01"
 # `kotlin-compose` plugin below (pinned to `kotlin`); that compiler plugin is what keeps
 # CM Kotlin-2.4.0-safe, so no CM release has to certify 2.4.0 by name.
 composeMultiplatform = "1.11.1"
+# Screenshot + Android-on-JVM testing for the Android Compose Views (#27). Roborazzi renders
+# Compose screenshots through Robolectric on the JVM (no device) — the CI JVM-fast path
+# (ADR-0006); Robolectric also drives the Compose UI interaction tests. The Roborazzi Gradle
+# plugin (applied directly in app/androidApp, which hosts the tests, like sqldelight in its module)
+# adds the `record`/`verify`/`compare` tasks; its artifacts pair with the matching plugin version.
+roborazzi = "1.63.0"
+robolectric = "4.16.1"
 # iOS Swift bridging (ADR-0003): SKIE. NOT WIRED YET — no released SKIE supports Kotlin
 # 2.4.0 as of 2026-06 (latest 0.10.12 tops out at Kotlin 2.3.10), and SKIE asserts the
 # Kotlin version at *configuration* time, so applying it would fail Gradle sync on every
@@ -98,6 +105,11 @@ kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime",
 # Shared presentation: Decompose (component tree + slot navigation) for feature commonMain (#25).
 # `decompose` api-exposes the Essenty Lifecycle/StateKeeper used by the components and their tests.
 decompose = { group = "com.arkivanov.decompose", name = "decompose", version.ref = "decompose" }
+# Decompose's Compose bindings (#27): `subscribeAsState()` to observe a `Value`/`ChildSlot` from a
+# Composable. Used in :feature:tasks:ui's androidMain (the TasksScreen host) + app/androidApp — never
+# the iOS-facing feature commonMain. (The `retainedComponent`/Android lifecycle integration the demo
+# host uses ships in the core `decompose` artifact above, not in this one.)
+decompose-extensions-compose = { group = "com.arkivanov.decompose", name = "extensions-compose", version.ref = "decompose" }
 
 # Local database (issue #21). commonMain: the runtime + the coroutines Flow extensions
 # (`asFlow`/`mapToList`) the repositories observe through (ADR-0001 observe-via-Flow). Per-target
@@ -142,6 +154,16 @@ compose-compiler-gradlePlugin = { group = "org.jetbrains.kotlin", name = "compos
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 
+# Screenshot + Compose-on-JVM test stack for the Android Views (#27, ADR-0006 JVM-fast path).
+# `roborazzi` + `roborazzi-compose` capture Compose trees to PNG; `roborazzi-junit-rule` provides
+# the `RoborazziRule`/output-context glue. `robolectric` is the Android sandbox these run inside on
+# the JVM. Used from app/androidApp's unit-test source set with the androidx compose-ui test
+# artifacts (`androidx-ui-test-junit4`/`-manifest`) already in this catalog.
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
+roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
@@ -157,4 +179,9 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 # SQLDelight schema codegen (issue #21). Applied per-module via alias in core/database — same
 # pattern as kotlin-serialization in core/network — since only that module hosts the database.
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+# Roborazzi screenshot tasks (#27): `recordRoborazzi*`/`verifyRoborazzi*`/`compareRoborazzi*`.
+# Applied directly in app/androidApp, which hosts the screenshot tests, via alias — same per-module
+# pattern as sqldelight/kotlin-serialization, not a convention plugin — so it must also be declared
+# `apply false` in the root build to land on that module's classpath.
+roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
 # skie = { id = "co.touchlab.skie", version.ref = "skie" }   # deferred — see [versions] note
