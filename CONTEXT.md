@@ -73,3 +73,53 @@ one, not a credential the client persists (ADR-0012). Minted/revoked via the web
 Settings or `…/auth/tokens`.
 _Avoid_: access token, OAuth token, session token, API key. (The wire/spec name is "API token"; the
 product term is **PAT**.)
+
+### Navigation surface
+
+The client UI is **not** a flat list of screens. It has a fixed structure — a [[Shell]] above many
+[[Destination]]s, each of which may show co-resident [[Pane]]s and its own drill-down stack (the
+three tiers in ADR-0007; the shell split in ADR-0013). The terms below keep these levels distinct so
+"how many views are there" has a structural answer, not a number.
+
+**View**:
+The thin, per-platform **native renderer** of shared component state — the *V* in the shared-state /
+View / command split (ADR-0003). A View holds no business logic; it renders slots/stacks and emits
+events/commands (e.g. `TaskListScreen`, `TaskDetailScreen`). Many Views compose one [[Destination]].
+_Avoid_: using "view" for a navigable place (that is a [[Destination]]) or for the backend
+[[Workspace]] (the backend reserves "view" for that concept) — "View" here is **only** the renderer.
+
+**Destination**:
+A **top-level navigable place** in the [[Main shell]], switched laterally via the nav suite (Plan,
+Calendar, Agenda, [[Dashboard]], All Tasks, Tasks, [[Workspace]]s, Groups, Profile, Permissions,
+Settings, …). Switching between Destinations is **state-preserving**: each keeps its own drill-down
+stack (multiple back stacks, ADR-0007 tier 1). "All Tasks" is the rendering of the backend
+[[Personal org]].
+_Avoid_: view, screen, tab, page.
+
+**Pane**:
+A **co-resident region within a single [[Destination]]** — e.g. the list pane and detail pane of
+Tasks, shown as 1 or 2 panes by window size class (ADR-0007 tier 2). Panes are co-resident slots, not
+a back stack. Only list/detail-shaped Destinations have Panes; single-pane Destinations (Calendar,
+Dashboard) have none.
+_Avoid_: screen, view, window.
+
+**Shell**:
+The **root container above all [[Destination]]s**, in one of two states by auth status (ADR-0013):
+the **Auth shell** (pre-[[Account]]: sign-in, MFA challenge, account picker — no Org scope, no nav
+suite) and the **Main shell** (post-Account: hosts the Destinations, scoped to the [[Active Account]]
++ active [[Workspace]]). Login is never a Destination. The Auth shell is re-entered from the Main
+shell for [[Account switch]] / add-account.
+_Avoid_: screen, root view.
+
+**Dashboard** *(client)*:
+An **always-global at-a-glance overview** [[Destination]] (e.g. progress, counts, mood, upcoming).
+It summarizes across **all** Orgs and **ignores** the active [[Workspace]] scope — the one place that
+does. Distinct from a [[Workspace]], which *selects* scope rather than summarizing.
+_Avoid_: workspace, home, board.
+
+**Workspace** *(client rendering of the backend concept)*:
+The backend's [[Workspace]] — a per-user saved view scoping a curated set of [[Org]]s and their items
+— rendered in this client as a [[Destination]] (to manage/switch Workspaces) and as the **active
+scope** the Org-scoped Destinations honour. The definition is owned by the backend `CONTEXT.md`; this
+entry only records how the client surfaces it.
+_Avoid_: dashboard (that is the global overview [[Destination]], a different thing), view, board, lens.
