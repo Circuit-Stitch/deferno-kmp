@@ -356,6 +356,21 @@ class MainShellComponentTest {
         )
     }
 
+    @Test
+    fun chromeSignOut_bubblesToOutputForTheHost() {
+        // The shell-chrome sign-out affordance (the desktop Account menu, ADR-0017) raises the same
+        // SignOutRequested intent as the Profile button, from outside the Destination graph.
+        val outputs = mutableListOf<MainShellComponent.Output>()
+        val shell = shell(output = outputs::add)
+
+        shell.signOut()
+
+        assertEquals(
+            listOf<MainShellComponent.Output>(MainShellComponent.Output.SignOutRequested),
+            outputs,
+        )
+    }
+
     // --- Shell-level overlay route (#70, ADR-0015) ---
 
     @Test

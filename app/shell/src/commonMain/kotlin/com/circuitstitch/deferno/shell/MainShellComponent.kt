@@ -99,6 +99,14 @@ interface MainShellComponent {
     /** Switch the Active Account — re-keys the shell for the new Account, no re-auth (ADR-0002/0012). */
     fun switchAccount(id: AccountId)
 
+    /**
+     * Request sign-out of the Active Account from a **shell-chrome** affordance (the desktop Account
+     * menu, ADR-0017) — emits [Output.SignOutRequested] for the host/root to secure-wipe the Account
+     * (ADR-0009/0012). It is the same intent the Profile Destination's sign-out button raises, surfaced
+     * at shell level so chrome outside the Destination graph (a menu bar) can raise it too.
+     */
+    fun signOut()
+
     /** A live Destination instance, tagged with which [Destination] it is so the View can render it. */
     sealed interface DestinationChild {
         val destination: Destination
@@ -206,6 +214,8 @@ class DefaultMainShellComponent(
     override val destinations: List<Destination> = Destination.entries
 
     override fun switchAccount(id: AccountId) = onSwitchAccount(id)
+
+    override fun signOut() = output(MainShellComponent.Output.SignOutRequested)
 
     // Plain-data configs (serializer = null → no state restoration wired in v1, matching the feature
     // components). One per Destination; equality is what `bringToFront` matches to retain a child.

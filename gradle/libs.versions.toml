@@ -152,6 +152,10 @@ kotlin-inject-anvil-compiler = { group = "software.amazon.lastmile.kotlin.inject
 # Reactive core + Flow test stack (issue #14): StateFlow in commonMain; runTest + Turbine in commonTest.
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+# The Swing/AWT event-dispatch-thread dispatcher (Dispatchers.Swing). app/desktopApp builds the shared
+# RootComponent on the EDT and the root collects AccountManager.activeAccount to drive Decompose
+# navigation — which must run on the UI (EDT) thread, so the collector needs an EDT dispatcher (#83).
+kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "coroutines" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
 

@@ -1,6 +1,9 @@
 package com.circuitstitch.deferno.desktop.shell
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -8,29 +11,40 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.PermanentNavigationDrawer
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.feature.plan.ui.PlanDesktopScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksDesktopScreen
+import com.circuitstitch.deferno.shell.Destination
+import com.circuitstitch.deferno.shell.MainShellComponent
 
 /**
- * The **Main shell** View, desktop edition (ADR-0013): it hosts the [MainShellComponent]'s Destination
- * graph in a desktop-native navigation surface. Rather than reuse the Android `NavigationSuiteScaffold`
- * (an Android-only adaptive artifact), it renders the desktop's own nav suite — a persistent
- * [NavigationRail] that **expands into a [PermanentNavigationDrawer]** on a wide window. It renders one
- * nav item per registered [Destination] (never a fixed count) and the foreground Destination's screen
- * as content.
+ * The **Main shell** View, desktop edition (ADR-0013 / ADR-0017): it hosts the shared
+ * [MainShellComponent]'s Destination graph in a desktop-native navigation surface. Rather than reuse
+ * the Android `NavigationSuiteScaffold` (an Android-only adaptive artifact), it renders the desktop's
+ * own nav suite — a persistent [NavigationRail] that **expands into a [PermanentNavigationDrawer]** on a
+ * wide window. It lists **every** registered [Destination] directly (the `NavSlot` Primary/Secondary
+ * distinction is a no-op on desktop — there is no compact "More") and renders the foreground
+ * Destination's screen as content, with the shell-level **overlay route** layered above it (ADR-0015).
  *
  * The rail ↔ drawer choice is driven purely by the **continuous available width** (ADR-0008 G1 — never
  * a device-type check) via [desktopNavKindFor]; the View is otherwise a pure renderer of the shared
@@ -39,47 +53,60 @@ import com.circuitstitch.deferno.feature.tasks.ui.TasksDesktopScreen
 @Composable
 fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
     val stack by component.stack.subscribeAsState()
+    val overlay by component.overlay.subscribeAsState()
     val active = stack.active.instance
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        when (desktopNavKindFor(maxWidth.value.toInt())) {
-            DesktopNavKind.Drawer ->
-                PermanentNavigationDrawer(
-                    drawerContent = {
-                        PermanentDrawerSheet(Modifier.width(DrawerWidth)) {
+    Box(modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            when (desktopNavKindFor(maxWidth.value.toInt())) {
+                DesktopNavKind.Drawer ->
+                    PermanentNavigationDrawer(
+                        drawerContent = {
+                            PermanentDrawerSheet(Modifier.width(DrawerWidth)) {
+                                component.destinations.forEach { destination ->
+                                    NavigationDrawerItem(
+                                        label = { Text(destination.label) },
+                                        selected = destination == active.destination,
+                                        onClick = { component.selectDestination(destination) },
+                                        icon = { Icon(destination.icon, contentDescription = null) },
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                    )
+                                }
+                            }
+                        },
+                    ) {
+                        DestinationContent(active)
+                    }
+
+                DesktopNavKind.Rail ->
+                    Row(Modifier.fillMaxSize()) {
+                        NavigationRail {
                             component.destinations.forEach { destination ->
-                                NavigationDrawerItem(
-                                    label = { Text(destination.label) },
+                                NavigationRailItem(
                                     selected = destination == active.destination,
                                     onClick = { component.selectDestination(destination) },
                                     icon = { Icon(destination.icon, contentDescription = null) },
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                    label = { Text(destination.label) },
                                 )
                             }
                         }
-                    },
-                ) {
-                    DestinationContent(active)
-                }
-
-            DesktopNavKind.Rail ->
-                Row(Modifier.fillMaxSize()) {
-                    NavigationRail {
-                        component.destinations.forEach { destination ->
-                            NavigationRailItem(
-                                selected = destination == active.destination,
-                                onClick = { component.selectDestination(destination) },
-                                icon = { Icon(destination.icon, contentDescription = null) },
-                                label = { Text(destination.label) },
-                            )
-                        }
+                        DestinationContent(active)
                     }
-                    DestinationContent(active)
-                }
+            }
+        }
+
+        // The shell-level overlay route sits above the whole nav suite (ADR-0015); shell back (Esc)
+        // dismisses it first (routed through the shared MainShellComponent.onBack()).
+        overlay.child?.instance?.let { child ->
+            OverlayHost(child = child, onDismiss = component::dismissOverlay)
         }
     }
 }
 
-/** Renders the foreground Destination's desktop screen, filling the content area. */
+/**
+ * Renders the foreground Destination's desktop screen, filling the content area. Plan + Tasks render
+ * their existing desktop Views; Profile, Settings, and reserved Destinations (Calendar #74) render a
+ * placeholder until their desktop Views land (#84/#85, ADR-0017).
+ */
 @Composable
 private fun DestinationContent(active: MainShellComponent.DestinationChild) {
     when (active) {
@@ -88,6 +115,72 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
 
         is MainShellComponent.DestinationChild.Tasks ->
             TasksDesktopScreen(active.component, Modifier.fillMaxSize())
+
+        is MainShellComponent.DestinationChild.Profile ->
+            ComingSoon(active.destination)
+
+        is MainShellComponent.DestinationChild.Settings ->
+            ComingSoon(active.destination)
+
+        is MainShellComponent.DestinationChild.Placeholder ->
+            ComingSoon(active.destination)
+    }
+}
+
+/**
+ * The shell-level overlay above the foreground Destination (ADR-0015). Search (#73) and New (#71) carry
+ * real Views on Android; their desktop Views are later slices, so on desktop every overlay route renders
+ * a dismissible "coming soon" placeholder — the mechanism (render position + back precedence) is fully
+ * wired regardless. The route is reachable via the Account/View menu + Ctrl+F/Ctrl+N (Main.kt).
+ */
+@Composable
+private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () -> Unit) {
+    val title = when (child) {
+        is MainShellComponent.OverlayChild.Search -> "Search"
+        is MainShellComponent.OverlayChild.New -> "New"
+        MainShellComponent.OverlayChild.Placeholder -> "Overlay"
+    }
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(text = title, style = MaterialTheme.typography.titleLarge)
+            Text(
+                text = "This surface arrives on desktop in an upcoming release.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Button(onClick = onDismiss, modifier = Modifier.padding(top = 24.dp)) {
+                Text("Dismiss")
+            }
+        }
+    }
+}
+
+/** A gentle placeholder body for a Destination whose desktop View isn't built yet (ADR-0017). */
+@Composable
+private fun ComingSoon(destination: Destination, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = "${destination.label} is coming soon",
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = "This space is reserved — its desktop view arrives in an upcoming release.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }
 
@@ -117,12 +210,18 @@ internal fun desktopNavKindFor(widthDp: Int): DesktopNavKind =
 internal val Destination.label: String
     get() = when (this) {
         Destination.Plan -> "Plan"
+        Destination.Calendar -> "Calendar"
         Destination.Tasks -> "Tasks"
+        Destination.Profile -> "Profile"
+        Destination.Settings -> "Settings"
     }
 
 /** The nav-suite icon for a [Destination] — a View concern, kept out of the shared registry. */
 private val Destination.icon: ImageVector
     get() = when (this) {
-        Destination.Plan -> Icons.Filled.DateRange
+        Destination.Plan -> Icons.Filled.Home
+        Destination.Calendar -> Icons.Filled.DateRange
         Destination.Tasks -> Icons.AutoMirrored.Filled.List
+        Destination.Profile -> Icons.Filled.Person
+        Destination.Settings -> Icons.Filled.Settings
     }
