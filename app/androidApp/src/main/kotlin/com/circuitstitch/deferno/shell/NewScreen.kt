@@ -16,6 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -25,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
+import kotlin.time.Instant
 
 /**
  * The **New** create surface View (#71, ADR-0015/0016): an **explicit** Task/Habit/Chore/Event kind
@@ -83,6 +87,27 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Notes" },
             )
 
+            // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2). The form surfaces a
+            // required start + optional end so a real Event create succeeds. Inputs take an ISO-8601
+            // instant (e.g. 2026-06-08T09:00:00Z) — a pragmatic v1 entry; a native date-time picker is a
+            // follow-up. (Location is absent from the v0.1 backend contract, so it is not collected here.)
+            if (state.selectedKind == ItemKind.Event) {
+                Spacer(Modifier.padding(top = 8.dp))
+                InstantField(
+                    value = state.start,
+                    onValueChange = component::setStart,
+                    label = "Starts (e.g. 2026-06-08T09:00:00Z)",
+                    semanticsLabel = "Event start",
+                )
+                Spacer(Modifier.padding(top = 8.dp))
+                InstantField(
+                    value = state.end,
+                    onValueChange = component::setEnd,
+                    label = "Ends (optional)",
+                    semanticsLabel = "Event end",
+                )
+            }
+
             // The gentle online-only feedback (ADR-0016).
             when (val status = state.status) {
                 NewStatus.Offline -> ReconnectMessage()
@@ -105,6 +130,34 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/**
+ * An ISO-8601 instant text input (the Event start/end, FIX 1). The user types an RFC3339 instant; a
+ * parseable value is pushed up via [onValueChange] as a real [Instant], an unparseable one clears it
+ * (so a half-typed value never POSTs an invalid `complete_by`). v1 entry shape — a native date-time
+ * picker is a follow-up; the component stays Compose-free and unit-tested on [Instant]s directly.
+ */
+@Composable
+private fun InstantField(
+    value: Instant?,
+    onValueChange: (Instant?) -> Unit,
+    label: String,
+    semanticsLabel: String,
+    modifier: Modifier = Modifier,
+) {
+    var text by remember(value) { mutableStateOf(value?.toString() ?: "") }
+    OutlinedTextField(
+        value = text,
+        onValueChange = {
+            text = it
+            onValueChange(runCatching { Instant.parse(it.trim()) }.getOrNull())
+        },
+        label = { Text(label) },
+        singleLine = true,
+        isError = text.isNotBlank() && runCatching { Instant.parse(text.trim()) }.getOrNull() == null,
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = semanticsLabel },
+    )
 }
 
 @Composable

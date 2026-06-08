@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.network.dto.RecurrenceDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlin.time.Instant
 
 /**
  * The **New** create-surface logic (#71, ADR-0015/0016): the explicit kind picker + per-kind form
@@ -32,6 +33,15 @@ interface NewComponent {
     fun setTitle(title: String)
     fun setNotes(notes: String)
 
+    /**
+     * Set the Event's **fixed start** (`complete_by`) — the one field an Event create genuinely
+     * requires (AC #2, FIX 1). `null` clears it. Ignored by the non-Event kinds.
+     */
+    fun setStart(start: Instant?)
+
+    /** Set the Event's optional **end** (`end_time`); `null` clears it (omitted from the POST). */
+    fun setEnd(end: Instant?)
+
     /** Submit the per-kind form via the online-only create path. */
     fun submit()
 
@@ -44,10 +54,25 @@ data class NewState(
     val selectedKind: ItemKind = ItemKind.Task,
     val title: String = "",
     val notes: String = "",
+    // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2). The start is required for an
+    // Event create — the v0.1 `POST /events` wire requires a non-empty `complete_by` (ADR-0011); the
+    // end is optional. The other kinds ignore these. (No `location` field: it is absent from the v0.1
+    // contract — contracts/openapi-0.1.json carries no location anywhere — so the client cannot send
+    // one; a location is a documented backend follow-up, not invented on the wire.)
+    val start: Instant? = null,
+    val end: Instant? = null,
     val status: NewStatus = NewStatus.Editing,
 ) {
-    /** Create is enabled only with a non-blank title (the one universally-required field). */
-    val canSubmit: Boolean get() = title.isNotBlank() && status != NewStatus.Submitting
+    /**
+     * Create is enabled only with a non-blank title (the one universally-required field) — and, for an
+     * **Event**, a chosen [start] (a bare Event create with no start POSTs `complete_by:""`, which the
+     * server rejects — FIX 1, AC #2). The recurring kinds default their cadence (recurrence picker is a
+     * documented v1 follow-up), so they need no extra field here.
+     */
+    val canSubmit: Boolean
+        get() = title.isNotBlank() &&
+            status != NewStatus.Submitting &&
+            (selectedKind != ItemKind.Event || start != null)
 }
 
 /** Where the New surface is in its create lifecycle. */
@@ -79,6 +104,8 @@ class DefaultNewComponent(
     override fun selectKind(kind: ItemKind) = _state.update { it.copy(selectedKind = kind, status = NewStatus.Editing) }
     override fun setTitle(title: String) = _state.update { it.copy(title = title, status = NewStatus.Editing) }
     override fun setNotes(notes: String) = _state.update { it.copy(notes = notes, status = NewStatus.Editing) }
+    override fun setStart(start: Instant?) = _state.update { it.copy(start = start, status = NewStatus.Editing) }
+    override fun setEnd(end: Instant?) = _state.update { it.copy(end = end, status = NewStatus.Editing) }
 
     override fun submit() {
         val snapshot = _state.value
@@ -99,10 +126,14 @@ class DefaultNewComponent(
 }
 
 /**
- * Build the online-only create payload for the selected kind (ADR-0016). Notes map to `description`;
- * the recurring kinds default to a daily recurrence in v1 (the recurrence picker is a follow-up), and
- * an Event needs a start, so a bare Event create falls back to a placeholder start the user can edit
- * after it joins the offline-first edit flow. The Chore group/rotation is deferred (ADR-0015).
+ * Build the online-only create payload for the selected kind (ADR-0016). Notes map to `description`,
+ * **omitted when blank** (`null`, not `""`) so the tolerant serializer drops the field rather than
+ * POSTing an empty string the server rejects (FIX 1 — `explicitNulls=false` omits nulls, *not* empty
+ * strings; ADR-0011/0005). The recurring kinds default to a daily recurrence in v1 (the recurrence
+ * picker is a documented follow-up). An **Event** carries its chosen fixed [start] as the required
+ * `complete_by` and its optional [end] as `end_time` — never an empty string (`canSubmit` gates the
+ * start, so `start` is non-null here; the `?:` start-of-epoch fallback is a defensive last resort that
+ * a non-submittable Event never reaches). The Chore group/rotation is deferred (ADR-0015).
  */
 internal fun NewState.toPayload(): CreateItem.Payload {
     val notesOrNull = notes.ifBlank { null }
@@ -115,7 +146,13 @@ internal fun NewState.toPayload(): CreateItem.Payload {
             CreateChorePayload(title = title.trim(), recurrence = RecurrenceDto(type = "daily"), description = notesOrNull),
         )
         ItemKind.Event -> CreateItem.Payload.Event(
-            CreateEventPayload(title = title.trim(), completeBy = "", description = notesOrNull),
+            CreateEventPayload(
+                title = title.trim(),
+                // The required, non-empty start (`canSubmit` requires a start for an Event).
+                completeBy = (start ?: Instant.DISTANT_FUTURE).toString(),
+                endTime = end?.toString(),
+                description = notesOrNull,
+            ),
         )
     }
 }
