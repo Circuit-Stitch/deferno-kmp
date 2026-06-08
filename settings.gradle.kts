@@ -47,6 +47,7 @@ include(":core:di")
 include(":feature:auth")
 include(":feature:tasks")
 include(":feature:plan")
+include(":feature:profile")
 
 // Per-slice Compose Views (#27): a UI submodule on the Compose platforms only (Android + desktop,
 // no iOS — iOS is SwiftUI). Kept separate from the slice's logic module because the Compose compiler
@@ -54,6 +55,7 @@ include(":feature:plan")
 include(":feature:auth:ui")
 include(":feature:tasks:ui")
 include(":feature:plan:ui")
+include(":feature:profile:ui")
 
 // Per-platform application entry points.
 include(":app:androidApp")

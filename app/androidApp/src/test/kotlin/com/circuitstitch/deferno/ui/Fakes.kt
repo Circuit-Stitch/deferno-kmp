@@ -1,5 +1,9 @@
 package com.circuitstitch.deferno.ui
 
+import com.circuitstitch.deferno.core.data.auth.AuthRepository
+import com.circuitstitch.deferno.core.data.auth.MeResult
+import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
@@ -11,6 +15,8 @@ import com.circuitstitch.deferno.feature.auth.AuthComponent
 import com.circuitstitch.deferno.feature.auth.AuthState
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanState
+import com.circuitstitch.deferno.feature.profile.ProfileComponent
+import com.circuitstitch.deferno.feature.profile.ProfileState
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import com.circuitstitch.deferno.feature.tasks.TaskListComponent
@@ -143,4 +149,33 @@ internal class FakeAuthComponent(initial: AuthState) : AuthComponent {
         private set
 
     override fun onRetry() { retryCount++ }
+}
+
+/** A sample Active Account for the shell / Profile fixtures (the "active Account" control). */
+internal val sampleAccount = Account(AccountId("work"), "Work")
+
+/** Programmable [AuthRepository] for the shell + Profile Views (defaults to the signed-in [sampleUser]). */
+internal class FakeAuthRepository(var result: MeResult = MeResult.Authenticated(sampleUser)) : AuthRepository {
+    var loadCount: Int = 0
+        private set
+
+    override suspend fun loadMe(): MeResult {
+        loadCount++
+        return result
+    }
+}
+
+internal class FakeProfileComponent(
+    initial: ProfileState,
+    override val account: Account = sampleAccount,
+) : ProfileComponent {
+    private val _state = MutableStateFlow(initial)
+    override val state: StateFlow<ProfileState> = _state
+    var retryCount = 0
+        private set
+    var signOutCount = 0
+        private set
+
+    override fun onRetry() { retryCount++ }
+    override fun onSignOut() { signOutCount++ }
 }

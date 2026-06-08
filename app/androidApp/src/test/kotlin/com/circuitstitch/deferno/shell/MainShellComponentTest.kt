@@ -2,10 +2,15 @@ package com.circuitstitch.deferno.shell
 
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.data.auth.AuthRepository
+import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
+import com.circuitstitch.deferno.feature.profile.ProfileComponent
+import com.circuitstitch.deferno.ui.FakeAuthRepository
+import com.circuitstitch.deferno.ui.sampleAccount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertEquals
@@ -29,11 +34,15 @@ class MainShellComponentTest {
     private fun shell(
         taskRepo: DemoTaskRepository = DemoTaskRepository(SampleData.tasks),
         planRepo: DemoPlanRepository = DemoPlanRepository(emptyList()),
+        auth: AuthRepository = FakeAuthRepository(),
+        account: Account = sampleAccount,
         output: (MainShellComponent.Output) -> Unit = {},
     ) = DefaultMainShellComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         taskRepository = taskRepo,
         planRepository = planRepo,
+        authRepository = auth,
+        account = account,
         today = today,
         timeZone = "UTC",
         output = output,
@@ -45,6 +54,9 @@ class MainShellComponentTest {
 
     private fun MainShellComponent.tasks(): com.circuitstitch.deferno.feature.tasks.TasksComponent =
         (stack.value.active.instance as MainShellComponent.DestinationChild.Tasks).component
+
+    private fun MainShellComponent.profile(): ProfileComponent =
+        (stack.value.active.instance as MainShellComponent.DestinationChild.Profile).component
 
     @Test
     fun opensIntoThePlan() {
@@ -166,6 +178,103 @@ class MainShellComponentTest {
         assertTrue("back closes the tree", shell.onBack())
         assertNull(tasks.tree.value.child)
         assertEquals(Destination.Tasks, shell.activeDestination())
+    }
+
+    // --- v1 Destination set (#70, ADR-0015) ---
+
+    @Test
+    fun registryIsTheV1DestinationSet_inNavOrder() {
+        assertEquals(
+            listOf(
+                Destination.Plan,
+                Destination.Calendar,
+                Destination.Tasks,
+                Destination.Profile,
+                Destination.Settings,
+            ),
+            shell().destinations,
+        )
+    }
+
+    @Test
+    fun selectingProfile_switchesLaterally_andRetainsItAcrossASwitch() {
+        val shell = shell()
+        shell.selectDestination(Destination.Profile)
+        assertEquals(Destination.Profile, shell.activeDestination())
+
+        val profile = shell.profile()
+        shell.selectDestination(Destination.Plan)
+        shell.selectDestination(Destination.Profile)
+
+        assertSame("the Profile Destination is retained across a lateral switch", profile, shell.profile())
+    }
+
+    @Test
+    fun calendarAndSettings_openAsReservedPlaceholders() {
+        val shell = shell()
+
+        shell.selectDestination(Destination.Calendar)
+        val calendar = shell.stack.value.active.instance
+        assertTrue(calendar is MainShellComponent.DestinationChild.Placeholder)
+        assertEquals(Destination.Calendar, calendar.destination)
+
+        shell.selectDestination(Destination.Settings)
+        val settings = shell.stack.value.active.instance
+        assertTrue(settings is MainShellComponent.DestinationChild.Placeholder)
+        assertEquals(Destination.Settings, settings.destination)
+    }
+
+    @Test
+    fun profile_isBuiltForTheBoundActiveAccount() {
+        val shell = shell()
+        shell.selectDestination(Destination.Profile)
+        assertEquals(sampleAccount, shell.profile().account)
+    }
+
+    @Test
+    fun profileSignOut_bubblesToOutputForTheHost() {
+        val outputs = mutableListOf<MainShellComponent.Output>()
+        val shell = shell(output = outputs::add)
+        shell.selectDestination(Destination.Profile)
+
+        shell.profile().onSignOut()
+
+        assertEquals(
+            listOf<MainShellComponent.Output>(MainShellComponent.Output.SignOutRequested),
+            outputs,
+        )
+    }
+
+    // --- Shell-level overlay route (#70, ADR-0015) ---
+
+    @Test
+    fun overlay_opensAboveTheForegroundDestination_andDismissesBackToOrigin() {
+        val shell = shell()
+        assertNull("no overlay initially", shell.overlay.value.child)
+
+        shell.openOverlay(OverlayRoute.Placeholder)
+        assertNotNull("overlay pushed above the foreground Destination", shell.overlay.value.child)
+        assertEquals("the foreground Destination is untouched", Destination.Plan, shell.activeDestination())
+
+        shell.dismissOverlay()
+        assertNull("overlay dismissed back to origin", shell.overlay.value.child)
+    }
+
+    @Test
+    fun back_dismissesTheOverlayBeforeTheActiveDestinationsInnerState() {
+        val shell = shell()
+        shell.selectDestination(Destination.Tasks)
+        shell.tasks().list.onTaskClicked(TaskId("t-1")) // a dismissable inner pane on Tasks
+        shell.openOverlay(OverlayRoute.Placeholder)
+
+        // Back hits the overlay first — the Tasks detail stays open beneath it.
+        assertTrue("back dismisses the overlay", shell.onBack())
+        assertNull(shell.overlay.value.child)
+        assertNotNull("the Tasks detail is untouched beneath the overlay", shell.tasks().detail.value.child)
+
+        // Then back resumes the normal precedence: dismiss the Tasks detail.
+        assertTrue("back now dismisses the Tasks detail", shell.onBack())
+        assertNull(shell.tasks().detail.value.child)
     }
 
     private fun stackPlan(shell: MainShellComponent): MainShellComponent.DestinationChild.Plan =

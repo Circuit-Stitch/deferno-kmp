@@ -41,6 +41,9 @@ class MainActivity : ComponentActivity() {
             DefaultRootComponent(
                 componentContext = componentContext,
                 accountManager = appComponent.accountManager,
+                // The Profile Destination's /auth/me identity fetch (#70). AppScope + Active-Account-aware
+                // (the bearer plugin attaches the Active Account's PAT per request, ADR-0012).
+                authRepository = appComponent.authRepository,
                 // Build the per-Account data layer for an Active Account from the DI graph (ADR-0014).
                 accountSession = { account ->
                     AccountComponentSession(createAccountComponent(appComponent, account))
