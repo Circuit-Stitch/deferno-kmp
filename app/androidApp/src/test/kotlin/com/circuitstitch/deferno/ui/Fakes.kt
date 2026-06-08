@@ -2,14 +2,19 @@ package com.circuitstitch.deferno.ui
 
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.MeResult
+import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.ThemeFamily
+import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.User
 import com.circuitstitch.deferno.core.model.UserId
+import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.auth.AuthComponent
 import com.circuitstitch.deferno.feature.auth.AuthState
@@ -211,4 +216,58 @@ internal class FakeProfileComponent(
 
     override fun onRetry() { retryCount++ }
     override fun onSignOut() { signOutCount++ }
+}
+
+/** A sample settings bag for the shell / Settings fixtures (#72). */
+internal val sampleUserSettings = UserSettings(
+    themeFamily = ThemeFamily.Deferno,
+    themeMode = ThemeMode.Auto,
+    globalDoneVisibilitySeconds = 259200L,
+    dashboardDoneVisibilitySeconds = 86400L,
+    timeZone = "America/Los_Angeles",
+    trackingEnabled = false,
+    dragAndDropEnabled = false,
+    username = "sampleuser",
+)
+
+/**
+ * In-memory [SettingsRepository] for the shell / Settings View tests (#72). Backed by a
+ * [MutableStateFlow] so `observeSettings()` re-emits; `refresh()` is a no-op (the data is local).
+ */
+internal class FakeSettingsRepository(initial: UserSettings = sampleUserSettings) : SettingsRepository {
+    val state = MutableStateFlow(initial)
+    override fun observeSettings(): kotlinx.coroutines.flow.Flow<UserSettings> = state
+    override suspend fun refresh() { /* offline fake */ }
+}
+
+/**
+ * In-memory [SettingsWriter] for the shell / Settings View tests (#72). Records each intent and
+ * mirrors the optimistic apply into [repo] so the observed settings reflect the write (live-apply).
+ */
+internal class FakeSettingsWriter(private val repo: FakeSettingsRepository = FakeSettingsRepository()) : SettingsWriter {
+    val themeChanges = mutableListOf<Pair<ThemeFamily, ThemeMode>>()
+    val trackingChanges = mutableListOf<Boolean>()
+    val dragAndDropChanges = mutableListOf<Boolean>()
+
+    override suspend fun setTheme(family: ThemeFamily, mode: ThemeMode) {
+        themeChanges += family to mode
+        repo.state.value = repo.state.value.copy(themeFamily = family, themeMode = mode)
+    }
+
+    override suspend fun setTracking(enabled: Boolean) {
+        trackingChanges += enabled
+        repo.state.value = repo.state.value.copy(trackingEnabled = enabled)
+    }
+
+    override suspend fun setDragAndDrop(enabled: Boolean) {
+        dragAndDropChanges += enabled
+        repo.state.value = repo.state.value.copy(dragAndDropEnabled = enabled)
+    }
+
+    override suspend fun setDoneVisibility(globalSeconds: Long?, dashboardSeconds: Long?) {
+        repo.state.value = repo.state.value.copy(
+            globalDoneVisibilitySeconds = globalSeconds,
+            dashboardDoneVisibilitySeconds = dashboardSeconds,
+        )
+    }
 }

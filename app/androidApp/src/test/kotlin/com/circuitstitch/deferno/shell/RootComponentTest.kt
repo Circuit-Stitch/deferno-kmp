@@ -4,6 +4,8 @@ import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
+import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
@@ -12,6 +14,8 @@ import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
 import com.circuitstitch.deferno.ui.FakeAuthRepository
+import com.circuitstitch.deferno.ui.FakeSettingsRepository
+import com.circuitstitch.deferno.ui.FakeSettingsWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -241,6 +245,8 @@ private class FakeAccountManager(active: Account? = null) : AccountManager {
 private class FakeAccountSession(
     override val taskRepository: TaskRepository = DemoTaskRepository(SampleData.tasks),
     override val planRepository: PlanRepository = DemoPlanRepository(emptyList()),
+    override val settingsRepository: SettingsRepository = FakeSettingsRepository(),
+    override val settingsWriter: SettingsWriter = FakeSettingsWriter(),
 ) : AccountSession {
     val addedToPlan = mutableListOf<TaskId>()
     val workingStateSets = mutableListOf<Pair<TaskId, com.circuitstitch.deferno.core.model.WorkingState>>()

@@ -40,6 +40,8 @@ class MainShellNavInteractionTest {
         taskRepository = DemoTaskRepository(SampleData.tasks),
         planRepository = DemoPlanRepository(emptyList()),
         authRepository = FakeAuthRepository(),
+        settingsRepository = FakeSettingsRepository(),
+        settingsWriter = FakeSettingsWriter(),
         account = sampleAccount,
         today = LocalDate(2026, 6, 6),
         timeZone = "UTC",

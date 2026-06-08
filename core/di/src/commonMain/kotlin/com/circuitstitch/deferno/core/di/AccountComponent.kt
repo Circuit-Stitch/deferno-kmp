@@ -2,6 +2,8 @@ package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
+import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.model.Account
@@ -47,6 +49,12 @@ abstract class AccountComponent(
      */
     abstract val taskRepository: TaskRepository
     abstract val planRepository: PlanRepository
+
+    /** The user's settings — observed for the Settings Destination + the app-wide live theme (#72). */
+    abstract val settingsRepository: SettingsRepository
+
+    /** The settings write seam (#72): optimistic local apply + outbox enqueue for `PATCH /auth/me/settings`. */
+    abstract val settingsWriter: SettingsWriter
 
     /** The command-registry dispatch site (ADR-0007) over this Account's write seams. */
     abstract val commandExecutor: CommandExecutor

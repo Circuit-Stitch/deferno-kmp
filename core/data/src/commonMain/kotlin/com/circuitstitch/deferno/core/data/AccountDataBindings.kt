@@ -11,6 +11,13 @@ import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.plan.PlanWriter
 import com.circuitstitch.deferno.core.data.plan.SqlDelightPlanLocalStore
+import com.circuitstitch.deferno.core.data.settings.OfflineSettingsRepository
+import com.circuitstitch.deferno.core.data.settings.OutboxSettingsWriter
+import com.circuitstitch.deferno.core.data.settings.SettingsLocalStore
+import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
+import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.data.settings.SettingsWriter
+import com.circuitstitch.deferno.core.data.settings.SqlDelightSettingsLocalStore
 import com.circuitstitch.deferno.core.data.task.OfflineTaskRepository
 import com.circuitstitch.deferno.core.data.task.OutboxTaskWriter
 import com.circuitstitch.deferno.core.data.task.SqlDelightTaskLocalStore
@@ -48,6 +55,10 @@ interface AccountDataBindings {
 
     @Provides
     @SingleIn(AccountScope::class)
+    fun settingsLocalStore(db: DefernoDatabase): SettingsLocalStore = SqlDelightSettingsLocalStore(db)
+
+    @Provides
+    @SingleIn(AccountScope::class)
     fun outboxStore(db: DefernoDatabase): OutboxStore = SqlDelightOutboxStore(db)
 
     @Provides
@@ -74,6 +85,18 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun planWriter(planStore: PlanLocalStore, outbox: OutboxStore): PlanWriter =
         OutboxPlanWriter(planStore, outbox)
+
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun settingsRepository(
+        localStore: SettingsLocalStore,
+        remoteSource: SettingsRemoteSource,
+    ): SettingsRepository = OfflineSettingsRepository(localStore, remoteSource)
+
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun settingsWriter(localStore: SettingsLocalStore, outbox: OutboxStore): SettingsWriter =
+        OutboxSettingsWriter(localStore, outbox)
 
     /**
      * The outbox replay engine (#23). Its reconcile closure — run once after a successful flush —

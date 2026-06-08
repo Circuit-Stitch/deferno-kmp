@@ -1,6 +1,8 @@
 package com.circuitstitch.deferno.shell
 
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
+import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.AddToPlan
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
@@ -25,6 +27,15 @@ interface AccountSession {
     val taskRepository: TaskRepository
     val planRepository: PlanRepository
 
+    /**
+     * The Active Account's settings — observed for the Settings Destination (#72) and the app-wide
+     * **live theme** (the theme StateFlow the root derives from this drives `DefernoTheme`).
+     */
+    val settingsRepository: SettingsRepository
+
+    /** The settings write seam (#72): optimistic local apply + outbox enqueue for `PATCH /auth/me/settings`. */
+    val settingsWriter: SettingsWriter
+
     /** Add [taskId] to the ([date], [tz]) plan — optimistic apply + outbox enqueue (ADR-0001/0007). */
     suspend fun addToPlan(taskId: TaskId, date: LocalDate, tz: String)
 
@@ -45,6 +56,8 @@ interface AccountSession {
 internal class AccountComponentSession(private val component: AccountComponent) : AccountSession {
     override val taskRepository: TaskRepository get() = component.taskRepository
     override val planRepository: PlanRepository get() = component.planRepository
+    override val settingsRepository: SettingsRepository get() = component.settingsRepository
+    override val settingsWriter: SettingsWriter get() = component.settingsWriter
 
     override suspend fun addToPlan(taskId: TaskId, date: LocalDate, tz: String) {
         component.commandExecutor.execute(AddToPlan(taskId, date, tz))

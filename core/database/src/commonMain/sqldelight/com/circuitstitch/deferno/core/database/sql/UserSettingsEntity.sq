@@ -1,0 +1,37 @@
+-- The local source-of-truth for the user's settings bag (ADR-0001, #72). There is exactly ONE
+-- settings row per Account (the per-Account encrypted DB is itself scoped to one Account, ADR-0002/
+-- 0014), so the table is a singleton: `id` is pinned to 0 by a CHECK so an upsert always targets the
+-- same row. Columns mirror the DOMAIN UserSettings (ADR-0011), all primitive SQL types (TEXT/INTEGER)
+-- so the generated `DefernoDatabase` needs no column adapters; the row<->domain conversion (the
+-- ThemeFamily/ThemeMode enums, the Boolean toggles) is done in Kotlin in core:data.
+--
+-- theme_family/theme_mode store the DOMAIN enum names (`Deferno`/`Mono`, `Light`/`Dark`/`Auto`), not
+-- the wire tokens — the wire casing lives only in core:network (ADR-0011). The done-visibility windows
+-- + time_zone are nullable (the read DTO defaults them). Reconciled as a full replace per refresh
+-- (offline-first: a failed pull leaves the cached row intact).
+CREATE TABLE userSettingsEntity (
+    id                                INTEGER NOT NULL PRIMARY KEY CHECK (id = 0),
+    theme_family                      TEXT NOT NULL,
+    theme_mode                        TEXT NOT NULL,
+    global_done_visibility_seconds    INTEGER,
+    dashboard_done_visibility_seconds INTEGER,
+    time_zone                         TEXT,
+    tracking_enabled                  INTEGER NOT NULL DEFAULT 0,
+    drag_and_drop_enabled             INTEGER NOT NULL DEFAULT 0,
+    username                          TEXT
+);
+
+-- The single settings row, or no rows when nothing has been cached yet (observed as a Flow; the
+-- repository seeds a default until the first refresh lands).
+selectSettings:
+SELECT * FROM userSettingsEntity WHERE id = 0;
+
+-- Upsert the singleton row (id pinned to 0 by the CHECK, so this always replaces the same row).
+upsertSettings:
+INSERT OR REPLACE INTO userSettingsEntity(
+    id, theme_family, theme_mode, global_done_visibility_seconds, dashboard_done_visibility_seconds,
+    time_zone, tracking_enabled, drag_and_drop_enabled, username
+) VALUES (0, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteAll:
+DELETE FROM userSettingsEntity;

@@ -1,16 +1,25 @@
 package com.circuitstitch.deferno
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.core.net.toUri
 import com.arkivanov.decompose.retainedComponent
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.di.createAccountComponent
+import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.RootShell
@@ -36,6 +45,10 @@ class MainActivity : ComponentActivity() {
         // (Decompose Android integration). The factory runs once per scene; the process-global
         // AppComponent is captured so rotation never rebuilds the data layer (G2). The default
         // coroutine context (Dispatchers.Main) drives the Active-Account collector + navigation.
+        // The application Context backs the Settings deep-links (#72) — held, not `this`, so it stays
+        // valid across the configuration changes the retained root survives.
+        val appContext = applicationContext
+
         val root = retainedComponent { componentContext ->
             val timeZone = TimeZone.currentSystemDefault()
             DefaultRootComponent(
@@ -51,6 +64,20 @@ class MainActivity : ComponentActivity() {
                 onSignIn = app::signInDevAccount,
                 today = Clock.System.todayIn(timeZone),
                 timeZone = timeZone.id,
+                // Settings → App Permissions: deep-link to this app's OS settings screen (#72).
+                onOpenOsAppSettings = {
+                    val intent = Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", appContext.packageName, null),
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    appContext.startActivity(intent)
+                },
+                // Settings → Security & 2FA: open the Active Account's Zitadel console URL in a browser.
+                onOpenConsoleUrl = { url ->
+                    val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    appContext.startActivity(intent)
+                },
             )
         }
 
@@ -66,7 +93,18 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            DefernoTheme {
+            // Drive the theme from the Active Account's settings so Appearance changes apply LIVE
+            // across the whole app (#72): the family selects the palette, and the mode resolves to a
+            // dark boolean (Auto follows the OS). Before any account is active the StateFlow seeds the
+            // default (Deferno / follow-system), so the Auth shell is themed too (ADR-0002/0014).
+            val settings by root.themeSettings.collectAsState()
+            DefernoTheme(
+                palette = when (settings.themeFamily) {
+                    ThemeFamily.Deferno -> DefernoPalette.Deferno
+                    ThemeFamily.Mono -> DefernoPalette.Mono
+                },
+                darkTheme = settings.themeMode.resolveDark(isSystemInDarkTheme()),
+            ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     RootShell(root)
                 }

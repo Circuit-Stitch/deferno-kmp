@@ -13,6 +13,8 @@ import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
+import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
@@ -21,6 +23,8 @@ import com.circuitstitch.deferno.feature.plan.DefaultPlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.profile.DefaultProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
+import com.circuitstitch.deferno.feature.settings.DefaultSettingsComponent
+import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.tasks.DefaultSearchComponent
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
@@ -110,10 +114,15 @@ interface MainShellComponent {
             override val destination: Destination = Destination.Profile
         }
 
+        /** The Settings tier-3 drill-down (#72): a category list → per-category detail (ADR-0007 t3). */
+        class Settings(val component: SettingsComponent) : DestinationChild {
+            override val destination: Destination = Destination.Settings
+        }
+
         /**
-         * A Destination whose own slice isn't built yet (Calendar #74, Settings #72) — a logic-less
-         * child the View renders as a placeholder body. It is still a real tier-1 Destination with its
-         * own retained back-stack entry, so it drops in its slice later with no structural change.
+         * A Destination whose own slice isn't built yet (Calendar #74) — a logic-less child the View
+         * renders as a placeholder body. It is still a real tier-1 Destination with its own retained
+         * back-stack entry, so it drops in its slice later with no structural change.
          */
         class Placeholder(override val destination: Destination) : DestinationChild
     }
@@ -133,6 +142,15 @@ interface MainShellComponent {
 
         /** A Profile "sign out" intent — the host secure-wipes the Active Account (ADR-0009/0012). */
         data object SignOutRequested : Output
+
+        /** A Settings "App Permissions" tap — the host deep-links to the OS app-settings screen (#72). */
+        data object OpenOsAppSettings : Output
+
+        /** A Settings "Security & 2FA" tap — the host opens the Zitadel console URL when present (#72). */
+        data object OpenConsoleUrl : Output
+
+        /** A Settings "Account → View profile" tap — switch laterally to the Profile Destination (#72). */
+        data object OpenProfile : Output
     }
 }
 
@@ -150,6 +168,8 @@ class DefaultMainShellComponent(
     private val taskRepository: TaskRepository,
     private val planRepository: PlanRepository,
     private val authRepository: AuthRepository,
+    private val settingsRepository: SettingsRepository,
+    private val settingsWriter: SettingsWriter,
     private val account: Account,
     private val today: LocalDate,
     private val timeZone: String,
@@ -273,7 +293,15 @@ class DefaultMainShellComponent(
                 )
 
             Config.Settings ->
-                MainShellComponent.DestinationChild.Placeholder(Destination.Settings)
+                MainShellComponent.DestinationChild.Settings(
+                    DefaultSettingsComponent(
+                        componentContext = childContext,
+                        settingsRepository = settingsRepository,
+                        settingsWriter = settingsWriter,
+                        output = ::onSettingsOutput,
+                        coroutineContext = coroutineContext,
+                    ),
+                )
         }
 
     private fun createOverlay(
@@ -340,6 +368,22 @@ class DefaultMainShellComponent(
         }
     }
 
+    private fun onSettingsOutput(output: SettingsComponent.Output) {
+        when (output) {
+            // OS deep-links cross the app boundary (an Android Intent), so they land at the host (#72).
+            SettingsComponent.Output.OpenOsAppSettings ->
+                this.output(MainShellComponent.Output.OpenOsAppSettings)
+            SettingsComponent.Output.OpenConsoleUrl ->
+                this.output(MainShellComponent.Output.OpenConsoleUrl)
+            // "View profile" is a lateral switch within the shell — handle it here (the shell owns the
+            // Destination graph), and also surface it for the host (parity with the other Outputs).
+            SettingsComponent.Output.OpenProfile -> {
+                navigation.bringToFront(Config.Profile)
+                this.output(MainShellComponent.Output.OpenProfile)
+            }
+        }
+    }
+
     private fun Destination.toConfig(): Config =
         when (this) {
             Destination.Plan -> Config.Plan
@@ -358,6 +402,8 @@ class DefaultMainShellComponent(
             is MainShellComponent.DestinationChild.Plan -> false
             is MainShellComponent.DestinationChild.Tasks -> component.dismissForegroundPane()
             is MainShellComponent.DestinationChild.Profile -> false
+            // Settings is a tier-3 drill-down: back pops an open category detail to the list first (#72).
+            is MainShellComponent.DestinationChild.Settings -> component.onBack()
             is MainShellComponent.DestinationChild.Placeholder -> false
         }
 }

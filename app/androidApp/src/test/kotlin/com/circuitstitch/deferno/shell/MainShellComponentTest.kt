@@ -9,7 +9,11 @@ import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
+import com.circuitstitch.deferno.feature.settings.SettingsCategory
+import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.ui.FakeAuthRepository
+import com.circuitstitch.deferno.ui.FakeSettingsRepository
+import com.circuitstitch.deferno.ui.FakeSettingsWriter
 import com.circuitstitch.deferno.ui.sampleAccount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.LocalDate
@@ -36,18 +40,25 @@ class MainShellComponentTest {
         planRepo: DemoPlanRepository = DemoPlanRepository(emptyList()),
         auth: AuthRepository = FakeAuthRepository(),
         account: Account = sampleAccount,
+        settingsRepo: FakeSettingsRepository = FakeSettingsRepository(),
+        settingsWriter: FakeSettingsWriter = FakeSettingsWriter(settingsRepo),
         output: (MainShellComponent.Output) -> Unit = {},
     ) = DefaultMainShellComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         taskRepository = taskRepo,
         planRepository = planRepo,
         authRepository = auth,
+        settingsRepository = settingsRepo,
+        settingsWriter = settingsWriter,
         account = account,
         today = today,
         timeZone = "UTC",
         output = output,
         coroutineContext = Dispatchers.Unconfined,
     )
+
+    private fun MainShellComponent.settings(): SettingsComponent =
+        (stack.value.active.instance as MainShellComponent.DestinationChild.Settings).component
 
     private fun MainShellComponent.activeDestination(): Destination =
         stack.value.active.instance.destination
@@ -210,18 +221,85 @@ class MainShellComponentTest {
     }
 
     @Test
-    fun calendarAndSettings_openAsReservedPlaceholders() {
+    fun calendar_opensAsAReservedPlaceholder() {
         val shell = shell()
 
         shell.selectDestination(Destination.Calendar)
         val calendar = shell.stack.value.active.instance
         assertTrue(calendar is MainShellComponent.DestinationChild.Placeholder)
         assertEquals(Destination.Calendar, calendar.destination)
+    }
+
+    @Test
+    fun settings_opensAsARealTier3Destination() {
+        // Settings is no longer a placeholder (#72): it opens the real Settings drill-down at its list.
+        val shell = shell()
 
         shell.selectDestination(Destination.Settings)
         val settings = shell.stack.value.active.instance
-        assertTrue(settings is MainShellComponent.DestinationChild.Placeholder)
+        assertTrue(settings is MainShellComponent.DestinationChild.Settings)
         assertEquals(Destination.Settings, settings.destination)
+        assertEquals(
+            SettingsComponent.SettingsChild.List,
+            (settings as MainShellComponent.DestinationChild.Settings).component.stack.value.active.instance,
+        )
+    }
+
+    @Test
+    fun settings_isRetainedAcrossALateralSwitch() {
+        val shell = shell()
+        shell.selectDestination(Destination.Settings)
+        val settings = shell.settings()
+        // Drill into a category (its tier-3 state).
+        settings.openCategory(SettingsCategory.Appearance)
+
+        shell.selectDestination(Destination.Plan)
+        shell.selectDestination(Destination.Settings)
+
+        // Same Settings instance, still drilled into Appearance — multiple back stacks, no reset.
+        assertSame("the Settings Destination is retained across the switch", settings, shell.settings())
+        assertTrue(shell.settings().stack.value.active.instance is SettingsComponent.SettingsChild.Detail)
+    }
+
+    @Test
+    fun back_delegatesToTheSettingsTier3StackBeforeFallingBackToPlan() {
+        val shell = shell()
+        shell.selectDestination(Destination.Settings)
+        shell.settings().openCategory(SettingsCategory.Appearance) // a tier-3 detail open
+
+        assertTrue("back pops the open Settings category detail", shell.onBack())
+        assertEquals(
+            SettingsComponent.SettingsChild.List,
+            shell.settings().stack.value.active.instance,
+        )
+        assertEquals(Destination.Settings, shell.activeDestination())
+
+        assertTrue("nothing left inside Settings → return to the Plan home", shell.onBack())
+        assertEquals(Destination.Plan, shell.activeDestination())
+    }
+
+    @Test
+    fun settingsOpenProfile_switchesLaterallyToProfile() {
+        val shell = shell()
+        shell.selectDestination(Destination.Settings)
+
+        shell.settings().onOpenProfile()
+
+        assertEquals(Destination.Profile, shell.activeDestination())
+    }
+
+    @Test
+    fun settingsAppPermissions_bubblesOpenOsAppSettingsToTheHost() {
+        val outputs = mutableListOf<MainShellComponent.Output>()
+        val shell = shell(output = outputs::add)
+        shell.selectDestination(Destination.Settings)
+
+        shell.settings().onOpenAppPermissions()
+
+        assertEquals(
+            listOf<MainShellComponent.Output>(MainShellComponent.Output.OpenOsAppSettings),
+            outputs,
+        )
     }
 
     @Test

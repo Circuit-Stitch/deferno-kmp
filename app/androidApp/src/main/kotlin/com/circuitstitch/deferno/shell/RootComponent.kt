@@ -12,11 +12,16 @@ import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlin.coroutines.CoroutineContext
@@ -39,6 +44,14 @@ interface RootComponent {
     /** The active shell (exactly one of [Child.Auth] / [Child.Main]). */
     val stack: Value<ChildStack<*, Child>>
 
+    /**
+     * The Active Account's settings, surfaced **app-wide** so the View's `DefernoTheme` re-themes
+     * live when Appearance changes (#72). It is derived at the root (above the per-Account boundary):
+     * it mirrors the active Main session's settings `Flow`, and falls back to [UserSettings.Default]
+     * in the no-account / Auth-shell state, re-pointing on an account switch (ADR-0002/0014).
+     */
+    val themeSettings: StateFlow<UserSettings>
+
     /** Route Android system-back to the active shell. `false` → the host lets the platform exit. */
     fun onBackClicked(): Boolean
 
@@ -56,11 +69,21 @@ class DefaultRootComponent(
     private val onSignIn: () -> Unit,
     private val today: LocalDate,
     private val timeZone: String,
+    /** Deep-link to the OS app-settings screen (Settings → App Permissions, #72). Handled by the host. */
+    private val onOpenOsAppSettings: () -> Unit = {},
+    /** Open the Active Account's Zitadel console URL, if any (Settings → Security & 2FA stub, #72). */
+    private val onOpenConsoleUrl: (String) -> Unit = {},
     coroutineContext: CoroutineContext = Dispatchers.Main,
 ) : RootComponent, ComponentContext by componentContext {
 
     private val scope = CoroutineScope(coroutineContext + SupervisorJob())
         .also { s -> lifecycle.doOnDestroy { s.cancel() } }
+
+    private val _themeSettings = MutableStateFlow(UserSettings.Default)
+    override val themeSettings: StateFlow<UserSettings> = _themeSettings.asStateFlow()
+
+    /** The collector mirroring the active session's settings into [_themeSettings]; cancelled on switch. */
+    private var themeJob: Job? = null
 
     private sealed interface Config {
         data object Auth : Config
@@ -108,6 +131,8 @@ class DefaultRootComponent(
         when (config) {
             Config.Auth -> {
                 activeSession = null
+                // No Active Account → no per-Account settings; fall the app-wide theme back to default.
+                pointThemeAt(null)
                 RootComponent.Child.Auth(
                     DefaultAuthShellComponent(componentContext = childContext, onSignIn = onSignIn),
                 )
@@ -119,17 +144,23 @@ class DefaultRootComponent(
                 val account = accountManager.accounts.value.first { it.id.value == config.accountId }
                 val session = accountSession(account)
                 activeSession = session
-                // Pull this Account's tasks + today's plan into the local cache on open / switch
-                // (offline-first: the repositories swallow failures, leaving the cache intact). The
-                // Views observe the local DB, so this is what surfaces real data on first open.
+                // Pull this Account's tasks + today's plan + settings into the local cache on open /
+                // switch (offline-first: the repositories swallow failures, leaving the cache intact).
+                // The Views observe the local DB, so this is what surfaces real data on first open.
                 scope.launch { session.taskRepository.refresh() }
                 scope.launch { session.planRepository.refreshPlan(today, timeZone) }
+                scope.launch { session.settingsRepository.refresh() }
+                // Re-point the app-wide theme `Flow` at THIS Account's settings (#72) — cancels the
+                // previous account's collector, so a switch never bleeds the prior account's theme.
+                pointThemeAt(session)
                 RootComponent.Child.Main(
                     DefaultMainShellComponent(
                         componentContext = childContext,
                         taskRepository = session.taskRepository,
                         planRepository = session.planRepository,
                         authRepository = authRepository,
+                        settingsRepository = session.settingsRepository,
+                        settingsWriter = session.settingsWriter,
                         account = account,
                         today = today,
                         timeZone = timeZone,
@@ -145,6 +176,23 @@ class DefaultRootComponent(
             }
         }
 
+    /**
+     * Re-point the app-wide theme [StateFlow] at [session]'s settings (or reset to the default when
+     * `null`). Cancels the prior collector first so an account switch / sign-out can never leave a
+     * stale or cross-account theme (account isolation, ADR-0002/0014).
+     */
+    private fun pointThemeAt(session: AccountSession?) {
+        themeJob?.cancel()
+        if (session == null) {
+            _themeSettings.value = UserSettings.Default
+            themeJob = null
+            return
+        }
+        themeJob = scope.launch {
+            session.settingsRepository.observeSettings().collect { _themeSettings.value = it }
+        }
+    }
+
     private fun onMainOutput(output: MainShellComponent.Output) {
         when (output) {
             // Add-to-plan applies through the Active Account's offline write path (optimistic apply +
@@ -152,6 +200,23 @@ class DefaultRootComponent(
             is MainShellComponent.Output.AddToPlanRequested -> onAddToPlan(output.id)
             // Sign out crosses the Account-isolation boundary (ADR-0002), so it lands at the root.
             MainShellComponent.Output.SignOutRequested -> onSignOut()
+            // OS / browser deep-links cross the app boundary (an Android Intent), so the host issues
+            // them (#72). App permissions opens the OS settings; the console URL is resolved from the
+            // Active Account's /auth/me identity (only admins carry one — a no-op when absent).
+            MainShellComponent.Output.OpenOsAppSettings -> onOpenOsAppSettings()
+            MainShellComponent.Output.OpenConsoleUrl -> onOpenConsoleUrl()
+            // "View profile" is a lateral switch the shell already performed; nothing for the host.
+            MainShellComponent.Output.OpenProfile -> Unit
+        }
+    }
+
+    private fun onOpenConsoleUrl() {
+        scope.launch {
+            val url = when (val me = authRepository.loadMe()) {
+                is com.circuitstitch.deferno.core.data.auth.MeResult.Authenticated -> me.user.consoleUrl
+                else -> null
+            }
+            if (url != null) onOpenConsoleUrl(url)
         }
     }
 

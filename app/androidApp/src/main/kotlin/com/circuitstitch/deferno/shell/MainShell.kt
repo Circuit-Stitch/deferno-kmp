@@ -54,6 +54,7 @@ import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.profile.ui.ProfileScreen
+import com.circuitstitch.deferno.feature.settings.ui.SettingsScreen
 import com.circuitstitch.deferno.feature.tasks.ui.SearchScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksScreen
 
@@ -190,6 +191,9 @@ private fun DestinationBody(active: MainShellComponent.DestinationChild, modifie
 
         is MainShellComponent.DestinationChild.Profile ->
             ProfileScreen(active.component, modifier)
+
+        is MainShellComponent.DestinationChild.Settings ->
+            SettingsScreen(active.component, modifier)
 
         is MainShellComponent.DestinationChild.Placeholder ->
             ComingSoon(active.destination, modifier)
