@@ -132,8 +132,9 @@ class DefaultNewComponent(
  * strings; ADR-0011/0005). The recurring kinds default to a daily recurrence in v1 (the recurrence
  * picker is a documented follow-up). An **Event** carries its chosen fixed [start] as the required
  * `complete_by` and its optional [end] as `end_time` — never an empty string (`canSubmit` gates the
- * start, so `start` is non-null here; the `?:` start-of-epoch fallback is a defensive last resort that
- * a non-submittable Event never reaches). The Chore group/rotation is deferred (ADR-0015).
+ * start, so `start` is non-null here; the `?:` end-of-epoch ([Instant.DISTANT_FUTURE]) fallback is a
+ * defensive last resort that a non-submittable Event never reaches). The Chore group/rotation is
+ * deferred (ADR-0015).
  */
 internal fun NewState.toPayload(): CreateItem.Payload {
     val notesOrNull = notes.ifBlank { null }
