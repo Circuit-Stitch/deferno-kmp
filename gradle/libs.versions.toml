@@ -56,6 +56,7 @@ coreKtx = "1.15.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
+androidxTestRunner = "1.6.2"
 lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.9.3"
 composeBom = "2026.05.01"
@@ -230,6 +231,9 @@ compose-gradlePlugin = { group = "org.jetbrains.compose", name = "compose-gradle
 compose-compiler-gradlePlugin = { group = "org.jetbrains.kotlin", name = "compose-compiler-gradle-plugin", version.ref = "kotlin" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+# The on-device instrumentation runner (AndroidJUnitRunner) for the whisper native-correctness device
+# test (#92, core:speech androidDeviceTest). Only the device-test source set uses it.
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 
 # Screenshot + Compose-on-JVM test stack for the Android Views (#27, ADR-0006 JVM-fast path).
 # `roborazzi` + `roborazzi-compose` capture Compose trees to PNG; `roborazzi-junit-rule` provides

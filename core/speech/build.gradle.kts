@@ -9,6 +9,14 @@ plugins {
 kotlin {
     android {
         namespace = "com.circuitstitch.deferno.core.speech"
+        // Instrumented (on-device) tests for the native whisper engine (#92, ADR-0018): the
+        // androidDeviceTest source set runs the JNI native-correctness check on a real device/emulator
+        // (the headless JVM gate can't load the .so). Validated locally now; CI runs it once a
+        // real-hardware runner lands (ADR-0006/0018).
+        @Suppress("UnstableApiUsage")
+        withDeviceTest {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
 
     sourceSets {
@@ -42,6 +50,14 @@ kotlin {
             // suspend availability()/select(), Turbine asserts the listen() Flow<TranscriptEvent>.
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.turbine)
+        }
+
+        // On-device native-correctness test (#92): runs the whisper JNI over a bundled jfk.wav and
+        // asserts the transcript — proving the real .so transcribes on the device ABI (the JVM gate
+        // can't load native code). Not part of `check`; run via :core:speech:connectedAndroidDeviceTest.
+        getByName("androidDeviceTest").dependencies {
+            implementation(libs.androidx.junit)
+            implementation(libs.androidx.test.runner)
         }
     }
 }
