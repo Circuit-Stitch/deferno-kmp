@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -132,6 +133,8 @@ class DefaultRootComponent(
                         account = account,
                         today = today,
                         timeZone = timeZone,
+                        workingStateEditor = session.workingStateEditor,
+                        searchTasks = SearchTasks.of(session.taskRepository),
                         accounts = accountManager.accounts,
                         activeAccount = accountManager.activeAccount,
                         onSwitchAccount = ::switchAccount,

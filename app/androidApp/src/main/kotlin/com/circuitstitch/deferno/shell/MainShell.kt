@@ -54,6 +54,7 @@ import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.profile.ui.ProfileScreen
+import com.circuitstitch.deferno.feature.tasks.ui.SearchScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksScreen
 
 /**
@@ -104,7 +105,7 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
                     accounts = component.accounts,
                     activeAccount = component.activeAccount,
                     onSwitch = component::switchAccount,
-                    onSearch = { component.openOverlay(OverlayRoute.Placeholder) },
+                    onSearch = { component.openOverlay(OverlayRoute.Search) },
                 )
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     DestinationBody(active, Modifier.fillMaxSize())
@@ -235,12 +236,12 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        text = "Search & New",
+                        text = "New",
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.semantics { heading() },
                     )
                     Text(
-                        text = "The shell overlay route is wired — Search and New arrive in upcoming releases.",
+                        text = "The shell overlay route is wired — New arrives in an upcoming release.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.defernoColors.inkMuted,
                         textAlign = TextAlign.Center,
@@ -251,6 +252,10 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
                     }
                 }
             }
+
+        // The global Search overlay (#73) renders the real SearchScreen over the same primitive.
+        is MainShellComponent.OverlayChild.Search ->
+            SearchScreen(child.component, modifier = Modifier.fillMaxSize())
     }
 }
 

@@ -42,6 +42,8 @@ class CommandExecutor(
             return CommandResult.Rejected(command.kind, RejectionReason.NotApplicable)
         }
         when (command) {
+            is StartTask -> taskWriter.setWorkingState(command.taskId, WorkingState.InProgress)
+            is SendTaskToReview -> taskWriter.setWorkingState(command.taskId, WorkingState.InReview)
             is CompleteTask -> taskWriter.setWorkingState(command.taskId, WorkingState.Done)
             is ReopenTask -> taskWriter.setWorkingState(command.taskId, WorkingState.Open)
             is DropTask -> taskWriter.setWorkingState(command.taskId, WorkingState.Dropped)

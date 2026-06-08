@@ -26,6 +26,8 @@ class CommandExecutorTest {
         val ex = executor(tw, pw)
 
         // null current → the enablement gate is skipped, so every command dispatches.
+        ex.execute(StartTask(id))
+        ex.execute(SendTaskToReview(id))
         ex.execute(CompleteTask(id))
         ex.execute(ReopenTask(id))
         ex.execute(DropTask(id))
@@ -40,6 +42,8 @@ class CommandExecutorTest {
 
         assertEquals(
             listOf(
+                FakeTaskWriter.Call.SetWorkingState(id, WorkingState.InProgress),
+                FakeTaskWriter.Call.SetWorkingState(id, WorkingState.InReview),
                 FakeTaskWriter.Call.SetWorkingState(id, WorkingState.Done),
                 FakeTaskWriter.Call.SetWorkingState(id, WorkingState.Open),
                 FakeTaskWriter.Call.SetWorkingState(id, WorkingState.Dropped),
@@ -120,6 +124,14 @@ class CommandExecutorTest {
         val ex = executor(tw, pw)
 
         // Each verb offered by a stale menu against a state it can't act on (the gate fires pre-write).
+        assertEquals(
+            CommandResult.Rejected(CommandKind.StartTask, RejectionReason.NotApplicable),
+            ex.execute(StartTask(id), current = task(workingState = WorkingState.InProgress)),
+        )
+        assertEquals(
+            CommandResult.Rejected(CommandKind.SendTaskToReview, RejectionReason.NotApplicable),
+            ex.execute(SendTaskToReview(id), current = task(workingState = WorkingState.InReview)),
+        )
         assertEquals(
             CommandResult.Rejected(CommandKind.CompleteTask, RejectionReason.NotApplicable),
             ex.execute(CompleteTask(id), current = task(workingState = WorkingState.Done)),

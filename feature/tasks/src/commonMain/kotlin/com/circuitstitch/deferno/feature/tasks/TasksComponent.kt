@@ -53,6 +53,9 @@ class DefaultTasksComponent(
     componentContext: ComponentContext,
     private val taskRepository: TaskRepository,
     private val output: (TasksComponent.Output) -> Unit = {},
+    // The working-state write seam (#73), threaded down into the detail slot so the detail can issue
+    // lifecycle Commands. Defaults to a no-op so existing shell/component tests build without it.
+    private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
     private val coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : TasksComponent, ComponentContext by componentContext {
 
@@ -87,6 +90,7 @@ class DefaultTasksComponent(
                 taskId = config.taskId,
                 taskRepository = taskRepository,
                 output = ::onDetailOutput,
+                workingStateEditor = workingStateEditor,
                 coroutineContext = coroutineContext,
             )
         }

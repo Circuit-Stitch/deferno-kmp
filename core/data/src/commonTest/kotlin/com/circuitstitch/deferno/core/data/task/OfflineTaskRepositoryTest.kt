@@ -289,4 +289,74 @@ class OfflineTaskRepositoryTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    // --- global search (#73): online-only one-shot, not the observed live cache ---
+
+    @Test
+    fun searchDelegatesToTheRemoteSourceAndCarriesTheFilters() = runTest {
+        val remote = FakeTaskRemoteSource(searchResults = listOf(summary("a"), summary("b")))
+        val query = TaskSearchQuery(query = "spring", statuses = setOf(WorkingState.InProgress))
+
+        val results = repo(remote = remote).search(query)
+
+        assertEquals(listOf(TaskId("a"), TaskId("b")), results.map { it.id })
+        assertEquals(query, remote.lastSearchQuery)
+    }
+
+    @Test
+    fun searchSkipsTheRoundTripForATooShortQuery() = runTest {
+        val remote = FakeTaskRemoteSource(searchResults = listOf(summary("a")))
+
+        // Below the contract's 2-char minimum → empty, with no call reaching the remote.
+        assertTrue(repo(remote = remote).search(TaskSearchQuery(query = "a")).isEmpty())
+        assertNull(remote.lastSearchQuery)
+    }
+
+    @Test
+    fun searchAppliesTheClientSideTitleSort() = runTest {
+        val remote = FakeTaskRemoteSource(
+            searchResults = listOf(summary("1", title = "Zebra"), summary("2", title = "apple")),
+        )
+
+        val results = repo(remote = remote).search(TaskSearchQuery("task", sort = SearchSort.TitleAsc))
+
+        // Case-insensitive A→Z over the server's order.
+        assertEquals(listOf("apple", "Zebra"), results.map { it.title })
+    }
+
+    @Test
+    fun searchAppliesTheClientSideDeadlineSort_nullsLast() = runTest {
+        val soon = Instant.parse("2026-06-08T00:00:00Z")
+        val later = Instant.parse("2026-06-20T00:00:00Z")
+        val remote = FakeTaskRemoteSource(
+            searchResults = listOf(
+                summary("none").copy(completeBy = null),
+                summary("later").copy(completeBy = later),
+                summary("soon").copy(completeBy = soon),
+            ),
+        )
+
+        val results = repo(remote = remote).search(TaskSearchQuery("task", sort = SearchSort.DeadlineAsc))
+
+        assertEquals(listOf(TaskId("soon"), TaskId("later"), TaskId("none")), results.map { it.id })
+    }
+
+    @Test
+    fun searchDoesNotWriteResultsIntoTheObservedCache() = runTest {
+        val local = FakeTaskLocalStore()
+        val remote = FakeTaskRemoteSource(searchResults = listOf(summary("hit")))
+        val repository = repo(local, remote)
+
+        repository.search(TaskSearchQuery("hit"))
+
+        // Search is a separate read surface (ADR-0001): the observed list stays untouched.
+        assertTrue(local.allIds().isEmpty())
+    }
+
+    @Test
+    fun searchReturnsEmptyWhenTheRemoteFails() = runTest {
+        val remote = FakeTaskRemoteSource(searchResults = listOf(summary("a")), failNext = true)
+
+        assertTrue(repo(remote = remote).search(TaskSearchQuery("query")).isEmpty())
+    }
 }

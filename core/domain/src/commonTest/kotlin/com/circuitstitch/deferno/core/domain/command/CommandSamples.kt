@@ -31,6 +31,8 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.AddToPlan -> AddToPlan(TaskId("t1"), SAMPLE_DATE, SAMPLE_TZ)
     CommandKind.RemoveFromPlan -> RemoveFromPlan(TaskId("t1"), SAMPLE_DATE, SAMPLE_TZ)
     CommandKind.ReorderPlan -> ReorderPlan(listOf(TaskId("t1")), SAMPLE_DATE, SAMPLE_TZ)
+    CommandKind.StartTask -> StartTask(TaskId("t1"))
+    CommandKind.SendTaskToReview -> SendTaskToReview(TaskId("t1"))
 }
 
 /** Concise [Task] fixture for the enablement tests. */

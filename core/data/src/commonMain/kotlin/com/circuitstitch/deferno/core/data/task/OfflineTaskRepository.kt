@@ -67,6 +67,26 @@ class OfflineTaskRepository(
     }
 
     /**
+     * Global search (#73): online-only, one-shot. Guards the contract's 2-char minimum (a too-short
+     * term short-circuits to `emptyList()` with no round trip), delegates to [TaskRemoteSource.search]
+     * (which maps a failure to `emptyList()`, offline-first), then applies the **client-side**
+     * [SearchSort]. Results are intentionally **not** upserted into the live cache: search is a
+     * separate read surface from the observed [observeTasks] list (ADR-0001 keeps that local-only).
+     */
+    override suspend fun search(query: TaskSearchQuery): List<Task> {
+        if (query.query.trim().length < MIN_SEARCH_QUERY_LENGTH) return emptyList()
+        val results = remoteSource.search(query)
+        return results.sortedWith(query.sort.comparator())
+    }
+
+    private fun SearchSort.comparator(): Comparator<Task> = when (this) {
+        SearchSort.Relevance -> Comparator { _, _ -> 0 } // keep the server's ranking
+        SearchSort.TitleAsc -> compareBy { it.title.lowercase() }
+        // Soonest deadline first; tasks without a deadline sort last (nulls last).
+        SearchSort.DeadlineAsc -> compareBy(nullsLast()) { it.completeBy }
+    }
+
+    /**
      * Merges an [incoming] snapshot row against the [existing] cached row so a summary refresh never
      * downgrades an already-full row (see the class doc). When [existing] is Full and [incoming] is a
      * Summary, the incoming summary fields win but the existing enrichment + Full state are kept;

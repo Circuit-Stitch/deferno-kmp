@@ -30,6 +30,10 @@ kotlin {
         // stretched across platforms (ADR-0007's "stretched phone" non-goal).
         androidMain.dependencies {
             implementation(project(":feature:tasks"))
+            // The Search overlay View binds to the search query/sort value types (#73), which live in
+            // the data layer (TaskSearchQuery, SearchSort) — feature:tasks exposes them but only via
+            // `implementation`, so this module declares its own dependency to reference them directly.
+            implementation(project(":core:data"))
             implementation(libs.decompose.extensions.compose)
             // Adaptive list/detail Panes (#29, ADR-0007 tier-2): the Android-native `TasksScreen`
             // renders the co-resident detail/tree slots as 1 or 2 panes by window size class via M3

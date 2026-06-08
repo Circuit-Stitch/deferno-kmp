@@ -18,6 +18,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -91,6 +92,38 @@ class KtorTaskRemoteSourceTest {
         val source = KtorTaskRemoteSource(client { respond("", HttpStatusCode.InternalServerError) })
 
         assertNull(source.fetch(TaskId("a")))
+    }
+
+    @Test
+    fun searchHitsTheSearchPathWithTheTermAndFilterQueryParams() = runTest {
+        var captured: HttpRequestData? = null
+        val source = KtorTaskRemoteSource(client { req -> captured = req; respondJson(listEnvelope) })
+
+        val tasks = source.search(
+            TaskSearchQuery(
+                query = "spring",
+                statuses = setOf(WorkingState.InProgress),
+                labels = setOf("home"),
+                fromDate = LocalDate(2026, 6, 1),
+                toDate = LocalDate(2026, 6, 30),
+            ),
+        )
+
+        val params = captured?.url?.parameters
+        assertTrue(captured?.url?.encodedPath?.endsWith("/tasks/search") == true)
+        assertEquals("spring", params?.get("q"))
+        assertEquals("in-progress", params?.get("status"))
+        assertEquals("home", params?.get("label"))
+        assertEquals("2026-06-01", params?.get("from_date"))
+        assertEquals("2026-06-30", params?.get("to_date"))
+        assertEquals(listOf(TaskId("a"), TaskId("b")), tasks.map { it.id })
+    }
+
+    @Test
+    fun searchReturnsEmptyOnFailure() = runTest {
+        val source = KtorTaskRemoteSource(client { respond("", HttpStatusCode.InternalServerError) })
+
+        assertTrue(source.search(TaskSearchQuery("query")).isEmpty())
     }
 
     // --- test helpers ---

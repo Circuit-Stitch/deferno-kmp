@@ -4,6 +4,7 @@ import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,6 +34,14 @@ interface TaskDetailComponent {
     fun onShowTreeClicked()
     fun onAddToPlanClicked()
 
+    /**
+     * Move this Task to [target] (#73) — one of the five [WorkingState]s, issued as a Command through
+     * the injected [WorkingStateEditor]: optimistic local apply + outbox enqueue (ADR-0001), gated on
+     * the current row so a no-op transition writes nothing (ADR-0007). The local DB Flow then re-emits
+     * the new state into [state], so the badge flips optimistically.
+     */
+    fun onSetWorkingState(target: WorkingState)
+
     sealed interface Output {
         data object Closed : Output
         data class TreeRequested(val id: TaskId) : Output
@@ -45,6 +54,9 @@ class DefaultTaskDetailComponent(
     override val taskId: TaskId,
     private val taskRepository: TaskRepository,
     private val output: (TaskDetailComponent.Output) -> Unit,
+    // The working-state write seam (#73). Defaults to a no-op so the many existing tests that exercise
+    // only the read/navigation paths construct the component without supplying it (ADR-0001/0007).
+    private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : TaskDetailComponent, ComponentContext by componentContext {
 
@@ -76,5 +88,12 @@ class DefaultTaskDetailComponent(
 
     override fun onAddToPlanClicked() {
         output(TaskDetailComponent.Output.AddToPlanRequested(taskId))
+    }
+
+    override fun onSetWorkingState(target: WorkingState) {
+        // Pass the currently-observed row as `current` so the executor's pre-flight gate can reject a
+        // stale transition (the state the Task is already in) before any write — ADR-0007.
+        val current = state.value.task
+        scope.launch { workingStateEditor.setWorkingState(taskId, target, current) }
     }
 }

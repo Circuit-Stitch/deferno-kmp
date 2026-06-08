@@ -243,8 +243,14 @@ private class FakeAccountSession(
     override val planRepository: PlanRepository = DemoPlanRepository(emptyList()),
 ) : AccountSession {
     val addedToPlan = mutableListOf<TaskId>()
+    val workingStateSets = mutableListOf<Pair<TaskId, com.circuitstitch.deferno.core.model.WorkingState>>()
 
     override suspend fun addToPlan(taskId: TaskId, date: LocalDate, tz: String) {
         addedToPlan += taskId
     }
+
+    override val workingStateEditor: com.circuitstitch.deferno.feature.tasks.WorkingStateEditor =
+        com.circuitstitch.deferno.feature.tasks.WorkingStateEditor { id, target, _ ->
+            workingStateSets += id to target
+        }
 }

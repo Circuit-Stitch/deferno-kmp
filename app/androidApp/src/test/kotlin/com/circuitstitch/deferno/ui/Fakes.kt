@@ -17,6 +17,9 @@ import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileState
+import com.circuitstitch.deferno.core.data.task.SearchSort
+import com.circuitstitch.deferno.feature.tasks.SearchComponent
+import com.circuitstitch.deferno.feature.tasks.SearchState
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import com.circuitstitch.deferno.feature.tasks.TaskListComponent
@@ -25,6 +28,7 @@ import com.circuitstitch.deferno.feature.tasks.TaskTreeComponent
 import com.circuitstitch.deferno.feature.tasks.TaskTreeState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.datetime.LocalDate
 import kotlin.time.Instant
 
 /**
@@ -100,9 +104,38 @@ internal class FakeTaskDetailComponent(
     var addToPlanCount = 0
         private set
 
+    /** The working-state edits the detail forwarded, in order (#73). */
+    val workingStateSets = mutableListOf<WorkingState>()
+
     override fun onCloseClicked() { closeCount++ }
     override fun onShowTreeClicked() { showTreeCount++ }
     override fun onAddToPlanClicked() { addToPlanCount++ }
+    override fun onSetWorkingState(target: WorkingState) { workingStateSets += target }
+}
+
+/** Records the global-search overlay's intents for the SearchScreen interaction test (#73). */
+internal class FakeSearchComponent(initial: SearchState = SearchState()) : SearchComponent {
+    private val _state = MutableStateFlow(initial)
+    override val state: StateFlow<SearchState> = _state
+    val queryChanges = mutableListOf<String>()
+    val statusToggles = mutableListOf<WorkingState>()
+    val sortChanges = mutableListOf<SearchSort>()
+    val resultClicks = mutableListOf<TaskId>()
+    var submitCount = 0
+        private set
+    var dismissCount = 0
+        private set
+
+    fun setState(state: SearchState) { _state.value = state }
+
+    override fun onQueryChanged(query: String) { queryChanges += query }
+    override fun onStatusToggled(status: WorkingState) { statusToggles += status }
+    override fun onLabelToggled(label: String) {}
+    override fun onSortChanged(sort: SearchSort) { sortChanges += sort }
+    override fun onDateRangeChanged(from: LocalDate?, to: LocalDate?) {}
+    override fun onSubmit() { submitCount++ }
+    override fun onResultClicked(id: TaskId) { resultClicks += id }
+    override fun onDismiss() { dismissCount++ }
 }
 
 internal class FakeTaskTreeComponent(
