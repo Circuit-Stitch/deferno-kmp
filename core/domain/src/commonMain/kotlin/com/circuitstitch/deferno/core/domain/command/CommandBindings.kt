@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.domain.command
 
+import com.circuitstitch.deferno.core.data.calendar.OccurrenceWriter
 import com.circuitstitch.deferno.core.data.create.CreateWriter
 import com.circuitstitch.deferno.core.data.plan.PlanWriter
 import com.circuitstitch.deferno.core.data.task.TaskWriter
@@ -10,8 +11,8 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
 /**
  * AccountScope binding for the command registry's dispatch site (ADR-0007/0014): [CommandExecutor]
- * routes pure-data commands to the Account's [TaskWriter] / [PlanWriter] / [CreateWriter] write seams,
- * so it lives in the same scope as the per-Account data layer it drives.
+ * routes pure-data commands to the Account's [TaskWriter] / [PlanWriter] / [CreateWriter] /
+ * [OccurrenceWriter] write seams, so it lives in the same scope as the per-Account data layer it drives.
  */
 @ContributesTo(AccountScope::class)
 interface CommandBindings {
@@ -21,5 +22,6 @@ interface CommandBindings {
         taskWriter: TaskWriter,
         planWriter: PlanWriter,
         createWriter: CreateWriter,
-    ): CommandExecutor = CommandExecutor(taskWriter, planWriter, createWriter)
+        occurrenceWriter: OccurrenceWriter,
+    ): CommandExecutor = CommandExecutor(taskWriter, planWriter, createWriter, occurrenceWriter)
 }

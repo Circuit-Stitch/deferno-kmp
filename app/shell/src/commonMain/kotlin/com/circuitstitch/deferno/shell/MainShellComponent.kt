@@ -12,13 +12,19 @@ import com.arkivanov.decompose.router.stack.bringToFront
 import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
+import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.core.model.CalendarItem
+import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.feature.calendar.CalendarComponent
+import com.circuitstitch.deferno.feature.calendar.DefaultCalendarComponent
+import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
 import com.circuitstitch.deferno.feature.plan.DefaultPlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.profile.DefaultProfileComponent
@@ -115,6 +121,11 @@ interface MainShellComponent {
             override val destination: Destination = Destination.Plan
         }
 
+        /** The Calendar Destination (#74): a single-pane month grid + day agenda over Occurrences. */
+        class Calendar(val component: CalendarComponent) : DestinationChild {
+            override val destination: Destination = Destination.Calendar
+        }
+
         class Tasks(val component: TasksComponent) : DestinationChild {
             override val destination: Destination = Destination.Tasks
         }
@@ -180,8 +191,11 @@ sealed interface OverlayRoute {
     /** The global Search route (#73) — launched from the ⌕ in any Destination app bar. */
     data object Search : OverlayRoute
 
-    /** The New create surface (#71): the FAB pushes this above the foreground Destination. */
-    data object New : OverlayRoute
+    /**
+     * The New create surface (#71): the FAB pushes this above the foreground Destination. [date]
+     * pre-dates the form to a chosen day (the Calendar FAB, #74) — `null` opens an undated form.
+     */
+    data class New(val date: LocalDate? = null) : OverlayRoute
 }
 
 class DefaultMainShellComponent(
@@ -194,6 +208,10 @@ class DefaultMainShellComponent(
     private val account: Account,
     private val today: LocalDate,
     private val timeZone: String,
+    // The Calendar Destination's read source + occurrence-act seam (#74). Defaulted to no-ops so the
+    // many shell tests build without supplying them (mirrors workingStateEditor/searchTasks/create).
+    private val calendarRepository: CalendarRepository = NoopCalendarRepository,
+    private val occurrenceEditor: OccurrenceEditor = NoopOccurrenceEditor,
     // The Tasks working-state write seam (#73), threaded into the Tasks Destination's component so its
     // detail can issue lifecycle Commands. Defaults to a no-op so the many shell tests build without it.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
@@ -295,7 +313,17 @@ class DefaultMainShellComponent(
                 )
 
             Config.Calendar ->
-                MainShellComponent.DestinationChild.Placeholder(Destination.Calendar)
+                MainShellComponent.DestinationChild.Calendar(
+                    DefaultCalendarComponent(
+                        componentContext = childContext,
+                        calendarRepository = calendarRepository,
+                        occurrenceEditor = occurrenceEditor,
+                        today = today,
+                        tz = timeZone,
+                        output = ::onCalendarOutput,
+                        coroutineContext = coroutineContext,
+                    ),
+                )
 
             Config.Tasks ->
                 MainShellComponent.DestinationChild.Tasks(
@@ -352,11 +380,13 @@ class DefaultMainShellComponent(
                     ),
                 )
 
-            OverlayRoute.New -> MainShellComponent.OverlayChild.New(
+            is OverlayRoute.New -> MainShellComponent.OverlayChild.New(
                 DefaultNewComponent(
                     create = create,
                     onCreated = ::dismissOverlay,
                     launch = { block -> overlayScope.launch { block() } },
+                    tz = timeZone,
+                    initialDate = route.date, // pre-date the form (the Calendar FAB, #74)
                 ),
             )
         }
@@ -388,6 +418,14 @@ class DefaultMainShellComponent(
                 val tasks = stack.value.active.instance as MainShellComponent.DestinationChild.Tasks
                 tasks.component.list.onTaskClicked(output.id)
             }
+        }
+    }
+
+    private fun onCalendarOutput(output: CalendarComponent.Output) {
+        when (output) {
+            // The Calendar FAB opens New pre-dated to the selected day (#74 AC) — push the New overlay
+            // carrying that date, reusing the same overlay primitive every create surface rides.
+            is CalendarComponent.Output.CreateForDay -> openOverlay(OverlayRoute.New(output.date))
         }
     }
 
@@ -445,6 +483,8 @@ class DefaultMainShellComponent(
     private fun MainShellComponent.DestinationChild.handleInnerBack(): Boolean =
         when (this) {
             is MainShellComponent.DestinationChild.Plan -> false
+            // Calendar is single-pane (no tier-2/tier-3): nothing to dismiss inside it.
+            is MainShellComponent.DestinationChild.Calendar -> false
             is MainShellComponent.DestinationChild.Tasks -> component.dismissForegroundPane()
             is MainShellComponent.DestinationChild.Profile -> false
             // Settings is a tier-3 drill-down: back pops an open category detail to the list first (#72).
@@ -467,4 +507,21 @@ private fun TasksComponent.dismissForegroundPane(): Boolean {
     tree.value.child?.instance?.let { it.onCloseClicked(); return true }
     detail.value.child?.instance?.let { it.onCloseClicked(); return true }
     return false
+}
+
+/** No-op Calendar read source — the shell's test default when no Account session supplies one (#74). */
+private val NoopCalendarRepository = object : CalendarRepository {
+    override fun observeMarkers(from: LocalDate, to: LocalDate) =
+        MutableStateFlow<Map<LocalDate, Int>>(emptyMap())
+
+    override fun observeDay(date: LocalDate) = MutableStateFlow<List<CalendarItem>>(emptyList())
+    override suspend fun refreshWindow(from: LocalDate, to: LocalDate, tz: String) {}
+    override suspend fun reconcile() {}
+}
+
+/** No-op occurrence-act seam — the shell's test default (a real one is command-backed, #74). */
+private val NoopOccurrenceEditor = object : OccurrenceEditor {
+    override suspend fun mark(itemId: String, action: OccurrenceAction) {}
+    override suspend fun clear(itemId: String) {}
+    override suspend fun reschedule(itemId: String, newDate: LocalDate) {}
 }

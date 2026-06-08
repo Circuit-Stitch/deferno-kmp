@@ -1,18 +1,24 @@
 package com.circuitstitch.deferno.shell
 
+import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.AddToPlan
+import com.circuitstitch.deferno.core.domain.command.ClearOccurrence
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.domain.command.CommandResult
 import com.circuitstitch.deferno.core.domain.command.CreateItem
+import com.circuitstitch.deferno.core.domain.command.MarkOccurrence
+import com.circuitstitch.deferno.core.domain.command.RescheduleOccurrence
 import com.circuitstitch.deferno.core.domain.command.taskCommandFor
 import com.circuitstitch.deferno.core.di.AccountComponent
+import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.datetime.LocalDate
 
@@ -49,6 +55,16 @@ interface AccountSession {
      */
     val workingStateEditor: WorkingStateEditor
 
+    /** The Calendar Destination's windowed feed read source (#74) — the month grid + day agenda observe it. */
+    val calendarRepository: CalendarRepository
+
+    /**
+     * The occurrence-act seam the Calendar drives (#74): mark / clear / reschedule a firing through the
+     * command executor (optimistic apply + outbox enqueue), so the feature layer never touches the
+     * registry directly — the firing-level mirror of [workingStateEditor].
+     */
+    val occurrenceEditor: OccurrenceEditor
+
     /**
      * Create a new item online (ADR-0016): routes [payload] through the command executor's online-only
      * [CreateItem] command. Returns the [CommandResult] so the New surface can show the created item
@@ -68,6 +84,7 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val planRepository: PlanRepository get() = component.planRepository
     override val settingsRepository: SettingsRepository get() = component.settingsRepository
     override val settingsWriter: SettingsWriter get() = component.settingsWriter
+    override val calendarRepository: CalendarRepository get() = component.calendarRepository
 
     override suspend fun addToPlan(taskId: TaskId, date: LocalDate, tz: String) {
         component.commandExecutor.execute(AddToPlan(taskId, date, tz))
@@ -75,6 +92,9 @@ class AccountComponentSession(private val component: AccountComponent) : Account
 
     override val workingStateEditor: WorkingStateEditor =
         commandWorkingStateEditor(component.commandExecutor)
+
+    override val occurrenceEditor: OccurrenceEditor =
+        commandOccurrenceEditor(component.commandExecutor)
 
     override suspend fun create(payload: CreateItem.Payload): CommandResult =
         component.commandExecutor.execute(CreateItem(payload))
@@ -88,4 +108,24 @@ class AccountComponentSession(private val component: AccountComponent) : Account
 internal fun commandWorkingStateEditor(executor: CommandExecutor): WorkingStateEditor =
     WorkingStateEditor { id: TaskId, target: WorkingState, current: Task? ->
         executor.execute(taskCommandFor(id, target), current = current)
+    }
+
+/**
+ * An [OccurrenceEditor] backed by a [CommandExecutor] (#74): each act maps to its occurrence Command
+ * and dispatches it (optimistic apply + outbox enqueue). Shared by production and tests so the mapping
+ * isn't duplicated — the firing-level mirror of [commandWorkingStateEditor].
+ */
+internal fun commandOccurrenceEditor(executor: CommandExecutor): OccurrenceEditor =
+    object : OccurrenceEditor {
+        override suspend fun mark(itemId: String, action: OccurrenceAction) {
+            executor.execute(MarkOccurrence(itemId, action))
+        }
+
+        override suspend fun clear(itemId: String) {
+            executor.execute(ClearOccurrence(itemId))
+        }
+
+        override suspend fun reschedule(itemId: String, newDate: LocalDate) {
+            executor.execute(RescheduleOccurrence(itemId, newDate))
+        }
     }

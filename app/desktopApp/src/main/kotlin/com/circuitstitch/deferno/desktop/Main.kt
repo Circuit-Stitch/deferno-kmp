@@ -251,7 +251,7 @@ private fun handleRootKey(event: KeyEvent, root: RootComponent, onQuit: () -> Un
             main != null
         }
         Key.N -> {
-            main?.openOverlay(OverlayRoute.New)
+            main?.openOverlay(OverlayRoute.New())
             main != null
         }
         Key.F -> {
@@ -311,7 +311,7 @@ private fun DefernoMenuBar(
                     ) { dismiss(); main.selectDestination(destination) }
                 }
                 HorizontalDivider()
-                MenuRow(text = "New…", shortcut = "Ctrl+N") { dismiss(); main.openOverlay(OverlayRoute.New) }
+                MenuRow(text = "New…", shortcut = "Ctrl+N") { dismiss(); main.openOverlay(OverlayRoute.New()) }
                 MenuRow(text = "Search…", shortcut = "Ctrl+F") { dismiss(); main.openOverlay(OverlayRoute.Search) }
                 HorizontalDivider()
                 MenuRow(text = "Refresh", shortcut = "Ctrl+R") { dismiss(); main.refreshActiveDestination() }
@@ -337,7 +337,7 @@ private fun DefernoMenuBar(
             // the toolbar counterparts of Ctrl+F / Ctrl+N. Pushed to the trailing edge by the spacer.
             Spacer(Modifier.weight(1f))
             ToolbarAction(text = "Search") { main.openOverlay(OverlayRoute.Search) }
-            ToolbarAction(text = "+ New") { main.openOverlay(OverlayRoute.New) }
+            ToolbarAction(text = "+ New") { main.openOverlay(OverlayRoute.New()) }
         }
     }
 }
@@ -410,7 +410,8 @@ private fun MainShellComponent.refreshActiveDestination() {
     when (val active = stack.value.active.instance) {
         is MainShellComponent.DestinationChild.Plan -> active.component.onRefresh()
         is MainShellComponent.DestinationChild.Tasks -> active.component.list.onRefresh()
-        // Profile/Settings/placeholder Destinations have no manual refresh.
+        // Calendar (auto-refreshes its window on open/nav), Profile, Settings, placeholder: no manual refresh.
+        is MainShellComponent.DestinationChild.Calendar,
         is MainShellComponent.DestinationChild.Profile,
         is MainShellComponent.DestinationChild.Settings,
         is MainShellComponent.DestinationChild.Placeholder,

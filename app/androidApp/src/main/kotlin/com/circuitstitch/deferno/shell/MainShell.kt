@@ -54,6 +54,7 @@ import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.feature.calendar.ui.CalendarScreen
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.profile.ui.ProfileScreen
 import com.circuitstitch.deferno.feature.settings.ui.SettingsScreen
@@ -116,7 +117,15 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
                     // create overlay above the foreground Destination. Shell-level so it is available
                     // from every Destination without each slice owning its own.
                     FloatingActionButton(
-                        onClick = { component.openOverlay(OverlayRoute.New) },
+                        // On the Calendar, the FAB opens New pre-dated to the selected day (#74); elsewhere
+                        // it opens an undated New. The Calendar routes its selected day through its own
+                        // component so the date stays the Destination's concern, not the shell chrome's.
+                        onClick = {
+                            when (val a = active) {
+                                is MainShellComponent.DestinationChild.Calendar -> a.component.onNewForSelectedDay()
+                                else -> component.openOverlay(OverlayRoute.New())
+                            }
+                        },
                         modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
                     ) {
                         Icon(Icons.Filled.Add, contentDescription = "New")
@@ -197,6 +206,9 @@ private fun DestinationBody(active: MainShellComponent.DestinationChild, modifie
         is MainShellComponent.DestinationChild.Plan ->
             PlanScreen(active.component, modifier)
 
+        is MainShellComponent.DestinationChild.Calendar ->
+            CalendarScreen(active.component, modifier)
+
         is MainShellComponent.DestinationChild.Tasks ->
             TasksScreen(active.component, modifier)
 
@@ -211,7 +223,7 @@ private fun DestinationBody(active: MainShellComponent.DestinationChild, modifie
     }
 }
 
-/** A gentle placeholder body for a reserved-but-unbuilt Destination (Calendar #74, Settings #72). */
+/** A gentle placeholder body for a reserved-but-unbuilt Destination (the deferred Agenda/Dashboard/…, ADR-0015). */
 @Composable
 private fun ComingSoon(destination: Destination, modifier: Modifier = Modifier) {
     Column(

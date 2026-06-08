@@ -21,7 +21,8 @@ class CommandExecutorTest {
         task: FakeTaskWriter,
         plan: FakePlanWriter,
         create: FakeCreateWriter = FakeCreateWriter(),
-    ) = CommandExecutor(task, plan, create)
+        occurrence: FakeOccurrenceWriter = FakeOccurrenceWriter(),
+    ) = CommandExecutor(task, plan, create, occurrence)
 
     @Test
     fun bindsEveryTaskCommandToTheRightWriterCallAndArgs() = runTest {
@@ -208,15 +209,18 @@ class CommandExecutorTest {
             val tw = FakeTaskWriter()
             val pw = FakePlanWriter()
             val cw = FakeCreateWriter(result = CreateResultFixtures.createdFor(kind))
+            val ow = FakeOccurrenceWriter()
 
-            val result = executor(tw, pw, cw).execute(sampleCommand(kind)) // null current → gate skipped
+            val result = executor(tw, pw, cw, ow).execute(sampleCommand(kind)) // null current → gate skipped
 
             assertEquals(CommandResult.Accepted(kind), result, "kind $kind should be Accepted")
             val isPlan = kind in CommandKind.planKinds
             val isCreate = kind in CommandKind.createKinds
+            val isOccurrence = kind in CommandKind.occurrenceKinds
             assertEquals(if (isPlan) 1 else 0, pw.calls.size, "kind $kind plan-writer calls")
-            assertEquals(if (isPlan || isCreate) 0 else 1, tw.calls.size, "kind $kind task-writer calls")
+            assertEquals(if (isPlan || isCreate || isOccurrence) 0 else 1, tw.calls.size, "kind $kind task-writer calls")
             assertEquals(if (isCreate) 1 else 0, cw.calls.size, "kind $kind create-writer calls")
+            assertEquals(if (isOccurrence) 1 else 0, ow.calls.size, "kind $kind occurrence-writer calls")
         }
     }
 
@@ -262,6 +266,28 @@ class CommandExecutorTest {
 
         assertEquals(CommandResult.Accepted(CommandKind.ConvertItem), result)
         assertEquals(listOf("convert:item-1:Task"), cw.calls)
+    }
+
+    @Test
+    fun occurrenceCommandsRouteToTheOccurrenceWriterOfflineFirst() = runTest {
+        val tw = FakeTaskWriter()
+        val ow = FakeOccurrenceWriter()
+        val ex = executor(tw, FakePlanWriter(), occurrence = ow)
+
+        // Mark / clear / reschedule are offline-first acts on an existing firing — Accepted, like the edits.
+        assertEquals(CommandResult.Accepted(CommandKind.MarkOccurrence), ex.execute(MarkOccurrence("ce-1", com.circuitstitch.deferno.core.model.OccurrenceAction.Complete)))
+        assertEquals(CommandResult.Accepted(CommandKind.ClearOccurrence), ex.execute(ClearOccurrence("ce-1")))
+        assertEquals(CommandResult.Accepted(CommandKind.RescheduleOccurrence), ex.execute(RescheduleOccurrence("ce-1", SAMPLE_DATE)))
+
+        assertEquals(
+            listOf<FakeOccurrenceWriter.Call>(
+                FakeOccurrenceWriter.Call.Mark("ce-1", com.circuitstitch.deferno.core.model.OccurrenceAction.Complete),
+                FakeOccurrenceWriter.Call.Clear("ce-1"),
+                FakeOccurrenceWriter.Call.Reschedule("ce-1", SAMPLE_DATE),
+            ),
+            ow.calls,
+        )
+        assertTrue(tw.calls.isEmpty(), "occurrence commands must not touch the task writer")
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.domain.command
 
+import com.circuitstitch.deferno.core.data.calendar.OccurrenceWriter
 import com.circuitstitch.deferno.core.data.create.CreateResult
 import com.circuitstitch.deferno.core.data.create.CreateWriter
 import com.circuitstitch.deferno.core.data.plan.PlanWriter
@@ -31,6 +32,7 @@ class CommandExecutor(
     private val taskWriter: TaskWriter,
     private val planWriter: PlanWriter,
     private val createWriter: CreateWriter,
+    private val occurrenceWriter: OccurrenceWriter,
 ) {
     /**
      * Run [command], first gating on [CommandKind.enabledFor].
@@ -67,6 +69,10 @@ class CommandExecutor(
             is CreateItem -> return createWriter.create(command.payload).toCommandResult(command.kind)
             is ConvertItem ->
                 return createWriter.convert(command.itemId, command.fromKind, command.payload).toCommandResult(command.kind)
+            // Occurrence acts (#74): offline-first like the Task edits — optimistic apply + outbox enqueue.
+            is MarkOccurrence -> occurrenceWriter.mark(command.occurrenceItemId, command.action)
+            is ClearOccurrence -> occurrenceWriter.clear(command.occurrenceItemId)
+            is RescheduleOccurrence -> occurrenceWriter.reschedule(command.occurrenceItemId, command.newDate)
         }
         return CommandResult.Accepted(command.kind)
     }

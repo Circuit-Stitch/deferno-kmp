@@ -224,13 +224,30 @@ class MainShellComponentTest {
     }
 
     @Test
-    fun calendar_opensAsAReservedPlaceholder() {
+    fun calendar_opensTheCalendarDestination() {
         val shell = shell()
 
         shell.selectDestination(Destination.Calendar)
         val calendar = shell.stack.value.active.instance
-        assertTrue(calendar is MainShellComponent.DestinationChild.Placeholder)
+        assertTrue(calendar is MainShellComponent.DestinationChild.Calendar)
         assertEquals(Destination.Calendar, calendar.destination)
+    }
+
+    @Test
+    fun calendarFab_opensNewPreDatedToTheSelectedDay() {
+        val shell = shell()
+        shell.selectDestination(Destination.Calendar)
+        val calendar = shell.stack.value.active.instance as MainShellComponent.DestinationChild.Calendar
+
+        // The FAB on the Calendar selects-then-creates: pick a day, then ask New to open on it (#74 AC).
+        val day = kotlinx.datetime.LocalDate(2026, 6, 8)
+        calendar.component.onDaySelected(day)
+        calendar.component.onNewForSelectedDay()
+
+        // The New overlay is pushed, pre-dated to the selected day.
+        val child = shell.overlay.value.child?.instance
+        assertTrue(child is MainShellComponent.OverlayChild.New)
+        assertEquals(day, child.component.state.value.date)
     }
 
     @Test
@@ -426,7 +443,7 @@ class MainShellComponentTest {
         val shell = shell()
         assertNull(shell.overlay.value.child, "no overlay initially")
 
-        shell.openOverlay(OverlayRoute.New)
+        shell.openOverlay(OverlayRoute.New())
         val child = shell.overlay.value.child?.instance
         assertTrue(child is MainShellComponent.OverlayChild.New, "the New create surface is pushed")
         assertEquals(Destination.Plan, shell.activeDestination(), "the foreground Destination is untouched")
@@ -468,7 +485,7 @@ class MainShellComponentTest {
     fun back_dismissesTheNewOverlayFirst() {
         val shell = shell()
         shell.selectDestination(Destination.Tasks)
-        shell.openOverlay(OverlayRoute.New)
+        shell.openOverlay(OverlayRoute.New())
 
         assertTrue(shell.onBack(), "back dismisses the New overlay")
         assertNull(shell.overlay.value.child)
@@ -487,7 +504,7 @@ class MainShellComponentTest {
                 )
             },
         )
-        shell.openOverlay(OverlayRoute.New)
+        shell.openOverlay(OverlayRoute.New())
         val newComponent = (shell.overlay.value.child!!.instance as MainShellComponent.OverlayChild.New).component
 
         // The picker defaults to Task (ADR-0015 — explicit, sensible default), and the form adapts.
@@ -505,7 +522,7 @@ class MainShellComponentTest {
     @Test
     fun newOverlay_offlineShowsReconnectToSaveAndStaysOpen() {
         val shell = shell() // default create returns Offline
-        shell.openOverlay(OverlayRoute.New)
+        shell.openOverlay(OverlayRoute.New())
         val newComponent = (shell.overlay.value.child!!.instance as MainShellComponent.OverlayChild.New).component
 
         newComponent.selectKind(com.circuitstitch.deferno.core.model.ItemKind.Habit)

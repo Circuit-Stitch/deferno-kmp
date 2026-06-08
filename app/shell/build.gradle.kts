@@ -21,6 +21,7 @@ kotlin {
             // by the app entry points, ADR-0004 #27).
             implementation(project(":feature:tasks"))
             implementation(project(":feature:plan"))
+            implementation(project(":feature:calendar"))
             implementation(project(":feature:profile"))
             implementation(project(":feature:settings"))
             // The per-Account DI graph the production AccountSession adapts (ADR-0014); the data

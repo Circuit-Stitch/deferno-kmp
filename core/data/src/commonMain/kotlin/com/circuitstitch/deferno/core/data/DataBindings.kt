@@ -13,6 +13,8 @@ import com.circuitstitch.deferno.core.data.auth.AuthRemoteSource
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.DefaultAuthRepository
 import com.circuitstitch.deferno.core.data.auth.KtorAuthRemoteSource
+import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
+import com.circuitstitch.deferno.core.data.calendar.KtorCalendarRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
@@ -107,6 +109,11 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun planRemoteSource(client: HttpClient): PlanRemoteSource = KtorPlanRemoteSource(client)
+
+    /** The windowed Calendar feed source (#74) over the shared client — `GET /tasks/calendar`. */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun calendarRemoteSource(client: HttpClient): CalendarRemoteSource = KtorCalendarRemoteSource(client)
 
     @Provides
     @SingleIn(AppScope::class)

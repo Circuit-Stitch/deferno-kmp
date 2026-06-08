@@ -1,5 +1,14 @@
 package com.circuitstitch.deferno.core.data
 
+import com.circuitstitch.deferno.core.data.calendar.CalendarLocalStore
+import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
+import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
+import com.circuitstitch.deferno.core.data.calendar.OccurrenceWriter
+import com.circuitstitch.deferno.core.data.calendar.OfflineCalendarRepository
+import com.circuitstitch.deferno.core.data.calendar.OutboxOccurrenceWriter
+import com.circuitstitch.deferno.core.data.calendar.RepositorySeriesKindSource
+import com.circuitstitch.deferno.core.data.calendar.SeriesKindSource
+import com.circuitstitch.deferno.core.data.calendar.SqlDelightCalendarLocalStore
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.chore.ChoreRepository
 import com.circuitstitch.deferno.core.data.chore.OfflineChoreRepository
@@ -135,6 +144,37 @@ interface AccountDataBindings {
     fun occurrenceRepository(localStore: OccurrenceLocalStore): OccurrenceRepository =
         OfflineOccurrenceRepository(localStore)
 
+    // The Calendar feed cache + series->kind index (#74): the local source of truth the month grid +
+    // day agenda observe; a window refresh full-replaces the span and a write applies optimistically here.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun calendarLocalStore(db: DefernoDatabase): CalendarLocalStore = SqlDelightCalendarLocalStore(db)
+
+    // Snapshots the locally-known Habit/Chore/Event definitions into the series_id -> kind index (#74),
+    // so a kind-less feed firing resolves the recurring kind its occurrence write needs.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun seriesKindSource(
+        habits: HabitRepository,
+        chores: ChoreRepository,
+        events: EventRepository,
+    ): SeriesKindSource = RepositorySeriesKindSource(habits, chores, events)
+
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun calendarRepository(
+        localStore: CalendarLocalStore,
+        remoteSource: CalendarRemoteSource,
+        seriesKindSource: SeriesKindSource,
+    ): CalendarRepository = OfflineCalendarRepository(localStore, remoteSource, seriesKindSource)
+
+    // The Occurrence (firing) write seam (#74): optimistic CalendarItem apply + outbox enqueue. Offline-
+    // first like the Task writer (these target an existing firing — not online-only like create).
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun occurrenceWriter(calendarStore: CalendarLocalStore, outbox: OutboxStore): OccurrenceWriter =
+        OutboxOccurrenceWriter(calendarStore, outbox)
+
     /**
      * The online-only create + convert writer (#71, ADR-0016). It bypasses the outbox entirely (a
      * create is never enqueued — no server idempotency key in v0.1) and seeds the server-assigned-id
@@ -186,9 +226,16 @@ interface AccountDataBindings {
         store: OutboxStore,
         sender: OutboxRequestSender,
         taskRepository: TaskRepository,
+        calendarRepository: CalendarRepository,
     ): OutboxProcessor = OutboxProcessor(
         store = store,
         sender = sender,
-        reconcile = { taskRepository.refresh() },
+        // After a successful flush, LWW-reconcile the Task snapshot AND re-pull the last Calendar window
+        // (so an occurrence mark/reschedule converges on server truth, #74). Plan ordering reconciles
+        // per-day via the UI's refreshPlan (the processor has no "current day").
+        reconcile = {
+            taskRepository.refresh()
+            calendarRepository.reconcile()
+        },
     )
 }

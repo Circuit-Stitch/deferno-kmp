@@ -1,0 +1,26 @@
+-- The `series_id -> kind` bridge index for the Calendar feed (#74). The feed row carries no kind, but
+-- acting on a recurring firing needs it (the occurrence endpoints are kind-scoped:
+-- `/habits|chores|events/{id}/...`). This table is the client-side resolution: seeded on each window
+-- refresh from the Habit/Chore/Event definitions this client knows (their local caches), and joined in
+-- Kotlin when reading the calendar window so a firing's kind is resolved to drive the act path.
+--
+-- A series whose kind can't be resolved (e.g. a definition created on the web this device hasn't
+-- cached) is simply absent here, so its calendar row renders read-only — gentle degradation, never a
+-- wrong write. `kind` is an ItemKind name (Habit/Chore/Event); a forward path collapses this whole
+-- index to nothing once the backend adds `kind` to the feed row (documented follow-up).
+CREATE TABLE seriesKindEntity (
+    series_id TEXT NOT NULL PRIMARY KEY,
+    kind      TEXT NOT NULL
+);
+
+selectAll:
+SELECT * FROM seriesKindEntity;
+
+selectBySeries:
+SELECT * FROM seriesKindEntity WHERE series_id = ?;
+
+insertOrReplace:
+INSERT OR REPLACE INTO seriesKindEntity(series_id, kind) VALUES (?, ?);
+
+deleteAll:
+DELETE FROM seriesKindEntity;
