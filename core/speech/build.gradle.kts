@@ -26,6 +26,14 @@ kotlin {
             implementation(libs.multiplatform.settings)
         }
 
+        androidMain.dependencies {
+            // The native whisper.cpp JNI library (#92, ADR-0018): supplies libwhisper_jni.so (the
+            // symbols WhisperBridge binds to) and packages it into Android consumers. Android-only — the
+            // KMP android-library target can't host externalNativeBuild, so the native build is a sibling
+            // com.android.library module (deferno.android.nativelib).
+            implementation(project(":speech-whisper-jni"))
+        }
+
         commonTest.dependencies {
             // The selector + seam are measured on the headless JVM gate (ADR-0006): runTest drives the
             // suspend availability()/select(), Turbine asserts the listen() Flow<TranscriptEvent>.

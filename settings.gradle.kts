@@ -70,6 +70,12 @@ include(":feature:settings:ui")
 // in the app entry points below. Sits above feature/* and below app/*.
 include(":app:shell")
 
+// The bespoke native (JNI) whisper library (#92, ADR-0018 — the repo's first native code): a classic
+// `com.android.library` module (the only Android module type whose DSL exposes externalNativeBuild/NDK)
+// that compiles the vendored whisper.cpp submodule into a `.so` consumed by core:speech's androidMain.
+// Kept OUTSIDE `:core:`/`:feature:` so the merged coverage gate never tries to measure native-only code.
+include(":speech-whisper-jni")
+
 // Per-platform application entry points.
 include(":app:androidApp")
 include(":app:desktopApp")

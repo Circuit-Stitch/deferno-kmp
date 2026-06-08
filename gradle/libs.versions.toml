@@ -246,6 +246,10 @@ androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profi
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+# The classic Android library plugin — used ONLY by the bespoke native JNI module (#92, ADR-0018):
+# its `android {}` DSL exposes externalNativeBuild/NDK/CMake, which the KMP android-library target does
+# not. Applied via the `deferno.android.nativelib` convention, so it is `apply false` in the root build.
+android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

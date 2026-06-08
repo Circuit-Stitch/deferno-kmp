@@ -7,6 +7,9 @@
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.kotlin.multiplatform.library) apply false
+    // Classic Android library plugin — applied by the `deferno.android.nativelib` convention for the
+    // bespoke whisper JNI module (#92), so `apply false` here lands it on that module's classpath.
+    alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.compose) apply false
