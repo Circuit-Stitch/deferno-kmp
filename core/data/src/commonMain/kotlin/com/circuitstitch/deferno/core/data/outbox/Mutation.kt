@@ -2,6 +2,9 @@ package com.circuitstitch.deferno.core.data.outbox
 
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.ThemeFamily
+import com.circuitstitch.deferno.core.model.ThemeMode
+import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.network.mapper.toWireToken
 import kotlinx.datetime.LocalDate
@@ -97,6 +100,27 @@ sealed interface PlanMutation : Mutation {
     fun applyTo(order: List<TaskId>): List<TaskId>
 }
 
+/**
+ * A [Mutation] against the user's single [UserSettings] bag (`PATCH /auth/me/settings`, #72). Each
+ * intent names *what changed* (`SetTheme(Mono, Dark)`, `SetTracking(false)`) — not a diff — so a
+ * replay is idempotent and two intents over independent fields never clobber each other (ADR-0001
+ * LWW). [applyTo] is the pure optimistic transform the writer applies to the cached settings the
+ * instant the user acts, so Appearance changes apply live before the request reaches the server.
+ *
+ * | Intent | Method + endpoint | Minimal body |
+ * |---|---|---|
+ * | [SetTheme] | `PATCH auth/me/settings` | `{"theme_family":"…","theme_mode":"…"}` |
+ * | [SetTracking] | `PATCH auth/me/settings` | `{"tracking_enabled":<bool>}` |
+ * | [SetDragAndDrop] | `PATCH auth/me/settings` | `{"drag_and_drop_enabled":<bool>}` |
+ * | [SetDoneVisibility] | `PATCH auth/me/settings` | `{"global_done_visibility_seconds":…,"dashboard_done_visibility_seconds":…}` |
+ */
+sealed interface SettingsMutation : Mutation {
+    override val target: String get() = "settings"
+
+    /** The optimistic local effect on the cached settings — **pure** and idempotent. */
+    fun applyTo(settings: UserSettings): UserSettings
+}
+
 // --- Task intents ---
 
 /** Set a Task's [WorkingState] (`open`/`in-progress`/`in-review`/`done`/`dropped`). */
@@ -187,6 +211,51 @@ data class PlanReorder(val taskIds: List<TaskId>, override val date: LocalDate, 
     }
 }
 
+// --- Settings intents ---
+
+/** Set the appearance: theme family + mode (Appearance category, #72). Applied live + persisted. */
+data class SetTheme(val family: ThemeFamily, val mode: ThemeMode) : SettingsMutation {
+    override fun applyTo(settings: UserSettings): UserSettings =
+        settings.copy(themeFamily = family, themeMode = mode)
+
+    override fun toRequest(): OutboxRequest = patchSettings {
+        put("theme_family", family.toWireToken())
+        put("theme_mode", mode.toWireToken())
+    }
+}
+
+/** Toggle analytics/tracking (Data & Privacy category, #72). */
+data class SetTracking(val enabled: Boolean) : SettingsMutation {
+    override fun applyTo(settings: UserSettings): UserSettings = settings.copy(trackingEnabled = enabled)
+    override fun toRequest(): OutboxRequest = patchSettings { put("tracking_enabled", enabled) }
+}
+
+/** Toggle the experimental drag-and-drop affordance (Task behavior category, #72). */
+data class SetDragAndDrop(val enabled: Boolean) : SettingsMutation {
+    override fun applyTo(settings: UserSettings): UserSettings = settings.copy(dragAndDropEnabled = enabled)
+    override fun toRequest(): OutboxRequest = patchSettings { put("drag_and_drop_enabled", enabled) }
+}
+
+/**
+ * Set the done-visibility windows (Task behavior category, #72): how long completed items stay
+ * visible in the global list and on the dashboard. A `null` means "clear it" — an explicit wire
+ * `null`, distinct from omit (ADR-0011).
+ */
+data class SetDoneVisibility(
+    val globalSeconds: Long?,
+    val dashboardSeconds: Long?,
+) : SettingsMutation {
+    override fun applyTo(settings: UserSettings): UserSettings = settings.copy(
+        globalDoneVisibilitySeconds = globalSeconds,
+        dashboardDoneVisibilitySeconds = dashboardSeconds,
+    )
+
+    override fun toRequest(): OutboxRequest = patchSettings {
+        if (globalSeconds == null) put("global_done_visibility_seconds", JsonNull) else put("global_done_visibility_seconds", globalSeconds)
+        if (dashboardSeconds == null) put("dashboard_done_visibility_seconds", JsonNull) else put("dashboard_done_visibility_seconds", dashboardSeconds)
+    }
+}
+
 // --- minimal-body builders (the "never emit an absent field" rule lives here) ---
 
 /** A `PATCH tasks/{id}` whose body is exactly the keys [build] sets — nothing absent (ADR-0011). */
@@ -196,3 +265,7 @@ private fun patchTask(id: TaskId, build: JsonObjectBuilder.() -> Unit): OutboxRe
 /** A `POST tasks/plan/{action}` whose body is exactly the keys [build] sets. */
 private fun postPlan(action: String, build: JsonObjectBuilder.() -> Unit): OutboxRequest =
     OutboxRequest(OutboxMethod.Post, listOf("tasks", "plan", action), buildJsonObject(build).toString())
+
+/** A `PATCH auth/me/settings` whose body is exactly the keys [build] sets — nothing absent (ADR-0011). */
+private fun patchSettings(build: JsonObjectBuilder.() -> Unit): OutboxRequest =
+    OutboxRequest(OutboxMethod.Patch, listOf("auth", "me", "settings"), buildJsonObject(build).toString())

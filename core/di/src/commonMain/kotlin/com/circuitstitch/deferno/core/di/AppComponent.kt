@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
+import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.database.AccountDatabaseFactory
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
@@ -70,6 +71,7 @@ abstract class AppComponent(
     // not part of the app-facing surface — the app uses AccountComponent.taskRepository et al.
     abstract val taskRemoteSource: TaskRemoteSource
     abstract val planRemoteSource: PlanRemoteSource
+    abstract val settingsRemoteSource: SettingsRemoteSource
     abstract val outboxRequestSender: OutboxRequestSender
     abstract val accountDatabaseFactory: AccountDatabaseFactory
 }

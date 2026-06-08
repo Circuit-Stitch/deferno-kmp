@@ -123,6 +123,10 @@ androidx-material-icons-core = { group = "androidx.compose.material", name = "ma
 # variant (app/desktopApp is a plain Kotlin/JVM module, not KMP, so it takes the platform jar
 # directly rather than relying on Gradle-metadata variant selection).
 compose-material-icons-core = { group = "org.jetbrains.compose.material", name = "material-icons-core-desktop", version.ref = "composeIcons" }
+# The multiplatform (KMP-metadata) variant of the JetBrains Material icon set — Gradle resolves the
+# right per-target jar (android vs jvm). Used from a Compose Multiplatform *library* module
+# (:feature:settings:ui) that has no androidx Compose BOM to version `androidx-material-icons-core`.
+compose-material-icons-core-kmp = { group = "org.jetbrains.compose.material", name = "material-icons-core", version.ref = "composeIcons" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 

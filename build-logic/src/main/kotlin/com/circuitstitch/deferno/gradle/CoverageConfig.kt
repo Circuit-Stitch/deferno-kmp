@@ -102,5 +102,6 @@ object CoverageConfig {
         "com.circuitstitch.deferno.feature.tasks.ui",
         "com.circuitstitch.deferno.feature.plan.ui",
         "com.circuitstitch.deferno.feature.profile.ui",
+        "com.circuitstitch.deferno.feature.settings.ui",
     )
 }

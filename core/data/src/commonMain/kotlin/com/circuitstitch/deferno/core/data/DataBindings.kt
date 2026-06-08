@@ -17,6 +17,8 @@ import com.circuitstitch.deferno.core.data.outbox.KtorOutboxRequestSender
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.KtorPlanRemoteSource
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
+import com.circuitstitch.deferno.core.data.settings.KtorSettingsRemoteSource
+import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
 import com.circuitstitch.deferno.core.data.task.KtorTaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.network.BearerTokenProvider
@@ -101,6 +103,10 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun planRemoteSource(client: HttpClient): PlanRemoteSource = KtorPlanRemoteSource(client)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun settingsRemoteSource(client: HttpClient): SettingsRemoteSource = KtorSettingsRemoteSource(client)
 
     @Provides
     @SingleIn(AppScope::class)

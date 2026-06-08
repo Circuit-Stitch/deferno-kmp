@@ -94,6 +94,8 @@ dependencies {
     implementation(project(":feature:auth:ui"))
     implementation(project(":feature:profile"))
     implementation(project(":feature:profile:ui"))
+    implementation(project(":feature:settings"))
+    implementation(project(":feature:settings:ui"))
     implementation(project(":core:model"))
     implementation(project(":core:data"))
     // The compile-time DI graph (#68, ADR-0014): the app builds AppComponent at startup and an
