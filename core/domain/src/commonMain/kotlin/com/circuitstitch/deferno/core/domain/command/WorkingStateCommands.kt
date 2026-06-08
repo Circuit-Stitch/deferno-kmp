@@ -5,8 +5,9 @@ import com.circuitstitch.deferno.core.model.WorkingState
 
 /**
  * The single mapping from a target [WorkingState] to the lifecycle [TaskCommand] that reaches it
- * (ADR-0007). The five status verbs ([OpenTask] / [StartTask] / [SendTaskToReview] / [CompleteTask] /
- * [DropTask]) cover the whole [WorkingState] lattice 1:1; an interactive surface (the Tasks detail,
+ * (ADR-0007). One command per state — [OpenTask] / [StartTask] / [SendTaskToReview] / [CompleteTask] /
+ * [DropTask] — covers the whole [WorkingState] lattice 1:1 ([ReopenTask] is a sixth status verb,
+ * deliberately outside this mapping; see below). An interactive surface (the Tasks detail,
  * #73) offers an affordance per state and converts the chosen state into a command **here**, so the
  * transition matrix lives once in `core:domain` and the UI layer never re-derives it.
  *
