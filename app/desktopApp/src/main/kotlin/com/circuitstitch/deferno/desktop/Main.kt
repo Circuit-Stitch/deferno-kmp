@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -330,7 +331,25 @@ private fun DefernoMenuBar(
                 if (accounts.isNotEmpty()) HorizontalDivider()
                 MenuRow(text = "Sign out") { dismiss(); main.signOut() }
             }
+
+            // Always-visible desktop-class affordance (ADR-0007, #86): a search control sits in the
+            // toolbar so global Search is reachable without opening a menu — the toolbar counterpart of
+            // Ctrl+F. Pushed to the trailing edge by the spacer. (The "+ New" affordance lands with #87.)
+            Spacer(Modifier.weight(1f))
+            ToolbarAction(text = "Search") { main.openOverlay(OverlayRoute.Search) }
         }
+    }
+}
+
+/** A trailing toolbar button on the in-app menu bar (the desktop "Search" / "+ New" affordances). */
+@Composable
+private fun ToolbarAction(text: String, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(text = text, style = MaterialTheme.typography.labelLarge)
     }
 }
 

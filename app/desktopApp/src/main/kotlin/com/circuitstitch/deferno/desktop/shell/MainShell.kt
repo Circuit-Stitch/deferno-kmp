@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.feature.plan.ui.PlanDesktopScreen
 import com.circuitstitch.deferno.feature.settings.ui.SettingsDesktopScreen
+import com.circuitstitch.deferno.feature.tasks.ui.SearchDesktopScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksDesktopScreen
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.MainShellComponent
@@ -129,25 +130,37 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
 }
 
 /**
- * The shell-level overlay above the foreground Destination (ADR-0015). Search (#73) and New (#71) carry
- * real Views on Android; their desktop Views are later slices, so on desktop every overlay route renders
- * a dismissible "coming soon" placeholder — the mechanism (render position + back precedence) is fully
- * wired regardless. The route is reachable via the Account/View menu + Ctrl+F/Ctrl+N (Main.kt).
+ * The shell-level overlay above the foreground Destination (ADR-0015): an opaque surface layered over
+ * the whole nav suite, dismissed first by shell back (Esc). Search (#86) renders its real desktop View
+ * (an opaque [Surface] owning its own Close affordance, routed back through the component's dismiss
+ * Output); New (#87) and the v1 [MainShellComponent.OverlayChild.Placeholder] route still render a
+ * dismissible placeholder until the New desktop View lands. Overlays are reachable via the View menu +
+ * Ctrl+F/Ctrl+N (Main.kt).
  */
 @Composable
 private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () -> Unit) {
-    val title = when (child) {
-        is MainShellComponent.OverlayChild.Search -> "Search"
-        is MainShellComponent.OverlayChild.New -> "New"
-        MainShellComponent.OverlayChild.Placeholder -> "Overlay"
+    when (child) {
+        is MainShellComponent.OverlayChild.Search ->
+            SearchDesktopScreen(child.component, Modifier.fillMaxSize())
+
+        is MainShellComponent.OverlayChild.New ->
+            OverlayPlaceholder(onDismiss)
+
+        MainShellComponent.OverlayChild.Placeholder ->
+            OverlayPlaceholder(onDismiss)
     }
+}
+
+/** A dismissible stand-in for an overlay route whose desktop View isn't built yet (ADR-0015). */
+@Composable
+private fun OverlayPlaceholder(onDismiss: () -> Unit) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(text = title, style = MaterialTheme.typography.titleLarge)
+            Text(text = "Overlay", style = MaterialTheme.typography.titleLarge)
             Text(
                 text = "This surface arrives on desktop in an upcoming release.",
                 style = MaterialTheme.typography.bodyMedium,

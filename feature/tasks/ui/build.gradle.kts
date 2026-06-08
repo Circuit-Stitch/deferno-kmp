@@ -52,7 +52,20 @@ kotlin {
         // renders the same shared Decompose components via `subscribeAsState()`.
         jvmMain.dependencies {
             implementation(project(":feature:tasks"))
+            // The desktop Search overlay View binds to the search query/sort value types (#86):
+            // SearchSort (and TaskSearchQuery) live in the data layer, which feature:tasks exposes only
+            // via `implementation`, so jvmMain declares its own dependency to reference them directly —
+            // mirroring androidMain (the Android SearchScreen needs the same types).
+            implementation(project(":core:data"))
             implementation(libs.decompose.extensions.compose)
+        }
+        // The desktop render/screenshot test (#86, cf. #39): a Compose-Multiplatform UI test on the
+        // JVM-fast path (no device) exercising the desktop Search View's empty/results/no-matches states
+        // and asserting the open/dismiss intents are forwarded.
+        jvmTest.dependencies {
+            implementation(project(":core:data"))
+            implementation(compose.desktop.uiTestJUnit4)
+            implementation(compose.desktop.currentOs)
         }
     }
 }
