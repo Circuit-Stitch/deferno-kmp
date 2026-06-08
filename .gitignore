@@ -33,6 +33,7 @@ local.properties
 # Keep a couple of shareable IDE settings if you choose to commit them later:
 !.idea/codeStyles/
 !.idea/inspectionProfiles/
+!.idea/runConfigurations/
 .idea/caches/
 .idea/libraries/
 .idea/modules.xml
