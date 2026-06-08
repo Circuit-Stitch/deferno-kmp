@@ -64,6 +64,7 @@ import com.circuitstitch.deferno.shell.RootComponent
 import java.awt.Desktop
 import java.io.File
 import java.net.URI
+import java.util.Locale
 import javax.swing.SwingUtilities
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
@@ -158,6 +159,15 @@ fun main() {
             onOpenSubmitFeedback = { browse(webAppUrl(environment, "feedback")) },
             // Settings → Security & 2FA: open the Active Account's Zitadel console URL in the browser.
             onOpenConsoleUrl = { url -> browse(url) },
+            // Dictation (#94, ADR-0018): the on-device whisper engine from the AppScope DI graph (the
+            // selector over the JVM `whisper-jni` engine) + the device locale it recognizes (a non-English
+            // locale reports unavailable rather than mis-transcribing). The New surface's mic drives this.
+            speechToText = appComponent.speechToText,
+            locale = Locale.getDefault().toLanguageTag(),
+            // Speech-engine App setting (#93/#94, ADR-0018): the device-local engine catalog from the same
+            // AppScope graph — the Settings Destination's "Speech engine" row reads + writes it (whisper is
+            // now a real desktop option, no longer only "Automatic").
+            speechEngineCatalog = appComponent.speechEngineCatalog,
             coroutineContext = Dispatchers.Swing,
         )
     }

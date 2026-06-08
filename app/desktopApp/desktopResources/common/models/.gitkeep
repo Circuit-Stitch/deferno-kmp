@@ -1,0 +1,3 @@
+# Keeps the Compose Desktop appResourcesRootDir tree present in a clean checkout (#94, ADR-0019).
+# The whisper small.en weights (ggml-small.en-q5_1.bin, ~190 MB) are fetched here by the
+# desktopApp `downloadWhisperModel` Gradle task and are gitignored — never committed.

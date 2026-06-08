@@ -1,0 +1,16 @@
+<!-- Material "mic" icon (24dp), a shared design-system glyph (#94). Lives here because the desktop nav
+     ships only material-icons-core, which omits Mic (it's in the ~37 MB material-icons-extended set the
+     apps deliberately avoid). Exposed via the generated Res.drawable.ic_mic; the fill is recoloured by
+     the Compose Icon's tint (active/listening vs idle). Used by the desktop New surface's Dictation
+     affordance — the cross-platform counterpart of androidApp's res/drawable/ic_mic.xml. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Literal fill (not a framework @android:color ref — the Compose vector parser won't resolve one);
+         the Compose Icon overrides it with its tint anyway. -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M12,14c1.66,0 3,-1.34 3,-3L15,5c0,-1.66 -1.34,-3 -3,-3S9,3.34 9,5v6c0,1.66 1.34,3 3,3zM17,11c0,2.76 -2.24,5 -5,5s-5,-2.24 -5,-5L5,11c0,3.53 2.61,6.43 6,6.92L11,21h2v-3.08c3.39,-0.49 6,-3.39 6,-6.92h-2z" />
+</vector>

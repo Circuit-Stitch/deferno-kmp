@@ -2,6 +2,9 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.gradle.api.provider.Provider
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JvmVendorSpec
+// Imported (not fully-qualified) because this JVM-plugin build script binds `java` to the Java extension
+// accessor, which shadows the `java.*` package — `java.net.URI(...)` would parse as `(java).net`.
+import java.net.URI
 
 plugins {
     // Kotlin/JVM + the shared JVM toolchain (from ProjectConfig). This convention no
@@ -101,8 +104,59 @@ compose.desktop.application {
         targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
         packageName = "Deferno"
         packageVersion = "1.0.0"
+        // Bundle the whisper `small.en` weights into the installer (#94, ADR-0019: desktop delivery is
+        // installer-bundled, not store-hosted / not downloaded at runtime). Everything under
+        // desktopResources/{common,<os>,<os>-<arch>} is packaged next to the app; the platform-agnostic
+        // model lives in `common/models/`. At runtime Compose exposes the (flattened) dir via the
+        // `compose.application.resources.dir` system property, which BundledModelLocator reads.
+        appResourcesRootDir.set(project.layout.projectDirectory.dir("desktopResources"))
     }
 }
+
+// --- Bundled whisper model (#94, ADR-0019) -----------------------------------------------------------
+// The desktop whisper engine (core:speech jvmMain) loads `small.en` from the packaged extra-resources dir
+// (appResourcesRootDir above). The ~190 MB weights are NOT committed — gitignored and fetched on demand so
+// a clean checkout stays small and git-clean (the desktop mirror of :speech-model-pack on Android). This
+// task downloads the pinned small.en q5_1 weights from Hugging Face into the resources tree if absent. It
+// is best-effort: an offline/CI build without the model still produces an app — the whisper engine just
+// reports ModelMissing (no mic) until the file is present, never a hard build failure.
+val whisperModelFileName = "ggml-small.en-q5_1.bin"
+
+val downloadWhisperModel = tasks.register("downloadWhisperModel") {
+    group = "speech"
+    description = "Fetches the small.en q5_1 whisper model into the desktop installer resources (ADR-0019)."
+    // Capture plain File + String locals (not script-object references) so the task stays
+    // configuration-cache compatible (mirrors :speech-model-pack:downloadWhisperModel).
+    val target = layout.projectDirectory.file("desktopResources/common/models/$whisperModelFileName").asFile
+    val url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$whisperModelFileName"
+    outputs.file(target)
+    // Treat an already-present, plausibly-complete file as up to date (avoid re-downloading ~190 MB).
+    onlyIf { !(target.exists() && target.length() > 150_000_000L) }
+    doLast {
+        target.parentFile.mkdirs()
+        logger.lifecycle("Downloading whisper model from $url …")
+        runCatching {
+            URI(url).toURL().openStream().use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+        }.onFailure { e ->
+            // Don't fail the build offline; remove any partial file so a later build retries.
+            target.delete()
+            logger.warn(
+                "Could not download the whisper model ($url): ${e.message}. The desktop app will build, " +
+                    "but on-device dictation reports ModelMissing until the model is present.",
+            )
+        }.onSuccess {
+            logger.lifecycle("Downloaded ${target.length()} bytes to $target")
+        }
+    }
+}
+
+// Stage the model before it is consumed: `prepareAppResources` copies appResourcesRootDir into the
+// packaged distribution (and runDistributable), and the dev `run` reads the source desktopResources/common
+// tree directly. Compile/test do NOT depend on it, so a plain build never triggers the ~190 MB download.
+tasks.matching { it.name == "prepareAppResources" || it.name == "run" }
+    .configureEach { dependsOn(downloadWhisperModel) }
 
 dependencies {
     // Compose Desktop runtime for the host OS (bundles Skiko) + Material 3 + the core Material icon
@@ -113,6 +167,11 @@ dependencies {
     // Just the core Material icon set (the glyphs the nav rail/drawer uses) — not the ≈37 MB
     // `materialIconsExtended` set, which the bundled desktop distribution would otherwise ship.
     implementation(libs.compose.material.icons.core)
+    // Compose Resources runtime: the New surface's Dictation mic loads the shared design-system glyph
+    // `Res.drawable.ic_mic` (#94) via `painterResource` — material-icons-core has no Mic. core:designsystem
+    // packages the asset (publicResClass); this brings the `org.jetbrains.compose.resources` loader the
+    // desktop calls (an `implementation` dep there isn't on this module's compile classpath).
+    implementation(compose.components.resources)
 
     // The shared, Compose-free app Shell (ADR-0017): the desktop renders these components
     // (RootComponent: Auth ↔ Main; the Main shell's Destination graph; AccountSession +

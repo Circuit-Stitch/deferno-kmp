@@ -99,11 +99,18 @@ androidxProfileinstaller = "1.4.1"
 # On-device speech-to-text (ADR-0018/0019, #92). `multiplatform-settings` backs the device-local
 # speech-engine choice — an [[App setting]], never synced, owned by core/speech (its first use). The
 # whisper.cpp portability baseline is vendored as a *pinned git submodule* at the `whisper` tag below
-# (a version, not a Maven dep); the `small.en` q5 model and the future desktop `whisper-jni` ride the
-# SAME tag, the version-skew pin ADR-0018 mandates. Play Asset Delivery's `com.android.asset-pack`
-# plugin (ADR-0019, in [plugins]) tracks AGP, so it carries no version of its own.
+# (a version, not a Maven dep); the `small.en` q5 model rides the SAME tag (the version-skew pin
+# ADR-0018 mandates). Play Asset Delivery's `com.android.asset-pack` plugin (ADR-0019, in [plugins])
+# tracks AGP, so it carries no version of its own.
 multiplatformSettings = "1.3.0"
 whisper = "1.8.6"
+# Desktop (JVM) whisper engine (#94, ADR-0018): the maintained `whisper-jni` Maven artifact. It tracks
+# whisper.cpp 1:1 (a whisper-jni X.Y.Z bundles whisper.cpp vX.Y.Z), and its newest release is 1.7.1 —
+# there is NO build of the mobile submodule's v1.8.6 tag. So the desktop engine INTENTIONALLY diverges
+# one minor version from mobile (ADR-0018 amendment): the managed desktop artifact is taken at its latest
+# maintained release rather than forced to mobile's tag. The skew is benign — the seam sits at the
+# Transcript altitude and the `small.en` q5 ggml weights are format-stable across whisper.cpp 1.7↔1.8.
+whisperJni = "1.7.1"
 # Play Asset Delivery runtime (#92, ADR-0019): the AssetPackManager core:speech uses to resolve the
 # install-time whisper-model pack's on-device location at runtime.
 playAssetDelivery = "2.3.0"
@@ -204,6 +211,12 @@ multiplatform-settings = { group = "com.russhwolf", name = "multiplatform-settin
 # Play Asset Delivery runtime (#92, ADR-0019, androidMain only): resolves the install-time whisper-model
 # pack's on-device path via AssetPackManager. The whisper engine reports Available only once it resolves.
 play-asset-delivery = { group = "com.google.android.play", name = "asset-delivery", version.ref = "playAssetDelivery" }
+
+# Desktop (JVM) whisper engine (#94, ADR-0018, jvmMain only): the maintained JNI binding to whisper.cpp.
+# The published jar embeds prebuilt native libs for Windows/Linux/macOS (x86_64 + arm64), loaded once via
+# `WhisperJNI.loadLibrary()` — no NDK/CMake on desktop (the "managed artifact on desktop" of ADR-0018,
+# vs the build-from-pinned-source mobile submodule). The `small.en` weights ship in the installer (ADR-0019).
+whisper-jni = { group = "io.github.givimad", name = "whisper-jni", version.ref = "whisperJni" }
 
 # Networking (issue #17). commonMain: the engine-agnostic client core + ContentNegotiation
 # wired to kotlinx.serialization JSON. Per-target engines: OkHttp (androidMain + jvmMain),

@@ -61,6 +61,16 @@ must **never silently fall back to cloud**.
   actuals). **No automated native-correctness CI in v1** — validated manually now, then by
   `connectedAndroidTest` + macOS native tests once the real-hardware runner lands.
 
+**Amendment (2026-06-08, #94 — desktop divergence).** The original decision pins the submodule and
+`whisper-jni` to the **same** upstream tag. In practice the maintained desktop artifact lags: the mobile
+submodule is at whisper.cpp **v1.8.6**, but `whisper-jni` tracks whisper.cpp 1:1 and its newest published
+release is **1.7.1** (whisper.cpp **v1.7.1**) — there is **no** build of v1.8.6. So the desktop engine
+**intentionally diverges one minor version from mobile**: `whisper-jni` is pinned to its latest maintained
+release rather than forced to mobile's tag, and both targets stay pinned to a *definite* tag for
+reproducibility (the principle holds; "same tag" does not, when no aligned artifact exists). The skew is
+benign — the seam sits at the [[Transcript]] altitude, and the `small.en` q5 ggml weights are format-stable
+across whisper.cpp 1.7↔1.8 — so behaviour is unaffected. Revisit if `whisper-jni` ships a v1.8.x build.
+
 **Forward path.** Native fast paths (ML Kit, `SpeechTranscriber`) land additively through the selector.
 The **[[Brain dump]]** extractor (Stage 2) consumes the Transcript and will relax ADR-0015's "never
 inferred". A multilingual model follows. The whisper baseline rolls out **Android → desktop → iOS**

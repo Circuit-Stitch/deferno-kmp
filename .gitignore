@@ -73,3 +73,6 @@ keystore.properties
 # install-time pack by :speech-model-pack:downloadWhisperModel. Never committed (not self-hosted,
 # not in git) — a clean checkout downloads it on first app build.
 speech-model-pack/src/main/assets/models/
+# Desktop whisper weights (#94, ADR-0019): ~190 MB, fetched into the Compose Desktop installer resources
+# by :app:desktopApp:downloadWhisperModel. Never committed; the .gitkeep keeps the tree present.
+app/desktopApp/desktopResources/common/models/*.bin

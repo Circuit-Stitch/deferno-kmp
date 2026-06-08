@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -28,11 +30,16 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.ic_mic
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.shell.DictationField
+import com.circuitstitch.deferno.shell.DictationStatus
 import com.circuitstitch.deferno.shell.NewComponent
 import com.circuitstitch.deferno.shell.NewStatus
 import kotlin.time.Instant
+import org.jetbrains.compose.resources.painterResource
 
 /**
  * The **New** create surface, desktop edition (#87, ADR-0015/0016/0017) — the desktop counterpart of
@@ -55,6 +62,16 @@ import kotlin.time.Instant
 @Composable
 fun NewDesktopScreen(component: NewComponent, modifier: Modifier = Modifier) {
     val state by component.state.collectAsState()
+
+    // Toggle [[Dictation]] into [field] (#94): tapping the active field's mic again stops it. Desktop has
+    // no in-app permission prompt — the OS gates mic access; a capture failure surfaces as a gentle error.
+    fun onMic(field: DictationField) {
+        if (state.dictation == DictationStatus.Listening && state.dictationField == field) {
+            component.stopDictation()
+        } else {
+            component.startDictation(field)
+        }
+    }
 
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -94,6 +111,16 @@ fun NewDesktopScreen(component: NewComponent, modifier: Modifier = Modifier) {
                     onValueChange = component::setTitle,
                     label = { Text("Title") },
                     singleLine = true,
+                    trailingIcon = {
+                        if (state.dictationAvailable) {
+                            MicButton(
+                                field = DictationField.Title,
+                                listening = state.dictation == DictationStatus.Listening &&
+                                    state.dictationField == DictationField.Title,
+                                onClick = ::onMic,
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Title" },
                 )
 
@@ -101,8 +128,21 @@ fun NewDesktopScreen(component: NewComponent, modifier: Modifier = Modifier) {
                     value = state.notes,
                     onValueChange = component::setNotes,
                     label = { Text("Notes") },
+                    trailingIcon = {
+                        if (state.dictationAvailable) {
+                            MicButton(
+                                field = DictationField.Notes,
+                                listening = state.dictation == DictationStatus.Listening &&
+                                    state.dictationField == DictationField.Notes,
+                                onClick = ::onMic,
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Notes" },
                 )
+
+                // The gentle Dictation feedback (#94): a recognition/capture error, never a silent failure.
+                DictationMessage(status = state.dictation)
 
                 // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2). The form surfaces a
                 // required start + optional end so a real Event create succeeds. Inputs take an ISO-8601
@@ -184,6 +224,50 @@ private fun ReconnectMessage(modifier: Modifier = Modifier) {
         color = MaterialTheme.defernoColors.inkMuted,
         textAlign = TextAlign.Center,
         modifier = modifier.fillMaxWidth().semantics { contentDescription = "Reconnect to save" },
+    )
+}
+
+/**
+ * The per-field [[Dictation]] mic (#94). Tinted primary while [listening] (and labelled "Stop dictation"
+ * so a tap toggles it off), muted otherwise. Shown only when the engine is available (the caller gates on
+ * `dictationAvailable`) — the desktop counterpart of the Android `MicButton`. The mic glyph is the shared
+ * design-system [Res.drawable.ic_mic] (material-icons-core has no Mic), recoloured by [Icon]'s tint.
+ */
+@Composable
+private fun MicButton(
+    field: DictationField,
+    listening: Boolean,
+    onClick: (DictationField) -> Unit,
+) {
+    IconButton(onClick = { onClick(field) }) {
+        Icon(
+            painter = painterResource(Res.drawable.ic_mic),
+            contentDescription = if (listening) "Stop dictation" else "Dictate",
+            tint = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The gentle Dictation status line (#94, ADR-0018): a soft recognition/capture-error note, never a silent
+ * failure. Silent while idle or listening (the streaming text itself is the listening feedback). The
+ * permission states never arise on desktop (the OS gates the mic, not an in-app prompt) but are handled
+ * totally over the sealed [DictationStatus].
+ */
+@Composable
+private fun DictationMessage(status: DictationStatus, modifier: Modifier = Modifier) {
+    val message = when (status) {
+        is DictationStatus.Error -> "Couldn't hear that — try the mic again."
+        DictationStatus.PermissionDenied,
+        DictationStatus.PermissionPermanentlyDenied,
+        -> "Dictation needs microphone access."
+        DictationStatus.Idle, DictationStatus.Listening -> return
+    }
+    Text(
+        text = message,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.defernoColors.inkMuted,
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = "Dictation status" },
     )
 }
 
