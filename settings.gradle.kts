@@ -63,3 +63,7 @@ include(":feature:settings:ui")
 include(":app:androidApp")
 include(":app:desktopApp")
 include(":app:iosApp")
+
+// Startup Baseline Profile generator (cold-start AOT): a `com.android.test` Macrobenchmark module that
+// drives app/androidApp's launch and emits the profile the release APK bundles. Tooling, not shippable.
+include(":baselineprofile")

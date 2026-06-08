@@ -18,6 +18,12 @@ plugins {
     // Applied directly (per-module alias) by app/androidApp, which hosts the screenshot tests (#27),
     // so it lands here `apply false` to reach that module's classpath — same as sqldelight above.
     alias(libs.plugins.roborazzi) apply false
+    // Startup Baseline Profile (cold-start AOT): `androidx.baselineprofile` is applied to app/androidApp
+    // (the consumer that bundles the profile) and to the `:baselineprofile` Macrobenchmark generator,
+    // whose module type is `com.android.test`. Both are applied per-module via alias, so `apply false`
+    // here lands them on those module classpaths — same pattern as roborazzi/sqldelight above.
+    alias(libs.plugins.android.test) apply false
+    alias(libs.plugins.androidx.baselineprofile) apply false
 
     // The repo root is Kover's aggregation point: this convention applies Kover here and
     // enforces the merged shared-core coverage gate (ADR-0006, issue #11). Kover stays

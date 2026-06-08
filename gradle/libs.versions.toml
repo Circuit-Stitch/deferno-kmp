@@ -84,6 +84,17 @@ material3Adaptive = "1.2.0"
 # adds the `record`/`verify`/`compare` tasks; its artifacts pair with the matching plugin version.
 roborazzi = "1.63.0"
 robolectric = "4.16.1"
+# Startup Baseline Profile (cold-start AOT). The app ships with NO baseline profile, so its own
+# startup classes (DI graph, shell, screens) are verified + JIT-compiled at runtime on every launch
+# (the install runs `run-from-apk`); a bundled profile lets ProfileInstaller AOT-compile the hot
+# path on install. The `:baselineprofile` com.android.test module (Macrobenchmark) generates it and
+# the `androidx.baselineprofile` Gradle plugin bundles it into the release APK. Pinned to the
+# 1.5.0-alpha line: it's the benchmark release that handles AGP/R8 9.1+ (1.5.0-alpha05+), matching
+# this project's AGP 9.2.1 — the 1.4.x stable line tops out at a max-recommended AGP of 9.0.
+androidxBenchmark = "1.5.0-alpha06"
+androidxBaselineprofile = "1.5.0-alpha06"
+androidxUiautomator = "2.3.0"
+androidxProfileinstaller = "1.4.1"
 # iOS Swift bridging (ADR-0003): SKIE. NOT WIRED YET — no released SKIE supports Kotlin
 # 2.4.0 as of 2026-06 (latest 0.10.12 tops out at Kotlin 2.3.10), and SKIE asserts the
 # Kotlin version at *configuration* time, so applying it would fail Gradle sync on every
@@ -206,6 +217,15 @@ roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi
 roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
+# Startup Baseline Profile generation (the `:baselineprofile` com.android.test module). Macrobenchmark
+# drives the app's startup journey on a connected device; `uiautomator` is the on-device driver
+# (`startActivityAndWait`). `profileinstaller` is the app-side runtime that applies the bundled profile
+# on install (present transitively via Compose, declared here so the consumer side is explicit, not
+# incidental). The `androidx.baselineprofile` Gradle plugin (see [plugins]) wires `generateBaselineProfile`.
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "androidxBenchmark" }
+androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "androidxUiautomator" }
+androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "androidxProfileinstaller" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
@@ -226,4 +246,11 @@ sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
 # pattern as sqldelight/kotlin-serialization, not a convention plugin — so it must also be declared
 # `apply false` in the root build to land on that module's classpath.
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
+# Baseline Profile (cold-start AOT). `android-test` is the `com.android.test` module type the
+# `:baselineprofile` Macrobenchmark generator uses; `androidx-baselineprofile` is applied to BOTH that
+# generator module and app/androidApp (the consumer that bundles the generated profile). Both are
+# applied directly per-module via alias, so — like sqldelight/roborazzi — they must also be declared
+# `apply false` in the root build to land on those modules' classpaths (the INVARIANT).
+android-test = { id = "com.android.test", version.ref = "agp" }
+androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "androidxBaselineprofile" }
 # skie = { id = "co.touchlab.skie", version.ref = "skie" }   # deferred — see [versions] note
