@@ -9,8 +9,10 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.util.prefs.Preferences
 
 /**
- * Desktop (JVM) speech bindings (ADR-0018). No desktop engine has landed yet (the `whisper-jni` baseline
- * is a follow-up), so the registered engine is the [UnavailableSpeechToText] floor — the `Set<SpeechToText>`
+ * Desktop (JVM) speech bindings (ADR-0018), AppScope process-singletons. The registered engine is the
+ * on-device whisper.cpp baseline ([WhisperSpeechToText] over the `whisper-jni` artifact + `TargetDataLine`
+ * capture, #94), resolving the installer-bundled `small.en` weights via [BundledModelLocator] (ADR-0019).
+ * It reports [UnavailableReason.ModelMissing] until those weights are present, so the `Set<SpeechToText>`
  * is never empty and the [SpeechToTextSelector] resolves on every target. The engine [[App setting]] is
  * backed by `java.util.prefs` (the cross-desktop store).
  */
@@ -19,7 +21,7 @@ interface JvmSpeechBindings {
     @Provides
     @IntoSet
     @SingleIn(AppScope::class)
-    fun jvmSpeechEngine(): SpeechToText = UnavailableSpeechToText
+    fun jvmSpeechEngine(): SpeechToText = WhisperSpeechToText(modelLocator = BundledModelLocator())
 
     @Provides
     @SingleIn(AppScope::class)

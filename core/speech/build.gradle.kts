@@ -45,6 +45,16 @@ kotlin {
             implementation(libs.play.asset.delivery)
         }
 
+        jvmMain.dependencies {
+            // The maintained desktop whisper engine (#94, ADR-0018): the `whisper-jni` Maven artifact the
+            // jvmMain WhisperSpeechToText drives (TargetDataLine capture → EnergyVad → whisper-jni). Its jar
+            // embeds the prebuilt native libs for the desktop OSes (loaded via WhisperJNI.loadLibrary()), so
+            // — unlike Android's vendored NDK build — desktop needs no native toolchain. `implementation`:
+            // the engine is internal to this module; the native jar still reaches the desktop app's runtime
+            // classpath transitively, and the model ships in the installer (ADR-0019).
+            implementation(libs.whisper.jni)
+        }
+
         commonTest.dependencies {
             // The selector + seam are measured on the headless JVM gate (ADR-0006): runTest drives the
             // suspend availability()/select(), Turbine asserts the listen() Flow<TranscriptEvent>.

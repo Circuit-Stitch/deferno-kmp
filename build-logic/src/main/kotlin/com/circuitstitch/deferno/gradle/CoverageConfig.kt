@@ -66,14 +66,18 @@ object CoverageConfig {
         // contract and the roster (de)serialization (AccountRosterCodec, commonTest) ARE measured.
         "com.circuitstitch.deferno.core.data.account.SharedPreferencesAccountRegistry*",
         "com.circuitstitch.deferno.core.data.account.AndroidAccountDataStore*",
-        // On-device speech-to-text platform actuals (issue #92, ADR-0018): the native whisper.cpp
-        // engine (NDK/CMake/JNI), its mic-capture glue (AudioRecord), the JNI loader, the Play Asset
-        // Delivery model locator, and the multiplatform-settings-backed engine [[App setting]] all run
-        // only on a real device — exercised by `connectedAndroidTest` (the jfk.wav→JNI native-correctness
-        // test), not the headless JVM gate (ADR-0006). The `SpeechToText` seam + `SpeechToTextSelector`
-        // (structural never-cloud) + `TranscriptEvent`/`SpeechAvailability` + the `EnergyVad` math + the
-        // in-memory preference fake ARE measured (commonMain/commonTest). The trailing `*` also catches
-        // each actual's nested/synthetic classes; it does not match the measured `UnavailableSpeechToText`.
+        // On-device speech-to-text platform actuals (issues #92/#94, ADR-0018): the per-platform whisper.cpp
+        // engines and their glue — Android's NDK/CMake/JNI engine + AudioRecord capture + JNI loader + Play
+        // Asset Delivery locator (#92), and the desktop `whisper-jni` engine + TargetDataLine capture +
+        // installer-bundled-model locator (#94) — plus the multiplatform-settings-backed engine [[App
+        // setting]]. They run only on a real device / desktop with a mic + model, exercised manually (plus
+        // Android's `connectedAndroidTest` jfk.wav→JNI native-correctness test), not the headless JVM gate
+        // (ADR-0006). The `SpeechToText` seam + `SpeechToTextSelector` (structural never-cloud) +
+        // `TranscriptEvent`/`SpeechAvailability` + the `EnergyVad` math + the in-memory preference fake ARE
+        // measured (commonMain/commonTest). The per-platform `WhisperSpeechToText`/`WhisperBridge`/
+        // `MicAudioSource` share a name across androidMain + jvmMain (the KMP per-actual pattern), so one
+        // glob each covers both. The trailing `*` also catches each actual's nested/synthetic classes; it
+        // does not match the measured `UnavailableSpeechToText`.
         "com.circuitstitch.deferno.core.speech.WhisperSpeechToText*",
         "com.circuitstitch.deferno.core.speech.WhisperBridge*",
         "com.circuitstitch.deferno.core.speech.MicAudioSource*",
