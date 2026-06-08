@@ -38,6 +38,10 @@ include(":core:common")
 include(":core:network")
 include(":core:database")
 include(":core:secure")
+// On-device speech-to-text (ADR-0018, #92): the SpeechToText seam + selector + engine impls. A device
+// capability bound at AppScope (identity-independent), mirroring core:secure. Sits beside it in the
+// foundation layer — it depends only on core:scopes (AppScope) and core:model.
+include(":core:speech")
 include(":core:data")
 include(":core:domain")
 include(":core:designsystem")

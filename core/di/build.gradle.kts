@@ -31,6 +31,10 @@ kotlin {
             // `api`: AccountDatabaseFactory is re-exposed on AppComponent for the child AccountScope.
             api(project(":core:database"))
             implementation(project(":core:secure"))
+            // Speech is an AppScope device capability (ADR-0018, #92): its SpeechToText seam + selector
+            // + per-platform engine multibinding merge here. `api` because AppComponent re-exposes
+            // `speechToText: SpeechToText` for the shell's Dictation surface, leaking the seam type.
+            api(project(":core:speech"))
         }
     }
 }

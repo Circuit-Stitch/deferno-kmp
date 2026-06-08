@@ -66,6 +66,19 @@ object CoverageConfig {
         // contract and the roster (de)serialization (AccountRosterCodec, commonTest) ARE measured.
         "com.circuitstitch.deferno.core.data.account.SharedPreferencesAccountRegistry*",
         "com.circuitstitch.deferno.core.data.account.AndroidAccountDataStore*",
+        // On-device speech-to-text platform actuals (issue #92, ADR-0018): the native whisper.cpp
+        // engine (NDK/CMake/JNI), its mic-capture glue (AudioRecord), the JNI loader, the Play Asset
+        // Delivery model locator, and the multiplatform-settings-backed engine [[App setting]] all run
+        // only on a real device — exercised by `connectedAndroidTest` (the jfk.wav→JNI native-correctness
+        // test), not the headless JVM gate (ADR-0006). The `SpeechToText` seam + `SpeechToTextSelector`
+        // (structural never-cloud) + `TranscriptEvent`/`SpeechAvailability` + the `EnergyVad` math + the
+        // in-memory preference fake ARE measured (commonMain/commonTest). The trailing `*` also catches
+        // each actual's nested/synthetic classes; it does not match the measured `UnavailableSpeechToText`.
+        "com.circuitstitch.deferno.core.speech.WhisperSpeechToText*",
+        "com.circuitstitch.deferno.core.speech.WhisperBridge*",
+        "com.circuitstitch.deferno.core.speech.MicAudioSource*",
+        "com.circuitstitch.deferno.core.speech.WhisperModelLocator*",
+        "com.circuitstitch.deferno.core.speech.SettingsSpeechEnginePreference*",
         // Compose @Composable glue (ADR-0006: "thin UI glue"; Views are screenshot-tested, not
         // unit-tested on the headless JVM gate). The design-system colour *tokens* ARE measured
         // (designsystem commonTest); the @Composable theme + typography builders that resolve fonts
