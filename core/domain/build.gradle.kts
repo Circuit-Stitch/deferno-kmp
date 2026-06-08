@@ -21,6 +21,10 @@ kotlin {
             // the same way core:data's own public API does, so no extra api/datetime wiring is needed.
             implementation(project(":core:model"))
             implementation(project(":core:data"))
+            // The CreateItem/ConvertItem commands (ADR-0016, #71) carry the create/convert wire
+            // payloads (CreateTaskPayload, …, ConvertItemPayload) the CreateWriter seam consumes —
+            // core:network is `implementation` in core:data, so name it here directly.
+            implementation(project(":core:network"))
         }
 
         commonTest.dependencies {

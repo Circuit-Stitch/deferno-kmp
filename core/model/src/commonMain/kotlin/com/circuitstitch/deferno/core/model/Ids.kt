@@ -39,3 +39,55 @@ value class UserId(val value: String) {
         require(value.isNotBlank()) { "UserId must not be blank" }
     }
 }
+
+/**
+ * Stable identifier of a [Habit] — the backend's UUID `id`. The reconcile key for the Habit cache,
+ * exactly as [TaskId] is for Tasks: a faithful, non-blank copy of the wire `id`, distinct from the
+ * human-facing [Habit.ref].
+ */
+@JvmInline
+value class HabitId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "HabitId must not be blank" }
+    }
+}
+
+/** Stable identifier of a [Chore] — the backend's UUID `id` (the Chore reconcile key, like [TaskId]). */
+@JvmInline
+value class ChoreId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "ChoreId must not be blank" }
+    }
+}
+
+/** Stable identifier of an [Event] — the backend's UUID `id` (the Event reconcile key, like [TaskId]). */
+@JvmInline
+value class EventId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "EventId must not be blank" }
+    }
+}
+
+/**
+ * Stable identifier of an [Occurrence] — the UUID of one dated firing of a recurring definition. An
+ * Occurrence is distinct from its parent definition (CONTEXT.md → "Occurrence"); this is the
+ * firing's own id, not the definition's [HabitId]/[ChoreId]/[EventId].
+ */
+@JvmInline
+value class OccurrenceId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "OccurrenceId must not be blank" }
+    }
+}
+
+/**
+ * Which of the four item kinds an item is (CONTEXT.md → "Item"). The clean domain mirror of the wire
+ * `type` discriminator (`task`/`habit`/`chore`/`event`). It is the explicit kind a New picker selects
+ * (ADR-0015 — no field-inference) and the target a `convert` Command names (ADR-0016 counterpart).
+ */
+enum class ItemKind {
+    Task,
+    Habit,
+    Chore,
+    Event,
+}

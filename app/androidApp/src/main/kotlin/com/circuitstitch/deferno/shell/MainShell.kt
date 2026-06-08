@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
@@ -24,6 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -110,6 +112,15 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
                 )
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     DestinationBody(active, Modifier.fillMaxSize())
+                    // The shell-level New FAB (#71, ADR-0015 "launched from any FAB"): opens the New
+                    // create overlay above the foreground Destination. Shell-level so it is available
+                    // from every Destination without each slice owning its own.
+                    FloatingActionButton(
+                        onClick = { component.openOverlay(OverlayRoute.New) },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = "New")
+                    }
                 }
             }
         }
@@ -240,12 +251,12 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        text = "New",
+                        text = "Overlay",
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.semantics { heading() },
                     )
                     Text(
-                        text = "The shell overlay route is wired — New arrives in an upcoming release.",
+                        text = "The shell overlay route is wired — Search and New render real content over it.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.defernoColors.inkMuted,
                         textAlign = TextAlign.Center,
@@ -260,6 +271,10 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         // The global Search overlay (#73) renders the real SearchScreen over the same primitive.
         is MainShellComponent.OverlayChild.Search ->
             SearchScreen(child.component, modifier = Modifier.fillMaxSize())
+
+        // The New create surface (#71): the kind picker + per-kind form + online-only create.
+        is MainShellComponent.OverlayChild.New ->
+            NewScreen(child.component, Modifier.fillMaxSize())
     }
 }
 

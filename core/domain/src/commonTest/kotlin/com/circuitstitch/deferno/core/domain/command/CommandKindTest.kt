@@ -40,9 +40,22 @@ class CommandKindTest {
                 CommandKind.StartTask to "task.start",
                 CommandKind.SendTaskToReview to "task.send-to-review",
                 CommandKind.OpenTask to "task.open",
+                CommandKind.CreateItem to "item.create",
+                CommandKind.ConvertItem to "item.convert",
             ),
             CommandKind.entries.associateWith { it.id.value },
         )
+    }
+
+    @Test
+    fun createAndConvertAreTheOnlyOnlineOnlyKinds() {
+        // ADR-0016: the create + convert kinds are flagged online-only (the signal the agent / OS-intent
+        // layer reads); every offline-first edit/status/plan kind is not.
+        assertEquals(
+            setOf(CommandKind.CreateItem, CommandKind.ConvertItem),
+            CommandKind.entries.filter { it.onlineOnly }.toSet(),
+        )
+        assertEquals(setOf(CommandKind.CreateItem, CommandKind.ConvertItem), CommandKind.createKinds.toSet())
     }
 
     @Test
@@ -132,10 +145,16 @@ class CommandKindTest {
     }
 
     @Test
-    fun taskKindsAndPlanKindsPartitionTheCatalog() {
-        assertEquals(CommandKind.entries.toSet(), (CommandKind.taskKinds + CommandKind.planKinds).toSet())
-        assertTrue(CommandKind.taskKinds.none { it in CommandKind.planKinds }, "the two filters must be disjoint")
+    fun taskPlanAndCreateKindsPartitionTheCatalog() {
+        assertEquals(
+            CommandKind.entries.toSet(),
+            (CommandKind.taskKinds + CommandKind.planKinds + CommandKind.createKinds).toSet(),
+        )
+        assertTrue(CommandKind.taskKinds.none { it in CommandKind.planKinds }, "the filters must be disjoint")
+        assertTrue(CommandKind.taskKinds.none { it in CommandKind.createKinds }, "the filters must be disjoint")
+        assertTrue(CommandKind.planKinds.none { it in CommandKind.createKinds }, "the filters must be disjoint")
         assertTrue(CommandKind.planKinds.all { it.category == CommandCategory.Plan })
-        assertTrue(CommandKind.taskKinds.none { it.category == CommandCategory.Plan })
+        assertTrue(CommandKind.createKinds.all { it.category == CommandCategory.Create })
+        assertTrue(CommandKind.taskKinds.none { it.category == CommandCategory.Plan || it.category == CommandCategory.Create })
     }
 }

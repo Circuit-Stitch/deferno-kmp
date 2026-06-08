@@ -1,8 +1,11 @@
 package com.circuitstitch.deferno.core.domain.command
 
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
+import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import kotlinx.datetime.LocalDate
 import kotlin.time.Instant
 
@@ -34,6 +37,8 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.StartTask -> StartTask(TaskId("t1"))
     CommandKind.SendTaskToReview -> SendTaskToReview(TaskId("t1"))
     CommandKind.OpenTask -> OpenTask(TaskId("t1"))
+    CommandKind.CreateItem -> CreateItem(CreateItem.Payload.Task(CreateTaskPayload(title = "new")))
+    CommandKind.ConvertItem -> ConvertItem("item-1", ItemKind.Task, ConvertItemPayload(type = "habit"))
 }
 
 /** Concise [Task] fixture for the enablement tests. */

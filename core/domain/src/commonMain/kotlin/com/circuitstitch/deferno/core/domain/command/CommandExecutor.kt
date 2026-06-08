@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.core.domain.command
 
+import com.circuitstitch.deferno.core.data.create.CreateResult
+import com.circuitstitch.deferno.core.data.create.CreateWriter
 import com.circuitstitch.deferno.core.data.plan.PlanWriter
 import com.circuitstitch.deferno.core.data.task.TaskWriter
 import com.circuitstitch.deferno.core.model.Task
@@ -28,6 +30,7 @@ import com.circuitstitch.deferno.core.model.WorkingState
 class CommandExecutor(
     private val taskWriter: TaskWriter,
     private val planWriter: PlanWriter,
+    private val createWriter: CreateWriter,
 ) {
     /**
      * Run [command], first gating on [CommandKind.enabledFor].
@@ -59,7 +62,32 @@ class CommandExecutor(
             is AddToPlan -> planWriter.add(command.taskId, command.date, command.tz)
             is RemoveFromPlan -> planWriter.remove(command.taskId, command.date, command.tz)
             is ReorderPlan -> planWriter.reorder(command.taskIds, command.date, command.tz)
+            // Online-only (ADR-0016): these return the writer's own outcome (Created/Offline/Failed),
+            // NOT a blanket Accepted — connectivity refusal must be structured, not silent.
+            is CreateItem -> return createWriter.create(command.payload).toCommandResult(command.kind)
+            is ConvertItem ->
+                return createWriter.convert(command.itemId, command.fromKind, command.payload).toCommandResult(command.kind)
         }
         return CommandResult.Accepted(command.kind)
     }
+}
+
+/** Dispatches a [CreateItem.Payload] to the kind-specific create call on the [CreateWriter]. */
+private suspend fun CreateWriter.create(payload: CreateItem.Payload): CreateResult = when (payload) {
+    is CreateItem.Payload.Task -> createTask(payload.payload)
+    is CreateItem.Payload.Habit -> createHabit(payload.payload)
+    is CreateItem.Payload.Chore -> createChore(payload.payload)
+    is CreateItem.Payload.Event -> createEvent(payload.payload)
+}
+
+/**
+ * Maps the data-layer [CreateResult] to the command-registry [CommandResult] for the online-only
+ * create/convert path (ADR-0016): a server-confirmed [CreateResult.Created] is [CommandResult.Accepted]
+ * (the row is seeded + observable); [CreateResult.Offline] is [CommandResult.Offline] (nothing
+ * enqueued, "reconnect to save"); [CreateResult.Failed] is [CommandResult.Failed] (a server verdict).
+ */
+private fun CreateResult.toCommandResult(kind: CommandKind): CommandResult = when (this) {
+    is CreateResult.Created -> CommandResult.Accepted(kind)
+    is CreateResult.Offline -> CommandResult.Offline(kind)
+    is CreateResult.Failed -> CommandResult.Failed(kind, message)
 }

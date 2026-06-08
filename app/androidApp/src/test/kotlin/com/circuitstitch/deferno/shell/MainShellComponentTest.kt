@@ -43,6 +43,8 @@ class MainShellComponentTest {
         settingsRepo: FakeSettingsRepository = FakeSettingsRepository(),
         settingsWriter: FakeSettingsWriter = FakeSettingsWriter(settingsRepo),
         output: (MainShellComponent.Output) -> Unit = {},
+        create: suspend (com.circuitstitch.deferno.core.domain.command.CreateItem.Payload) -> com.circuitstitch.deferno.core.domain.command.CommandResult =
+            { com.circuitstitch.deferno.core.domain.command.CommandResult.Offline(com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem) },
     ) = DefaultMainShellComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         taskRepository = taskRepo,
@@ -55,6 +57,7 @@ class MainShellComponentTest {
         timeZone = "UTC",
         output = output,
         coroutineContext = Dispatchers.Unconfined,
+        create = create,
     )
 
     private fun MainShellComponent.settings(): SettingsComponent =
@@ -401,6 +404,22 @@ class MainShellComponentTest {
         assertNull("overlay dismissed back to origin", shell.overlay.value.child)
     }
 
+    // --- New overlay route (#71, ADR-0015/0016) ---
+
+    @Test
+    fun newOverlay_opensAboveTheForegroundDestination_andDismissesBackToOrigin() {
+        val shell = shell()
+        assertNull("no overlay initially", shell.overlay.value.child)
+
+        shell.openOverlay(OverlayRoute.New)
+        val child = shell.overlay.value.child?.instance
+        assertTrue("the New create surface is pushed", child is MainShellComponent.OverlayChild.New)
+        assertEquals("the foreground Destination is untouched", Destination.Plan, shell.activeDestination())
+
+        shell.dismissOverlay()
+        assertNull("overlay dismissed back to origin", shell.overlay.value.child)
+    }
+
     @Test
     fun searchResultTap_opensThatTaskInTheTasksDestination_andDismissesTheOverlay() {
         val shell = shell()
@@ -428,6 +447,59 @@ class MainShellComponentTest {
 
         assertTrue("back now dismisses the Tasks detail", shell.onBack())
         assertNull(shell.tasks().detail.value.child)
+    }
+
+    @Test
+    fun back_dismissesTheNewOverlayFirst() {
+        val shell = shell()
+        shell.selectDestination(Destination.Tasks)
+        shell.openOverlay(OverlayRoute.New)
+
+        assertTrue("back dismisses the New overlay", shell.onBack())
+        assertNull(shell.overlay.value.child)
+        // The Tasks Destination is untouched beneath it (still foreground).
+        assertEquals(Destination.Tasks, shell.activeDestination())
+    }
+
+    @Test
+    fun newOverlay_pickerDefaultsToTask_andSubmitDispatchesTheCreateCommand() {
+        val created = mutableListOf<com.circuitstitch.deferno.core.domain.command.CreateItem.Payload>()
+        val shell = shell(
+            create = { payload ->
+                created += payload
+                com.circuitstitch.deferno.core.domain.command.CommandResult.Accepted(
+                    com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem,
+                )
+            },
+        )
+        shell.openOverlay(OverlayRoute.New)
+        val newComponent = (shell.overlay.value.child!!.instance as MainShellComponent.OverlayChild.New).component
+
+        // The picker defaults to Task (ADR-0015 — explicit, sensible default), and the form adapts.
+        assertEquals(com.circuitstitch.deferno.core.model.ItemKind.Task, newComponent.state.value.selectedKind)
+
+        newComponent.setTitle("buy milk")
+        newComponent.submit() // Unconfined → runs synchronously
+
+        // The create command was dispatched with a Task payload; an Accepted result dismisses the overlay.
+        assertEquals(1, created.size)
+        assertTrue(created[0] is com.circuitstitch.deferno.core.domain.command.CreateItem.Payload.Task)
+        assertNull("an accepted create dismisses the overlay", shell.overlay.value.child)
+    }
+
+    @Test
+    fun newOverlay_offlineShowsReconnectToSaveAndStaysOpen() {
+        val shell = shell() // default create returns Offline
+        shell.openOverlay(OverlayRoute.New)
+        val newComponent = (shell.overlay.value.child!!.instance as MainShellComponent.OverlayChild.New).component
+
+        newComponent.selectKind(com.circuitstitch.deferno.core.model.ItemKind.Habit)
+        newComponent.setTitle("stretch")
+        newComponent.submit()
+
+        // Offline → gentle "reconnect to save" status, overlay stays open, nothing dismissed.
+        assertEquals(NewStatus.Offline, newComponent.state.value.status)
+        assertNotNull("the New overlay stays open while offline", shell.overlay.value.child)
     }
 
     private fun stackPlan(shell: MainShellComponent): MainShellComponent.DestinationChild.Plan =

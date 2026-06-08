@@ -2,6 +2,8 @@ package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
+import com.circuitstitch.deferno.core.data.connectivity.Connectivity
+import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
@@ -74,6 +76,11 @@ abstract class AppComponent(
     abstract val settingsRemoteSource: SettingsRemoteSource
     abstract val outboxRequestSender: OutboxRequestSender
     abstract val accountDatabaseFactory: AccountDatabaseFactory
+    // The online-only create flow (#71, ADR-0016): the CreateWriter (AccountScope) gates on this
+    // process-global connectivity + POSTs through this shared remote source, so both are re-exposed
+    // here for the child AccountScope to consume.
+    abstract val itemRemoteSource: ItemRemoteSource
+    abstract val connectivity: Connectivity
 }
 
 // Creation from common code (KMP); anvil generates the per-platform `actual`. One

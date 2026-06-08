@@ -175,6 +175,9 @@ class DefaultRootComponent(
                         onSwitchAccount = ::switchAccount,
                         output = ::onMainOutput,
                         coroutineContext = scope.coroutineContext,
+                        // The online-only create seam (#71, ADR-0016): the New overlay dispatches the
+                        // CreateItem command through this Account's command executor.
+                        create = session::create,
                     ),
                 )
             }

@@ -1,0 +1,46 @@
+-- The local source-of-truth Habit table (ADR-0001, #71). A recurring definition: columns mirror the
+-- DOMAIN Habit (ADR-0011, schema from domain not wire). Like taskEntity, every column is a SQL
+-- primitive (TEXT/INTEGER/REAL) so the generated DB needs no adapters; the row<->domain conversion
+-- (the DefinitionState enum, the Recurrence object, instants, the labels list) is done in Kotlin in
+-- core:data (HabitEntityMapping.kt). `definition_state` is the "light switch" — NOT a working_state.
+-- `recurrence_type`/`recurrence_days` hold the flattened domain Recurrence.
+CREATE TABLE habitEntity (
+    id               TEXT NOT NULL PRIMARY KEY,
+    org_slug         TEXT NOT NULL,
+    owner_org_id     TEXT,
+    ref              TEXT,
+    sequence         INTEGER,
+    title            TEXT NOT NULL,
+    definition_state TEXT NOT NULL,
+    recurrence_type  TEXT,
+    recurrence_days  TEXT NOT NULL DEFAULT '',
+    labels           TEXT NOT NULL DEFAULT '',
+    parent_id        TEXT,
+    complete_by      TEXT,
+    pinned           INTEGER NOT NULL DEFAULT 0,
+    date_created     TEXT NOT NULL,
+    deleted_at       TEXT,
+    hydration_state  TEXT NOT NULL,
+    description      TEXT,
+    series_id        TEXT
+);
+
+CREATE INDEX habitEntity_owner_org_id ON habitEntity(owner_org_id);
+CREATE INDEX habitEntity_deleted_at ON habitEntity(deleted_at);
+
+-- Live (non-tombstoned) rows — the UI-facing list (ADR-0001 observe-via-Flow).
+selectAllActive:
+SELECT * FROM habitEntity WHERE deleted_at IS NULL ORDER BY sequence;
+
+selectById:
+SELECT * FROM habitEntity WHERE id = ?;
+
+insertOrReplace:
+INSERT OR REPLACE INTO habitEntity(
+    id, org_slug, owner_org_id, ref, sequence, title, definition_state, recurrence_type,
+    recurrence_days, labels, parent_id, complete_by, pinned, date_created, deleted_at,
+    hydration_state, description, series_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM habitEntity WHERE id = ?;

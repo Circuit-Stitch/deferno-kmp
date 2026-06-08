@@ -17,7 +17,11 @@ class CommandExecutorTest {
 
     private val id = TaskId("t1")
 
-    private fun executor(task: FakeTaskWriter, plan: FakePlanWriter) = CommandExecutor(task, plan)
+    private fun executor(
+        task: FakeTaskWriter,
+        plan: FakePlanWriter,
+        create: FakeCreateWriter = FakeCreateWriter(),
+    ) = CommandExecutor(task, plan, create)
 
     @Test
     fun bindsEveryTaskCommandToTheRightWriterCallAndArgs() = runTest {
@@ -196,19 +200,85 @@ class CommandExecutorTest {
     @Test
     fun everyCommandKindDispatchesToTheRightWriterAndAcceptsItsKind() = runTest {
         // Catalog-wide integrity: drives a sample of EACH kind through the exhaustive `when`. Asserting
-        // per-writer counts (against the catalog's own task/plan partition) — not just the total — means a
-        // kind that is unbound (0 calls), double-dispatched, or *mis-routed* to the wrong writer all fail
-        // here, before any becomes a hole.
+        // per-writer counts (against the catalog's task/plan/create partition) — not just the total —
+        // means a kind that is unbound (0 calls), double-dispatched, or *mis-routed* to the wrong writer
+        // all fail here, before any becomes a hole. (The online-only create/convert kinds route to the
+        // CreateWriter, whose default fake returns Created → Accepted.)
         for (kind in CommandKind.entries) {
             val tw = FakeTaskWriter()
             val pw = FakePlanWriter()
+            val cw = FakeCreateWriter(result = CreateResultFixtures.createdFor(kind))
 
-            val result = executor(tw, pw).execute(sampleCommand(kind)) // null current → gate skipped
+            val result = executor(tw, pw, cw).execute(sampleCommand(kind)) // null current → gate skipped
 
             assertEquals(CommandResult.Accepted(kind), result, "kind $kind should be Accepted")
             val isPlan = kind in CommandKind.planKinds
+            val isCreate = kind in CommandKind.createKinds
             assertEquals(if (isPlan) 1 else 0, pw.calls.size, "kind $kind plan-writer calls")
-            assertEquals(if (isPlan) 0 else 1, tw.calls.size, "kind $kind task-writer calls")
+            assertEquals(if (isPlan || isCreate) 0 else 1, tw.calls.size, "kind $kind task-writer calls")
+            assertEquals(if (isCreate) 1 else 0, cw.calls.size, "kind $kind create-writer calls")
         }
     }
+
+    @Test
+    fun createItemWhenOnlineDispatchesToTheCreateWriterAndIsAccepted() = runTest {
+        val cw = FakeCreateWriter(result = com.circuitstitch.deferno.core.data.create.CreateResult.Created(
+            com.circuitstitch.deferno.core.model.ItemKind.Task, "server-1",
+        ))
+        val result = executor(FakeTaskWriter(), FakePlanWriter(), cw)
+            .execute(CreateItem(CreateItem.Payload.Task(com.circuitstitch.deferno.core.network.dto.CreateTaskPayload(title = "x"))))
+
+        assertEquals(CommandResult.Accepted(CommandKind.CreateItem), result)
+        assertEquals(listOf("createTask"), cw.calls)
+    }
+
+    @Test
+    fun createItemWhenOfflineReturnsOfflineAndTheTaskWriterIsUntouched() = runTest {
+        // ADR-0016: the writer owns the connectivity gate; the executor faithfully surfaces Offline (not
+        // a false Accepted), and the offline-first task/plan writers are never touched (nothing enqueued).
+        val tw = FakeTaskWriter()
+        val pw = FakePlanWriter()
+        val cw = FakeCreateWriter(result = com.circuitstitch.deferno.core.data.create.CreateResult.Offline)
+
+        val result = executor(tw, pw, cw)
+            .execute(CreateItem(CreateItem.Payload.Habit(com.circuitstitch.deferno.core.network.dto.CreateHabitPayload(
+                title = "stretch",
+                recurrence = com.circuitstitch.deferno.core.network.dto.RecurrenceDto("daily"),
+            ))))
+
+        assertEquals(CommandResult.Offline(CommandKind.CreateItem), result)
+        assertTrue(tw.calls.isEmpty(), "offline create must not enqueue via the task writer")
+        assertTrue(pw.calls.isEmpty())
+    }
+
+    @Test
+    fun convertItemDispatchesToTheConvertWriter() = runTest {
+        val cw = FakeCreateWriter(result = com.circuitstitch.deferno.core.data.create.CreateResult.Created(
+            com.circuitstitch.deferno.core.model.ItemKind.Habit, "item-1",
+        ))
+        val result = executor(FakeTaskWriter(), FakePlanWriter(), cw)
+            .execute(ConvertItem("item-1", com.circuitstitch.deferno.core.model.ItemKind.Task,
+                com.circuitstitch.deferno.core.network.dto.ConvertItemPayload(type = "habit")))
+
+        assertEquals(CommandResult.Accepted(CommandKind.ConvertItem), result)
+        assertEquals(listOf("convert:item-1:Task"), cw.calls)
+    }
+
+    @Test
+    fun createItemServerRejectionSurfacesAsFailed() = runTest {
+        val cw = FakeCreateWriter(result = com.circuitstitch.deferno.core.data.create.CreateResult.Failed("title required"))
+        val result = executor(FakeTaskWriter(), FakePlanWriter(), cw)
+            .execute(CreateItem(CreateItem.Payload.Task(com.circuitstitch.deferno.core.network.dto.CreateTaskPayload(title = ""))))
+
+        assertEquals(CommandResult.Failed(CommandKind.CreateItem, "title required"), result)
+    }
+}
+
+/** Per-kind [CreateResult] fixture for the catalog-wide test (the create kinds need a Created outcome). */
+private object CreateResultFixtures {
+    fun createdFor(kind: CommandKind): com.circuitstitch.deferno.core.data.create.CreateResult =
+        com.circuitstitch.deferno.core.data.create.CreateResult.Created(
+            com.circuitstitch.deferno.core.model.ItemKind.Task,
+            "server-${kind.name}",
+        )
 }

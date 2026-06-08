@@ -1,0 +1,43 @@
+-- The local source-of-truth Chore table (ADR-0001, #71). Mirrors habitEntity (a recurring definition
+-- governed by definition_state) and adds the chore-specific `cadence_mode`. Group/rotation is deferred
+-- (ADR-0015), so there is no group column. Adapter-free primitives; conversion in ChoreEntityMapping.kt.
+CREATE TABLE choreEntity (
+    id               TEXT NOT NULL PRIMARY KEY,
+    org_slug         TEXT NOT NULL,
+    owner_org_id     TEXT,
+    ref              TEXT,
+    sequence         INTEGER,
+    title            TEXT NOT NULL,
+    definition_state TEXT NOT NULL,
+    recurrence_type  TEXT,
+    recurrence_days  TEXT NOT NULL DEFAULT '',
+    cadence_mode     TEXT,
+    labels           TEXT NOT NULL DEFAULT '',
+    parent_id        TEXT,
+    complete_by      TEXT,
+    pinned           INTEGER NOT NULL DEFAULT 0,
+    date_created     TEXT NOT NULL,
+    deleted_at       TEXT,
+    hydration_state  TEXT NOT NULL,
+    description      TEXT,
+    series_id        TEXT
+);
+
+CREATE INDEX choreEntity_owner_org_id ON choreEntity(owner_org_id);
+CREATE INDEX choreEntity_deleted_at ON choreEntity(deleted_at);
+
+selectAllActive:
+SELECT * FROM choreEntity WHERE deleted_at IS NULL ORDER BY sequence;
+
+selectById:
+SELECT * FROM choreEntity WHERE id = ?;
+
+insertOrReplace:
+INSERT OR REPLACE INTO choreEntity(
+    id, org_slug, owner_org_id, ref, sequence, title, definition_state, recurrence_type,
+    recurrence_days, cadence_mode, labels, parent_id, complete_by, pinned, date_created, deleted_at,
+    hydration_state, description, series_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM choreEntity WHERE id = ?;

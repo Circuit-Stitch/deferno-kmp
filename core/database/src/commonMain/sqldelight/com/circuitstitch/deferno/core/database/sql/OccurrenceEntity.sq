@@ -1,0 +1,28 @@
+-- The local source-of-truth Occurrence table (ADR-0001, #71): one dated firing of a recurring
+-- definition, kept STRICTLY distinct from the definition (which lives in habit/chore/eventEntity).
+-- `occurrence_state` is an OccurrenceState (how this firing went) — never a DefinitionState.
+-- `definition_id`/`kind` point back at the parent definition; `occurrence_date` is the calendar day
+-- (an ISO `yyyy-mm-dd` string). Adapter-free primitives; conversion in OccurrenceEntityMapping.kt.
+CREATE TABLE occurrenceEntity (
+    id               TEXT NOT NULL PRIMARY KEY,
+    definition_id    TEXT NOT NULL,
+    kind             TEXT NOT NULL,
+    occurrence_date  TEXT NOT NULL,
+    occurrence_state TEXT NOT NULL
+);
+
+CREATE INDEX occurrenceEntity_definition_id ON occurrenceEntity(definition_id);
+
+selectByDefinition:
+SELECT * FROM occurrenceEntity WHERE definition_id = ? ORDER BY occurrence_date;
+
+selectById:
+SELECT * FROM occurrenceEntity WHERE id = ?;
+
+insertOrReplace:
+INSERT OR REPLACE INTO occurrenceEntity(
+    id, definition_id, kind, occurrence_date, occurrence_state
+) VALUES (?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM occurrenceEntity WHERE id = ?;

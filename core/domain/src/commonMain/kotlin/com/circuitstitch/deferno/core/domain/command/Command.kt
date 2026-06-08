@@ -1,6 +1,12 @@
 package com.circuitstitch.deferno.core.domain.command
 
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
+import com.circuitstitch.deferno.core.network.dto.CreateChorePayload
+import com.circuitstitch.deferno.core.network.dto.CreateEventPayload
+import com.circuitstitch.deferno.core.network.dto.CreateHabitPayload
+import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import kotlinx.datetime.LocalDate
 import kotlin.time.Instant
 
@@ -24,13 +30,13 @@ import kotlin.time.Instant
  * Each command's binding to its action lives in [CommandExecutor]'s exhaustive `when`; the enumerable
  * catalog + per-state applicability live on [CommandKind].
  *
- * **`CreateTask` is intentionally absent.** Offline-create is deferred for the *same* reason it is
- * absent from `Mutation`: at envelope v0.1 there is no server idempotency key / client-id echo to
- * reconcile a client-temp id against the server's assigned UUID, so a replayed create would duplicate
- * (ADR-0001 reconciles on `id`). Every command here targets an **existing** entity (a stable server
- * id), which is what makes its replay reconcile-clean. `CreateTask` joins the registry as a real
- * command the day the outbox gains a create intent — modelling it as a non-dispatchable stub today
- * would lie to every enumerating surface (palette / agent / OS intent).
+ * **Create is online-only ([CreateItem] / [ConvertItem], ADR-0016).** At envelope v0.1 there is no
+ * server idempotency key, so a queued+replayed create would duplicate (ADR-0001 reconciles on `id`).
+ * So — unlike every *edit* command, which targets an existing id and is offline-first — create/convert
+ * call the endpoint **directly**, gated on connectivity: their [CommandKind.onlineOnly] flag is the
+ * signal the agent / OS-intent layer reads, and the executor returns [CommandResult.Offline] (not a
+ * false [CommandResult.Accepted]) when offline. They promote to normal offline-first outbox operations
+ * the day the backend gains an idempotency key (Kyle-Falconer/Deferno#307).
  *
  * **Reparent / move is likewise absent.** ADR-0007 pairs "drag-to-reorder / reparent" as a v1 input
  * goal; the reorder half is bound ([ReorderPlan]), but moving a Task under a new parent has no write
@@ -176,6 +182,50 @@ data class ReorderPlan(val taskIds: List<TaskId>, override val date: LocalDate, 
     override val kind: CommandKind get() = CommandKind.ReorderPlan
 }
 
+// --- Create + convert: ONLINE-ONLY (ADR-0016, #71) ---
+//
+// Unlike every other command (which targets an existing server id and is offline-first), create has
+// no server idempotency key in v0.1, so it is NOT enqueued — it calls the endpoint directly and
+// requires connectivity. Its [CommandKind.onlineOnly] flag is the signal the agent / OS-intent layer
+// reads, and the executor returns [CommandResult.Offline] (not a false Accepted) when refused. The
+// payload is the kind-specific create DTO the [com.circuitstitch.deferno.core.data.create.CreateWriter]
+// consumes; a sealed [CreateItem.Payload] keeps the operands typed per kind and the dispatch exhaustive.
+
+/** Create a new item of the explicitly-chosen [Payload] kind (ADR-0015 — no field-inference). */
+data class CreateItem(val payload: Payload) : Command {
+    override val kind: CommandKind get() = CommandKind.CreateItem
+
+    /** The kind-specific create operands. Exactly one per picker kind (Task/Habit/Chore/Event). */
+    sealed interface Payload {
+        val itemKind: ItemKind
+
+        data class Task(val payload: CreateTaskPayload) : Payload {
+            override val itemKind: ItemKind get() = ItemKind.Task
+        }
+
+        data class Habit(val payload: CreateHabitPayload) : Payload {
+            override val itemKind: ItemKind get() = ItemKind.Habit
+        }
+
+        data class Chore(val payload: CreateChorePayload) : Payload {
+            override val itemKind: ItemKind get() = ItemKind.Chore
+        }
+
+        data class Event(val payload: CreateEventPayload) : Payload {
+            override val itemKind: ItemKind get() = ItemKind.Event
+        }
+    }
+}
+
+/** Convert the existing item [itemId] (currently [fromKind]) to another kind via `POST /items/{id}/convert`. */
+data class ConvertItem(
+    val itemId: String,
+    val fromKind: ItemKind,
+    val payload: ConvertItemPayload,
+) : Command {
+    override val kind: CommandKind get() = CommandKind.ConvertItem
+}
+
 /**
  * The outcome of [CommandExecutor.execute] — the honest, **offline-first** vocabulary (ADR-0001).
  *
@@ -197,6 +247,21 @@ sealed interface CommandResult {
      * (e.g. [CompleteTask] on an already-Done Task).
      */
     data class Rejected(override val kind: CommandKind, val reason: RejectionReason) : CommandResult
+
+    /**
+     * An [CommandKind.onlineOnly] command ([CreateItem] / [ConvertItem]) refused because there is no
+     * connectivity (ADR-0016): the create endpoint was **not** called and **nothing was enqueued** —
+     * the structured "reconnect to save" the binding surface (UI / agent / OS intent) reports instead
+     * of a swallowed exception or a false [Accepted].
+     */
+    data class Offline(override val kind: CommandKind) : CommandResult
+
+    /**
+     * An [CommandKind.onlineOnly] command reached the server but it rejected the request (e.g. a 4xx) —
+     * a [message] the binding surface can show. Distinct from [Offline] because retrying offline won't
+     * help; distinct from [Rejected] because it is a server verdict, not the pure pre-flight gate.
+     */
+    data class Failed(override val kind: CommandKind, val message: String) : CommandResult
 }
 
 /** Why a [CommandResult.Rejected] command was refused. */

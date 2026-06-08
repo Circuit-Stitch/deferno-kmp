@@ -41,4 +41,28 @@ class IdsTest {
     fun userIdPreservesValue() {
         assertEquals("1d35f62e-eed9-44de-96e8-e61a307af83f", UserId("1d35f62e-eed9-44de-96e8-e61a307af83f").value)
     }
+
+    @Test
+    fun recurringIdsRejectBlank() {
+        assertFailsWith<IllegalArgumentException> { HabitId("") }
+        assertFailsWith<IllegalArgumentException> { ChoreId("  ") }
+        assertFailsWith<IllegalArgumentException> { EventId("") }
+        assertFailsWith<IllegalArgumentException> { OccurrenceId("   ") }
+    }
+
+    @Test
+    fun recurringIdsPreserveValue() {
+        assertEquals("h-1", HabitId("h-1").value)
+        assertEquals("c-1", ChoreId("c-1").value)
+        assertEquals("e-1", EventId("e-1").value)
+        assertEquals("o-1", OccurrenceId("o-1").value)
+    }
+
+    @Test
+    fun itemKindHasTheFourPickerKinds() {
+        assertEquals(
+            listOf(ItemKind.Task, ItemKind.Habit, ItemKind.Chore, ItemKind.Event),
+            ItemKind.entries,
+        )
+    }
 }
