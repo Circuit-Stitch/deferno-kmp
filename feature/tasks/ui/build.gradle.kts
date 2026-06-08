@@ -13,11 +13,15 @@ kotlin {
 
     sourceSets {
         // commonMain holds the platform-neutral, stateless atoms (TaskRow, the status badge, the
-        // pane header, empty/loading states) so a future desktop (jvmMain) View + the design system
-        // can reuse them. The Android-native *screens* that arrange them live in androidMain.
+        // pane header, empty/loading states) plus the pure secondary-pane precedence helper
+        // (resolveSecondarySlot, #67) so the Android and desktop screens share one source. The
+        // Android-native *screens* that arrange them live in androidMain.
         commonMain.dependencies {
             implementation(project(":core:model"))
             implementation(project(":core:designsystem"))
+            // The precedence helper takes TaskPane (the component's foreground enum); :feature:tasks
+            // sits in commonMain here — not duplicated per platform — so both screens inherit it.
+            implementation(project(":feature:tasks"))
 
             implementation(compose.runtime)
             implementation(compose.foundation)
@@ -29,7 +33,6 @@ kotlin {
         // so desktop/iOS get their own native screens rather than this phone single-pane layout
         // stretched across platforms (ADR-0007's "stretched phone" non-goal).
         androidMain.dependencies {
-            implementation(project(":feature:tasks"))
             // The Search overlay View binds to the search query/sort value types (#73), which live in
             // the data layer (TaskSearchQuery, SearchSort) — feature:tasks exposes them but only via
             // `implementation`, so this module declares its own dependency to reference them directly.
@@ -51,7 +54,6 @@ kotlin {
         // PaneHeader, …) — `internal`, but visible here because jvmMain shares this module — and
         // renders the same shared Decompose components via `subscribeAsState()`.
         jvmMain.dependencies {
-            implementation(project(":feature:tasks"))
             // The desktop Search overlay View binds to the search query/sort value types (#86):
             // SearchSort (and TaskSearchQuery) live in the data layer, which feature:tasks exposes only
             // via `implementation`, so jvmMain declares its own dependency to reference them directly —

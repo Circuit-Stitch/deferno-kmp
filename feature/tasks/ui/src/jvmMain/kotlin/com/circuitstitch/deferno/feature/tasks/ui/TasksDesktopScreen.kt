@@ -31,7 +31,6 @@ import com.circuitstitch.deferno.core.designsystem.theme.plexMono
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskListComponent
-import com.circuitstitch.deferno.feature.tasks.TaskPane
 import com.circuitstitch.deferno.feature.tasks.TaskTreeComponent
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 
@@ -58,27 +57,30 @@ fun TasksDesktopScreen(component: TasksComponent, modifier: Modifier = Modifier)
     val detail = detailSlot.child?.instance
     val tree = treeSlot.child?.instance
 
+    // The shared secondary-pane precedence (#67), identical to the Android screen's (TasksScreen.kt):
+    // which co-resident slot fills the secondary region. Only the None fallback differs by layout — an
+    // empty "pick a task" state beside the two-pane list, the list itself in the single-pane fold.
+    val slot = resolveSecondarySlot(activePane, hasDetail = detail != null, hasTree = tree != null)
+
     androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxSize()) {
         if (maxWidth >= TasksTwoPaneMinWidth) {
-            // Two panes: the list is always present on the left; the right pane is the active slot.
+            // Two panes: the list is always present on the left; the right pane is the resolved slot.
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.width(TasksListPaneWidth).fillMaxHeight()) {
                     TaskListPane(component.list)
                 }
                 VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Box(Modifier.weight(1f).fillMaxHeight()) {
-                    SecondaryPane(activePane, detail, tree)
+                    SecondaryPane(slot, detail, tree)
                 }
             }
         } else {
-            // One pane: render the most-recently-foregrounded slot, falling back to the list — the
-            // same precedence as the Android screen's compact fold (TasksScreen.kt).
-            when {
-                activePane == TaskPane.Tree && tree != null -> TaskTreePane(tree)
-                activePane == TaskPane.Detail && detail != null -> TaskDetailPane(detail)
-                tree != null -> TaskTreePane(tree)
-                detail != null -> TaskDetailPane(detail)
-                else -> TaskListPane(component.list)
+            // One pane: render the resolved slot, falling back to the list (not the empty state) — the
+            // home state when nothing is open.
+            when (slot) {
+                SecondarySlot.Tree -> tree?.let { TaskTreePane(it) }
+                SecondarySlot.Detail -> detail?.let { TaskDetailPane(it) }
+                SecondarySlot.None -> TaskListPane(component.list)
             }
         }
     }
@@ -90,19 +92,18 @@ internal val TasksTwoPaneMinWidth = 720.dp
 /** Fixed width of the list pane in the two-pane layout; the secondary pane takes the rest. */
 private val TasksListPaneWidth = 360.dp
 
-/** The right-hand pane in the two-pane layout: the active co-resident slot, else a gentle placeholder. */
+/** The right-hand pane in the two-pane layout: the resolved co-resident slot, else a gentle placeholder. */
 @Composable
 private fun SecondaryPane(
-    activePane: TaskPane,
+    slot: SecondarySlot,
     detail: TaskDetailComponent?,
     tree: TaskTreeComponent?,
 ) {
-    when {
-        activePane == TaskPane.Tree && tree != null -> TaskTreePane(tree)
-        activePane == TaskPane.Detail && detail != null -> TaskDetailPane(detail)
-        tree != null -> TaskTreePane(tree)
-        detail != null -> TaskDetailPane(detail)
-        else -> EmptyState(
+    when (slot) {
+        // The helper only returns Tree/Detail when that slot is open, so the instance is non-null here.
+        SecondarySlot.Tree -> tree?.let { TaskTreePane(it) }
+        SecondarySlot.Detail -> detail?.let { TaskDetailPane(it) }
+        SecondarySlot.None -> EmptyState(
             title = "Nothing open",
             body = "Pick a task on the left to see its details here.",
         )
