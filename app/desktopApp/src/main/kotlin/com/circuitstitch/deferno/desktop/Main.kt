@@ -332,16 +332,17 @@ private fun DefernoMenuBar(
                 MenuRow(text = "Sign out") { dismiss(); main.signOut() }
             }
 
-            // Always-visible desktop-class affordance (ADR-0007, #86): a search control sits in the
-            // toolbar so global Search is reachable without opening a menu — the toolbar counterpart of
-            // Ctrl+F. Pushed to the trailing edge by the spacer. (The "+ New" affordance lands with #87.)
+            // Always-visible desktop-class affordances (ADR-0007, #86/#87): a search control and a
+            // "+" both sit in the toolbar so the global overlays are reachable without opening a menu —
+            // the toolbar counterparts of Ctrl+F / Ctrl+N. Pushed to the trailing edge by the spacer.
             Spacer(Modifier.weight(1f))
             ToolbarAction(text = "Search") { main.openOverlay(OverlayRoute.Search) }
+            ToolbarAction(text = "+ New") { main.openOverlay(OverlayRoute.New) }
         }
     }
 }
 
-/** A trailing toolbar button on the in-app menu bar (the desktop "Search" / "+ New" affordances). */
+/** A trailing toolbar button on the in-app menu bar (the desktop "+ New" / "Search" affordances). */
 @Composable
 private fun ToolbarAction(text: String, onClick: () -> Unit) {
     TextButton(

@@ -131,11 +131,11 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
 
 /**
  * The shell-level overlay above the foreground Destination (ADR-0015): an opaque surface layered over
- * the whole nav suite, dismissed first by shell back (Esc). Search (#86) renders its real desktop View
- * (an opaque [Surface] owning its own Close affordance, routed back through the component's dismiss
- * Output); New (#87) and the v1 [MainShellComponent.OverlayChild.Placeholder] route still render a
- * dismissible placeholder until the New desktop View lands. Overlays are reachable via the View menu +
- * Ctrl+F/Ctrl+N (Main.kt).
+ * the whole nav suite, dismissed first by shell back (Esc). Search (#86) and New (#87) now render their
+ * real desktop Views — each an opaque [Surface] that owns its own Close/Cancel affordance (routed back
+ * through the shared component's dismiss Output); the v1 [OverlayChild.Placeholder] route (the shared
+ * mechanism's stand-in, not opened on desktop) keeps a dismissible placeholder. Overlays are reachable
+ * via the View menu + Ctrl+F/Ctrl+N (Main.kt).
  */
 @Composable
 private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () -> Unit) {
@@ -144,14 +144,14 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
             SearchDesktopScreen(child.component, Modifier.fillMaxSize())
 
         is MainShellComponent.OverlayChild.New ->
-            OverlayPlaceholder(onDismiss)
+            NewDesktopScreen(child.component, Modifier.fillMaxSize())
 
         MainShellComponent.OverlayChild.Placeholder ->
             OverlayPlaceholder(onDismiss)
     }
 }
 
-/** A dismissible stand-in for an overlay route whose desktop View isn't built yet (ADR-0015). */
+/** The dismissible stand-in for the v1 [MainShellComponent.OverlayChild.Placeholder] route (ADR-0015). */
 @Composable
 private fun OverlayPlaceholder(onDismiss: () -> Unit) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {

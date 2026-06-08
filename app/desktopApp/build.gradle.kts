@@ -171,4 +171,8 @@ dependencies {
     // The pure desktop-View breakpoint test (DesktopNavKindTest). The shared shell *components* are
     // tested in app/shell's commonTest (ADR-0017), so the desktop no longer duplicates those tests.
     testImplementation(libs.junit)
+    // The desktop New-overlay render/screenshot test (#87, cf. #39): a Compose-Multiplatform UI test
+    // on the JVM-fast path (no device). `uiTestJUnit4` brings `runComposeUiTest` (+ the desktop Skiko
+    // renderer transitively) so the test renders the New View over a real DefaultNewComponent.
+    testImplementation(compose.desktop.uiTestJUnit4)
 }
