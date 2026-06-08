@@ -37,6 +37,8 @@ class CommandKindTest {
                 CommandKind.AddToPlan to "plan.add",
                 CommandKind.RemoveFromPlan to "plan.remove",
                 CommandKind.ReorderPlan to "plan.reorder",
+                CommandKind.StartTask to "task.start",
+                CommandKind.SendTaskToReview to "task.send-to-review",
             ),
             CommandKind.entries.associateWith { it.id.value },
         )
@@ -75,6 +77,8 @@ class CommandKindTest {
         )
         val expected = mapOf(
             //                            Open   InProg InRev  Done   Dropped
+            CommandKind.StartTask to listOf(true, false, true, true, true),
+            CommandKind.SendTaskToReview to listOf(true, true, false, true, true),
             CommandKind.CompleteTask to listOf(true, true, true, false, true),
             CommandKind.ReopenTask to listOf(false, false, false, true, true),
             CommandKind.DropTask to listOf(true, true, true, true, false),
@@ -92,6 +96,8 @@ class CommandKindTest {
         // state — pinned here against a real (non-null) task across the whole catalog, so RemoveFromPlan /
         // ReorderPlan / the edit + schedule + organize kinds are each covered, not just a sample.
         val gated = setOf(
+            CommandKind.StartTask,
+            CommandKind.SendTaskToReview,
             CommandKind.CompleteTask,
             CommandKind.ReopenTask,
             CommandKind.DropTask,

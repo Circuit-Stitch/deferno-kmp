@@ -57,10 +57,21 @@ sealed interface PlanCommand : Command {
 //
 // Each verb is the ONLY command reaching its transition, so there is no "two ways to do the same
 // thing" (there is deliberately no generic SetWorkingState). They differ from each other precisely in
-// their [CommandKind.enabledFor] rule, and each encodes a design principle: completion is a clean
-// finish, Reopen is the "Done is never a dead end" guarantee, Drop is the non-punitive "let it go"
-// (docs/design-principles.md). The intermediate transitions (Start → InProgress, SendToReview →
-// InReview) are deferred until a board/kanban consumer needs them — they add non-breakingly.
+// their [CommandKind.enabledFor] rule, and each encodes a design principle: Start picks the work up,
+// SendToReview hands it on, completion is a clean finish, Reopen is the "Done is never a dead end"
+// guarantee, Drop is the non-punitive "let it go" (docs/design-principles.md). Together the five cover
+// the whole [WorkingState] lattice — the interactive Tasks detail (#73) maps each affordance onto one
+// verb, so the UI never re-derives the transition matrix (ADR-0007).
+
+/** Pick the Task up (`→ WorkingState.InProgress`). Disabled when it is already In progress (#73). */
+data class StartTask(override val taskId: TaskId) : TaskCommand {
+    override val kind: CommandKind get() = CommandKind.StartTask
+}
+
+/** Hand the Task on for review (`→ WorkingState.InReview`). Disabled when it is already In review (#73). */
+data class SendTaskToReview(override val taskId: TaskId) : TaskCommand {
+    override val kind: CommandKind get() = CommandKind.SendTaskToReview
+}
 
 /** Mark the Task done (`→ WorkingState.Done`). Disabled when it is already Done. */
 data class CompleteTask(override val taskId: TaskId) : TaskCommand {

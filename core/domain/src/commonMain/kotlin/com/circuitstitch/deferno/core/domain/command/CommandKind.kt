@@ -23,7 +23,11 @@ value class CommandId(val value: String) {
 
 /** Coarse grouping a palette / context menu uses to section the catalog. */
 enum class CommandCategory {
-    /** Lifecycle transitions ([CommandKind.CompleteTask] / [CommandKind.ReopenTask] / [CommandKind.DropTask]). */
+    /**
+     * Lifecycle transitions across the five [WorkingState]s — [CommandKind.StartTask] /
+     * [CommandKind.SendTaskToReview] / [CommandKind.CompleteTask] / [CommandKind.ReopenTask] /
+     * [CommandKind.DropTask].
+     */
     Status,
 
     /** Content edits (rename, description, delete). */
@@ -71,6 +75,14 @@ enum class CommandKind(
     AddToPlan(CommandId("plan.add"), CommandCategory.Plan),
     RemoveFromPlan(CommandId("plan.remove"), CommandCategory.Plan),
     ReorderPlan(CommandId("plan.reorder"), CommandCategory.Plan),
+
+    // The two intermediate lifecycle verbs (#73): the interactive Tasks detail moves a Task across all
+    // five working states, so the catalog now binds Start (→ InProgress) and SendToReview (→ InReview)
+    // alongside the existing Complete/Reopen/Drop. Appended at the end (CommandIds are a public contract
+    // — never reorder/rename existing entries); each, like the other status verbs, is the ONLY command
+    // reaching its transition (no generic SetWorkingState, Command.kt's "no two ways" note).
+    StartTask(CommandId("task.start"), CommandCategory.Status),
+    SendTaskToReview(CommandId("task.send-to-review"), CommandCategory.Status),
     ;
 
     /**
@@ -90,6 +102,8 @@ enum class CommandKind(
      * the destructive delete carry a real rule.
      */
     fun enabledFor(task: Task?): Boolean = when (this) {
+        StartTask -> task == null || task.workingState != WorkingState.InProgress
+        SendTaskToReview -> task == null || task.workingState != WorkingState.InReview
         CompleteTask -> task == null || task.workingState != WorkingState.Done
         ReopenTask -> task == null || task.workingState.isTerminal
         DropTask -> task == null || task.workingState != WorkingState.Dropped

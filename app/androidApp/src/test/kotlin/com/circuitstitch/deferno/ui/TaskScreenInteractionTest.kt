@@ -3,10 +3,12 @@ package com.circuitstitch.deferno.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
@@ -77,6 +79,33 @@ class TaskScreenInteractionTest {
         assertEquals(1, component.addToPlanCount)
         assertEquals(1, component.showTreeCount)
         assertEquals(1, component.closeCount)
+    }
+
+    @Test
+    fun taskDetail_workingStateChip_forwardsTheSetIntent() {
+        // The Task is Open, so tapping "In progress" forwards a Start (→ InProgress) edit (#73).
+        val task = sampleTask("1", "Plan the spring launch", workingState = WorkingState.Open)
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        setContent { TaskDetailScreen(component) }
+
+        composeRule.onNodeWithContentDescription("Set to In progress").performClick()
+        composeRule.onNodeWithContentDescription("Set to Done").performClick()
+        composeRule.onNodeWithContentDescription("Set to Set aside").performClick()
+
+        assertEquals(
+            listOf(WorkingState.InProgress, WorkingState.Done, WorkingState.Dropped),
+            component.workingStateSets,
+        )
+    }
+
+    @Test
+    fun taskDetail_currentWorkingState_isMarkedSelected() {
+        val task = sampleTask("1", workingState = WorkingState.InReview)
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        setContent { TaskDetailScreen(component) }
+
+        // The current state reads as the selected affordance (not a "Set to" action).
+        composeRule.onNodeWithContentDescription("In review, current working state").assertIsDisplayed()
     }
 
     @Test

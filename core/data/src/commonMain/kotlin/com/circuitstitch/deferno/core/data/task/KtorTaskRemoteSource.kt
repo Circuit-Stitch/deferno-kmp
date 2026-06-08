@@ -6,9 +6,11 @@ import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
 import com.circuitstitch.deferno.core.network.dto.TaskSummaryDto
 import com.circuitstitch.deferno.core.network.mapper.toDomain
+import com.circuitstitch.deferno.core.network.mapper.toWireToken
 import com.circuitstitch.deferno.core.network.requestApi
 import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.parameter
 import io.ktor.http.appendPathSegments
 
 /**
@@ -18,11 +20,14 @@ import io.ktor.http.appendPathSegments
  *
  * - [fetchAll] -> `GET /tasks` -> `List<TaskSummaryDto>` -> [HydrationState.Summary][Task] list.
  * - [fetch]    -> `GET /tasks/{id}` -> `TaskDetailDto` -> [HydrationState.Full][Task].
+ * - [search]   -> `GET /tasks/search?q=…&status=…&label=…&from_date=…&to_date=…` -> summary list (#73).
  *
- * **Offline-first (ADR-0001).** Both reads map an [ApiResult.Failure] to nothing
- * (`emptyList()`/`null`) rather than throwing, so a refresh/hydrate that can't reach the server
- * leaves the local cache intact instead of wiping it. The endpoint paths are not load-bearing for
- * the repository tests (those drive the fake); they follow the contract's `/tasks` + `/tasks/{id}`.
+ * **Offline-first (ADR-0001).** Every read maps an [ApiResult.Failure] to nothing
+ * (`emptyList()`/`null`) rather than throwing, so a refresh/hydrate/search that can't reach the
+ * server leaves the local cache intact instead of wiping it. The endpoint paths are not load-bearing
+ * for the repository tests (those drive the fake); they follow the contract's `/tasks` + `/tasks/{id}`
+ * + `/tasks/search` (the `search_tasks` MCP contract: `query` ≥ 2 chars, `status`, `label`,
+ * `from_date`, `to_date`).
  */
 class KtorTaskRemoteSource(
     private val client: HttpClient,
@@ -45,6 +50,23 @@ class KtorTaskRemoteSource(
         return when (result) {
             is ApiResult.Success -> result.data.toDomain()
             is ApiResult.Failure -> null
+        }
+    }
+
+    override suspend fun search(query: TaskSearchQuery): List<Task> {
+        val result = client.requestApi<List<TaskSummaryDto>> {
+            url { appendPathSegments("tasks", "search") }
+            parameter("q", query.query)
+            // The contract takes a single status + single label; send the first selected of each (the
+            // v1 search UI offers one status-set / label-set, the wire honors one — narrow, not lossy).
+            query.statuses.firstOrNull()?.let { parameter("status", it.toWireToken()) }
+            query.labels.firstOrNull()?.let { parameter("label", it) }
+            query.fromDate?.let { parameter("from_date", it.toString()) }
+            query.toDate?.let { parameter("to_date", it.toString()) }
+        }
+        return when (result) {
+            is ApiResult.Success -> result.data.map { it.toDomain() }
+            is ApiResult.Failure -> emptyList()
         }
     }
 }

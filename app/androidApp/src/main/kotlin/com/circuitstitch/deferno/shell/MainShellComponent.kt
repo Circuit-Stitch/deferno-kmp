@@ -21,9 +21,13 @@ import com.circuitstitch.deferno.feature.plan.DefaultPlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.profile.DefaultProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
+import com.circuitstitch.deferno.feature.tasks.DefaultSearchComponent
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
+import com.circuitstitch.deferno.feature.tasks.SearchComponent
+import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import com.circuitstitch.deferno.feature.tasks.TaskPane
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
+import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -116,8 +120,11 @@ interface MainShellComponent {
 
     /** A shell-level overlay instance the View renders above the foreground Destination (ADR-0015). */
     sealed interface OverlayChild {
-        /** The v1 stand-in until Search (#73) / New (#71) supply real overlay content. */
+        /** The v1 stand-in until New (#71) supplies real overlay content. */
         data object Placeholder : OverlayChild
+
+        /** The global Search overlay (#73): a real route over the same overlay primitive. */
+        class Search(val component: SearchComponent) : OverlayChild
     }
 
     sealed interface Output {
@@ -129,10 +136,13 @@ interface MainShellComponent {
     }
 }
 
-/** The shell-level overlay routes Search/New will become (ADR-0015); v1 ships only [Placeholder]. */
+/** The shell-level overlay routes (ADR-0015): [Placeholder] is the v1 stand-in (New, #71, replaces it). */
 sealed interface OverlayRoute {
     /** The trivial v1 placeholder so the overlay mechanism is wired and testable. */
     data object Placeholder : OverlayRoute
+
+    /** The global Search route (#73) — launched from the ⌕ in any Destination app bar. */
+    data object Search : OverlayRoute
 }
 
 class DefaultMainShellComponent(
@@ -143,6 +153,12 @@ class DefaultMainShellComponent(
     private val account: Account,
     private val today: LocalDate,
     private val timeZone: String,
+    // The Tasks working-state write seam (#73), threaded into the Tasks Destination's component so its
+    // detail can issue lifecycle Commands. Defaults to a no-op so the many shell tests build without it.
+    private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    // The global-search seam (#73): a one-shot, online-only pull the Search overlay drives. Defaults
+    // to "no results" so tests that don't exercise Search build without supplying it.
+    private val searchTasks: SearchTasks = SearchTasks { _ -> emptyList() },
     override val accounts: StateFlow<List<Account>> = MutableStateFlow(emptyList()),
     override val activeAccount: StateFlow<Account?> = MutableStateFlow(null),
     private val onSwitchAccount: (AccountId) -> Unit = {},
@@ -240,6 +256,7 @@ class DefaultMainShellComponent(
                         componentContext = childContext,
                         taskRepository = taskRepository,
                         output = ::onTasksOutput,
+                        workingStateEditor = workingStateEditor,
                         coroutineContext = coroutineContext,
                     ),
                 )
@@ -261,11 +278,36 @@ class DefaultMainShellComponent(
 
     private fun createOverlay(
         route: OverlayRoute,
-        @Suppress("UNUSED_PARAMETER") childContext: ComponentContext,
+        childContext: ComponentContext,
     ): MainShellComponent.OverlayChild =
         when (route) {
             OverlayRoute.Placeholder -> MainShellComponent.OverlayChild.Placeholder
+
+            OverlayRoute.Search ->
+                MainShellComponent.OverlayChild.Search(
+                    DefaultSearchComponent(
+                        componentContext = childContext,
+                        searchTasks = searchTasks,
+                        output = ::onSearchOutput,
+                        coroutineContext = coroutineContext,
+                    ),
+                )
         }
+
+    private fun onSearchOutput(output: SearchComponent.Output) {
+        when (output) {
+            // A result tap opens that Task in the Tasks Destination — dismiss the overlay, switch
+            // laterally, then route the open through the list's public intent (the same path a real
+            // list tap takes, mirroring onPlanOutput).
+            is SearchComponent.Output.OpenTask -> {
+                dismissOverlay()
+                navigation.bringToFront(Config.Tasks)
+                val tasks = stack.value.active.instance as MainShellComponent.DestinationChild.Tasks
+                tasks.component.list.onTaskClicked(output.id)
+            }
+            SearchComponent.Output.Dismissed -> dismissOverlay()
+        }
+    }
 
     private fun onPlanOutput(output: PlanComponent.Output) {
         when (output) {

@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.feature.tasks
 
 import com.circuitstitch.deferno.core.data.task.TaskRepository
+import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -29,6 +30,10 @@ class FakeTaskRepository(initial: List<Task> = emptyList()) : TaskRepository {
     /** Full rows returned by `hydrate()`, keyed by id (summary → full upgrade, #22). */
     var hydrateResults: Map<TaskId, Task> = emptyMap()
 
+    /** Rows the next `search()` returns; the recorded queries let a test assert what was searched (#73). */
+    var searchResults: List<Task> = emptyList()
+    val searchQueries = mutableListOf<TaskSearchQuery>()
+
     override fun observeTasks(): Flow<List<Task>> = tasks
 
     override fun observeTask(id: TaskId): Flow<Task?> =
@@ -46,6 +51,11 @@ class FakeTaskRepository(initial: List<Task> = emptyList()) : TaskRepository {
                 if (current.any { it.id == id }) current.map { if (it.id == id) full else it } else current + full
             }
         }
+    }
+
+    override suspend fun search(query: TaskSearchQuery): List<Task> {
+        searchQueries += query
+        return searchResults
     }
 }
 

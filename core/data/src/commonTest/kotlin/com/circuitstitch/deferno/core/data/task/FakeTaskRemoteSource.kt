@@ -13,7 +13,13 @@ class FakeTaskRemoteSource(
     var snapshot: List<Task> = emptyList(),
     var details: Map<TaskId, Task> = emptyMap(),
     var failNext: Boolean = false,
+    /** Rows the next [search] returns (in server order); the repo applies the client sort over these. */
+    var searchResults: List<Task> = emptyList(),
 ) : TaskRemoteSource {
+
+    /** The [TaskSearchQuery] the last [search] received, for asserting the filters reached the wire. */
+    var lastSearchQuery: TaskSearchQuery? = null
+        private set
 
     override suspend fun fetchAll(): List<Task> {
         if (failNext) return emptyList()
@@ -23,5 +29,11 @@ class FakeTaskRemoteSource(
     override suspend fun fetch(id: TaskId): Task? {
         if (failNext) return null
         return details[id]
+    }
+
+    override suspend fun search(query: TaskSearchQuery): List<Task> {
+        lastSearchQuery = query
+        if (failNext) return emptyList()
+        return searchResults
     }
 }

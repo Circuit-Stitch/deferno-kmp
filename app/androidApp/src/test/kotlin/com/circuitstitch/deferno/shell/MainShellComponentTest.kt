@@ -277,6 +277,51 @@ class MainShellComponentTest {
         assertNull(shell.tasks().detail.value.child)
     }
 
+    // --- Global Search overlay route (#73, ADR-0015) ---
+
+    @Test
+    fun search_opensAboveTheForegroundDestination_andDismissesBackToOrigin() {
+        val shell = shell()
+        assertNull("no overlay initially", shell.overlay.value.child)
+
+        shell.openOverlay(OverlayRoute.Search)
+        val child = shell.overlay.value.child?.instance
+        assertTrue("the Search overlay is pushed above the foreground", child is MainShellComponent.OverlayChild.Search)
+        assertEquals("the foreground Destination is untouched", Destination.Plan, shell.activeDestination())
+
+        shell.dismissOverlay()
+        assertNull("overlay dismissed back to origin", shell.overlay.value.child)
+    }
+
+    @Test
+    fun searchResultTap_opensThatTaskInTheTasksDestination_andDismissesTheOverlay() {
+        val shell = shell()
+        shell.openOverlay(OverlayRoute.Search)
+        val search = (shell.overlay.value.child?.instance as MainShellComponent.OverlayChild.Search).component
+
+        search.onResultClicked(TaskId("t-1"))
+
+        // Mirrors the Plan-tap routing: switch to Tasks, open the Task, and pop the overlay.
+        assertNull("the overlay is dismissed on result tap", shell.overlay.value.child)
+        assertEquals(Destination.Tasks, shell.activeDestination())
+        assertEquals(TaskId("t-1"), shell.tasks().detail.value.child?.instance?.taskId)
+    }
+
+    @Test
+    fun back_dismissesTheSearchOverlayBeforeTheActiveDestinationsInnerState() {
+        val shell = shell()
+        shell.selectDestination(Destination.Tasks)
+        shell.tasks().list.onTaskClicked(TaskId("t-1"))
+        shell.openOverlay(OverlayRoute.Search)
+
+        assertTrue("back dismisses the Search overlay", shell.onBack())
+        assertNull(shell.overlay.value.child)
+        assertNotNull("the Tasks detail is untouched beneath the overlay", shell.tasks().detail.value.child)
+
+        assertTrue("back now dismisses the Tasks detail", shell.onBack())
+        assertNull(shell.tasks().detail.value.child)
+    }
+
     private fun stackPlan(shell: MainShellComponent): MainShellComponent.DestinationChild.Plan =
         shell.stack.value.active.instance as MainShellComponent.DestinationChild.Plan
 }
