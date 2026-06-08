@@ -5,6 +5,9 @@ import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
+import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.SpeechEngineId
+import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -55,5 +58,26 @@ class FakeSettingsWriter(private val repo: FakeSettingsRepository) : SettingsWri
             globalDoneVisibilitySeconds = globalSeconds,
             dashboardDoneVisibilitySeconds = dashboardSeconds,
         )
+    }
+}
+
+/**
+ * In-memory [SpeechEngineCatalog] for the [SettingsComponent] speech-engine tests (#93). Returns a fixed
+ * [fixedOptions] list and records each [select] so the test can assert the device-local choice was
+ * persisted through the catalog (the analogue of [FakeSettingsWriter] for the App setting).
+ */
+class FakeSpeechEngineCatalog(
+    private val fixedOptions: List<SpeechEngineOption> = emptyList(),
+    initial: SpeechEngineId = SpeechEngineId.Whisper,
+) : SpeechEngineCatalog {
+    var current: SpeechEngineId = initial
+        private set
+    val selects = mutableListOf<SpeechEngineId>()
+
+    override suspend fun options(locale: String): List<SpeechEngineOption> = fixedOptions
+    override fun selected(): SpeechEngineId = current
+    override fun select(id: SpeechEngineId) {
+        selects += id
+        current = id
     }
 }

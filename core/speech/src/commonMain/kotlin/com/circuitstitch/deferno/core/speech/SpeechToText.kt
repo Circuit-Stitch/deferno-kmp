@@ -59,6 +59,15 @@ value class SpeechEngineId(val value: String) {
         /** The portable whisper.cpp baseline — the v1 default and the always-available floor (ADR-0018). */
         val Whisper: SpeechEngineId = SpeechEngineId("whisper")
 
+        /**
+         * The **"Automatic"** choice surfaced on the Settings Destination (#93): not a real engine, but
+         * the device-local preference value meaning *"let the [SpeechToTextSelector] rank-pick whatever is
+         * available"*. Because it never matches a registered engine's id, the selector falls through its
+         * preference step to the highest-[rank] available engine — exactly the rank-pick this denotes
+         * (ADR-0018). The v1 default stays [Whisper] (pinned), with Automatic offered as an opt-in.
+         */
+        val Automatic: SpeechEngineId = SpeechEngineId("automatic")
+
         /** The composite [SpeechToTextSelector] itself (the app-facing engine over all registered engines). */
         val Selector: SpeechEngineId = SpeechEngineId("selector")
 

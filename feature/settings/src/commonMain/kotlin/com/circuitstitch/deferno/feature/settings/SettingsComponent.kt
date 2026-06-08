@@ -14,26 +14,39 @@ import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
+import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.SpeechEngineId
+import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 
 /**
  * The Settings Destination's category catalog (#72, ADR-0007 tier 3 / ADR-0015). Every wireframe
- * category is listed — the **backed** ones are functional over `UserSettings` get/patch, the two
- * **unbacked** ones ([Security2FA], [Integrations]) render gentle coming-soon stubs (a deliberate,
- * scoped exception to "no dead ends": a settings list missing obvious rows reads as broken). The
- * View renders one row per entry; tapping one drills into [SettingsChild] for it.
+ * category is listed — the **backed** ones are functional, the two **unbacked** ones ([Security2FA],
+ * [Integrations]) render gentle coming-soon stubs (a deliberate, scoped exception to "no dead ends": a
+ * settings list missing obvious rows reads as broken). The View renders one row per entry; tapping one
+ * drills into [SettingsChild] for it.
+ *
+ * Most backed categories are driven by the Active Account's synced `UserSettings`; [SpeechEngine] is the
+ * exception — a **device-local [[App setting]]** (#93, ADR-0018) over the [SettingsComponent.speechEngine]
+ * read model, **not** `UserSettings`, so it never syncs and never changes on an Account switch. The View
+ * shows its row only when the device has a real speech engine (hidden on platforms whose engine hasn't
+ * landed yet, #94/#95).
  */
 enum class SettingsCategory(val backed: Boolean) {
     Appearance(backed = true),
     TaskBehavior(backed = true),
+    SpeechEngine(backed = true),
     DataPrivacy(backed = true),
     HelpFeedback(backed = true),
     AppPermissions(backed = true),
@@ -41,6 +54,26 @@ enum class SettingsCategory(val backed: Boolean) {
     Account(backed = true),
     Security2FA(backed = false),
     Integrations(backed = false),
+}
+
+/**
+ * The Settings Destination's view of the device-local **speech-engine choice** (#93, ADR-0018) — the
+ * [SpeechEngine] category's state. [options] is `Automatic` + each real engine on this device (each with
+ * its current availability), [selected] is the current device-local choice (default Whisper). [available]
+ * is true only when the device has a real engine; the View shows the [SpeechEngine] row only then, so it
+ * is hidden on platforms whose engine hasn't landed yet (desktop/iOS pre-#94/#95).
+ */
+data class SpeechEngineSettings(
+    val options: List<SpeechEngineOption>,
+    val selected: SpeechEngineId,
+) {
+    /** Whether a real engine is registered on this device (more than just the `Automatic` strategy). */
+    val available: Boolean get() = options.any { it.id != SpeechEngineId.Automatic }
+
+    companion object {
+        /** The pre-options seed (no engines queried yet): the persisted choice with an empty option list. */
+        fun seed(selected: SpeechEngineId): SpeechEngineSettings = SpeechEngineSettings(emptyList(), selected)
+    }
 }
 
 /**
@@ -62,6 +95,13 @@ interface SettingsComponent {
 
     /** The Active Account's settings — drives every backed category and the app-wide live theme. */
     val settings: StateFlow<UserSettings>
+
+    /**
+     * The device-local speech-engine choice ([SettingsCategory.SpeechEngine], #93, ADR-0018) — an
+     * **[[App setting]]**, sourced from the AppScope speech catalog, **not** the synced [settings]. It
+     * never syncs to the backend and never changes when the Active Account switches.
+     */
+    val speechEngine: StateFlow<SpeechEngineSettings>
 
     /** Drill into [category]'s detail (push). */
     fun openCategory(category: SettingsCategory)
@@ -85,6 +125,14 @@ interface SettingsComponent {
 
     /** Data & Privacy: toggle analytics/tracking. */
     fun onTrackingChanged(enabled: Boolean)
+
+    /**
+     * Speech engine: set the device-local engine choice (#93, ADR-0018) — persists device-locally via the
+     * speech catalog, **never** synced. A chosen-but-unavailable engine still records the preference; the
+     * [com.circuitstitch.deferno.core.speech.SpeechToTextSelector] falls back to the whisper floor at
+     * `listen()` time (never cloud), so the choice is honoured the moment that engine becomes available.
+     */
+    fun onSpeechEngineSelected(id: SpeechEngineId)
 
     // --- host-routed intents (Output up to the shell) ---
 
@@ -142,6 +190,14 @@ class DefaultSettingsComponent(
     private val settingsRepository: SettingsRepository,
     private val settingsWriter: SettingsWriter,
     private val output: (SettingsComponent.Output) -> Unit = {},
+    // The device-local speech-engine [[App setting]] (#93, ADR-0018): the AppScope catalog over the
+    // registered engines + device-local preference. Defaulted to the inert [EmptySpeechEngineCatalog] so
+    // the many existing Settings tests build without supplying it — it yields only "Automatic", so the
+    // SpeechEngine row stays hidden (the analogue of the shell's UnavailableSpeechToText default).
+    private val speechEngineCatalog: SpeechEngineCatalog = EmptySpeechEngineCatalog,
+    // The device locale the catalog queries engine availability for (a non-English locale reports
+    // unavailable rather than mis-transcribing, ADR-0018). Defaulted for tests.
+    private val locale: String = "en-US",
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : SettingsComponent, ComponentContext by componentContext {
 
@@ -170,6 +226,21 @@ class DefaultSettingsComponent(
     override val settings: StateFlow<UserSettings> =
         settingsRepository.observeSettings()
             .stateIn(scope, SharingStarted.Eagerly, UserSettings.Default)
+
+    // The device-local speech-engine choice (#93). Seeded synchronously with the persisted choice (an
+    // empty option list → row hidden); the init below fills the options once each engine's suspend
+    // availability resolves. Device-local — sourced from the AppScope catalog, never the synced settings.
+    private val _speechEngine = MutableStateFlow(SpeechEngineSettings.seed(speechEngineCatalog.selected()))
+    override val speechEngine: StateFlow<SpeechEngineSettings> = _speechEngine.asStateFlow()
+
+    init {
+        scope.launch {
+            _speechEngine.value = SpeechEngineSettings(
+                options = speechEngineCatalog.options(locale),
+                selected = speechEngineCatalog.selected(),
+            )
+        }
+    }
 
     // `push` is a DelicateDecomposeApi (a direct imperative push rather than a navigate-transform);
     // intentional here — a tier-3 drill-down is exactly a push/pop stack (the same shape the docs note
@@ -205,6 +276,13 @@ class DefaultSettingsComponent(
 
     override fun onTrackingChanged(enabled: Boolean) {
         scope.launch { settingsWriter.setTracking(enabled) }
+    }
+
+    override fun onSpeechEngineSelected(id: SpeechEngineId) {
+        // Device-local persist (App setting, #93) — not the synced SettingsWriter. A selection doesn't
+        // change availability, so reflect the new choice in place rather than re-querying the options.
+        speechEngineCatalog.select(id)
+        _speechEngine.value = _speechEngine.value.copy(selected = id)
     }
 
     override fun onOpenDataExportImport() = output(SettingsComponent.Output.OpenDataExportImport)

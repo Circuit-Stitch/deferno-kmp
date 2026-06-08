@@ -102,6 +102,9 @@ class MainActivity : ComponentActivity() {
                 // mis-transcribing). The New surface's mic drives this.
                 speechToText = appComponent.speechToText,
                 locale = Locale.getDefault().toLanguageTag(),
+                // Speech engine App setting (#93, ADR-0018): the device-local engine catalog from the same
+                // AppScope graph — the Settings Destination's "Speech engine" row reads + writes it.
+                speechEngineCatalog = appComponent.speechEngineCatalog,
             )
         }
 

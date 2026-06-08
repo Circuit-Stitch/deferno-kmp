@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.database.AccountDatabaseFactory
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.AppScope
+import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.scopes.PlatformContext
 import me.tatarka.inject.annotations.Provides
@@ -73,6 +74,15 @@ abstract class AppComponent(
      * multibinding (and its per-platform engine + preference contributions) on every target.
      */
     abstract val speechToText: SpeechToText
+
+    /**
+     * The device-local **speech-engine choice** read model the Settings Destination renders (#93,
+     * ADR-0018): the registered engines + their availability + the device-local preference, over the same
+     * AppScope multibinding the [speechToText] selector reads. An [[App setting]] — device-local, never
+     * synced, never per-Account — so switching Accounts never changes it. Surfaced here for the Settings
+     * surface and to compile-validate its binding on every target.
+     */
+    abstract val speechEngineCatalog: SpeechEngineCatalog
 
     // --- Bindings re-exposed for the child AccountScope (ADR-0014) ---
     // kotlin-inject-anvil does not auto-propagate a parent's contributed @Provides into a child merge;

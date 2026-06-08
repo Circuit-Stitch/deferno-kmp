@@ -83,6 +83,18 @@ class SpeechToTextSelectorTest {
     }
 
     @Test
+    fun automaticPreference_rankPicks_neverPinsAnEngine() = runTest {
+        // "Automatic" (#93) is the Settings choice meaning "let the selector decide": its id never matches
+        // a registered engine, so the preference step falls through to the highest-rank available engine —
+        // the rank-pick this denotes (ADR-0018). Here the native fast path outranks the whisper floor.
+        val whisper = FakeSpeechToText(whisperId, rank = 0, availability = SpeechAvailability.Available)
+        val native = FakeSpeechToText(nativeId, rank = 10, availability = SpeechAvailability.Available)
+        val selector = selector(whisper, native, preference = InMemorySpeechEnginePreference(SpeechEngineId.Automatic))
+
+        assertEquals(nativeId, selector.select("en-US", ContinuityHint.Utterance)?.id)
+    }
+
+    @Test
     fun continuousHint_dropsEnginesThatDoNotSupportContinuous() = runTest {
         val whisper = FakeSpeechToText(whisperId, rank = 0, supportsContinuous = true, availability = SpeechAvailability.Available)
         val native = FakeSpeechToText(nativeId, rank = 10, supportsContinuous = false, availability = SpeechAvailability.Available)

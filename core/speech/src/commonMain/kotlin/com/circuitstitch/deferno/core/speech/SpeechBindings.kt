@@ -26,4 +26,17 @@ interface SpeechBindings {
         engines: Set<SpeechToText>,
         preference: SpeechEnginePreference,
     ): SpeechToText = SpeechToTextSelector(engines, preference)
+
+    /**
+     * The device-local speech-engine choice surfaced to the Settings Destination (#93, ADR-0018), over
+     * the same `Set<SpeechToText>` multibinding + [SpeechEnginePreference] the [SpeechToTextSelector]
+     * reads — so the Settings row and the selector agree on what is registered and what is chosen. An
+     * AppScope process-singleton: a **device capability**, identity-independent, never per-Account.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun speechEngineCatalog(
+        engines: Set<SpeechToText>,
+        preference: SpeechEnginePreference,
+    ): SpeechEngineCatalog = DefaultSpeechEngineCatalog(engines, preference)
 }

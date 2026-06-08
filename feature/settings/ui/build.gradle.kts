@@ -19,6 +19,9 @@ kotlin {
             implementation(project(":feature:settings"))
             implementation(project(":core:model"))
             implementation(project(":core:designsystem"))
+            // The Speech engine row renders core:speech types directly (SpeechEngineId / SpeechAvailability
+            // labels, the option list) — the device-local App setting (#93, ADR-0018).
+            implementation(project(":core:speech"))
 
             implementation(libs.decompose)
             implementation(libs.decompose.extensions.compose)
@@ -41,6 +44,9 @@ kotlin {
             implementation(project(":feature:settings"))
             implementation(project(":core:model"))
             implementation(project(":core:designsystem"))
+            // The Speech engine row renders core:speech types directly (#93) — though desktop hides the row
+            // until a desktop engine lands (#94), the shared screen still references these types.
+            implementation(project(":core:speech"))
 
             implementation(libs.decompose)
             implementation(libs.decompose.extensions.compose)

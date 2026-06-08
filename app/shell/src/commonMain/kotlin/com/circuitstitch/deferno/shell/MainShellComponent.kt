@@ -22,6 +22,8 @@ import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
 import com.circuitstitch.deferno.feature.calendar.CalendarComponent
@@ -234,6 +236,11 @@ class DefaultMainShellComponent(
     // without supplying them — dictation simply offers no mic.
     private val speechToText: SpeechToText = UnavailableSpeechToText,
     private val locale: String = "en-US",
+    // The device-local speech-engine [[App setting]] (#93, ADR-0018): the AppScope catalog the Settings
+    // Destination reads (registered engines + availability + the device-local choice). Defaulted to the
+    // inert [EmptySpeechEngineCatalog] (only "Automatic" → the Settings row hides) so the many shell tests
+    // build without it; production threads the real catalog from the AppComponent (like speechToText).
+    private val speechEngineCatalog: SpeechEngineCatalog = EmptySpeechEngineCatalog,
 ) : MainShellComponent, ComponentContext by componentContext {
 
     override val destinations: List<Destination> = Destination.entries
@@ -361,6 +368,10 @@ class DefaultMainShellComponent(
                         settingsRepository = settingsRepository,
                         settingsWriter = settingsWriter,
                         output = ::onSettingsOutput,
+                        // The device-local speech-engine App setting (#93) + the device locale its
+                        // availability is queried for — sourced from AppScope, not this Account's settings.
+                        speechEngineCatalog = speechEngineCatalog,
+                        locale = locale,
                         coroutineContext = coroutineContext,
                     ),
                 )

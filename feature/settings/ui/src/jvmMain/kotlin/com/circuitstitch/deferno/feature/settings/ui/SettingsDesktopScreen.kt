@@ -39,8 +39,13 @@ import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
+import com.circuitstitch.deferno.core.speech.SpeechAvailability
+import com.circuitstitch.deferno.core.speech.SpeechEngineId
+import com.circuitstitch.deferno.core.speech.SpeechEngineOption
+import com.circuitstitch.deferno.core.speech.UnavailableReason
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
+import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
 
 /** Minimum height for a clickable row/control — design-principles.md "≥44–48dp" targets. */
 private val MinTouchTarget = 48.dp
@@ -68,13 +73,24 @@ private val MinTouchTarget = 48.dp
 fun SettingsDesktopScreen(component: SettingsComponent, modifier: Modifier = Modifier) {
     val stack by component.stack.subscribeAsState()
     val settings by component.settings.collectAsState()
+    val speechEngine by component.speechEngine.collectAsState()
 
     when (val child = stack.active.instance) {
         SettingsComponent.SettingsChild.List ->
-            SettingsListContent(onOpenCategory = component::openCategory, modifier = modifier)
+            SettingsListContent(
+                onOpenCategory = component::openCategory,
+                speechEngine = speechEngine,
+                modifier = modifier,
+            )
 
         is SettingsComponent.SettingsChild.Detail ->
-            CategoryDetail(category = child.category, settings = settings, component = component, modifier = modifier)
+            CategoryDetail(
+                category = child.category,
+                settings = settings,
+                speechEngine = speechEngine,
+                component = component,
+                modifier = modifier,
+            )
     }
 }
 
@@ -87,6 +103,7 @@ private val DesktopCategories: List<SettingsCategory> =
 @Composable
 internal fun SettingsListContent(
     onOpenCategory: (SettingsCategory) -> Unit,
+    speechEngine: SpeechEngineSettings,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -95,9 +112,12 @@ internal fun SettingsListContent(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         ) {
             DesktopCategories.forEach { category ->
+                // The device-local Speech engine row shows only when this device has a real engine (#93) —
+                // hidden on desktop until a desktop engine lands (#94); shown automatically once it does.
+                if (category == SettingsCategory.SpeechEngine && !speechEngine.available) return@forEach
                 CategoryRow(
                     label = category.title,
-                    summary = if (category.backed) null else "Coming soon",
+                    summary = category.rowSummary(speechEngine),
                     onClick = { onOpenCategory(category) },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -136,6 +156,7 @@ private fun CategoryRow(label: String, summary: String?, onClick: () -> Unit) {
 private fun CategoryDetail(
     category: SettingsCategory,
     settings: UserSettings,
+    speechEngine: SpeechEngineSettings,
     component: SettingsComponent,
     modifier: Modifier = Modifier,
 ) {
@@ -151,6 +172,7 @@ private fun CategoryDetail(
             when (category) {
                 SettingsCategory.Appearance -> AppearanceDetail(settings, component)
                 SettingsCategory.TaskBehavior -> TaskBehaviorDetail(settings, component)
+                SettingsCategory.SpeechEngine -> SpeechEngineDetail(speechEngine, component::onSpeechEngineSelected)
                 SettingsCategory.DataPrivacy -> DataPrivacyDetail(settings, component)
                 SettingsCategory.HelpFeedback -> HelpFeedbackDetail(component)
                 SettingsCategory.Legal -> LegalDetail()
@@ -191,6 +213,25 @@ private fun AppearanceDetail(settings: UserSettings, component: SettingsComponen
             label = mode.label,
             selected = settings.themeMode == mode,
             onSelect = { component.onThemeModeChanged(mode) },
+        )
+    }
+}
+
+@Composable
+private fun SpeechEngineDetail(state: SpeechEngineSettings, onSelect: (SpeechEngineId) -> Unit) {
+    Text(
+        // The App-setting nature, stated plainly (AC #2): device-local, never synced, never per-Account.
+        text = "Choose how dictation turns your voice into text. This stays on this device and isn’t " +
+            "synced to your account.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.defernoColors.inkMuted,
+    )
+    state.options.forEach { option ->
+        EngineChoiceRow(
+            label = speechEngineLabel(option.id),
+            note = speechEngineNote(option),
+            selected = state.selected == option.id,
+            onSelect = { onSelect(option.id) },
         )
     }
 }
@@ -361,6 +402,31 @@ private fun ChoiceRow(label: String, selected: Boolean, onSelect: () -> Unit) {
     }
 }
 
+/** A radio row that, unlike [ChoiceRow], carries an optional [note] subtitle (the engine availability). */
+@Composable
+private fun EngineChoiceRow(label: String, note: String?, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTouchTarget)
+            .selectable(selected = selected, onClick = onSelect),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            if (note != null) {
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.defernoColors.inkMuted,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun ToggleRow(
     label: String,
@@ -438,6 +504,7 @@ private val SettingsCategory.title: String
     get() = when (this) {
         SettingsCategory.Appearance -> "Appearance"
         SettingsCategory.TaskBehavior -> "Task behavior"
+        SettingsCategory.SpeechEngine -> "Speech engine"
         SettingsCategory.DataPrivacy -> "Data & Privacy"
         SettingsCategory.HelpFeedback -> "Help & Feedback"
         SettingsCategory.AppPermissions -> "App Permissions"
@@ -446,6 +513,45 @@ private val SettingsCategory.title: String
         SettingsCategory.Security2FA -> "Security & 2FA"
         SettingsCategory.Integrations -> "Integrations"
     }
+
+/**
+ * The category-row summary line: the Speech engine row shows the current choice (and flags it when the
+ * chosen engine isn't usable yet — AC #3); the unbacked categories show "Coming soon"; the rest show none.
+ */
+private fun SettingsCategory.rowSummary(speechEngine: SpeechEngineSettings): String? = when {
+    this == SettingsCategory.SpeechEngine -> {
+        val selectedOption = speechEngine.options.firstOrNull { it.id == speechEngine.selected }
+        val label = speechEngineLabel(speechEngine.selected)
+        // Flag unavailability when the chosen engine reports Unavailable OR is no longer registered at all
+        // (selected ∉ options) — both mean it can't transcribe now, so the row must reflect that (AC3).
+        val unavailable = selectedOption == null || selectedOption.availability is SpeechAvailability.Unavailable
+        if (unavailable) "$label · unavailable" else label
+    }
+    !backed -> "Coming soon"
+    else -> null
+}
+
+/** The human label for an engine id (View concern, like the nav-suite labels) — `Automatic` leads the row. */
+private fun speechEngineLabel(id: SpeechEngineId): String = when (id) {
+    SpeechEngineId.Automatic -> "Automatic"
+    SpeechEngineId.Whisper -> "Whisper"
+    // Future native fast paths get explicit labels as they land (#96/#97); fall back to a humanised id.
+    else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+}
+
+/** The per-engine subtitle: Automatic explains itself; a real engine shows *why* it isn't usable yet (AC #3). */
+private fun speechEngineNote(option: SpeechEngineOption): String? = when (option.id) {
+    SpeechEngineId.Automatic -> "Use the best engine available on this device"
+    else -> when (val availability = option.availability) {
+        SpeechAvailability.Available -> null
+        is SpeechAvailability.Unavailable -> when (availability.reason) {
+            UnavailableReason.ModelMissing -> "Downloading…"
+            UnavailableReason.UnsupportedLocale -> "Not available for your language"
+            UnavailableReason.NoEngine -> "Not available on this device"
+            UnavailableReason.NotReady -> "Preparing…"
+        }
+    }
+}
 
 private val ThemeFamily.label: String
     get() = when (this) {

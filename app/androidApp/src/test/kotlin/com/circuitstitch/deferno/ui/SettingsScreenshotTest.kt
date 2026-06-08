@@ -34,10 +34,14 @@ class SettingsScreenshotTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private fun component(category: SettingsCategory? = null) = DefaultSettingsComponent(
+    private fun component(
+        category: SettingsCategory? = null,
+        speechEngineCatalog: com.circuitstitch.deferno.core.speech.SpeechEngineCatalog = FakeSpeechEngineCatalog(),
+    ) = DefaultSettingsComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         settingsRepository = FakeSettingsRepository(),
         settingsWriter = FakeSettingsWriter(),
+        speechEngineCatalog = speechEngineCatalog,
         coroutineContext = Dispatchers.Unconfined,
     ).also { if (category != null) it.openCategory(category) }
 
@@ -71,4 +75,30 @@ class SettingsScreenshotTest {
     @Test
     fun comingSoonStub_light() =
         capture("settings_coming_soon_light") { SettingsScreen(component(SettingsCategory.Integrations)) }
+
+    // The device-local Speech engine row (#93) — present only on a device with a real engine. These use a
+    // catalog with Automatic + an available Whisper (the Android v1 shape) so the row + detail render.
+
+    @Test
+    fun categoryList_withSpeechEngineRow_light() =
+        capture("settings_list_speech_light") {
+            SettingsScreen(component(speechEngineCatalog = FakeSpeechEngineCatalog.whisper()))
+        }
+
+    @Test
+    fun speechEngineDetail_light() =
+        capture("settings_speech_engine_light") {
+            SettingsScreen(
+                component(SettingsCategory.SpeechEngine, speechEngineCatalog = FakeSpeechEngineCatalog.whisper()),
+            )
+        }
+
+    /** The unavailable visual state (AC3): the chosen Whisper engine's model is still arriving. */
+    @Test
+    fun speechEngineDetail_unavailable_light() =
+        capture("settings_speech_engine_unavailable_light") {
+            SettingsScreen(
+                component(SettingsCategory.SpeechEngine, speechEngineCatalog = FakeSpeechEngineCatalog.whisperUnavailable()),
+            )
+        }
 }
