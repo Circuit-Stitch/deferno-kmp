@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -58,6 +59,39 @@ class SearchComponentTest {
         assertEquals(listOf(TaskId("a")), component.state.value.results.map { it.id })
         assertTrue(component.state.value.hasSearched)
         assertFalse(component.state.value.isSearching)
+    }
+
+    @Test
+    fun submitCarriesTheChosenDateRangeAndLabelsIntoTheQuery() = runTest {
+        // #73 follow-up DEFECT 3: the search query must carry the date range + tags filters the overlay
+        // collects (not just status + sort). Drives the date-range + label handlers, then asserts both
+        // land in the TaskSearchQuery the seam receives.
+        val search = RecordingSearch(results = emptyList())
+        val component = component(search)
+
+        component.onQueryChanged("spring")
+        component.onLabelToggled("home")
+        component.onLabelToggled("errands")
+        component.onDateRangeChanged(LocalDate(2026, 6, 1), LocalDate(2026, 6, 30))
+        component.onSubmit()
+        advanceUntilIdle()
+
+        val query = search.queries.single()
+        assertEquals(setOf("home", "errands"), query.labels)
+        assertEquals(LocalDate(2026, 6, 1), query.fromDate)
+        assertEquals(LocalDate(2026, 6, 30), query.toDate)
+    }
+
+    @Test
+    fun toggleAddsThenRemovesALabel() = runTest {
+        // Re-toggling a label removes it — the chip is a toggle, so the query never carries a stale tag.
+        val search = RecordingSearch()
+        val component = component(search)
+
+        component.onLabelToggled("home")
+        assertEquals(setOf("home"), component.state.value.labels)
+        component.onLabelToggled("home")
+        assertEquals(emptySet(), component.state.value.labels)
     }
 
     @Test

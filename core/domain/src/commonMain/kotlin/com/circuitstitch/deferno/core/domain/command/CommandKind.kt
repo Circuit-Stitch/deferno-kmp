@@ -24,9 +24,9 @@ value class CommandId(val value: String) {
 /** Coarse grouping a palette / context menu uses to section the catalog. */
 enum class CommandCategory {
     /**
-     * Lifecycle transitions across the five [WorkingState]s — [CommandKind.StartTask] /
-     * [CommandKind.SendTaskToReview] / [CommandKind.CompleteTask] / [CommandKind.ReopenTask] /
-     * [CommandKind.DropTask].
+     * Lifecycle transitions across the five [WorkingState]s — [CommandKind.OpenTask] /
+     * [CommandKind.StartTask] / [CommandKind.SendTaskToReview] / [CommandKind.CompleteTask] /
+     * [CommandKind.ReopenTask] / [CommandKind.DropTask].
      */
     Status,
 
@@ -83,6 +83,14 @@ enum class CommandKind(
     // reaching its transition (no generic SetWorkingState, Command.kt's "no two ways" note).
     StartTask(CommandId("task.start"), CommandCategory.Status),
     SendTaskToReview(CommandId("task.send-to-review"), CommandCategory.Status),
+
+    // The general "set back to Open" verb (#73 follow-up): the interactive five-state editor must be able
+    // to move a Task to Open from ANY non-Open state — including the non-terminal In-progress / In-review.
+    // [ReopenTask] alone can't serve that chip: its enabledFor is terminal-only, so the Open chip from a
+    // non-terminal state produced a command the executor rejected NotApplicable — a silent no-op. OpenTask
+    // is enabled whenever the Task isn't already Open; ReopenTask stays the narrower terminal-only verb.
+    // Appended at the end (CommandIds are a public contract — never reorder/rename existing entries).
+    OpenTask(CommandId("task.open"), CommandCategory.Status),
     ;
 
     /**
@@ -102,6 +110,7 @@ enum class CommandKind(
      * the destructive delete carry a real rule.
      */
     fun enabledFor(task: Task?): Boolean = when (this) {
+        OpenTask -> task == null || task.workingState != WorkingState.Open
         StartTask -> task == null || task.workingState != WorkingState.InProgress
         SendTaskToReview -> task == null || task.workingState != WorkingState.InReview
         CompleteTask -> task == null || task.workingState != WorkingState.Done

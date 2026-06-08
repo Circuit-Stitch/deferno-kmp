@@ -26,6 +26,7 @@ class CommandExecutorTest {
         val ex = executor(tw, pw)
 
         // null current → the enablement gate is skipped, so every command dispatches.
+        ex.execute(OpenTask(id))
         ex.execute(StartTask(id))
         ex.execute(SendTaskToReview(id))
         ex.execute(CompleteTask(id))
@@ -42,6 +43,7 @@ class CommandExecutorTest {
 
         assertEquals(
             listOf(
+                FakeTaskWriter.Call.SetWorkingState(id, WorkingState.Open),
                 FakeTaskWriter.Call.SetWorkingState(id, WorkingState.InProgress),
                 FakeTaskWriter.Call.SetWorkingState(id, WorkingState.InReview),
                 FakeTaskWriter.Call.SetWorkingState(id, WorkingState.Done),
@@ -151,6 +153,44 @@ class CommandExecutorTest {
 
         assertTrue(tw.calls.isEmpty(), "a rejected command must perform no write")
         assertTrue(pw.calls.isEmpty())
+    }
+
+    @Test
+    fun movingToOpenFromANonTerminalStateActuallyWritesAndIsNotRejected() = runTest {
+        // Regression (#73 follow-up): the Tasks-detail five-state editor renders "Open" as always
+        // tappable, so the user must be able to move to Open from ANY non-Open state — including the
+        // non-terminal InProgress / InReview. The full real path: taskCommandFor(Open) → execute(current).
+        // It must dispatch setWorkingState(Open), NOT be rejected NotApplicable as a silent no-op.
+        for (from in listOf(WorkingState.InProgress, WorkingState.InReview, WorkingState.Done, WorkingState.Dropped)) {
+            val tw = FakeTaskWriter()
+            val ex = executor(tw, FakePlanWriter())
+
+            val result = ex.execute(taskCommandFor(id, WorkingState.Open), current = task(workingState = from))
+
+            assertEquals(
+                CommandResult.Accepted(taskCommandFor(id, WorkingState.Open).kind),
+                result,
+                "moving to Open from $from must be accepted, not a silent no-op",
+            )
+            assertEquals(
+                listOf<FakeTaskWriter.Call>(FakeTaskWriter.Call.SetWorkingState(id, WorkingState.Open)),
+                tw.calls,
+                "moving to Open from $from must write setWorkingState(Open)",
+            )
+        }
+    }
+
+    @Test
+    fun movingToOpenWhenAlreadyOpenIsAStaleNoOp() = runTest {
+        // The only no-op transition for Open is the one where the Task is already Open (#73): the
+        // pre-flight gate rejects it before any write, like every other lifecycle verb's self-transition.
+        val tw = FakeTaskWriter()
+        val ex = executor(tw, FakePlanWriter())
+
+        val result = ex.execute(taskCommandFor(id, WorkingState.Open), current = task(workingState = WorkingState.Open))
+
+        assertEquals(RejectionReason.NotApplicable, (result as CommandResult.Rejected).reason)
+        assertTrue(tw.calls.isEmpty(), "a no-op self-transition to Open must write nothing")
     }
 
     @Test

@@ -114,8 +114,13 @@ class KtorTaskRemoteSourceTest {
         assertEquals("spring", params?.get("q"))
         assertEquals("in-progress", params?.get("status"))
         assertEquals("home", params?.get("label"))
-        assertEquals("2026-06-01", params?.get("from_date"))
-        assertEquals("2026-06-30", params?.get("to_date"))
+        // The REST query-param names per the OpenAPI contract (GET /tasks/search) are "from"/"to" —
+        // NOT the MCP search_tasks tool's from_date/to_date (#73 follow-up). Sending from_date/to_date
+        // made the real backend silently ignore the date range.
+        assertEquals("2026-06-01", params?.get("from"))
+        assertEquals("2026-06-30", params?.get("to"))
+        assertNull(params?.get("from_date"), "the MCP tool param name must not leak onto the REST query")
+        assertNull(params?.get("to_date"), "the MCP tool param name must not leak onto the REST query")
         assertEquals(listOf(TaskId("a"), TaskId("b")), tasks.map { it.id })
     }
 

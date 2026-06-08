@@ -20,8 +20,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -33,6 +37,7 @@ import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
+import kotlinx.datetime.LocalDate
 
 /**
  * The global Search overlay View (#73): a thin renderer of [SearchComponent]. It hosts the query
@@ -51,6 +56,8 @@ fun SearchScreen(component: SearchComponent, modifier: Modifier = Modifier) {
         onQueryChanged = component::onQueryChanged,
         onSubmit = component::onSubmit,
         onStatusToggled = component::onStatusToggled,
+        onLabelToggled = component::onLabelToggled,
+        onDateRangeChanged = component::onDateRangeChanged,
         onSortChanged = component::onSortChanged,
         onResultClicked = component::onResultClicked,
         onDismiss = component::onDismiss,
@@ -65,6 +72,8 @@ internal fun SearchContent(
     onQueryChanged: (String) -> Unit,
     onSubmit: () -> Unit,
     onStatusToggled: (WorkingState) -> Unit,
+    onLabelToggled: (String) -> Unit,
+    onDateRangeChanged: (from: LocalDate?, to: LocalDate?) -> Unit,
     onSortChanged: (SearchSort) -> Unit,
     onResultClicked: (TaskId) -> Unit,
     onDismiss: () -> Unit,
@@ -99,6 +108,8 @@ internal fun SearchContent(
                 )
 
                 StatusFilters(selected = state.statuses, onToggle = onStatusToggled)
+                TagsFilter(selected = state.labels, onToggle = onLabelToggled)
+                DateRangeFilter(from = state.fromDate, to = state.toDate, onChange = onDateRangeChanged)
                 SortControl(selected = state.sort, onChange = onSortChanged)
             }
 
@@ -133,6 +144,110 @@ private fun StatusFilters(
         }
     }
 }
+
+/**
+ * The tags/label filter (#73): a small input to add a tag plus a removable chip per currently-selected
+ * label. Adding a tag and tapping a selected chip both forward [onToggle] — the component owns the
+ * toggle semantics (add if absent, remove if present), so this stays a thin renderer (ADR-0007).
+ * Feeds [com.circuitstitch.deferno.core.data.task.TaskSearchQuery.labels].
+ */
+@Composable
+private fun TagsFilter(
+    selected: Set<String>,
+    onToggle: (String) -> Unit,
+) {
+    var draft by remember { mutableStateOf("") }
+    val add = {
+        val tag = draft.trim()
+        if (tag.isNotEmpty()) {
+            onToggle(tag)
+            draft = ""
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = "Tags",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.defernoColors.inkMuted,
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                label = { Text("Add a tag") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { add() }),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Done),
+            )
+            TextButton(onClick = add) { Text("Add tag") }
+        }
+        if (selected.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                selected.forEach { label ->
+                    FilterChip(
+                        selected = true,
+                        onClick = { onToggle(label) },
+                        label = { Text(label) },
+                        modifier = Modifier.semantics { contentDescription = "Remove tag $label" },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The date-range filter (#73): two ISO-date (YYYY-MM-DD) inputs feeding
+ * [com.circuitstitch.deferno.core.data.task.TaskSearchQuery.fromDate]/[toDate]. A full Material
+ * date-range picker is deferred; a blank or unparseable field is treated as "no bound" (`null`), so
+ * the user can clear an end of the range by emptying it. Each edit forwards the current (from, to) pair.
+ */
+@Composable
+private fun DateRangeFilter(
+    from: LocalDate?,
+    to: LocalDate?,
+    onChange: (from: LocalDate?, to: LocalDate?) -> Unit,
+) {
+    var fromText by remember { mutableStateOf(from?.toString() ?: "") }
+    var toText by remember { mutableStateOf(to?.toString() ?: "") }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = "Date range",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.defernoColors.inkMuted,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = fromText,
+                onValueChange = {
+                    fromText = it
+                    onChange(parseIsoDateOrNull(it), parseIsoDateOrNull(toText))
+                },
+                label = { Text("From (YYYY-MM-DD)") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = toText,
+                onValueChange = {
+                    toText = it
+                    onChange(parseIsoDateOrNull(fromText), parseIsoDateOrNull(it))
+                },
+                label = { Text("To (YYYY-MM-DD)") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+/** Parse an ISO `YYYY-MM-DD` string to a [LocalDate], or `null` if blank/malformed (treated as no bound). */
+private fun parseIsoDateOrNull(text: String): LocalDate? =
+    text.trim().takeIf { it.isNotEmpty() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 
 /** The client-side sort control (#73): a chip per [SearchSort] option. */
 @Composable

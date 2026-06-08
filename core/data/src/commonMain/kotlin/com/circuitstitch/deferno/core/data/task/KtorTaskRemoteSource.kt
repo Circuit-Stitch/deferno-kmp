@@ -20,14 +20,15 @@ import io.ktor.http.appendPathSegments
  *
  * - [fetchAll] -> `GET /tasks` -> `List<TaskSummaryDto>` -> [HydrationState.Summary][Task] list.
  * - [fetch]    -> `GET /tasks/{id}` -> `TaskDetailDto` -> [HydrationState.Full][Task].
- * - [search]   -> `GET /tasks/search?q=…&status=…&label=…&from_date=…&to_date=…` -> summary list (#73).
+ * - [search]   -> `GET /tasks/search?q=…&status=…&label=…&from=…&to=…` -> summary list (#73).
  *
  * **Offline-first (ADR-0001).** Every read maps an [ApiResult.Failure] to nothing
  * (`emptyList()`/`null`) rather than throwing, so a refresh/hydrate/search that can't reach the
  * server leaves the local cache intact instead of wiping it. The endpoint paths are not load-bearing
  * for the repository tests (those drive the fake); they follow the contract's `/tasks` + `/tasks/{id}`
- * + `/tasks/search` (the `search_tasks` MCP contract: `query` ≥ 2 chars, `status`, `label`,
- * `from_date`, `to_date`).
+ * + `/tasks/search`. The search query params match the OpenAPI REST contract: `q` (≥ 2 chars),
+ * `status`, `label`, `from`, `to` — note these date params are `from`/`to`, distinct from the MCP
+ * `search_tasks` tool's `from_date`/`to_date`.
  */
 class KtorTaskRemoteSource(
     private val client: HttpClient,
@@ -61,8 +62,11 @@ class KtorTaskRemoteSource(
             // v1 search UI offers one status-set / label-set, the wire honors one — narrow, not lossy).
             query.statuses.firstOrNull()?.let { parameter("status", it.toWireToken()) }
             query.labels.firstOrNull()?.let { parameter("label", it) }
-            query.fromDate?.let { parameter("from_date", it.toString()) }
-            query.toDate?.let { parameter("to_date", it.toString()) }
+            // The REST query-param names are "from"/"to" per the OpenAPI contract (GET /tasks/search) —
+            // NOT the MCP search_tasks tool's from_date/to_date. Using the tool names made the real
+            // backend silently ignore the date range (#73 follow-up).
+            query.fromDate?.let { parameter("from", it.toString()) }
+            query.toDate?.let { parameter("to", it.toString()) }
         }
         return when (result) {
             is ApiResult.Success -> result.data.map { it.toDomain() }
