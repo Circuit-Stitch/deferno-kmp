@@ -23,12 +23,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.LocalDate
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotSame
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotSame
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * The per-scene navigation root (ADR-0013 / ADR-0014): the two-state Shell selected by the Active
@@ -211,7 +211,7 @@ class RootComponentTest {
         // Personal, which we prove by reading the new Profile's bound Account.
         assertTrue(root.activeChild() is RootComponent.Child.Main)
         val secondMain = (root.activeChild() as RootComponent.Child.Main).component
-        assertNotSame("the Main shell is re-keyed for the sibling, not mutated", firstMain, secondMain)
+        assertNotSame(firstMain, secondMain, "the Main shell is re-keyed for the sibling, not mutated")
         secondMain.selectDestination(Destination.Profile)
         assertEquals(
             personal,
@@ -268,17 +268,17 @@ class RootComponentTest {
             personal.id to FakeAccountSession(settingsRepository = personalRepo),
         )
         val root = rootWithSessions(manager) { sessions.getValue(it.id) }
-        assertEquals("opens pointed at Work's theme", ThemeFamily.Deferno, root.themeSettings.value.themeFamily)
+        assertEquals(ThemeFamily.Deferno, root.themeSettings.value.themeFamily, "opens pointed at Work's theme")
 
         // Switch to Personal: the theme re-points to Personal's settings (account isolation, ADR-0002).
         (root.activeChild() as RootComponent.Child.Main).component.let {
             (it as DefaultMainShellComponent).switchAccount(personal.id)
         }
-        assertEquals("re-points to Personal's theme on switch", ThemeFamily.Mono, root.themeSettings.value.themeFamily)
+        assertEquals(ThemeFamily.Mono, root.themeSettings.value.themeFamily, "re-points to Personal's theme on switch")
 
         // The prior account's collector must be cancelled: a later Work-side change must NOT bleed through.
         workRepo.state.value = workRepo.state.value.copy(themeMode = ThemeMode.Light)
-        assertEquals("Work's collector is cancelled — no cross-account bleed", ThemeFamily.Mono, root.themeSettings.value.themeFamily)
+        assertEquals(ThemeFamily.Mono, root.themeSettings.value.themeFamily, "Work's collector is cancelled — no cross-account bleed")
         assertEquals(ThemeMode.Auto, root.themeSettings.value.themeMode)
     }
 

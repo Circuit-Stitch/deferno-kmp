@@ -63,7 +63,7 @@ interface AccountSession {
  * component owns the Account's encrypted DB, repositories, outbox, and command executor; this adapts
  * the slice the shell needs.
  */
-internal class AccountComponentSession(private val component: AccountComponent) : AccountSession {
+class AccountComponentSession(private val component: AccountComponent) : AccountSession {
     override val taskRepository: TaskRepository get() = component.taskRepository
     override val planRepository: PlanRepository get() = component.planRepository
     override val settingsRepository: SettingsRepository get() = component.settingsRepository

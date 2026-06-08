@@ -4,17 +4,20 @@ import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 
 /** A dev Account paired with the PAT to seed it with (#68, ADR-0012). */
-internal data class DevAccount(val account: Account, val token: String)
+data class DevAccount(val account: Account, val token: String)
 
 /**
- * Parses the dev-account PATs surfaced from `local.properties` into [BuildConfig] (#68, ADR-0012) — the
- * interim dev login placeholder until real sign-in (#15). [DefernoApplication] seeds these into the
- * `AccountManager` on a debug build, so the app opens on real staging data.
+ * Parses the dev-account PATs surfaced from `local.properties` into a per-platform generated constant
+ * (`BuildConfig` on Android; #68, ADR-0012) — the interim dev login placeholder until real sign-in
+ * (#15). The host app (`DefernoApplication`) feeds those two strings into [from] and seeds the result
+ * into the `AccountManager` on a debug build, so the app opens on real staging data. Lives in the
+ * shared shell module (Compose-free, ADR-0017) and is pure — it takes the strings as arguments, so it
+ * carries no platform `BuildConfig` reference of its own.
  *
- * Both inputs are blank in a release build (the BuildConfig fields are empty there), so [from] returns
+ * Both inputs are blank in a release build (the generated fields are empty there), so [from] returns
  * an empty list and nothing is ever seeded in production — no PAT ships.
  */
-internal object DevAccounts {
+object DevAccounts {
     /** Id used for the back-compat single-token account. */
     private val DEFAULT_ID = AccountId("dev")
 

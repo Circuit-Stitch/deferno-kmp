@@ -113,12 +113,14 @@ baselineProfile {
 }
 
 dependencies {
-    // The navigation shell (#55, ADR-0013): the RootComponent (Auth ↔ Main shells) + Main shell's
-    // Destination graph (NavigationSuiteScaffold) live in src/main/.../shell over the shared Decompose
-    // components + Android Views. Android-only — a native desktop/iOS shell is its own follow-up, not
-    // this phone layout stretched (ADR-0007). It is backed by the in-memory stub repositories +
-    // SampleData under src/main/.../demo (TEMPORARY until DI lands, ADR-0008). core:designsystem
-    // provides DefernoTheme for the Compose host.
+    // The shared, Compose-free app Shell (ADR-0017): the shell *components* (RootComponent, Main shell
+    // + Destination graph, AccountSession, New, Auth) now live in :app:shell; this module owns only the
+    // Android-native *Views* that render them (RootShell, MainShell's NavigationSuiteScaffold, NewScreen,
+    // in src/main/.../shell) — the phone nav surface, not a desktop/iOS layout stretched (ADR-0007).
+    implementation(project(":app:shell"))
+    // The feature slices: the logic modules supply the component types the Views reference directly
+    // (PlanComponent, TasksComponent, …); the `:ui` submodules supply the Android-native screens.
+    // core:designsystem provides DefernoTheme for the Compose host.
     implementation(project(":feature:tasks"))
     implementation(project(":feature:tasks:ui"))
     implementation(project(":feature:plan"))
@@ -131,14 +133,12 @@ dependencies {
     implementation(project(":feature:settings:ui"))
     implementation(project(":core:model"))
     implementation(project(":core:data"))
-    // The New create surface (#71, ADR-0016) builds the create payload DTOs (CreateTaskPayload, …) the
-    // CreateItem command carries — core:network is `implementation` in core:domain, so name it here.
+    // DefernoEnvironment selects the backend at startup (DefernoApplication) and derives the web-app
+    // origin for the Settings deep-links (MainActivity.webAppUrl, #72).
     implementation(project(":core:network"))
     // The compile-time DI graph (#68, ADR-0014): the app builds AppComponent at startup and an
-    // AccountComponent per Active Account; core:domain supplies the CommandExecutor + AddToPlan command
-    // the shell drives for the offline write path.
+    // AccountComponent per Active Account (createAppComponent / createAccountComponent).
     implementation(project(":core:di"))
-    implementation(project(":core:domain"))
     implementation(project(":core:designsystem"))
     // Decompose: `retainedComponent { }` builds the demo root so it survives configuration changes
     // (rotation) + back-press routing; `subscribeAsState()` observes the tab/slots from Compose.
@@ -176,6 +176,10 @@ dependencies {
     // Roborazzi screenshots without a device, rendering the Views through their public
     // `*Screen(component)` entry points driven by tiny fakes (see src/test). The feature/UI + data
     // modules they touch are already on the main classpath above (testImplementation extends it).
+    // The shell *components* moved to :app:shell (ADR-0017), but the Android-native View interaction
+    // tests still drive DefaultMainShellComponent directly — the New-overlay test supplies a `create`
+    // seam typed in core:domain (CreateItem / CommandResult), so name it for the test classpath only.
+    testImplementation(project(":core:domain"))
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.roborazzi)

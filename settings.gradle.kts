@@ -59,6 +59,11 @@ include(":feature:plan:ui")
 include(":feature:profile:ui")
 include(":feature:settings:ui")
 
+// The shared, Compose-free app Shell library (ADR-0017): the shell *components* (RootComponent, Main
+// shell, Destination graph, AccountSession, New, Auth) rendered three ways by the per-platform Views
+// in the app entry points below. Sits above feature/* and below app/*.
+include(":app:shell")
+
 // Per-platform application entry points.
 include(":app:androidApp")
 include(":app:desktopApp")

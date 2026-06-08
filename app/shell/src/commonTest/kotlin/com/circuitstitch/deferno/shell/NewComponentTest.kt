@@ -2,11 +2,11 @@ package com.circuitstitch.deferno.shell
 
 import com.circuitstitch.deferno.core.domain.command.CreateItem
 import com.circuitstitch.deferno.core.model.ItemKind
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /**
@@ -27,9 +27,9 @@ class NewComponentTest {
     fun eventPayloadCarriesANonEmptyStart() {
         val payload = NewState(selectedKind = ItemKind.Event, title = "standup", start = start).toPayload()
 
-        assertTrue("Event maps to an Event payload", payload is CreateItem.Payload.Event)
-        val event = (payload as CreateItem.Payload.Event).payload
-        assertTrue("the Event start (complete_by) is non-empty", event.completeBy.isNotBlank())
+        assertTrue(payload is CreateItem.Payload.Event, "Event maps to an Event payload")
+        val event = payload.payload // smart-cast via the assertTrue above
+        assertTrue(event.completeBy.isNotBlank(), "the Event start (complete_by) is non-empty")
         assertEquals(start.toString(), event.completeBy)
     }
 
@@ -39,9 +39,9 @@ class NewComponentTest {
         val event = (NewState(selectedKind = ItemKind.Event, title = "standup", start = start)
             .toPayload() as CreateItem.Payload.Event).payload
 
-        assertNull("blank notes must be null, not \"\"", event.description)
-        assertNull("an absent end must be null, not \"\"", event.endTime)
-        assertFalse("the start is never an empty string", event.completeBy.isEmpty())
+        assertNull(event.description, "blank notes must be null, not \"\"")
+        assertNull(event.endTime, "an absent end must be null, not \"\"")
+        assertFalse(event.completeBy.isEmpty(), "the start is never an empty string")
     }
 
     @Test
@@ -52,19 +52,19 @@ class NewComponentTest {
 
         val noEnd = (NewState(selectedKind = ItemKind.Event, title = "standup", start = start)
             .toPayload() as CreateItem.Payload.Event).payload
-        assertNull("no end when not supplied", noEnd.endTime)
+        assertNull(noEnd.endTime, "no end when not supplied")
     }
 
     @Test
     fun anEventWithoutAStartCannotBeSubmitted() {
         // An Event needs a fixed start (AC #2). Title alone is not enough for the Event kind.
         assertFalse(
-            "an Event with no start is not submittable",
             NewState(selectedKind = ItemKind.Event, title = "standup", start = null).canSubmit,
+            "an Event with no start is not submittable",
         )
         assertTrue(
-            "an Event with a start is submittable",
             NewState(selectedKind = ItemKind.Event, title = "standup", start = start).canSubmit,
+            "an Event with a start is submittable",
         )
     }
 
@@ -78,6 +78,6 @@ class NewComponentTest {
         val task = (NewState(selectedKind = ItemKind.Task, title = "buy milk").toPayload()
             as CreateItem.Payload.Task).payload
         assertEquals("buy milk", task.title)
-        assertNull("blank notes never become \"\" on a Task either", task.description)
+        assertNull(task.description, "blank notes never become \"\" on a Task either")
     }
 }

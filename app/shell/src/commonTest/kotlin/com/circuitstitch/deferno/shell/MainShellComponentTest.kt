@@ -17,13 +17,13 @@ import com.circuitstitch.deferno.ui.FakeSettingsWriter
 import com.circuitstitch.deferno.ui.sampleAccount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.LocalDate
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertSame
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 /**
  * The Main shell's Destination graph (ADR-0013 / ADR-0007 tier 1): a registry the nav suite renders,
@@ -107,7 +107,7 @@ class MainShellComponentTest {
 
         // Same Tasks instance, detail still open on the same Task — multiple back stacks, no reset.
         val tasksAgain = shell.tasks()
-        assertSame("the Tasks Destination is retained across the switch", tasks, tasksAgain)
+        assertSame(tasks, tasksAgain, "the Tasks Destination is retained across the switch")
         assertEquals(TaskId("t-1"), tasksAgain.detail.value.child?.instance?.taskId)
     }
 
@@ -162,14 +162,14 @@ class MainShellComponentTest {
         shell.selectDestination(Destination.Tasks)
         shell.tasks().list.onTaskClicked(TaskId("t-1")) // detail open on the Tasks Destination
 
-        assertTrue("dismisses the open detail", shell.onBack())
+        assertTrue(shell.onBack(), "dismisses the open detail")
         assertNull(shell.tasks().detail.value.child)
         assertEquals(Destination.Tasks, shell.activeDestination())
 
-        assertTrue("no pane left → return to the Plan home", shell.onBack())
+        assertTrue(shell.onBack(), "no pane left → return to the Plan home")
         assertEquals(Destination.Plan, shell.activeDestination())
 
-        assertFalse("on the Plan home with nothing to dismiss → not consumed", shell.onBack())
+        assertFalse(shell.onBack(), "on the Plan home with nothing to dismiss → not consumed")
     }
 
     @Test
@@ -183,13 +183,13 @@ class MainShellComponentTest {
 
         // Foreground is the child's detail, with the tree still co-resident behind it.
         assertEquals(TaskId("t-1a"), tasks.detail.value.child?.instance?.taskId)
-        assertNotNull("tree stays open beneath the child detail", tasks.tree.value.child)
+        assertNotNull(tasks.tree.value.child, "tree stays open beneath the child detail")
 
-        assertTrue("back closes the foregrounded child detail", shell.onBack())
-        assertNull("child detail dismissed", tasks.detail.value.child)
-        assertNotNull("tree now revealed", tasks.tree.value.child)
+        assertTrue(shell.onBack(), "back closes the foregrounded child detail")
+        assertNull(tasks.detail.value.child, "child detail dismissed")
+        assertNotNull(tasks.tree.value.child, "tree now revealed")
 
-        assertTrue("back closes the tree", shell.onBack())
+        assertTrue(shell.onBack(), "back closes the tree")
         assertNull(tasks.tree.value.child)
         assertEquals(Destination.Tasks, shell.activeDestination())
     }
@@ -220,7 +220,7 @@ class MainShellComponentTest {
         shell.selectDestination(Destination.Plan)
         shell.selectDestination(Destination.Profile)
 
-        assertSame("the Profile Destination is retained across a lateral switch", profile, shell.profile())
+        assertSame(profile, shell.profile(), "the Profile Destination is retained across a lateral switch")
     }
 
     @Test
@@ -244,7 +244,7 @@ class MainShellComponentTest {
         assertEquals(Destination.Settings, settings.destination)
         assertEquals(
             SettingsComponent.SettingsChild.List,
-            (settings as MainShellComponent.DestinationChild.Settings).component.stack.value.active.instance,
+            settings.component.stack.value.active.instance, // smart-cast via the assertTrue above
         )
     }
 
@@ -260,7 +260,7 @@ class MainShellComponentTest {
         shell.selectDestination(Destination.Settings)
 
         // Same Settings instance, still drilled into Appearance — multiple back stacks, no reset.
-        assertSame("the Settings Destination is retained across the switch", settings, shell.settings())
+        assertSame(settings, shell.settings(), "the Settings Destination is retained across the switch")
         assertTrue(shell.settings().stack.value.active.instance is SettingsComponent.SettingsChild.Detail)
     }
 
@@ -270,14 +270,14 @@ class MainShellComponentTest {
         shell.selectDestination(Destination.Settings)
         shell.settings().openCategory(SettingsCategory.Appearance) // a tier-3 detail open
 
-        assertTrue("back pops the open Settings category detail", shell.onBack())
+        assertTrue(shell.onBack(), "back pops the open Settings category detail")
         assertEquals(
             SettingsComponent.SettingsChild.List,
             shell.settings().stack.value.active.instance,
         )
         assertEquals(Destination.Settings, shell.activeDestination())
 
-        assertTrue("nothing left inside Settings → return to the Plan home", shell.onBack())
+        assertTrue(shell.onBack(), "nothing left inside Settings → return to the Plan home")
         assertEquals(Destination.Plan, shell.activeDestination())
     }
 
@@ -361,14 +361,14 @@ class MainShellComponentTest {
     @Test
     fun overlay_opensAboveTheForegroundDestination_andDismissesBackToOrigin() {
         val shell = shell()
-        assertNull("no overlay initially", shell.overlay.value.child)
+        assertNull(shell.overlay.value.child, "no overlay initially")
 
         shell.openOverlay(OverlayRoute.Placeholder)
-        assertNotNull("overlay pushed above the foreground Destination", shell.overlay.value.child)
-        assertEquals("the foreground Destination is untouched", Destination.Plan, shell.activeDestination())
+        assertNotNull(shell.overlay.value.child, "overlay pushed above the foreground Destination")
+        assertEquals(Destination.Plan, shell.activeDestination(), "the foreground Destination is untouched")
 
         shell.dismissOverlay()
-        assertNull("overlay dismissed back to origin", shell.overlay.value.child)
+        assertNull(shell.overlay.value.child, "overlay dismissed back to origin")
     }
 
     @Test
@@ -379,12 +379,12 @@ class MainShellComponentTest {
         shell.openOverlay(OverlayRoute.Placeholder)
 
         // Back hits the overlay first — the Tasks detail stays open beneath it.
-        assertTrue("back dismisses the overlay", shell.onBack())
+        assertTrue(shell.onBack(), "back dismisses the overlay")
         assertNull(shell.overlay.value.child)
-        assertNotNull("the Tasks detail is untouched beneath the overlay", shell.tasks().detail.value.child)
+        assertNotNull(shell.tasks().detail.value.child, "the Tasks detail is untouched beneath the overlay")
 
         // Then back resumes the normal precedence: dismiss the Tasks detail.
-        assertTrue("back now dismisses the Tasks detail", shell.onBack())
+        assertTrue(shell.onBack(), "back now dismisses the Tasks detail")
         assertNull(shell.tasks().detail.value.child)
     }
 
@@ -393,15 +393,15 @@ class MainShellComponentTest {
     @Test
     fun search_opensAboveTheForegroundDestination_andDismissesBackToOrigin() {
         val shell = shell()
-        assertNull("no overlay initially", shell.overlay.value.child)
+        assertNull(shell.overlay.value.child, "no overlay initially")
 
         shell.openOverlay(OverlayRoute.Search)
         val child = shell.overlay.value.child?.instance
-        assertTrue("the Search overlay is pushed above the foreground", child is MainShellComponent.OverlayChild.Search)
-        assertEquals("the foreground Destination is untouched", Destination.Plan, shell.activeDestination())
+        assertTrue(child is MainShellComponent.OverlayChild.Search, "the Search overlay is pushed above the foreground")
+        assertEquals(Destination.Plan, shell.activeDestination(), "the foreground Destination is untouched")
 
         shell.dismissOverlay()
-        assertNull("overlay dismissed back to origin", shell.overlay.value.child)
+        assertNull(shell.overlay.value.child, "overlay dismissed back to origin")
     }
 
     // --- New overlay route (#71, ADR-0015/0016) ---
@@ -409,15 +409,15 @@ class MainShellComponentTest {
     @Test
     fun newOverlay_opensAboveTheForegroundDestination_andDismissesBackToOrigin() {
         val shell = shell()
-        assertNull("no overlay initially", shell.overlay.value.child)
+        assertNull(shell.overlay.value.child, "no overlay initially")
 
         shell.openOverlay(OverlayRoute.New)
         val child = shell.overlay.value.child?.instance
-        assertTrue("the New create surface is pushed", child is MainShellComponent.OverlayChild.New)
-        assertEquals("the foreground Destination is untouched", Destination.Plan, shell.activeDestination())
+        assertTrue(child is MainShellComponent.OverlayChild.New, "the New create surface is pushed")
+        assertEquals(Destination.Plan, shell.activeDestination(), "the foreground Destination is untouched")
 
         shell.dismissOverlay()
-        assertNull("overlay dismissed back to origin", shell.overlay.value.child)
+        assertNull(shell.overlay.value.child, "overlay dismissed back to origin")
     }
 
     @Test
@@ -429,7 +429,7 @@ class MainShellComponentTest {
         search.onResultClicked(TaskId("t-1"))
 
         // Mirrors the Plan-tap routing: switch to Tasks, open the Task, and pop the overlay.
-        assertNull("the overlay is dismissed on result tap", shell.overlay.value.child)
+        assertNull(shell.overlay.value.child, "the overlay is dismissed on result tap")
         assertEquals(Destination.Tasks, shell.activeDestination())
         assertEquals(TaskId("t-1"), shell.tasks().detail.value.child?.instance?.taskId)
     }
@@ -441,11 +441,11 @@ class MainShellComponentTest {
         shell.tasks().list.onTaskClicked(TaskId("t-1"))
         shell.openOverlay(OverlayRoute.Search)
 
-        assertTrue("back dismisses the Search overlay", shell.onBack())
+        assertTrue(shell.onBack(), "back dismisses the Search overlay")
         assertNull(shell.overlay.value.child)
-        assertNotNull("the Tasks detail is untouched beneath the overlay", shell.tasks().detail.value.child)
+        assertNotNull(shell.tasks().detail.value.child, "the Tasks detail is untouched beneath the overlay")
 
-        assertTrue("back now dismisses the Tasks detail", shell.onBack())
+        assertTrue(shell.onBack(), "back now dismisses the Tasks detail")
         assertNull(shell.tasks().detail.value.child)
     }
 
@@ -455,7 +455,7 @@ class MainShellComponentTest {
         shell.selectDestination(Destination.Tasks)
         shell.openOverlay(OverlayRoute.New)
 
-        assertTrue("back dismisses the New overlay", shell.onBack())
+        assertTrue(shell.onBack(), "back dismisses the New overlay")
         assertNull(shell.overlay.value.child)
         // The Tasks Destination is untouched beneath it (still foreground).
         assertEquals(Destination.Tasks, shell.activeDestination())
@@ -484,7 +484,7 @@ class MainShellComponentTest {
         // The create command was dispatched with a Task payload; an Accepted result dismisses the overlay.
         assertEquals(1, created.size)
         assertTrue(created[0] is com.circuitstitch.deferno.core.domain.command.CreateItem.Payload.Task)
-        assertNull("an accepted create dismisses the overlay", shell.overlay.value.child)
+        assertNull(shell.overlay.value.child, "an accepted create dismisses the overlay")
     }
 
     @Test
@@ -499,7 +499,7 @@ class MainShellComponentTest {
 
         // Offline → gentle "reconnect to save" status, overlay stays open, nothing dismissed.
         assertEquals(NewStatus.Offline, newComponent.state.value.status)
-        assertNotNull("the New overlay stays open while offline", shell.overlay.value.child)
+        assertNotNull(shell.overlay.value.child, "the New overlay stays open while offline")
     }
 
     private fun stackPlan(shell: MainShellComponent): MainShellComponent.DestinationChild.Plan =

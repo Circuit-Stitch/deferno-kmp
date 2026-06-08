@@ -2,12 +2,12 @@ package com.circuitstitch.deferno
 
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 /**
  * The dev-account PAT parser (#68, ADR-0012): turns the `local.properties`-sourced BuildConfig fields
- * into the Accounts [DefernoApplication] seeds. Pure logic — exercised here on the JVM-fast path.
+ * into the Accounts the host app seeds. Pure logic — exercised here on the JVM-fast path.
  */
 class DevAccountsTest {
 
