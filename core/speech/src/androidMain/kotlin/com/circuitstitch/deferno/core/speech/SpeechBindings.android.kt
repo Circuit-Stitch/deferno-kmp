@@ -13,17 +13,17 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
  * from the AppScope graph (the `PlatformContext` unwrap in core:di), exactly as the secure vault does.
  *
  * The engine is contributed `@IntoSet` into the `Set<SpeechToText>` the [SpeechToTextSelector] ranks: the
- * real on-device whisper.cpp engine ([WhisperSpeechToText] — NDK/CMake/JNI + AudioRecord). It reports
- * [UnavailableReason.ModelMissing] until the model is present; the [WhisperModelLocator] is an L1
- * placeholder returning `null`, and the Play Asset Delivery-backed locator (ADR-0019) is wired in #92 L2.
+ * real on-device whisper.cpp engine ([WhisperSpeechToText] — NDK/CMake/JNI + AudioRecord), resolving its
+ * model from the Play Asset Delivery install-time pack ([PlayAssetDeliveryModelLocator], ADR-0019). It
+ * reports [UnavailableReason.ModelMissing] until that pack's weights are present on device.
  */
 @ContributesTo(AppScope::class)
 interface AndroidSpeechBindings {
     @Provides
     @IntoSet
     @SingleIn(AppScope::class)
-    fun androidSpeechEngine(): SpeechToText =
-        WhisperSpeechToText(modelLocator = WhisperModelLocator { null })
+    fun androidSpeechEngine(context: Context): SpeechToText =
+        WhisperSpeechToText(modelLocator = PlayAssetDeliveryModelLocator(context))
 
     /**
      * The device-local speech-engine choice ([[App setting]], ADR-0018), SharedPreferences-backed. The

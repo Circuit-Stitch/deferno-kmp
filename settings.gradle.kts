@@ -76,6 +76,10 @@ include(":app:shell")
 // Kept OUTSIDE `:core:`/`:feature:` so the merged coverage gate never tries to measure native-only code.
 include(":speech-whisper-jni")
 
+// The whisper model's Play Asset Delivery install-time pack (#92, ADR-0019): ships small.en off the
+// base-APK budget. A `com.android.asset-pack` module declared by app/androidApp's `assetPacks`.
+include(":speech-model-pack")
+
 // Per-platform application entry points.
 include(":app:androidApp")
 include(":app:desktopApp")

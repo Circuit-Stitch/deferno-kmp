@@ -103,6 +103,9 @@ androidxProfileinstaller = "1.4.1"
 # plugin (ADR-0019, in [plugins]) tracks AGP, so it carries no version of its own.
 multiplatformSettings = "1.3.0"
 whisper = "1.8.6"
+# Play Asset Delivery runtime (#92, ADR-0019): the AssetPackManager core:speech uses to resolve the
+# install-time whisper-model pack's on-device location at runtime.
+playAssetDelivery = "2.3.0"
 # iOS Swift bridging (ADR-0003): SKIE. NOT WIRED YET — no released SKIE supports Kotlin
 # 2.4.0 as of 2026-06 (latest 0.10.12 tops out at Kotlin 2.3.10), and SKIE asserts the
 # Kotlin version at *configuration* time, so applying it would fail Gradle sync on every
@@ -196,6 +199,10 @@ java-keyring = { group = "com.github.javakeyring", name = "java-keyring", versio
 # commonMain Settings API over SharedPreferences (Android), java.util.prefs (JVM), and NSUserDefaults
 # (iOS). Owned by core/speech — the first multiplatform-settings use. An App setting, never synced.
 multiplatform-settings = { group = "com.russhwolf", name = "multiplatform-settings", version.ref = "multiplatformSettings" }
+
+# Play Asset Delivery runtime (#92, ADR-0019, androidMain only): resolves the install-time whisper-model
+# pack's on-device path via AssetPackManager. The whisper engine reports Available only once it resolves.
+play-asset-delivery = { group = "com.google.android.play", name = "asset-delivery", version.ref = "playAssetDelivery" }
 
 # Networking (issue #17). commonMain: the engine-agnostic client core + ContentNegotiation
 # wired to kotlinx.serialization JSON. Per-target engines: OkHttp (androidMain + jvmMain),

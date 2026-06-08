@@ -68,3 +68,8 @@ keystore.properties
 
 # Profiling
 *.hprof
+
+# On-device whisper model weights (#92, ADR-0019): ~190 MB, fetched into the Play Asset Delivery
+# install-time pack by :speech-model-pack:downloadWhisperModel. Never committed (not self-hosted,
+# not in git) — a clean checkout downloads it on first app build.
+speech-model-pack/src/main/assets/models/

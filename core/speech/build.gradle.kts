@@ -32,6 +32,9 @@ kotlin {
             // KMP android-library target can't host externalNativeBuild, so the native build is a sibling
             // com.android.library module (deferno.android.nativelib).
             implementation(project(":speech-whisper-jni"))
+            // Play Asset Delivery (#92, ADR-0019): resolves the install-time whisper-model pack's
+            // on-device path (PlayAssetDeliveryModelLocator) so the engine reports Available once present.
+            implementation(libs.play.asset.delivery)
         }
 
         commonTest.dependencies {

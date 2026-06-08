@@ -77,7 +77,7 @@ object CoverageConfig {
         "com.circuitstitch.deferno.core.speech.WhisperSpeechToText*",
         "com.circuitstitch.deferno.core.speech.WhisperBridge*",
         "com.circuitstitch.deferno.core.speech.MicAudioSource*",
-        "com.circuitstitch.deferno.core.speech.WhisperModelLocator*",
+        "com.circuitstitch.deferno.core.speech.*ModelLocator*",
         "com.circuitstitch.deferno.core.speech.SettingsSpeechEnginePreference*",
         // Compose @Composable glue (ADR-0006: "thin UI glue"; Views are screenshot-tested, not
         // unit-tested on the headless JVM gate). The design-system colour *tokens* ARE measured
