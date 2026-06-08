@@ -44,6 +44,13 @@ kotlin {
             // BOM resolves, so both compile against the same adaptive API.
             implementation(libs.androidx.material3.adaptive)
             implementation(libs.androidx.material3.adaptive.layout)
+            // The `@Preview` annotation (androidx.compose.ui.tooling.preview, the same one app/androidApp
+            // uses) so the Android-native screens + the commonMain atoms render in the IDE preview pane.
+            // Pulled via the CMP `ui-tooling-preview` artifact (versioned by the Compose plugin) — no
+            // androidx Compose BOM. androidMain only: the androidx-namespaced annotation resolves on the
+            // Android target, so the previews live in Android source sets (where Android Studio renders
+            // them); the commonMain atoms are previewed from androidMain since they're `internal` here.
+            implementation(compose.components.uiToolingPreview)
         }
         // The desktop-native screen: a large-screen two-pane list + detail/tree layout (ADR-0007's
         // tier-2 "1 or 2 panes by size class") — the desktop counterpart of the Android single-pane

@@ -25,6 +25,12 @@ kotlin {
         // commonMain so desktop/iOS get their own native screens (ADR-0007), not this phone layout.
         androidMain.dependencies {
             implementation(project(":feature:plan"))
+            // The `@Preview` annotation (androidx.compose.ui.tooling.preview, the same one app/androidApp
+            // uses) so the Android screen + the commonMain atoms render in the IDE preview pane. Via the
+            // CMP `ui-tooling-preview` artifact (no androidx Compose BOM). androidMain only: the androidx
+            // annotation resolves on the Android target, so previews live where Android Studio renders
+            // them; the commonMain atoms are previewed from androidMain since they're `internal` here.
+            implementation(compose.components.uiToolingPreview)
         }
         // The desktop-native Plan screen: renders the shared PlanComponent, reusing the commonMain
         // atoms (PlanTaskRow, EmptyPlan, …) — `internal`, but visible here because jvmMain shares

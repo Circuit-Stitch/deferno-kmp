@@ -13,6 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.feature.tasks.TaskListComponent
@@ -70,5 +72,28 @@ internal fun TaskListContent(
                 }
             }
         }
+    }
+}
+
+// --- @Preview ---
+
+@Preview
+@Composable
+private fun TaskListContentPreview() {
+    DefernoTheme {
+        TaskListContent(
+            tasks = previewSampleTasks(),
+            isRefreshing = false,
+            onTaskClick = {},
+            onRefresh = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun TaskListContentEmptyPreview() {
+    DefernoTheme {
+        TaskListContent(tasks = emptyList(), isRefreshing = false, onTaskClick = {}, onRefresh = {})
     }
 }

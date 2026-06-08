@@ -19,11 +19,19 @@ kotlin {
         androidMain.dependencies {
             implementation(project(":feature:auth"))
             implementation(project(":core:model"))
+            // Brand theme for the `@Preview`s (DefernoTheme) — the screen itself relies on the host's
+            // theme, but its previews render under the real design system like every other slice's do.
+            implementation(project(":core:designsystem"))
 
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+            // The multiplatform `@Preview` annotation (androidx.compose.ui.tooling.preview, the same one
+            // app/androidApp uses) so the auth screen renders in the IDE preview pane. Pulled via the CMP
+            // `ui-tooling-preview` artifact (versioned by the Compose plugin) — this is a Compose
+            // Multiplatform module with no androidx Compose BOM to version it against.
+            implementation(compose.components.uiToolingPreview)
         }
     }
 }

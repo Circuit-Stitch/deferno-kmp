@@ -22,11 +22,15 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.designsystem.theme.plexMono
 import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
+import kotlin.time.Instant
+import androidx.compose.ui.tooling.preview.Preview
 
 /**
  * The Task detail pane (#27). Thin renderer of [TaskDetailComponent]: observes the hydrating row and
@@ -180,4 +184,57 @@ internal fun workingStateLabel(state: WorkingState): String = when (state) {
     WorkingState.InReview -> "In review"
     WorkingState.Done -> "Done"
     WorkingState.Dropped -> "Set aside"
+}
+
+// --- @Preview ---
+
+/** A small full-detail sample Task for the IDE preview pane (mirrors the demo fixture). */
+private fun previewTask(): Task = Task(
+    id = TaskId("t-1"),
+    orgSlug = "u-deferno",
+    title = "Plan the spring launch",
+    workingState = WorkingState.InProgress,
+    ref = "u-deferno-1",
+    children = listOf(TaskId("t-1a"), TaskId("t-1b"), TaskId("t-1c")),
+    dateCreated = Instant.parse("2026-06-01T09:00:00Z"),
+    description = "Pull the campaign together: write the announcement, run a copy pass with the team, " +
+        "and schedule the post.",
+)
+
+@Preview
+@Composable
+private fun TaskDetailContentPreview() {
+    DefernoTheme {
+        TaskDetailContent(
+            task = previewTask(),
+            isHydrating = false,
+            onClose = {},
+            onShowTree = {},
+            onAddToPlan = {},
+            onSetWorkingState = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun TaskDetailContentNotFoundPreview() {
+    DefernoTheme {
+        TaskDetailContent(
+            task = null,
+            isHydrating = false,
+            onClose = {},
+            onShowTree = {},
+            onAddToPlan = {},
+            onSetWorkingState = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun WorkingStateEditorPreview() {
+    DefernoTheme {
+        WorkingStateEditor(current = WorkingState.InProgress, onSetWorkingState = {})
+    }
 }

@@ -12,7 +12,9 @@ import androidx.compose.material3.adaptive.layout.calculateThreePaneScaffoldValu
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskPane
 import com.circuitstitch.deferno.feature.tasks.TaskTreeComponent
@@ -96,5 +98,16 @@ private fun TasksDetailPane(
             body = "Pick a task on the left to see its details here.",
             modifier = modifier,
         )
+    }
+}
+
+// --- @Preview ---
+
+/** The two-pane placeholder shown when no co-resident slot is open (the adaptive host's "pick a task" state). */
+@Preview
+@Composable
+private fun TasksDetailPaneEmptyPreview() {
+    DefernoTheme {
+        TasksDetailPane(activePane = TaskPane.List, detail = null, tree = null)
     }
 }

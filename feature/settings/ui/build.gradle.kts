@@ -27,6 +27,12 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+            // The multiplatform `@Preview` annotation (androidx.compose.ui.tooling.preview, the same one
+            // app/androidApp uses) so the tier-3 Settings screens render in the IDE preview pane. Pulled
+            // via the CMP `ui-tooling-preview` artifact (versioned by the Compose plugin) — this module
+            // has no androidx Compose BOM to version it against (same reason the icons use the JetBrains
+            // artifact).
+            implementation(compose.components.uiToolingPreview)
             // The handful of nav glyphs the tier-3 drill-down uses (back arrow, the chevron on a
             // category row): `material-icons-core` (the small set, not the ≈37MB extended) — the same
             // choice the shell + desktop nav suite make. The JetBrains Compose Multiplatform artifact

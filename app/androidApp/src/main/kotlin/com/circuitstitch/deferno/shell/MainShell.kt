@@ -48,9 +48,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
@@ -375,3 +377,25 @@ private val Destination.icon: ImageVector
         Destination.Profile -> Icons.Filled.Person
         Destination.Settings -> Icons.Filled.Settings
     }
+
+// --- @Preview ---
+
+@Preview
+@Composable
+private fun ComingSoonPreview() {
+    DefernoTheme {
+        ComingSoon(destination = Destination.Calendar)
+    }
+}
+
+@Preview
+@Composable
+private fun AccountSwitcherPreview() {
+    val accounts = listOf(
+        Account(AccountId("a-1"), "Personal"),
+        Account(AccountId("a-2"), "Work"),
+    )
+    DefernoTheme {
+        AccountSwitcher(accounts = accounts, active = accounts.first(), onSwitch = {})
+    }
+}

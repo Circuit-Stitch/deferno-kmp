@@ -39,11 +39,16 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.designsystem.theme.plexMono
 import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.User
+import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileState
 
@@ -318,5 +323,46 @@ private fun initialsOf(name: String): String {
         parts.isEmpty() -> "?"
         parts.size == 1 -> parts.first().take(1).uppercase()
         else -> (parts.first().take(1) + parts.last().take(1)).uppercase()
+    }
+}
+
+// --- @Preview ---
+
+private fun previewUser(): User = User(
+    id = UserId("u-1"),
+    username = "ada",
+    displayName = "Ada Lovelace",
+    role = "admin",
+    personalOrgId = OrgId("org-1"),
+    orgSlug = "u-ada",
+    isAdmin = true,
+    consoleUrl = "https://console.example.com",
+)
+
+private fun previewAccount(): Account = Account(id = AccountId("a-1"), label = "Personal")
+
+@Preview
+@Composable
+private fun ProfileContentSignedInPreview() {
+    DefernoTheme {
+        ProfileContent(
+            account = previewAccount(),
+            state = ProfileState.SignedIn(previewUser()),
+            onRetry = {},
+            onSignOut = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ProfileContentLoadingPreview() {
+    DefernoTheme {
+        ProfileContent(
+            account = previewAccount(),
+            state = ProfileState.Loading,
+            onRetry = {},
+            onSignOut = {},
+        )
     }
 }

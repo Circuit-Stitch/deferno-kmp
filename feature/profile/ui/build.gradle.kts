@@ -25,6 +25,11 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+            // The multiplatform `@Preview` annotation (androidx.compose.ui.tooling.preview, the same one
+            // app/androidApp uses) so the Profile screen renders in the IDE preview pane. Pulled via the
+            // CMP `ui-tooling-preview` artifact (versioned by the Compose plugin) — this is a Compose
+            // Multiplatform module with no androidx Compose BOM to version it against.
+            implementation(compose.components.uiToolingPreview)
         }
     }
 }

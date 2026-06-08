@@ -35,12 +35,17 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.arkivanov.decompose.router.stack.ChildStack
+import com.arkivanov.decompose.value.Value
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
+import kotlinx.coroutines.flow.StateFlow
+import androidx.compose.ui.tooling.preview.Preview
 
 /** Minimum height for a tappable row/control — design-principles.md "≥44–48dp" touch targets. */
 private val MinTouchTarget = 48.dp
@@ -454,6 +459,81 @@ private val ThemeMode.label: String
         ThemeMode.Dark -> "Dark"
         ThemeMode.Auto -> "Follow system"
     }
+
+// --- @Preview ---
+
+/**
+ * A no-op [SettingsComponent] for the IDE preview pane. The detail sections render off the [UserSettings]
+ * passed in and forward intents through these (preview-inert) methods; they never read [stack]/[settings],
+ * so those stay unimplemented.
+ */
+private object PreviewSettingsComponent : SettingsComponent {
+    override val stack: Value<ChildStack<*, SettingsComponent.SettingsChild>>
+        get() = error("not rendered in @Preview")
+    override val settings: StateFlow<UserSettings>
+        get() = error("not rendered in @Preview")
+
+    override fun openCategory(category: SettingsCategory) = Unit
+    override fun onBack(): Boolean = false
+    override fun onThemeFamilyChanged(family: ThemeFamily) = Unit
+    override fun onThemeModeChanged(mode: ThemeMode) = Unit
+    override fun onDragAndDropChanged(enabled: Boolean) = Unit
+    override fun onDoneVisibilityChanged(globalSeconds: Long?, dashboardSeconds: Long?) = Unit
+    override fun onTrackingChanged(enabled: Boolean) = Unit
+    override fun onOpenDataExportImport() = Unit
+    override fun onOpenSubmitFeedback() = Unit
+    override fun onOpenAppPermissions() = Unit
+    override fun onOpenConsole() = Unit
+    override fun onOpenProfile() = Unit
+}
+
+/** Mirror [CategoryDetail]'s scaffold so a detail section previews as it renders in the screen. */
+@Composable
+private fun PreviewDetailScaffold(content: @Composable () -> Unit) {
+    DefernoTheme {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) { content() }
+    }
+}
+
+@Preview
+@Composable
+private fun SettingsListContentPreview() {
+    DefernoTheme {
+        SettingsListContent(onOpenCategory = {})
+    }
+}
+
+@Preview
+@Composable
+private fun AppearanceDetailPreview() {
+    PreviewDetailScaffold {
+        AppearanceDetail(settings = UserSettings.Default, component = PreviewSettingsComponent)
+    }
+}
+
+@Preview
+@Composable
+private fun TaskBehaviorDetailPreview() {
+    PreviewDetailScaffold {
+        TaskBehaviorDetail(
+            settings = UserSettings(dragAndDropEnabled = true, globalDoneVisibilitySeconds = 86400L),
+            component = PreviewSettingsComponent,
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun ComingSoonDetailPreview() {
+    PreviewDetailScaffold {
+        ComingSoonDetail(
+            body = "Connect Deferno with the other tools you use. Integrations are on the way.",
+        )
+    }
+}
 
 /** The selectable done-visibility windows the View offers (seconds match the contract fixture). */
 private enum class DoneVisibilityWindow(val label: String, val seconds: Long?) {

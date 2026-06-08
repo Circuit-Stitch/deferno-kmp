@@ -10,6 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.feature.tasks.TaskTreeComponent
@@ -58,5 +60,28 @@ internal fun TaskTreeContent(
                 }
             }
         }
+    }
+}
+
+// --- @Preview ---
+
+@Preview
+@Composable
+private fun TaskTreeContentPreview() {
+    DefernoTheme {
+        TaskTreeContent(
+            rootTitle = "Plan the spring launch",
+            children = previewSampleTasks().take(3),
+            onChildClick = {},
+            onClose = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun TaskTreeContentEmptyPreview() {
+    DefernoTheme {
+        TaskTreeContent(rootTitle = "Water the plants", children = emptyList(), onChildClick = {}, onClose = {})
     }
 }

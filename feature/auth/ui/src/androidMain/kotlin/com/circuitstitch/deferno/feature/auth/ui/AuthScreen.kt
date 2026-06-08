@@ -17,8 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.User
+import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.feature.auth.AuthComponent
 import com.circuitstitch.deferno.feature.auth.AuthState
 
@@ -113,4 +117,41 @@ private fun Retryable(title: String, body: String, action: String, onAction: () 
         onClick = onAction,
         modifier = Modifier.padding(top = 16.dp).heightIn(min = 48.dp),
     ) { Text(action) }
+}
+
+// --- @Preview ---
+
+private fun previewUser(): User = User(
+    id = UserId("u-1"),
+    username = "ada",
+    displayName = "Ada Lovelace",
+    role = "member",
+    personalOrgId = OrgId("org-1"),
+    orgSlug = "u-ada",
+    isAdmin = false,
+    consoleUrl = null,
+)
+
+@Preview
+@Composable
+private fun AuthContentSignedInPreview() {
+    DefernoTheme {
+        AuthContent(state = AuthState.SignedIn(previewUser()), onRetry = {})
+    }
+}
+
+@Preview
+@Composable
+private fun AuthContentLoadingPreview() {
+    DefernoTheme {
+        AuthContent(state = AuthState.Loading, onRetry = {})
+    }
+}
+
+@Preview
+@Composable
+private fun AuthContentReauthPreview() {
+    DefernoTheme {
+        AuthContent(state = AuthState.ReauthRequired, onRetry = {})
+    }
 }

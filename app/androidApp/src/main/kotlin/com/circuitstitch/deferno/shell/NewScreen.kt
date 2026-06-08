@@ -24,11 +24,15 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
 import kotlin.time.Instant
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * The **New** create surface View (#71, ADR-0015/0016): an **explicit** Task/Habit/Chore/Event kind
@@ -179,3 +183,41 @@ private val ItemKind.pickerLabel: String
         ItemKind.Chore -> "Chore"
         ItemKind.Event -> "Event"
     }
+
+// --- @Preview ---
+
+/** A render-only [NewComponent] for the preview pane — holds a fixed [NewState], ignores all intents. */
+private class PreviewNewComponent(state: NewState) : NewComponent {
+    override val state: StateFlow<NewState> = MutableStateFlow(state)
+    override fun selectKind(kind: ItemKind) = Unit
+    override fun setTitle(title: String) = Unit
+    override fun setNotes(notes: String) = Unit
+    override fun setStart(start: Instant?) = Unit
+    override fun setEnd(end: Instant?) = Unit
+    override fun submit() = Unit
+    override fun dismiss() = Unit
+}
+
+@Preview
+@Composable
+private fun NewScreenTaskPreview() {
+    DefernoTheme {
+        NewScreen(
+            component = PreviewNewComponent(
+                NewState(selectedKind = ItemKind.Task, title = "Draft the announcement"),
+            ),
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun NewScreenEventOfflinePreview() {
+    DefernoTheme {
+        NewScreen(
+            component = PreviewNewComponent(
+                NewState(selectedKind = ItemKind.Event, title = "Team sync", status = NewStatus.Offline),
+            ),
+        )
+    }
+}

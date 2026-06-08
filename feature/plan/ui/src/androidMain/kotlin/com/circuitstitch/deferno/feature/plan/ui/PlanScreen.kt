@@ -20,7 +20,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.feature.plan.PlanComponent
@@ -83,5 +85,28 @@ internal fun PlanContent(
                 }
             }
         }
+    }
+}
+
+// --- @Preview ---
+
+@Preview
+@Composable
+private fun PlanContentPreview() {
+    DefernoTheme {
+        PlanContent(
+            tasks = previewSamplePlanTasks(),
+            isRefreshing = false,
+            onTaskClick = {},
+            onRefresh = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun PlanContentEmptyPreview() {
+    DefernoTheme {
+        PlanContent(tasks = emptyList(), isRefreshing = false, onTaskClick = {}, onRefresh = {})
     }
 }

@@ -31,13 +31,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.task.SearchSort
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
+import androidx.compose.ui.tooling.preview.Preview
 
 /**
  * The global Search overlay View (#73): a thin renderer of [SearchComponent]. It hosts the query
@@ -296,4 +299,63 @@ private fun sortLabel(sort: SearchSort): String = when (sort) {
     SearchSort.Relevance -> "Best match"
     SearchSort.TitleAsc -> "Title (A–Z)"
     SearchSort.DeadlineAsc -> "Soonest due"
+}
+
+// --- @Preview ---
+
+/** A small sample result row for the IDE preview pane. */
+private fun previewResult(id: String, title: String, workingState: WorkingState): Task = Task(
+    id = TaskId(id),
+    orgSlug = "u-deferno",
+    title = title,
+    workingState = workingState,
+    ref = "u-deferno-$id",
+    dateCreated = Instant.parse("2026-06-01T09:00:00Z"),
+)
+
+@Preview
+@Composable
+private fun SearchContentResultsPreview() {
+    DefernoTheme {
+        SearchContent(
+            state = SearchState(
+                query = "launch",
+                statuses = setOf(WorkingState.InProgress),
+                labels = setOf("work"),
+                sort = SearchSort.Relevance,
+                results = listOf(
+                    previewResult("1", "Plan the spring launch", WorkingState.InProgress),
+                    previewResult("2", "Draft the announcement", WorkingState.Open),
+                    previewResult("3", "Schedule the post", WorkingState.Done),
+                ),
+                hasSearched = true,
+            ),
+            onQueryChanged = {},
+            onSubmit = {},
+            onStatusToggled = {},
+            onLabelToggled = {},
+            onDateRangeChanged = { _, _ -> },
+            onSortChanged = {},
+            onResultClicked = {},
+            onDismiss = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun SearchContentEmptyPreview() {
+    DefernoTheme {
+        SearchContent(
+            state = SearchState(),
+            onQueryChanged = {},
+            onSubmit = {},
+            onStatusToggled = {},
+            onLabelToggled = {},
+            onDateRangeChanged = { _, _ -> },
+            onSortChanged = {},
+            onResultClicked = {},
+            onDismiss = {},
+        )
+    }
 }
