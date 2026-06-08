@@ -29,6 +29,10 @@ kotlin {
             // command executor + commands it drives (add-to-plan, working-state, online-only create);
             // the create-payload DTOs the New surface builds; and the shared model.
             implementation(project(":core:di"))
+            // On-device speech-to-text (#92, ADR-0018): the SpeechToText seam the New surface's
+            // Dictation drives. The production engine is resolved from the DI graph (AppComponent) and
+            // threaded in by the host; tests pass a fake or omit it (dictation simply unavailable).
+            implementation(project(":core:speech"))
             implementation(project(":core:data"))
             implementation(project(":core:domain"))
             implementation(project(":core:network"))
@@ -46,5 +50,10 @@ kotlin {
         // from the deferno.kmp convention; the demo/fake repositories live alongside the tests in
         // commonTest (confined to the test source set — never on a main classpath, ADR-0017), and the
         // shell's main deps (core/feature, Decompose, coroutines, datetime) are visible transitively.
+        commonTest.dependencies {
+            // runTest + the virtual scheduler (advanceUntilIdle/backgroundScope) for the New surface's
+            // Dictation state-machine tests (#92): the streaming listen() Flow is driven deterministically.
+            implementation(libs.kotlinx.coroutines.test)
+        }
     }
 }

@@ -13,6 +13,8 @@ import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserSettings
+import com.circuitstitch.deferno.core.speech.SpeechToText
+import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +79,11 @@ class DefaultRootComponent(
     private val onOpenSubmitFeedback: () -> Unit = {},
     /** Open the Active Account's Zitadel console URL, if any (Settings → Security & 2FA stub, #72). */
     private val onOpenConsoleUrl: (String) -> Unit = {},
+    // Dictation (#92, ADR-0018): the on-device SpeechToText (the AppScope selector) the New surface's mic
+    // drives, and the device locale it recognizes. Threaded down to the Main shell. Defaulted to the
+    // Unavailable floor / English so tests build without them.
+    private val speechToText: SpeechToText = UnavailableSpeechToText,
+    private val locale: String = "en-US",
     coroutineContext: CoroutineContext = Dispatchers.Main,
 ) : RootComponent, ComponentContext by componentContext {
 
@@ -181,6 +188,10 @@ class DefaultRootComponent(
                         // The online-only create seam (#71, ADR-0016): the New overlay dispatches the
                         // CreateItem command through this Account's command executor.
                         create = session::create,
+                        // Dictation (#92, ADR-0018): the AppScope speech engine + device locale the New
+                        // surface's mic drives, threaded through to DefaultNewComponent.
+                        speechToText = speechToText,
+                        locale = locale,
                     ),
                 )
             }
