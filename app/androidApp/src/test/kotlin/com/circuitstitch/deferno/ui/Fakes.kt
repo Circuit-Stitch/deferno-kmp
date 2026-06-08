@@ -124,6 +124,8 @@ internal class FakeSearchComponent(initial: SearchState = SearchState()) : Searc
     override val state: StateFlow<SearchState> = _state
     val queryChanges = mutableListOf<String>()
     val statusToggles = mutableListOf<WorkingState>()
+    val labelToggles = mutableListOf<String>()
+    val dateRangeChanges = mutableListOf<Pair<LocalDate?, LocalDate?>>()
     val sortChanges = mutableListOf<SearchSort>()
     val resultClicks = mutableListOf<TaskId>()
     var submitCount = 0
@@ -135,9 +137,9 @@ internal class FakeSearchComponent(initial: SearchState = SearchState()) : Searc
 
     override fun onQueryChanged(query: String) { queryChanges += query }
     override fun onStatusToggled(status: WorkingState) { statusToggles += status }
-    override fun onLabelToggled(label: String) {}
+    override fun onLabelToggled(label: String) { labelToggles += label }
     override fun onSortChanged(sort: SearchSort) { sortChanges += sort }
-    override fun onDateRangeChanged(from: LocalDate?, to: LocalDate?) {}
+    override fun onDateRangeChanged(from: LocalDate?, to: LocalDate?) { dateRangeChanges += (from to to) }
     override fun onSubmit() { submitCount++ }
     override fun onResultClicked(id: TaskId) { resultClicks += id }
     override fun onDismiss() { dismissCount++ }

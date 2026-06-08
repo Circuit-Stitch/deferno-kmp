@@ -33,6 +33,7 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.ReorderPlan -> ReorderPlan(listOf(TaskId("t1")), SAMPLE_DATE, SAMPLE_TZ)
     CommandKind.StartTask -> StartTask(TaskId("t1"))
     CommandKind.SendTaskToReview -> SendTaskToReview(TaskId("t1"))
+    CommandKind.OpenTask -> OpenTask(TaskId("t1"))
 }
 
 /** Concise [Task] fixture for the enablement tests. */

@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.SearchState
 import com.circuitstitch.deferno.feature.tasks.ui.SearchScreen
+import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -62,6 +63,45 @@ class SearchScreenInteractionTest {
         composeRule.onNodeWithText("Title (A–Z)").performClick()
 
         assertEquals(listOf(SearchSort.TitleAsc), component.sortChanges)
+    }
+
+    @Test
+    fun addingATagForwardsTheLabelToggle() {
+        // #73 follow-up DEFECT 3: the overlay must offer a tags/label control wired to onLabelToggled —
+        // it was a dead handler the View never called.
+        val component = FakeSearchComponent()
+        setContent { SearchScreen(component) }
+
+        composeRule.onNodeWithText("Add a tag").performTextInput("home")
+        composeRule.onNodeWithText("Add tag").performClick()
+
+        assertEquals(listOf("home"), component.labelToggles)
+    }
+
+    @Test
+    fun tappingASelectedTagChipForwardsTheToggleToRemoveIt() {
+        // A selected tag renders as a chip; tapping it toggles it back off (removing it from the query).
+        val component = FakeSearchComponent(SearchState(labels = setOf("errands")))
+        setContent { SearchScreen(component) }
+
+        composeRule.onNodeWithText("errands").performClick()
+
+        assertEquals(listOf("errands"), component.labelToggles)
+    }
+
+    @Test
+    fun enteringADateRangeForwardsTheDateRangeChange() {
+        // #73 follow-up DEFECT 3: the overlay must offer a date-range (from/to) control wired to
+        // onDateRangeChanged — it was a dead handler the View never called.
+        val component = FakeSearchComponent()
+        setContent { SearchScreen(component) }
+
+        composeRule.onNodeWithText("From (YYYY-MM-DD)").performTextInput("2026-06-01")
+        composeRule.onNodeWithText("To (YYYY-MM-DD)").performTextInput("2026-06-30")
+
+        // Both edits forward the current (from, to) pair; the last carries both parsed dates.
+        assertEquals(LocalDate(2026, 6, 1) to null, component.dateRangeChanges.first())
+        assertEquals(LocalDate(2026, 6, 1) to LocalDate(2026, 6, 30), component.dateRangeChanges.last())
     }
 
     @Test

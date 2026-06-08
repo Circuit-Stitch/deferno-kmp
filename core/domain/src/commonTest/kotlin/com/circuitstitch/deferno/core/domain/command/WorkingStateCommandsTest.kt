@@ -17,7 +17,9 @@ class WorkingStateCommandsTest {
 
     @Test
     fun everyWorkingStateMapsToItsOneLifecycleVerb() {
-        assertEquals(ReopenTask(id), taskCommandFor(id, WorkingState.Open))
+        // Open maps to OpenTask, NOT ReopenTask (#73 follow-up): the editor must reach Open from any
+        // non-Open state, while ReopenTask stays the narrower terminal-only "reopen a finished Task" verb.
+        assertEquals(OpenTask(id), taskCommandFor(id, WorkingState.Open))
         assertEquals(StartTask(id), taskCommandFor(id, WorkingState.InProgress))
         assertEquals(SendTaskToReview(id), taskCommandFor(id, WorkingState.InReview))
         assertEquals(CompleteTask(id), taskCommandFor(id, WorkingState.Done))

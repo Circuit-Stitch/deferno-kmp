@@ -55,13 +55,18 @@ sealed interface PlanCommand : Command {
 
 // --- Status: semantic lifecycle verbs (the agent / keyboard / Siri vocabulary ADR-0007 names) ---
 //
-// Each verb is the ONLY command reaching its transition, so there is no "two ways to do the same
-// thing" (there is deliberately no generic SetWorkingState). They differ from each other precisely in
-// their [CommandKind.enabledFor] rule, and each encodes a design principle: Start picks the work up,
+// Each verb encodes a design principle: Open sets the work back to the start, Start picks it up,
 // SendToReview hands it on, completion is a clean finish, Reopen is the "Done is never a dead end"
-// guarantee, Drop is the non-punitive "let it go" (docs/design-principles.md). Together the five cover
-// the whole [WorkingState] lattice — the interactive Tasks detail (#73) maps each affordance onto one
-// verb, so the UI never re-derives the transition matrix (ADR-0007).
+// guarantee, Drop is the non-punitive "let it go" (docs/design-principles.md). The interactive Tasks
+// detail (#73) maps each five-state affordance onto exactly one verb, so the UI never re-derives the
+// transition matrix (ADR-0007).
+//
+// There is still no generic SetWorkingState(state) command: a verb's identity (its name + telemetry +
+// agent/OS-intent vocabulary) is the point. [OpenTask] and [ReopenTask] both target `Open`, but they
+// are NOT two ways to do the same thing — they differ in their [CommandKind.enabledFor] rule: OpenTask
+// moves to Open from any non-Open state (what the working-state editor needs), while ReopenTask is the
+// narrower, terminal-only "reopen a finished Task" affordance a context menu still surfaces on a
+// Done/Dropped row. [taskCommandFor] maps the editor's Open chip onto OpenTask.
 
 /** Pick the Task up (`→ WorkingState.InProgress`). Disabled when it is already In progress (#73). */
 data class StartTask(override val taskId: TaskId) : TaskCommand {
@@ -76,6 +81,20 @@ data class SendTaskToReview(override val taskId: TaskId) : TaskCommand {
 /** Mark the Task done (`→ WorkingState.Done`). Disabled when it is already Done. */
 data class CompleteTask(override val taskId: TaskId) : TaskCommand {
     override val kind: CommandKind get() = CommandKind.CompleteTask
+}
+
+/**
+ * Move the Task back to the start of its lifecycle (`→ WorkingState.Open`) from **any** non-Open
+ * state (#73). This is the general "set it back to Open" verb the interactive five-state editor maps
+ * the Open chip onto — disabled only when the Task is already Open.
+ *
+ * It is distinct from [ReopenTask]: that one is the narrower, forgiving "Done is never a dead end"
+ * affordance, gated to a *terminal* (Done/Dropped) Task only. Keeping both means a context menu can
+ * still surface "Reopen" specifically on a finished Task while the working-state editor offers a plain
+ * "Open" from In-progress / In-review without the terminal-only gate swallowing it as a no-op.
+ */
+data class OpenTask(override val taskId: TaskId) : TaskCommand {
+    override val kind: CommandKind get() = CommandKind.OpenTask
 }
 
 /** Reopen a finished Task (`→ WorkingState.Open`) — the forgiving "Done is never a dead end" path. */

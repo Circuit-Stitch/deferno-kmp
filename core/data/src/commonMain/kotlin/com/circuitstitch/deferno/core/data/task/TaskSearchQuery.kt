@@ -9,9 +9,10 @@ import kotlinx.datetime.LocalDate
  * chips: this is the **one-shot, online-only** search surface, not the offline observed list (ADR-0001
  * reads are local `Flow`s — search results are never written into the live cache).
  *
- * The backend `search_tasks` contract takes `query` (min 2 chars), an optional `status`, a single
- * `label`, and `from_date`/`to_date`. [TaskRepository.search] honors the same shape; the sort is
- * applied client-side ([SearchSort]).
+ * The backend `GET /tasks/search` contract takes `q` (min 2 chars), an optional `status`, a single
+ * `label`, and a `from`/`to` date range. [TaskRepository.search] honors the same shape; the sort is
+ * applied client-side ([SearchSort]). (The MCP `search_tasks` tool names the date range
+ * `from_date`/`to_date`, but the REST query params are `from`/`to` — see [KtorTaskRemoteSource].)
  *
  * @property query the free-text term (title + description); the search guard requires ≥ 2 chars.
  * @property statuses the [WorkingState]s to include; empty = no status filter (all states).
