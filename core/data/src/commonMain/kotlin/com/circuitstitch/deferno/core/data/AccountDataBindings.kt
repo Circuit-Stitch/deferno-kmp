@@ -16,6 +16,10 @@ import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.habit.HabitRepository
 import com.circuitstitch.deferno.core.data.habit.OfflineHabitRepository
 import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceRepository
+import com.circuitstitch.deferno.core.data.occurrence.OfflineOccurrenceRepository
+import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
@@ -91,6 +95,12 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun eventLocalStore(db: DefernoDatabase): EventLocalStore = SqlDelightEventLocalStore(db)
 
+    // The Occurrence (firing-level) local store (#71, AC #4): the per-Account SQLDelight cache an
+    // occurrence read from the kind-scoped endpoint seeds into, so it joins the observe Flow (ADR-0001).
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun occurrenceLocalStore(db: DefernoDatabase): OccurrenceLocalStore = SqlDelightOccurrenceLocalStore(db)
+
     @Provides
     @SingleIn(AccountScope::class)
     fun taskRepository(
@@ -119,6 +129,11 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun eventRepository(localStore: EventLocalStore): EventRepository = OfflineEventRepository(localStore)
+
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun occurrenceRepository(localStore: OccurrenceLocalStore): OccurrenceRepository =
+        OfflineOccurrenceRepository(localStore)
 
     /**
      * The online-only create + convert writer (#71, ADR-0016). It bypasses the outbox entirely (a
