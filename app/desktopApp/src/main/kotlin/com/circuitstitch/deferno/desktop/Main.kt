@@ -251,7 +251,7 @@ private fun handleRootKey(event: KeyEvent, root: RootComponent, onQuit: () -> Un
             main != null
         }
         Key.N -> {
-            main?.openOverlay(OverlayRoute.New())
+            main?.openNew()
             main != null
         }
         Key.F -> {
@@ -311,7 +311,7 @@ private fun DefernoMenuBar(
                     ) { dismiss(); main.selectDestination(destination) }
                 }
                 HorizontalDivider()
-                MenuRow(text = "New…", shortcut = "Ctrl+N") { dismiss(); main.openOverlay(OverlayRoute.New()) }
+                MenuRow(text = "New…", shortcut = "Ctrl+N") { dismiss(); main.openNew() }
                 MenuRow(text = "Search…", shortcut = "Ctrl+F") { dismiss(); main.openOverlay(OverlayRoute.Search) }
                 HorizontalDivider()
                 MenuRow(text = "Refresh", shortcut = "Ctrl+R") { dismiss(); main.refreshActiveDestination() }
@@ -337,7 +337,7 @@ private fun DefernoMenuBar(
             // the toolbar counterparts of Ctrl+F / Ctrl+N. Pushed to the trailing edge by the spacer.
             Spacer(Modifier.weight(1f))
             ToolbarAction(text = "Search") { main.openOverlay(OverlayRoute.Search) }
-            ToolbarAction(text = "+ New") { main.openOverlay(OverlayRoute.New()) }
+            ToolbarAction(text = "+ New") { main.openNew() }
         }
     }
 }
@@ -403,6 +403,19 @@ private fun MenuRow(
             }
         },
     )
+}
+
+/**
+ * Open the **New** create overlay, pre-dated to the Calendar's selected day when the Calendar is the
+ * foreground Destination (the desktop counterpart of the Android calendar FAB, #74) — an undated New
+ * elsewhere. The date stays the Calendar's concern: it routes through the component's
+ * `onNewForSelectedDay`, which emits CreateForDay and lets the shared shell open New(date).
+ */
+private fun MainShellComponent.openNew() {
+    when (val active = stack.value.active.instance) {
+        is MainShellComponent.DestinationChild.Calendar -> active.component.onNewForSelectedDay()
+        else -> openOverlay(OverlayRoute.New())
+    }
 }
 
 /** Refresh the data of whichever Destination is foreground (the View → Refresh / Ctrl+R action). */
