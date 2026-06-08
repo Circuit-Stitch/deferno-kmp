@@ -13,6 +13,11 @@ import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
+import com.circuitstitch.deferno.core.speech.DefaultSpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.InMemorySpeechEnginePreference
+import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.SpeechEngineId
 import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
@@ -60,6 +65,7 @@ class RootComponentTest {
     /** A root whose Main child is built from a per-Account [sessionFor] — for the theme re-pointing tests. */
     private fun rootWithSessions(
         manager: AccountManager,
+        speechEngineCatalog: SpeechEngineCatalog = EmptySpeechEngineCatalog,
         sessionFor: (Account) -> AccountSession,
     ) = DefaultRootComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
@@ -69,6 +75,7 @@ class RootComponentTest {
         onSignIn = {},
         today = today,
         timeZone = "UTC",
+        speechEngineCatalog = speechEngineCatalog,
         coroutineContext = Dispatchers.Unconfined,
     )
 
@@ -219,6 +226,41 @@ class RootComponentTest {
                 .component.account,
         )
         assertEquals(personal, manager.activeAccount.value)
+    }
+
+    // --- device-local speech-engine App setting (#93, ADR-0018, AC2: "never changes on Account switch") ---
+
+    @Test
+    fun speechEngineChoice_survivesAccountSwitch_isDeviceLocalNotPerAccount() {
+        // The inverse of the synced theme (which re-points per Account): the speech engine is a device-local
+        // App setting, so the choice must survive an Account switch unchanged (AC2). One catalog is shared
+        // across every Main rebuild — the AppScope catalog production threads, not a per-Account one.
+        val personal = Account(AccountId("personal"), "Personal")
+        val manager = FakeAccountManager(active = account).also { it.signIn(personal); it.activate(account.id) }
+        val catalog = DefaultSpeechEngineCatalog(emptySet(), InMemorySpeechEnginePreference())
+        val root = rootWithSessions(manager, speechEngineCatalog = catalog) { FakeAccountSession() }
+
+        // On Work, choose "Automatic" via the Settings Destination.
+        val workMain = (root.activeChild() as RootComponent.Child.Main).component
+        workMain.selectDestination(Destination.Settings)
+        val workSettings =
+            (workMain.stack.value.active.instance as MainShellComponent.DestinationChild.Settings).component
+        workSettings.onSpeechEngineSelected(SpeechEngineId.Automatic)
+        assertEquals(SpeechEngineId.Automatic, workSettings.speechEngine.value.selected)
+
+        // Switch to Personal: the Main shell is re-keyed (per-Account isolation, ADR-0002), but the
+        // device-local speech choice persists — it is NOT rebuilt per Account.
+        workMain.switchAccount(personal.id)
+        val personalMain = (root.activeChild() as RootComponent.Child.Main).component
+        assertNotSame(workMain, personalMain, "the Main shell is re-keyed for the switch")
+        personalMain.selectDestination(Destination.Settings)
+        val personalSettings =
+            (personalMain.stack.value.active.instance as MainShellComponent.DestinationChild.Settings).component
+        assertEquals(
+            SpeechEngineId.Automatic,
+            personalSettings.speechEngine.value.selected,
+            "the device-local speech choice survives the Account switch (it is not per-Account)",
+        )
     }
 
     // --- app-wide live-theme StateFlow re-pointing (#72, AC: "Appearance applies live app-wide") ---

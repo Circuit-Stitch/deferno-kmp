@@ -13,6 +13,8 @@ import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserSettings
+import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
@@ -84,6 +86,10 @@ class DefaultRootComponent(
     // Unavailable floor / English so tests build without them.
     private val speechToText: SpeechToText = UnavailableSpeechToText,
     private val locale: String = "en-US",
+    // The device-local speech-engine [[App setting]] (#93, ADR-0018): the AppScope catalog the Settings
+    // Destination reads. Threaded down to the Main shell. Defaulted to the inert [EmptySpeechEngineCatalog]
+    // (only "Automatic" → the row hides) so tests build without it; production passes the AppComponent's.
+    private val speechEngineCatalog: SpeechEngineCatalog = EmptySpeechEngineCatalog,
     coroutineContext: CoroutineContext = Dispatchers.Main,
 ) : RootComponent, ComponentContext by componentContext {
 
@@ -192,6 +198,8 @@ class DefaultRootComponent(
                         // surface's mic drives, threaded through to DefaultNewComponent.
                         speechToText = speechToText,
                         locale = locale,
+                        // The device-local speech-engine App setting (#93) the Settings Destination reads.
+                        speechEngineCatalog = speechEngineCatalog,
                     ),
                 )
             }

@@ -5,6 +5,11 @@ import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
+import com.circuitstitch.deferno.core.speech.SpeechAvailability
+import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.SpeechEngineId
+import com.circuitstitch.deferno.core.speech.SpeechEngineOption
+import com.circuitstitch.deferno.core.speech.UnavailableReason
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -26,6 +31,7 @@ class SettingsComponentTest {
     private fun component(
         initial: UserSettings = UserSettings.Default,
         output: (SettingsComponent.Output) -> Unit = {},
+        speechEngineCatalog: SpeechEngineCatalog = FakeSpeechEngineCatalog(),
     ): Triple<DefaultSettingsComponent, FakeSettingsRepository, FakeSettingsWriter> {
         val repo = FakeSettingsRepository(initial)
         val writer = FakeSettingsWriter(repo)
@@ -34,10 +40,20 @@ class SettingsComponentTest {
             settingsRepository = repo,
             settingsWriter = writer,
             output = output,
+            speechEngineCatalog = speechEngineCatalog,
             coroutineContext = Dispatchers.Unconfined,
         )
         return Triple(component, repo, writer)
     }
+
+    /** A catalog offering Automatic + an available Whisper — the Android v1 shape (a real engine present). */
+    private fun whisperCatalog() = FakeSpeechEngineCatalog(
+        fixedOptions = listOf(
+            SpeechEngineOption(SpeechEngineId.Automatic, SpeechAvailability.Available),
+            SpeechEngineOption(SpeechEngineId.Whisper, SpeechAvailability.Available),
+        ),
+        initial = SpeechEngineId.Whisper,
+    )
 
     @Test
     fun opensAtTheCategoryList() {
@@ -162,11 +178,79 @@ class SettingsComponentTest {
 
     @Test
     fun everyWireframeCategoryIsListed_backedAndUnbacked() {
-        // The catalog must render ALL wireframe categories (#72): seven backed + two coming-soon stubs.
-        assertEquals(7, SettingsCategory.entries.count { it.backed })
+        // The catalog must render ALL categories (#72): eight backed (incl. the device-local Speech
+        // engine, #93) + two coming-soon stubs.
+        assertEquals(8, SettingsCategory.entries.count { it.backed })
         assertEquals(
             listOf(SettingsCategory.Security2FA, SettingsCategory.Integrations),
             SettingsCategory.entries.filterNot { it.backed },
         )
+    }
+
+    // --- Speech engine: the device-local App setting (#93, ADR-0018) ---
+
+    @Test
+    fun speechEngine_exposesCatalogOptions_andDefaultsToWhisper() {
+        val (component, _, _) = component(speechEngineCatalog = whisperCatalog())
+
+        val state = component.speechEngine.value
+        assertEquals(listOf(SpeechEngineId.Automatic, SpeechEngineId.Whisper), state.options.map { it.id })
+        assertEquals(SpeechEngineId.Whisper, state.selected)
+        assertTrue(state.available, "a real engine (whisper) is registered, so the row shows")
+    }
+
+    @Test
+    fun selectingASpeechEngine_persistsThroughCatalog_andReflectsImmediately() {
+        val catalog = whisperCatalog()
+        val (component, _, _) = component(speechEngineCatalog = catalog)
+
+        component.onSpeechEngineSelected(SpeechEngineId.Automatic)
+
+        // Persisted device-locally through the catalog (App setting) — NOT the synced SettingsWriter.
+        assertEquals(listOf(SpeechEngineId.Automatic), catalog.selects)
+        assertEquals(SpeechEngineId.Automatic, catalog.current)
+        assertEquals(SpeechEngineId.Automatic, component.speechEngine.value.selected)
+    }
+
+    @Test
+    fun speechEngineRow_isHidden_whenNoRealEngineOnThisDevice() {
+        // Desktop/iOS pre-engine (#94/#95): the catalog yields only the Automatic strategy.
+        val onlyAutomatic = FakeSpeechEngineCatalog(
+            fixedOptions = listOf(SpeechEngineOption(SpeechEngineId.Automatic, SpeechAvailability.Available)),
+        )
+        val (component, _, _) = component(speechEngineCatalog = onlyAutomatic)
+
+        assertFalse(component.speechEngine.value.available, "only Automatic → no real engine → row hidden")
+    }
+
+    @Test
+    fun selectingAnUnavailableEngine_stillRecordsThePreference() {
+        // AC3: a chosen-but-unavailable engine still records the preference (the selector falls back to the
+        // whisper floor at listen() time, never cloud), so the choice is honoured once it becomes available.
+        val nativeId = SpeechEngineId("native-fast-path")
+        val catalog = FakeSpeechEngineCatalog(
+            fixedOptions = listOf(
+                SpeechEngineOption(SpeechEngineId.Automatic, SpeechAvailability.Available),
+                SpeechEngineOption(SpeechEngineId.Whisper, SpeechAvailability.Available),
+                SpeechEngineOption(nativeId, SpeechAvailability.Unavailable(UnavailableReason.ModelMissing)),
+            ),
+        )
+        val (component, _, _) = component(speechEngineCatalog = catalog)
+
+        component.onSpeechEngineSelected(nativeId)
+
+        assertEquals(listOf(nativeId), catalog.selects)
+        assertEquals(nativeId, component.speechEngine.value.selected)
+    }
+
+    @Test
+    fun speechEngineCategory_drillsDownAndBacksOut_likeAnyCategory() {
+        val (component, _, _) = component(speechEngineCatalog = whisperCatalog())
+
+        component.openCategory(SettingsCategory.SpeechEngine)
+        val detail = assertIs<SettingsComponent.SettingsChild.Detail>(component.stack.value.active.instance)
+        assertEquals(SettingsCategory.SpeechEngine, detail.category)
+
+        assertTrue(component.onBack(), "back pops the Speech engine detail to the list")
     }
 }

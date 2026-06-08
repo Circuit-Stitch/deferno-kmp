@@ -16,6 +16,11 @@ import com.circuitstitch.deferno.core.model.User
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.speech.SpeechAvailability
+import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.SpeechEngineId
+import com.circuitstitch.deferno.core.speech.SpeechEngineOption
+import com.circuitstitch.deferno.core.speech.UnavailableReason
 import com.circuitstitch.deferno.feature.auth.AuthComponent
 import com.circuitstitch.deferno.feature.auth.AuthState
 import com.circuitstitch.deferno.feature.plan.PlanComponent
@@ -270,6 +275,47 @@ internal class FakeSettingsWriter(private val repo: FakeSettingsRepository = Fak
         repo.state.value = repo.state.value.copy(
             globalDoneVisibilitySeconds = globalSeconds,
             dashboardDoneVisibilitySeconds = dashboardSeconds,
+        )
+    }
+}
+
+/**
+ * In-memory [SpeechEngineCatalog] for the Settings speech-engine View tests (#93). Returns a fixed
+ * option list and records each [select] so a test can assert the device-local choice persisted. The
+ * [whisper] factory mirrors the Android v1 shape (Automatic + an available Whisper); the default empty
+ * list yields only "Automatic" → the Settings row hides (the desktop/no-engine case).
+ */
+internal class FakeSpeechEngineCatalog(
+    private val fixedOptions: List<SpeechEngineOption> = emptyList(),
+    initial: SpeechEngineId = SpeechEngineId.Whisper,
+) : SpeechEngineCatalog {
+    var current: SpeechEngineId = initial
+        private set
+    val selects = mutableListOf<SpeechEngineId>()
+
+    override suspend fun options(locale: String): List<SpeechEngineOption> = fixedOptions
+    override fun selected(): SpeechEngineId = current
+    override fun select(id: SpeechEngineId) {
+        selects += id
+        current = id
+    }
+
+    companion object {
+        fun whisper(): FakeSpeechEngineCatalog = FakeSpeechEngineCatalog(
+            fixedOptions = listOf(
+                SpeechEngineOption(SpeechEngineId.Automatic, SpeechAvailability.Available),
+                SpeechEngineOption(SpeechEngineId.Whisper, SpeechAvailability.Available),
+            ),
+            initial = SpeechEngineId.Whisper,
+        )
+
+        /** Whisper selected but its model still arriving (#93 AC3) — the unavailable visual state. */
+        fun whisperUnavailable(): FakeSpeechEngineCatalog = FakeSpeechEngineCatalog(
+            fixedOptions = listOf(
+                SpeechEngineOption(SpeechEngineId.Automatic, SpeechAvailability.Available),
+                SpeechEngineOption(SpeechEngineId.Whisper, SpeechAvailability.Unavailable(UnavailableReason.ModelMissing)),
+            ),
+            initial = SpeechEngineId.Whisper,
         )
     }
 }

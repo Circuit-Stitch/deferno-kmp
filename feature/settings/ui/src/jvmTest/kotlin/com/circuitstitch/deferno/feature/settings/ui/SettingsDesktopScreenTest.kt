@@ -17,6 +17,10 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
+import com.circuitstitch.deferno.core.speech.SpeechAvailability
+import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.SpeechEngineId
+import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import com.circuitstitch.deferno.feature.settings.DefaultSettingsComponent
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
@@ -24,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -40,10 +45,12 @@ class SettingsDesktopScreenTest {
         repo: FakeSettingsRepository,
         writer: FakeSettingsWriter,
         category: SettingsCategory? = null,
+        speechEngineCatalog: SpeechEngineCatalog = FakeSpeechEngineCatalog(),
     ): SettingsComponent = DefaultSettingsComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         settingsRepository = repo,
         settingsWriter = writer,
+        speechEngineCatalog = speechEngineCatalog,
         coroutineContext = Dispatchers.Unconfined,
     ).also { if (category != null) it.openCategory(category) }
 
@@ -58,6 +65,30 @@ class SettingsDesktopScreenTest {
         onNodeWithText("Security & 2FA").assertExists()
         // App Permissions is omitted on desktop — there is no per-app OS settings screen (ADR-0017).
         onNodeWithText("App Permissions").assertDoesNotExist()
+        // The device-local Speech engine row is hidden where no engine is registered (#93) — desktop has
+        // none until #94, so the shared screen shows nothing rather than a dead "Automatic"-only row.
+        onNodeWithText("Speech engine").assertDoesNotExist()
+    }
+
+    @Test
+    fun speechEngineRow_shows_andSelecting_persists_whenADesktopEngineIsPresent() = runComposeUiTest {
+        // Forward-compat for the desktop engine (#94): once one is registered the shared screen renders the
+        // device-local Speech engine row + detail (the same path Android takes), and selecting persists it.
+        val repo = FakeSettingsRepository()
+        val catalog = FakeSpeechEngineCatalog(
+            fixedOptions = listOf(
+                SpeechEngineOption(SpeechEngineId.Automatic, SpeechAvailability.Available),
+                SpeechEngineOption(SpeechEngineId.Whisper, SpeechAvailability.Available),
+            ),
+        )
+        setContent {
+            Themed { SettingsDesktopScreen(component(repo, FakeSettingsWriter(repo), speechEngineCatalog = catalog)) }
+        }
+
+        onNodeWithText("Speech engine").performClick()
+        onNodeWithText("Automatic").performClick()
+
+        assertEquals(listOf(SpeechEngineId.Automatic), catalog.selects)
     }
 
     @Test
@@ -108,4 +139,21 @@ private class FakeSettingsWriter(private val repo: FakeSettingsRepository) : Set
     override suspend fun setTracking(enabled: Boolean) = Unit
     override suspend fun setDragAndDrop(enabled: Boolean) = Unit
     override suspend fun setDoneVisibility(globalSeconds: Long?, dashboardSeconds: Long?) = Unit
+}
+
+/** In-memory [SpeechEngineCatalog] recording each [select] (#93); empty options → the row hides. */
+private class FakeSpeechEngineCatalog(
+    private val fixedOptions: List<SpeechEngineOption> = emptyList(),
+    initial: SpeechEngineId = SpeechEngineId.Whisper,
+) : SpeechEngineCatalog {
+    var current: SpeechEngineId = initial
+        private set
+    val selects = mutableListOf<SpeechEngineId>()
+
+    override suspend fun options(locale: String): List<SpeechEngineOption> = fixedOptions
+    override fun selected(): SpeechEngineId = current
+    override fun select(id: SpeechEngineId) {
+        selects += id
+        current = id
+    }
 }

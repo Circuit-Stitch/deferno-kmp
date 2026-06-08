@@ -10,6 +10,11 @@ import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.ThemeFamily
+import com.circuitstitch.deferno.core.speech.SpeechAvailability
+import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
+import com.circuitstitch.deferno.core.speech.SpeechEngineId
+import com.circuitstitch.deferno.core.speech.SpeechEngineOption
+import com.circuitstitch.deferno.core.speech.UnavailableReason
 import com.circuitstitch.deferno.feature.settings.DefaultSettingsComponent
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.ui.SettingsScreen
@@ -38,10 +43,12 @@ class SettingsScreenInteractionTest {
     private fun component(
         repo: FakeSettingsRepository = FakeSettingsRepository(),
         writer: FakeSettingsWriter = FakeSettingsWriter(repo),
+        speechEngineCatalog: SpeechEngineCatalog = FakeSpeechEngineCatalog(),
     ) = DefaultSettingsComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         settingsRepository = repo,
         settingsWriter = writer,
+        speechEngineCatalog = speechEngineCatalog,
         coroutineContext = Dispatchers.Unconfined,
     )
 
@@ -157,5 +164,50 @@ class SettingsScreenInteractionTest {
         composeRule.onNodeWithText("Integrations").performClick()
         // It opens a real detail explaining the coming-soon state (not a dead tap).
         composeRule.onNodeWithText("Coming soon").assertIsDisplayed()
+    }
+
+    // --- Speech engine: the device-local App setting (#93, ADR-0018) ---
+
+    @Test
+    fun speechEngineRow_isHidden_whenThisDeviceHasNoRealEngine() {
+        // The default catalog yields only "Automatic" (no real engine) — the desktop/iOS pre-engine case.
+        setContent { SettingsScreen(component()) }
+
+        composeRule.onNodeWithText("Speech engine").assertDoesNotExist()
+    }
+
+    @Test
+    fun speechEngineRow_shows_andSelectingAutomatic_persistsTheDeviceLocalChoice() {
+        val catalog = FakeSpeechEngineCatalog.whisper()
+        setContent { SettingsScreen(component(speechEngineCatalog = catalog)) }
+
+        // The row shows on a device with a real engine (Android, whisper), summarised by the current choice.
+        composeRule.onNodeWithText("Speech engine").performClick()
+        // The detail lists Automatic + Whisper; choose Automatic.
+        composeRule.onNodeWithText("Whisper").assertIsDisplayed()
+        composeRule.onNodeWithText("Automatic").performClick()
+
+        // Persisted device-locally through the catalog — never the synced SettingsWriter.
+        assertEquals(listOf(SpeechEngineId.Automatic), catalog.selects)
+    }
+
+    @Test
+    fun speechEngineRow_reflectsUnavailability_inSummaryAndDetailNote() {
+        // AC3 "the row reflects unavailability": Whisper is registered but its model is still arriving.
+        val catalog = FakeSpeechEngineCatalog(
+            fixedOptions = listOf(
+                SpeechEngineOption(SpeechEngineId.Automatic, SpeechAvailability.Available),
+                SpeechEngineOption(SpeechEngineId.Whisper, SpeechAvailability.Unavailable(UnavailableReason.ModelMissing)),
+            ),
+            initial = SpeechEngineId.Whisper,
+        )
+        setContent { SettingsScreen(component(speechEngineCatalog = catalog)) }
+
+        // The list row summary flags the chosen-but-unavailable engine.
+        composeRule.onNodeWithText("Whisper · unavailable").assertIsDisplayed()
+
+        // Drilling in, the per-engine note explains WHY (the ModelMissing → "Downloading…" mapping).
+        composeRule.onNodeWithText("Speech engine").performClick()
+        composeRule.onNodeWithText("Downloading…").assertIsDisplayed()
     }
 }
