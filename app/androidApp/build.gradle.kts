@@ -125,6 +125,8 @@ dependencies {
     implementation(project(":feature:tasks:ui"))
     implementation(project(":feature:plan"))
     implementation(project(":feature:plan:ui"))
+    implementation(project(":feature:calendar"))
+    implementation(project(":feature:calendar:ui"))
     implementation(project(":feature:auth"))
     implementation(project(":feature:auth:ui"))
     implementation(project(":feature:profile"))

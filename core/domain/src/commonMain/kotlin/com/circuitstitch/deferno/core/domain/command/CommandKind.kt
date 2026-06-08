@@ -44,6 +44,9 @@ enum class CommandCategory {
 
     /** New-item creation + post-creation kind conversion ([CommandKind.CreateItem] / [CommandKind.ConvertItem]). */
     Create,
+
+    /** Acting on one dated firing from the Calendar — mark / clear / reschedule ([CommandKind.MarkOccurrence] …). */
+    Occurrence,
 }
 
 /**
@@ -101,6 +104,14 @@ enum class CommandKind(
     // agent / OS-intent layer reads to surface the connectivity requirement rather than failing silently.
     CreateItem(CommandId("item.create"), CommandCategory.Create, onlineOnly = true),
     ConvertItem(CommandId("item.convert"), CommandCategory.Create, onlineOnly = true),
+
+    // Acting on a Calendar firing (#74): mark / clear / reschedule one Occurrence. Offline-first (these
+    // target an existing firing — unlike create), so NOT onlineOnly. Appended at the end (CommandIds are a
+    // public contract — never reorder/rename existing entries). The per-kind action set (a habit has no
+    // start/skip; reschedule is Events-only) is gated by the View, not here, so these always apply.
+    MarkOccurrence(CommandId("occurrence.mark"), CommandCategory.Occurrence),
+    ClearOccurrence(CommandId("occurrence.clear"), CommandCategory.Occurrence),
+    RescheduleOccurrence(CommandId("occurrence.reschedule"), CommandCategory.Occurrence),
     ;
 
     /**
@@ -131,14 +142,21 @@ enum class CommandKind(
     }
 
     companion object {
-        /** The catalog a Task context menu / palette section offers (the per-Task kinds, not plan/create). */
+        /** The catalog a Task context menu / palette section offers (the per-Task kinds only). */
         val taskKinds: List<CommandKind>
-            get() = entries.filter { it.category != CommandCategory.Plan && it.category != CommandCategory.Create }
+            get() = entries.filter {
+                it.category != CommandCategory.Plan &&
+                    it.category != CommandCategory.Create &&
+                    it.category != CommandCategory.Occurrence
+            }
 
         /** The catalog a Plan view offers. */
         val planKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Plan }
 
         /** The create + convert catalog the New surface / convert affordance offers (ADR-0016, #71). */
         val createKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Create }
+
+        /** The catalog the Calendar day agenda offers for acting on a firing (#74). */
+        val occurrenceKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Occurrence }
     }
 }

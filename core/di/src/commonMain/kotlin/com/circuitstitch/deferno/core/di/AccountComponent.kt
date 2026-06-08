@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.di
 
+import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreRepository
 import com.circuitstitch.deferno.core.data.event.EventRepository
 import com.circuitstitch.deferno.core.data.habit.HabitRepository
@@ -75,6 +76,13 @@ abstract class AccountComponent(
      * real accessor — observe-only over the local cache, like the recurring-definition repositories.
      */
     abstract val occurrenceRepository: OccurrenceRepository
+
+    /**
+     * The Calendar feed read repository (#74): the windowed month grid + day agenda source, observed
+     * from the local cache. Exposing it anchors anvil's compile-time validation of the calendar chain
+     * (store + series-kind index → DB, repo → AppScope feed source) and gives the shell its accessor.
+     */
+    abstract val calendarRepository: CalendarRepository
 
     /** The command-registry dispatch site (ADR-0007) over this Account's write seams. */
     abstract val commandExecutor: CommandExecutor

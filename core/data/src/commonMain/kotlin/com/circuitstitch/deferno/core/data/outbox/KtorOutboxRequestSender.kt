@@ -60,5 +60,6 @@ internal fun outcomeFor(status: Int): SendOutcome = when {
 private fun OutboxMethod.toKtor(): HttpMethod = when (this) {
     OutboxMethod.Patch -> HttpMethod.Patch
     OutboxMethod.Post -> HttpMethod.Post
+    OutboxMethod.Put -> HttpMethod.Put
     OutboxMethod.Delete -> HttpMethod.Delete
 }

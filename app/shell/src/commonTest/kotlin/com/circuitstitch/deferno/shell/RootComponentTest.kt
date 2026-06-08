@@ -354,6 +354,23 @@ private class FakeAccountSession(
             workingStateSets += id to target
         }
 
+    override val calendarRepository: com.circuitstitch.deferno.core.data.calendar.CalendarRepository =
+        object : com.circuitstitch.deferno.core.data.calendar.CalendarRepository {
+            override fun observeMarkers(from: LocalDate, to: LocalDate) =
+                kotlinx.coroutines.flow.MutableStateFlow<Map<LocalDate, Int>>(emptyMap())
+            override fun observeDay(date: LocalDate) =
+                kotlinx.coroutines.flow.MutableStateFlow<List<com.circuitstitch.deferno.core.model.CalendarItem>>(emptyList())
+            override suspend fun refreshWindow(from: LocalDate, to: LocalDate, tz: String) {}
+            override suspend fun reconcile() {}
+        }
+
+    override val occurrenceEditor: com.circuitstitch.deferno.feature.calendar.OccurrenceEditor =
+        object : com.circuitstitch.deferno.feature.calendar.OccurrenceEditor {
+            override suspend fun mark(itemId: String, action: com.circuitstitch.deferno.core.model.OccurrenceAction) {}
+            override suspend fun clear(itemId: String) {}
+            override suspend fun reschedule(itemId: String, newDate: LocalDate) {}
+        }
+
     override suspend fun create(
         payload: com.circuitstitch.deferno.core.domain.command.CreateItem.Payload,
     ): com.circuitstitch.deferno.core.domain.command.CommandResult {

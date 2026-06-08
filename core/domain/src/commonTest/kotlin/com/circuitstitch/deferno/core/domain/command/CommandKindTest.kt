@@ -42,6 +42,9 @@ class CommandKindTest {
                 CommandKind.OpenTask to "task.open",
                 CommandKind.CreateItem to "item.create",
                 CommandKind.ConvertItem to "item.convert",
+                CommandKind.MarkOccurrence to "occurrence.mark",
+                CommandKind.ClearOccurrence to "occurrence.clear",
+                CommandKind.RescheduleOccurrence to "occurrence.reschedule",
             ),
             CommandKind.entries.associateWith { it.id.value },
         )
@@ -145,16 +148,26 @@ class CommandKindTest {
     }
 
     @Test
-    fun taskPlanAndCreateKindsPartitionTheCatalog() {
+    fun taskPlanCreateAndOccurrenceKindsPartitionTheCatalog() {
         assertEquals(
             CommandKind.entries.toSet(),
-            (CommandKind.taskKinds + CommandKind.planKinds + CommandKind.createKinds).toSet(),
+            (CommandKind.taskKinds + CommandKind.planKinds + CommandKind.createKinds + CommandKind.occurrenceKinds).toSet(),
         )
         assertTrue(CommandKind.taskKinds.none { it in CommandKind.planKinds }, "the filters must be disjoint")
         assertTrue(CommandKind.taskKinds.none { it in CommandKind.createKinds }, "the filters must be disjoint")
+        assertTrue(CommandKind.taskKinds.none { it in CommandKind.occurrenceKinds }, "the filters must be disjoint")
         assertTrue(CommandKind.planKinds.none { it in CommandKind.createKinds }, "the filters must be disjoint")
+        assertTrue(CommandKind.planKinds.none { it in CommandKind.occurrenceKinds }, "the filters must be disjoint")
+        assertTrue(CommandKind.createKinds.none { it in CommandKind.occurrenceKinds }, "the filters must be disjoint")
         assertTrue(CommandKind.planKinds.all { it.category == CommandCategory.Plan })
         assertTrue(CommandKind.createKinds.all { it.category == CommandCategory.Create })
-        assertTrue(CommandKind.taskKinds.none { it.category == CommandCategory.Plan || it.category == CommandCategory.Create })
+        assertTrue(CommandKind.occurrenceKinds.all { it.category == CommandCategory.Occurrence })
+        assertTrue(
+            CommandKind.taskKinds.none {
+                it.category == CommandCategory.Plan ||
+                    it.category == CommandCategory.Create ||
+                    it.category == CommandCategory.Occurrence
+            },
+        )
     }
 }

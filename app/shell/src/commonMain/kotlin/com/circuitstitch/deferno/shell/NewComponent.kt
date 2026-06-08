@@ -11,6 +11,9 @@ import com.circuitstitch.deferno.core.network.dto.RecurrenceDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlin.time.Instant
 
 /**
@@ -42,6 +45,13 @@ interface NewComponent {
     /** Set the Event's optional **end** (`end_time`); `null` clears it (omitted from the POST). */
     fun setEnd(end: Instant?)
 
+    /**
+     * Set the item's **date** (#74) — the day a Task/Habit/Chore anchors to, mapped to `complete_by`.
+     * It is also the Event's fallback start when no explicit [setStart] is given. `null` clears it. This
+     * is the field the Calendar FAB pre-dates to the selected day.
+     */
+    fun setDate(date: LocalDate?)
+
     /** Submit the per-kind form via the online-only create path. */
     fun submit()
 
@@ -61,18 +71,21 @@ data class NewState(
     // one; a location is a documented backend follow-up, not invented on the wire.)
     val start: Instant? = null,
     val end: Instant? = null,
+    // The item's date (#74): the Task/Habit/Chore `complete_by` anchor, and the Event's fallback start.
+    // The Calendar FAB pre-dates this to the selected day; the New form surfaces it for the non-Event kinds.
+    val date: LocalDate? = null,
     val status: NewStatus = NewStatus.Editing,
 ) {
     /**
      * Create is enabled only with a non-blank title (the one universally-required field) — and, for an
-     * **Event**, a chosen [start] (a bare Event create with no start POSTs `complete_by:""`, which the
-     * server rejects — FIX 1, AC #2). The recurring kinds default their cadence (recurrence picker is a
-     * documented v1 follow-up), so they need no extra field here.
+     * **Event**, a fixed start: either an explicit [start] or a pre-dated [date] fallback (a bare Event
+     * create with no start POSTs `complete_by:""`, which the server rejects — FIX 1, AC #2). The
+     * recurring kinds default their cadence (recurrence picker is a documented v1 follow-up).
      */
     val canSubmit: Boolean
         get() = title.isNotBlank() &&
             status != NewStatus.Submitting &&
-            (selectedKind != ItemKind.Event || start != null)
+            (selectedKind != ItemKind.Event || start != null || date != null)
 }
 
 /** Where the New surface is in its create lifecycle. */
@@ -96,9 +109,13 @@ class DefaultNewComponent(
     private val create: suspend (CreateItem.Payload) -> CommandResult,
     private val onCreated: () -> Unit,
     private val launch: (suspend () -> Unit) -> Unit,
+    // The Active Account's time zone (#74): a pre-dated [date] becomes a `complete_by` instant in it.
+    private val tz: String = "UTC",
+    // The pre-dated day the Calendar FAB opens New on (#74); `null` opens an undated form.
+    initialDate: LocalDate? = null,
 ) : NewComponent {
 
-    private val _state = MutableStateFlow(NewState())
+    private val _state = MutableStateFlow(NewState(date = initialDate))
     override val state: StateFlow<NewState> = _state
 
     override fun selectKind(kind: ItemKind) = _state.update { it.copy(selectedKind = kind, status = NewStatus.Editing) }
@@ -106,13 +123,14 @@ class DefaultNewComponent(
     override fun setNotes(notes: String) = _state.update { it.copy(notes = notes, status = NewStatus.Editing) }
     override fun setStart(start: Instant?) = _state.update { it.copy(start = start, status = NewStatus.Editing) }
     override fun setEnd(end: Instant?) = _state.update { it.copy(end = end, status = NewStatus.Editing) }
+    override fun setDate(date: LocalDate?) = _state.update { it.copy(date = date, status = NewStatus.Editing) }
 
     override fun submit() {
         val snapshot = _state.value
         if (!snapshot.canSubmit) return
         _state.update { it.copy(status = NewStatus.Submitting) }
         launch {
-            when (create(snapshot.toPayload())) {
+            when (create(snapshot.toPayload(tz))) {
                 is CommandResult.Accepted -> onCreated()
                 is CommandResult.Offline -> _state.update { it.copy(status = NewStatus.Offline) }
                 is CommandResult.Failed -> _state.update { it.copy(status = NewStatus.Failed("Could not save. Try again.")) }
@@ -136,21 +154,37 @@ class DefaultNewComponent(
  * defensive last resort that a non-submittable Event never reaches). The Chore group/rotation is
  * deferred (ADR-0015).
  */
-internal fun NewState.toPayload(): CreateItem.Payload {
+internal fun NewState.toPayload(tz: String = "UTC"): CreateItem.Payload {
     val notesOrNull = notes.ifBlank { null }
+    // The pre-dated day becomes a start-of-day instant in the Active Account's zone (#74). Null stays
+    // null (omitted by the tolerant serializer), so an undated create is byte-identical to before.
+    val dateInstant = date?.atStartOfDayIn(runCatching { TimeZone.of(tz) }.getOrDefault(TimeZone.UTC))
     return when (selectedKind) {
-        ItemKind.Task -> CreateItem.Payload.Task(CreateTaskPayload(title = title.trim(), description = notesOrNull))
+        ItemKind.Task -> CreateItem.Payload.Task(
+            CreateTaskPayload(title = title.trim(), description = notesOrNull, completeBy = dateInstant?.toString()),
+        )
         ItemKind.Habit -> CreateItem.Payload.Habit(
-            CreateHabitPayload(title = title.trim(), recurrence = RecurrenceDto(type = "daily"), description = notesOrNull),
+            CreateHabitPayload(
+                title = title.trim(),
+                recurrence = RecurrenceDto(type = "daily"),
+                description = notesOrNull,
+                completeBy = dateInstant?.toString(),
+            ),
         )
         ItemKind.Chore -> CreateItem.Payload.Chore(
-            CreateChorePayload(title = title.trim(), recurrence = RecurrenceDto(type = "daily"), description = notesOrNull),
+            CreateChorePayload(
+                title = title.trim(),
+                recurrence = RecurrenceDto(type = "daily"),
+                description = notesOrNull,
+                completeBy = dateInstant?.toString(),
+            ),
         )
         ItemKind.Event -> CreateItem.Payload.Event(
             CreateEventPayload(
                 title = title.trim(),
-                // The required, non-empty start (`canSubmit` requires a start for an Event).
-                completeBy = (start ?: Instant.DISTANT_FUTURE).toString(),
+                // The required, non-empty start: an explicit start, else the pre-dated day, else a
+                // defensive far-future fallback a non-submittable Event never reaches (`canSubmit`).
+                completeBy = (start ?: dateInstant ?: Instant.DISTANT_FUTURE).toString(),
                 endTime = end?.toString(),
                 description = notesOrNull,
             ),

@@ -1,12 +1,17 @@
 package com.circuitstitch.deferno.core.data.outbox
 
+import com.circuitstitch.deferno.core.model.CalendarItem
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.network.mapper.OccurrenceKind
 import com.circuitstitch.deferno.core.network.mapper.toWireToken
+import com.circuitstitch.deferno.core.network.mapper.toWorkingState
 import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObjectBuilder
@@ -269,3 +274,129 @@ private fun postPlan(action: String, build: JsonObjectBuilder.() -> Unit): Outbo
 /** A `PATCH auth/me/settings` whose body is exactly the keys [build] sets — nothing absent (ADR-0011). */
 private fun patchSettings(build: JsonObjectBuilder.() -> Unit): OutboxRequest =
     OutboxRequest(OutboxMethod.Patch, listOf("auth", "me", "settings"), buildJsonObject(build).toString())
+
+/**
+ * A [Mutation] against one dated firing (an Occurrence) of a recurring definition (#74) — the
+ * firing-level sibling of `TaskMutation`. It is the write half of the Calendar surface, deferred at
+ * envelope v0.1 (see the class note above) until #71 supplied the firing domain + cache. Unlike a Task
+ * intent it targets a `(kind, seriesId, date)` firing, because the occurrence endpoints are kind-scoped
+ * (`/habits|chores|events/{seriesId}/occurrences/{date}`). Offline-first (ADR-0001): these target an
+ * **existing** server entity, so they ride the normal outbox — *not* online-only like create.
+ *
+ * [applyTo] is the pure optimistic transform of the cached [CalendarItem] (the calendar surface acts on
+ * feed rows, whose progress is a [WorkingState] — the no-`missed` axis, design-principle #4). [itemId]
+ * is the local row id the writer updates; the firing identity ([kind]/[seriesId]/[date]) drives the
+ * endpoint + body.
+ *
+ * | Intent | Method + endpoint | Minimal body |
+ * |---|---|---|
+ * | [MarkOccurrence] habit | `POST habits/{id}/occurrences` | `{"done":<bool>,"date":"<yyyy-mm-dd>"}` |
+ * | [MarkOccurrence] chore | `PUT chores/{id}/occurrences/{date}` | `{"status":"<in_progress\|done\|skipped>"}` |
+ * | [MarkOccurrence] event | `POST events/{id}/occurrences/{date}` | `{"action":"<in_progress\|done\|dropped>"}` |
+ * | [ClearOccurrence] | `DELETE {kind}/{id}/occurrences/{date}` | *(no body)* |
+ * | [RescheduleOccurrence] | `POST {kind}/{id}/occurrences/{date}/reschedule` | `{"new_date":"<yyyy-mm-dd>"}` |
+ */
+sealed interface OccurrenceMutation : Mutation {
+    /** The local [CalendarItem] row id the optimistic [applyTo] updates. */
+    val itemId: String
+
+    /** Which recurring kind — selects the kind-scoped endpoint + body shape. */
+    val kind: ItemKind
+
+    /** The recurring definition id the occurrence endpoints key on. */
+    val seriesId: String
+
+    /** The firing's calendar day (the `{date}` path segment). */
+    val date: LocalDate
+
+    override val target: String get() = "occurrence:${kind.name}:$seriesId:$date"
+
+    /** The optimistic local effect on the cached firing row — **pure** and idempotent. */
+    fun applyTo(item: CalendarItem): CalendarItem
+}
+
+/**
+ * Mark a firing (#74). A **habit** is binary — `done = (action == Complete)` with the firing's `date`
+ * in the body (the UI offers a habit only Complete). A **chore** or **event** carries the kind-appropriate
+ * wire token via [toWireToken]. Optimistically sets the cached row's [WorkingState] (Start -> In-progress,
+ * Complete → Done, Skip → Dropped); replay-safe — re-applying yields the same state.
+ */
+data class MarkOccurrence(
+    override val itemId: String,
+    override val kind: ItemKind,
+    override val seriesId: String,
+    override val date: LocalDate,
+    val action: OccurrenceAction,
+) : OccurrenceMutation {
+    override fun applyTo(item: CalendarItem): CalendarItem = item.copy(status = action.toWorkingState())
+
+    override fun toRequest(): OutboxRequest = when (kind) {
+        ItemKind.Habit -> OutboxRequest(
+            OutboxMethod.Post,
+            listOf("habits", seriesId, "occurrences"),
+            buildJsonObject {
+                put("done", action == OccurrenceAction.Complete)
+                put("date", date.toString())
+            }.toString(),
+        )
+        ItemKind.Chore -> OutboxRequest(
+            OutboxMethod.Put,
+            listOf("chores", seriesId, "occurrences", date.toString()),
+            buildJsonObject { put("status", action.toWireToken(OccurrenceKind.Chore)) }.toString(),
+        )
+        ItemKind.Event -> OutboxRequest(
+            OutboxMethod.Post,
+            listOf("events", seriesId, "occurrences", date.toString()),
+            buildJsonObject { put("action", action.toWireToken(OccurrenceKind.Event)) }.toString(),
+        )
+        ItemKind.Task -> error("MarkOccurrence is only valid for a recurring kind, not Task")
+    }
+}
+
+/**
+ * Clear a firing's status (#74) — the forgiving "let it go back to Scheduled" undo (design-principle #8),
+ * uniform across kinds via `DELETE …/occurrences/{date}`. Optimistically resets the cached row to
+ * [WorkingState.Open].
+ */
+data class ClearOccurrence(
+    override val itemId: String,
+    override val kind: ItemKind,
+    override val seriesId: String,
+    override val date: LocalDate,
+) : OccurrenceMutation {
+    override fun applyTo(item: CalendarItem): CalendarItem = item.copy(status = WorkingState.Open)
+
+    override fun toRequest(): OutboxRequest =
+        OutboxRequest(OutboxMethod.Delete, listOf(kind.occurrencePath(), seriesId, "occurrences", date.toString()))
+}
+
+/**
+ * Reschedule a firing to [newDate] (#74). Optimistically moves the cached row to the new day (its
+ * start/end times are corrected on the next window reconcile). Kept kind-general for forward
+ * compatibility, but the UI only offers it for **Events** in v1 — the habit/chore reschedule endpoints
+ * are server-side not-yet-implemented, and enqueuing a guaranteed failure would move the row then snap it
+ * back, which reads as shaming-by-failure (design-principle #4).
+ */
+data class RescheduleOccurrence(
+    override val itemId: String,
+    override val kind: ItemKind,
+    override val seriesId: String,
+    override val date: LocalDate,
+    val newDate: LocalDate,
+) : OccurrenceMutation {
+    override fun applyTo(item: CalendarItem): CalendarItem = item.copy(date = newDate)
+
+    override fun toRequest(): OutboxRequest = OutboxRequest(
+        OutboxMethod.Post,
+        listOf(kind.occurrencePath(), seriesId, "occurrences", date.toString(), "reschedule"),
+        buildJsonObject { put("new_date", newDate.toString()) }.toString(),
+    )
+}
+
+/** The kind-scoped occurrence endpoint prefix (`habits`/`chores`/`events`). */
+private fun ItemKind.occurrencePath(): String = when (this) {
+    ItemKind.Habit -> "habits"
+    ItemKind.Chore -> "chores"
+    ItemKind.Event -> "events"
+    ItemKind.Task -> error("occurrence endpoints are only for recurring kinds, not Task")
+}

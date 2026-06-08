@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.domain.command
 
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -39,6 +40,9 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.OpenTask -> OpenTask(TaskId("t1"))
     CommandKind.CreateItem -> CreateItem(CreateItem.Payload.Task(CreateTaskPayload(title = "new")))
     CommandKind.ConvertItem -> ConvertItem("item-1", ItemKind.Task, ConvertItemPayload(type = "habit"))
+    CommandKind.MarkOccurrence -> MarkOccurrence("ce-1", OccurrenceAction.Complete)
+    CommandKind.ClearOccurrence -> ClearOccurrence("ce-1")
+    CommandKind.RescheduleOccurrence -> RescheduleOccurrence("ce-1", SAMPLE_DATE)
 }
 
 /** Concise [Task] fixture for the enablement tests. */

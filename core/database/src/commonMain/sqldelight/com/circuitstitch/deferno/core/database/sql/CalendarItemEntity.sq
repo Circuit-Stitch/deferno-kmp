@@ -1,0 +1,59 @@
+-- The local source-of-truth cache for the windowed Calendar feed (ADR-0001, #74): one row per
+-- `GET /tasks/calendar` entry — a recurring firing, a one-off dated item, or a synced external event,
+-- projected to a single dated block. The month grid + day agenda observe this table (observe-via-Flow,
+-- ADR-0001); a window refresh full-replaces the rows for that date span (see `deleteInRange` + upsert).
+--
+-- Adapter-free primitives (TEXT/INTEGER), conversion in CalendarEntityMapping.kt. `item_date` is the
+-- local calendar day (ISO `yyyy-mm-dd`, projected into the user's tz at the edge) — indexed because the
+-- grid/agenda query by date window. `working_state` is a WorkingState (the feed reports progress on the
+-- Task axis even for firings — there is no `missed`/`late`, which is what keeps the surface non-shaming,
+-- design-principle #4). The recurring `kind` is NOT stored here — it is resolved at read time from
+-- `seriesKindEntity`, so a row carries only its `series_id`. `labels` is a `\n`-joined TEXT.
+CREATE TABLE calendarItemEntity (
+    id            TEXT NOT NULL PRIMARY KEY,
+    task_id       TEXT NOT NULL,
+    series_id     TEXT,
+    title         TEXT NOT NULL,
+    item_date     TEXT NOT NULL,
+    start_at      TEXT NOT NULL,
+    end_at        TEXT NOT NULL,
+    all_day       INTEGER NOT NULL DEFAULT 0,
+    working_state TEXT NOT NULL,
+    source        TEXT NOT NULL,
+    labels        TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX calendarItemEntity_item_date ON calendarItemEntity(item_date);
+CREATE INDEX calendarItemEntity_series_id ON calendarItemEntity(series_id);
+
+-- The day-agenda query: every row on one calendar day, earliest first.
+selectByDate:
+SELECT * FROM calendarItemEntity WHERE item_date = ? ORDER BY start_at, id;
+
+-- The month-window query (half-open `[from, to)` — matches the feed's window semantics).
+selectInRange:
+SELECT * FROM calendarItemEntity WHERE item_date >= ? AND item_date < ? ORDER BY item_date, start_at, id;
+
+-- The grid markers: how many entries fall on each day in the window (a dot/count per cell).
+selectMarkersInRange:
+SELECT item_date, count(*) AS count FROM calendarItemEntity
+WHERE item_date >= ? AND item_date < ? GROUP BY item_date;
+
+selectById:
+SELECT * FROM calendarItemEntity WHERE id = ?;
+
+insertOrReplace:
+INSERT OR REPLACE INTO calendarItemEntity(
+    id, task_id, series_id, title, item_date, start_at, end_at, all_day, working_state, source, labels
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- A window full-replace clears the span before re-seeding it, so a firing the server removed from the
+-- window (e.g. a deleted definition) does not linger in the cache (ADR-0001 reconcile).
+deleteInRange:
+DELETE FROM calendarItemEntity WHERE item_date >= ? AND item_date < ?;
+
+deleteById:
+DELETE FROM calendarItemEntity WHERE id = ?;
+
+deleteAll:
+DELETE FROM calendarItemEntity;

@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.domain.command
 
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
 import com.circuitstitch.deferno.core.network.dto.CreateChorePayload
@@ -224,6 +225,34 @@ data class ConvertItem(
     val payload: ConvertItemPayload,
 ) : Command {
     override val kind: CommandKind get() = CommandKind.ConvertItem
+}
+
+// --- Occurrence: acting on one dated firing from the Calendar (#74) — OFFLINE-FIRST ---
+//
+// Unlike create, these target an EXISTING firing (a recurring Habit/Chore/Event occurrence), so they
+// ride the normal offline-first outbox (ADR-0001) — optimistic apply + enqueue. The operand is the
+// local Calendar row id ([occurrenceItemId]); the writer resolves the firing's kind + series + date
+// from the cached row, so the command stays a thin, serialization-shaped intent. 1:1 with the
+// `OccurrenceWriter` seam.
+
+/** A [Command] acting on one dated firing (an Occurrence), addressed by its Calendar row id (#74). */
+sealed interface OccurrenceCommand : Command {
+    val occurrenceItemId: String
+}
+
+/** Mark a firing with a coarse [action] (start / complete / skip) — the per-kind occurrence write. */
+data class MarkOccurrence(override val occurrenceItemId: String, val action: OccurrenceAction) : OccurrenceCommand {
+    override val kind: CommandKind get() = CommandKind.MarkOccurrence
+}
+
+/** Clear a firing's status back to Scheduled — the forgiving undo (design-principle #8). */
+data class ClearOccurrence(override val occurrenceItemId: String) : OccurrenceCommand {
+    override val kind: CommandKind get() = CommandKind.ClearOccurrence
+}
+
+/** Reschedule a firing to [newDate] (Events only in v1 — habit/chore reschedule is server-unimplemented). */
+data class RescheduleOccurrence(override val occurrenceItemId: String, val newDate: LocalDate) : OccurrenceCommand {
+    override val kind: CommandKind get() = CommandKind.RescheduleOccurrence
 }
 
 /**

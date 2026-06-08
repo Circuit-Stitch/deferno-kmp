@@ -168,6 +168,9 @@ class DefaultRootComponent(
                         account = account,
                         today = today,
                         timeZone = timeZone,
+                        // The Calendar Destination's feed source + occurrence-act seam (#74).
+                        calendarRepository = session.calendarRepository,
+                        occurrenceEditor = session.occurrenceEditor,
                         workingStateEditor = session.workingStateEditor,
                         searchTasks = SearchTasks.of(session.taskRepository),
                         accounts = accountManager.accounts,

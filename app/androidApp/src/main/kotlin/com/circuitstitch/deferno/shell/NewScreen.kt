@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
+import kotlinx.datetime.LocalDate
 import kotlin.time.Instant
 
 /**
@@ -86,6 +87,19 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
                 label = { Text("Notes") },
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Notes" },
             )
+
+            // A Date the item anchors to (#74) — the Calendar FAB pre-dates this to the selected day, and
+            // it maps to `complete_by`. Shown for the non-Event kinds (an Event uses its fixed start
+            // below instead). ISO `yyyy-mm-dd` entry — a native date picker is a follow-up.
+            if (state.selectedKind != ItemKind.Event) {
+                Spacer(Modifier.padding(top = 8.dp))
+                DateField(
+                    value = state.date,
+                    onValueChange = component::setDate,
+                    label = "Date (optional, e.g. 2026-06-08)",
+                    semanticsLabel = "Date",
+                )
+            }
 
             // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2). The form surfaces a
             // required start + optional end so a real Event create succeeds. Inputs take an ISO-8601
@@ -156,6 +170,33 @@ private fun InstantField(
         label = { Text(label) },
         singleLine = true,
         isError = text.isNotBlank() && runCatching { Instant.parse(text.trim()) }.getOrNull() == null,
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = semanticsLabel },
+    )
+}
+
+/**
+ * An ISO `yyyy-mm-dd` date text input (#74) — the Task/Habit/Chore date the Calendar FAB pre-dates. A
+ * parseable value pushes a real [LocalDate] up; an unparseable one clears it (so a half-typed value
+ * never POSTs an invalid date). Pre-filled from [value]; a native date picker is a follow-up.
+ */
+@Composable
+private fun DateField(
+    value: LocalDate?,
+    onValueChange: (LocalDate?) -> Unit,
+    label: String,
+    semanticsLabel: String,
+    modifier: Modifier = Modifier,
+) {
+    var text by remember(value) { mutableStateOf(value?.toString() ?: "") }
+    OutlinedTextField(
+        value = text,
+        onValueChange = {
+            text = it
+            onValueChange(runCatching { LocalDate.parse(it.trim()) }.getOrNull())
+        },
+        label = { Text(label) },
+        singleLine = true,
+        isError = text.isNotBlank() && runCatching { LocalDate.parse(text.trim()) }.getOrNull() == null,
         modifier = modifier.fillMaxWidth().semantics { contentDescription = semanticsLabel },
     )
 }

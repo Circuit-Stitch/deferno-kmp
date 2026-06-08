@@ -109,3 +109,15 @@ fun OccurrenceAction.toWireToken(kind: OccurrenceKind): String = when (this) {
         OccurrenceKind.Event -> "dropped"
     }
 }
+
+/**
+ * The **optimistic** [WorkingState] a coarse [OccurrenceAction] sets on a cached calendar row (#74).
+ * The Calendar feed reports progress on the Task axis ([WorkingState]), so acting on a firing applies
+ * the equivalent state instantly before the kind-scoped occurrence write replays + reconciles: Start →
+ * In-progress, Complete → Done, Skip → Dropped (the gentle, non-`missed` axis — design-principle #4).
+ */
+fun OccurrenceAction.toWorkingState(): WorkingState = when (this) {
+    OccurrenceAction.Start -> WorkingState.InProgress
+    OccurrenceAction.Complete -> WorkingState.Done
+    OccurrenceAction.Skip -> WorkingState.Dropped
+}

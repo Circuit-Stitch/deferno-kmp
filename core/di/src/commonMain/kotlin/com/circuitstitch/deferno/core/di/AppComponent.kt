@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
+import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
@@ -73,6 +74,8 @@ abstract class AppComponent(
     // not part of the app-facing surface — the app uses AccountComponent.taskRepository et al.
     abstract val taskRemoteSource: TaskRemoteSource
     abstract val planRemoteSource: PlanRemoteSource
+    // The windowed Calendar feed source (#74): the OfflineCalendarRepository (AccountScope) refreshes through it.
+    abstract val calendarRemoteSource: CalendarRemoteSource
     abstract val settingsRemoteSource: SettingsRemoteSource
     abstract val outboxRequestSender: OutboxRequestSender
     abstract val accountDatabaseFactory: AccountDatabaseFactory

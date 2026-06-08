@@ -108,8 +108,8 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
 /**
  * Renders the foreground Destination's desktop screen, filling the content area. Plan + Tasks render
  * their existing desktop Views, Settings (#85) its tier-3 drill-down, and Profile (#84) its identity
- * hub; the reserved Calendar Destination (#74) still renders a placeholder until its desktop View
- * lands (ADR-0017).
+ * hub; the Calendar Destination (#74 — Android-first; shared logic) still renders a placeholder until
+ * its desktop View lands (ADR-0017).
  */
 @Composable
 private fun DestinationContent(active: MainShellComponent.DestinationChild) {
@@ -119,6 +119,10 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
 
         is MainShellComponent.DestinationChild.Tasks ->
             TasksDesktopScreen(active.component, Modifier.fillMaxSize())
+
+        // The Calendar slice's logic is shared (#74), but its desktop View rides the ADR-0017 parity work.
+        is MainShellComponent.DestinationChild.Calendar ->
+            ComingSoon(active.destination)
 
         is MainShellComponent.DestinationChild.Profile ->
             ProfileDesktopScreen(active.component, Modifier.fillMaxSize())

@@ -2,12 +2,13 @@ package com.circuitstitch.deferno.core.data.outbox
 
 /**
  * The HTTP verb an [OutboxRequest] dispatches with (ADR-0001, #23). Deliberately a closed set of the
- * three verbs the v1 intent table uses — `PATCH` (Task field edits), `POST` (pin / plan ops), and
- * `DELETE` (soft-delete a Task) — rather than the open Ktor `HttpMethod`, so an outbox row can only
- * ever decode to a verb the sender knows how to issue. The wire-token decode degrades an unknown
- * stored value defensively (see [SqlDelightOutboxStore]).
+ * verbs the v1 intent table uses — `PATCH` (Task field edits), `POST` (pin / plan ops / occurrence
+ * mark + reschedule), `PUT` (chore occurrence set-status, #74), and `DELETE` (soft-delete a Task /
+ * clear an occurrence) — rather than the open Ktor `HttpMethod`, so an outbox row can only ever decode
+ * to a verb the sender knows how to issue. The wire-token decode degrades an unknown stored value
+ * defensively (see [SqlDelightOutboxStore]).
  */
-enum class OutboxMethod { Patch, Post, Delete }
+enum class OutboxMethod { Patch, Post, Put, Delete }
 
 /**
  * The already-computed wire request an outbox entry replays (ADR-0001, #23) — the unit the offline
