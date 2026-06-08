@@ -1,0 +1,62 @@
+Deferno
+Copyright 2026 Circuit Stitch
+
+This product is developed by Circuit Stitch and the Deferno contributors and is
+licensed under the Apache License, Version 2.0 (the "License"). You may obtain a
+copy of the License in the LICENSE file distributed with this software, or at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+
+===============================================================================
+Trademarks and branding (Apache License 2.0, Section 6)
+===============================================================================
+
+"Deferno", the Deferno name, the flame logo and icon, and the associated
+branding, naming, and visual identity are trademarks of Circuit Stitch. They are
+NOT licensed under the Apache License, Version 2.0 — Section 6 of that License
+expressly grants no trademark rights.
+
+The Apache License lets you use, modify, and redistribute this software. It does
+NOT let you use the Deferno name or flame branding to identify your own modified
+version, or in any way that suggests endorsement by, or affiliation with,
+Circuit Stitch. If you fork, modify, or redistribute a modified version of this
+software, you must remove or replace the "Deferno" name, the flame logo/icon, and
+the associated branding before distributing it. (Reasonable and customary use to
+truthfully describe the origin of the Work — e.g. "based on Deferno" — remains
+permitted under Section 6.)
+
+This reservation does not extend to the "Plex" Reserved Font Name of the bundled
+IBM Plex fonts, which belongs to IBM Corp. and must itself be left intact under
+the SIL Open Font License — see THIRD-PARTY-LICENSES.
+
+
+===============================================================================
+Third-party components
+===============================================================================
+
+This product includes and builds upon software developed by third parties. Many
+of those components are themselves licensed under the Apache License, Version 2.0,
+including (non-exhaustively):
+
+  - Kotlin and the kotlinx libraries (kotlinx.coroutines, kotlinx.serialization,
+    kotlinx.datetime) — Copyright JetBrains s.r.o. and contributors
+  - Ktor — Copyright JetBrains s.r.o. and contributors
+  - Jetpack Compose, Compose Multiplatform, and AndroidX — Copyright The Android
+    Open Source Project and JetBrains s.r.o.
+  - Decompose and Essenty — Copyright Arkadii Ivanov
+  - kotlin-inject — Copyright Evan Tatarka
+  - kotlin-inject-anvil — Copyright Amazon.com, Inc. or its affiliates
+  - SQLDelight and Turbine — Copyright Cash App / Block, Inc.
+  - OkHttp — Copyright Square, Inc.
+  - multiplatform-settings — Copyright Russell Wolf
+  - Google Play Asset Delivery / Play Core SDK — Copyright Google LLC
+
+The complete attribution list and the full license texts for ALL bundled
+third-party components — including those under non-Apache licenses such as the
+MIT License (whisper.cpp, ggml, and the bundled speech-model weights), the
+BSD 3-Clause License (SQLCipher, java-keyring), the SIL Open Font License 1.1
+(IBM Plex fonts), the Eclipse Public License 1.0 (JUnit, test-scope only), and
+the GNU General Public License v2 with the Classpath Exception (the JetBrains
+Runtime bundled into the desktop installer) — are recorded in the
+THIRD-PARTY-LICENSES file distributed with this software.
