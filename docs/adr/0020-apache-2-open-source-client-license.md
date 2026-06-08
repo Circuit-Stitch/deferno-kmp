@@ -4,7 +4,7 @@
 author-operated**. A license audit of the full dependency graph confirmed **nothing forces our hand**:
 every shipped dependency is **Apache-2.0, MIT, or BSD-3-Clause** (Compose Multiplatform, Decompose,
 kotlin-inject, kotlinx-*, Ktor, SQLDelight, multiplatform-settings; whisper.cpp + ggml MIT; SQLCipher
-BSD-3; java-keyring MIT). The two copyleft-looking deps are non-issues: **JUnit (EPL-1.0)** is
+BSD-3; java-keyring BSD-3). The two copyleft-looking deps are non-issues: **JUnit (EPL-1.0)** is
 test-scope only and never ships, and the **JetBrains Runtime (GPLv2)** bundled into the desktop
 installers (ADR-0019) is covered by its **Classpath Exception** — a bundled JRE does not make the app
 GPL. So the choice is **strategic, not forced**: what license best serves an open client over a closed
@@ -31,12 +31,16 @@ automatically — the open-source release (and the desktop installers in particu
 - a root **LICENSE** (Apache-2.0 text) and **NOTICE** (also the home for the **Deferno** trademark +
   flame-branding reservation), neither of which exists yet;
 - a **THIRD-PARTY-LICENSES** file aggregating: MIT for **whisper.cpp + ggml** (the "ggml authors")
-  **and the bundled model weights** (ADR-0019), BSD-3-Clause for **SQLCipher**, MIT for **java-keyring**,
+  **and the bundled model weights** (ADR-0019), BSD-3-Clause for **SQLCipher** and **java-keyring**,
   **SIL OFL-1.1** for the bundled **IBM Plex** fonts (`core/designsystem`), and EPL-1.0 for JUnit (test);
 - on **desktop only**, the **JBR GPLv2 + Classpath-Exception** license text **plus a corresponding-source
   pointer**, wired into `nativeDistributions` packaging so jpackage ships it with the bundled runtime;
 - **IBM Plex's "Plex" Reserved Font Name** must be left intact (the font files can't be renamed);
 - **CONTRIBUTING with a DCO sign-off** (inbound = outbound) so external PRs are unambiguously Apache-2.0.
+
+> **Correction (2026-06-08, #100):** the audit above first labeled **java-keyring** MIT; its bundled
+> source is in fact **BSD-3-Clause** (`Copyright © 2019, Java Keyring`). Still permissive, so the
+> Apache-2.0 conclusion is unchanged — the shipped `THIRD-PARTY-LICENSES` records it under BSD-3-Clause.
 
 **Consequences.** Anyone may fork and even resell the client — accepted, because the client was never
 the asset. Relicensing later (e.g. to source-available) would require **contributor consent** once

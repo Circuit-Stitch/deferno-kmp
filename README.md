@@ -72,3 +72,18 @@ real code lands feature by feature.
 - **Build:** Gradle 9.5.1 + AGP 9.2.1 (Kotlin compiled by AGP's built-in Kotlin support — there is no
   separate `org.jetbrains.kotlin.android` plugin)
 - **Code style:** shared Kotlin `KOTLIN_OFFICIAL` settings live in `.idea/codeStyles/`
+
+## License
+
+The Deferno client is open source under the **Apache License, Version 2.0** — see
+[`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) ([ADR-0020](docs/adr/0020-apache-2-open-source-client-license.md)).
+The backend service is separate and proprietary; this repository is the client only.
+
+- The **"Deferno"** name and flame branding are reserved trademarks of Circuit Stitch and are
+  **not** granted by the license (Apache-2.0 §6) — forks must rebrand. See [`NOTICE`](NOTICE).
+- Bundled third-party components (whisper.cpp/ggml, the Whisper model weights, SQLCipher,
+  java-keyring, IBM Plex fonts, and — in the desktop installer — the JetBrains Runtime) carry their
+  own licenses, aggregated in [`THIRD-PARTY-LICENSES`](THIRD-PARTY-LICENSES).
+
+Contributions are welcome under an inbound = outbound model with a **DCO sign-off** (no CLA) —
+see [`CONTRIBUTING.md`](CONTRIBUTING.md).

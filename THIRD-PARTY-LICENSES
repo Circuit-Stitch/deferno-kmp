@@ -1,0 +1,381 @@
+===============================================================================
+Third-party licenses
+===============================================================================
+
+The Deferno client (Copyright 2026 Circuit Stitch, licensed under the Apache
+License, Version 2.0 — see LICENSE and NOTICE) is built with, and distributes,
+the third-party components listed below. This file aggregates their copyright
+notices and license terms, as required by those licenses.
+
+"Distributed" / "bundled" below means the component, or code compiled from it,
+ships inside a released artifact (the Android application, the iOS application,
+or the desktop installer). Components marked "test-scope only" are used only to
+build and test the project and are NOT present in any released artifact.
+
+Scope key:
+  [android]   shipped in the Android application
+  [ios]       shipped in the iOS application
+  [desktop]   shipped in the desktop application / installer
+  [all]       shipped on every platform
+  [test]      build/test only — never distributed
+
+A short index of the non-Apache components and their licenses:
+
+  whisper.cpp ......................... MIT License            [android][ios][desktop]
+  ggml ................................ MIT License            [android][ios][desktop]
+  Whisper "small.en" model weights .... MIT License            [android][ios][desktop]
+  SQLCipher (sqlcipher-android) ....... BSD 3-Clause License   [android]
+  java-keyring ........................ BSD 3-Clause License   [desktop]
+  IBM Plex fonts ...................... SIL Open Font License 1.1   [all]
+  JUnit 4 ............................. Eclipse Public License 1.0  [test]
+  JetBrains Runtime (JBR) ............. GPLv2 + Classpath Exception [desktop]
+
+First-party code and most libraries are under the Apache License, Version 2.0
+(Section 1 below). The remaining sections cover each non-Apache component.
+
+
+===============================================================================
+1. Apache License 2.0 components
+===============================================================================
+
+The following libraries are licensed under the Apache License, Version 2.0. Its
+full text is in the LICENSE file at the root of this distribution and at
+http://www.apache.org/licenses/LICENSE-2.0 ; it is not reproduced again here.
+
+  * Kotlin standard library and the kotlinx libraries — kotlinx.coroutines,
+    kotlinx.serialization, kotlinx.datetime
+        Copyright JetBrains s.r.o. and Kotlin Programming Language contributors
+  * Ktor
+        Copyright JetBrains s.r.o. and contributors
+  * Jetpack Compose / Compose Multiplatform and AndroidX libraries
+        Copyright The Android Open Source Project; Copyright JetBrains s.r.o.
+  * Material Components / Material icons
+        Copyright The Android Open Source Project; Copyright JetBrains s.r.o.
+  * Decompose and Essenty
+        Copyright Arkadii Ivanov
+  * kotlin-inject
+        Copyright Evan Tatarka
+  * kotlin-inject-anvil
+        Copyright Amazon.com, Inc. or its affiliates
+  * SQLDelight
+        Copyright Cash App / Block, Inc. (originally Square, Inc.)
+  * OkHttp (Ktor OkHttp engine, [android][desktop])
+        Copyright Square, Inc.
+  * multiplatform-settings
+        Copyright Russell Wolf
+  * JNA — Java Native Access (transitive via java-keyring, [desktop]). JNA is
+    dual-licensed; Deferno elects the Apache License, Version 2.0.
+        Copyright Timothy Wall and contributors
+  * Test-scope only [test]: Turbine, kotlinx-coroutines-test,
+    ktor-client-mock, Robolectric, Roborazzi, AndroidX Test, Espresso,
+    Benchmark/Macrobenchmark, and the Baseline Profile tooling — all under the
+    Apache License, Version 2.0, none distributed in a released artifact.
+
+
+===============================================================================
+2. MIT License components
+===============================================================================
+
+The following bundled components are licensed under the MIT License.
+
+  * whisper.cpp — the on-device speech-to-text engine. Compiled from the pinned
+    `third_party/whisper.cpp` git submodule into the native library
+    `libwhisper_jni.so` shipped in the Android application; the same engine
+    backs the iOS and desktop speech paths (ADR-0018). [android][ios][desktop]
+        Copyright (c) 2023-2024 The ggml authors
+        (whisper.cpp — https://github.com/ggerganov/whisper.cpp)
+
+  * ggml — the tensor / machine-learning library vendored within and compiled as
+    part of whisper.cpp (same submodule and native library). [android][ios][desktop]
+        Copyright (c) 2023-2024 The ggml authors
+
+  * Whisper "small.en" speech-model weights — `ggml-small.en-q5_1.bin`, the
+    quantized OpenAI Whisper "small.en" weights produced by the whisper.cpp
+    project. Delivered with the app (Android: Play Asset Delivery install-time
+    pack; iOS: On-Demand Resources; desktop: bundled in the installer —
+    ADR-0019). The weights are NOT committed to this repository; they are fetched
+    from https://huggingface.co/ggerganov/whisper.cpp at build/delivery time.
+    [android][ios][desktop]
+        OpenAI Whisper models — Copyright (c) 2022 OpenAI — released under the
+        MIT License; converted and quantized by the whisper.cpp / ggml authors,
+        also under the MIT License.
+
+The MIT License applies to the components above:
+
+    MIT License
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+
+===============================================================================
+3. BSD 3-Clause License components
+===============================================================================
+
+The following bundled components are licensed under the BSD 3-Clause License.
+
+  * SQLCipher (net.zetetic:sqlcipher-android) — the at-rest encryption layer for
+    the local SQLite database on Android (ADR-0002/0009). Its native library is
+    packaged into the Android application. [android]
+        Copyright (c) 2008, ZETETIC LLC. All rights reserved.
+        License: https://www.zetetic.net/sqlcipher/license/
+
+  * java-keyring (com.github.javakeyring:java-keyring) — desktop (JVM) OS
+    keychain access (macOS Keychain / Windows Credential Store / Linux Secret
+    Service) for the secure-storage vault (ADR-0009). [desktop]
+        Copyright (c) 2019, Java Keyring. All rights reserved.
+
+NOTE: java-keyring's audited classification in ADR-0020 / issue #100 was "MIT";
+on inspection its source carries the BSD 3-Clause license (reproduced below), so
+it is recorded here under BSD 3-Clause. Both are permissive and impose only
+notice-retention obligations, which this file satisfies.
+
+The BSD 3-Clause License applies to the components above:
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright notice,
+       this list of conditions and the following disclaimer in the documentation
+       and/or other materials provided with the distribution.
+
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived from this
+       software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+    LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+
+===============================================================================
+4. SIL Open Font License 1.1 — IBM Plex fonts
+===============================================================================
+
+  * IBM Plex (IBM Plex Sans and IBM Plex Mono) — the bundled UI typefaces in
+    `core/designsystem` (ADR-0010), shipped on every platform. [all]
+        Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
+
+The "Plex" Reserved Font Name MUST be left intact: under the SIL OFL, no Modified
+Version of the font software may use the Reserved Font Name. The font files in
+this repository are unmodified IBM Plex and are not renamed. The verbatim license
+also ships alongside the fonts at `core/designsystem/licenses/IBMPlex-OFL.txt`
+and is reproduced in full here:
+
+    Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
+
+    This Font Software is licensed under the SIL Open Font License, Version 1.1.
+    This license is copied below, and is also available with a FAQ at:
+    https://openfontlicense.org
+
+    -----------------------------------------------------------
+    SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+    -----------------------------------------------------------
+
+    PREAMBLE
+    The goals of the Open Font License (OFL) are to stimulate worldwide
+    development of collaborative font projects, to support the font creation
+    efforts of academic and linguistic communities, and to provide a free and
+    open framework in which fonts may be shared and improved in partnership
+    with others.
+
+    The OFL allows the licensed fonts to be used, studied, modified and
+    redistributed freely as long as they are not sold by themselves. The
+    fonts, including any derivative works, can be bundled, embedded,
+    redistributed and/or sold with any software provided that any reserved
+    names are not used by derivative works. The fonts and derivatives,
+    however, cannot be released under any other type of license. The
+    requirement for fonts to remain under this license does not apply
+    to any document created using the fonts or their derivatives.
+
+    DEFINITIONS
+    "Font Software" refers to the set of files released by the Copyright
+    Holder(s) under this license and clearly marked as such. This may
+    include source files, build scripts and documentation.
+
+    "Reserved Font Name" refers to any names specified as such after the
+    copyright statement(s).
+
+    "Original Version" refers to the collection of Font Software components as
+    distributed by the Copyright Holder(s).
+
+    "Modified Version" refers to any derivative made by adding to, deleting,
+    or substituting -- in part or in whole -- any of the components of the
+    Original Version, by changing formats or by porting the Font Software to a
+    new environment.
+
+    "Author" refers to any designer, engineer, programmer, technical
+    writer or other person who contributed to the Font Software.
+
+    PERMISSION & CONDITIONS
+    Permission is hereby granted, free of charge, to any person obtaining
+    a copy of the Font Software, to use, study, copy, merge, embed, modify,
+    redistribute, and sell modified and unmodified copies of the Font
+    Software, subject to the following conditions:
+
+    1) Neither the Font Software nor any of its individual components,
+    in Original or Modified Versions, may be sold by itself.
+
+    2) Original or Modified Versions of the Font Software may be bundled,
+    redistributed and/or sold with any software, provided that each copy
+    contains the above copyright notice and this license. These can be
+    included either as stand-alone text files, human-readable headers or
+    in the appropriate machine-readable metadata fields within text or
+    binary files as long as those fields can be easily viewed by the user.
+
+    3) No Modified Version of the Font Software may use the Reserved Font
+    Name(s) unless explicit written permission is granted by the corresponding
+    Copyright Holder. This restriction only applies to the primary font name as
+    presented to the users.
+
+    4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+    Software shall not be used to promote, endorse or advertise any
+    Modified Version, except to acknowledge the contribution(s) of the
+    Copyright Holder(s) and the Author(s) or with their explicit written
+    permission.
+
+    5) The Font Software, modified or unmodified, in part or in whole,
+    must be distributed entirely under this license, and must not be
+    distributed under any other license. The requirement for fonts to
+    remain under this license does not apply to any document created
+    using the Font Software.
+
+    TERMINATION
+    This license becomes null and void if any of the above conditions are
+    not met.
+
+    DISCLAIMER
+    THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+    OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+    COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+    INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+    DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+    OTHER DEALINGS IN THE FONT SOFTWARE.
+
+
+===============================================================================
+5. Eclipse Public License 1.0 — JUnit (test-scope only)
+===============================================================================
+
+  * JUnit 4 (junit:junit) — the unit-testing framework. Used only to build and
+    run the test suite; it is NOT included in the Android, iOS, or desktop
+    released artifacts. [test]
+        Copyright (c) the JUnit contributors
+        SPDX-License-Identifier: EPL-1.0
+
+JUnit 4 is licensed under the Eclipse Public License, Version 1.0. Because JUnit
+is test-scope only and is never distributed as part of a Deferno release, its
+copyleft terms do not reach any shipped artifact. The full text of the Eclipse
+Public License, Version 1.0 is available at:
+
+    https://www.eclipse.org/legal/epl-v10.html
+
+
+===============================================================================
+6. GNU General Public License v2 with the Classpath Exception
+   — JetBrains Runtime (desktop installer only)
+===============================================================================
+
+  * JetBrains Runtime (JBR) — the Java runtime that the desktop application runs
+    on and that is bundled into the desktop installers by jlink/jpackage
+    (ADR-0019/0021). JBR is OpenJDK plus JetBrains patches. It is shipped ONLY in
+    the desktop installer; the Android and iOS applications do not contain it.
+    [desktop]
+        Copyright (c) Oracle and/or its affiliates and other contributors;
+        JetBrains patches Copyright (c) JetBrains s.r.o.
+
+JBR is licensed under the GNU General Public License, version 2, WITH the
+"Classpath" Exception. The Classpath Exception is what allows the (Apache-2.0,
+proprietary, or otherwise non-GPL) Deferno application to run on and be
+distributed with the bundled runtime without the application itself becoming
+subject to the GPL. The exception reads:
+
+    "CLASSPATH" EXCEPTION TO THE GPL
+
+    Certain source files distributed by Oracle America and/or its affiliates are
+    subject to the following clarification and special exception to the GPL, but
+    only where Oracle has expressly included in the particular source file's
+    header the words "Oracle designates this particular file as subject to the
+    "Classpath" exception as provided by Oracle in the LICENSE file that
+    accompanied this code."
+
+        Linking this library statically or dynamically with other modules is
+        making a combined work based on this library. Thus, the terms and
+        conditions of the GNU General Public License cover the whole combination.
+
+        As a special exception, the copyright holders of this library give you
+        permission to link this library with independent modules to produce an
+        executable, regardless of the license terms of these independent
+        modules, and to copy and distribute the resulting executable under terms
+        of your choice, provided that you also meet, for each linked independent
+        module, the terms and conditions of the license of that module. An
+        independent module is a module which is not derived from or based on this
+        library. If you modify this library, you may extend this exception to
+        your version of the library, but you are not obligated to do so. If you
+        do not wish to do so, delete this exception statement from your version.
+
+Full license text. The complete GNU General Public License, version 2, together
+with the Classpath Exception, is included inside the bundled runtime (its
+`legal/` directory and the `LICENSE` file at the runtime's root), and is also
+available at:
+
+    GPL v2:  https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+    JBR:     https://github.com/JetBrains/JetBrainsRuntime/blob/main/LICENSE
+
+Written offer / corresponding source. The complete corresponding source code for
+the exact JetBrains Runtime build bundled in a given Deferno desktop installer is
+published by JetBrains at:
+
+    https://github.com/JetBrains/JetBrainsRuntime
+
+The precise version/tag of the bundled runtime is recorded in the runtime's
+`release` file inside the installed application (the `IMPLEMENTOR_VERSION` /
+`JAVA_VERSION` fields); the matching source is the correspondingly tagged release
+in that repository. The upstream OpenJDK source is additionally available at
+https://github.com/openjdk/jdk . On request, Circuit Stitch will provide a copy
+of the corresponding source for the JBR build shipped in any Deferno release.
+
+
+===============================================================================
+7. Platform SDKs and services
+===============================================================================
+
+Some first-party platform SDKs ship in the applications under their vendors' own
+terms rather than an open-source license:
+
+  * Google Play Asset Delivery / Play Core SDK
+    (com.google.android.play:asset-delivery) — used on Android to resolve the
+    install-time speech-model pack (ADR-0019). [android]
+        Copyright Google LLC. Governed by the Play Core Software Development Kit
+        Terms of Service: https://developer.android.com/guide/playcore/license
+
+These SDKs are redistributable as part of an application under those terms.
