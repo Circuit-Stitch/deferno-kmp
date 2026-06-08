@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
+import com.circuitstitch.deferno.ui.FakeAuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,7 @@ import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -40,6 +42,7 @@ class RootComponentTest {
     ) = DefaultRootComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         accountManager = manager,
+        authRepository = FakeAuthRepository(),
         accountSession = { session },
         onSignIn = onSignIn,
         today = today,
@@ -154,6 +157,46 @@ class RootComponentTest {
         tasks.detail.value.child?.instance?.onAddToPlanClicked()
 
         assertEquals(listOf(TaskId("t-1")), session.addedToPlan)
+    }
+
+    @Test
+    fun signingOutFromProfile_secureWipesTheActiveAccount_andReturnsToAuth() {
+        val manager = FakeAccountManager(active = account)
+        val root = root(manager)
+        val main = (root.activeChild() as RootComponent.Child.Main).component
+        main.selectDestination(Destination.Profile)
+        val profile =
+            (main.stack.value.active.instance as MainShellComponent.DestinationChild.Profile).component
+
+        profile.onSignOut()
+
+        // The only Account is removed (secure-wiped) → activeAccount null → swap back to the Auth shell.
+        assertTrue(root.activeChild() is RootComponent.Child.Auth)
+        assertNull(manager.activeAccount.value)
+    }
+
+    @Test
+    fun signingOut_withAnotherAccountPresent_switchesToTheSibling_notAuth() {
+        val personal = Account(AccountId("personal"), "Personal")
+        val manager = FakeAccountManager(active = account).also { it.signIn(personal); it.activate(account.id) }
+        val root = root(manager)
+        val firstMain = (root.activeChild() as RootComponent.Child.Main).component
+        firstMain.selectDestination(Destination.Profile)
+        (firstMain.stack.value.active.instance as MainShellComponent.DestinationChild.Profile).component.onSignOut()
+
+        // removeAccount re-points active to the remaining sibling → still Main, but the shell is REBUILT
+        // per Account, not mutated across the boundary (ADR-0013 / ADR-0002): a fresh instance bound to
+        // Personal, which we prove by reading the new Profile's bound Account.
+        assertTrue(root.activeChild() is RootComponent.Child.Main)
+        val secondMain = (root.activeChild() as RootComponent.Child.Main).component
+        assertNotSame("the Main shell is re-keyed for the sibling, not mutated", firstMain, secondMain)
+        secondMain.selectDestination(Destination.Profile)
+        assertEquals(
+            personal,
+            (secondMain.stack.value.active.instance as MainShellComponent.DestinationChild.Profile)
+                .component.account,
+        )
+        assertEquals(personal, manager.activeAccount.value)
     }
 }
 

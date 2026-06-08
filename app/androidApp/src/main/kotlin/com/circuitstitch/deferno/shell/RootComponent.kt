@@ -8,6 +8,7 @@ import com.arkivanov.decompose.router.stack.replaceAll
 import com.arkivanov.decompose.value.Value
 import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.circuitstitch.deferno.core.data.account.AccountManager
+import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
@@ -49,6 +50,7 @@ interface RootComponent {
 class DefaultRootComponent(
     componentContext: ComponentContext,
     private val accountManager: AccountManager,
+    private val authRepository: AuthRepository,
     private val accountSession: (Account) -> AccountSession,
     private val onSignIn: () -> Unit,
     private val today: LocalDate,
@@ -126,6 +128,8 @@ class DefaultRootComponent(
                         componentContext = childContext,
                         taskRepository = session.taskRepository,
                         planRepository = session.planRepository,
+                        authRepository = authRepository,
+                        account = account,
                         today = today,
                         timeZone = timeZone,
                         accounts = accountManager.accounts,
@@ -143,7 +147,20 @@ class DefaultRootComponent(
             // Add-to-plan applies through the Active Account's offline write path (optimistic apply +
             // outbox enqueue), not a host mirror — the real per-Account command (ADR-0001/0007/0014).
             is MainShellComponent.Output.AddToPlanRequested -> onAddToPlan(output.id)
+            // Sign out crosses the Account-isolation boundary (ADR-0002), so it lands at the root.
+            MainShellComponent.Output.SignOutRequested -> onSignOut()
         }
+    }
+
+    private fun onSignOut() {
+        val id = accountManager.activeAccount.value?.id ?: return
+        // Secure-wipe the Active Account locally (encrypted DB + DB key + bearer token, in the crash-safe
+        // order, ADR-0009) via removeAccount, which re-points activeAccount to another Account or null.
+        // The collector above then swaps the shell back to the Auth shell when it hits null, or re-keys
+        // Main for the remaining sibling — the "return to Auth, or to another signed-in Account" rule.
+        // Server-side PAT revocation (DELETE /auth/tokens/{id}) is deferred to in-app sign-in (#15),
+        // where the token id is captured at mint time (a dev-pasted opaque PAT carries no id to revoke).
+        scope.launch { accountManager.removeAccount(id) }
     }
 
     private fun onAddToPlan(taskId: TaskId) {
