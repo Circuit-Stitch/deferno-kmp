@@ -142,15 +142,17 @@ dependencies {
     // DefernoTheme + palette for the Compose host (live-themed off the shared root, ADR-0017).
     implementation(project(":core:designsystem"))
 
-    // The feature slices the shared Main shell composes. Plan + Tasks render their existing desktop
-    // Views (the :ui submodules' jvmMain); Profile + Settings render a placeholder on desktop for now
-    // (their jvmMain Views are later slices, #84/#85), but their *logic* modules are on the compile
-    // classpath because the Main shell View pattern-matches the Profile/Settings DestinationChild.
+    // The feature slices the shared Main shell composes — each renders its existing desktop View (the
+    // :ui submodule's jvmMain), the desktop counterpart of the Android screen (ADR-0017). Plan, Tasks,
+    // Profile (#84), and Settings (#85) all have desktop Views now; Calendar is still a placeholder (#74).
     implementation(project(":feature:plan"))
     implementation(project(":feature:plan:ui"))
     implementation(project(":feature:tasks"))
     implementation(project(":feature:tasks:ui"))
     implementation(project(":feature:profile"))
+    // The Profile Destination's desktop View (#84): the shared Main shell renders it in the content
+    // area (its jvmMain ProfileDesktopScreen — the identity hub + co-located Account controls).
+    implementation(project(":feature:profile:ui"))
     implementation(project(":feature:settings"))
     // The Settings Destination's desktop View (#85): the shared Main shell renders it in the content
     // area (its jvmMain SettingsDesktopScreen, the desktop counterpart of the Android settings screen).
