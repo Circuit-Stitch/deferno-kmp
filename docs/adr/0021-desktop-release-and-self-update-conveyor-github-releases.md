@@ -22,7 +22,12 @@ concern, and Linux is served by an apt/yum repo or Flathub.
   — eliminating the per-OS CI matrix `jpackage` forces (it cannot cross-compile). Its built-in update
   engine (MSIX block-map deltas on Windows, Sparkle bsdiff on macOS) is **background, delta, and silent
   on restart** — strictly better than the "download the full installer and relaunch" model we had
-  otherwise chosen. **JBR is kept** (fed as a jbrsdk input).
+  otherwise chosen. **The first Linux slice (#102) bundles the JDK Conveyor auto-imports from the
+  module's Gradle toolchain — OpenJDK 17 / Temurin — not JBR.** Forcing JBR would mean either a fragile
+  override of the auto-imported JDK or pulling the desktop compile toolchain off the shared Temurin;
+  shipping the default is the lower-risk start (this ADR was already "open to revisiting Temurin"). The
+  local dev `run` task still launches on JBR via `javaHome`. Bundling JBR in the Conveyor package
+  (a one-line `/stdlib/jdk/17/jetbrains.conf` include + verification) is a deferred follow-up.
 - **Releases + the update feed live on the public main repo's GitHub Releases**
   (`Circuit-Stitch/deferno-kmp`): `app.site.base-url = github.com/$repo/releases/latest/download`. The
   app ships **zero credentials**; cutting a Release *is* shipping an update.
@@ -30,11 +35,16 @@ concern, and Linux is served by an apt/yum repo or Flathub.
   manager / a distro repo updates the app, so in-app self-update covers **Windows + macOS** only.
 - **Single version source of truth in `ProjectConfig`** (matching the "build config lives in
   build-logic" rule). One `APP_VERSION` feeds Android `versionName` (+ a derived `versionCode`), the
-  desktop `packageVersion` / `project.version` Conveyor reads, and the `v$APP_VERSION` release tag —
-  replacing today's split (`packageVersion "1.0.0"` vs `versionName "0.1.0"`/`versionCode 1`).
-- **A manual semver tag (`v*`) triggers the release.** Pushing the tag runs CI on one Linux runner:
-  install the `conveyor` CLI → `conveyor make site` → publish to a GitHub Release. (Automated
-  version/changelog tooling such as release-please is a deferred, additive option.)
+  desktop `packageVersion` / `project.version` Conveyor reads (mapped to `app.version`), and the
+  `$APP_VERSION` release tag — replacing today's split (`packageVersion "1.0.0"` vs
+  `versionName "0.1.0"`/`versionCode 1`).
+- **A manual plain-semver tag (e.g. `0.1.0`, no `v` prefix) triggers the release.** Conveyor owns
+  release creation and names the GitHub Release/tag after `app.version` verbatim, and a `v` prefix is
+  illegal in a Conveyor version — so the trigger tag is the **bare** `$APP_VERSION`, which then equals
+  Conveyor's release tag exactly (one tag, no orphan; a `v$APP_VERSION` tag would leave a second,
+  mismatched tag). Pushing the tag runs CI on one Linux runner: verify the tag matches `APP_VERSION` →
+  the official Conveyor action runs `conveyor make copied-site` → publish to a GitHub Release.
+  (Automated version/changelog tooling such as release-please is a deferred, additive option.)
 - **Signing is phased, Linux-first.** Conveyor self-serves GPG-signed `deb`/apt from a generated key
   (zero external certs) for the dogfood now; **macOS notarization + Windows Authenticode** slot in
   later as **secrets-only** config — and Conveyor can perform both **from Linux** (no Mac needed).
@@ -58,9 +68,12 @@ paid certs or other OSes are involved.
   for dogfooding; native Fedora distribution is a separate later effort (COPR/Flathub, or a
   supplemental `jpackage` RPM). Until then mac/Windows dogfood builds are self-signed and show OS
   warnings.
-- JBR must be supplied as the **jbrsdk** (jmods-bearing) flavor for Conveyor's `jlink` step — already
-  satisfied by the project's Foojay `JvmVendorSpec.JETBRAINS` resolution; worth a per-target build
-  smoke-test.
+- **Runtime divergence while JBR-bundling is deferred (#102):** the Conveyor package ships OpenJDK 17 /
+  Temurin (the auto-imported toolchain JDK) while local `run` uses JBR, so packaged Linux builds may
+  differ slightly in window-manager decorations / theme integration. When JBR-bundling is taken up, it
+  must be supplied as the **jbrsdk** (jmods-bearing) flavor for Conveyor's `jlink` step — satisfiable
+  via the project's Foojay `JvmVendorSpec.JETBRAINS` resolution and a `/stdlib/jdk/17/jetbrains.conf`
+  include, with a per-target build smoke-test.
 
 **Considered & rejected.**
 

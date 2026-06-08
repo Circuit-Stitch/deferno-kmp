@@ -1,0 +1,84 @@
+# Tag-triggered desktop release (ADR-0021, #102). Pushing a plain-semver tag (e.g. `0.1.0`) builds the
+# Linux package with Hydraulic Conveyor on a single Linux runner and publishes it + the update metadata
+# to a public GitHub Release.
+#
+# Tag scheme — plain semver, NO `v` prefix: Conveyor owns release creation and names the GitHub
+# Release/tag after `app.version` (= ProjectConfig.APP_VERSION via Gradle project.version), which must
+# be a plain numeric dotted string. Pushing the bare version makes the trigger tag and Conveyor's
+# release tag identical (one tag, no mismatch). To cut a release: bump ProjectConfig.APP_VERSION, then
+# `git tag 0.1.0 && git push origin 0.1.0`.
+#
+# This slice is Linux only (deb + tarball). Windows/macOS targets are a follow-up.
+name: Release
+
+on:
+  push:
+    # Bare semver only (no `v`). `0.1.0`, `1.2.3`, … — matches Conveyor's app.version-named release.
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+
+# Conveyor uploads the Release directly via the GitHub API using the Actions-provided GITHUB_TOKEN,
+# which needs write access to repository contents (the default token is read-only).
+permissions:
+  contents: write
+
+# Never cancel an in-flight release; serialize per tag.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & publish Linux package (Conveyor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # JDK to RUN Gradle: Conveyor's `make` invokes `./gradlew` via the conveyor.conf hashbang
+      # include, so a JDK must be on PATH. This launcher JDK is independent of the app's bundled
+      # runtime — Conveyor bundles JBR 17 (selected in conveyor.conf via /stdlib/jdk/17/jetbrains).
+      # Temurin 17 matches the project toolchain + ci.yml. (The Android SDK is preinstalled on
+      # ubuntu-latest, so the full-build configuration the include triggers resolves the Android
+      # native module without extra setup.)
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      # Guard the single source of truth: Conveyor names the Release after app.version (=
+      # ProjectConfig.APP_VERSION via project.version), NOT after the git tag. Fail fast if the pushed
+      # tag doesn't equal the built version, so a forgotten APP_VERSION bump can't publish a Release
+      # whose name disagrees with the tag.
+      - name: Verify pushed tag matches APP_VERSION
+        run: |
+          built="$(./gradlew -q :app:desktopApp:properties | awk -F': ' '/^version:/ {print $2}')"
+          tag="${GITHUB_REF_NAME}"
+          echo "Built version (ProjectConfig.APP_VERSION): '${built}'  ·  pushed tag: '${tag}'"
+          if [ "${built}" != "${tag}" ]; then
+            echo "::error::Pushed tag '${tag}' does not match ProjectConfig.APP_VERSION ('${built}'). Bump APP_VERSION to match the tag (or re-tag), then push again."
+            exit 1
+          fi
+
+      # The official Conveyor action: downloads + caches the `conveyor` CLI (version tracks the action
+      # tag, here 22.0), then runs `conveyor make copied-site` — build the Linux .deb + tarball + apt
+      # repo + update metadata and upload them to the GitHub Release named for app.version.
+      #   - OAUTH_TOKEN: read by conveyor.conf's app.site.github.oauth-token; the built-in GITHUB_TOKEN
+      #     suffices for releases in this same repo (no PAT, no embedded credential).
+      #   - signing_key: the Conveyor ROOT key (app.signing-key). REQUIRED even for self-signed Linux
+      #     packages. Generate once with `conveyor keys generate` and store as the SIGNING_KEY repo
+      #     secret (see docs/RELEASING.md). Its private half stays in the secret and never ships in the
+      #     artifact; only the derived public/apt key is embedded for verification.
+      #   - agree_to_license: 1 — non-interactively accept the Conveyor EULA (current version 1).
+      - name: Build & publish with Conveyor
+        uses: hydraulic-software/conveyor/actions/build@v22.0
+        env:
+          OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          command: make copied-site
+          signing_key: ${{ secrets.SIGNING_KEY }}
+          agree_to_license: 1

@@ -65,6 +65,12 @@ composeBom = "2026.05.01"
 # `kotlin-compose` plugin below (pinned to `kotlin`); that compiler plugin is what keeps
 # CM Kotlin-2.4.0-safe, so no CM release has to certify 2.4.0 by name.
 composeMultiplatform = "1.11.1"
+# Hydraulic Conveyor (ADR-0021, #102): the desktop packager + auto-updater. The `dev.hydraulic.conveyor`
+# Gradle plugin (applied in app/desktopApp) adds the `printConveyorConfig` task that bridges the
+# `compose.desktop.application {}` config into the root `conveyor.conf`, and the per-platform input
+# configurations (`linuxAmd64`, …). The plugin version (2.0) tracks the Conveyor CLI loosely; the CI
+# release runs the pinned `conveyor` CLI via the official action (`@v22.0`), not this Gradle plugin.
+conveyor = "2.0"
 # Compose Material icon set for the desktop nav suite (rail/drawer). The JetBrains
 # `org.jetbrains.compose.material` icon artifacts are version-decoupled from the Compose
 # Multiplatform plugin (they stopped tracking it in lockstep at 1.7.x) — 1.7.3 is what CM 1.11.1
@@ -281,6 +287,11 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 # pinned to `kotlin`. Applied per-module (like kotlin-compose), not via a convention plugin.
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+# Hydraulic Conveyor (ADR-0021, #102): the desktop packager's Gradle bridge. Applied directly in
+# app/desktopApp via alias (it owns the `compose.desktop.application {}` block it extracts config
+# from) — same per-module pattern as sqldelight/roborazzi, so it must also be declared `apply false`
+# in the root build to land on that module's classpath (the INVARIANT).
+conveyor = { id = "dev.hydraulic.conveyor", version.ref = "conveyor" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 # SQLDelight schema codegen (issue #21). Applied per-module via alias in core/database — same

@@ -17,6 +17,13 @@ android {
     defaultConfig {
         minSdk = ProjectConfig.MIN_SDK
         targetSdk = ProjectConfig.TARGET_SDK
+
+        // Single version source of truth (ADR-0021, #101): one APP_VERSION in ProjectConfig drives
+        // the versionName and a deterministic, monotonic versionCode — so no hardcoded version is
+        // left in the app build file, and bumping APP_VERSION moves the Android build in lockstep
+        // with the desktop packageVersion and the release tag.
+        versionCode = ProjectConfig.ANDROID_VERSION_CODE
+        versionName = ProjectConfig.APP_VERSION
     }
 }
 
