@@ -71,6 +71,10 @@ class DefaultRootComponent(
     private val timeZone: String,
     /** Deep-link to the OS app-settings screen (Settings → App Permissions, #72). Handled by the host. */
     private val onOpenOsAppSettings: () -> Unit = {},
+    /** Open the web app's data export/import surface (Settings → Data & Privacy, #72 AC #3). Host-handled. */
+    private val onOpenDataExportImport: () -> Unit = {},
+    /** Open the web app's submit-feedback surface (Settings → Help & Feedback, #72 AC #4). Host-handled. */
+    private val onOpenSubmitFeedback: () -> Unit = {},
     /** Open the Active Account's Zitadel console URL, if any (Settings → Security & 2FA stub, #72). */
     private val onOpenConsoleUrl: (String) -> Unit = {},
     coroutineContext: CoroutineContext = Dispatchers.Main,
@@ -204,6 +208,10 @@ class DefaultRootComponent(
             // them (#72). App permissions opens the OS settings; the console URL is resolved from the
             // Active Account's /auth/me identity (only admins carry one — a no-op when absent).
             MainShellComponent.Output.OpenOsAppSettings -> onOpenOsAppSettings()
+            // Export/import + feedback have no client endpoint at v0.1 — open the web app instead, the
+            // same ACTION_VIEW plumbing the console URL uses (AC #3/#4, ADR-0015).
+            MainShellComponent.Output.OpenDataExportImport -> onOpenDataExportImport()
+            MainShellComponent.Output.OpenSubmitFeedback -> onOpenSubmitFeedback()
             MainShellComponent.Output.OpenConsoleUrl -> onOpenConsoleUrl()
             // "View profile" is a lateral switch the shell already performed; nothing for the host.
             MainShellComponent.Output.OpenProfile -> Unit

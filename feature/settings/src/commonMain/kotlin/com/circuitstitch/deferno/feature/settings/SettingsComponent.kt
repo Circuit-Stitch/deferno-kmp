@@ -88,6 +88,19 @@ interface SettingsComponent {
 
     // --- host-routed intents (Output up to the shell) ---
 
+    /**
+     * Data & Privacy: ask the host to open the web app's export/import surface. There is no client
+     * REST endpoint at envelope v0.1 (export/import is deferred), so it is **reachable** as a web
+     * action rather than handled in-app — not dead prose (AC #3, ADR-0015).
+     */
+    fun onOpenDataExportImport()
+
+    /**
+     * Help & Feedback: ask the host to open the web app's submit-feedback surface. Same deferral as
+     * export/import — no in-app feedback endpoint at v0.1, but the tap is **reachable** (AC #4).
+     */
+    fun onOpenSubmitFeedback()
+
     /** App Permissions: ask the host to deep-link to the OS app-settings screen. */
     fun onOpenAppPermissions()
 
@@ -109,6 +122,12 @@ interface SettingsComponent {
     sealed interface Output {
         /** Open the OS app-settings screen for this app (App Permissions category). */
         data object OpenOsAppSettings : Output
+
+        /** Open the web app's data export/import surface (Data & Privacy — no client endpoint at v0.1). */
+        data object OpenDataExportImport : Output
+
+        /** Open the web app's submit-feedback surface (Help & Feedback — no client endpoint at v0.1). */
+        data object OpenSubmitFeedback : Output
 
         /** Open the Zitadel admin console (Security & 2FA stub) — handled only when a URL is present. */
         data object OpenConsoleUrl : Output
@@ -187,6 +206,10 @@ class DefaultSettingsComponent(
     override fun onTrackingChanged(enabled: Boolean) {
         scope.launch { settingsWriter.setTracking(enabled) }
     }
+
+    override fun onOpenDataExportImport() = output(SettingsComponent.Output.OpenDataExportImport)
+
+    override fun onOpenSubmitFeedback() = output(SettingsComponent.Output.OpenSubmitFeedback)
 
     override fun onOpenAppPermissions() = output(SettingsComponent.Output.OpenOsAppSettings)
 

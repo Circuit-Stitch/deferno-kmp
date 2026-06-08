@@ -303,6 +303,36 @@ class MainShellComponentTest {
     }
 
     @Test
+    fun settingsDataExportImport_bubblesOpenDataExportImportToTheHost() {
+        // AC #3: the reachable export/import web action routes up to the host (which deep-links the web app).
+        val outputs = mutableListOf<MainShellComponent.Output>()
+        val shell = shell(output = outputs::add)
+        shell.selectDestination(Destination.Settings)
+
+        shell.settings().onOpenDataExportImport()
+
+        assertEquals(
+            listOf<MainShellComponent.Output>(MainShellComponent.Output.OpenDataExportImport),
+            outputs,
+        )
+    }
+
+    @Test
+    fun settingsSubmitFeedback_bubblesOpenSubmitFeedbackToTheHost() {
+        // AC #4: the reachable submit-feedback web action routes up to the host.
+        val outputs = mutableListOf<MainShellComponent.Output>()
+        val shell = shell(output = outputs::add)
+        shell.selectDestination(Destination.Settings)
+
+        shell.settings().onOpenSubmitFeedback()
+
+        assertEquals(
+            listOf<MainShellComponent.Output>(MainShellComponent.Output.OpenSubmitFeedback),
+            outputs,
+        )
+    }
+
+    @Test
     fun profile_isBuiltForTheBoundActiveAccount() {
         val shell = shell()
         shell.selectDestination(Destination.Profile)

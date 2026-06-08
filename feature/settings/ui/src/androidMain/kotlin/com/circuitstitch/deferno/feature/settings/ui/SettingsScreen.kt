@@ -138,7 +138,7 @@ private fun CategoryDetail(
                 SettingsCategory.Appearance -> AppearanceDetail(settings, component)
                 SettingsCategory.TaskBehavior -> TaskBehaviorDetail(settings, component)
                 SettingsCategory.DataPrivacy -> DataPrivacyDetail(settings, component)
-                SettingsCategory.HelpFeedback -> HelpFeedbackDetail()
+                SettingsCategory.HelpFeedback -> HelpFeedbackDetail(component)
                 SettingsCategory.AppPermissions -> AppPermissionsDetail(component)
                 SettingsCategory.Legal -> LegalDetail()
                 SettingsCategory.Account -> AccountDetail(settings, component)
@@ -216,21 +216,31 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     SectionLabel("Your data")
     Text(
-        text = "Export and import are available from the Deferno web app. " +
-            "We’ll bring them into the app in a future release.",
+        text = "Export and import run in the Deferno web app — there’s no in-app endpoint yet. " +
+            "Open the web app to manage your data.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
+    // Reachable web action, not dead prose (AC #3): the host deep-links the web app's data surface.
+    TextButton(
+        onClick = component::onOpenDataExportImport,
+        modifier = Modifier.heightIn(min = MinTouchTarget),
+    ) { Text("Export or import your data") }
 }
 
 @Composable
-private fun HelpFeedbackDetail() {
+private fun HelpFeedbackDetail(component: SettingsComponent) {
     Text(
-        text = "Have a question or a suggestion? Send us feedback from the Deferno web app — " +
-            "in-app feedback is coming soon.",
+        text = "Have a question or a suggestion? Feedback runs in the Deferno web app — " +
+            "there’s no in-app endpoint yet. Open the web app to send it.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
+    // Reachable web action, not dead prose (AC #4): the host deep-links the web app's feedback surface.
+    TextButton(
+        onClick = component::onOpenSubmitFeedback,
+        modifier = Modifier.heightIn(min = MinTouchTarget),
+    ) { Text("Send feedback") }
 }
 
 @Composable

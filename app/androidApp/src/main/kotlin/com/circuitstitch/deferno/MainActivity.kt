@@ -20,6 +20,7 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.di.createAccountComponent
 import com.circuitstitch.deferno.core.model.ThemeFamily
+import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.RootShell
@@ -72,6 +73,23 @@ class MainActivity : ComponentActivity() {
                     ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     appContext.startActivity(intent)
                 },
+                // Settings → Data & Privacy: export/import has no client endpoint at v0.1 (ADR-0015),
+                // so it is a REACHABLE web action — open the web app's data surface (AC #3). The origin
+                // is derived from the configured environment, so it tracks staging/prod automatically.
+                onOpenDataExportImport = {
+                    val url = webAppUrl(appComponent.environment, "settings/data")
+                    appContext.startActivity(
+                        Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                },
+                // Settings → Help & Feedback: likewise reachable, not dead text — open the web app's
+                // feedback surface (AC #4).
+                onOpenSubmitFeedback = {
+                    val url = webAppUrl(appComponent.environment, "feedback")
+                    appContext.startActivity(
+                        Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                },
                 // Settings → Security & 2FA: open the Active Account's Zitadel console URL in a browser.
                 onOpenConsoleUrl = { url ->
                     val intent = Intent(Intent.ACTION_VIEW, url.toUri())
@@ -111,4 +129,16 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+/**
+ * Build a web-app URL for [path] from the configured backend [environment] (#72, AC #3/#4). The web
+ * app shares the API host: the env [com.circuitstitch.deferno.core.network.DefernoEnvironment.baseUrl]
+ * carries the `/api/` API prefix, so the web origin is that base with the `/api/` suffix dropped — the
+ * deep-link tracks staging/prod automatically rather than hard-coding a host. [path] is a relative
+ * web-app route (no leading slash), e.g. `settings/data` or `feedback`.
+ */
+internal fun webAppUrl(environment: DefernoEnvironment, path: String): String {
+    val origin = environment.baseUrl.removeSuffix("/").removeSuffix("/api")
+    return "$origin/$path"
 }

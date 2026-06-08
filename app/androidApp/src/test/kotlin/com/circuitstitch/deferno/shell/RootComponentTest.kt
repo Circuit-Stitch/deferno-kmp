@@ -10,6 +10,9 @@ import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.ThemeFamily
+import com.circuitstitch.deferno.core.model.ThemeMode
+import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
@@ -49,6 +52,21 @@ class RootComponentTest {
         authRepository = FakeAuthRepository(),
         accountSession = { session },
         onSignIn = onSignIn,
+        today = today,
+        timeZone = "UTC",
+        coroutineContext = Dispatchers.Unconfined,
+    )
+
+    /** A root whose Main child is built from a per-Account [sessionFor] — for the theme re-pointing tests. */
+    private fun rootWithSessions(
+        manager: AccountManager,
+        sessionFor: (Account) -> AccountSession,
+    ) = DefaultRootComponent(
+        componentContext = DefaultComponentContext(LifecycleRegistry()),
+        accountManager = manager,
+        authRepository = FakeAuthRepository(),
+        accountSession = sessionFor,
+        onSignIn = {},
         today = today,
         timeZone = "UTC",
         coroutineContext = Dispatchers.Unconfined,
@@ -201,6 +219,81 @@ class RootComponentTest {
                 .component.account,
         )
         assertEquals(personal, manager.activeAccount.value)
+    }
+
+    // --- app-wide live-theme StateFlow re-pointing (#72, AC: "Appearance applies live app-wide") ---
+
+    @Test
+    fun themeSettings_defaultsToDefault_inTheAuthShell() {
+        // No Active Account → the app-wide theme falls back to the default so the Auth shell is themed.
+        val root = root(FakeAccountManager())
+        assertTrue(root.activeChild() is RootComponent.Child.Auth)
+        assertEquals(UserSettings.Default, root.themeSettings.value)
+    }
+
+    @Test
+    fun themeSettings_pointsAtTheActiveAccountsSettings_onOpen() {
+        val mono = UserSettings.Default.copy(themeFamily = ThemeFamily.Mono, themeMode = ThemeMode.Dark)
+        val session = FakeAccountSession(settingsRepository = FakeSettingsRepository(mono))
+        val root = rootWithSessions(FakeAccountManager(active = account)) { session }
+
+        // The root mirrors the active session's settings into the app-wide theme StateFlow on open.
+        assertEquals(mono, root.themeSettings.value)
+    }
+
+    @Test
+    fun themeSettings_updatesLive_whenTheActiveAccountsSettingsChange() {
+        // This is the actual "applies live app-wide" mechanism: the root's themeSettings StateFlow
+        // re-emits when the Active Account's settings Flow changes (the seam behind DefernoTheme).
+        val repo = FakeSettingsRepository(UserSettings.Default)
+        val session = FakeAccountSession(settingsRepository = repo)
+        val root = rootWithSessions(FakeAccountManager(active = account)) { session }
+        assertEquals(ThemeFamily.Deferno, root.themeSettings.value.themeFamily)
+
+        // A live Appearance write (the same Flow the Settings writer mutates) re-points the theme.
+        repo.state.value = repo.state.value.copy(themeFamily = ThemeFamily.Mono, themeMode = ThemeMode.Dark)
+
+        assertEquals(ThemeFamily.Mono, root.themeSettings.value.themeFamily)
+        assertEquals(ThemeMode.Dark, root.themeSettings.value.themeMode)
+    }
+
+    @Test
+    fun themeSettings_rePointsOnAccountSwitch_andTheOldAccountsLaterChangeDoesNotBleed() {
+        val personal = Account(AccountId("personal"), "Personal")
+        val manager = FakeAccountManager(active = account).also { it.signIn(personal); it.activate(account.id) }
+        val workRepo = FakeSettingsRepository(UserSettings.Default.copy(themeFamily = ThemeFamily.Deferno))
+        val personalRepo = FakeSettingsRepository(UserSettings.Default.copy(themeFamily = ThemeFamily.Mono))
+        val sessions = mapOf(
+            account.id to FakeAccountSession(settingsRepository = workRepo),
+            personal.id to FakeAccountSession(settingsRepository = personalRepo),
+        )
+        val root = rootWithSessions(manager) { sessions.getValue(it.id) }
+        assertEquals("opens pointed at Work's theme", ThemeFamily.Deferno, root.themeSettings.value.themeFamily)
+
+        // Switch to Personal: the theme re-points to Personal's settings (account isolation, ADR-0002).
+        (root.activeChild() as RootComponent.Child.Main).component.let {
+            (it as DefaultMainShellComponent).switchAccount(personal.id)
+        }
+        assertEquals("re-points to Personal's theme on switch", ThemeFamily.Mono, root.themeSettings.value.themeFamily)
+
+        // The prior account's collector must be cancelled: a later Work-side change must NOT bleed through.
+        workRepo.state.value = workRepo.state.value.copy(themeMode = ThemeMode.Light)
+        assertEquals("Work's collector is cancelled — no cross-account bleed", ThemeFamily.Mono, root.themeSettings.value.themeFamily)
+        assertEquals(ThemeMode.Auto, root.themeSettings.value.themeMode)
+    }
+
+    @Test
+    fun themeSettings_fallsBackToDefault_onSignOut() {
+        val mono = UserSettings.Default.copy(themeFamily = ThemeFamily.Mono)
+        val manager = FakeAccountManager(active = account)
+        val root = rootWithSessions(manager) { FakeAccountSession(settingsRepository = FakeSettingsRepository(mono)) }
+        assertEquals(ThemeFamily.Mono, root.themeSettings.value.themeFamily)
+
+        manager.signOut()
+
+        // Back at the Auth shell → the app-wide theme resets to the default (no stale account theme).
+        assertTrue(root.activeChild() is RootComponent.Child.Auth)
+        assertEquals(UserSettings.Default, root.themeSettings.value)
     }
 }
 

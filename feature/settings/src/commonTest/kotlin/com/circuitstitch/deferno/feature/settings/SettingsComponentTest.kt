@@ -114,6 +114,36 @@ class SettingsComponentTest {
     }
 
     @Test
+    fun dataPrivacy_exportImport_emitsOpenDataExportImport() {
+        // Export/import has no client REST endpoint at envelope v0.1, but it must be a REACHABLE web
+        // action (AC #3) — not dead prose: tapping it asks the host to deep-link the web app.
+        val outputs = mutableListOf<SettingsComponent.Output>()
+        val (component, _, _) = component(output = outputs::add)
+
+        component.onOpenDataExportImport()
+
+        assertEquals(
+            listOf<SettingsComponent.Output>(SettingsComponent.Output.OpenDataExportImport),
+            outputs,
+        )
+    }
+
+    @Test
+    fun helpFeedback_submit_emitsOpenSubmitFeedback() {
+        // Submit-feedback is likewise reachable, not static text (AC #4): the tap asks the host to
+        // deep-link the web app's feedback surface.
+        val outputs = mutableListOf<SettingsComponent.Output>()
+        val (component, _, _) = component(output = outputs::add)
+
+        component.onOpenSubmitFeedback()
+
+        assertEquals(
+            listOf<SettingsComponent.Output>(SettingsComponent.Output.OpenSubmitFeedback),
+            outputs,
+        )
+    }
+
+    @Test
     fun security2FA_emitsOpenConsoleUrl_andAccount_emitsOpenProfile() {
         val outputs = mutableListOf<SettingsComponent.Output>()
         val (component, _, _) = component(output = outputs::add)

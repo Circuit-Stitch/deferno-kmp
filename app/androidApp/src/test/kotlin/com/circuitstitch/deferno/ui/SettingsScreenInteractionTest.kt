@@ -11,6 +11,7 @@ import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.feature.settings.DefaultSettingsComponent
+import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.ui.SettingsScreen
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
@@ -95,6 +96,58 @@ class SettingsScreenInteractionTest {
         composeRule.onNodeWithText("Drag and drop (experimental)").performClick()
 
         assertEquals(listOf(true), writer.dragAndDropChanges)
+    }
+
+    @Test
+    fun dataPrivacy_exportImportButton_forwardsTheReachableWebAction() {
+        // AC #3: export/import must be a REACHABLE action (a real button → Output), not static prose.
+        val outputs = mutableListOf<SettingsComponent.Output>()
+        val repo = FakeSettingsRepository()
+        setContent {
+            SettingsScreen(
+                DefaultSettingsComponent(
+                    componentContext = DefaultComponentContext(LifecycleRegistry()),
+                    settingsRepository = repo,
+                    settingsWriter = FakeSettingsWriter(repo),
+                    output = outputs::add,
+                    coroutineContext = Dispatchers.Unconfined,
+                ),
+            )
+        }
+
+        composeRule.onNodeWithText("Data & Privacy").performClick()
+        composeRule.onNodeWithText("Export or import your data").performClick()
+
+        assertEquals(
+            listOf<SettingsComponent.Output>(SettingsComponent.Output.OpenDataExportImport),
+            outputs,
+        )
+    }
+
+    @Test
+    fun helpFeedback_submitButton_forwardsTheReachableWebAction() {
+        // AC #4: submit-feedback must be a REACHABLE action (a real button → Output), not static prose.
+        val outputs = mutableListOf<SettingsComponent.Output>()
+        val repo = FakeSettingsRepository()
+        setContent {
+            SettingsScreen(
+                DefaultSettingsComponent(
+                    componentContext = DefaultComponentContext(LifecycleRegistry()),
+                    settingsRepository = repo,
+                    settingsWriter = FakeSettingsWriter(repo),
+                    output = outputs::add,
+                    coroutineContext = Dispatchers.Unconfined,
+                ),
+            )
+        }
+
+        composeRule.onNodeWithText("Help & Feedback").performClick()
+        composeRule.onNodeWithText("Send feedback").performClick()
+
+        assertEquals(
+            listOf<SettingsComponent.Output>(SettingsComponent.Output.OpenSubmitFeedback),
+            outputs,
+        )
     }
 
     @Test

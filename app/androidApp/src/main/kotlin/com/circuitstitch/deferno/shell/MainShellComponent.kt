@@ -146,6 +146,12 @@ interface MainShellComponent {
         /** A Settings "App Permissions" tap — the host deep-links to the OS app-settings screen (#72). */
         data object OpenOsAppSettings : Output
 
+        /** A Settings "Data & Privacy → export/import" tap — the host deep-links the web app (#72, AC #3). */
+        data object OpenDataExportImport : Output
+
+        /** A Settings "Help & Feedback → submit" tap — the host deep-links the web app (#72, AC #4). */
+        data object OpenSubmitFeedback : Output
+
         /** A Settings "Security & 2FA" tap — the host opens the Zitadel console URL when present (#72). */
         data object OpenConsoleUrl : Output
 
@@ -370,9 +376,15 @@ class DefaultMainShellComponent(
 
     private fun onSettingsOutput(output: SettingsComponent.Output) {
         when (output) {
-            // OS deep-links cross the app boundary (an Android Intent), so they land at the host (#72).
+            // OS / web deep-links cross the app boundary (an Android Intent), so they land at the host (#72).
             SettingsComponent.Output.OpenOsAppSettings ->
                 this.output(MainShellComponent.Output.OpenOsAppSettings)
+            // Export/import + feedback have no client endpoint at v0.1, so they are reachable web
+            // actions: re-emit for the host to deep-link the web app (AC #3/#4, ADR-0015).
+            SettingsComponent.Output.OpenDataExportImport ->
+                this.output(MainShellComponent.Output.OpenDataExportImport)
+            SettingsComponent.Output.OpenSubmitFeedback ->
+                this.output(MainShellComponent.Output.OpenSubmitFeedback)
             SettingsComponent.Output.OpenConsoleUrl ->
                 this.output(MainShellComponent.Output.OpenConsoleUrl)
             // "View profile" is a lateral switch within the shell — handle it here (the shell owns the
