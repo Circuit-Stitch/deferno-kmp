@@ -152,6 +152,9 @@ dependencies {
     implementation(project(":feature:tasks:ui"))
     implementation(project(":feature:profile"))
     implementation(project(":feature:settings"))
+    // The Settings Destination's desktop View (#85): the shared Main shell renders it in the content
+    // area (its jvmMain SettingsDesktopScreen, the desktop counterpart of the Android settings screen).
+    implementation(project(":feature:settings:ui"))
 
     // Decompose: the shell/Destination component tree + `subscribeAsState()` Compose bindings, and
     // `LifecycleController`, which drives Essenty's LifecycleRegistry off the desktop window state

@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.feature.plan.ui.PlanDesktopScreen
+import com.circuitstitch.deferno.feature.settings.ui.SettingsDesktopScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksDesktopScreen
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.MainShellComponent
@@ -104,8 +105,8 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
 
 /**
  * Renders the foreground Destination's desktop screen, filling the content area. Plan + Tasks render
- * their existing desktop Views; Profile, Settings, and reserved Destinations (Calendar #74) render a
- * placeholder until their desktop Views land (#84/#85, ADR-0017).
+ * their existing desktop Views, and Settings (#85) renders its tier-3 drill-down View; Profile (#84)
+ * and reserved Destinations (Calendar #74) render a placeholder until their desktop Views land (ADR-0017).
  */
 @Composable
 private fun DestinationContent(active: MainShellComponent.DestinationChild) {
@@ -120,7 +121,7 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
             ComingSoon(active.destination)
 
         is MainShellComponent.DestinationChild.Settings ->
-            ComingSoon(active.destination)
+            SettingsDesktopScreen(active.component, Modifier.fillMaxSize())
 
         is MainShellComponent.DestinationChild.Placeholder ->
             ComingSoon(active.destination)
