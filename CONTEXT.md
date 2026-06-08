@@ -175,3 +175,51 @@ what a command palette lists, a context menu filters, and the agent / OS-intent 
 above the offline-first write seam, so issuing a Command applies optimistically and enqueues for replay
 (ADR-0001). It is not a UI; the [[View]]s and the agent are its *clients*.
 _Avoid_: dispatcher, bus, controller, menu.
+
+### Voice & dictation
+
+**Dictation** *(client)*:
+Speaking to fill a text field — the microphone affordance on a text input (in v1, the **New** create
+surface's title/notes) that turns on-device speech into a [[Transcript]] streamed into the focused
+field. The person still chooses the item kind **explicitly** (ADR-0015); dictation **never infers
+structure** (no kind, count, due date, or tags). The product is editable text, nothing more.
+_Avoid_: voice commands (routing speech to the [[Command]] registry — a deliberate non-goal, a
+different capability), transcription (the act; the *product* is the [[Transcript]]), recording (audio
+is transient and never persisted).
+
+**Transcript** *(client)*:
+The editable text a [[Dictation]] produces — partial words stream in, a final result settles, and from
+that point it is ordinary editable text the person owns. The single hand-off artifact between the
+on-device speech layer and whatever consumes it (in v1, a text field; later, the [[Brain dump]]
+extractor). Always **on-device**: the audio never leaves the device and is never sent to a server for
+recognition.
+_Avoid_: recording (the transient audio, not kept), recognition result, dictation (that is the *act*).
+
+**Brain dump** *(deferred)*:
+Free-form spoken capture whose [[Transcript]] a future on-device extractor turns into **several draft
+[[Task]]s** the person reviews before anything is created — Stage 2, **not built in v1**. Unlike
+[[Dictation]] (which fills one field and infers nothing), a brain dump is inference-heavy and will
+relax ADR-0015's "kind is explicit, never inferred." The drafts are exactly that: *drafts*, never
+auto-committed.
+_Avoid_: [[Dictation]] (fills one field, no inference), voice commands (a non-goal).
+
+### Settings (app vs user)
+
+The **Settings** [[Destination]] surfaces two kinds of preference that look alike on screen but differ
+in *where they live and how far they travel*. Keeping them distinct stops "a setting" from silently
+implying "synced."
+
+**User setting** *(synced)*:
+A per-[[Account]] preference **synced with the backend**, offline-first through the outbox (ADR-0001) —
+the `UserSettings` model (appearance, task behaviour, …). It follows the [[Account]] across devices and
+is scoped to the [[Active Account]].
+_Avoid_: app setting (the device-local kind), preference (ambiguous between the two).
+
+**App setting** *(client, device-local)*:
+A preference scoped to **this install on this device** — **never synced, never crossing [[Account]]s**.
+Covers OS/app permissions, device notification preferences, and the [[Dictation]] **speech-engine
+choice**. Lives in a device-local store, *not* in [[User setting]]s, because the thing it configures is a
+device capability (an engine available on one device may be absent on another). Surfaced on the same
+**Settings** [[Destination]] alongside [[User setting]]s.
+_Avoid_: [[User setting]] (the synced, per-Account kind), system/OS setting (those live in the platform
+Settings app, not Deferno).

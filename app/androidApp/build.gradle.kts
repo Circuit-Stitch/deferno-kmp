@@ -44,6 +44,11 @@ fun stringLiteral(value: String): String =
 android {
     namespace = "com.circuitstitch.deferno"
 
+    // The on-device whisper model ships as a Play Asset Delivery INSTALL-TIME pack (#92, ADR-0019):
+    // present from first launch but OFF the base-APK size budget (not bundled in the binary). The pack
+    // is populated by :speech-model-pack:downloadWhisperModel (see the preBuild hook below).
+    assetPacks += listOf(":speech-model-pack")
+
     defaultConfig {
         applicationId = "com.circuitstitch.deferno"
         versionCode = 1
@@ -110,6 +115,13 @@ baselineProfile {
     warnings {
         variantHasNoBaselineProfileDependency = false
     }
+}
+
+// Fetch the whisper model into the install-time asset pack before the app is built (#92, ADR-0019).
+// preBuild is the earliest app task, so the pack is populated before asset packaging reads it. The
+// download task no-ops when the model is already present and only warns (never fails) when offline.
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(":speech-model-pack:downloadWhisperModel")
 }
 
 dependencies {

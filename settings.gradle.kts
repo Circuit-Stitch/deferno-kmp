@@ -38,6 +38,10 @@ include(":core:common")
 include(":core:network")
 include(":core:database")
 include(":core:secure")
+// On-device speech-to-text (ADR-0018, #92): the SpeechToText seam + selector + engine impls. A device
+// capability bound at AppScope (identity-independent), mirroring core:secure. Sits beside it in the
+// foundation layer — it depends only on core:scopes (AppScope) and core:model.
+include(":core:speech")
 include(":core:data")
 include(":core:domain")
 include(":core:designsystem")
@@ -65,6 +69,16 @@ include(":feature:settings:ui")
 // shell, Destination graph, AccountSession, New, Auth) rendered three ways by the per-platform Views
 // in the app entry points below. Sits above feature/* and below app/*.
 include(":app:shell")
+
+// The bespoke native (JNI) whisper library (#92, ADR-0018 — the repo's first native code): a classic
+// `com.android.library` module (the only Android module type whose DSL exposes externalNativeBuild/NDK)
+// that compiles the vendored whisper.cpp submodule into a `.so` consumed by core:speech's androidMain.
+// Kept OUTSIDE `:core:`/`:feature:` so the merged coverage gate never tries to measure native-only code.
+include(":speech-whisper-jni")
+
+// The whisper model's Play Asset Delivery install-time pack (#92, ADR-0019): ships small.en off the
+// base-APK budget. A `com.android.asset-pack` module declared by app/androidApp's `assetPacks`.
+include(":speech-model-pack")
 
 // Per-platform application entry points.
 include(":app:androidApp")

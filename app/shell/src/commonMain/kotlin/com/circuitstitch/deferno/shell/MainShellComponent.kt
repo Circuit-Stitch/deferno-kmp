@@ -22,6 +22,8 @@ import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.speech.SpeechToText
+import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
 import com.circuitstitch.deferno.feature.calendar.CalendarComponent
 import com.circuitstitch.deferno.feature.calendar.DefaultCalendarComponent
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
@@ -227,6 +229,11 @@ class DefaultMainShellComponent(
     // no-op Offline so a test that doesn't exercise create needn't supply it.
     private val create: suspend (com.circuitstitch.deferno.core.domain.command.CreateItem.Payload) -> com.circuitstitch.deferno.core.domain.command.CommandResult =
         { com.circuitstitch.deferno.core.domain.command.CommandResult.Offline(com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem) },
+    // Dictation (#92, ADR-0018): the on-device SpeechToText the New surface's mic drives, and the device
+    // locale it recognizes. Defaulted to the Unavailable floor / English so the many shell tests build
+    // without supplying them — dictation simply offers no mic.
+    private val speechToText: SpeechToText = UnavailableSpeechToText,
+    private val locale: String = "en-US",
 ) : MainShellComponent, ComponentContext by componentContext {
 
     override val destinations: List<Destination> = Destination.entries
@@ -387,6 +394,10 @@ class DefaultMainShellComponent(
                     launch = { block -> overlayScope.launch { block() } },
                     tz = timeZone,
                     initialDate = route.date, // pre-date the form (the Calendar FAB, #74)
+                    // Dictation (#92): the mic drives the AppScope SpeechToText on the overlay scope.
+                    speech = speechToText,
+                    locale = locale,
+                    dictationScope = overlayScope,
                 ),
             )
         }

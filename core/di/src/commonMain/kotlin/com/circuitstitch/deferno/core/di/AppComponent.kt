@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.database.AccountDatabaseFactory
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.AppScope
+import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.scopes.PlatformContext
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
@@ -63,6 +64,15 @@ abstract class AppComponent(
      * HttpClient → BearerTokenProvider → AccountContext chain at compile time.
      */
     abstract val authRepository: AuthRepository
+
+    /**
+     * On-device speech-to-text (#92, ADR-0018): the [SpeechToText] selector over every registered engine
+     * (the `Set<SpeechToText>` multibinding) honouring the device-local engine preference. An AppScope
+     * **device capability** — identity-independent, like the secure vault (ADR-0014), not per-Account.
+     * The **New** surface's [[Dictation]] drives it; resolving it here also compile-validates the
+     * multibinding (and its per-platform engine + preference contributions) on every target.
+     */
+    abstract val speechToText: SpeechToText
 
     // --- Bindings re-exposed for the child AccountScope (ADR-0014) ---
     // kotlin-inject-anvil does not auto-propagate a parent's contributed @Provides into a child merge;

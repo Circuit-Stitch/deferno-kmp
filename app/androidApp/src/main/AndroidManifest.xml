@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- On-device Dictation (#92, ADR-0018): microphone capture for the New surface's speech-to-text.
+         Runtime-requested on first mic tap; audio is recognized on-device and never leaves the device. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <application
         android:name=".DefernoApplication"
         android:allowBackup="true"

@@ -24,6 +24,7 @@ import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.RootShell
+import java.util.Locale
 import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
@@ -96,6 +97,11 @@ class MainActivity : ComponentActivity() {
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     appContext.startActivity(intent)
                 },
+                // Dictation (#92, ADR-0018): the on-device speech engine from the AppScope DI graph, and
+                // the device locale it recognizes (a non-English locale reports unavailable rather than
+                // mis-transcribing). The New surface's mic drives this.
+                speechToText = appComponent.speechToText,
+                locale = Locale.getDefault().toLanguageTag(),
             )
         }
 

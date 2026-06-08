@@ -8,9 +8,17 @@ import com.circuitstitch.deferno.core.network.dto.CreateEventPayload
 import com.circuitstitch.deferno.core.network.dto.CreateHabitPayload
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import com.circuitstitch.deferno.core.network.dto.RecurrenceDto
+import com.circuitstitch.deferno.core.speech.ContinuityHint
+import com.circuitstitch.deferno.core.speech.SpeechAvailability
+import com.circuitstitch.deferno.core.speech.SpeechError
+import com.circuitstitch.deferno.core.speech.SpeechToText
+import com.circuitstitch.deferno.core.speech.TranscriptEvent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -57,6 +65,45 @@ interface NewComponent {
 
     /** Dismiss the surface (the host clears the overlay). */
     fun dismiss()
+
+    /**
+     * Begin **[[Dictation]]** into [field] (#92, ADR-0018): on-device speech streams as partial
+     * [[Transcript]] text into the focused title/notes field and settles to a final result. The View
+     * calls this only **after** RECORD_AUDIO is granted (it owns the OS prompt); dictation only fills
+     * text — it never infers the kind or any other field (ADR-0015), and create still gates on
+     * connectivity (ADR-0016). A no-op when no speech engine is wired.
+     */
+    fun startDictation(field: DictationField)
+
+    /** Stop an in-progress dictation, keeping whatever text has already streamed into the field. */
+    fun stopDictation()
+
+    /**
+     * The View reports a **denied** RECORD_AUDIO outcome (#92) so the surface can show the gentle
+     * "needs microphone access" state — and, when [permanentlyDenied], offer the OS-settings deep-link.
+     */
+    fun dictationPermissionDenied(permanentlyDenied: Boolean)
+}
+
+/** Which text field a [[Dictation]] fills (#92). The mic affordance sits on each. */
+enum class DictationField { Title, Notes }
+
+/** Where the New surface is in its [[Dictation]] lifecycle (#92, ADR-0018), independent of create [NewStatus]. */
+sealed interface DictationStatus {
+    /** Not dictating. */
+    data object Idle : DictationStatus
+
+    /** Capturing speech; partials are streaming into the focused field. */
+    data object Listening : DictationStatus
+
+    /** RECORD_AUDIO was denied — the gentle "needs microphone access" (the View offers a retry). */
+    data object PermissionDenied : DictationStatus
+
+    /** RECORD_AUDIO was permanently denied — the View additionally deep-links to OS settings. */
+    data object PermissionPermanentlyDenied : DictationStatus
+
+    /** Recognition failed (engine/capture/unavailable) — surfaced gently, never a silent failure. */
+    data class Error(val reason: SpeechError) : DictationStatus
 }
 
 /** The New surface's render state. */
@@ -75,6 +122,13 @@ data class NewState(
     // The Calendar FAB pre-dates this to the selected day; the New form surfaces it for the non-Event kinds.
     val date: LocalDate? = null,
     val status: NewStatus = NewStatus.Editing,
+    // Dictation (#92, ADR-0018), orthogonal to the create [status]. [dictationAvailable] gates whether the
+    // mic affordance is offered at all (the engine is available: model present + supported locale);
+    // [dictation] is the active lifecycle/permission state; [dictationField] is the field currently being
+    // filled (null when idle), so the View can show that field's mic as active.
+    val dictationAvailable: Boolean = false,
+    val dictation: DictationStatus = DictationStatus.Idle,
+    val dictationField: DictationField? = null,
 ) {
     /**
      * Create is enabled only with a non-blank title (the one universally-required field) — and, for an
@@ -113,10 +167,36 @@ class DefaultNewComponent(
     private val tz: String = "UTC",
     // The pre-dated day the Calendar FAB opens New on (#74); `null` opens an undated form.
     initialDate: LocalDate? = null,
+    // Dictation (#92, ADR-0018): the on-device [SpeechToText] (the selector) the mic drives, the device
+    // [locale] it recognizes (a non-English locale reports unavailable, never mis-transcribes), and the
+    // [dictationScope] the streaming listen() runs/cancels on. All defaulted so the shell/desktop tests
+    // build without them — dictation is simply unavailable (no mic) when no engine/scope is supplied.
+    private val speech: SpeechToText? = null,
+    private val locale: String = "en-US",
+    private val dictationScope: CoroutineScope? = null,
 ) : NewComponent {
 
     private val _state = MutableStateFlow(NewState(date = initialDate))
     override val state: StateFlow<NewState> = _state
+
+    /** The active dictation collection; cancelled on stop, permission-deny, or a new start. */
+    private var dictationJob: Job? = null
+
+    /** The field's text at the moment dictation started — partials replace only the dictated suffix. */
+    private var dictationBaseText: String = ""
+
+    init {
+        // Offer the mic only when the engine is genuinely available now (model present + supported
+        // locale, ADR-0018/0019). Queried off the UI path on the dictation scope.
+        val engine = speech
+        val scope = dictationScope
+        if (engine != null && scope != null) {
+            scope.launch {
+                val available = engine.availability(locale) == SpeechAvailability.Available
+                _state.update { it.copy(dictationAvailable = available) }
+            }
+        }
+    }
 
     override fun selectKind(kind: ItemKind) = _state.update { it.copy(selectedKind = kind, status = NewStatus.Editing) }
     override fun setTitle(title: String) = _state.update { it.copy(title = title, status = NewStatus.Editing) }
@@ -141,6 +221,67 @@ class DefaultNewComponent(
     }
 
     override fun dismiss() = onCreated()
+
+    override fun startDictation(field: DictationField) {
+        val engine = speech ?: return
+        val scope = dictationScope ?: return
+        dictationJob?.cancel()
+        // Capture the existing text so streaming partials replace only the dictated suffix (the person
+        // keeps anything they had already typed). Dictation fills text only — never the kind (ADR-0015).
+        dictationBaseText = _state.value.textOf(field)
+        _state.update { it.copy(dictationField = field, dictation = DictationStatus.Listening) }
+        dictationJob = scope.launch {
+            engine.listen(locale, ContinuityHint.Utterance).collect { event ->
+                when (event) {
+                    is TranscriptEvent.Partial ->
+                        _state.update { it.withText(field, dictationBaseText + event.text) }
+                    is TranscriptEvent.Final ->
+                        _state.update {
+                            it.withText(field, dictationBaseText + event.text)
+                                .copy(dictationField = null, dictation = DictationStatus.Idle)
+                        }
+                    is TranscriptEvent.Error ->
+                        _state.update {
+                            it.copy(dictationField = null, dictation = DictationStatus.Error(event.reason))
+                        }
+                }
+            }
+        }
+    }
+
+    override fun stopDictation() {
+        dictationJob?.cancel()
+        dictationJob = null
+        // Keep the streamed text — it is ordinary editable text now (ADR-0018) — just leave the listening state.
+        _state.update {
+            if (it.dictationField != null) it.copy(dictationField = null, dictation = DictationStatus.Idle) else it
+        }
+    }
+
+    override fun dictationPermissionDenied(permanentlyDenied: Boolean) {
+        dictationJob?.cancel()
+        dictationJob = null
+        _state.update {
+            it.copy(
+                dictationField = null,
+                dictation = if (permanentlyDenied) {
+                    DictationStatus.PermissionPermanentlyDenied
+                } else {
+                    DictationStatus.PermissionDenied
+                },
+            )
+        }
+    }
+
+    private fun NewState.textOf(field: DictationField): String = when (field) {
+        DictationField.Title -> title
+        DictationField.Notes -> notes
+    }
+
+    private fun NewState.withText(field: DictationField, text: String): NewState = when (field) {
+        DictationField.Title -> copy(title = text)
+        DictationField.Notes -> copy(notes = text)
+    }
 }
 
 /**

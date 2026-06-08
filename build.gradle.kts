@@ -7,6 +7,9 @@
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.kotlin.multiplatform.library) apply false
+    // Classic Android library plugin — applied by the `deferno.android.nativelib` convention for the
+    // bespoke whisper JNI module (#92), so `apply false` here lands it on that module's classpath.
+    alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.compose) apply false
@@ -24,6 +27,10 @@ plugins {
     // here lands them on those module classpaths — same pattern as roborazzi/sqldelight above.
     alias(libs.plugins.android.test) apply false
     alias(libs.plugins.androidx.baselineprofile) apply false
+    // Play Asset Delivery (ADR-0019, #92): `com.android.asset-pack` is applied directly by the
+    // speech-model asset-pack module via alias, so `apply false` here lands it on that module's
+    // classpath — same per-module pattern as roborazzi/sqldelight/baselineprofile above.
+    alias(libs.plugins.android.asset.pack) apply false
 
     // The repo root is Kover's aggregation point: this convention applies Kover here and
     // enforces the merged shared-core coverage gate (ADR-0006, issue #11). Kover stays
