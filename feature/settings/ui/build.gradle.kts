@@ -33,5 +33,31 @@ kotlin {
             // (carries its own version, no androidx BOM needed in a CMP library module).
             implementation(libs.compose.material.icons.core.kmp)
         }
+        // The desktop-native Settings screen (#85): renders the shared SettingsComponent's tier-3
+        // drill-down on Compose Desktop — the desktop counterpart of the Android screen (ADR-0017),
+        // not the phone layout stretched. Mirrors the androidMain deps; the icon glyphs come from the
+        // desktop `material-icons-core` artifact (the desktop variant, not the KMP one androidMain uses).
+        jvmMain.dependencies {
+            implementation(project(":feature:settings"))
+            implementation(project(":core:model"))
+            implementation(project(":core:designsystem"))
+
+            implementation(libs.decompose)
+            implementation(libs.decompose.extensions.compose)
+
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            implementation(compose.material3)
+            implementation(compose.ui)
+            implementation(libs.compose.material.icons.core)
+        }
+        // The desktop render/screenshot test (#85, cf. #39): a Compose-Multiplatform UI test on the
+        // JVM-fast path (no device) over a real DefaultSettingsComponent + in-memory settings fakes.
+        // core:data supplies the SettingsRepository/SettingsWriter the fakes implement.
+        jvmTest.dependencies {
+            implementation(project(":core:data"))
+            implementation(compose.desktop.uiTestJUnit4)
+            implementation(compose.desktop.currentOs)
+        }
     }
 }

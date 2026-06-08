@@ -16,11 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.circuitstitch.deferno.shell.AuthShellComponent
+import com.circuitstitch.deferno.shell.RootComponent
 
 /**
- * The root View, desktop edition (ADR-0013): renders whichever [[Shell]] the [RootComponent] has
- * foreground — the [AuthShell] (pre-[[Account]]) or the [MainShell] (the Destination graph). The shell
- * swaps reactively as the [AuthGate] flips; this View is a pure renderer of that single active child.
+ * The root View, desktop edition (ADR-0013 / ADR-0017): renders whichever [[Shell]] the shared
+ * [RootComponent] has foreground — the [AuthShell] (pre-[[Account]]) or the [MainShell] (the Destination
+ * graph). The shell swaps reactively as the **Active Account** changes (the shared root keys off
+ * `AccountManager.activeAccount`); this View is a pure renderer of that single active child.
  */
 @Composable
 fun RootShell(component: RootComponent, modifier: Modifier = Modifier) {
@@ -34,7 +37,8 @@ fun RootShell(component: RootComponent, modifier: Modifier = Modifier) {
 /**
  * The Auth shell View, desktop edition — a pre-Account placeholder until #15 (sign-in / MFA /
  * account-picker). It is deliberately not a [[Destination]] and carries no nav suite (ADR-0013).
- * "Continue" completes the stubbed Auth flow, crossing into the Main shell.
+ * "Continue" invokes the host's dev-PAT sign-in placeholder (#68): once an Account is seeded, the
+ * shared root swaps this for the Main shell.
  */
 @Composable
 fun AuthShell(component: AuthShellComponent, modifier: Modifier = Modifier) {
