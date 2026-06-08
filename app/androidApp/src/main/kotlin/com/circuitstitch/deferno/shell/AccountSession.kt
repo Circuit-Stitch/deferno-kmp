@@ -6,6 +6,8 @@ import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.AddToPlan
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
+import com.circuitstitch.deferno.core.domain.command.CommandResult
+import com.circuitstitch.deferno.core.domain.command.CreateItem
 import com.circuitstitch.deferno.core.domain.command.taskCommandFor
 import com.circuitstitch.deferno.core.di.AccountComponent
 import com.circuitstitch.deferno.core.model.Task
@@ -46,6 +48,14 @@ interface AccountSession {
      * feature layer touching the command registry directly (mirrors the [addToPlan] wrapper).
      */
     val workingStateEditor: WorkingStateEditor
+
+    /**
+     * Create a new item online (ADR-0016): routes [payload] through the command executor's online-only
+     * [CreateItem] command. Returns the [CommandResult] so the New surface can show the created item
+     * (Accepted), a gentle "reconnect to save" (Offline), or a server error (Failed) — never a silent
+     * failure. **Nothing is enqueued offline** (ADR-0016).
+     */
+    suspend fun create(payload: CreateItem.Payload): CommandResult
 }
 
 /**
@@ -65,6 +75,9 @@ internal class AccountComponentSession(private val component: AccountComponent) 
 
     override val workingStateEditor: WorkingStateEditor =
         commandWorkingStateEditor(component.commandExecutor)
+
+    override suspend fun create(payload: CreateItem.Payload): CommandResult =
+        component.commandExecutor.execute(CreateItem(payload))
 }
 
 /**

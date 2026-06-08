@@ -334,7 +334,7 @@ private class FakeAccountManager(active: Account? = null) : AccountManager {
     }
 }
 
-/** In-memory [AccountSession] over the in-memory demo repositories; records add-to-plan calls. */
+/** In-memory [AccountSession] over the in-memory demo repositories; records add-to-plan + create calls. */
 private class FakeAccountSession(
     override val taskRepository: TaskRepository = DemoTaskRepository(SampleData.tasks),
     override val planRepository: PlanRepository = DemoPlanRepository(emptyList()),
@@ -343,6 +343,7 @@ private class FakeAccountSession(
 ) : AccountSession {
     val addedToPlan = mutableListOf<TaskId>()
     val workingStateSets = mutableListOf<Pair<TaskId, com.circuitstitch.deferno.core.model.WorkingState>>()
+    val created = mutableListOf<com.circuitstitch.deferno.core.domain.command.CreateItem.Payload>()
 
     override suspend fun addToPlan(taskId: TaskId, date: LocalDate, tz: String) {
         addedToPlan += taskId
@@ -352,4 +353,13 @@ private class FakeAccountSession(
         com.circuitstitch.deferno.feature.tasks.WorkingStateEditor { id, target, _ ->
             workingStateSets += id to target
         }
+
+    override suspend fun create(
+        payload: com.circuitstitch.deferno.core.domain.command.CreateItem.Payload,
+    ): com.circuitstitch.deferno.core.domain.command.CommandResult {
+        created += payload
+        return com.circuitstitch.deferno.core.domain.command.CommandResult.Accepted(
+            com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem,
+        )
+    }
 }

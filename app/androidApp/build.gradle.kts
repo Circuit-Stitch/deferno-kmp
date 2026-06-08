@@ -98,6 +98,9 @@ dependencies {
     implementation(project(":feature:settings:ui"))
     implementation(project(":core:model"))
     implementation(project(":core:data"))
+    // The New create surface (#71, ADR-0016) builds the create payload DTOs (CreateTaskPayload, …) the
+    // CreateItem command carries — core:network is `implementation` in core:domain, so name it here.
+    implementation(project(":core:network"))
     // The compile-time DI graph (#68, ADR-0014): the app builds AppComponent at startup and an
     // AccountComponent per Active Account; core:domain supplies the CommandExecutor + AddToPlan command
     // the shell drives for the offline write path.

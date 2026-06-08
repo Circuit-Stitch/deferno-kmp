@@ -41,6 +41,9 @@ enum class CommandCategory {
 
     /** Daily-plan membership + ordering. */
     Plan,
+
+    /** New-item creation + post-creation kind conversion ([CommandKind.CreateItem] / [CommandKind.ConvertItem]). */
+    Create,
 }
 
 /**
@@ -60,6 +63,7 @@ enum class CommandKind(
     val id: CommandId,
     val category: CommandCategory,
     val destructive: Boolean = false,
+    val onlineOnly: Boolean = false,
 ) {
     CompleteTask(CommandId("task.complete"), CommandCategory.Status),
     ReopenTask(CommandId("task.reopen"), CommandCategory.Status),
@@ -91,6 +95,12 @@ enum class CommandKind(
     // is enabled whenever the Task isn't already Open; ReopenTask stays the narrower terminal-only verb.
     // Appended at the end (CommandIds are a public contract — never reorder/rename existing entries).
     OpenTask(CommandId("task.open"), CommandCategory.Status),
+
+    // Create + convert are ONLINE-ONLY (ADR-0016): the server has no idempotency key in v0.1, so they
+    // call the endpoint directly rather than enqueuing — the [onlineOnly] flag is exactly the signal the
+    // agent / OS-intent layer reads to surface the connectivity requirement rather than failing silently.
+    CreateItem(CommandId("item.create"), CommandCategory.Create, onlineOnly = true),
+    ConvertItem(CommandId("item.convert"), CommandCategory.Create, onlineOnly = true),
     ;
 
     /**
@@ -121,10 +131,14 @@ enum class CommandKind(
     }
 
     companion object {
-        /** The catalog a Task context menu / palette section offers (every non-plan kind). */
-        val taskKinds: List<CommandKind> get() = entries.filter { it.category != CommandCategory.Plan }
+        /** The catalog a Task context menu / palette section offers (the per-Task kinds, not plan/create). */
+        val taskKinds: List<CommandKind>
+            get() = entries.filter { it.category != CommandCategory.Plan && it.category != CommandCategory.Create }
 
         /** The catalog a Plan view offers. */
         val planKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Plan }
+
+        /** The create + convert catalog the New surface / convert affordance offers (ADR-0016, #71). */
+        val createKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Create }
     }
 }

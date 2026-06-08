@@ -35,6 +35,7 @@ import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlin.coroutines.CoroutineContext
 
@@ -129,11 +130,14 @@ interface MainShellComponent {
 
     /** A shell-level overlay instance the View renders above the foreground Destination (ADR-0015). */
     sealed interface OverlayChild {
-        /** The v1 stand-in until New (#71) supplies real overlay content. */
+        /** The v1 stand-in (both Search #73 and New #71 are real routes over the same primitive). */
         data object Placeholder : OverlayChild
 
         /** The global Search overlay (#73): a real route over the same overlay primitive. */
         class Search(val component: SearchComponent) : OverlayChild
+
+        /** The New create surface (#71): the kind picker + per-kind form, online-only create (ADR-0016). */
+        class New(val component: NewComponent) : OverlayChild
     }
 
     sealed interface Output {
@@ -160,13 +164,16 @@ interface MainShellComponent {
     }
 }
 
-/** The shell-level overlay routes (ADR-0015): [Placeholder] is the v1 stand-in (New, #71, replaces it). */
+/** The shell-level overlay routes (ADR-0015): the v1 [Placeholder], plus [Search] (#73) and [New] (#71). */
 sealed interface OverlayRoute {
     /** The trivial v1 placeholder so the overlay mechanism is wired and testable. */
     data object Placeholder : OverlayRoute
 
     /** The global Search route (#73) — launched from the ⌕ in any Destination app bar. */
     data object Search : OverlayRoute
+
+    /** The New create surface (#71): the FAB pushes this above the foreground Destination. */
+    data object New : OverlayRoute
 }
 
 class DefaultMainShellComponent(
@@ -190,6 +197,10 @@ class DefaultMainShellComponent(
     private val onSwitchAccount: (AccountId) -> Unit = {},
     private val output: (MainShellComponent.Output) -> Unit = {},
     private val coroutineContext: CoroutineContext = Dispatchers.Default,
+    // The online-only create seam (#71, ADR-0016) the New overlay dispatches through. Defaulted to a
+    // no-op Offline so a test that doesn't exercise create needn't supply it.
+    private val create: suspend (com.circuitstitch.deferno.core.domain.command.CreateItem.Payload) -> com.circuitstitch.deferno.core.domain.command.CommandResult =
+        { com.circuitstitch.deferno.core.domain.command.CommandResult.Offline(com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem) },
 ) : MainShellComponent, ComponentContext by componentContext {
 
     override val destinations: List<Destination> = Destination.entries
@@ -310,6 +321,10 @@ class DefaultMainShellComponent(
                 )
         }
 
+    // Scope for the shell-owned overlay work (the New create dispatch, #71). Tied to the injected
+    // coroutineContext so a test drives it on its own scheduler.
+    private val overlayScope = kotlinx.coroutines.CoroutineScope(coroutineContext + kotlinx.coroutines.SupervisorJob())
+
     private fun createOverlay(
         route: OverlayRoute,
         childContext: ComponentContext,
@@ -326,6 +341,14 @@ class DefaultMainShellComponent(
                         coroutineContext = coroutineContext,
                     ),
                 )
+
+            OverlayRoute.New -> MainShellComponent.OverlayChild.New(
+                DefaultNewComponent(
+                    create = create,
+                    onCreated = ::dismissOverlay,
+                    launch = { block -> overlayScope.launch { block() } },
+                ),
+            )
         }
 
     private fun onSearchOutput(output: SearchComponent.Output) {

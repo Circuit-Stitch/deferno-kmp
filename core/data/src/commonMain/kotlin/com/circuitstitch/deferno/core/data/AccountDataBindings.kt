@@ -1,5 +1,25 @@
 package com.circuitstitch.deferno.core.data
 
+import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
+import com.circuitstitch.deferno.core.data.chore.ChoreRepository
+import com.circuitstitch.deferno.core.data.chore.OfflineChoreRepository
+import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
+import com.circuitstitch.deferno.core.data.connectivity.Connectivity
+import com.circuitstitch.deferno.core.data.create.CreateWriter
+import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
+import com.circuitstitch.deferno.core.data.create.OnlineCreateWriter
+import com.circuitstitch.deferno.core.data.event.EventLocalStore
+import com.circuitstitch.deferno.core.data.event.EventRepository
+import com.circuitstitch.deferno.core.data.event.OfflineEventRepository
+import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
+import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.habit.HabitRepository
+import com.circuitstitch.deferno.core.data.habit.OfflineHabitRepository
+import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceRepository
+import com.circuitstitch.deferno.core.data.occurrence.OfflineOccurrenceRepository
+import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
@@ -61,6 +81,26 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun outboxStore(db: DefernoDatabase): OutboxStore = SqlDelightOutboxStore(db)
 
+    // The recurring-kind local stores (#71): the per-Account SQLDelight caches a created Habit/Chore/
+    // Event seeds into, so the row joins the observe Flow exactly as a Task does (ADR-0001).
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun habitLocalStore(db: DefernoDatabase): HabitLocalStore = SqlDelightHabitLocalStore(db)
+
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun choreLocalStore(db: DefernoDatabase): ChoreLocalStore = SqlDelightChoreLocalStore(db)
+
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun eventLocalStore(db: DefernoDatabase): EventLocalStore = SqlDelightEventLocalStore(db)
+
+    // The Occurrence (firing-level) local store (#71, AC #4): the per-Account SQLDelight cache an
+    // occurrence read from the kind-scoped endpoint seeds into, so it joins the observe Flow (ADR-0001).
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun occurrenceLocalStore(db: DefernoDatabase): OccurrenceLocalStore = SqlDelightOccurrenceLocalStore(db)
+
     @Provides
     @SingleIn(AccountScope::class)
     fun taskRepository(
@@ -75,6 +115,42 @@ interface AccountDataBindings {
         remoteSource: PlanRemoteSource,
         taskStore: TaskLocalStore,
     ): PlanRepository = OfflinePlanRepository(planStore, remoteSource, taskStore)
+
+    // The recurring read repositories (#71): observe-only Flows over the local stores, mirroring
+    // OfflineTaskRepository so a created definition surfaces with no manual refresh (ADR-0001).
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun habitRepository(localStore: HabitLocalStore): HabitRepository = OfflineHabitRepository(localStore)
+
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun choreRepository(localStore: ChoreLocalStore): ChoreRepository = OfflineChoreRepository(localStore)
+
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun eventRepository(localStore: EventLocalStore): EventRepository = OfflineEventRepository(localStore)
+
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun occurrenceRepository(localStore: OccurrenceLocalStore): OccurrenceRepository =
+        OfflineOccurrenceRepository(localStore)
+
+    /**
+     * The online-only create + convert writer (#71, ADR-0016). It bypasses the outbox entirely (a
+     * create is never enqueued — no server idempotency key in v0.1) and seeds the server-assigned-id
+     * row into the matching local store. The remote source + connectivity it reads are AppScope (the
+     * shared client follows the Active Account per request — ADR-0014); the local stores are this scope.
+     */
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun createWriter(
+        connectivity: Connectivity,
+        remoteSource: ItemRemoteSource,
+        taskStore: TaskLocalStore,
+        habitStore: HabitLocalStore,
+        choreStore: ChoreLocalStore,
+        eventStore: EventLocalStore,
+    ): CreateWriter = OnlineCreateWriter(connectivity, remoteSource, taskStore, habitStore, choreStore, eventStore)
 
     @Provides
     @SingleIn(AccountScope::class)

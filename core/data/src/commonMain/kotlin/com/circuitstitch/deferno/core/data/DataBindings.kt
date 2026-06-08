@@ -13,6 +13,10 @@ import com.circuitstitch.deferno.core.data.auth.AuthRemoteSource
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.DefaultAuthRepository
 import com.circuitstitch.deferno.core.data.auth.KtorAuthRemoteSource
+import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
+import com.circuitstitch.deferno.core.data.connectivity.Connectivity
+import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
+import com.circuitstitch.deferno.core.data.create.KtorItemRemoteSource
 import com.circuitstitch.deferno.core.data.outbox.KtorOutboxRequestSender
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.KtorPlanRemoteSource
@@ -111,6 +115,20 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun authRemoteSource(client: HttpClient): AuthRemoteSource = KtorAuthRemoteSource(client)
+
+    /** The online-only create/convert remote source (#71, ADR-0016) over the shared client. */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun itemRemoteSource(client: HttpClient): ItemRemoteSource = KtorItemRemoteSource(client)
+
+    /**
+     * The connectivity seam the online-only create gate consults (#71, ADR-0016). The v1 default
+     * assumes online and lets the create call's own transport failure be the signal; a platform-aware
+     * actual is a non-breaking follow-up. AppScope — connectivity is a process concern, not per-Account.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun connectivity(): Connectivity = AssumeOnlineConnectivity()
 
     /** The outbox's network sender (#23), replaying queued requests over the shared client. */
     @Provides

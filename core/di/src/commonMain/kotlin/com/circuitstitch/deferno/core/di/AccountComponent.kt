@@ -1,5 +1,9 @@
 package com.circuitstitch.deferno.core.di
 
+import com.circuitstitch.deferno.core.data.chore.ChoreRepository
+import com.circuitstitch.deferno.core.data.event.EventRepository
+import com.circuitstitch.deferno.core.data.habit.HabitRepository
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceRepository
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
@@ -55,6 +59,22 @@ abstract class AccountComponent(
 
     /** The settings write seam (#72): optimistic local apply + outbox enqueue for `PATCH /auth/me/settings`. */
     abstract val settingsWriter: SettingsWriter
+
+    /**
+     * The recurring-kind read repositories (#71). Exposing them anchors anvil's compile-time validation
+     * of the create flow's AccountScope chain (the CreateWriter seeds the same local stores these
+     * observe), and lets the shell observe a freshly created Habit/Chore/Event like a Task.
+     */
+    abstract val habitRepository: HabitRepository
+    abstract val choreRepository: ChoreRepository
+    abstract val eventRepository: EventRepository
+
+    /**
+     * The Occurrence (firing-level) read repository (#71, AC #4). Exposing it anchors anvil's
+     * compile-time validation of the Occurrence chain (store → DB) and gives the firing read source a
+     * real accessor — observe-only over the local cache, like the recurring-definition repositories.
+     */
+    abstract val occurrenceRepository: OccurrenceRepository
 
     /** The command-registry dispatch site (ADR-0007) over this Account's write seams. */
     abstract val commandExecutor: CommandExecutor
