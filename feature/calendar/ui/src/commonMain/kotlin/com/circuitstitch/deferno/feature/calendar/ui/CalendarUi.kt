@@ -147,7 +147,7 @@ internal fun MonthHeader(visibleMonth: LocalDate, onPrevious: () -> Unit, onNext
 
 /** The Monday-start weekday column headers. */
 @Composable
-private fun WeekdayHeader(modifier: Modifier = Modifier) {
+internal fun WeekdayHeader(modifier: Modifier = Modifier) {
     Row(modifier = modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
         WEEKDAY_LABELS.forEach { label ->
             Text(
@@ -248,9 +248,9 @@ private fun DayCell(
     }
 }
 
-/** A banner shown while a firing is being rescheduled: pick a new day in the grid above. */
+/** A banner shown while a firing is being rescheduled: pick a new day in the grid above (or beside, on desktop). */
 @Composable
-private fun RescheduleBanner(item: CalendarItem, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+internal fun RescheduleBanner(item: CalendarItem, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).padding(horizontal = 16.dp),

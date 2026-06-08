@@ -143,10 +143,14 @@ dependencies {
     implementation(project(":core:designsystem"))
 
     // The feature slices the shared Main shell composes — each renders its existing desktop View (the
-    // :ui submodule's jvmMain), the desktop counterpart of the Android screen (ADR-0017). Plan, Tasks,
-    // Profile (#84), and Settings (#85) all have desktop Views now; Calendar is still a placeholder (#74).
+    // :ui submodule's jvmMain), the desktop counterpart of the Android screen (ADR-0017). Plan, Calendar
+    // (#74), Tasks, Profile (#84), and Settings (#85) all have desktop Views now.
     implementation(project(":feature:plan"))
     implementation(project(":feature:plan:ui"))
+    implementation(project(":feature:calendar"))
+    // The Calendar Destination's desktop View (#74): the shared Main shell renders it in the content
+    // area (its jvmMain CalendarDesktopScreen — the month grid + day agenda, two-pane on a wide window).
+    implementation(project(":feature:calendar:ui"))
     implementation(project(":feature:tasks"))
     implementation(project(":feature:tasks:ui"))
     implementation(project(":feature:profile"))

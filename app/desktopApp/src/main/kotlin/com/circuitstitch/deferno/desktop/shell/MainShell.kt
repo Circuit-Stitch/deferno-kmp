@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.circuitstitch.deferno.feature.calendar.ui.CalendarDesktopScreen
 import com.circuitstitch.deferno.feature.plan.ui.PlanDesktopScreen
 import com.circuitstitch.deferno.feature.profile.ui.ProfileDesktopScreen
 import com.circuitstitch.deferno.feature.settings.ui.SettingsDesktopScreen
@@ -107,9 +108,9 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
 
 /**
  * Renders the foreground Destination's desktop screen, filling the content area. Plan + Tasks render
- * their existing desktop Views, Settings (#85) its tier-3 drill-down, and Profile (#84) its identity
- * hub; the Calendar Destination (#74 — Android-first; shared logic) still renders a placeholder until
- * its desktop View lands (ADR-0017).
+ * their existing desktop Views, Settings (#85) its tier-3 drill-down, Profile (#84) its identity hub,
+ * and Calendar (#74) its month grid + day agenda (two-pane on a wide window) — every v1 Destination now
+ * has a native desktop View (ADR-0017).
  */
 @Composable
 private fun DestinationContent(active: MainShellComponent.DestinationChild) {
@@ -120,9 +121,9 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
         is MainShellComponent.DestinationChild.Tasks ->
             TasksDesktopScreen(active.component, Modifier.fillMaxSize())
 
-        // The Calendar slice's logic is shared (#74), but its desktop View rides the ADR-0017 parity work.
+        // The Calendar Destination's desktop View (#74): the desktop counterpart of the Android screen.
         is MainShellComponent.DestinationChild.Calendar ->
-            ComingSoon(active.destination)
+            CalendarDesktopScreen(active.component, Modifier.fillMaxSize())
 
         is MainShellComponent.DestinationChild.Profile ->
             ProfileDesktopScreen(active.component, Modifier.fillMaxSize())
