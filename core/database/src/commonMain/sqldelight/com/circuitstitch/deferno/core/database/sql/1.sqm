@@ -1,0 +1,38 @@
+-- Migration 1 -> 2: add the Calendar feed cache (#74).
+--
+-- This is the first real SQLDelight migration (ADR-0022). Before it, schema changes re-snapshotted
+-- `databases/1.db` in place, which silently stranded any DB created earlier — a table folded into "v1"
+-- never reached an already-initialised file (the driver runs neither create() nor migrate() when the
+-- on-disk user_version already equals Schema.version). That bit us twice (`userSettingsEntity` on
+-- Android, `calendarItemEntity`/`seriesKindEntity` on desktop). From here on every schema change ships
+-- a numbered `.sqm` + a new frozen `databases/<N>.db` snapshot, so existing DBs migrate forward instead
+-- of crashing. See ADR-0022 for the runbook.
+--
+-- IF NOT EXISTS is deliberate and unique to this first migration: because pre-migration "v1" was
+-- ambiguous (a DB created before #74 has 8 tables; one created from the post-#74 in-place re-snapshot
+-- has all 10, both stamped user_version=1), this 1->2 step must be idempotent so it neither strands the
+-- old shape nor errors "table already exists" on the new one. `verifyCommonMainDefernoDatabaseMigration`
+-- (in CI's `check`) still proves it reproduces the `.sq` schema from the 8-table `1.db` baseline.
+-- Future migrations start from an unambiguous version and should use plain CREATE.
+
+CREATE TABLE IF NOT EXISTS seriesKindEntity (
+    series_id TEXT NOT NULL PRIMARY KEY,
+    kind      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS calendarItemEntity (
+    id            TEXT NOT NULL PRIMARY KEY,
+    task_id       TEXT NOT NULL,
+    series_id     TEXT,
+    title         TEXT NOT NULL,
+    item_date     TEXT NOT NULL,
+    start_at      TEXT NOT NULL,
+    end_at        TEXT NOT NULL,
+    all_day       INTEGER NOT NULL DEFAULT 0,
+    working_state TEXT NOT NULL,
+    source        TEXT NOT NULL,
+    labels        TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS calendarItemEntity_item_date ON calendarItemEntity(item_date);
+CREATE INDEX IF NOT EXISTS calendarItemEntity_series_id ON calendarItemEntity(series_id);

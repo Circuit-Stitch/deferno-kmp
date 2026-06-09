@@ -62,9 +62,12 @@ sqldelight {
     databases {
         create("DefernoDatabase") {
             packageName.set("com.circuitstitch.deferno.core.database.sql")
-            // Write a `.db` snapshot of each schema version so migrations can be verified
-            // against it (ADR-0001 migration scaffolding). `verifyMigrations` fails the build
-            // on a broken `.sqm`. Schema authored in `.sq` (deriveSchemaFromMigrations stays off).
+            // Write a frozen `.db` snapshot of each schema version so migrations are verified
+            // against it (ADR-0022). `verifyMigrations` (a `check` dependency, run by CI) fails the
+            // build if the committed snapshots + `.sqm` migrations don't reproduce the `.sq` schema.
+            // Schema authored in `.sq` (deriveSchemaFromMigrations stays off); each schema change adds
+            // a new numbered `<N>.sqm` + `databases/<N>.db` and never edits a released one — see the
+            // runbook in ADR-0022.
             schemaOutputDirectory.set(file("src/commonMain/sqldelight/databases"))
             verifyMigrations.set(true)
         }
