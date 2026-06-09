@@ -1,0 +1,8 @@
+{
+  "type": "stream_data",
+  "id": 2,
+  "event": {
+    "type": "partial",
+    "text": "hello wor"
+  }
+}

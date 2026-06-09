@@ -1,0 +1,96 @@
+package com.circuitstitch.deferno.core.sidecar
+
+import kotlinx.serialization.json.JsonPrimitive
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+
+class SidecarFrameSerializationTest {
+
+    @Test
+    fun tagsEachFrameWithItsTypeDiscriminator() {
+        val json = encode(SidecarFrame.Request(id = 1, method = "queryPermission"))
+        assertTrue(json.contains("\"type\":\"request\""), json)
+    }
+
+    @Test
+    fun omitsNullAndDefaultFieldsForCompactFrames() {
+        // explicitNulls=false → a null `params` is absent; encodeDefaults=false → an empty default is absent.
+        val request = encode(SidecarFrame.Request(id = 1, method = "m", params = null))
+        assertFalse(request.contains("params"), request)
+
+        val welcome = encode(SidecarFrame.Welcome(protocolVersion = 1, capabilities = emptySet()))
+        assertFalse(welcome.contains("capabilities"), welcome)
+    }
+
+    @Test
+    fun toleratesUnknownKeysFromANewerHelper() {
+        val frame = decode("""{"type":"welcome","protocolVersion":1,"futureField":{"x":true}}""")
+        val welcome = assertIs<SidecarFrame.Welcome>(frame)
+        assertEquals(1, welcome.protocolVersion)
+    }
+
+    @Test
+    fun coercesAnUnknownErrorCodeToUnknown() {
+        val frame = decode("""{"type":"failure","error":{"code":"teleport","message":"???"}}""")
+        val failure = assertIs<SidecarFrame.Failure>(frame)
+        assertEquals(SidecarErrorCode.UNKNOWN, failure.error.code)
+    }
+
+    @Test
+    fun goldenFixturesDecodeToTheDocumentedFrames() {
+        assertIs<SidecarFrame.Hello>(decode(fixture("hello.json")))
+        assertIs<SidecarFrame.Welcome>(decode(fixture("welcome.json")))
+        assertIs<SidecarFrame.Push>(decode(fixture("push-permission-changed.json")))
+        assertIs<SidecarFrame.Failure>(decode(fixture("failure.json")))
+    }
+
+    @Test
+    fun goldenResponsePayloadDecodesToThePermissionWire() {
+        val response = assertIs<SidecarFrame.Response>(decode(fixture("query-permission-response.json")))
+        val status = SidecarJson.decodeFromJsonElement(
+            PermissionStatusWire.serializer(),
+            checkNotNull(response.result),
+        )
+        assertEquals("speech", status.capability)
+        assertEquals(PermissionStatusValue.GRANTED, status.status)
+    }
+
+    @Test
+    fun goldenStreamPayloadDecodesToTheTranscriptWire() {
+        val data = assertIs<SidecarFrame.StreamData>(decode(fixture("transcript-stream-data.json")))
+        val event = SidecarJson.decodeFromJsonElement(TranscriptWire.serializer(), data.event)
+        val partial = assertIs<TranscriptWire.Partial>(event)
+        assertEquals("hello wor", partial.text)
+    }
+
+    @Test
+    fun transcriptWireRoundTripsEveryVariant() {
+        for (event in listOf(TranscriptWire.Partial("a"), TranscriptWire.Final("b"), TranscriptWire.Failure("capture"))) {
+            val json = SidecarJson.encodeToString(TranscriptWire.serializer(), event)
+            assertEquals(event, SidecarJson.decodeFromString(TranscriptWire.serializer(), json))
+        }
+    }
+
+    @Test
+    fun failureToStringRedactsErrorDetails() {
+        // Privacy: a Failure's opaque details must not surface in diagnostics (ADR-0009).
+        val failure = SidecarFrame.Failure(
+            id = 1,
+            error = SidecarError(SidecarErrorCode.INTERNAL, "boom", details = JsonPrimitive("SECRET")),
+        )
+        assertFalse(failure.error.toString().contains("SECRET"), failure.error.toString())
+    }
+
+    private fun encode(frame: SidecarFrame): String =
+        SidecarJson.encodeToString(SidecarFrame.serializer(), frame)
+
+    private fun decode(json: String): SidecarFrame =
+        SidecarJson.decodeFromString(SidecarFrame.serializer(), json)
+
+    private fun fixture(name: String): String =
+        checkNotNull(javaClass.getResourceAsStream("/$name")) { "missing golden fixture: $name" }
+            .bufferedReader().use { it.readText() }
+}

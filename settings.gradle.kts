@@ -42,6 +42,14 @@ include(":core:secure")
 // capability bound at AppScope (identity-independent), mirroring core:secure. Sits beside it in the
 // foundation layer — it depends only on core:scopes (AppScope) and core:model.
 include(":core:speech")
+// The OS-agnostic JVM half of the native-sidecar substrate (ADR-0024/0025): the Sidecar client + the
+// JSON IPC contract reached over a local socket, the JVM↔native-Helper seam for capabilities the JVM
+// can't reach. JVM-only *by design* (deferno.jvm.library, the repo's first non-KMP core module) — its
+// peers are native Helper processes (Swift on macOS now; Windows/Linux later), not Kotlin, so it
+// carries no KMP targets. A deliberately isolated leaf: depends on NOTHING in core/* (its own wire
+// DTOs, condensed to domain at the edge by core:speech #119 / permissions #120, ADR-0011), so it stays
+// cheaply extractable to its own repo later.
+include(":core:sidecar")
 include(":core:data")
 include(":core:domain")
 include(":core:designsystem")

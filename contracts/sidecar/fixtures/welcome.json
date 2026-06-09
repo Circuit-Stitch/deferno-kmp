@@ -1,0 +1,5 @@
+{
+  "type": "welcome",
+  "protocolVersion": 1,
+  "capabilities": ["permissions", "speech.transcribe"]
+}
