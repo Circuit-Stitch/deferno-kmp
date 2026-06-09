@@ -69,11 +69,15 @@ struct TaskRow: View {
 struct PaneHeader<Trailing: View>: View {
     let title: String
     let onBack: (() -> Void)?
+    /// Shows the Deferno flame brand mark before the title — set on the Plan home (the app's calm
+    /// entry pane), left off elsewhere so it brands the home without repeating on every pane.
+    let showsBrand: Bool
     let trailing: () -> Trailing
 
-    init(title: String, onBack: (() -> Void)? = nil, @ViewBuilder trailing: @escaping () -> Trailing) {
+    init(title: String, onBack: (() -> Void)? = nil, showsBrand: Bool = false, @ViewBuilder trailing: @escaping () -> Trailing) {
         self.title = title
         self.onBack = onBack
+        self.showsBrand = showsBrand
         self.trailing = trailing
     }
 
@@ -82,6 +86,9 @@ struct PaneHeader<Trailing: View>: View {
             if let onBack {
                 Button("Back", action: onBack)
                     .frame(minHeight: Layout.minTouchTarget)
+            }
+            if showsBrand {
+                Brandmark()
             }
             Text(title)
                 .font(.title2.weight(.semibold))
@@ -97,8 +104,25 @@ struct PaneHeader<Trailing: View>: View {
 }
 
 extension PaneHeader where Trailing == EmptyView {
-    init(title: String, onBack: (() -> Void)? = nil) {
-        self.init(title: title, onBack: onBack) { EmptyView() }
+    init(title: String, onBack: (() -> Void)? = nil, showsBrand: Bool = false) {
+        self.init(title: title, onBack: onBack, showsBrand: showsBrand) { EmptyView() }
+    }
+}
+
+/// The Deferno brand mark: the flame logo — the shared `core/designsystem/brand/flame.svg` rasterized
+/// into the `Flame` image asset by `scripts/generate-brand-assets.sh`, the same flame as the app icon
+/// and launch screen. Sized to sit beside a `PaneHeader` title; spoken as "Deferno" for VoiceOver. The
+/// flame is red line-art over white; on the header's `systemBackground` the white reads as the surface,
+/// so it shows as a clean red mark in light mode and the full red/white flame in dark mode.
+struct Brandmark: View {
+    var height: CGFloat = 28
+
+    var body: some View {
+        Image("Flame")
+            .resizable()
+            .scaledToFit()
+            .frame(width: height, height: height)
+            .accessibilityLabel("Deferno")
     }
 }
 

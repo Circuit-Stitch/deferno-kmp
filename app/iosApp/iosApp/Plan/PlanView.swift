@@ -16,7 +16,7 @@ struct PlanView: View {
     var body: some View {
         let value = state.value
         VStack(spacing: 0) {
-            PaneHeader(title: "Today") {
+            PaneHeader(title: "Today", showsBrand: true) {
                 Button("Refresh") { component.onRefresh() }
                     .frame(minHeight: Layout.minTouchTarget)
                     .disabled(value.isRefreshing)
