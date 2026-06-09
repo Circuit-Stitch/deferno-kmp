@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.input.key.Key
@@ -56,6 +57,11 @@ import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.PlatformContext
 import com.circuitstitch.deferno.desktop.shell.RootShell
 import com.circuitstitch.deferno.desktop.shell.label
+import com.circuitstitch.deferno.desktop.update.ConveyorUpdateBackend
+import com.circuitstitch.deferno.desktop.update.UpdateAction
+import com.circuitstitch.deferno.desktop.update.UpdateManager
+import com.circuitstitch.deferno.desktop.update.UpdateState
+import com.circuitstitch.deferno.desktop.update.presentUpdate
 import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.MainShellComponent
@@ -122,6 +128,17 @@ fun main() {
     // host → SecureStorageException) is isolated — the window still opens into the Auth shell.
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    // In-app self-update (#103, ADR-0021): drives Conveyor's update engine from the desktop "Check for
+    // updates" Help menu + a menu-bar badge. The backend is a no-op when the app isn't Conveyor-packaged
+    // (dev `run`, where SoftwareUpdateController.getInstance() is null) and reports "package-manager
+    // updates" on Linux — so checks/installs are safely inert except in a packaged Win/Mac build. The
+    // generated DesktopBuildConfig.APP_VERSION (= ProjectConfig.APP_VERSION) is the version shown when
+    // unpackaged; a real package reports the same value via the injected `app.version` property.
+    val updateManager = UpdateManager(
+        backend = ConveyorUpdateBackend.create(DesktopBuildConfig.APP_VERSION),
+        scope = appScope,
+    )
+
     // Honour the OS dark/light preference. Compose Desktop's isSystemInDarkTheme() doesn't read the
     // Linux desktop setting, so on Linux we ask the XDG Desktop Portal directly (KDE/GNOME implement
     // it); null elsewhere → fall back to Compose's detector (which works on Windows/macOS). It feeds
@@ -179,6 +196,11 @@ fun main() {
         seedDevAccounts(appComponent)
     }
 
+    // One-shot best-effort probe so a packaged Win/Mac build surfaces an "Update available" badge at
+    // launch without the user opening the menu (a no-op everywhere else). Conveyor also auto-checks in
+    // the background on its own schedule; this just makes the in-app state fresh on open.
+    updateManager.checkForUpdates()
+
     application {
         val windowState = rememberWindowState(size = DpSize(1280.dp, 832.dp))
         // Bind the Essenty lifecycle to the window (resume/pause/stop on focus/minimise/close).
@@ -219,7 +241,15 @@ fun main() {
                         // The menu bar belongs to the Main shell only — the Auth shell is a bare
                         // pre-Account placeholder with no Destinations/account actions (ADR-0013).
                         if (mainComponent != null) {
-                            DefernoMenuBar(main = mainComponent, onQuit = ::exitApplication)
+                            val updateState by updateManager.state.collectAsState()
+                            DefernoMenuBar(
+                                main = mainComponent,
+                                updateState = updateState,
+                                onCheckForUpdates = updateManager::checkForUpdates,
+                                onInstallUpdate = updateManager::installUpdate,
+                                onViewReleases = { browse(RELEASES_URL) },
+                                onQuit = ::exitApplication,
+                            )
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
                         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -294,16 +324,24 @@ private fun digitIndex(key: Key): Int? = when (key) {
  * The in-app, themed menu bar — a Compose replacement for the native AWT menu bar (which can't follow
  * the dark theme). It is the desktop binding surface for the shell's intents (a precursor to ADR-0007's
  * shared command registry): File → Quit; View → switch Destination / New / Search / Refresh; Account →
- * switch the Active Account (no re-auth) / Sign out (ADR-0017).
+ * switch the Active Account (no re-auth) / Sign out (ADR-0017); Help → version + self-update (#103).
+ *
+ * The [updateState] feeds the Help menu's "Check for updates" row and a trailing "Update available" /
+ * "Updating…" badge, so an available update is visible without opening the menu (ADR-0021).
  */
 @Composable
 private fun DefernoMenuBar(
     main: MainShellComponent,
+    updateState: UpdateState,
+    onCheckForUpdates: () -> Unit,
+    onInstallUpdate: () -> Unit,
+    onViewReleases: () -> Unit,
     onQuit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val mainStack by main.stack.subscribeAsState()
     val activeDestination = mainStack.active.instance.destination
+    val update = presentUpdate(updateState)
     Surface(color = MaterialTheme.colorScheme.surface, modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.height(40.dp).padding(horizontal = 4.dp),
@@ -341,23 +379,52 @@ private fun DefernoMenuBar(
                 if (accounts.isNotEmpty()) HorizontalDivider()
                 MenuRow(text = "Sign out") { dismiss(); main.signOut() }
             }
+            MenuBarMenu(label = "Help") { dismiss ->
+                // Self-update (#103, ADR-0021): the running version, then a single state-driven row —
+                // "Check for updates…" / "Restart to update…" / "View all releases…" depending on the
+                // update state, plus an optional status line (up to date, available, error).
+                MenuRow(text = update.versionLine, enabled = false) {}
+                HorizontalDivider()
+                MenuRow(text = update.actionLabel, enabled = update.actionEnabled) {
+                    dismiss()
+                    when (update.action) {
+                        UpdateAction.CHECK -> onCheckForUpdates()
+                        UpdateAction.INSTALL -> onInstallUpdate()
+                        UpdateAction.VIEW_RELEASES -> onViewReleases()
+                        UpdateAction.NONE -> Unit
+                    }
+                }
+                update.statusLine?.let { status -> MenuRow(text = status, enabled = false) {} }
+            }
 
             // Always-visible desktop-class affordances (ADR-0007, #86/#87): a search control and a
             // "+" both sit in the toolbar so the global overlays are reachable without opening a menu —
             // the toolbar counterparts of Ctrl+F / Ctrl+N. Pushed to the trailing edge by the spacer.
             Spacer(Modifier.weight(1f))
+            // A visible self-update badge (#103): shown only when an update is available/applying, in the
+            // primary accent so it stands out; clicking it applies an available update (inert while
+            // "Updating…"). The full controls live in the Help menu.
+            update.badge?.let { badge ->
+                ToolbarAction(text = badge, color = MaterialTheme.colorScheme.primary) {
+                    if (update.action == UpdateAction.INSTALL) onInstallUpdate()
+                }
+            }
             ToolbarAction(text = "Search") { main.openOverlay(OverlayRoute.Search) }
             ToolbarAction(text = "+ New") { main.openNew() }
         }
     }
 }
 
-/** A trailing toolbar button on the in-app menu bar (the desktop "+ New" / "Search" affordances). */
+/** A trailing toolbar button on the in-app menu bar (the desktop "+ New" / "Search" / update badge). */
 @Composable
-private fun ToolbarAction(text: String, onClick: () -> Unit) {
+private fun ToolbarAction(
+    text: String,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    onClick: () -> Unit,
+) {
     TextButton(
         onClick = onClick,
-        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+        colors = ButtonDefaults.textButtonColors(contentColor = color),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Text(text = text, style = MaterialTheme.typography.labelLarge)
@@ -391,6 +458,7 @@ private fun MenuRow(
     text: String,
     shortcut: String? = null,
     selected: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     DropdownMenuItem(
@@ -398,6 +466,7 @@ private fun MenuRow(
             Text(text = text, fontWeight = if (selected) FontWeight.SemiBold else null)
         },
         onClick = onClick,
+        enabled = enabled,
         leadingIcon = if (selected) {
             { Text("✓") }
         } else {
@@ -468,6 +537,12 @@ internal fun webAppUrl(environment: DefernoEnvironment, path: String): String {
     val origin = environment.baseUrl.removeSuffix("/").removeSuffix("/api")
     return "$origin/$path"
 }
+
+/**
+ * The public GitHub Releases page — the "View all releases" fallback the Help menu opens when in-app
+ * self-update isn't available (Linux package-manager updates, or an unpackaged dev run; #103).
+ */
+private const val RELEASES_URL = "https://github.com/Circuit-Stitch/deferno-kmp/releases"
 
 /** Open [url] in the OS default browser (the Settings web deep-links, #72). Best-effort + headless-safe. */
 private fun browse(url: String) {

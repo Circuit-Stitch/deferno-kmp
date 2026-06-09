@@ -1,8 +1,13 @@
 # Releasing the desktop app
 
 The desktop release pipeline is **Hydraulic Conveyor** publishing to **public GitHub Releases**
-(ADR-0021). This first slice is **Linux only** — a `.deb` + a distribution-independent tarball, both
-bundling the JetBrains Runtime. Windows/macOS targets and in-app self-update are a follow-up.
+(ADR-0021). One `conveyor make copied-site` on a **single Linux runner** cross-builds **Linux + Windows
++ macOS** (Intel + Apple Silicon) — no per-OS runner matrix, no Mac — each bundling **Eclipse Temurin /
+OpenJDK 17** (#103; the desktop standardizes on Temurin — no JBR). Windows + macOS are **self-signed for
+now** (#103): they install with an OS warning
+(SmartScreen / Gatekeeper) until production signing — Apple notarization + Windows Authenticode — lands
+in **#104**. Linux is distributed via the package manager (apt repo + tarball now; Fedora/Flathub in
+**#105**), not in-app self-update.
 
 The spine is: **`ProjectConfig.APP_VERSION` → git tag → CI → Conveyor → public GitHub Release.**
 
@@ -69,9 +74,29 @@ git push origin main 0.1.1
 ```
 
 Pushing the tag runs `.github/workflows/release.yml` on one Linux runner: it verifies the tag matches
-`APP_VERSION`, then the official Conveyor action runs `conveyor make copied-site`, building the Linux
-package and publishing it + the Conveyor update metadata to a public GitHub Release named `0.1.1`. The
-artifacts are downloadable without authentication.
+`APP_VERSION`, then the official Conveyor action runs `conveyor make copied-site`, cross-building the
+Linux (`.deb` + tarball + apt repo), Windows (MSIX + `.appinstaller` + installer EXE), and macOS
+(per-arch app ZIPs + Sparkle appcasts) packages and publishing them + the Conveyor update metadata to a
+public GitHub Release named `0.1.1`. The artifacts are downloadable without authentication.
+
+## In-app self-update (Windows + macOS)
+
+Self-update is **Windows + macOS only** (ADR-0021): the OS update engines Conveyor wires up — Windows
+MSIX/AppInstaller block-map deltas, macOS Sparkle deltas — check the GitHub Release in the background
+and apply on restart. **Cutting a new Release *is* shipping an update**: installing version N then
+publishing N+1 makes installed Win/Mac apps update themselves to N+1.
+
+The desktop app also exposes a manual **Help → Check for updates** menu item plus a menu-bar **"Update
+available" / "Updating…"** badge (`app/desktopApp/.../desktop/update/`), driven by Conveyor's
+`SoftwareUpdateController` (the `dev.hydraulic.conveyor:conveyor-control` library). It reads the running
+version, fetches the published version, and — when newer — triggers the OS-native update + restart. When
+the app is **not** Conveyor-packaged (a `./gradlew :app:desktopApp:run` dev session) the controller is
+absent and the menu falls back to "View all releases…"; on **Linux** it points at the package manager.
+
+> **Self-signed caveat (until #104):** a self-signed macOS app is not Gatekeeper-trusted, so it can't be
+> opened by double-click — Conveyor's download page ships a one-line `curl | bash` install script that
+> removes the quarantine flag. Windows shows a SmartScreen prompt. Both go away once #104 wires the real
+> certs. Self-update itself works on the self-signed builds.
 
 ## Test the package locally (optional)
 
@@ -81,15 +106,17 @@ With the Conveyor CLI installed and the root key generated (steps above), from t
 conveyor make site
 ```
 
-This builds the Linux `.deb` + tarball + the static download page under `output/` **without**
-uploading (no `OAUTH_TOKEN` needed). Install/run the `.deb` (or extract the tarball) and confirm it
-launches and works. `conveyor make copied-site` additionally uploads, and is what CI runs.
+This cross-builds every target (Linux `.deb` + tarball, Windows MSIX/EXE, macOS ZIPs) + the static
+download page under `output/` **without** uploading (no `OAUTH_TOKEN` needed). Install/run the Linux
+`.deb` (or extract the tarball) and confirm it launches and works. `conveyor make copied-site`
+additionally uploads, and is what CI runs.
 
-> **Bundled runtime (for now): OpenJDK 17 / Temurin**, the JDK Conveyor imports from the module's
-> Gradle toolchain — not the JetBrains Runtime. So the packaged app may differ slightly from
-> `./gradlew :app:desktopApp:run` (which still launches on JBR) in Linux window-manager decorations /
-> theme integration. Bundling JBR is a deferred follow-up (ADR-0021); see `conveyor.conf` for the
-> one-line switch.
+> **Bundled runtime: Eclipse Temurin / OpenJDK 17 on every machine** (#103) — the JDK the Conveyor
+> Gradle plugin auto-imports from the desktop module's toolchain (`/stdlib/jdk/17/openjdk.conf`). The
+> desktop standardizes on Temurin everywhere: dev `./gradlew :app:desktopApp:run`, jpackage, and the
+> Conveyor package all use it (no JetBrains Runtime — the JBR rendering advantage was a misdiagnosis,
+> ADR-0021). Conveyor `jlink`s it; a full Temurin JDK ships jmods, so no extra include or override is
+> needed.
 
 > The Android SDK must be available (`ANDROID_HOME`) when Conveyor runs, because its
 > `printConveyorConfig` include configures the whole Gradle build (which includes the Android native

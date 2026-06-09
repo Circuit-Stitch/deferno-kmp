@@ -5,13 +5,14 @@ checking the project's GitHub Releases and updating on user request — even tho
 finished; the goal is the framework. Three facts shape the choice. (1) **Open-sourcing the client under
 Apache-2.0 (ADR-0020) dissolves the original blocker:** a private repo would have forced an updater to
 ship an extractable token to read Releases; a **public repo means public Releases, no embedded
-credential.** (2) The **runtime is not a deciding factor** — the JetBrains Runtime (ADR-0019,
-[[desktop-app-runtime-config]]) is preserved under either tool (today's `jpackage` already bundles it;
-Conveyor `jlink`s whatever JDK input you give it and treats JBR as a first-class
-`/stdlib/jdk/<v>/jetbrains.conf` input, needing the jmods-bearing **jbrsdk** that Foojay `JETBRAINS`
-already resolves), and we are anyway open to revisiting Temurin. (3) On **Linux the convention is the
-package manager / distro repo**, not in-app self-update — so in-app update is a **Windows/macOS**
-concern, and Linux is served by an apt/yum repo or Flathub.
+credential.** (2) The **runtime is not a deciding factor** — Conveyor `jlink`s whatever JDK input it
+imports from the Gradle toolchain, and **the desktop standardizes on Eclipse Temurin / OpenJDK 17
+everywhere** (dev `run`, jpackage, and the Conveyor package). The JetBrains Runtime was tried for nicer
+Linux window chrome but **dropped**: the apparent advantage was a misdiagnosis — the theming gaps were
+the dark-mode *detection* gap (fixed separately via the XDG portal) and the Skiko/Wayland resize
+white-bleed (a GPU-surface issue), not the JDK vendor ([[desktop-app-runtime-config]]). (3) On **Linux
+the convention is the package manager / distro repo**, not in-app self-update — so in-app update is a
+**Windows/macOS** concern, and Linux is served by an apt/yum repo or Flathub.
 
 **Decision.**
 
@@ -22,12 +23,13 @@ concern, and Linux is served by an apt/yum repo or Flathub.
   — eliminating the per-OS CI matrix `jpackage` forces (it cannot cross-compile). Its built-in update
   engine (MSIX block-map deltas on Windows, Sparkle bsdiff on macOS) is **background, delta, and silent
   on restart** — strictly better than the "download the full installer and relaunch" model we had
-  otherwise chosen. **The first Linux slice (#102) bundles the JDK Conveyor auto-imports from the
-  module's Gradle toolchain — OpenJDK 17 / Temurin — not JBR.** Forcing JBR would mean either a fragile
-  override of the auto-imported JDK or pulling the desktop compile toolchain off the shared Temurin;
-  shipping the default is the lower-risk start (this ADR was already "open to revisiting Temurin"). The
-  local dev `run` task still launches on JBR via `javaHome`. Bundling JBR in the Conveyor package
-  (a one-line `/stdlib/jdk/17/jetbrains.conf` include + verification) is a deferred follow-up.
+  otherwise chosen. **The desktop bundles OpenJDK 17 / Eclipse Temurin on every machine** — the JDK
+  Conveyor auto-imports from the module's Gradle toolchain (`/stdlib/jdk/17/openjdk.conf`), and the same
+  Temurin the dev `run` task + jpackage use via `javaHome`. **JBR was dropped (#103):** it was tried for
+  Linux window-manager integration, but the theming gaps it seemed to fix were actually the dark-mode
+  detection gap (solved via the XDG portal) and the Skiko/Wayland resize bleed (a GPU issue), so no
+  JBR-specific override is warranted — Temurin everywhere keeps the dev runtime, jpackage, and the
+  Conveyor package on one JDK with no `jetbrains.conf` include.
 - **Releases + the update feed live on the public main repo's GitHub Releases**
   (`Circuit-Stitch/deferno-kmp`): `app.site.base-url = github.com/$repo/releases/latest/download`. The
   app ships **zero credentials**; cutting a Release *is* shipping an update.
@@ -68,12 +70,13 @@ paid certs or other OSes are involved.
   for dogfooding; native Fedora distribution is a separate later effort (COPR/Flathub, or a
   supplemental `jpackage` RPM). Until then mac/Windows dogfood builds are self-signed and show OS
   warnings.
-- **Runtime divergence while JBR-bundling is deferred (#102):** the Conveyor package ships OpenJDK 17 /
-  Temurin (the auto-imported toolchain JDK) while local `run` uses JBR, so packaged Linux builds may
-  differ slightly in window-manager decorations / theme integration. When JBR-bundling is taken up, it
-  must be supplied as the **jbrsdk** (jmods-bearing) flavor for Conveyor's `jlink` step — satisfiable
-  via the project's Foojay `JvmVendorSpec.JETBRAINS` resolution and a `/stdlib/jdk/17/jetbrains.conf`
-  include, with a per-target build smoke-test.
+- **Runtime divergence (resolved in #103 — standardized on Temurin):** #102 shipped OpenJDK 17 / Temurin
+  in the Conveyor package while local `run` used JBR. **#103 closed the gap by dropping JBR and putting
+  the whole desktop on Eclipse Temurin** — `javaHome` (dev `run` + jpackage) now resolves Temurin
+  (`JvmVendorSpec.ADOPTIUM`), matching the Temurin the Conveyor package already jlinks from the
+  auto-imported toolchain. The JBR rendering advantage was a misdiagnosis (dark-mode detection +
+  Skiko/Wayland resize bleed, not the JDK vendor — [[desktop-app-runtime-config]]), so no
+  `jetbrains.conf` override is used; one JDK family everywhere.
 
 **Considered & rejected.**
 
