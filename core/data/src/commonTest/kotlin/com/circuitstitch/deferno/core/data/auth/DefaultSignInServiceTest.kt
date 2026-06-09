@@ -60,7 +60,8 @@ class DefaultSignInServiceTest {
 
     @Test
     fun blankDisplayName_labelsTheAccountFromTheUsername() = runTest {
-        val remote = FakeAuthRemoteSource(MeResult.Authenticated(user.copy(displayName = "")))
+        // Whitespace-only, not just empty — pins the `.ifBlank` fallback (not `.ifEmpty`).
+        val remote = FakeAuthRemoteSource(MeResult.Authenticated(user.copy(displayName = "   ")))
 
         val result = service(remote).signIn("pat")
 

@@ -19,8 +19,9 @@ kotlin {
             api(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
+            // The component tests assert synchronously against state.value (a StandardTestDispatcher
+            // drives the init/submit coroutines) — no Turbine flow harness needed.
             implementation(libs.kotlinx.coroutines.test)
-            implementation(libs.turbine)
         }
         // The Compose View for this slice lives in the sibling `:feature:signin:ui` module (Android +
         // JVM/desktop, no iOS). The Compose compiler plugin can't be applied here because this module

@@ -13,7 +13,9 @@ the token first** with a one-off `GET /auth/me` carrying that token as an explic
 `SignInService` in `core/data` over an `AuthRemoteSource.fetchMe(token)` variant; the
 `core/network` bearer plugin skips its active-Account provider header when `Authorization` is
 already set). **Only on success** does it create the Account — `AccountId` derived from the backend
-**User id**, label from `display_name ?: username` — and store the token via `addAccount`, after
+**User id**, label from the User's `display_name` (falling back to `username` when it is blank — the
+contract field is non-nullable, so the real fallback case is an empty/whitespace name) — and store
+the token via `addAccount`, after
 which `activeAccount` flips and `RootComponent` swaps the Auth shell for Main. Browser-OAuth + PKCE
 (the no-paste UX) stacks onto this same `SignInService` seam when #299 lands.
 

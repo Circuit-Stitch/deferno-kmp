@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -20,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -90,8 +92,14 @@ internal fun SignInContent(
                     singleLine = true,
                     enabled = !state.isValidating,
                     isError = state.error != null,
+                    // A credential field: mask it, and keep the opaque PAT out of the IME's autocorrect /
+                    // learned-words / suggestion store (ADR-0009 — don't leak secrets).
                     visualTransformation =
                         if (revealed) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        autoCorrectEnabled = false,
+                        keyboardType = KeyboardType.Password,
+                    ),
                     trailingIcon = {
                         TextButton(onClick = { revealed = !revealed }) {
                             Text(text = if (revealed) "Hide" else "Show")

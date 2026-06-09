@@ -11,6 +11,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
@@ -39,9 +40,12 @@ class DefaultSignInComponent(
 
     override fun onSubmit() {
         val token = _state.value.token.trim()
-        if (token.isEmpty() || _state.value.isValidating) return
+        if (token.isEmpty()) return
+        // Flip the in-flight flag SYNCHRONOUSLY (compare-and-set) before launching, so two taps in the
+        // same frame — both seeing isValidating == false — can't each fire a validation + addAccount.
+        val previous = _state.getAndUpdate { if (it.isValidating) it else it.copy(isValidating = true, error = null) }
+        if (previous.isValidating) return
         scope.launch {
-            _state.update { it.copy(isValidating = true, error = null) }
             val error = when (signInService.signIn(token)) {
                 // Success flips the Active Account; the shell replaces this surface (ADR-0013). Clearing
                 // the flag is harmless if it still renders for an instant before the swap.

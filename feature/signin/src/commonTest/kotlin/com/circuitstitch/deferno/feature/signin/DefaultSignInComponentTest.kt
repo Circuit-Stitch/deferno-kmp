@@ -65,6 +65,21 @@ class DefaultSignInComponentTest {
     }
 
     @Test
+    fun twoRapidSubmits_validateOnlyOnce() = runTest {
+        // Two taps in the same frame (before the first validation's launch body runs): the synchronous
+        // in-flight guard must drop the second, so only one /auth/me + one addAccount fire.
+        val service = FakeSignInService(SignInResult.Success(account))
+        val component = component(service)
+
+        component.onTokenChange("pat")
+        component.onSubmit()
+        component.onSubmit()
+        advanceUntilIdle()
+
+        assertEquals(listOf("pat"), service.tokens)
+    }
+
+    @Test
     fun aValidToken_showsValidatingThenSettlesWithoutError_andTrimsTheToken() = runTest {
         val gate = CompletableDeferred<Unit>()
         val service = FakeSignInService(SignInResult.Success(account)).apply { this.gate = gate }

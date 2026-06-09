@@ -49,11 +49,16 @@ class SignInScreenTest {
     }
 
     @Test
-    fun revealToggle_flipsBetweenShowAndHide() = runComposeUiTest {
+    fun revealToggle_defaultsToMasked_andRoundTrips() = runComposeUiTest {
         setContent { Themed { SignInScreen(FakeSignInComponent(SignInState(token = "secret"))) } }
 
+        // Default is masked: the toggle offers "Show", not "Hide" (ADR-0009 — secret hidden by default).
+        onNodeWithText("Hide").assertDoesNotExist()
         onNodeWithText("Show").performClick()
         onNodeWithText("Hide").assertExists()
+        // Toggling back re-masks.
+        onNodeWithText("Hide").performClick()
+        onNodeWithText("Show").assertExists()
     }
 
     @Test
