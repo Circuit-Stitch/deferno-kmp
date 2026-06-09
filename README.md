@@ -82,8 +82,8 @@ The backend service is separate and proprietary; this repository is the client o
 - The **"Deferno"** name and flame branding are reserved trademarks of Circuit Stitch and are
   **not** granted by the license (Apache-2.0 §6) — forks must rebrand. See [`NOTICE`](NOTICE).
 - Bundled third-party components (whisper.cpp/ggml, the Whisper model weights, SQLCipher,
-  java-keyring, IBM Plex fonts, and — in the desktop installer — the JetBrains Runtime) carry their
-  own licenses, aggregated in [`THIRD-PARTY-LICENSES`](THIRD-PARTY-LICENSES).
+  java-keyring, IBM Plex fonts, and — in the desktop installer — the bundled OpenJDK runtime, Eclipse
+  Temurin) carry their own licenses, aggregated in [`THIRD-PARTY-LICENSES`](THIRD-PARTY-LICENSES).
 
 Contributions are welcome under an inbound = outbound model with a **DCO sign-off** (no CLA) —
 see [`CONTRIBUTING.md`](CONTRIBUTING.md).

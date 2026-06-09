@@ -76,6 +76,11 @@ composeMaterial3 = "1.9.0"
 # configurations (`linuxAmd64`, …). The plugin version (2.0) tracks the Conveyor CLI loosely; the CI
 # release runs the pinned `conveyor` CLI via the official action (`@v22.0`), not this Gradle plugin.
 conveyor = "2.0"
+# Conveyor's in-app update control library (#103, ADR-0021): `dev.hydraulic.conveyor:conveyor-control`
+# exposes `SoftwareUpdateController` — the desktop app reads its own + the published version and
+# triggers the OS-native update/restart UI for the in-app "Check for updates" affordance. Versioned
+# independently of the Gradle plugin / CLI above (1.1 is the current release).
+conveyorControl = "1.1"
 # Compose Material icon set for the desktop nav suite (rail/drawer). The JetBrains
 # `org.jetbrains.compose.material` icon artifacts are version-decoupled from the Compose
 # Multiplatform plugin (they stopped tracking it in lockstep at 1.7.x) — 1.7.3 is what CM 1.11.1
@@ -184,6 +189,12 @@ compose-components-resources = { group = "org.jetbrains.compose.components", nam
 compose-ui-test-junit4 = { group = "org.jetbrains.compose.ui", name = "ui-test-junit4", version.ref = "composeMultiplatform" }
 compose-desktop-linux-x64 = { group = "org.jetbrains.compose.desktop", name = "desktop-jvm-linux-x64", version.ref = "composeMultiplatform" }
 compose-desktop-windows-x64 = { group = "org.jetbrains.compose.desktop", name = "desktop-jvm-windows-x64", version.ref = "composeMultiplatform" }
+# macOS Skiko native jars (#103): supplied to Conveyor's per-arch `macAmd64`/`macAarch64` inputs so it
+# can cross-build the Intel + Apple-Silicon packages from the Linux runner (the natives are prebuilt).
+compose-desktop-macos-x64 = { group = "org.jetbrains.compose.desktop", name = "desktop-jvm-macos-x64", version.ref = "composeMultiplatform" }
+compose-desktop-macos-arm64 = { group = "org.jetbrains.compose.desktop", name = "desktop-jvm-macos-arm64", version.ref = "composeMultiplatform" }
+# Conveyor in-app self-update control API (#103) — desktop only.
+conveyor-control = { group = "dev.hydraulic.conveyor", name = "conveyor-control", version.ref = "conveyorControl" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
