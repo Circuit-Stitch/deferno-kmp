@@ -37,10 +37,8 @@ jobs:
 
       # JDK to RUN Gradle: Conveyor's `make` invokes `./gradlew` via the conveyor.conf hashbang
       # include, so a JDK must be on PATH. This launcher JDK is independent of the app's bundled
-      # runtime — Conveyor bundles JBR 17 (selected in conveyor.conf via /stdlib/jdk/17/jetbrains).
-      # Temurin 17 matches the project toolchain + ci.yml. (The Android SDK is preinstalled on
-      # ubuntu-latest, so the full-build configuration the include triggers resolves the Android
-      # native module without extra setup.)
+      # runtime — for now Conveyor bundles the auto-imported OpenJDK 17 / Temurin (conveyor.conf;
+      # JBR bundling deferred). Temurin 17 matches the project toolchain + ci.yml.
       - name: Set up JDK 17 (Temurin)
         uses: actions/setup-java@v5
         with:
@@ -49,6 +47,19 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
+
+      # Conveyor's printConveyorConfig include (and the tag-verify step below) configures the WHOLE
+      # Gradle build, including the native :speech-whisper-jni module, which pins
+      # ndkVersion = ProjectConfig.NDK_VERSION. ubuntu-latest preinstalls the Android SDK but not this
+      # exact NDK, so configuration fails ("licences have not been accepted") without this. Conveyor
+      # builds only the desktop app (which does NOT depend on the Android native lib), so the NDK is
+      # needed for CONFIGURATION only — no whisper.cpp submodule / CMake build here. Keep the NDK
+      # version in lockstep with ProjectConfig.NDK_VERSION (the source of truth).
+      - name: Install Android NDK for the native speech module (#92)
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" "ndk;30.0.14904198"
 
       # Guard the single source of truth: Conveyor names the Release after app.version (=
       # ProjectConfig.APP_VERSION via project.version), NOT after the git tag. Fail fast if the pushed
