@@ -84,6 +84,27 @@ xcrun simctl launch booted com.circuitstitch.deferno
 > is exactly what the framework search path and the Run Script's `cd "$SRCROOT/../.."`
 > (→ repo root) assume.
 
+## Tests (#28)
+
+Unit coverage for the iOS View layer lives in the **`iosAppTests`** target — a host-app
+unit-test bundle (`@testable import iosApp` + `import Deferno`), wired into the `iosApp`
+scheme's Test action. Two suites, both green on the iOS 17.2 simulator under Xcode 15.2:
+
+- **`SecondarySlotTests`** — the secondary-pane precedence (`resolveSecondarySlot`,
+  `Common/CommonViews.swift`). Because the Compose UI module can't target iOS (ADR-0004 /
+  #27), that rule is **hand-ported** from the shared Kotlin `resolveSecondarySlot`; this is
+  the Swift twin of the Kotlin `SecondarySlotTest` 12-row table, so the two copies can't
+  drift.
+- **`StateBridgeTests`** — the SKIE-free bridge end to end: it drives the *real* `DefernoDemo`
+  components and asserts list state and the co-resident **detail** slot reach the SwiftUI
+  observers on the main thread (a row tap → the shared component opens the detail slot).
+
+```sh
+# from app/iosApp — builds the shared framework + app, then runs the suite on a simulator
+xcodebuild test -project iosApp.xcodeproj -scheme iosApp -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 15 Pro Max'
+```
+
 ## SKIE (deferred) and the hand-written bridge
 
 ADR-0003 calls for **SKIE** to bridge `Flow`/suspend/sealed types into idiomatic Swift.
