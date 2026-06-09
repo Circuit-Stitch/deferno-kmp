@@ -9,12 +9,28 @@
 /* Begin PBXBuildFile section */
 		DE0002000000000000000001 /* DefernoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000001 /* DefernoApp.swift */; };
 		DE0002000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000002 /* ContentView.swift */; };
+		DE0002000000000000000010 /* ObservableState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000010 /* ObservableState.swift */; };
+		DE0002000000000000000011 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000011 /* DesignSystem.swift */; };
+		DE0002000000000000000012 /* CommonViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000012 /* CommonViews.swift */; };
+		DE0002000000000000000013 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000013 /* TaskListView.swift */; };
+		DE0002000000000000000014 /* TaskDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000014 /* TaskDetailView.swift */; };
+		DE0002000000000000000015 /* TaskTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000015 /* TaskTreeView.swift */; };
+		DE0002000000000000000016 /* TasksScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000016 /* TasksScreen.swift */; };
+		DE0002000000000000000017 /* PlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000017 /* PlanView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		DE0001000000000000000001 /* DefernoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoApp.swift; sourceTree = "<group>"; };
 		DE0001000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		DE0001000000000000000003 /* iosApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iosApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DE0001000000000000000010 /* ObservableState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservableState.swift; sourceTree = "<group>"; };
+		DE0001000000000000000011 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		DE0001000000000000000012 /* CommonViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonViews.swift; sourceTree = "<group>"; };
+		DE0001000000000000000013 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
+		DE0001000000000000000014 /* TaskDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
+		DE0001000000000000000015 /* TaskTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskTreeView.swift; sourceTree = "<group>"; };
+		DE0001000000000000000016 /* TasksScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksScreen.swift; sourceTree = "<group>"; };
+		DE0001000000000000000017 /* PlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,6 +57,11 @@
 			children = (
 				DE0001000000000000000001 /* DefernoApp.swift */,
 				DE0001000000000000000002 /* ContentView.swift */,
+				DE0003000000000000000010 /* Bridge */,
+				DE0003000000000000000011 /* DesignSystem */,
+				DE0003000000000000000012 /* Common */,
+				DE0003000000000000000013 /* Tasks */,
+				DE0003000000000000000014 /* Plan */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -51,6 +72,49 @@
 				DE0001000000000000000003 /* iosApp.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000010 /* Bridge */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000010 /* ObservableState.swift */,
+			);
+			path = Bridge;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000011 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000011 /* DesignSystem.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000012 /* Common */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000012 /* CommonViews.swift */,
+			);
+			path = Common;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000013 /* Tasks */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000013 /* TaskListView.swift */,
+				DE0001000000000000000014 /* TaskDetailView.swift */,
+				DE0001000000000000000015 /* TaskTreeView.swift */,
+				DE0001000000000000000016 /* TasksScreen.swift */,
+			);
+			path = Tasks;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000014 /* Plan */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000017 /* PlanView.swift */,
+			);
+			path = Plan;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -146,6 +210,14 @@
 			files = (
 				DE0002000000000000000001 /* DefernoApp.swift in Sources */,
 				DE0002000000000000000002 /* ContentView.swift in Sources */,
+				DE0002000000000000000010 /* ObservableState.swift in Sources */,
+				DE0002000000000000000011 /* DesignSystem.swift in Sources */,
+				DE0002000000000000000012 /* CommonViews.swift in Sources */,
+				DE0002000000000000000013 /* TaskListView.swift in Sources */,
+				DE0002000000000000000014 /* TaskDetailView.swift in Sources */,
+				DE0002000000000000000015 /* TaskTreeView.swift in Sources */,
+				DE0002000000000000000016 /* TasksScreen.swift in Sources */,
+				DE0002000000000000000017 /* PlanView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -170,7 +242,7 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -191,7 +263,7 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;

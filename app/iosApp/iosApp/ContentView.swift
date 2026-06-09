@@ -1,19 +1,20 @@
-import SwiftUI
 import Deferno
+import SwiftUI
 
-// SwiftUI Views are centralized in this Xcode project in per-feature folders (ADR-0004).
-// This stub reads its text from the shared `Deferno` framework (IosGreeting, defined in
-// app/iosApp/src/iosMain) — the SKIE-free baseline. Once features expose their Decompose
-// components (and a Kotlin-2.4.0-compatible SKIE is wired), these Views render shared state.
+/// The app root. A simple `TabView` over the two built feature Destinations — **Plan** (the calm
+/// home, opened first per design-principles.md) and **Tasks** (the size-class-adaptive list/detail/
+/// tree, #51). Both render the shared Decompose components handed over by the demo harness (`#51`);
+/// the full Main shell (the nav suite + Calendar/Profile/Settings Destinations, ADR-0013) is a
+/// follow-up. SwiftUI Views are centralized in this Xcode project in per-feature folders (ADR-0004).
 struct ContentView: View {
-    private let greeting = IosGreeting().text
+    let demo: DefernoDemo
 
     var body: some View {
-        Text(greeting)
-            .padding()
+        TabView {
+            PlanView(component: demo.plan.component)
+                .tabItem { Label("Plan", systemImage: "sun.max") }
+            TasksScreen(root: demo.tasks)
+                .tabItem { Label("Tasks", systemImage: "checklist") }
+        }
     }
-}
-
-#Preview {
-    ContentView()
 }
