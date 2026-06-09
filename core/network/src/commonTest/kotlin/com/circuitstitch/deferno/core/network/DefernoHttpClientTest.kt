@@ -6,6 +6,7 @@ import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
+import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.url
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -87,6 +88,22 @@ class DefernoHttpClientTest {
         token = "token-b"
         client.requestApi<Probe>()
         assertEquals("Bearer token-b", captured?.headers?.get(HttpHeaders.Authorization))
+    }
+
+    @Test
+    fun doesNotOverrideAnExplicitAuthorizationHeader() = runTest {
+        // Sign-in validates a CANDIDATE token via /auth/me with an explicit bearer (#15, ADR-0023);
+        // the provider's Active-Account token must not clobber it (and the candidate path works even
+        // while another Account is active — the add-account precedence).
+        var captured: HttpRequestData? = null
+        val client = client(tokenProvider = { "active-account-token" }) { req ->
+            captured = req
+            respondJson(okEnvelope)
+        }
+
+        client.requestApi<Probe> { bearerAuth("candidate-token") }
+
+        assertEquals("Bearer candidate-token", captured?.headers?.get(HttpHeaders.Authorization))
     }
 
     @Test

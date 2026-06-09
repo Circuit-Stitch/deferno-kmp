@@ -116,6 +116,7 @@ object CoverageConfig {
         // (same rationale as the designsystem theme above, ADR-0006). The shared Decompose components
         // driving them ARE measured (feature commonTest, #25/#20).
         "com.circuitstitch.deferno.feature.auth.ui",
+        "com.circuitstitch.deferno.feature.signin.ui",
         "com.circuitstitch.deferno.feature.tasks.ui",
         "com.circuitstitch.deferno.feature.plan.ui",
         "com.circuitstitch.deferno.feature.profile.ui",

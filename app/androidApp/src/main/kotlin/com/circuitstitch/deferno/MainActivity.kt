@@ -63,7 +63,8 @@ class MainActivity : ComponentActivity() {
                 accountSession = { account ->
                     AccountComponentSession(createAccountComponent(appComponent, account))
                 },
-                onSignIn = app::signInDevAccount,
+                // The paste-PAT sign-in service (#15, ADR-0023) the Auth shell drives.
+                signInService = appComponent.signInService,
                 today = Clock.System.todayIn(timeZone),
                 timeZone = timeZone.id,
                 // Settings → App Permissions: deep-link to this app's OS settings screen (#72).

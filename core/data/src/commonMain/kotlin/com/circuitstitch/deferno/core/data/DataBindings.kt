@@ -12,7 +12,9 @@ import com.circuitstitch.deferno.core.data.account.ReauthRequests
 import com.circuitstitch.deferno.core.data.auth.AuthRemoteSource
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.DefaultAuthRepository
+import com.circuitstitch.deferno.core.data.auth.DefaultSignInService
 import com.circuitstitch.deferno.core.data.auth.KtorAuthRemoteSource
+import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.calendar.KtorCalendarRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
@@ -100,6 +102,18 @@ interface DataBindings {
         accountContext: AccountContext,
         reauth: ReauthRequester,
     ): AuthRepository = DefaultAuthRepository(remoteSource, accountContext, reauth)
+
+    /**
+     * The v1 sign-in service (#15, ADR-0023): validate a pasted PAT via the candidate-token
+     * `/auth/me` and, on success, establish the Account through [AccountManager]. AppScope —
+     * pre-Account, like the remote sources it composes, and the convergence seam the Auth shell drives.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun signInService(
+        remoteSource: AuthRemoteSource,
+        accountManager: AccountManager,
+    ): SignInService = DefaultSignInService(remoteSource, accountManager)
 
     // The Ktor remote sources over the one shared client — AppScope, since the client is (ADR-0014).
     @Provides

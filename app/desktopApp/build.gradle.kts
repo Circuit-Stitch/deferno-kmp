@@ -239,6 +239,10 @@ dependencies {
     implementation(project(":feature:calendar:ui"))
     implementation(project(":feature:tasks"))
     implementation(project(":feature:tasks:ui"))
+    // The paste-PAT sign-in slice the desktop RootShell renders for the Auth shell (#15, ADR-0023): the
+    // logic module supplies the SignInComponent type the shell exposes, the :ui submodule the screen.
+    implementation(project(":feature:signin"))
+    implementation(project(":feature:signin:ui"))
     implementation(project(":feature:profile"))
     // The Profile Destination's desktop View (#84): the shared Main shell renders it in the content
     // area (its jvmMain ProfileDesktopScreen — the identity hub + co-located Account controls).

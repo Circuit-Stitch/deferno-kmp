@@ -19,6 +19,9 @@ kotlin {
             // The feature slices the Main shell composes into its Destination graph — the *logic*
             // modules only (the Compose Views live in each slice's `:ui` submodule, consumed directly
             // by the app entry points, ADR-0004 #27).
+            // The paste-PAT sign-in slice (#15, ADR-0023) the Auth shell hosts (its logic module only;
+            // the Compose View lives in :feature:signin:ui, consumed by the app entry points).
+            implementation(project(":feature:signin"))
             implementation(project(":feature:tasks"))
             implementation(project(":feature:plan"))
             implementation(project(":feature:calendar"))

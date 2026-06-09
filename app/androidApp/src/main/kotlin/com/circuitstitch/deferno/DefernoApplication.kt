@@ -46,14 +46,6 @@ class DefernoApplication : Application() {
         }
     }
 
-    /**
-     * The dev "sign in" placeholder (#68): (re)seed the dev-PAT Accounts. Wired to the Auth shell's
-     * action — a no-op when no PAT is configured or every dev Account is already present.
-     */
-    fun signInDevAccount() {
-        appScope.launch { seedDevAccounts() }
-    }
-
     /** Idempotent: add only the dev Accounts not already in the roster (empty list in release). */
     private suspend fun seedDevAccounts() {
         val manager = appComponent.accountManager

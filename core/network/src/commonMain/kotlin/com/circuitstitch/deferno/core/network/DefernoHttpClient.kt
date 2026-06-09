@@ -12,6 +12,7 @@ import io.ktor.client.request.request
 import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.URLProtocol
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
@@ -76,11 +77,18 @@ internal fun defernoHttpClient(
  * so switching the Active Account re-points the credential immediately (ADR-0002). When the
  * provider returns `null` (no Account active) the request goes out unauthenticated — the path
  * the bootstrap calls take before a PAT exists (ADR-0012).
+ *
+ * A request that has **already set `Authorization`** is left untouched: sign-in validates a
+ * *candidate* PAT with `GET /auth/me` carrying that token as an explicit bearer (#15, ADR-0023),
+ * which must not be overridden by the Active Account's PAT (the precedence that also makes
+ * add-account work while another Account is active).
  */
 private fun bearerAuthPlugin(tokenProvider: BearerTokenProvider) =
     createClientPlugin("DefernoBearerAuth") {
         onRequest { request, _ ->
-            tokenProvider.currentToken()?.let { token -> request.bearerAuth(token) }
+            if (request.headers[HttpHeaders.Authorization] == null) {
+                tokenProvider.currentToken()?.let { token -> request.bearerAuth(token) }
+            }
         }
     }
 
