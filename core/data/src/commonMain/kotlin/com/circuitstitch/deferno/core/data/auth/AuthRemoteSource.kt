@@ -38,4 +38,13 @@ sealed interface MeResult {
 interface AuthRemoteSource {
     /** Issues `GET /auth/me` for whoever is the Active Account right now and condenses the result. */
     suspend fun fetchMe(): MeResult
+
+    /**
+     * Issues `GET /auth/me` carrying [token] as an **explicit** bearer — validating a *candidate*
+     * PAT during sign-in (#15, ADR-0023), before any Account holds it. The shared client's bearer
+     * plugin leaves an already-set `Authorization` untouched, so this bypasses the Active-Account
+     * provider. Same condensation as [fetchMe]: [MeResult.Unauthorized] means the pasted token is
+     * invalid/expired, [MeResult.Unavailable] is transient.
+     */
+    suspend fun fetchMe(token: String): MeResult
 }

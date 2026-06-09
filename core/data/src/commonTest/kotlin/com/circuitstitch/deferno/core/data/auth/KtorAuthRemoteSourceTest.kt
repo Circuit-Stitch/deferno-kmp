@@ -56,6 +56,21 @@ class KtorAuthRemoteSourceTest {
     }
 
     @Test
+    fun fetchMeWithACandidateTokenSendsItAsTheBearer() = runTest {
+        // #15/ADR-0023: the candidate-token /auth/me carries the pasted PAT as an EXPLICIT bearer (the
+        // shared client's plugin then leaves it untouched, DefernoHttpClientTest), validating the token
+        // before any Account holds it. This pins the load-bearing `requestMe { bearerAuth(token) }` wiring.
+        var captured: HttpRequestData? = null
+        val source = KtorAuthRemoteSource(client { req -> captured = req; respondJson(authMeEnvelope) })
+
+        val result = source.fetchMe("pasted-pat-123")
+
+        assertEquals(true, captured?.url?.encodedPath?.endsWith("/auth/me"))
+        assertEquals("Bearer pasted-pat-123", captured?.headers?.get(HttpHeaders.Authorization))
+        assertIs<MeResult.Authenticated>(result)
+    }
+
+    @Test
     fun emptyBody401MapsToUnauthorized() = runTest {
         // The verified empty-body 401 (CONTRACT-NOTES → "Error model"): synthesized ApiError.Status.
         val source = KtorAuthRemoteSource(client { respond("", HttpStatusCode.Unauthorized) })

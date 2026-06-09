@@ -3,6 +3,8 @@ package com.circuitstitch.deferno.shell
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.account.AccountManager
+import com.circuitstitch.deferno.core.data.auth.SignInResult
+import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
@@ -50,13 +52,13 @@ class RootComponentTest {
     private fun root(
         manager: AccountManager,
         session: AccountSession = FakeAccountSession(),
-        onSignIn: () -> Unit = {},
+        signInService: SignInService = FakeSignInService { SignInResult.Unavailable },
     ) = DefaultRootComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         accountManager = manager,
         authRepository = FakeAuthRepository(),
         accountSession = { session },
-        onSignIn = onSignIn,
+        signInService = signInService,
         today = today,
         timeZone = "UTC",
         coroutineContext = Dispatchers.Unconfined,
@@ -72,7 +74,7 @@ class RootComponentTest {
         accountManager = manager,
         authRepository = FakeAuthRepository(),
         accountSession = sessionFor,
-        onSignIn = {},
+        signInService = FakeSignInService { SignInResult.Unavailable },
         today = today,
         timeZone = "UTC",
         speechEngineCatalog = speechEngineCatalog,
@@ -148,11 +150,18 @@ class RootComponentTest {
     }
 
     @Test
-    fun authShellContinue_triggersOnSignIn() {
+    fun submittingAValidTokenOnTheAuthShell_swapsToTheMainShell() {
         val manager = FakeAccountManager()
-        val root = root(manager, onSignIn = { manager.signIn(account) })
+        // A valid pasted token establishes the Account (addAccount); the activeAccount collector then
+        // swaps the Auth shell for the Main shell — the #15/ADR-0023 sign-in path through the shell.
+        val root = root(
+            manager,
+            signInService = FakeSignInService { manager.signIn(account); SignInResult.Success(account) },
+        )
+        val auth = root.activeChild() as RootComponent.Child.Auth
 
-        (root.activeChild() as RootComponent.Child.Auth).component.onSignInClicked()
+        auth.component.signIn.onTokenChange("pat-xyz")
+        auth.component.signIn.onSubmit()
 
         assertTrue(root.activeChild() is RootComponent.Child.Main)
     }
@@ -337,6 +346,14 @@ class RootComponentTest {
         assertTrue(root.activeChild() is RootComponent.Child.Auth)
         assertEquals(UserSettings.Default, root.themeSettings.value)
     }
+}
+
+/**
+ * A [SignInService] double whose [signIn] runs [onSignIn] and returns its result — lets the Auth-shell
+ * test drive a valid pasted token through to an established Account without a real `/auth/me` call.
+ */
+private class FakeSignInService(private val onSignIn: () -> SignInResult) : SignInService {
+    override suspend fun signIn(token: String): SignInResult = onSignIn()
 }
 
 /**

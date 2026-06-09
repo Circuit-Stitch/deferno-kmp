@@ -146,9 +146,9 @@ fun main() {
             accountSession = { account ->
                 AccountComponentSession(createAccountComponent(appComponent, account))
             },
-            // The dev "sign in" placeholder (#68): (re)seed the dev-PAT Account(s) — a no-op when none
-            // is configured or every dev Account is already present.
-            onSignIn = { appScope.launch { seedDevAccounts(appComponent) } },
+            // The paste-PAT sign-in service (#15, ADR-0023) the Auth shell drives. Dev-PAT seeding still
+            // runs at startup below, so a configured dev build skips the sign-in screen entirely.
+            signInService = appComponent.signInService,
             today = Clock.System.todayIn(timeZone),
             timeZone = timeZone.id,
             // Settings → App Permissions is Android-only — there is no per-app OS settings screen on

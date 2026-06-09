@@ -6,6 +6,8 @@ import com.circuitstitch.deferno.core.network.dto.AuthenticatedUserDto
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import com.circuitstitch.deferno.core.network.requestApi
 import io.ktor.client.HttpClient
+import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.url
 import io.ktor.http.appendPathSegments
 
@@ -26,9 +28,16 @@ class KtorAuthRemoteSource(
     private val client: HttpClient,
 ) : AuthRemoteSource {
 
-    override suspend fun fetchMe(): MeResult {
+    override suspend fun fetchMe(): MeResult = requestMe { }
+
+    // The candidate-token sign-in validation (#15, ADR-0023): set Authorization explicitly so the
+    // bearer plugin leaves it alone — the pasted PAT is verified before any Account holds it.
+    override suspend fun fetchMe(token: String): MeResult = requestMe { bearerAuth(token) }
+
+    private suspend fun requestMe(configure: HttpRequestBuilder.() -> Unit): MeResult {
         val result = client.requestApi<AuthenticatedUserDto> {
             url { appendPathSegments("auth", "me") }
+            configure()
         }
         return when (result) {
             is ApiResult.Success -> MeResult.Authenticated(result.data.toDomain())

@@ -9,6 +9,7 @@ import com.arkivanov.decompose.value.Value
 import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
+import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
@@ -17,6 +18,7 @@ import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
+import com.circuitstitch.deferno.feature.signin.DefaultSignInComponent
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,7 +72,8 @@ class DefaultRootComponent(
     private val accountManager: AccountManager,
     private val authRepository: AuthRepository,
     private val accountSession: (Account) -> AccountSession,
-    private val onSignIn: () -> Unit,
+    /** The v1 sign-in seam (#15, ADR-0023): the Auth shell's [DefaultSignInComponent] validates a pasted PAT through it. */
+    private val signInService: SignInService,
     private val today: LocalDate,
     private val timeZone: String,
     /** Deep-link to the OS app-settings screen (Settings → App Permissions, #72). Handled by the host. */
@@ -151,7 +154,12 @@ class DefaultRootComponent(
                 // No Active Account → no per-Account settings; fall the app-wide theme back to default.
                 pointThemeAt(null)
                 RootComponent.Child.Auth(
-                    DefaultAuthShellComponent(componentContext = childContext, onSignIn = onSignIn),
+                    DefaultAuthShellComponent(
+                        componentContext = childContext,
+                        // The paste-PAT sign-in surface (#15, ADR-0023): on a valid token it calls
+                        // addAccount, the activeAccount collector above swaps in the Main shell.
+                        signIn = { ctx -> DefaultSignInComponent(ctx, signInService, scope.coroutineContext) },
+                    ),
                 )
             }
 

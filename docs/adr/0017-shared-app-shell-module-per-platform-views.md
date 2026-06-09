@@ -25,8 +25,9 @@ runtime path (the demo fakes survive only in test source sets). The shell now ke
 `app/shell` sits **above** `feature/*` (it composes four feature slices + `core/di`) and **below** the
 app entry points — refining ADR-0004's `core/* → feature/* → app/*` layering so that `app/` holds both
 the platform applications and the shared shell library they render. The shared `RootComponent` stays
-host-agnostic via constructor lambdas (`onOpenOsAppSettings`, `onOpen…`, `onSignIn`): each host supplies
-its own (desktop browses with `java.awt.Desktop`, omits the Android-only OS-app-settings affordance).
+host-agnostic via constructor lambdas (`onOpenOsAppSettings`, `onOpen…`): each host supplies its own
+(desktop browses with `java.awt.Desktop`, omits the Android-only OS-app-settings affordance). (Sign-in
+is no longer one of these lambdas — it moved to an injected `SignInService` per ADR-0023.)
 
 **Consequences.** The drift is structural-impossible-by-construction: one shell, rendered three ways.
 Desktop at runtime now requires a configured **dev-PAT** (surfaced from `local.properties` into a

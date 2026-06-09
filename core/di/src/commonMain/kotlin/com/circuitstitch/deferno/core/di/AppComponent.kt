@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
+import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
@@ -65,6 +66,13 @@ abstract class AppComponent(
      * HttpClient → BearerTokenProvider → AccountContext chain at compile time.
      */
     abstract val authRepository: AuthRepository
+
+    /**
+     * The v1 sign-in service (#15, ADR-0023): validate a pasted PAT against `/auth/me` and establish
+     * the Account. The Auth shell drives it; exposing it here also compile-validates its
+     * AuthRemoteSource + AccountManager dependencies in the merged graph.
+     */
+    abstract val signInService: SignInService
 
     /**
      * On-device speech-to-text (#92, ADR-0018): the [SpeechToText] selector over every registered engine

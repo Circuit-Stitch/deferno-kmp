@@ -49,6 +49,9 @@ include(":core:di")
 
 // Feature slices: each owns its shared Decompose component + ViewModel + state (commonMain + iOS).
 include(":feature:auth")
+// Paste-PAT sign-in (#15, ADR-0023): the v1 Auth-shell surface — validate a pasted PAT via /auth/me,
+// then establish the Account. Browser-OAuth + PKCE minting stacks on this seam when backend #299 lands.
+include(":feature:signin")
 include(":feature:tasks")
 include(":feature:plan")
 include(":feature:calendar")
@@ -59,6 +62,7 @@ include(":feature:settings")
 // no iOS — iOS is SwiftUI). Kept separate from the slice's logic module because the Compose compiler
 // plugin is module-wide and would break the logic module's iOS compilation (ADR-0004).
 include(":feature:auth:ui")
+include(":feature:signin:ui")
 include(":feature:tasks:ui")
 include(":feature:plan:ui")
 include(":feature:calendar:ui")
