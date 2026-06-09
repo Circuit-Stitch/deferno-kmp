@@ -1,0 +1,192 @@
+package com.circuitstitch.deferno.core.sidecar
+
+import app.cash.turbine.test
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.attribute.PosixFilePermissions
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+
+/**
+ * The headline tracer-bullet test (#118): the real [DefaultSidecarClient] over a real AF_UNIX
+ * [UnixSocketTransport] talking to the [StubHelper] over a real socket — proving the entire JVM client
+ * path (connect, peer-auth handshake, request/response, server stream, push, cancel, graceful
+ * degradation) **end-to-end on the Linux fast path with no Mac** (ADR-0024).
+ */
+class SidecarClientE2ETest {
+
+    private val TOKEN = "shared-in-band-token"
+    private val cleanups = mutableListOf<() -> Unit>()
+
+    @AfterTest
+    fun tearDown() {
+        cleanups.asReversed().forEach { runCatching { it() } }
+    }
+
+    @Test
+    fun connectsAuthenticatesAndSurfacesCapabilities() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub()
+        val client = client(stub.path)
+
+        client.connect()
+
+        assertEquals(
+            setOf(SidecarCapabilities.Permissions, SidecarCapabilities.SpeechTranscribe),
+            client.capabilities(),
+        )
+        assertIs<SidecarConnectionState.Ready>(client.state.value)
+    }
+
+    @Test
+    fun completesARequestResponseRoundTrip() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub().also { it.permissionStatus = PermissionStatusValue.GRANTED }
+        val client = client(stub.path)
+        client.connect()
+
+        val result = checkNotNull(client.request(SidecarMethods.QueryPermission))
+        val status = SidecarJson.decodeFromJsonElement(PermissionStatusWire.serializer(), result)
+
+        assertEquals("speech", status.capability)
+        assertEquals(PermissionStatusValue.GRANTED, status.status)
+    }
+
+    @Test
+    fun consumesAServerStream() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub()
+        val client = client(stub.path)
+        client.connect()
+
+        client.openStream(SidecarMethods.SubscribeTranscript).test {
+            assertEquals(TranscriptWire.Partial("hel"), transcript(awaitItem()))
+            assertEquals(TranscriptWire.Partial("hello wor"), transcript(awaitItem()))
+            assertEquals(TranscriptWire.Final("hello world"), transcript(awaitItem()))
+            awaitComplete()
+        }
+    }
+
+    @Test
+    fun receivesAnUnsolicitedPush() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub().also { it.permissionStatus = PermissionStatusValue.DENIED }
+        val client = client(stub.path)
+        client.connect()
+
+        // Collect pushes BEFORE triggering the stub to push (the stub pushes after answering the query).
+        client.pushes.test {
+            client.request(SidecarMethods.QueryPermission)
+            val push = awaitItem()
+            assertEquals(SidecarTopics.PermissionChanged, push.topic)
+            val status = SidecarJson.decodeFromJsonElement(PermissionStatusWire.serializer(), push.payload)
+            assertEquals(PermissionStatusValue.DENIED, status.status)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun cancellingTheStreamTellsTheHelperToStop() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub()
+        val client = client(stub.path)
+        client.connect()
+
+        client.openStream(SidecarMethods.SubscribeTranscript).test {
+            awaitItem() // first partial, then we abandon the stream
+            cancel()
+        }
+
+        val cancelledId = withTimeout(2_000) { stub.awaitCancel() }
+        assertTrue(cancelledId > 0, "expected the Helper to receive a Cancel for the open stream")
+    }
+
+    @Test
+    fun reDialsAfterTheConnectionDrops() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val path = socketDir().resolve("h.sock")
+        val client = client(path)
+
+        val stub1 = StubHelper(path, expectedToken = TOKEN).also { it.start(); cleanups += { it.close() } }
+        client.connect()
+        assertEquals(
+            SidecarConnectionState.Ready(setOf(SidecarCapabilities.Permissions, SidecarCapabilities.SpeechTranscribe)),
+            client.state.value,
+        )
+
+        // Drop the Helper; the client's reader sees EOF and transitions to Disconnected.
+        stub1.close()
+        withTimeout(2_000) { client.state.first { it is SidecarConnectionState.Disconnected } }
+
+        // A fresh Helper binds the same path; the next request re-dials transparently.
+        StubHelper(path, expectedToken = TOKEN).also { it.start(); cleanups += { it.close() } }
+        val result = checkNotNull(client.request(SidecarMethods.QueryPermission))
+        assertEquals("speech", SidecarJson.decodeFromJsonElement(PermissionStatusWire.serializer(), result).capability)
+    }
+
+    @Test
+    fun rejectsAnInvalidToken() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub()
+        val client = client(stub.path, token = "wrong-token")
+
+        assertFailsWith<SidecarSecurityException> { client.connect() }
+        assertIs<SidecarConnectionState.Disconnected>(client.state.value)
+    }
+
+    @Test
+    fun degradesGracefullyWhenNoHelperIsBound() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val dir = socketDir()
+        val absent = dir.resolve("not-bound.sock")
+        val client = client(absent)
+
+        assertFailsWith<SidecarUnavailableException> { client.connect() }
+    }
+
+    @Test
+    fun refusesAnInsecureSocketPath() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub()
+        // Make the bound socket group/other-readable — the client-half peer-trust must refuse it.
+        Files.setPosixFilePermissions(stub.path, PosixFilePermissions.fromString("rw-r--r--"))
+        val client = client(stub.path)
+
+        assertFailsWith<SidecarSecurityException> { client.connect() }
+    }
+
+    // --- helpers -----------------------------------------------------------------------------------
+
+    private fun transcript(event: kotlinx.serialization.json.JsonElement): TranscriptWire =
+        SidecarJson.decodeFromJsonElement(TranscriptWire.serializer(), event)
+
+    private fun startStub(token: String = TOKEN): StubHelper {
+        val stub = StubHelper(socketDir().resolve("h.sock"), expectedToken = token)
+        stub.start()
+        cleanups += { stub.close() }
+        return stub
+    }
+
+    private fun client(path: Path, token: String = TOKEN): SidecarClient =
+        unixSocketSidecarClient(path, token).also { client -> cleanups += { client.close() } }
+
+    private fun socketDir(): Path {
+        val tmp = Paths.get("/tmp")
+        val base = if (Files.isDirectory(tmp) && Files.isWritable(tmp)) tmp else Paths.get(System.getProperty("java.io.tmpdir"))
+        val dir = Files.createTempDirectory(base, "deferno-sidecar")
+        cleanups += { runCatching { dir.toFile().deleteRecursively() } }
+        return dir
+    }
+
+    private fun posixSupported(): Boolean =
+        FileSystems.getDefault().supportedFileAttributeViews().contains("posix")
+}

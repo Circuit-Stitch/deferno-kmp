@@ -1,0 +1,8 @@
+{
+  "type": "failure",
+  "id": 1,
+  "error": {
+    "code": "unknown_method",
+    "message": "no such method: listCalendars"
+  }
+}

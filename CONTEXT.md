@@ -203,6 +203,43 @@ relax ADR-0015's "kind is explicit, never inferred." The drafts are exactly that
 auto-committed.
 _Avoid_: [[Dictation]] (fills one field, no inference), voice commands (a non-goal).
 
+### Native sidecar (desktop)
+
+How the **desktop** client reaches OS-native capabilities the JVM can't (on-device dictation, OS
+permission prompts, notifications, a menu-bar item) — a separate native process over a local socket,
+not JVM→native FFI (ADR-0024/0025).
+
+**Sidecar** *(client, desktop)*:
+A separate **OS-native helper process** the desktop client reaches over a local socket to use
+capabilities the JVM can't. A **pattern**, not one program: macOS uses a Swift helper today; Windows and
+Linux helpers follow over the *same* contract. The JVM never links native code — it talks to the helper.
+_Avoid_: plugin, extension, daemon (the lifecycle is per-OS — launchd on macOS, etc.); "the Swift app"
+(macOS is one instance of the pattern).
+
+**Sidecar helper** (the **Helper**) *(client, desktop)*:
+A concrete **per-OS implementation of the server half** of the [[Sidecar protocol]] — the macOS Swift
+helper now; Windows/Linux helpers later. It owns the OS-native capabilities and its own permission
+identity (TCC on macOS, ADR-0024), binds the socket, and speaks the one contract.
+_Avoid_: [[Sidecar]] (that is the pattern), server (overloaded with the backend), plugin.
+
+**Sidecar client** *(client, desktop)*:
+The **OS-agnostic JVM half** — one implementation across every desktop OS. It connects to whatever
+[[Sidecar helper]] binds the socket path, performs the peer-auth handshake, and multiplexes
+request/response, server streams, and push. Helper-agnostic: in tests a [[Stub helper]] stands in.
+_Avoid_: SDK, driver.
+
+**Sidecar protocol** *(client, desktop)*:
+The **language-neutral** JSON-over-socket contract every [[Sidecar helper]] implements — frame shapes,
+correlation, error model, handshake, capability negotiation (ADR-0025; spec in `contracts/sidecar/`). The
+shared substrate that lets a new OS add a [[Sidecar helper]] without a new protocol.
+_Avoid_: API (the backend's REST surface is "the API"), format.
+
+**Stub helper** *(client, desktop, testing)*:
+A **canned, non-native** [[Sidecar helper]] that binds a real socket and serves fixed frames — the
+*reference implementation of the server half*, used to exercise the whole [[Sidecar client]] path on the
+Linux fast path with no Mac (ADR-0024 tracer bullet). Not a real capability provider.
+_Avoid_: mock (it binds a real socket and speaks the real protocol), fake.
+
 ### Settings (app vs user)
 
 The **Settings** [[Destination]] surfaces two kinds of preference that look alike on screen but differ

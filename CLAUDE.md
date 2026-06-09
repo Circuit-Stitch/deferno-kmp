@@ -26,6 +26,7 @@ build-logic/                          ← composable convention plugins — comp
 core/                                 ← shared KMP foundations
   model · common · network · database · secure · data · domain · designsystem
   di/                                 ← compile-time DI scope graph (process/app → Account → scene, ADR-0008)
+  sidecar/                            ← OS-agnostic JVM Sidecar client + JSON IPC contract to native Helpers (JVM-only · deferno.jvm.library · ADR-0024/0025)
 feature/                              ← shared KMP feature slices (Decompose component + ViewModel + state; commonMain + iOS)
   auth · tasks · plan
   tasks/ui · plan/ui                  ← per-slice Compose Views (deferno.compose.library: Android + JVM, NO iOS — #27)
@@ -65,6 +66,7 @@ The convention plugins (`build-logic/src/main/kotlin/`, ADR-0004) are small and 
 - `deferno.coverage` — Kover with the shared-core exclusions (`CoverageConfig`) on each module's own report.
 - `deferno.coverage.aggregation` — the coverage *gate*: applied at the root, aggregates `core/*`+`feature/*` via `kover(project(...))` and enforces the merged ~85–90% bound (plus a "must be measured" floor so a hollowed-out gate can't pass vacuously). Run via `:koverVerify` (in CI).
 - `deferno.kmp.library` — composes `deferno.android` + `deferno.coverage`; applied by every `core/*`/`feature/*` module.
+- `deferno.jvm.library` — a pure-Kotlin/JVM library (kotlin-jvm + JVM toolchain + `deferno.coverage`), the no-Android/no-KMP sibling of `deferno.kmp.library` (the standalone pure-Kotlin module `deferno.kmp` anticipates). Applied by a module that is JVM-only *by design*: currently `core/sidecar`, the JVM half of the native-sidecar substrate (ADR-0024/0025) whose peers are native Helper processes (not Kotlin), so KMP targets would be permanent dead weight. Still gated by the merged coverage report (it's a `core/*` module).
 - `deferno.di` — kotlin-inject + anvil DI wiring (KSP plugin + DI runtimes + per-target processors); composed onto `deferno.kmp.library` by modules that host or contribute DI bindings: `core/di` (the merge site — `AppComponent`/`AccountComponent`/`SceneComponent`) plus the modules with distributed `@ContributesTo` bindings (`core/secure · network · data · database · domain`, ADR-0014).
 - `deferno.compose` — applies the two Compose Gradle plugins (Compose Multiplatform runtime + `compose {}`/Resources DSL, and the Kotlin Compose *compiler* plugin). Composed onto a module that holds Composable code; deps stay in each module's build file (commonMain for a shared UI library, `androidMain` for a feature slice's Android Views — ADR-0004).
 - `deferno.compose.library` — a Compose UI *library* on the Compose platforms only: **Android + JVM/desktop, no iOS** (the iOS View is SwiftUI with its own design system, ADR-0003/0004; Compose Multiplatform 1.11 also dropped the deprecated `iosX64` variant). Sibling of `deferno.kmp.library` minus iOS, plus `deferno.compose`. Applied by `core/designsystem` and each per-slice UI submodule (`feature/tasks/ui`, `feature/plan/ui` — the Compose Views can't share a module with the slice's iOS target, ADR-0004 #27).

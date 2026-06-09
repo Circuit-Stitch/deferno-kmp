@@ -1,0 +1,8 @@
+{
+  "type": "push",
+  "topic": "permissionChanged",
+  "payload": {
+    "capability": "mic",
+    "status": "denied"
+  }
+}
