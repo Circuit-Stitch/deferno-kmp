@@ -182,13 +182,14 @@ dependencies {
 
     // Conveyor per-platform inputs (ADR-0021, #102): the Conveyor Gradle plugin adds a configuration
     // per target machine (linuxAmd64, macAmd64, windowsAmd64, …); it does NOT auto-collect the
-    // Skiko-bearing jars, so the per-OS Compose artifact is declared into each. This slice is Linux
-    // only — the commented lines are the Windows/macOS follow-up. `compose.desktop.currentOs` above
-    // stays for the dev `./gradlew :app:desktopApp:run` path.
+    // Skiko-bearing jars, so the per-OS Compose artifact is declared into each. Linux + Windows ship
+    // (both cross-built from Linux — the Skiko Windows natives are prebuilt in the jar, no toolchain
+    // needed); the commented macOS lines are the follow-up (blocked on notarization, ADR-0021).
+    // `compose.desktop.currentOs` above stays for the dev `./gradlew :app:desktopApp:run` path.
     linuxAmd64(compose.desktop.linux_x64)
+    windowsAmd64(compose.desktop.windows_x64)
     // macAmd64(compose.desktop.macos_x64)
     // macAarch64(compose.desktop.macos_arm64)
-    // windowsAmd64(compose.desktop.windows_x64)
     implementation(compose.material3)
     // Just the core Material icon set (the glyphs the nav rail/drawer uses) — not the ≈37 MB
     // `materialIconsExtended` set, which the bundled desktop distribution would otherwise ship.
