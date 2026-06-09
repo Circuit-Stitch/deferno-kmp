@@ -79,6 +79,25 @@ xcrun simctl launch booted com.circuitstitch.deferno
   (where the Gradle task stages the framework) and `OTHER_LDFLAGS = -framework Deferno`.
 - **`import Deferno`** in the Swift sources reaches the exported components, the model,
   and the bridge (`StateFlowBridge`/`ValueBridge`/`DetailSlot`/`TreeSlot`, `BridgeKt`).
+- **Branding** — the app wears the Deferno **flame** throughout, all rasterized from the shared
+  `core/designsystem/brand/flame.svg` (the source of truth) by `scripts/generate-brand-assets.sh`
+  (macOS). The script rasterizes the SVG with **`NSImage`**, which decodes it natively *and keeps the
+  transparent background* — `qlmanage`/QuickLook flattens the transparent page onto opaque white,
+  which would leave a white box behind the flame. It emits two assets into `iosApp/Assets.xcassets`:
+    - `AppIcon.appiconset/AppIcon-1024.png` — the home-screen icon (`ASSETCATALOG_COMPILER_APPICON_NAME
+      = AppIcon`): the flame on the Deferno dark surface (`#1F1B16`), matching the Android adaptive
+      icon. iOS app icons **must** be raster PNG (the catalog doesn't accept SVG; the vector Icon
+      Composer `.icon` needs Xcode 16+, and this project targets 15.2), so the SVG is rasterized once
+      and iOS derives every size from the 1024. No alpha (App Store requirement).
+    - `Flame.imageset/Flame.png` — the bare flame on a transparent background, shared by the launch
+      screen and the in-app `Brandmark` (the flame beside the Plan "Today" header — `CommonViews.swift`,
+      enabled via `PaneHeader(showsBrand:)`).
+  The launch screen is `LaunchScreen.storyboard` (`INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen`):
+  the flame centered on the same `#1F1B16` surface. The home-screen name is **Deferno**
+  (`INFOPLIST_KEY_CFBundleDisplayName`), not the `iosApp` target name. Note: the iOS Simulator caches
+  the launch image aggressively per bundle id — after changing the launch screen, a fresh/erased
+  simulator (or a real device) shows the new render; reinstalling onto the same booted sim may keep
+  serving the old one.
 
 > The project sits at `app/iosApp/iosApp.xcodeproj`, so `$SRCROOT` = `app/iosApp` — which
 > is exactly what the framework search path and the Run Script's `cd "$SRCROOT/../.."`
