@@ -36,7 +36,15 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 class MainShellNavScreenshotTest {
 
+    // Deliberately stays on the v1 `createComposeRule` (the other UI tests migrated to the v2 rule).
+    // Unlike those, this baseline drives a *real* DefaultMainShellComponent whose adaptive nav suite
+    // animates its selected-item state, so the captured frame depends on effects running immediately
+    // — the Unconfined semantics these goldens were recorded under. The v2 rule swaps in a
+    // StandardTestDispatcher that queues those effects instead, changing what a re-record would
+    // capture. Keep v1 and suppress the deprecation rather than re-baseline a real animated screen for
+    // a test-dispatcher swap.
     @get:Rule
+    @Suppress("DEPRECATION")
     val composeRule = createComposeRule()
 
     private fun shell() = DefaultMainShellComponent(

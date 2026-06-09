@@ -23,10 +23,10 @@ kotlin {
             // sits in commonMain here — not duplicated per platform — so both screens inherit it.
             implementation(project(":feature:tasks"))
 
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.ui)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.ui)
         }
         // The Android-native screens (#27): they render the shared Decompose components (#25) and
         // observe the co-resident detail/tree slots via `subscribeAsState()`. Kept out of commonMain
@@ -66,7 +66,7 @@ kotlin {
         // and asserting the open/dismiss intents are forwarded.
         jvmTest.dependencies {
             implementation(project(":core:data"))
-            implementation(compose.desktop.uiTestJUnit4)
+            implementation(libs.compose.ui.test.junit4)
             implementation(compose.desktop.currentOs)
         }
     }

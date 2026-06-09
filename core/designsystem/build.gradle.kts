@@ -12,12 +12,12 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             // Compose Multiplatform UI surface (resolves to androidx.compose.* on Android).
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.ui)
-            implementation(compose.material3)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.ui)
+            implementation(libs.compose.material3)
             // Compose Resources — the IBM Plex font families packaged in commonMain/composeResources.
-            implementation(compose.components.resources)
+            implementation(libs.compose.components.resources)
         }
     }
 }

@@ -8,6 +8,7 @@ import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -40,6 +41,7 @@ private class RecordingEditor(private val repo: FakeTaskRepository) : WorkingSta
     }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class) // advanceUntilIdle() — drives the scheduler past the init fetch.
 class TaskDetailComponentTest {
 
     @Test
@@ -53,7 +55,7 @@ class TaskDetailComponentTest {
             // Drain to the settled state: hydrate has upgraded the row and finished.
             var item = awaitItem()
             while (item.isHydrating || item.task?.hydration != HydrationState.Full) item = awaitItem()
-            assertEquals("the details", item.task?.description)
+            assertEquals("the details", item.task.description)
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -104,7 +106,7 @@ class TaskDetailComponentTest {
             // The optimistic local update propagates back through the repository Flow.
             var updated = awaitItem()
             while (updated.task?.workingState != WorkingState.InProgress) updated = awaitItem()
-            assertEquals(WorkingState.InProgress, updated.task?.workingState)
+            assertEquals(WorkingState.InProgress, updated.task.workingState)
             cancelAndIgnoreRemainingEvents()
         }
     }

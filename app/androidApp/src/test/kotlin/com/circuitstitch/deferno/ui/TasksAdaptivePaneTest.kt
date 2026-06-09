@@ -1,7 +1,8 @@
 package com.circuitstitch.deferno.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.arkivanov.decompose.DefaultComponentContext
@@ -31,6 +32,7 @@ import org.robolectric.annotation.Config
  * `calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth`.
  */
 @RunWith(RobolectricTestRunner::class)
+@OptIn(ExperimentalTestApi::class)
 class TasksAdaptivePaneTest {
 
     @get:Rule

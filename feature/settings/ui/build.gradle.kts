@@ -26,10 +26,10 @@ kotlin {
             implementation(libs.decompose)
             implementation(libs.decompose.extensions.compose)
 
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.ui)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.ui)
             // The handful of nav glyphs the tier-3 drill-down uses (back arrow, the chevron on a
             // category row): `material-icons-core` (the small set, not the ≈37MB extended) — the same
             // choice the shell + desktop nav suite make. The JetBrains Compose Multiplatform artifact
@@ -51,10 +51,10 @@ kotlin {
             implementation(libs.decompose)
             implementation(libs.decompose.extensions.compose)
 
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.ui)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.ui)
             implementation(libs.compose.material.icons.core)
         }
         // The desktop render/screenshot test (#85, cf. #39): a Compose-Multiplatform UI test on the
@@ -62,7 +62,7 @@ kotlin {
         // core:data supplies the SettingsRepository/SettingsWriter the fakes implement.
         jvmTest.dependencies {
             implementation(project(":core:data"))
-            implementation(compose.desktop.uiTestJUnit4)
+            implementation(libs.compose.ui.test.junit4)
             implementation(compose.desktop.currentOs)
         }
     }

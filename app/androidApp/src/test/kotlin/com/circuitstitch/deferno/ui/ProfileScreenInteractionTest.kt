@@ -2,7 +2,8 @@ package com.circuitstitch.deferno.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
@@ -24,6 +25,7 @@ import org.robolectric.RobolectricTestRunner
  * commonTest ([com.circuitstitch.deferno.feature.profile.ProfileComponentTest]).
  */
 @RunWith(RobolectricTestRunner::class)
+@OptIn(ExperimentalTestApi::class)
 class ProfileScreenInteractionTest {
 
     @get:Rule

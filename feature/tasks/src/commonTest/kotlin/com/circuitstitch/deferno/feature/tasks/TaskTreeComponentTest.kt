@@ -39,7 +39,7 @@ class TaskTreeComponentTest {
         component.state.test {
             var item = awaitItem()
             while (item.root == null) item = awaitItem()
-            assertEquals(TaskId("root"), item.root?.id)
+            assertEquals(TaskId("root"), item.root.id)
             assertEquals(listOf(TaskId("c1"), TaskId("c2")), item.children.map { it.id })
             cancelAndIgnoreRemainingEvents()
         }

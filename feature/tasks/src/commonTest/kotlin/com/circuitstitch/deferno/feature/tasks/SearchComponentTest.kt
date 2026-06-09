@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -22,6 +23,7 @@ import kotlin.test.assertTrue
  * landing in [SearchState], the open-task + dismiss intents, the 2-char minimum guard, and the
  * isSearching transition — over a recording [SearchTasks] on the JVM-fast path (ADR-0006).
  */
+@OptIn(ExperimentalCoroutinesApi::class) // advanceUntilIdle() — drives the scheduler past the init fetch.
 class SearchComponentTest {
 
     private class RecordingSearch(var results: List<com.circuitstitch.deferno.core.model.Task> = emptyList()) :

@@ -1,8 +1,9 @@
 package com.circuitstitch.deferno.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
@@ -21,6 +22,7 @@ import org.robolectric.RobolectricTestRunner
  * re-auth / unavailable states — the state-mapping logic itself is tested in `:feature:auth`
  * commonTest ([com.circuitstitch.deferno.feature.auth.AuthComponentTest]).
  */
+@OptIn(ExperimentalTestApi::class)
 @RunWith(RobolectricTestRunner::class)
 class AuthScreenInteractionTest {
 
