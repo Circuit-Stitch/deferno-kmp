@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent TEMPLATE for the Deferno macOS Sidecar helper (ADR-0024, #121).
+
+  This is the launchd contract: an **on-demand, socket-activated** per-user agent. launchd owns the
+  socket — it binds + listen()s the AF_UNIX path below (owner-only, mode 0600) and starts the helper on
+  the FIRST client connection, handing it the inherited fd via launch_activate_socket("Sidecar", …).
+  The JVM client stays launchd-agnostic: it just dials the same well-known path.
+
+  It is a TEMPLATE: the install step (Conveyor / first run — #122) substitutes the placeholders with
+  absolute, per-user values and writes the result to ~/Library/LaunchAgents/, then `launchctl bootstrap
+  gui/$(id -u)` it. launchd does NOT expand "~", so the paths MUST be absolute.
+
+  Placeholders:
+    __HELPER_PATH__   absolute path to the signed deferno-sidecar binary inside the installed .app
+    __SOCKET_PATH__   absolute AF_UNIX socket path — MUST equal the client's
+                      SidecarSocketPath.default() on macOS:
+                      $HOME/Library/Application Support/Deferno/sidecar.sock
+    __TOKEN_FILE__    absolute path to the 0600 in-band-token file both peers read
+                      (e.g. $HOME/Library/Application Support/Deferno/sidecar.token)
+    __STDERR_LOG__    absolute path for the helper's metadata-only diagnostics
+                      (e.g. $HOME/Library/Logs/Deferno/sidecar.log)
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.circuitstitch.deferno.sidecar</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HELPER_PATH__</string>
+        <string>--socket-name</string>
+        <string>Sidecar</string>
+    </array>
+
+    <!-- On-demand socket activation: launchd binds + owns the socket; the helper inherits it. -->
+    <key>Sockets</key>
+    <dict>
+        <key>Sidecar</key>
+        <dict>
+            <key>SockPathName</key>
+            <string>__SOCKET_PATH__</string>
+            <key>SockPathMode</key>
+            <!-- 0600 == 384 decimal (launchd wants the mode as an integer). -->
+            <integer>384</integer>
+            <key>SockType</key>
+            <string>stream</string>
+            <key>SockFamily</key>
+            <string>Unix</string>
+        </dict>
+    </dict>
+
+    <!-- The in-band auth token is read from a 0600 file (kept out of this plist). -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DEFERNO_SIDECAR_TOKEN_FILE</key>
+        <string>__TOKEN_FILE__</string>
+    </dict>
+
+    <!-- Start on connection, not at login; let launchd reap it when idle. -->
+    <key>RunAtLoad</key>
+    <false/>
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardErrorPath</key>
+    <string>__STDERR_LOG__</string>
+</dict>
+</plist>
