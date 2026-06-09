@@ -75,6 +75,15 @@ jobs:
             exit 1
           fi
 
+      # Build the desktop app's own JAR. Conveyor does NOT build your app — its config (from the
+      # printConveyorConfig include) lists `app/desktopApp/build/libs/desktopApp-<version>.jar` as an
+      # input and resolves the dependency jars from the Gradle cache, but the app jar must already
+      # exist on disk or Conveyor fails with "Input doesn't exist or isn't readable". The `jar` task
+      # also resolves the runtime classpath, pre-populating the cache Conveyor reads. Produces only the
+      # thin app jar (no fat jar / jpackage) — Conveyor assembles the distribution itself.
+      - name: Build the desktop app jar
+        run: ./gradlew :app:desktopApp:jar
+
       # The official Conveyor action: downloads + caches the `conveyor` CLI (version tracks the action
       # tag, here 22.0), then runs `conveyor make copied-site` — build the Linux .deb + tarball + apt
       # repo + update metadata and upload them to the GitHub Release named for app.version.
