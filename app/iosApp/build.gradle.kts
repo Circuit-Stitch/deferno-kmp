@@ -17,28 +17,40 @@ kotlin {
         target.binaries.framework {
             baseName = "Deferno"
             isStatic = true
-            // Public declarations of THIS module (e.g. IosGreeting in iosMain) already
-            // land in the generated Deferno.framework header for Swift to call. To also
-            // surface public APIs from the feature/core *dependencies*, switch their
-            // `implementation(...)` below to `export(...)` (and have those modules declare
-            // the deps `api(...)` so they're transitively exportable).
+            // Surface the shared presentation layer to SwiftUI (#51). The Tasks + Plan
+            // Decompose components, the domain model (Task/TaskId/WorkingState), and the
+            // Decompose/coroutines types their public API exposes must land in the generated
+            // Deferno.framework header for the per-feature SwiftUI Views to render them.
+            // `export(...)` requires the matching `api(project(...))` dependency below.
             //
-            // SKIE (ADR-0003) — which bridges Flow/suspend/sealed into idiomatic Swift —
-            // is deliberately NOT applied yet: no released SKIE supports Kotlin 2.4.0 as
-            // of 2026-06, and SKIE's configuration-time version check would fail Gradle
-            // sync on every host. When a 2.4.0-compatible SKIE ships, apply
-            // `alias(libs.plugins.skie)` (see gradle/libs.versions.toml) and export the
-            // feature components here.
+            // SKIE (ADR-0003) — which bridges Flow/suspend/sealed into idiomatic Swift — is
+            // still NOT applied (no released SKIE supports Kotlin 2.4.0 as of 2026-06; see
+            // gradle/libs.versions.toml + ./README.md). Until it ships, the SwiftUI Views
+            // observe `StateFlow`/`Value` through the hand-written, SKIE-free bridge in
+            // `src/iosMain/.../ios/bridge` (ObservableState.swift wraps it on the Swift side).
+            export(project(":feature:tasks"))
+            export(project(":feature:plan"))
+            export(project(":core:model"))
+            export(libs.decompose)
+            export(libs.kotlinx.coroutines.core)
         }
     }
 
     sourceSets {
         iosMain.dependencies {
-            implementation(project(":feature:auth"))
-            implementation(project(":feature:tasks"))
-            implementation(project(":feature:plan"))
-            // No :core:designsystem — it's a Compose UI module (Android + desktop). The iOS
-            // View layer is SwiftUI with its own design system in the Xcode project (ADR-0004).
+            // `api` (not `implementation`) so the exported framework header carries these —
+            // `export(...)` above only works for `api` dependencies.
+            api(project(":feature:tasks"))
+            api(project(":feature:plan"))
+            api(project(":core:model"))
+            api(libs.decompose)
+            api(libs.kotlinx.coroutines.core)
+            // Used only by the in-memory demo harness (DemoRepositories.kt) — the repository
+            // ports the components construct over. Not part of the Swift-facing API, so not
+            // exported. The real iOS app shell (a follow-up) will supply DI-provided
+            // repositories instead (#68, ADR-0014); this stays a scaffold fixture.
+            implementation(project(":core:data"))
+            implementation(libs.kotlinx.datetime)
         }
     }
 }

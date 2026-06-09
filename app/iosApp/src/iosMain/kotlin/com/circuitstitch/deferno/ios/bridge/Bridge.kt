@@ -1,0 +1,116 @@
+package com.circuitstitch.deferno.ios.bridge
+
+import com.arkivanov.decompose.router.slot.ChildSlot
+import com.arkivanov.decompose.value.Value
+import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.feature.plan.PlanComponent
+import com.circuitstitch.deferno.feature.plan.PlanState
+import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
+import com.circuitstitch.deferno.feature.tasks.TaskDetailState
+import com.circuitstitch.deferno.feature.tasks.TaskListComponent
+import com.circuitstitch.deferno.feature.tasks.TaskListState
+import com.circuitstitch.deferno.feature.tasks.TaskTreeComponent
+import com.circuitstitch.deferno.feature.tasks.TaskTreeState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+
+/**
+ * The **SKIE-free bridge** the SwiftUI Views observe (#51). ADR-0003 calls for SKIE to turn
+ * `StateFlow`/`Value`/sealed types into idiomatic Swift, but no released SKIE supports Kotlin 2.4.0
+ * yet (see `app/iosApp/README.md`). Until it ships, these small **concrete** wrappers do that job by
+ * hand: they keep `kotlinx.coroutines.StateFlow` and the Decompose `Value`/`ChildSlot` generics out
+ * of the Swift-facing surface entirely, exposing only `value`/`current` snapshots and a
+ * callback-based `subscribe` that returns a [Subscription] Swift cancels in `deinit`
+ * (see `iosApp/Bridge/ObservableState.swift`). When SKIE lands, this whole package can be deleted and
+ * the Views can observe the components' `StateFlow`/`Value` directly.
+ */
+
+/** A handle Swift holds and [cancel]s in `deinit` to stop observing. */
+class Subscription internal constructor(private val onCancel: () -> Unit) {
+    fun cancel() {
+        onCancel()
+    }
+}
+
+/**
+ * Observes a component's `StateFlow` from Swift without SKIE. Each [subscribe] collects on
+ * [Dispatchers.Main] (so the View updates on the main thread) in its own scope, cancelled when the
+ * returned [Subscription] is. The current value is always available synchronously via [value].
+ */
+class StateFlowBridge<T : Any> internal constructor(private val flow: StateFlow<T>) {
+    val value: T get() = flow.value
+
+    fun subscribe(onEach: (T) -> Unit): Subscription {
+        val scope = CoroutineScope(Dispatchers.Main)
+        scope.launch { flow.collect { onEach(it) } }
+        return Subscription { scope.cancel() }
+    }
+}
+
+/**
+ * Observes a Decompose [Value] (e.g. the Tasks `activePane`) from Swift. Decompose's `subscribe`
+ * fires synchronously with the current value, so no coroutine is involved — the [Subscription] just
+ * cancels the Decompose subscription.
+ */
+class ValueBridge<T : Any> internal constructor(private val delegate: Value<T>) {
+    val current: T get() = delegate.value
+
+    fun subscribe(onEach: (T) -> Unit): Subscription {
+        val cancellation = delegate.subscribe { onEach(it) }
+        return Subscription { cancellation.cancel() }
+    }
+}
+
+/**
+ * The Tasks **detail** co-resident slot, flattened to its (nullable) child component so Swift never
+ * touches the `Value<ChildSlot<*, …>>` generics. [current] is the open detail component, or `null`.
+ */
+class DetailSlot internal constructor(private val slot: Value<ChildSlot<*, TaskDetailComponent>>) {
+    val current: TaskDetailComponent? get() = slot.value.child?.instance
+
+    fun subscribe(onEach: (TaskDetailComponent?) -> Unit): Subscription {
+        val cancellation = slot.subscribe { onEach(it.child?.instance) }
+        return Subscription { cancellation.cancel() }
+    }
+}
+
+/** The Tasks **tree** co-resident slot, flattened to its (nullable) child component (see [DetailSlot]). */
+class TreeSlot internal constructor(private val slot: Value<ChildSlot<*, TaskTreeComponent>>) {
+    val current: TaskTreeComponent? get() = slot.value.child?.instance
+
+    fun subscribe(onEach: (TaskTreeComponent?) -> Unit): Subscription {
+        val cancellation = slot.subscribe { onEach(it.child?.instance) }
+        return Subscription { cancellation.cancel() }
+    }
+}
+
+// Concrete factories that pin each StateFlow's element type, so Swift gets a strongly-typed
+// StateFlowBridge<…> (the generic is resolved here) without ever naming `StateFlow`. They also keep
+// StateFlowBridge's constructor internal — Swift can only obtain a bridge through these.
+fun taskListStateBridge(component: TaskListComponent): StateFlowBridge<TaskListState> =
+    StateFlowBridge(component.state)
+
+fun taskDetailStateBridge(component: TaskDetailComponent): StateFlowBridge<TaskDetailState> =
+    StateFlowBridge(component.state)
+
+fun taskTreeStateBridge(component: TaskTreeComponent): StateFlowBridge<TaskTreeState> =
+    StateFlowBridge(component.state)
+
+fun planStateBridge(component: PlanComponent): StateFlowBridge<PlanState> =
+    StateFlowBridge(component.state)
+
+/**
+ * A stable String identity for a [Task], for SwiftUI list diffing. `Task.id` is a [TaskId] value
+ * class that Kotlin/Native erases to an opaque `id` in the header (so Swift can't read `.value`); this
+ * unwraps it to the underlying UUID String the View keys rows on.
+ */
+fun taskKey(task: Task): String = task.id.value
+
+/** The String identity of the Task a detail pane shows — for SwiftUI view identity (see [taskKey]). */
+fun detailKey(component: TaskDetailComponent): String = component.taskId.value
+
+/** The String identity of the Task a tree pane is rooted at — for SwiftUI view identity (see [taskKey]). */
+fun treeKey(component: TaskTreeComponent): String = component.rootId.value
