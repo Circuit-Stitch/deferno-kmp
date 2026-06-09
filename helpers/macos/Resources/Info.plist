@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist for the Deferno macOS Sidecar helper (ADR-0024, #121).
+
+  This is embedded into the bare Mach-O executable at link time (the __TEXT,__info_plist section) by
+  scripts/build.sh, NOT shipped as a bundle resource: the helper is a launchd-activated command-line
+  agent, not a .app. TCC attributes the mic + Speech grants to THIS helper's identity (its stable
+  Developer ID signature + CFBundleIdentifier), so the usage strings below — not the JVM app's — are
+  what the user sees in the permission prompts, and the grants persist across rebuilds while the
+  signature is stable (ADR-0024).
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.circuitstitch.deferno.sidecar</string>
+    <key>CFBundleName</key>
+    <string>Deferno Sidecar</string>
+    <key>CFBundleExecutable</key>
+    <string>deferno-sidecar</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+
+    <!-- Background agent: no Dock icon, no UI of its own. -->
+    <key>LSBackgroundOnly</key>
+    <true/>
+
+    <!-- TCC usage strings. Shown verbatim in the macOS permission prompts the helper triggers. Non-PII,
+         user-facing, and explain WHY Deferno needs each capability (Apple requires these or the request
+         crashes / is denied). -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Deferno uses the microphone to transcribe your dictation on-device.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Deferno transcribes your dictation on-device using Apple Speech Recognition; audio stays on this Mac.</string>
+</dict>
+</plist>
