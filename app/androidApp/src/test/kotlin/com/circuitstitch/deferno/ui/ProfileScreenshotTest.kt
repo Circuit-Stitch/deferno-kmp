@@ -4,7 +4,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
@@ -24,6 +25,7 @@ import org.robolectric.RobolectricTestRunner
  * no-op, so these also run as part of the normal unit-test task.
  */
 @RunWith(RobolectricTestRunner::class)
+@OptIn(ExperimentalTestApi::class)
 class ProfileScreenshotTest {
 
     @get:Rule

@@ -21,10 +21,10 @@ android {
         externalNativeBuild {
             cmake {
                 // C++17 for whisper.cpp/ggml; the lean build options are set in CMakeLists.txt (FORCE).
+                // The CMake 4.x policy-version floor the old whisper.cpp sub-builds need is set inside
+                // CMakeLists.txt (CMAKE_POLICY_VERSION_MINIMUM) — not as a `-D` arg here, which made
+                // CMake warn that the variable went unused by the project.
                 cppFlags += "-std=c++17"
-                // The SDK ships CMake 4.x, which rejects the older `cmake_minimum_required` some
-                // whisper.cpp/ggml sub-builds declare. This documented escape hatch lets them configure.
-                arguments += "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
             }
         }
     }

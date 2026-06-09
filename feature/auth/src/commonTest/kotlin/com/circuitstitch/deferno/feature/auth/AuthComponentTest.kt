@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.data.auth.MeResult
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.User
 import com.circuitstitch.deferno.core.model.UserId
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -19,6 +20,7 @@ import kotlin.test.assertEquals
  * transient unavailable — and [AuthComponent.onRetry] re-fetches. Driven on the JVM-fast path
  * (ADR-0006) with a `StandardTestDispatcher` so the init fetch is observable as `Loading` first.
  */
+@OptIn(ExperimentalCoroutinesApi::class) // advanceUntilIdle() — drives the scheduler past the init fetch.
 class AuthComponentTest {
 
     private val user = User(

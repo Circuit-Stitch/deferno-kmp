@@ -21,10 +21,10 @@ kotlin {
             implementation(project(":core:model"))
             implementation(project(":core:designsystem"))
 
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.ui)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.ui)
         }
         // The Android-native Profile screen (#70): renders the shared ProfileComponent (#71), reusing
         // the commonMain atoms. Kept out of commonMain so desktop/iOS get their own native screens.
@@ -39,7 +39,7 @@ kotlin {
         // The desktop render test (#84, cf. #39): a Compose-Multiplatform UI test on the JVM-fast path
         // (no device) driving the screen over a fake ProfileComponent (no DI graph, no AuthRepository).
         jvmTest.dependencies {
-            implementation(compose.desktop.uiTestJUnit4)
+            implementation(libs.compose.ui.test.junit4)
             implementation(compose.desktop.currentOs)
         }
     }

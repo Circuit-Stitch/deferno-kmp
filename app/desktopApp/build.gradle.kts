@@ -186,11 +186,11 @@ dependencies {
     // (both cross-built from Linux — the Skiko Windows natives are prebuilt in the jar, no toolchain
     // needed); the commented macOS lines are the follow-up (blocked on notarization, ADR-0021).
     // `compose.desktop.currentOs` above stays for the dev `./gradlew :app:desktopApp:run` path.
-    linuxAmd64(compose.desktop.linux_x64)
-    windowsAmd64(compose.desktop.windows_x64)
+    linuxAmd64(libs.compose.desktop.linux.x64)
+    windowsAmd64(libs.compose.desktop.windows.x64)
     // macAmd64(compose.desktop.macos_x64)
     // macAarch64(compose.desktop.macos_arm64)
-    implementation(compose.material3)
+    implementation(libs.compose.material3)
     // Just the core Material icon set (the glyphs the nav rail/drawer uses) — not the ≈37 MB
     // `materialIconsExtended` set, which the bundled desktop distribution would otherwise ship.
     implementation(libs.compose.material.icons.core)
@@ -198,7 +198,7 @@ dependencies {
     // `Res.drawable.ic_mic` (#94) via `painterResource` — material-icons-core has no Mic. core:designsystem
     // packages the asset (publicResClass); this brings the `org.jetbrains.compose.resources` loader the
     // desktop calls (an `implementation` dep there isn't on this module's compile classpath).
-    implementation(compose.components.resources)
+    implementation(libs.compose.components.resources)
 
     // The shared, Compose-free app Shell (ADR-0017): the desktop renders these components
     // (RootComponent: Auth ↔ Main; the Main shell's Destination graph; AccountSession +
@@ -266,5 +266,5 @@ dependencies {
     // The desktop New-overlay render/screenshot test (#87, cf. #39): a Compose-Multiplatform UI test
     // on the JVM-fast path (no device). `uiTestJUnit4` brings `runComposeUiTest` (+ the desktop Skiko
     // renderer transitively) so the test renders the New View over a real DefaultNewComponent.
-    testImplementation(compose.desktop.uiTestJUnit4)
+    testImplementation(libs.compose.ui.test.junit4)
 }

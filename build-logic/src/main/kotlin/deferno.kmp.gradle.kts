@@ -14,6 +14,15 @@ plugins {
 kotlin {
     jvmToolchain(ProjectConfig.JVM_TOOLCHAIN)
 
+    // expect/actual *classes* (e.g. core/scopes' PlatformContext) are still compiler-flagged as Beta
+    // (KT-61573). The feature is load-bearing for this KMP project, so opt in across every target —
+    // the JetBrains-recommended way to silence the per-`actual` Beta warning, rather than annotating
+    // each declaration. Applies to all compilations configured below (commonMain + jvm + iOS, and the
+    // Android target that `deferno.android` layers on top).
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
     // Desktop / JVM-fast test path (ADR-0006: the bulk of logic is tested here).
     jvm()
 

@@ -206,7 +206,7 @@ private fun DayCell(
         else -> MaterialTheme.defernoColors.inkMuted
     }
     val description = buildString {
-        append(monthName(date.month)).append(' ').append(date.dayOfMonth)
+        append(monthName(date.month)).append(' ').append(date.day)
         append(if (markerCount > 0) ", $markerCount ${if (markerCount == 1) "item" else "items"}" else ", no items")
         if (isSelected) append(", selected")
     }
@@ -225,7 +225,7 @@ private fun DayCell(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = date.dayOfMonth.toString(),
+                text = date.day.toString(),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                 color = numberColor,
@@ -403,7 +403,7 @@ internal fun monthLabel(date: LocalDate): String = "${monthName(date.month)} ${d
 
 /** "Monday, June 8" — the agenda heading for a day. */
 internal fun agendaHeading(date: LocalDate): String =
-    "${weekdayName(date)}, ${monthName(date.month)} ${date.dayOfMonth}"
+    "${weekdayName(date)}, ${monthName(date.month)} ${date.day}"
 
 /** The 42 day cells (6 weeks) for [visibleMonth]'s grid, Monday-start — matches the repository window. */
 internal fun calendarGridDays(visibleMonth: LocalDate): List<LocalDate> {
@@ -426,7 +426,6 @@ private fun monthName(month: Month): String = when (month) {
     Month.OCTOBER -> "October"
     Month.NOVEMBER -> "November"
     Month.DECEMBER -> "December"
-    else -> month.toString()
 }
 
 private fun weekdayName(date: LocalDate): String = when (date.dayOfWeek.isoDayNumber) {

@@ -17,10 +17,10 @@ kotlin {
             implementation(project(":core:model"))
             implementation(project(":core:designsystem"))
 
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.ui)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.ui)
             // The month grid derives its 42 day cells from the visible month (LocalDate math).
             implementation(libs.kotlinx.datetime)
         }
@@ -39,7 +39,7 @@ kotlin {
         // the kind-aware action set (reschedule hidden for habit/chore).
         jvmTest.dependencies {
             implementation(project(":feature:calendar"))
-            implementation(compose.desktop.uiTestJUnit4)
+            implementation(libs.compose.ui.test.junit4)
             implementation(compose.desktop.currentOs)
         }
     }

@@ -16,10 +16,10 @@ kotlin {
             implementation(project(":core:model"))
             implementation(project(":core:designsystem"))
 
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.ui)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.ui)
         }
         // The Android-native Plan screen (#27): renders the shared PlanComponent (#25). Kept out of
         // commonMain so desktop/iOS get their own native screens (ADR-0007), not this phone layout.

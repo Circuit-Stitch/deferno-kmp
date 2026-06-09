@@ -25,6 +25,14 @@ set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
+# The SDK ships CMake 4.x, which drops compatibility with the older `cmake_minimum_required(VERSION
+# 3.5)` the vendored whisper.cpp/ggml sub-builds still declare. Set the policy-version floor as a
+# normal variable here — it propagates into the add_subdirectory() scope below, where those
+# `cmake_minimum_required` calls read it. (Passing it as a `-D` CLI arg instead made CMake warn that
+# the manually-specified variable went "unused by the project", since it's consumed by the policy
+# machinery rather than dereferenced in listfiles. Setting it in-scope avoids that warning.)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
 add_subdirectory(${WHISPER_DIR} ${CMAKE_CURRENT_BINARY_DIR}/whisper-build)
 
 add_library(whisper_jni SHARED whisper_jni.cpp)
