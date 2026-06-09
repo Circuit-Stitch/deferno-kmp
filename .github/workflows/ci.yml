@@ -27,10 +27,14 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
+        # submodules: the bespoke native speech module (:speech-whisper-jni, #92/ADR-0018) compiles
+        # the vendored whisper.cpp submodule (third_party/whisper.cpp) via CMake; `check` builds its
+        # .so (pulled in by lint), so the submodule source must be present.
         uses: actions/checkout@v6
         with:
           # Full history so the append-only migration guard can diff against the PR base / prior push.
           fetch-depth: 0
+          submodules: recursive
 
       # Released SQLDelight schema versions are frozen (ADR-0022): a schema change adds a NEW numbered
       # `<N>.sqm` + `databases/<N>.db`, never edits a committed one. Editing a released `.sqm` silently
@@ -75,10 +79,22 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
 
+      # The native speech module (:speech-whisper-jni, #92) pins ndkVersion = ProjectConfig.NDK_VERSION
+      # and builds whisper.cpp via an SDK CMake. ubuntu-latest preinstalls the Android SDK but NOT this
+      # exact NDK, so AGP fails configuring the module ("licences have not been accepted"). Accept the
+      # SDK licences and install the pinned NDK + CMake. Keep the NDK version in lockstep with
+      # ProjectConfig.NDK_VERSION (the source of truth, per its KDoc).
+      - name: Install Android NDK + CMake for the native speech module (#92)
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" "ndk;30.0.14904198" "cmake;3.22.1"
+
       # The Android SDK (ANDROID_HOME / ANDROID_SDK_ROOT) is preinstalled on ubuntu-latest,
       # so AGP's host unit-test compilation needs no setup-android step and no
-      # local.properties. `check` runs commonTest on JVM + the Android host tests + lint;
-      # `:koverVerify` is the merged shared-core coverage gate (deferno.coverage.aggregation).
+      # local.properties. `check` runs commonTest on JVM + the Android host tests + lint
+      # (incl. building the :speech-whisper-jni .so above); `:koverVerify` is the merged
+      # shared-core coverage gate (deferno.coverage.aggregation).
       - name: Build, test & verify coverage
         run: ./gradlew check :koverVerify --stacktrace
 

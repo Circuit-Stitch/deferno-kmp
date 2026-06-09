@@ -51,8 +51,8 @@ android {
 
     defaultConfig {
         applicationId = "com.circuitstitch.deferno"
-        versionCode = 1
-        versionName = "0.1.0"
+        // versionName / versionCode derive from ProjectConfig.APP_VERSION via the
+        // deferno.android.application convention (the single version source of truth, ADR-0021/#101).
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

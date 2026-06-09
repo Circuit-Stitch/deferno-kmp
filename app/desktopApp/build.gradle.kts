@@ -15,6 +15,12 @@ plugins {
     alias(libs.plugins.compose.multiplatform)
     // The Compose *compiler* plugin (pinned to the Kotlin version via the catalog).
     alias(libs.plugins.kotlin.compose)
+    // Hydraulic Conveyor (ADR-0021, #102): the desktop packager + auto-updater. Applied here because
+    // it extracts its inputs from THIS module's `compose.desktop.application {}` block (main class,
+    // JVM args, vendor) and from Gradle `project.version` → `app.version`, exposing them to the
+    // root `conveyor.conf` via the `printConveyorConfig` task. It also adds the per-platform input
+    // configurations (`linuxAmd64`, …) wired in `dependencies {}` below.
+    alias(libs.plugins.conveyor)
 }
 
 // The desktop app runs on, and ships with, the **JetBrains Runtime** — the JDK Compose Desktop is
@@ -98,12 +104,22 @@ compose.desktop.application {
     mainClass = "com.circuitstitch.deferno.desktop.MainKt"
     // Run + package on the JetBrains Runtime (see note above); bundles JBR into the distribution.
     javaHome = jetbrainsRuntimeHome
+    // This `nativeDistributions {}` block drives the legacy jpackage path (`./gradlew packageDeb`),
+    // kept as a fallback. The release pipeline is **Conveyor** (ADR-0021, #102), which does its own
+    // jlink/packaging and IGNORES these jpackage-only keys (targetFormats/packageName/packageVersion);
+    // it imports only `mainClass` + the runtime from this module, and reads the app version from
+    // Gradle `project.version` (→ `app.version`), not from `packageVersion`. `conveyor.conf` at the
+    // repo root configures the Conveyor outputs.
     nativeDistributions {
         // Each installer format only builds on its host OS; configuring all three is
         // harmless cross-platform (Deb is the one this Linux box can actually produce).
         targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
         packageName = "Deferno"
-        packageVersion = "1.0.0"
+        // Single version source of truth (ADR-0021, #101): project.version is set from
+        // ProjectConfig.APP_VERSION by the deferno.jvm.application convention — the same source the
+        // Android versionName/versionCode AND Conveyor's app.version derive from — so nothing is
+        // hardcoded here.
+        packageVersion = project.version.toString()
         // Bundle the whisper `small.en` weights into the installer (#94, ADR-0019: desktop delivery is
         // installer-bundled, not store-hosted / not downloaded at runtime). Everything under
         // desktopResources/{common,<os>,<os>-<arch>} is packaged next to the app; the platform-agnostic
@@ -163,6 +179,16 @@ dependencies {
     // set the nav rail/drawer uses (the androidx adaptive nav-suite the Android shell uses is an
     // Android-only artifact, so desktop builds its own native rail/drawer here).
     implementation(compose.desktop.currentOs)
+
+    // Conveyor per-platform inputs (ADR-0021, #102): the Conveyor Gradle plugin adds a configuration
+    // per target machine (linuxAmd64, macAmd64, windowsAmd64, …); it does NOT auto-collect the
+    // Skiko-bearing jars, so the per-OS Compose artifact is declared into each. This slice is Linux
+    // only — the commented lines are the Windows/macOS follow-up. `compose.desktop.currentOs` above
+    // stays for the dev `./gradlew :app:desktopApp:run` path.
+    linuxAmd64(compose.desktop.linux_x64)
+    // macAmd64(compose.desktop.macos_x64)
+    // macAarch64(compose.desktop.macos_arm64)
+    // windowsAmd64(compose.desktop.windows_x64)
     implementation(compose.material3)
     // Just the core Material icon set (the glyphs the nav rail/drawer uses) — not the ≈37 MB
     // `materialIconsExtended` set, which the bundled desktop distribution would otherwise ship.

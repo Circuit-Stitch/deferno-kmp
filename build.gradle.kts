@@ -15,6 +15,11 @@ plugins {
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.compose.multiplatform) apply false
+    // Hydraulic Conveyor (ADR-0021, #102): the desktop packager's Gradle plugin, applied directly in
+    // app/desktopApp via alias (it extracts config from that module's compose.desktop.application
+    // block). Like roborazzi/sqldelight/baselineprofile, it lands here `apply false` so it reaches
+    // that one module's classpath at apply-time.
+    alias(libs.plugins.conveyor) apply false
     alias(libs.plugins.kover) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.sqldelight) apply false

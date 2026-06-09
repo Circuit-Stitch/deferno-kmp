@@ -13,6 +13,12 @@ plugins {
     id("org.jetbrains.kotlin.jvm")
 }
 
+// Single version source of truth (ADR-0021, #101): project.version is what Conveyor reads (via
+// printConveyorConfig → app.version) and what the desktop `packageVersion` derives from. Routing it
+// through ProjectConfig.APP_VERSION — the same source the Android versionName/versionCode use — means
+// one bump moves the desktop package, the Android build, and the release tag together.
+version = ProjectConfig.APP_VERSION
+
 kotlin {
     jvmToolchain(ProjectConfig.JVM_TOOLCHAIN)
 }
