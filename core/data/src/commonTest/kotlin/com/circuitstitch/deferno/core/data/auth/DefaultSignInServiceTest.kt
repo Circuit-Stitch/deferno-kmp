@@ -39,8 +39,15 @@ class DefaultSignInServiceTest {
 
     private val vault = InMemorySecretVault()
     private val manager = DefaultAccountManager(InMemoryAccountRegistry(), vault, NoOpAccountDataStore)
+    private val deviceName = DeviceName("Deferno Test — CI")
 
-    private fun service(remote: FakeAuthRemoteSource) = DefaultSignInService(remote, manager)
+    private fun service(
+        remote: FakeAuthRemoteSource,
+        nativeAuth: NativeAuthRemoteSource = FakeNativeAuthRemoteSource(),
+        browser: BrowserAuthenticator = FakeBrowserAuthenticator(),
+        clientStore: OAuthClientStore = InMemoryOAuthClientStore(),
+        manager: DefaultAccountManager = this.manager,
+    ) = DefaultSignInService(remote, manager, nativeAuth, browser, clientStore, deviceName)
 
     @Test
     fun validToken_createsTheAccount_vaultsTheToken_andMakesItActive() = runTest {
@@ -102,9 +109,121 @@ class DefaultSignInServiceTest {
             DefaultAccountManager(InMemoryAccountRegistry(), ThrowingSecretVault, NoOpAccountDataStore)
         val remote = FakeAuthRemoteSource(MeResult.Authenticated(user))
 
-        val result = DefaultSignInService(remote, throwingManager).signIn("pat-xyz")
+        val result = service(remote, manager = throwingManager).signIn("pat-xyz")
 
         assertEquals(SignInResult.Unavailable, result)
+    }
+
+    // --- browser OAuth + PKCE path (ADR-0026) ---
+
+    @Test
+    fun browser_happyPath_mintsTokenAndCommitsAccountWithTokenId() = runTest {
+        val remote = FakeAuthRemoteSource(MeResult.Authenticated(user))
+        val nativeAuth = FakeNativeAuthRemoteSource() // mints token "minted-pat" / id "tok-id-1"
+        val browser = FakeBrowserAuthenticator(outcome = FakeBrowserAuthenticator.Outcome.Success)
+
+        val result = service(remote, nativeAuth = nativeAuth, browser = browser).signInWithBrowser()
+
+        val success = assertIs<SignInResult.Success>(result)
+        assertEquals(AccountId("4f1c-user"), success.account.id) // id = backend User id
+        assertEquals("Ada Lovelace", success.account.label)
+        assertEquals("tok-id-1", success.account.tokenId) // server token id carried for revoke (ADR-0026)
+        assertEquals("minted-pat", vault.getBearerToken(success.account.id)) // the minted PAT is vaulted
+        assertEquals(success.account, manager.activeAccount.value)
+        // The exchange echoed the exact redirect_uri the browser captured (binding check).
+        assertEquals(browser.registrationRedirectUri, nativeAuth.lastExchangeRedirectUri)
+        assertEquals(1, nativeAuth.exchangeCalls)
+    }
+
+    @Test
+    fun browser_userCancelled_returnsCancelled_andCreatesNoAccount() = runTest {
+        val nativeAuth = FakeNativeAuthRemoteSource()
+        val result = service(
+            FakeAuthRemoteSource(MeResult.Authenticated(user)),
+            nativeAuth = nativeAuth,
+            browser = FakeBrowserAuthenticator(outcome = FakeBrowserAuthenticator.Outcome.Cancelled),
+        ).signInWithBrowser()
+
+        assertEquals(SignInResult.Cancelled, result)
+        assertTrue(manager.accounts.value.isEmpty())
+        assertEquals(0, nativeAuth.exchangeCalls) // never exchanged
+    }
+
+    @Test
+    fun browser_launchFailed_returnsUnavailable() = runTest {
+        val result = service(
+            FakeAuthRemoteSource(MeResult.Authenticated(user)),
+            browser = FakeBrowserAuthenticator(outcome = FakeBrowserAuthenticator.Outcome.Failed),
+        ).signInWithBrowser()
+
+        assertEquals(SignInResult.Unavailable, result)
+        assertTrue(manager.accounts.value.isEmpty())
+    }
+
+    @Test
+    fun browser_tamperedState_isRejected_withoutExchangingTheCode() = runTest {
+        // A returned state that doesn't match the one we sent is a CSRF signal — abort before exchange.
+        val nativeAuth = FakeNativeAuthRemoteSource()
+        val result = service(
+            FakeAuthRemoteSource(MeResult.Authenticated(user)),
+            nativeAuth = nativeAuth,
+            browser = FakeBrowserAuthenticator(outcome = FakeBrowserAuthenticator.Outcome.TamperedState),
+        ).signInWithBrowser()
+
+        assertEquals(SignInResult.Unavailable, result)
+        assertEquals(0, nativeAuth.exchangeCalls)
+        assertTrue(manager.accounts.value.isEmpty())
+    }
+
+    @Test
+    fun browser_errorRedirect_returnsUnavailable_withoutExchanging() = runTest {
+        val nativeAuth = FakeNativeAuthRemoteSource()
+        val result = service(
+            FakeAuthRemoteSource(MeResult.Authenticated(user)),
+            nativeAuth = nativeAuth,
+            browser = FakeBrowserAuthenticator(outcome = FakeBrowserAuthenticator.Outcome.ErrorRedirect),
+        ).signInWithBrowser()
+
+        assertEquals(SignInResult.Unavailable, result)
+        assertEquals(0, nativeAuth.exchangeCalls)
+    }
+
+    @Test
+    fun browser_registrationFails_returnsUnavailable_withoutOpeningTheBrowser() = runTest {
+        val nativeAuth = FakeNativeAuthRemoteSource().apply { registerResult = FakeNativeAuthRemoteSource.failure() }
+        val browser = FakeBrowserAuthenticator()
+        val result = service(
+            FakeAuthRemoteSource(MeResult.Authenticated(user)),
+            nativeAuth = nativeAuth,
+            browser = browser,
+        ).signInWithBrowser()
+
+        assertEquals(SignInResult.Unavailable, result)
+        assertEquals(0, browser.authenticateCalls) // bailed before the browser leg
+    }
+
+    @Test
+    fun browser_exchangeFails_returnsUnavailable() = runTest {
+        val nativeAuth = FakeNativeAuthRemoteSource().apply { exchangeResult = FakeNativeAuthRemoteSource.failure(400) }
+        val result = service(
+            FakeAuthRemoteSource(MeResult.Authenticated(user)),
+            nativeAuth = nativeAuth,
+        ).signInWithBrowser()
+
+        assertEquals(SignInResult.Unavailable, result)
+        assertTrue(manager.accounts.value.isEmpty())
+    }
+
+    @Test
+    fun browser_cachesTheClientId_registeringOnlyOnce() = runTest {
+        val nativeAuth = FakeNativeAuthRemoteSource()
+        val store = InMemoryOAuthClientStore()
+        val svc = service(FakeAuthRemoteSource(MeResult.Authenticated(user)), nativeAuth = nativeAuth, clientStore = store)
+
+        svc.signInWithBrowser()
+        svc.signInWithBrowser()
+
+        assertEquals(1, nativeAuth.registerCalls) // second sign-in reused the cached client_id
     }
 
     /** A vault whose write fails the way the Keychain/Keystore does on a misconfigured build. */

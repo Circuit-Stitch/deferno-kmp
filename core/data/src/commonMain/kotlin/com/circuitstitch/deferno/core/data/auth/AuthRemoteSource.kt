@@ -47,4 +47,13 @@ interface AuthRemoteSource {
      * invalid/expired, [MeResult.Unavailable] is transient.
      */
     suspend fun fetchMe(token: String): MeResult
+
+    /**
+     * Revokes the API token with [tokenId] server-side (`DELETE /auth/tokens/{id}`), authenticating
+     * with [token] as an **explicit** bearer (the token being revoked). The self-service sign-out
+     * revoke for browser-minted accounts (ADR-0026 / #310): the account knows its own token id, so it
+     * can drop the credential on the server, not just locally. **Best-effort** — returns `true` on a
+     * `2xx`/`204`, `false` on any failure (offline, already-revoked); sign-out must not block on it.
+     */
+    suspend fun revokeToken(tokenId: String, token: String): Boolean
 }

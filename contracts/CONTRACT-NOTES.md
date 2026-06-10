@@ -18,6 +18,40 @@ disagrees with `openapi-0.1.json`, **the live behavior wins and is noted here.**
   surface (the `/challenge` endpoints aren't even in the spec) — do not try to automate login.
 - `GET /auth/me` → `AuthenticatedUser{ id, username, display_name, role, personal_org_id, org_slug,
   is_admin, console_url }`. `personal_org_id` / `owner_org_id` is the Org isolation key (ADR-0002).
+  As of backend #299 `email` + `avatar_url` are documented (nullable, additive; `avatar_url` always
+  `null` today — render an initials avatar).
+
+### Native browser sign-in: OAuth Authorization Code + PKCE (backend #299, ADR-0012)
+
+The proper native login (replacing paste). **Not in `openapi-0.1.json`** — these are browser-redirect /
+RFC-standard endpoints outside the data API. Shapes below **verified live against staging 2026-06-10**.
+All three live under the existing `/api/` base (build with `appendPathSegments("auth","native",…)`); they
+are **unauthenticated** (no bearer). The app ships **zero credential UI** — password + Deferno MFA + Google
+SSO all happen in the system browser (RFC 8252: Custom Tabs / `ASWebAuthenticationSession`, never a WebView).
+
+- **Register** (RFC 7591, public client, open + rate-limited): `POST /api/auth/native/register`
+  `{ redirect_uris: [..], client_name?, application_type?, token_endpoint_auth_method?: "none" }` →
+  `201` envelope `{ data: { client_id, client_name, redirect_uris, token_endpoint_auth_method } }`.
+  Cache `client_id` per-install. `redirect_uri` must be on the allowlist: custom scheme
+  `com.circuitstitch.deferno://…` (fallback), verified HTTPS App/Universal Link (preferred), or loopback
+  `http://127.0.0.1:{port}` (desktop).
+- **Authorize** (browser entry): `GET /api/auth/native/authorize?client_id&redirect_uri&response_type=code
+  &code_challenge&code_challenge_method=S256&state` → `303` to Zitadel (`auth2.defernowork.com/oauth/v2/
+  authorize`, the backend's own `…/api/auth/oidc/callback` is the OIDC redirect). After login the backend
+  intercepts the callback (native branch, **no web session/cookie**) and `302`s to
+  `redirect_uri?code=…&state=…`. The one-time `code` has a 5-min TTL, single-use, bound to
+  `{user_id, client_id, redirect_uri, code_challenge}`. Missing params → `400 missing field client_id`.
+- **Token exchange**: `POST /api/auth/native/token { code, code_verifier, client_id, redirect_uri, name? }`
+  → envelope `CreateApiTokenResponse { …ApiTokenView, token }` (`ApiTokenView = { id, name, kind,
+  created_at, client_id?, last_used_at? }`). `name` tags the device (e.g. "Deferno Android — Pixel 8").
+  `client_id` **and** `redirect_uri` are **both required** (the ADR's `{code,code_verifier,name?}` is
+  incomplete); a bad code → `400 invalid grant`. The returned `token` is the durable revocable `kind:user`
+  PAT; its `id` enables server-side revoke on sign-out (`DELETE /auth/tokens/{id}`, unblocking #310).
+- Discovery (`GET /.well-known/oauth-authorization-server`, RFC 8414) is **not reliably reachable** (local:
+  `503 OIDC not configured`; staging host-root serves the SPA, `/api/.well-known/…` is `404`) — so the
+  client does **not** depend on it; endpoints are derived from the `/api/` base.
+- The app still **does not** call `/auth/sign-in` (ROPC, rejected in the backend ADR; it requires
+  `X-Requested-With` + an in-flight `auth_request` and is the web login's internal leg).
 
 ## Envelope & error model (ADR-0005)
 

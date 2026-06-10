@@ -11,9 +11,15 @@ import com.circuitstitch.deferno.core.data.account.ReauthRequester
 import com.circuitstitch.deferno.core.data.account.ReauthRequests
 import com.circuitstitch.deferno.core.data.auth.AuthRemoteSource
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
+import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
 import com.circuitstitch.deferno.core.data.auth.DefaultAuthRepository
 import com.circuitstitch.deferno.core.data.auth.DefaultSignInService
+import com.circuitstitch.deferno.core.data.auth.DeviceName
+import com.circuitstitch.deferno.core.data.auth.InMemoryOAuthClientStore
 import com.circuitstitch.deferno.core.data.auth.KtorAuthRemoteSource
+import com.circuitstitch.deferno.core.data.auth.KtorNativeAuthRemoteSource
+import com.circuitstitch.deferno.core.data.auth.NativeAuthRemoteSource
+import com.circuitstitch.deferno.core.data.auth.OAuthClientStore
 import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.calendar.KtorCalendarRemoteSource
@@ -30,6 +36,7 @@ import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
 import com.circuitstitch.deferno.core.data.task.KtorTaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.network.BearerTokenProvider
+import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.AppScope
 import com.circuitstitch.deferno.core.secure.SecretVault
 import io.ktor.client.HttpClient
@@ -62,7 +69,10 @@ interface DataBindings {
         registry: AccountRegistry,
         vault: SecretVault,
         dataStore: AccountDataStore,
-    ): AccountManager = DefaultAccountManager(registry, vault, dataStore)
+        // Lazy breaks the cycle AuthRemoteSource → HttpClient → BearerTokenProvider → AccountContext
+        // (= this manager); the manager only touches it for the sign-out token revoke (ADR-0026).
+        authRemoteSource: Lazy<AuthRemoteSource>,
+    ): AccountManager = DefaultAccountManager(registry, vault, dataStore, authRemoteSource)
 
     @Provides
     fun accountContext(manager: AccountManager): AccountContext = manager
@@ -104,16 +114,36 @@ interface DataBindings {
     ): AuthRepository = DefaultAuthRepository(remoteSource, accountContext, reauth)
 
     /**
-     * The v1 sign-in service (#15, ADR-0023): validate a pasted PAT via the candidate-token
-     * `/auth/me` and, on success, establish the Account through [AccountManager]. AppScope —
-     * pre-Account, like the remote sources it composes, and the convergence seam the Auth shell drives.
+     * The sign-in service (#15, ADR-0012/0023/0026): the browser OAuth + PKCE flow ([BrowserAuthenticator]
+     * + [NativeAuthRemoteSource], minting a per-device PAT) and the dev paste fallback, both converging on
+     * [AccountManager]. AppScope — pre-Account, like the remote sources it composes, and the convergence
+     * seam the Auth shell drives. [browserAuthenticator] + [deviceName] are per-platform bindings,
+     * contributed from each target's `*DataBindings` module.
      */
     @Provides
     @SingleIn(AppScope::class)
     fun signInService(
         remoteSource: AuthRemoteSource,
         accountManager: AccountManager,
-    ): SignInService = DefaultSignInService(remoteSource, accountManager)
+        nativeAuth: NativeAuthRemoteSource,
+        browserAuthenticator: BrowserAuthenticator,
+        clientStore: OAuthClientStore,
+        deviceName: DeviceName,
+    ): SignInService =
+        DefaultSignInService(remoteSource, accountManager, nativeAuth, browserAuthenticator, clientStore, deviceName)
+
+    /** The native browser-OAuth remote source (register / authorize-url / token-exchange, ADR-0026). */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun nativeAuthRemoteSource(
+        client: HttpClient,
+        environment: DefernoEnvironment,
+    ): NativeAuthRemoteSource = KtorNativeAuthRemoteSource(client, environment)
+
+    /** Per-process cache of the registered OAuth client_id (a persistent store is a follow-up, ADR-0026). */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun oauthClientStore(): OAuthClientStore = InMemoryOAuthClientStore()
 
     // The Ktor remote sources over the one shared client — AppScope, since the client is (ADR-0014).
     @Provides

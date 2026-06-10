@@ -54,4 +54,23 @@ class AccountRosterCodecTest {
             AccountRosterCodec.decode("[{\"id\":\"x\"}]"),
         )
     }
+
+    @Test
+    fun roundTripsTheTokenIdWhenPresentAndOmitsItOtherwise() {
+        // A browser-minted account carries its token id (ADR-0026); a pasted/dev one does not.
+        val minted = Account(AccountId("acct-c"), "Browser", tokenId = "tok-xyz")
+        val roster = listOf(a, minted)
+
+        val encoded = AccountRosterCodec.encode(roster)
+        assertTrue(encoded.contains("\"token_id\":\"tok-xyz\""), encoded)
+        // The token-less account must not emit a token_id key at all.
+        assertTrue(!encoded.substringBefore("acct-c").contains("token_id"), encoded)
+        assertContentEquals(roster, AccountRosterCodec.decode(encoded))
+    }
+
+    @Test
+    fun blankTokenIdDecodesToNull() {
+        val decoded = AccountRosterCodec.decode("[{\"id\":\"x\",\"label\":\"L\",\"token_id\":\"\"}]")
+        assertContentEquals(listOf(Account(AccountId("x"), "L", tokenId = null)), decoded)
+    }
 }

@@ -4,6 +4,9 @@ import com.circuitstitch.deferno.core.data.account.AccountDataStore
 import com.circuitstitch.deferno.core.data.account.AccountRegistry
 import com.circuitstitch.deferno.core.data.account.InMemoryAccountRegistry
 import com.circuitstitch.deferno.core.data.account.NoOpAccountDataStore
+import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
+import com.circuitstitch.deferno.core.data.auth.DeviceName
+import com.circuitstitch.deferno.core.data.auth.LoopbackBrowserAuthenticator
 import com.circuitstitch.deferno.core.scopes.AppScope
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
@@ -23,4 +26,14 @@ interface JvmDataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun accountDataStore(): AccountDataStore = NoOpAccountDataStore
+
+    /** The system-browser OAuth leg (ADR-0026): a loopback listener captures the redirect on desktop. */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun browserAuthenticator(): BrowserAuthenticator = LoopbackBrowserAuthenticator()
+
+    /** Tags a minted token to this device (ADR-0026). */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun deviceName(): DeviceName = DeviceName("Deferno Desktop — ${System.getProperty("os.name") ?: "Desktop"}")
 }

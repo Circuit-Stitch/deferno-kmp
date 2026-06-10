@@ -15,6 +15,7 @@ import com.circuitstitch.deferno.core.network.dto.EventDetailDto
 import com.circuitstitch.deferno.core.network.dto.HabitDetailDto
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
+import com.circuitstitch.deferno.core.network.map
 import com.circuitstitch.deferno.core.network.mapper.asChoreOrNull
 import com.circuitstitch.deferno.core.network.mapper.asEventOrNull
 import com.circuitstitch.deferno.core.network.mapper.asHabitOrNull
@@ -44,16 +45,16 @@ class KtorItemRemoteSource(
 ) : ItemRemoteSource {
 
     override suspend fun createTask(payload: CreateTaskPayload): ApiResult<Task> =
-        client.requestApi<TaskDetailDto> { post("tasks", payload) }.mapData { it.toDomain() }
+        client.requestApi<TaskDetailDto> { post("tasks", payload) }.map { it.toDomain() }
 
     override suspend fun createHabit(payload: CreateHabitPayload): ApiResult<Habit> =
-        client.requestApi<HabitDetailDto> { post("habits", payload) }.mapData { it.toDomain() }
+        client.requestApi<HabitDetailDto> { post("habits", payload) }.map { it.toDomain() }
 
     override suspend fun createChore(payload: CreateChorePayload): ApiResult<Chore> =
-        client.requestApi<ChoreDetailDto> { post("chores", payload) }.mapData { it.toDomain() }
+        client.requestApi<ChoreDetailDto> { post("chores", payload) }.map { it.toDomain() }
 
     override suspend fun createEvent(payload: CreateEventPayload): ApiResult<Event> =
-        client.requestApi<EventDetailDto> { post("events", payload) }.mapData { it.toDomain() }
+        client.requestApi<EventDetailDto> { post("events", payload) }.map { it.toDomain() }
 
     override suspend fun convert(id: String, payload: ConvertItemPayload): ApiResult<ConvertedItem> =
         client.requestApi<ItemView> {
@@ -61,7 +62,7 @@ class KtorItemRemoteSource(
             url { appendPathSegments("items", id, "convert") }
             contentType(ContentType.Application.Json)
             setBody(payload)
-        }.mapData { it.toConvertedItem() }
+        }.map { it.toConvertedItem() }
 }
 
 /** Maps the polymorphic convert response to the kind it became (exactly one matches). */
@@ -82,10 +83,4 @@ private inline fun <reified T> HttpRequestBuilder.post(segment: String, body: T)
     url { appendPathSegments(segment) }
     contentType(ContentType.Application.Json)
     setBody(body)
-}
-
-/** Maps an [ApiResult] success payload through [transform], leaving a failure untouched. */
-private inline fun <T, R> ApiResult<T>.mapData(transform: (T) -> R): ApiResult<R> = when (this) {
-    is ApiResult.Success -> ApiResult.Success(transform(data))
-    is ApiResult.Failure -> ApiResult.Failure(error)
 }

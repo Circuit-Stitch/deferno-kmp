@@ -1,8 +1,10 @@
 package com.circuitstitch.deferno.core.data.account
 
+import com.circuitstitch.deferno.core.data.auth.AuthRemoteSource
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.secure.SecretVault
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +26,12 @@ class DefaultAccountManager(
     private val registry: AccountRegistry,
     private val vault: SecretVault,
     private val dataStore: AccountDataStore,
+    // Lazy to break the DI cycle: AuthRemoteSource → HttpClient → BearerTokenProvider → AccountContext
+    // (= this manager). Only touched by removeAccount's best-effort revoke, long after the graph is
+    // built. Defaults to an unwired stub so tests that never revoke a token-id-bearing account can omit
+    // it; production binds the real one (DataBindings).
+    private val authRemoteSource: Lazy<AuthRemoteSource> =
+        lazy { error("AuthRemoteSource not wired for token revoke (ADR-0026)") },
 ) : AccountManager {
 
     private val _accounts = MutableStateFlow<List<Account>>(emptyList())
@@ -40,6 +48,9 @@ class DefaultAccountManager(
     }
 
     override suspend fun removeAccount(id: AccountId) {
+        // Revoke the credential server-side before the local wipe (best-effort; never blocks sign-out).
+        revokeServerSide(id)
+
         // Secure-wipe data + token before deregistering, so a crash cannot orphan secrets (ADR-0009).
         dataStore.wipe(id)
         vault.deleteBearerToken(id)
@@ -50,6 +61,24 @@ class DefaultAccountManager(
             registry.setActive(registry.all().firstOrNull()?.id)
         }
         syncFromRegistry()
+    }
+
+    /**
+     * Best-effort server-side token revoke for accounts whose token id we know (browser-minted,
+     * ADR-0026) — so the credential dies on the server, not just on the device. Pasted / dev accounts
+     * carry no token id → skipped (their shared dev PAT must NOT be revoked). A revoke failure (offline,
+     * already-revoked) is swallowed: sign-out must never block on it (revokeToken is itself best-effort).
+     */
+    private suspend fun revokeServerSide(id: AccountId) {
+        val tokenId = registry.all().firstOrNull { it.id == id }?.tokenId ?: return
+        val token = vault.getBearerToken(id) ?: return
+        try {
+            authRemoteSource.value.revokeToken(tokenId, token)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // Swallow — local wipe still proceeds.
+        }
     }
 
     override suspend fun switchTo(id: AccountId) {

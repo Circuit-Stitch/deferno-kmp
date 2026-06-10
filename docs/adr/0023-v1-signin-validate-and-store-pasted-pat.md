@@ -30,3 +30,11 @@ browser-mint path, which returns the id at mint time. `AccountId = UserId` makes
 identity **idempotent** (an upsert, never a duplicate Account). This pass is **initial sign-in
 only**; the Auth-shell *re-entry* for adding a second Account while one is active (ADR-0013) — and
 the candidate-token-vs-active-Account bearer precedence it implies — is a follow-up.
+
+**Update (2026-06-10, Deferno#299 landed).** The browser-mint path it anticipated has shipped — see
+**ADR-0026**. The paste path is now demoted from "the real sign-in surface" to a **developer-only
+affordance** (a debug-gated "Use a token instead" reveal), kept as a dev convenience and MFA escape
+hatch; the system-browser OAuth flow is the primary surface. The "logout stays local-wipe-only"
+consequence is lifted **for browser-minted accounts** (they carry a server-side token id and now
+revoke via `DELETE /auth/tokens/{id}`); pasted tokens still carry no id, so they remain
+local-wipe-only — which also keeps the shared dev PAT from being revoked.

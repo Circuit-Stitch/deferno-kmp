@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
 import com.arkivanov.decompose.retainedComponent
+import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.di.createAccountComponent
@@ -138,6 +139,28 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        // A cold start via the OAuth redirect (rare — sign-in starts from a running app) still hands off.
+        forwardAuthRedirect(intent)
+    }
+
+    // The OAuth redirect (#15, ADR-0026) re-enters this singleTop activity as a new VIEW intent on the
+    // custom scheme; forward it to the inbox the in-flight BrowserAuthenticator is awaiting.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        forwardAuthRedirect(intent)
+    }
+
+    private fun forwardAuthRedirect(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme == AUTH_REDIRECT_SCHEME) {
+            AuthRedirectInbox.publish(data.toString())
+        }
+    }
+
+    private companion object {
+        const val AUTH_REDIRECT_SCHEME = "com.circuitstitch.deferno"
     }
 }
 

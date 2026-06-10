@@ -1,6 +1,8 @@
 package com.circuitstitch.deferno.core.data.account
 
 import app.cash.turbine.test
+import com.circuitstitch.deferno.core.data.auth.FakeAuthRemoteSource
+import com.circuitstitch.deferno.core.data.auth.MeResult
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.secure.InMemorySecretVault
@@ -182,6 +184,53 @@ class DefaultAccountManagerTest {
 
         assertContentEquals(listOf(accountA), manager.accounts.value)
         assertEquals(accountA, manager.activeAccount.value)
+    }
+
+    // --- server-side token revoke on sign-out (ADR-0026 / #310) ---
+
+    @Test
+    fun removingAnAccountWithATokenIdRevokesItServerSideBeforeLocalWipe() = runTest {
+        val remote = FakeAuthRemoteSource(MeResult.Unavailable)
+        val mgr = DefaultAccountManager(registry, vault, dataStore, lazyOf(remote))
+        val browserMinted = Account(AccountId("account-a"), "Work", tokenId = "tok-123")
+        mgr.addAccount(browserMinted, "pat-a")
+
+        mgr.removeAccount(browserMinted.id)
+
+        // The known token id + its token were sent for server-side revoke...
+        assertEquals(1, remote.revokeCalls)
+        assertEquals("tok-123", remote.lastRevokedTokenId)
+        assertEquals("pat-a", remote.lastRevokedToken)
+        // ...and the local wipe still happened.
+        assertNull(vault.getBearerToken(browserMinted.id))
+        assertTrue(mgr.accounts.value.isEmpty())
+    }
+
+    @Test
+    fun removingAnAccountWithoutATokenIdDoesNotRevokeServerSide() = runTest {
+        // Paste / dev accounts carry no token id → local-wipe-only (the shared dev PAT must survive).
+        val remote = FakeAuthRemoteSource(MeResult.Unavailable)
+        val mgr = DefaultAccountManager(registry, vault, dataStore, lazyOf(remote))
+        mgr.addAccount(accountA, "token-a") // accountA has no tokenId
+
+        mgr.removeAccount(accountA.id)
+
+        assertEquals(0, remote.revokeCalls)
+        assertNull(vault.getBearerToken(accountA.id))
+    }
+
+    @Test
+    fun aFailedServerRevokeStillCompletesLocalSignOut() = runTest {
+        val remote = FakeAuthRemoteSource(MeResult.Unavailable).apply { revokeResult = false }
+        val mgr = DefaultAccountManager(registry, vault, dataStore, lazyOf(remote))
+        val browserMinted = Account(AccountId("account-a"), "Work", tokenId = "tok-123")
+        mgr.addAccount(browserMinted, "pat-a")
+
+        mgr.removeAccount(browserMinted.id)
+
+        assertEquals(1, remote.revokeCalls)
+        assertNull(vault.getBearerToken(browserMinted.id)) // local wipe proceeded despite revoke failure
+        assertTrue(mgr.accounts.value.isEmpty())
     }
 
     // --- startup load: persisted roster hydrates the observable state (ADR-0014) ---

@@ -113,6 +113,27 @@ class KtorAuthRemoteSourceTest {
         assertEquals(MeResult.Unavailable, source.fetchMe())
     }
 
+    @Test
+    fun revokeTokenDeletesByIdWithTheTokenAsExplicitBearer() = runTest {
+        var captured: HttpRequestData? = null
+        // 204 No Content — revoke deliberately bypasses requestApi (no envelope to parse).
+        val source = KtorAuthRemoteSource(client { req -> captured = req; respond("", HttpStatusCode.NoContent) })
+
+        val ok = source.revokeToken(tokenId = "tok-123", token = "pat-secret")
+
+        assertEquals(true, ok)
+        assertEquals("DELETE", captured?.method?.value)
+        assertEquals(true, captured?.url?.encodedPath?.endsWith("/auth/tokens/tok-123"))
+        assertEquals("Bearer pat-secret", captured?.headers?.get(HttpHeaders.Authorization))
+    }
+
+    @Test
+    fun revokeTokenReturnsFalseOnFailureSoSignOutStillProceeds() = runTest {
+        val source = KtorAuthRemoteSource(client { respond("", HttpStatusCode.InternalServerError) })
+
+        assertEquals(false, source.revokeToken("tok-123", "pat-secret"))
+    }
+
     // --- test helpers (mirror KtorTaskRemoteSourceTest) ---
 
     private fun client(
