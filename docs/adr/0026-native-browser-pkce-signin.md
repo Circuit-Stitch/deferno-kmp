@@ -66,3 +66,16 @@ verified App/Universal Links, a follow-up. **iOS is code-complete but device-ver
 to macOS** (ADR-0006): the Swift layer must register the `com.circuitstitch.deferno` URL scheme
 (`CFBundleURLTypes`) and forward incoming URLs via `DefernoRoot.forwardAuthRedirect` (#137), and
 `ASWebAuthenticationSession` should be swapped in for `openURL` there.
+
+**Amendment (2026-06-10).** The `ASWebAuthenticationSession` follow-up landed: `IosBrowserAuthenticator`
+now runs the authorize leg in the in-app session sheet (presented over the app, auto-dismissing,
+sharing Safari's cookies/password manager — still not a WebView), capturing its own redirect, after a
+TestFlight build was observed bouncing users out to Safari. The anchor is provided from Kotlin
+(`UIApplication.keyWindow`), so no Swift-layer swap was needed; the `CFBundleURLTypes` scheme +
+`forwardAuthRedirect` → inbox path is retained as a fallback for externally-opened redirects (Android
+is unchanged). Two environment fixes rode along: `DefernoEnvironment.Production` was corrected to the
+real prod host `https://app.defernowork.com/api/` (the spec `servers` entry `api.deferno.app` never
+resolved in DNS), and `DefernoRoot` now selects the environment by build configuration
+(`Platform.isDebugBinary`: Debug → Staging, Release/TestFlight → Production). Note: as of 2026-06-10
+the `/api/auth/native/*` endpoints 404 on the prod host — browser sign-in against Production needs
+the backend handoff (Deferno#299) deployed there.

@@ -30,10 +30,14 @@ interface IosDataBindings {
     @SingleIn(AppScope::class)
     fun accountDataStore(): AccountDataStore = NoOpAccountDataStore
 
-    /** The system-browser OAuth leg (ADR-0026); the Swift app forwards the redirect into the shared [AuthRedirectInbox] via `DefernoRoot.forwardAuthRedirect` (#137). */
+    /**
+     * The browser OAuth leg (ADR-0026): an in-app `ASWebAuthenticationSession` sheet that captures
+     * its own redirect — the [AuthRedirectInbox] (`DefernoRoot.forwardAuthRedirect`, #137) is now
+     * only the fallback for externally-opened redirects.
+     */
     @Provides
     @SingleIn(AppScope::class)
-    fun browserAuthenticator(inbox: AuthRedirectInbox): BrowserAuthenticator = IosBrowserAuthenticator(inbox)
+    fun browserAuthenticator(): BrowserAuthenticator = IosBrowserAuthenticator()
 
     /** Tags a minted token to this device (ADR-0026). */
     @Provides

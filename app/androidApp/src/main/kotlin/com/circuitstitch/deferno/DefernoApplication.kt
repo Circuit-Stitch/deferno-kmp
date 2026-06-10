@@ -36,9 +36,9 @@ class DefernoApplication : Application() {
         super.onCreate()
         appComponent = createAppComponent(
             platform = PlatformContext(this),
-            // Debug dev builds talk to staging (the dev-PAT target, ADR-0012). A real environment
-            // selector by build type is a follow-up.
-            environment = DefernoEnvironment.Staging,
+            // Environment by build type: debug dev builds talk to staging (the dev-PAT target,
+            // ADR-0012); release builds talk to production.
+            environment = if (BuildConfig.DEBUG) DefernoEnvironment.Staging else DefernoEnvironment.Production,
         )
         appScope.launch {
             appComponent.accountManager.load()
