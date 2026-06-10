@@ -9,6 +9,7 @@ import com.circuitstitch.deferno.core.data.account.DefaultAccountManager
 import com.circuitstitch.deferno.core.data.account.DefaultReauthCoordinator
 import com.circuitstitch.deferno.core.data.account.ReauthRequester
 import com.circuitstitch.deferno.core.data.account.ReauthRequests
+import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.AuthRemoteSource
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
@@ -131,6 +132,16 @@ interface DataBindings {
         deviceName: DeviceName,
     ): SignInService =
         DefaultSignInService(remoteSource, accountManager, nativeAuth, browserAuthenticator, clientStore, deviceName)
+
+    /**
+     * The one-shot redirect rendezvous (ADR-0026, #137): the host OS layer publishes the captured
+     * redirect URI, the in-flight mobile [BrowserAuthenticator] awaits it. One AppScope instance so
+     * both ends meet; bound here (not per-platform) since the type is platform-neutral — desktop's
+     * loopback authenticator simply never consumes it.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun authRedirectInbox(): AuthRedirectInbox = AuthRedirectInbox()
 
     /** The native browser-OAuth remote source (register / authorize-url / token-exchange, ADR-0026). */
     @Provides

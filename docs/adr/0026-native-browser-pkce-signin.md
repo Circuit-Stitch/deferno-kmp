@@ -30,9 +30,12 @@ The `redirect_uri` is platform-owned: a fixed custom scheme `com.circuitstitch.d
 mobile (a verified App/Universal Link is the preferred upgrade), a freshly-bound loopback
 `http://127.0.0.1:{port}/callback` on desktop (the AS ignores the loopback port, RFC 8252 §7.3). The
 `BrowserAuthenticator` is a `core/data` port with per-platform implementations: **Android** opens an
-`ACTION_VIEW` intent and captures the redirect via a `singleTop` activity's `onNewIntent` →
-`AuthRedirectInbox`; **desktop** binds a loopback `ServerSocket` + `Desktop.browse`; **iOS** opens
-Safari via `UIApplication.openURL` and captures via the Swift URL handler → `IosAuthRedirectInbox`.
+`ACTION_VIEW` intent and captures the redirect via a `singleTop` activity's `onNewIntent`; **desktop**
+binds a loopback `ServerSocket` + `Desktop.browse`; **iOS** opens Safari via `UIApplication.openURL`
+and captures via the Swift URL handler. The mobile capture rendezvous is one shared `commonMain`
+`AuthRedirectInbox` (#137) — an AppScope singleton injected into both authenticators and exposed on
+the `AppComponent` for the host OS layer to publish into (Android's `MainActivity`, iOS's
+`DefernoRoot.forwardAuthRedirect`), not ambient static state.
 
 The pasted-PAT path (ADR-0023) is **retained as a developer affordance** only — hidden behind a
 debug-only "Use a token instead" reveal (Android gates it on `BuildConfig.DEBUG`) — for local dev and
@@ -61,5 +64,5 @@ verified shapes live in `contracts/CONTRACT-NOTES.md` → "Native browser sign-i
 PKCE stops it *exchanging* the code but not *receiving* the redirect; the mitigation is to prefer
 verified App/Universal Links, a follow-up. **iOS is code-complete but device-verification is deferred
 to macOS** (ADR-0006): the Swift layer must register the `com.circuitstitch.deferno` URL scheme
-(`CFBundleURLTypes`) and forward incoming URLs to `IosAuthRedirectInbox.publish`, and
+(`CFBundleURLTypes`) and forward incoming URLs via `DefernoRoot.forwardAuthRedirect` (#137), and
 `ASWebAuthenticationSession` should be swapped in for `openURL` there.

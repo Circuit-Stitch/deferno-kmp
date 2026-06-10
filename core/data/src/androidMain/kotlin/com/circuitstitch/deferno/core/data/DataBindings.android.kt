@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.data.account.AccountRegistry
 import com.circuitstitch.deferno.core.data.account.AndroidAccountDataStore
 import com.circuitstitch.deferno.core.data.account.SharedPreferencesAccountRegistry
 import com.circuitstitch.deferno.core.data.auth.AndroidBrowserAuthenticator
+import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
 import com.circuitstitch.deferno.core.data.auth.DeviceName
 import com.circuitstitch.deferno.core.database.DatabaseKeyStore
@@ -33,10 +34,11 @@ interface AndroidDataBindings {
     fun accountDataStore(context: Context, keyStore: DatabaseKeyStore): AccountDataStore =
         AndroidAccountDataStore(context, keyStore)
 
-    /** The system-browser OAuth leg (ADR-0026); the redirect is routed back via [AuthRedirectInbox]. */
+    /** The system-browser OAuth leg (ADR-0026); MainActivity routes the redirect back via the shared [AuthRedirectInbox] (#137). */
     @Provides
     @SingleIn(AppScope::class)
-    fun browserAuthenticator(context: Context): BrowserAuthenticator = AndroidBrowserAuthenticator(context)
+    fun browserAuthenticator(context: Context, inbox: AuthRedirectInbox): BrowserAuthenticator =
+        AndroidBrowserAuthenticator(context, inbox)
 
     /** Tags a minted token to this device (ADR-0026). */
     @Provides

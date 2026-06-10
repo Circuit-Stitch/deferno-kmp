@@ -108,6 +108,24 @@ class DefernoRoot {
     }
 
     /**
+     * The OAuth redirect hand-off (ADR-0026, #137): the Swift URL handler (`onOpenURL` /
+     * `application(_:open:)`) forwards every incoming URL here; a custom-scheme auth redirect is
+     * published into the AppScope [com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox] the
+     * in-flight `IosBrowserAuthenticator` awaits — the iOS twin of `MainActivity.forwardAuthRedirect`.
+     * Other URLs are ignored. (Registering the `CFBundleURLTypes` scheme and wiring `onOpenURL` is
+     * the macOS-gated device-verify follow-up, ADR-0006.)
+     */
+    fun forwardAuthRedirect(url: String) {
+        if (url.startsWith("$AUTH_REDIRECT_SCHEME://")) {
+            appComponent.authRedirectInbox.publish(url)
+        }
+    }
+
+    private companion object {
+        const val AUTH_REDIRECT_SCHEME = "com.circuitstitch.deferno"
+    }
+
+    /**
      * Idempotent dev-PAT seeding (the iOS analogue of `DefernoApplication.seedDevAccounts`): the two
      * optional Info.plist strings (`DevAccounts` / `DevStagingToken`) feed [DevAccounts.from] so a
      * developer can open on real staging data without typing. Both absent in a normal build → nothing
