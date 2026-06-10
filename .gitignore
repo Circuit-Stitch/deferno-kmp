@@ -55,6 +55,12 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 
+# CocoaPods (app/iosApp — SQLCipher, ADR-0009). Commit the Podfile + Podfile.lock (the lock pins the
+# pod versions so local + CI resolve identically and the iOS CI cache keys on it); the integrated
+# `Pods/` checkout and the generated `iosApp.xcworkspace` are reproduced by `pod install` and ignored.
+app/iosApp/Pods/
+app/iosApp/iosApp.xcworkspace/
+
 # Keystores and signing — never commit secrets
 *.jks
 *.keystore

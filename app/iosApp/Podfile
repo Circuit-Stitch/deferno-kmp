@@ -1,0 +1,16 @@
+# SQLCipher for the iOS encrypted per-Account database (ADR-0009, #21).
+#
+# The shared Kotlin static `Deferno.framework` opens the DB via SQLiter (`native-driver`) with an
+# `Encryption(key=…)` config that applies the key through `PRAGMA key` — so the app must link a SQLite
+# build that understands it. SQLCipher (CommonCrypto provider) supplies the standard `sqlite3_*` symbols
+# the framework references *plus* real at-rest encryption. We link **only** SQLCipher (the app target's
+# `OTHER_LDFLAGS` carries no `-lsqlite3`), so there is exactly one sqlite implementation and no duplicate
+# symbols. `linkSqlite` is effectively false already — the cinterop's system-sqlite linker opt is not
+# propagated into the consuming app, so SQLCipher cleanly satisfies the undefined symbols.
+#
+# After `pod install`, build via the generated `iosApp.xcworkspace` (not the `.xcodeproj`).
+platform :ios, '16.0'
+
+target 'iosApp' do
+  pod 'SQLCipher', '~> 4.6'
+end

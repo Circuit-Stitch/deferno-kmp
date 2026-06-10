@@ -2,17 +2,22 @@
 
 The iOS application entry point. Two halves live here:
 
-- **`build.gradle.kts`** — the `:app:iosApp` Gradle module. It bundles the shared
-  feature slices into a single static **`Deferno.framework`** (targets `iosX64`,
-  `iosArm64`, `iosSimulatorArm64`) and **`export(...)`s** the Tasks + Plan Decompose
-  components, the domain model, and the Decompose/coroutines types their public API
-  exposes so SwiftUI can render them. This half builds on any host for klib compilation;
-  the framework binary links on a **macOS runner** (ADR-0006).
+- **`build.gradle.kts`** — the `:app:iosApp` Gradle module. It bundles the shared **app
+  shell** (`:app:shell`) + the DI graph (`:core:di`) + every feature slice into a single
+  static **`Deferno.framework`** (targets `iosX64`, `iosArm64`, `iosSimulatorArm64`) and
+  **`export(...)`s** the shell + feature Decompose components, the domain model, and the
+  Decompose/coroutines/datetime types their public API exposes so SwiftUI can render them.
+  This half builds on any host for klib compilation; the framework binary links on a
+  **macOS runner** (ADR-0006).
 - **`iosApp/`** — the **SwiftUI sources**, centralized in per-feature folders (the
   deliberate Android-co-located / iOS-centralized asymmetry of ADR-0004): the iOS View
-  layer with its own design system (`DesignSystem/`), shared atoms (`Common/`), the
-  Tasks (`Tasks/`) and Plan (`Plan/`) Views, and the SKIE-free observation bridge
-  (`Bridge/`). The Views are **thin renderers of the shared Decompose components** (#51).
+  layer with its own design system (`DesignSystem/` — `DefernoTheme` mirrors the Compose
+  palettes, driven live off `RootComponent.themeSettings`), shared atoms (`Common/`), the
+  navigation frame (`RootView`, `Shell/MainShellView`), the Auth/sign-in (`Auth/`), the
+  five Destinations (`Plan/`, `Calendar/`, `Tasks/`, `Profile/`, `Settings/`), the
+  Search/New overlays (`Search/`, `New/`), and the SKIE-free observation bridge
+  (`Bridge/`). The Views are **thin renderers of the shared Decompose components**
+  (#51/#35).
 - **`iosApp.xcodeproj/`** — the committed **Xcode project** (universal iPhone + iPad,
   `TARGETED_DEVICE_FAMILY = 1,2`, deployment target **iOS 16** for `NavigationSplitView`
   + size classes). It links the static `Deferno` framework produced above and drives its
@@ -33,32 +38,77 @@ The Views hold no business logic: they observe the components' state and forward
 (tap, refresh, set working state, add to plan, show breakdown). All navigation lives in
 the retained shared component (`DefaultTasksComponent` self-wires list→detail→tree).
 
-### The demo harness (scaffold)
+### The app entry — real shell over the DI graph (#35)
 
-There is **no iOS app shell + DI yet** (the iOS analogue of the Android `#55`/`#68`
-shell + roster is a follow-up). To make the Views runnable today, `DefernoApp` owns a
-**`DefernoDemo`** harness (`src/iosMain/.../ios/DefernoDemo.kt`) that constructs the
-*real* `DefaultTasksComponent` / `DefaultPlanComponent` over in-memory `Demo*Repository`
-fakes — the iOS counterpart of the Android shell's `demo/` fixtures. Only the data source
-is a fixture; the Views render genuine shared components. When the real shell lands, it
-replaces the harness with DI-provided repositories (ADR-0014).
+`DefernoApp` (`@main`) now owns **`DefernoRoot`** (`src/iosMain/.../ios/DefernoRoot.kt`) —
+the iOS analogue of Android's `DefernoApplication` + `MainActivity` in one host object. It
+builds the process-global **`AppComponent`** from the real DI graph (`createAppComponent`),
+hydrates the persisted account roster + seeds any optional dev-PAT Accounts (from the
+`DevAccounts` / `DevStagingToken` Info.plist keys, both absent in a normal build), and
+constructs **`DefaultRootComponent`** over an Essenty `LifecycleRegistry` with the iOS host
+deep-links (`UIApplication`). SwiftUI's `RootView` renders that shared `RootComponent`
+(Auth ↔ Main → the Destination graph, ADR-0013/0017): paste a PAT to sign in, then the
+adaptive nav suite (`MainShellView`) over the five Destinations + the Search/New overlays.
+
+The in-memory **`DefernoDemo`** harness (`ios/DefernoDemo.kt`) is **retained for the unit
+tests only** (`StateBridgeTests` drives it without a DB); it is no longer the app entry.
+
+### Data layer: SQLCipher — encrypted at rest (ADR-0009)
+
+The per-Account database is opened by `IosSqlDriverFactory` (SQLiter / `native-driver`) with SQLiter's
+`Encryption` config, which applies the per-Account key via `PRAGMA key` — so the app must link a SQLite
+that understands it. That's **SQLCipher**, integrated as a **CocoaPod** (`Podfile` → `pod 'SQLCipher',
+'~> 4.6'`). It supplies the standard `sqlite3_*` symbols the static framework references — SQLiter's
+cinterop links system sqlite at the *klib* level, but Kotlin/Native does **not** propagate that linker
+opt into the consuming app for a static framework, so nothing else links sqlite and SQLCipher is the
+**sole** provider (no duplicate symbols) — **plus** real encryption-at-rest: the pod's `sqlite3.c`
+compiles with `SQLITE_HAS_CODEC` + `SQLCIPHER_CRYPTO_CC` (the CommonCrypto provider; no OpenSSL), so the
+app binary carries `sqlcipherCodecAttach` and `PRAGMA key` is real.
+
+After `pod install`, **build the generated `iosApp.xcworkspace`, not the bare `.xcodeproj`** (a project
+with an integrated pod links only from its workspace). `Podfile` + `Podfile.lock` are committed (the
+lock pins the resolved pod version so local + CI match); the integrated `Pods/` and `iosApp.xcworkspace`
+are reproduced by `pod install` and are gitignored.
+
+> **Local Ruby caveat — this dev machine only (Intel Ventura).** CocoaPods is a Ruby gem, and the macOS
+> *system* Ruby (2.6) is too old for it (modern CocoaPods' `ffi` needs Ruby ≥ 3.0), while Homebrew can't
+> install a Ruby *bottle* on Intel Ventura — `brew install ruby/cocoapods` falls back to building LLVM +
+> Rust + Ruby **from source** (hours). The one-time fix used here, which leaves the system Ruby untouched:
+> ```sh
+> rbenv install 3.3.11            # compiles ONLY Ruby (~10 min), not the brew toolchain
+> rbenv shell 3.3.11 && gem install cocoapods
+> # that Ruby links Homebrew openssl@3, whose CA path is unpopulated → point it at a bundle:
+> ln -sf /usr/local/etc/ca-certificates/cert.pem /usr/local/etc/openssl@3/cert.pem
+> LANG=en_US.UTF-8 pod install   # CocoaPods needs a UTF-8 locale
+> ```
+> **CI needs none of this** — GitHub's macOS runners ship Ruby 3 + CocoaPods preinstalled, so the iOS
+> workflow (`.github/workflows/ios.yml`) just runs `pod install`.
 
 ## Building & running (macOS + Xcode)
 
-The Xcode project is **committed** (`iosApp.xcodeproj`), so on macOS + Xcode (verified on
-Xcode 15.2 / iOS 17.2 SDK) you just build and run — no project setup needed. Klibs
-cross-compile on any host, but **linking the framework + running the app require macOS**
-(ADR-0006).
+The Xcode project is **committed** (`iosApp.xcodeproj`), verified on Xcode 15.2 / iOS 17.2 SDK. The one
+setup step is **`pod install`** (SQLCipher, above) — it generates `iosApp.xcworkspace`, which you build
+from then on. Klibs cross-compile on any host, but **linking the framework + running the app require
+macOS** (ADR-0006).
 
-**Xcode GUI:** open `app/iosApp/iosApp.xcodeproj`, pick an iPhone or iPad simulator, and
-Run. The Run Script phase builds the shared framework via Gradle first.
+**Xcode GUI:** run `pod install` once (from `app/iosApp`), then open `app/iosApp/iosApp.xcworkspace`
+(**not** the `.xcodeproj`), pick an iPhone or iPad simulator, and Run. The Run Script phase builds the
+shared framework via Gradle first.
 
-**Headless** (how the Views were verified, on a booted simulator):
+**Headless** (how the app was verified, on a booted simulator). Note: **do not pass
+`CODE_SIGNING_ALLOWED=NO`** when you intend to *run* the app — an unsigned iOS app has no
+entitlements, so the Keychain (`SecItem*`, used by the token `SecretVault` + the SQLCipher
+`DatabaseKeyProvider`, ADR-0009) returns `errSecMissingEntitlement (-34018)` and sign-in aborts. The
+default ad-hoc "Sign to Run Locally" signature is enough for the Simulator Keychain. (`CODE_SIGNING_ALLOWED=NO`
+is fine for a *compile-only* check or the unit tests, which use the in-memory `DefernoDemo` — that's
+what the iOS CI does.) The product is `Deferno.app` (`PRODUCT_NAME = Deferno`; the target/scheme are
+still named `iosApp`).
 ```sh
 # from app/iosApp
-xcodebuild -project iosApp.xcodeproj -scheme iosApp -configuration Debug \
-  -destination 'platform=iOS Simulator,name=iPhone 15 Pro Max' -derivedDataPath build/dd build
-xcrun simctl install booted build/dd/Build/Products/Debug-iphonesimulator/iosApp.app
+pod install   # once; regenerate after a Podfile change (see the Ruby caveat above)
+xcodebuild -workspace iosApp.xcworkspace -scheme iosApp -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 15' -derivedDataPath build/dd build
+xcrun simctl install booted build/dd/Build/Products/Debug-iphonesimulator/Deferno.app
 xcrun simctl launch booted com.circuitstitch.deferno
 ```
 
@@ -120,8 +170,9 @@ scheme's Test action. Two suites, both green on the iOS 17.2 simulator under Xco
 
 ```sh
 # from app/iosApp — builds the shared framework + app, then runs the suite on a simulator
-xcodebuild test -project iosApp.xcodeproj -scheme iosApp -configuration Debug \
-  -destination 'platform=iOS Simulator,name=iPhone 15 Pro Max'
+pod install   # once (generates iosApp.xcworkspace)
+xcodebuild test -workspace iosApp.xcworkspace -scheme iosApp -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 15'
 ```
 
 ## SKIE (deferred) and the hand-written bridge
