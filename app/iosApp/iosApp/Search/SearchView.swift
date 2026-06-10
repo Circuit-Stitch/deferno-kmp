@@ -47,10 +47,17 @@ struct SearchView: View {
     }
 
     private var queryField: some View {
-        TextField("Search tasks", text: Binding(get: { state.value.query }, set: { component.onQueryChanged(query: $0) }))
-            .textFieldStyle(.roundedBorder)
-            .submitLabel(.search)
-            .onSubmit { component.onSubmit() }
+        HStack(spacing: 8) {
+            TextField("Search tasks", text: Binding(get: { state.value.query }, set: { component.onQueryChanged(query: $0) }))
+                .textFieldStyle(.roundedBorder)
+                .submitLabel(.search)
+                .onSubmit { component.onSubmit() }
+            // A visible submit affordance — the keyboard's Search key alone is undiscoverable (#73).
+            Button("Search") { component.onSubmit() }
+                .buttonStyle(.borderedProminent)
+                .tint(colors.primary)
+                .disabled(!state.value.canSearch || state.value.isSearching)
+        }
     }
 
     private func statusFilter(_ value: SearchState) -> some View {
@@ -123,6 +130,10 @@ struct SearchView: View {
             }
         } else if value.isSearching {
             LoadingStrip(label: "Searching…")
+        } else if value.searchFailed {
+            // A failed pull (offline / server error) is NOT "no matches" — say so (#73 follow-up).
+            EmptyStateView(title: "Search is unavailable",
+                           message: "Something went wrong reaching the server. Check your connection and try again.")
         } else if value.hasSearched {
             EmptyStateView(title: "No matches",
                            message: "Nothing matched your search. Try a different word or fewer filters.")

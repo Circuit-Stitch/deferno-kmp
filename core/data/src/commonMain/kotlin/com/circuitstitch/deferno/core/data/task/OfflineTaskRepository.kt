@@ -68,15 +68,19 @@ class OfflineTaskRepository(
 
     /**
      * Global search (#73): online-only, one-shot. Guards the contract's 2-char minimum (a too-short
-     * term short-circuits to `emptyList()` with no round trip), delegates to [TaskRemoteSource.search]
-     * (which maps a failure to `emptyList()`, offline-first), then applies the **client-side**
+     * term short-circuits to an empty [TaskSearchResult.Success] with no round trip), delegates to
+     * [TaskRemoteSource.search] (a failed pull stays [TaskSearchResult.Unavailable] — visible to the
+     * foreground search UI, unlike the silent background reads), then applies the **client-side**
      * [SearchSort]. Results are intentionally **not** upserted into the live cache: search is a
      * separate read surface from the observed [observeTasks] list (ADR-0001 keeps that local-only).
      */
-    override suspend fun search(query: TaskSearchQuery): List<Task> {
-        if (query.query.trim().length < MIN_SEARCH_QUERY_LENGTH) return emptyList()
-        val results = remoteSource.search(query)
-        return results.sortedWith(query.sort.comparator())
+    override suspend fun search(query: TaskSearchQuery): TaskSearchResult {
+        if (query.query.trim().length < MIN_SEARCH_QUERY_LENGTH) return TaskSearchResult.Success(emptyList())
+        return when (val result = remoteSource.search(query)) {
+            is TaskSearchResult.Success ->
+                TaskSearchResult.Success(result.tasks.sortedWith(query.sort.comparator()))
+            TaskSearchResult.Unavailable -> result
+        }
     }
 
     private fun SearchSort.comparator(): Comparator<Task> = when (this) {

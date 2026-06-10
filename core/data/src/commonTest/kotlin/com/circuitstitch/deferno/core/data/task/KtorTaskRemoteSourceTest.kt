@@ -99,7 +99,7 @@ class KtorTaskRemoteSourceTest {
         var captured: HttpRequestData? = null
         val source = KtorTaskRemoteSource(client { req -> captured = req; respondJson(listEnvelope) })
 
-        val tasks = source.search(
+        val outcome = source.search(
             TaskSearchQuery(
                 query = "spring",
                 statuses = setOf(WorkingState.InProgress),
@@ -121,14 +121,17 @@ class KtorTaskRemoteSourceTest {
         assertEquals("2026-06-30", params?.get("to"))
         assertNull(params?.get("from_date"), "the MCP tool param name must not leak onto the REST query")
         assertNull(params?.get("to_date"), "the MCP tool param name must not leak onto the REST query")
+        val tasks = (outcome as TaskSearchResult.Success).tasks
         assertEquals(listOf(TaskId("a"), TaskId("b")), tasks.map { it.id })
     }
 
     @Test
-    fun searchReturnsEmptyOnFailure() = runTest {
+    fun searchReportsUnavailableOnFailure() = runTest {
+        // Unlike the background reads, a failed search must stay visible (#73 follow-up): the UI
+        // renders "search is unavailable", never a misleading "No matches".
         val source = KtorTaskRemoteSource(client { respond("", HttpStatusCode.InternalServerError) })
 
-        assertTrue(source.search(TaskSearchQuery("query")).isEmpty())
+        assertEquals(TaskSearchResult.Unavailable, source.search(TaskSearchQuery("query")))
     }
 
     // --- test helpers ---

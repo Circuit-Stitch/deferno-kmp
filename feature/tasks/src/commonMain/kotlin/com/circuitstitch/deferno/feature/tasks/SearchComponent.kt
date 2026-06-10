@@ -5,6 +5,7 @@ import com.circuitstitch.deferno.core.data.task.MIN_SEARCH_QUERY_LENGTH
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
+import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -20,9 +21,12 @@ import kotlin.coroutines.CoroutineContext
 /**
  * Observable state for the global-search overlay (#73). [hasSearched] distinguishes the initial,
  * untouched overlay ("type to search") from a completed search that found nothing ("no matches"), so
- * the View can show the right gentle copy. [results] is the last completed search's rows; [isSearching]
- * is true only while a pull is in flight. The filters ([statuses]/[labels]/[fromDate]/[toDate]) and
- * [sort] mirror [TaskSearchQuery] so the View binds straight to them.
+ * the View can show the right gentle copy; [searchFailed] further distinguishes a search that
+ * **couldn't run** ([TaskSearchResult.Unavailable] — offline or a server error) from one that ran and
+ * found nothing, so a broken backend never masquerades as "no matches". [results] is the last
+ * completed search's rows; [isSearching] is true only while a pull is in flight. The filters
+ * ([statuses]/[labels]/[fromDate]/[toDate]) and [sort] mirror [TaskSearchQuery] so the View binds
+ * straight to them.
  */
 data class SearchState(
     val query: String = "",
@@ -34,6 +38,7 @@ data class SearchState(
     val results: List<Task> = emptyList(),
     val isSearching: Boolean = false,
     val hasSearched: Boolean = false,
+    val searchFailed: Boolean = false,
 ) {
     /** Whether the current query meets the backend's 2-char minimum (#73). */
     val canSearch: Boolean get() = query.trim().length >= MIN_SEARCH_QUERY_LENGTH
@@ -111,7 +116,7 @@ class DefaultSearchComponent(
         if (!current.canSearch || current.isSearching) return
         _state.update { it.copy(isSearching = true) }
         scope.launch {
-            val results = searchTasks.search(
+            val outcome = searchTasks.search(
                 TaskSearchQuery(
                     query = current.query.trim(),
                     statuses = current.statuses,
@@ -121,7 +126,22 @@ class DefaultSearchComponent(
                     sort = current.sort,
                 ),
             )
-            _state.update { it.copy(results = results, isSearching = false, hasSearched = true) }
+            _state.update {
+                when (outcome) {
+                    is TaskSearchResult.Success -> it.copy(
+                        results = outcome.tasks,
+                        isSearching = false,
+                        hasSearched = true,
+                        searchFailed = false,
+                    )
+                    TaskSearchResult.Unavailable -> it.copy(
+                        results = emptyList(),
+                        isSearching = false,
+                        hasSearched = true,
+                        searchFailed = true,
+                    )
+                }
+            }
         }
     }
 

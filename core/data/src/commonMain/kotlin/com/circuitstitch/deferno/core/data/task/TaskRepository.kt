@@ -34,15 +34,15 @@ interface TaskRepository {
      * overlay's term + date/status/tag filters + client sort). Deliberately a `suspend` returning a
      * snapshot, **not** an observable `Flow`: search results are a separate read surface and are *not*
      * written into the live [observeTasks] cache (ADR-0001 keeps the observed list local-only — there
-     * is no offline search). A failed pull yields `emptyList()` (offline-first), and the convenience
-     * overload guards the contract's 2-char minimum (a too-short query returns `emptyList()` without a
-     * round trip). See [OfflineTaskRepository.search].
+     * is no offline search). A failed pull is [TaskSearchResult.Unavailable] so the overlay can show
+     * "search is unavailable" instead of a misleading "no matches"; the 2-char minimum guard returns
+     * an empty [TaskSearchResult.Success] without a round trip. See [OfflineTaskRepository.search].
      */
-    suspend fun search(query: TaskSearchQuery): List<Task>
+    suspend fun search(query: TaskSearchQuery): TaskSearchResult
 }
 
 /** Minimum query length the backend `search_tasks` contract enforces (#73). */
 const val MIN_SEARCH_QUERY_LENGTH: Int = 2
 
 /** Convenience search by a bare term (no filters, relevance sort). */
-suspend fun TaskRepository.search(query: String): List<Task> = search(TaskSearchQuery(query))
+suspend fun TaskRepository.search(query: String): TaskSearchResult = search(TaskSearchQuery(query))

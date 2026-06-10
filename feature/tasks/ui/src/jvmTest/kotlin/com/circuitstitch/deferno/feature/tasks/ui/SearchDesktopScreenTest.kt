@@ -66,6 +66,16 @@ class SearchDesktopScreenTest {
     }
 
     @Test
+    fun failedSearch_showsUnavailableCopy_notNoMatches() = runComposeUiTest {
+        // A 503/offline pull must not render as "No matches" (#73 follow-up).
+        setContent {
+            Themed { Content(SearchState(query = "zz", hasSearched = true, searchFailed = true)) }
+        }
+        onNodeWithText("Search is unavailable").assertExists()
+        onNodeWithText("No matches").assertDoesNotExist()
+    }
+
+    @Test
     fun close_forwardsDismissIntent() = runComposeUiTest {
         var dismissed = false
         setContent { Themed { Content(SearchState(), onDismiss = { dismissed = true }) } }
