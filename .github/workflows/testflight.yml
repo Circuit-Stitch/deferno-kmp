@@ -107,15 +107,21 @@ jobs:
           mkdir -p "$RUNNER_TEMP/private_keys"
           echo "$API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/private_keys/AuthKey.p8"
 
-      # Archive the Release device build. xcodebuild runs the project's Run Script phase first
+      # Archive the Release device build, UNSIGNED. xcodebuild runs the project's Run Script phase first
       # (./gradlew :app:iosApp:embedAndSignAppleFrameworkForXcode → the iosArm64 Release Deferno.framework),
-      # then compiles + links the SwiftUI app against it + the SQLCipher pod, and signs it via cloud-managed
-      # automatic signing. CURRENT_PROJECT_VERSION = the run number → a unique, increasing CFBundleVersion.
-      - name: Archive (Release, generic iOS device)
+      # then compiles + links the SwiftUI app against it + the SQLCipher pod.
+      #
+      # Why unsigned here: signing the *archive* under automatic signing uses an "iOS App Development"
+      # profile (the archive action's default), which requires a device registered to the team — a brand
+      # new team has none, so it fails with "no devices from which to generate a provisioning profile".
+      # App Store / TestFlight distribution signing needs ZERO devices and belongs at *export* time, which
+      # the next step does via cloud-managed automatic signing (it mints the Apple Distribution cert + App
+      # Store profile from the API key). So skip signing now — the same CODE_SIGNING_ALLOWED=NO the
+      # simulator build in ios.yml uses, which the Kotlin Run Script handles. The Deferno framework and
+      # SQLCipher are statically linked, so the .app has no embedded dylibs; export re-signs just the app.
+      # CURRENT_PROJECT_VERSION = the run number → a unique, increasing CFBundleVersion.
+      - name: Archive (Release, generic iOS device) — unsigned
         working-directory: app/iosApp
-        env:
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
           set -o pipefail
           if command -v xcbeautify >/dev/null 2>&1; then FMT=(xcbeautify --renderer github-actions); else FMT=(cat); fi
@@ -125,12 +131,8 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$PWD/build/Deferno.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
-            -authenticationKeyID "$KEY_ID" \
-            -authenticationKeyIssuerID "$ISSUER_ID" \
-            DEVELOPMENT_TEAM=GDV76FJJZ5 \
-            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             | "${FMT[@]}"
 
