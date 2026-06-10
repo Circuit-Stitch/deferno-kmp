@@ -8,6 +8,8 @@ import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.User
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.secure.InMemorySecretVault
+import com.circuitstitch.deferno.core.secure.SecretVault
+import com.circuitstitch.deferno.core.secure.SecureStorageException
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -88,5 +90,30 @@ class DefaultSignInServiceTest {
         assertEquals(SignInResult.Unavailable, result)
         assertTrue(manager.accounts.value.isEmpty())
         assertNull(manager.activeAccount.value)
+    }
+
+    @Test
+    fun secureStorageThrows_returnsUnavailable_ratherThanCrashing() = runTest {
+        // A VALIDATED token whose Account establishment throws (the secure vault rejects the write — e.g.
+        // an unsigned iOS build has no Keychain entitlement, so SecItemAdd returns
+        // errSecMissingEntitlement) must surface Unavailable, NOT let the exception escape signIn() and
+        // abort the app's sign-in coroutine (ADR-0009/0023). Without the guard this throws.
+        val throwingManager =
+            DefaultAccountManager(InMemoryAccountRegistry(), ThrowingSecretVault, NoOpAccountDataStore)
+        val remote = FakeAuthRemoteSource(MeResult.Authenticated(user))
+
+        val result = DefaultSignInService(remote, throwingManager).signIn("pat-xyz")
+
+        assertEquals(SignInResult.Unavailable, result)
+    }
+
+    /** A vault whose write fails the way the Keychain/Keystore does on a misconfigured build. */
+    private object ThrowingSecretVault : SecretVault {
+        override fun putBearerToken(account: AccountId, token: String): Unit =
+            throw SecureStorageException("simulated secure-storage write failure")
+
+        override fun getBearerToken(account: AccountId): String? = null
+
+        override fun deleteBearerToken(account: AccountId) = Unit
     }
 }
