@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.data.account.AccountManager
+import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
@@ -73,6 +74,15 @@ abstract class AppComponent(
      * AuthRemoteSource + AccountManager dependencies in the merged graph.
      */
     abstract val signInService: SignInService
+
+    /**
+     * The one-shot OAuth redirect rendezvous (ADR-0026, #137). The host OS layer resolves it here to
+     * publish the redirect URI the system browser returned with — Android's `MainActivity` from its
+     * custom-scheme intent, the iOS Swift URL handler via `DefernoRoot.forwardAuthRedirect` — and the
+     * in-flight mobile `BrowserAuthenticator` (same AppScope instance) awaits it. Exposed instead of
+     * reached as a static `object` so the hand-off flows through DI like everything else.
+     */
+    abstract val authRedirectInbox: AuthRedirectInbox
 
     /**
      * On-device speech-to-text (#92, ADR-0018): the [SpeechToText] selector over every registered engine
