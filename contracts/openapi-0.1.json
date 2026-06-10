@@ -28,7 +28,7 @@
                     "auth"
                 ],
                 "summary": "Get the current user",
-                "description": "Return the authenticated user's profile (id, username, display name, role, personal-org id and slug).",
+                "description": "Return the authenticated user's profile (id, username, display name, email, avatar URL, role, personal-org id and slug). `email` and `avatar_url` are nullable/additive (#309); `avatar_url` is currently always null (clients render an initials avatar).",
                 "operationId": "get_me",
                 "responses": {
                     "200": {
@@ -394,6 +394,36 @@
                     },
                     {
                         "session_cookie": []
+                    }
+                ]
+            }
+        },
+        "/auth/tokens/revoke-current": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Revoke the API token presented in this request",
+                "description": "Revoke (delete) the bearer token used to authenticate this request. For native clients that hold only the opaque token string and never learned its id, this is the self-service sign-out revoke: the server resolves the presented token to its record and deletes it. Requires bearer authentication \u2014 cookie sessions present no token and receive 401 (use POST /auth/logout instead).",
+                "operationId": "revoke_current_api_token",
+                "responses": {
+                    "204": {
+                        "description": "Revoked (no content)"
+                    },
+                    "401": {
+                        "description": "Not authenticated, or no bearer token presented",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer_token": []
                     }
                 ]
             }
@@ -3343,8 +3373,19 @@
                     "items"
                 ],
                 "summary": "List the caller's items",
-                "description": "List every non-deleted item (Task/Habit/Chore/Event) in the caller's personal org as a polymorphic JSON array. Supports OData-style `$filter`/`$orderby`/`$select`/`$top`/`$skip` query params plus a `window=all` flag; each element carries a `kind` discriminator and the `ref`/`org_slug`/`sequence`/`type` identity fields.",
+                "description": "List every non-deleted item (Task/Habit/Chore/Event) in the caller's personal org as a polymorphic JSON array. Supports OData-style `$filter`/`$orderby`/`$select`/`$top`/`$skip` query params plus a `window=all` flag; each element carries a `kind` discriminator and the `ref`/`org_slug`/`sequence`/`type` identity fields. Pass `?since=<cursor>` (an opaque `next_since` from a prior response) to fetch only items mutated since that point \u2014 a delta pull that also includes tombstones for deletions. A `?since=` delta does not compose with `$filter`/`$top`/`$skip`/`$select` (400).",
                 "operationId": "list_items",
+                "parameters": [
+                    {
+                        "name": "since",
+                        "in": "query",
+                        "description": "Opaque delta-pull cursor: echo back the `next_since` from a prior response to receive only items whose per-org `rev` exceeds it (plus deletion tombstones). Omit for a cold snapshot. A malformed cursor is rejected with 400 `invalid_cursor` so the client re-bootstraps cold rather than silently desyncing.",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Polymorphic item objects (v0.1 envelope around a freeform array)",
@@ -6014,6 +6055,13 @@
                     "personal_org_id"
                 ],
                 "properties": {
+                    "avatar_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Profile image URL. Always `null` today \u2014 the native client renders an\ninitials avatar from `display_name`; a real source can be wired later\nwithout a contract change. #309."
+                    },
                     "console_url": {
                         "type": [
                             "string",
@@ -6026,6 +6074,13 @@
                             "string",
                             "null"
                         ]
+                    },
+                    "email": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "The user's email (OIDC `email` claim). Nullable + additive: omitted\nwhen unknown (legacy rows until the next sign-in backfills it). #309."
                     },
                     "id": {
                         "type": "string",
@@ -6211,6 +6266,7 @@
                 "required": [
                     "id",
                     "task_id",
+                    "kind",
                     "title",
                     "start",
                     "end",
@@ -6249,6 +6305,10 @@
                     },
                     "id": {
                         "type": "string"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/ItemKind",
+                        "description": "The work-item kind this row projects: `task`, `habit`, `chore`, or\n`event` (Issue #311). Recurring firings carry their series\ndefinition's kind, so a client can route a kind-scoped occurrence\naction (`POST /habits/{id}/occurrences`,\n`PUT /chores/{id}/occurrences/{date}`,\n`POST /events/{id}/occurrences/{date}`) straight from the feed row\nwithout a client-side `series_id -> kind` index. A one-off dated\nTask is `task`; an external (e.g. Google Calendar) event is stored\nas an Event-kind item, so it is `event` \u2014 clients gate\nactionability on `source`, not `kind`."
                     },
                     "labels": {
                         "type": "array",
@@ -6487,6 +6547,12 @@
                     "recurrence": {
                         "$ref": "#/components/schemas/Recurrence"
                     },
+                    "rev": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                        "minimum": 0
+                    },
                     "series_id": {
                         "type": "string",
                         "format": "uuid"
@@ -6511,6 +6577,14 @@
                     },
                     "title": {
                         "type": "string"
+                    },
+                    "updated_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time",
+                        "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                     }
                 }
             },
@@ -7266,6 +7340,13 @@
                             }
                         ]
                     },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
                     "version": {
                         "type": "string"
                     }
@@ -7287,6 +7368,13 @@
                             "personal_org_id"
                         ],
                         "properties": {
+                            "avatar_url": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "description": "Profile image URL. Always `null` today \u2014 the native client renders an\ninitials avatar from `display_name`; a real source can be wired later\nwithout a contract change. #309."
+                            },
                             "console_url": {
                                 "type": [
                                     "string",
@@ -7299,6 +7387,13 @@
                                     "string",
                                     "null"
                                 ]
+                            },
+                            "email": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "description": "The user's email (OIDC `email` claim). Nullable + additive: omitted\nwhen unknown (legacy rows until the next sign-in backfills it). #309."
                             },
                             "id": {
                                 "type": "string",
@@ -7342,6 +7437,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -7516,6 +7618,12 @@
                             "recurrence": {
                                 "$ref": "#/components/schemas/Recurrence"
                             },
+                            "rev": {
+                                "type": "integer",
+                                "format": "int64",
+                                "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                                "minimum": 0
+                            },
                             "series_id": {
                                 "type": "string",
                                 "format": "uuid"
@@ -7540,6 +7648,14 @@
                             },
                             "title": {
                                 "type": "string"
+                            },
+                            "updated_at": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "format": "date-time",
+                                "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                             }
                         }
                     },
@@ -7552,6 +7668,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -7607,6 +7730,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -7692,6 +7822,13 @@
                             }
                         ]
                     },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
                     "version": {
                         "type": "string"
                     }
@@ -7728,6 +7865,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -7768,6 +7912,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -7947,6 +8098,12 @@
                                     }
                                 ]
                             },
+                            "rev": {
+                                "type": "integer",
+                                "format": "int64",
+                                "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                                "minimum": 0
+                            },
                             "series_id": {
                                 "type": [
                                     "string",
@@ -7974,6 +8131,14 @@
                             },
                             "title": {
                                 "type": "string"
+                            },
+                            "updated_at": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "format": "date-time",
+                                "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                             }
                         }
                     },
@@ -7986,6 +8151,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -8072,6 +8244,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -8242,6 +8421,12 @@
                             "recurrence": {
                                 "$ref": "#/components/schemas/Recurrence"
                             },
+                            "rev": {
+                                "type": "integer",
+                                "format": "int64",
+                                "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                                "minimum": 0
+                            },
                             "series_id": {
                                 "type": "string",
                                 "format": "uuid"
@@ -8266,6 +8451,14 @@
                             },
                             "title": {
                                 "type": "string"
+                            },
+                            "updated_at": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "format": "date-time",
+                                "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                             }
                         }
                     },
@@ -8278,6 +8471,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -8324,6 +8524,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -8500,6 +8707,12 @@
                                     "recurrence": {
                                         "$ref": "#/components/schemas/Recurrence"
                                     },
+                                    "rev": {
+                                        "type": "integer",
+                                        "format": "int64",
+                                        "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                                        "minimum": 0
+                                    },
                                     "series_id": {
                                         "type": "string",
                                         "format": "uuid"
@@ -8524,6 +8737,14 @@
                                     },
                                     "title": {
                                         "type": "string"
+                                    },
+                                    "updated_at": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "date-time",
+                                        "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                                     }
                                 }
                             },
@@ -8534,6 +8755,17 @@
                                     "type"
                                 ],
                                 "properties": {
+                                    "kind": {
+                                        "oneOf": [
+                                            {
+                                                "type": "null"
+                                            },
+                                            {
+                                                "$ref": "#/components/schemas/ItemKind",
+                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                            }
+                                        ]
+                                    },
                                     "org_slug": {
                                         "type": "string"
                                     },
@@ -8553,7 +8785,7 @@
                                     },
                                     "type": {
                                         "type": "string",
-                                        "description": "Work-item kind tag: `task` | `habit` | `chore` | `event`."
+                                        "description": "Backward-compat alias of the kind tag under the legacy `type` key,\nretained for existing consumers. New readers should use `kind`."
                                     }
                                 }
                             }
@@ -8569,6 +8801,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -8750,6 +8989,12 @@
                                             }
                                         ]
                                     },
+                                    "rev": {
+                                        "type": "integer",
+                                        "format": "int64",
+                                        "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                                        "minimum": 0
+                                    },
                                     "series_id": {
                                         "type": [
                                             "string",
@@ -8777,6 +9022,14 @@
                                     },
                                     "title": {
                                         "type": "string"
+                                    },
+                                    "updated_at": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "date-time",
+                                        "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                                     }
                                 }
                             },
@@ -8787,6 +9040,17 @@
                                     "type"
                                 ],
                                 "properties": {
+                                    "kind": {
+                                        "oneOf": [
+                                            {
+                                                "type": "null"
+                                            },
+                                            {
+                                                "$ref": "#/components/schemas/ItemKind",
+                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                            }
+                                        ]
+                                    },
                                     "org_slug": {
                                         "type": "string"
                                     },
@@ -8806,7 +9070,7 @@
                                     },
                                     "type": {
                                         "type": "string",
-                                        "description": "Work-item kind tag: `task` | `habit` | `chore` | `event`."
+                                        "description": "Backward-compat alias of the kind tag under the legacy `type` key,\nretained for existing consumers. New readers should use `kind`."
                                     }
                                 }
                             }
@@ -8822,6 +9086,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -8994,6 +9265,12 @@
                                     "recurrence": {
                                         "$ref": "#/components/schemas/Recurrence"
                                     },
+                                    "rev": {
+                                        "type": "integer",
+                                        "format": "int64",
+                                        "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                                        "minimum": 0
+                                    },
                                     "series_id": {
                                         "type": "string",
                                         "format": "uuid"
@@ -9018,6 +9295,14 @@
                                     },
                                     "title": {
                                         "type": "string"
+                                    },
+                                    "updated_at": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "date-time",
+                                        "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                                     }
                                 }
                             },
@@ -9028,6 +9313,17 @@
                                     "type"
                                 ],
                                 "properties": {
+                                    "kind": {
+                                        "oneOf": [
+                                            {
+                                                "type": "null"
+                                            },
+                                            {
+                                                "$ref": "#/components/schemas/ItemKind",
+                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                            }
+                                        ]
+                                    },
                                     "org_slug": {
                                         "type": "string"
                                     },
@@ -9047,7 +9343,7 @@
                                     },
                                     "type": {
                                         "type": "string",
-                                        "description": "Work-item kind tag: `task` | `habit` | `chore` | `event`."
+                                        "description": "Backward-compat alias of the kind tag under the legacy `type` key,\nretained for existing consumers. New readers should use `kind`."
                                     }
                                 }
                             }
@@ -9063,6 +9359,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -9173,6 +9476,17 @@
                                     "type"
                                 ],
                                 "properties": {
+                                    "kind": {
+                                        "oneOf": [
+                                            {
+                                                "type": "null"
+                                            },
+                                            {
+                                                "$ref": "#/components/schemas/ItemKind",
+                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                            }
+                                        ]
+                                    },
                                     "org_slug": {
                                         "type": "string"
                                     },
@@ -9192,7 +9506,7 @@
                                     },
                                     "type": {
                                         "type": "string",
-                                        "description": "Work-item kind tag: `task` | `habit` | `chore` | `event`."
+                                        "description": "Backward-compat alias of the kind tag under the legacy `type` key,\nretained for existing consumers. New readers should use `kind`."
                                     }
                                 }
                             }
@@ -9208,6 +9522,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -9393,6 +9714,17 @@
                                         "format": "uuid",
                                         "description": "Set when this task is a subtask materialized from a recurring item's\noccurrence; `null` for ordinary tasks. Removed together with that\noccurrence."
                                     },
+                                    "onboarding_step": {
+                                        "oneOf": [
+                                            {
+                                                "type": "null"
+                                            },
+                                            {
+                                                "$ref": "#/components/schemas/OnboardingStep",
+                                                "description": "Onboarding-tutorial marker. `Some(step)` when this Task is a\nbackend-seeded onboarding task; `None` for all ordinary user tasks.\nPlaintext structural metadata (mirrors `external` / `occurrence_id`).\nTask-only \u2014 the other three item kinds never carry it."
+                                            }
+                                        ]
+                                    },
                                     "owner_org_id": {
                                         "type": "string",
                                         "format": "uuid",
@@ -9415,6 +9747,12 @@
                                         ],
                                         "format": "double"
                                     },
+                                    "rev": {
+                                        "type": "integer",
+                                        "format": "int64",
+                                        "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                                        "minimum": 0
+                                    },
                                     "series_id": {
                                         "type": [
                                             "string",
@@ -9436,6 +9774,14 @@
                                     },
                                     "title": {
                                         "type": "string"
+                                    },
+                                    "updated_at": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "date-time",
+                                        "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                                     }
                                 }
                             },
@@ -9446,6 +9792,17 @@
                                     "type"
                                 ],
                                 "properties": {
+                                    "kind": {
+                                        "oneOf": [
+                                            {
+                                                "type": "null"
+                                            },
+                                            {
+                                                "$ref": "#/components/schemas/ItemKind",
+                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                            }
+                                        ]
+                                    },
                                     "org_slug": {
                                         "type": "string"
                                     },
@@ -9465,7 +9822,7 @@
                                     },
                                     "type": {
                                         "type": "string",
-                                        "description": "Work-item kind tag: `task` | `habit` | `chore` | `event`."
+                                        "description": "Backward-compat alias of the kind tag under the legacy `type` key,\nretained for existing consumers. New readers should use `kind`."
                                     }
                                 }
                             }
@@ -9481,6 +9838,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -9591,6 +9955,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -9723,6 +10094,13 @@
                             }
                         ]
                     },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
                     "version": {
                         "type": "string"
                     }
@@ -9776,6 +10154,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -9846,6 +10231,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -10029,6 +10421,17 @@
                                 "format": "uuid",
                                 "description": "Set when this task is a subtask materialized from a recurring item's\noccurrence; `null` for ordinary tasks. Removed together with that\noccurrence."
                             },
+                            "onboarding_step": {
+                                "oneOf": [
+                                    {
+                                        "type": "null"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/OnboardingStep",
+                                        "description": "Onboarding-tutorial marker. `Some(step)` when this Task is a\nbackend-seeded onboarding task; `None` for all ordinary user tasks.\nPlaintext structural metadata (mirrors `external` / `occurrence_id`).\nTask-only \u2014 the other three item kinds never carry it."
+                                    }
+                                ]
+                            },
                             "owner_org_id": {
                                 "type": "string",
                                 "format": "uuid",
@@ -10051,6 +10454,12 @@
                                 ],
                                 "format": "double"
                             },
+                            "rev": {
+                                "type": "integer",
+                                "format": "int64",
+                                "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                                "minimum": 0
+                            },
                             "series_id": {
                                 "type": [
                                     "string",
@@ -10072,6 +10481,14 @@
                             },
                             "title": {
                                 "type": "string"
+                            },
+                            "updated_at": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "format": "date-time",
+                                "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                             }
                         }
                     },
@@ -10084,6 +10501,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -10151,6 +10575,13 @@
                             }
                         ]
                     },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
                     "version": {
                         "type": "string"
                     }
@@ -10214,6 +10645,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -10308,6 +10746,13 @@
                             }
                         ]
                     },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
                     "version": {
                         "type": "string"
                     }
@@ -10328,6 +10773,7 @@
                             "required": [
                                 "id",
                                 "task_id",
+                                "kind",
                                 "title",
                                 "start",
                                 "end",
@@ -10366,6 +10812,10 @@
                                 },
                                 "id": {
                                     "type": "string"
+                                },
+                                "kind": {
+                                    "$ref": "#/components/schemas/ItemKind",
+                                    "description": "The work-item kind this row projects: `task`, `habit`, `chore`, or\n`event` (Issue #311). Recurring firings carry their series\ndefinition's kind, so a client can route a kind-scoped occurrence\naction (`POST /habits/{id}/occurrences`,\n`PUT /chores/{id}/occurrences/{date}`,\n`POST /events/{id}/occurrences/{date}`) straight from the feed row\nwithout a client-side `series_id -> kind` index. A one-off dated\nTask is `task`; an external (e.g. Google Calendar) event is stored\nas an Event-kind item, so it is `event` \u2014 clients gate\nactionability on `source`, not `kind`."
                                 },
                                 "labels": {
                                     "type": "array",
@@ -10436,6 +10886,13 @@
                             }
                         ]
                     },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
                     "version": {
                         "type": "string"
                     }
@@ -10489,6 +10946,13 @@
                             }
                         ]
                     },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
                     "version": {
                         "type": "string"
                     }
@@ -10538,6 +11002,13 @@
                             }
                         ]
                     },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
                     "version": {
                         "type": "string"
                     }
@@ -10584,6 +11055,17 @@
                                         "type"
                                     ],
                                     "properties": {
+                                        "kind": {
+                                            "oneOf": [
+                                                {
+                                                    "type": "null"
+                                                },
+                                                {
+                                                    "$ref": "#/components/schemas/ItemKind",
+                                                    "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                                }
+                                            ]
+                                        },
                                         "org_slug": {
                                             "type": "string"
                                         },
@@ -10603,7 +11085,7 @@
                                         },
                                         "type": {
                                             "type": "string",
-                                            "description": "Work-item kind tag: `task` | `habit` | `chore` | `event`."
+                                            "description": "Backward-compat alias of the kind tag under the legacy `type` key,\nretained for existing consumers. New readers should use `kind`."
                                         }
                                     }
                                 }
@@ -10620,6 +11102,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -10662,6 +11151,17 @@
                                         "type"
                                     ],
                                     "properties": {
+                                        "kind": {
+                                            "oneOf": [
+                                                {
+                                                    "type": "null"
+                                                },
+                                                {
+                                                    "$ref": "#/components/schemas/ItemKind",
+                                                    "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                                }
+                                            ]
+                                        },
                                         "org_slug": {
                                             "type": "string"
                                         },
@@ -10681,7 +11181,7 @@
                                         },
                                         "type": {
                                             "type": "string",
-                                            "description": "Work-item kind tag: `task` | `habit` | `chore` | `event`."
+                                            "description": "Backward-compat alias of the kind tag under the legacy `type` key,\nretained for existing consumers. New readers should use `kind`."
                                         }
                                     }
                                 }
@@ -10698,6 +11198,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -10809,6 +11316,17 @@
                                         "type"
                                     ],
                                     "properties": {
+                                        "kind": {
+                                            "oneOf": [
+                                                {
+                                                    "type": "null"
+                                                },
+                                                {
+                                                    "$ref": "#/components/schemas/ItemKind",
+                                                    "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                                }
+                                            ]
+                                        },
                                         "org_slug": {
                                             "type": "string"
                                         },
@@ -10828,7 +11346,7 @@
                                         },
                                         "type": {
                                             "type": "string",
-                                            "description": "Work-item kind tag: `task` | `habit` | `chore` | `event`."
+                                            "description": "Backward-compat alias of the kind tag under the legacy `type` key,\nretained for existing consumers. New readers should use `kind`."
                                         }
                                     }
                                 }
@@ -10845,6 +11363,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -10925,6 +11450,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -11060,6 +11592,13 @@
                             }
                         ]
                     },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
                     "version": {
                         "type": "string"
                     }
@@ -11117,6 +11656,13 @@
                             }
                         ]
                     },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
                     "version": {
                         "type": "string"
                     }
@@ -11157,6 +11703,13 @@
                                 "$ref": "#/components/schemas/EnvelopeError"
                             }
                         ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
                     },
                     "version": {
                         "type": "string"
@@ -11346,6 +11899,12 @@
                             }
                         ]
                     },
+                    "rev": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                        "minimum": 0
+                    },
                     "series_id": {
                         "type": [
                             "string",
@@ -11373,6 +11932,14 @@
                     },
                     "title": {
                         "type": "string"
+                    },
+                    "updated_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time",
+                        "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                     }
                 }
             },
@@ -11681,6 +12248,12 @@
                     "recurrence": {
                         "$ref": "#/components/schemas/Recurrence"
                     },
+                    "rev": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                        "minimum": 0
+                    },
                     "series_id": {
                         "type": "string",
                         "format": "uuid"
@@ -11705,6 +12278,14 @@
                     },
                     "title": {
                         "type": "string"
+                    },
+                    "updated_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time",
+                        "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                     }
                 }
             },
@@ -12126,6 +12707,20 @@
                     "done_on_time",
                     "done_late",
                     "dropped"
+                ]
+            },
+            "OnboardingStep": {
+                "type": "string",
+                "description": "Stable identity of an onboarding-tutorial step.\n\nSerialized snake_case so the wire/JSON form is the stable step key the\nwebui trigger catalog is keyed on. The backend owns the step *copy*; the\nwebui owns the trigger map keyed by this step.",
+                "enum": [
+                    "tap_to_open",
+                    "long_press_done",
+                    "create_task",
+                    "create_habit",
+                    "create_chore",
+                    "create_event",
+                    "add_to_plan",
+                    "connect_google_calendar"
                 ]
             },
             "PinnedTaskResponse": {
@@ -12772,6 +13367,17 @@
                         "format": "uuid",
                         "description": "Set when this task is a subtask materialized from a recurring item's\noccurrence; `null` for ordinary tasks. Removed together with that\noccurrence."
                     },
+                    "onboarding_step": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/OnboardingStep",
+                                "description": "Onboarding-tutorial marker. `Some(step)` when this Task is a\nbackend-seeded onboarding task; `None` for all ordinary user tasks.\nPlaintext structural metadata (mirrors `external` / `occurrence_id`).\nTask-only \u2014 the other three item kinds never carry it."
+                            }
+                        ]
+                    },
                     "owner_org_id": {
                         "type": "string",
                         "format": "uuid",
@@ -12794,6 +13400,12 @@
                         ],
                         "format": "double"
                     },
+                    "rev": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Per-org monotonic revision; the ordering key for `?since=` delta pull.\n`0` for legacy rows (acquires a real value on next mutation).",
+                        "minimum": 0
+                    },
                     "series_id": {
                         "type": [
                             "string",
@@ -12815,6 +13427,14 @@
                     },
                     "title": {
                         "type": "string"
+                    },
+                    "updated_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time",
+                        "description": "Display-only \"last changed\" timestamp; falls back to `date_created`\nwhen `None`. NOT the cursor ordering key (that is `rev`)."
                     }
                 }
             },
