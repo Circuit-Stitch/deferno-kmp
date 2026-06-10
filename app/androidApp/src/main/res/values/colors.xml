@@ -1,0 +1,6 @@
+<resources>
+    <!-- Splash background: the warm near-black paper-2 the flame mark was designed on, so the
+         red/white flame and gold Circuit Stitch logo read with strong contrast. Shared by the
+         system-splash window background and the in-app Compose BrandSplash. -->
+    <color name="splash_background">#1F1B16</color>
+</resources>

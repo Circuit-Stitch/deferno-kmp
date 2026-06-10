@@ -1,20 +1,31 @@
 package com.circuitstitch.deferno
 
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.core.net.toUri
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import com.arkivanov.decompose.retainedComponent
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
@@ -26,6 +37,7 @@ import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.RootShell
 import java.util.Locale
 import kotlin.time.Clock
+import kotlinx.coroutines.delay
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 
@@ -38,6 +50,10 @@ import kotlinx.datetime.todayIn
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Suppress the Android 12+ cold-start circular icon mask (Theme.Deferno.Starting uses a
+        // transparent splash icon over the brand background) and hand the window back to Theme.Deferno
+        // for the first frame. The un-masked flame + Circuit Stitch logo are drawn by BrandSplash below.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         val app = application as DefernoApplication
@@ -119,22 +135,58 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        enableEdgeToEdge()
+        // Fully transparent system bars (transparent scrims) so the dark splash — and edge-to-edge app
+        // content — shows behind them instead of the bright nav-bar contrast scrim the auto default
+        // paints in light mode. Icon colours are driven per splash/theme state in setContent below.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+        )
         setContent {
             // Drive the theme from the Active Account's settings so Appearance changes apply LIVE
             // across the whole app (#72): the family selects the palette, and the mode resolves to a
             // dark boolean (Auto follows the OS). Before any account is active the StateFlow seeds the
             // default (Deferno / follow-system), so the Auth shell is themed too (ADR-0002/0014).
             val settings by root.themeSettings.collectAsState()
+            val darkTheme = settings.themeMode.resolveDark(isSystemInDarkTheme())
             DefernoTheme(
                 palette = when (settings.themeFamily) {
                     ThemeFamily.Deferno -> DefernoPalette.Deferno
                     ThemeFamily.Mono -> DefernoPalette.Mono
                 },
-                darkTheme = settings.themeMode.resolveDark(isSystemInDarkTheme()),
+                darkTheme = darkTheme,
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     RootShell(root)
+                }
+            }
+
+            // Brand launch splash (no circular mask): the flame centered with the Circuit Stitch mark
+            // at the bottom, drawn over the shell and faded out a beat after the first frame. Kept
+            // outside DefernoTheme so it shows the fixed brand identity before any Account theme is
+            // resolved, and continues the icon-less system splash seamlessly (same background).
+            var showSplash by remember { mutableStateOf(true) }
+            LaunchedEffect(Unit) {
+                delay(SPLASH_HOLD_MS)
+                showSplash = false
+            }
+            val splashAlpha by animateFloatAsState(
+                targetValue = if (showSplash) 1f else 0f,
+                animationSpec = tween(durationMillis = SPLASH_FADE_MS),
+                label = "splashFade",
+            )
+            if (splashAlpha > 0f) {
+                BrandSplash(Modifier.alpha(splashAlpha))
+            }
+
+            // System-bar icon colours: the dark splash needs light icons; once it's gone, follow the
+            // app theme. The bars are transparent (see enableEdgeToEdge), so there's no bright scrim —
+            // the dark splash, then the app content, shows through behind the status/nav icons.
+            val lightIcons = !showSplash && !darkTheme
+            LaunchedEffect(lightIcons) {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = lightIcons
+                    isAppearanceLightNavigationBars = lightIcons
                 }
             }
         }
@@ -161,6 +213,10 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val AUTH_REDIRECT_SCHEME = "com.circuitstitch.deferno"
+
+        /** Brand splash: hold after the first frame, then fade out (ms). */
+        const val SPLASH_HOLD_MS = 400L
+        const val SPLASH_FADE_MS = 200
     }
 }
 

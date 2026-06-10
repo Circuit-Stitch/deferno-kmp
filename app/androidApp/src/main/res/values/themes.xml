@@ -5,4 +5,17 @@
       no-action-bar window background for launch.
     -->
     <style name="Theme.Deferno" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!--
+      Cold-start launch theme (Android 12+ system splash via androidx core-splashscreen). The icon is
+      a transparent drawable and no icon-background colour is set, so the system splash shows only the
+      brand background with NO circular mask. installSplashScreen() in MainActivity hands the window
+      back to Theme.Deferno once the first frame is ready; the in-app Compose BrandSplash then draws
+      the (un-masked) flame + Circuit Stitch logo over the same background, so the handoff is seamless.
+    -->
+    <style name="Theme.Deferno.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
+        <item name="postSplashScreenTheme">@style/Theme.Deferno</item>
+    </style>
 </resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Intentionally empty/transparent. Used as the Android 12+ system-splash icon so the cold-start
+     splash shows only windowSplashScreenBackground (no circular icon mask). The branded flame +
+     Circuit Stitch logo are drawn by the in-app Compose BrandSplash, which has no circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="1"
+    android:viewportHeight="1">
+    <path android:fillColor="#00000000" android:pathData="M0,0h1v1h-1z" />
+</vector>
