@@ -17,7 +17,8 @@ import kotlinx.serialization.json.put
  * registries (e.g. [SharedPreferencesAccountRegistry]). A JSON array of `{id,label}` that preserves
  * insertion order, built with the kotlinx.serialization runtime only — no `@Serializable` / compiler
  * plugin (the same approach the outbox uses to render bodies). Holds only non-secret metadata
- * (ADR-0002): never tokens.
+ * (ADR-0002): never the token itself — `token_id` is the token's safe-to-return server id (ADR-0026),
+ * present for browser-minted accounts and omitted for pasted dev ones.
  *
  * Tolerant on read (ADR-0009 cache posture): malformed input, a non-array, or an entry with a blank
  * id decodes to a clean empty / skip rather than throwing — a corrupt roster degrades to "no
@@ -31,6 +32,7 @@ object AccountRosterCodec {
                 addJsonObject {
                     put("id", account.id.value)
                     put("label", account.label)
+                    account.tokenId?.let { put("token_id", it) }
                 }
             }
         }.toString()
@@ -48,7 +50,8 @@ object AccountRosterCodec {
             val obj = element as? JsonObject ?: return@mapNotNull null
             val id = obj["id"]?.jsonPrimitive?.content.orEmpty()
             val label = obj["label"]?.jsonPrimitive?.content.orEmpty()
-            if (id.isBlank()) null else Account(AccountId(id), label)
+            val tokenId = obj["token_id"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+            if (id.isBlank()) null else Account(AccountId(id), label, tokenId)
         }
     }
 }

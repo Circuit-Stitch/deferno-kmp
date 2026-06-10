@@ -30,4 +30,22 @@ class FakeAuthRemoteSource(var result: MeResult) : AuthRemoteSource {
         lastToken = token
         return candidateResult ?: result
     }
+
+    /** Records of the most recent [revokeToken] call (sign-out server revoke, ADR-0026). */
+    var revokeCalls: Int = 0
+        private set
+    var lastRevokedTokenId: String? = null
+        private set
+    var lastRevokedToken: String? = null
+        private set
+
+    /** Programmed outcome for [revokeToken]. */
+    var revokeResult: Boolean = true
+
+    override suspend fun revokeToken(tokenId: String, token: String): Boolean {
+        revokeCalls++
+        lastRevokedTokenId = tokenId
+        lastRevokedToken = token
+        return revokeResult
+    }
 }

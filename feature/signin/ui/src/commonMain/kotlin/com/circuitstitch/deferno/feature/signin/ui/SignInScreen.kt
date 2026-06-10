@@ -31,20 +31,29 @@ import com.circuitstitch.deferno.feature.signin.SignInError
 import com.circuitstitch.deferno.feature.signin.SignInState
 
 /**
- * The paste-PAT sign-in screen (#15, ADR-0023): the Auth-shell View that renders the shared
- * [SignInComponent]. The token field is masked with a reveal toggle (ADR-0009: don't expose secrets on
- * screen), and validation state / errors are surfaced inline. On success the component flips the Active
- * Account and the shell swaps this surface for the Main shell — there is nothing for the View to do.
+ * The sign-in screen (#15, ADR-0012/0026): the Auth-shell View that renders the shared [SignInComponent].
+ * The primary action is **Sign in** — the system-browser OAuth flow, so there is **no in-app credential
+ * field** by default (password + MFA + SSO happen in the browser). When [showDeveloperOptions] is set
+ * (debug builds), a "Use a token instead" affordance reveals the paste-PAT fallback (ADR-0023): a masked
+ * field with a reveal toggle (ADR-0009). On success the component flips the Active Account and the shell
+ * swaps this surface for Main — there is nothing for the View to do.
  *
  * Compose-Multiplatform commonMain: the same screen renders on Android and desktop.
  */
 @Composable
-fun SignInScreen(component: SignInComponent, modifier: Modifier = Modifier) {
+fun SignInScreen(
+    component: SignInComponent,
+    modifier: Modifier = Modifier,
+    showDeveloperOptions: Boolean = false,
+) {
     val state by component.state.collectAsState()
     SignInContent(
         state = state,
+        onSignInClick = component::onSignInClick,
+        onUseTokenInstead = component::onUseTokenInstead,
         onTokenChange = component::onTokenChange,
         onSubmit = component::onSubmit,
+        showDeveloperOptions = showDeveloperOptions,
         modifier = modifier,
     )
 }
@@ -53,8 +62,11 @@ fun SignInScreen(component: SignInComponent, modifier: Modifier = Modifier) {
 @Composable
 internal fun SignInContent(
     state: SignInState,
+    onSignInClick: () -> Unit,
+    onUseTokenInstead: () -> Unit,
     onTokenChange: (String) -> Unit,
     onSubmit: () -> Unit,
+    showDeveloperOptions: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier = modifier.fillMaxSize()) {
@@ -69,63 +81,105 @@ internal fun SignInContent(
             ) {
                 Text(text = "Deferno", style = MaterialTheme.typography.headlineMedium)
                 Text(
-                    text = "Sign in with a personal access token",
+                    text = "Sign in to your account",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 8.dp),
                 )
 
-                var revealed by remember { mutableStateOf(false) }
-                val error = state.error
-                val supporting: (@Composable () -> Unit)? =
-                    if (error != null) {
-                        { Text(text = errorMessage(error)) }
-                    } else {
-                        null
-                    }
-                OutlinedTextField(
-                    value = state.token,
-                    onValueChange = onTokenChange,
-                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-                    label = { Text(text = "Personal access token") },
-                    singleLine = true,
-                    enabled = !state.isValidating,
-                    isError = state.error != null,
-                    // A credential field: mask it, and keep the opaque PAT out of the IME's autocorrect /
-                    // learned-words / suggestion store (ADR-0009 — don't leak secrets).
-                    visualTransformation =
-                        if (revealed) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
-                        autoCorrectEnabled = false,
-                        keyboardType = KeyboardType.Password,
-                    ),
-                    trailingIcon = {
-                        TextButton(onClick = { revealed = !revealed }) {
-                            Text(text = if (revealed) "Hide" else "Show")
-                        }
-                    },
-                    supportingText = supporting,
-                )
-
                 Button(
-                    onClick = onSubmit,
-                    enabled = state.canSubmit,
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    onClick = onSignInClick,
+                    enabled = state.canStartBrowser,
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
                 ) {
-                    Text(text = if (state.isValidating) "Signing in…" else "Sign in")
+                    Text(text = if (state.isBusy) "Signing in…" else "Sign in")
                 }
-
                 Text(
-                    text = "Create a token in Deferno on the web: Settings → Tokens.",
+                    text = "A secure browser window opens to finish signing in.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 16.dp),
+                    modifier = Modifier.padding(top = 12.dp),
                 )
+
+                // Browser-path error (the paste path shows its error inline on the field instead).
+                val error = state.error
+                if (error != null && !state.showTokenEntry) {
+                    Text(
+                        text = errorMessage(error),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
+
+                if (showDeveloperOptions) {
+                    if (state.showTokenEntry) {
+                        TokenEntry(state = state, onTokenChange = onTokenChange, onSubmit = onSubmit)
+                    } else {
+                        TextButton(
+                            onClick = onUseTokenInstead,
+                            modifier = Modifier.padding(top = 8.dp),
+                        ) { Text(text = "Use a token instead") }
+                    }
+                }
             }
         }
     }
+}
+
+/** The developer paste-PAT fallback (ADR-0023): a masked token field + reveal toggle + submit. */
+@Composable
+private fun TokenEntry(state: SignInState, onTokenChange: (String) -> Unit, onSubmit: () -> Unit) {
+    var revealed by remember { mutableStateOf(false) }
+    val error = state.error
+    val supporting: (@Composable () -> Unit)? =
+        if (error != null) {
+            { Text(text = errorMessage(error)) }
+        } else {
+            null
+        }
+    OutlinedTextField(
+        value = state.token,
+        onValueChange = onTokenChange,
+        modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+        label = { Text(text = "Personal access token") },
+        singleLine = true,
+        enabled = !state.isBusy,
+        isError = state.error != null,
+        // A credential field: mask it, and keep the opaque PAT out of the IME's autocorrect /
+        // learned-words / suggestion store (ADR-0009 — don't leak secrets).
+        visualTransformation =
+            if (revealed) VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(
+            autoCorrectEnabled = false,
+            keyboardType = KeyboardType.Password,
+        ),
+        trailingIcon = {
+            TextButton(onClick = { revealed = !revealed }) {
+                Text(text = if (revealed) "Hide" else "Show")
+            }
+        },
+        supportingText = supporting,
+    )
+
+    Button(
+        onClick = onSubmit,
+        enabled = state.canSubmitToken,
+        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+    ) {
+        Text(text = if (state.isBusy) "Signing in…" else "Sign in with token")
+    }
+
+    Text(
+        text = "Create a token in Deferno on the web: Settings → Tokens.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(top = 16.dp),
+    )
 }
 
 private fun errorMessage(error: SignInError): String = when (error) {

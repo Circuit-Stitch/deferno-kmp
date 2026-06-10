@@ -21,60 +21,103 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * The desktop render test for the sign-in screen (#15, cf. feature:profile:ui) — a Compose-Multiplatform
- * UI test on the JVM-fast path (no device) driving [SignInScreen] over a fake [SignInComponent]. It
- * covers the masked-field reveal toggle (ADR-0009), the submit-enablement gate, the inline error, and
- * the submit wiring. The sign-in state machine itself is unit-tested in feature:signin.
+ * The desktop render test for the sign-in screen (#15, ADR-0012/0026) — a Compose-Multiplatform UI test
+ * on the JVM-fast path (no device) driving [SignInScreen] over a fake [SignInComponent]. It covers the
+ * browser-first primary button + wiring, the in-flight label, the inline browser error, and — behind the
+ * developer flag — the paste fallback's reveal toggle (ADR-0009) and submit gate. The sign-in state
+ * machine itself is unit-tested in feature:signin.
  */
 @OptIn(ExperimentalTestApi::class)
 class SignInScreenTest {
 
     @Test
-    fun idle_showsTheTokenFieldAndADisabledSignInButton() = runComposeUiTest {
+    fun idle_showsTheBrowserSignInButton_andNoCredentialField() = runComposeUiTest {
         setContent { Themed { SignInScreen(FakeSignInComponent(SignInState())) } }
 
-        onNodeWithText("Personal access token").assertExists()
-        // Blank token → the button is present but disabled.
-        onNodeWithText("Sign in").assertIsNotEnabled()
+        onNodeWithText("Sign in").assertIsEnabled()
+        // No in-app credential field by default (ADR-0012/0026): password lives in the browser.
+        onNodeWithText("Personal access token").assertDoesNotExist()
     }
 
     @Test
-    fun aNonBlankToken_enablesSignIn_andClickingItSubmits() = runComposeUiTest {
-        val fake = FakeSignInComponent(SignInState(token = "pat-123"))
+    fun clickingSignIn_startsTheBrowserFlow() = runComposeUiTest {
+        val fake = FakeSignInComponent(SignInState())
         setContent { Themed { SignInScreen(fake) } }
 
-        onNodeWithText("Sign in").assertIsEnabled()
         onNodeWithText("Sign in").performClick()
+        assertEquals(1, fake.signInClicks)
+    }
+
+    @Test
+    fun busy_showsTheInFlightLabel() = runComposeUiTest {
+        setContent { Themed { SignInScreen(FakeSignInComponent(SignInState(isBusy = true))) } }
+
+        onNodeWithText("Signing in…").assertExists()
+    }
+
+    @Test
+    fun unavailableError_rendersInline() = runComposeUiTest {
+        val state = SignInState(error = SignInError.Unavailable)
+        setContent { Themed { SignInScreen(FakeSignInComponent(state)) } }
+
+        onNodeWithText("Couldn’t reach Deferno", substring = true).assertExists()
+    }
+
+    // --- developer paste fallback (only when showDeveloperOptions) ---
+
+    @Test
+    fun developerOptionsHidden_doesNotOfferTheTokenAffordance() = runComposeUiTest {
+        setContent { Themed { SignInScreen(FakeSignInComponent(SignInState()), showDeveloperOptions = false) } }
+
+        onNodeWithText("Use a token instead").assertDoesNotExist()
+    }
+
+    @Test
+    fun useTokenInstead_isOfferedAndWired_whenDeveloperOptionsShown() = runComposeUiTest {
+        val fake = FakeSignInComponent(SignInState())
+        setContent { Themed { SignInScreen(fake, showDeveloperOptions = true) } }
+
+        onNodeWithText("Use a token instead").performClick()
+        assertEquals(1, fake.useTokenCount)
+    }
+
+    @Test
+    fun tokenEntry_revealsFieldAndSubmits() = runComposeUiTest {
+        val fake = FakeSignInComponent(SignInState(showTokenEntry = true, token = "pat-123"))
+        setContent { Themed { SignInScreen(fake, showDeveloperOptions = true) } }
+
+        onNodeWithText("Personal access token").assertExists()
+        onNodeWithText("Sign in with token").assertIsEnabled()
+        onNodeWithText("Sign in with token").performClick()
         assertEquals(1, fake.submitCount)
     }
 
     @Test
-    fun revealToggle_defaultsToMasked_andRoundTrips() = runComposeUiTest {
-        setContent { Themed { SignInScreen(FakeSignInComponent(SignInState(token = "secret"))) } }
+    fun tokenEntry_blankToken_disablesSubmit() = runComposeUiTest {
+        setContent { Themed { SignInScreen(FakeSignInComponent(SignInState(showTokenEntry = true)), showDeveloperOptions = true) } }
 
-        // Default is masked: the toggle offers "Show", not "Hide" (ADR-0009 — secret hidden by default).
+        onNodeWithText("Sign in with token").assertIsNotEnabled()
+    }
+
+    @Test
+    fun tokenEntry_revealToggle_defaultsToMasked_andRoundTrips() = runComposeUiTest {
+        val state = SignInState(showTokenEntry = true, token = "secret")
+        setContent { Themed { SignInScreen(FakeSignInComponent(state), showDeveloperOptions = true) } }
+
+        // Masked by default: the toggle offers "Show", not "Hide" (ADR-0009).
         onNodeWithText("Hide").assertDoesNotExist()
         onNodeWithText("Show").performClick()
         onNodeWithText("Hide").assertExists()
-        // Toggling back re-masks.
         onNodeWithText("Hide").performClick()
         onNodeWithText("Show").assertExists()
     }
 
     @Test
-    fun invalidToken_rendersTheInlineError() = runComposeUiTest {
-        val state = SignInState(token = "bad", error = SignInError.InvalidToken)
-        setContent { Themed { SignInScreen(FakeSignInComponent(state)) } }
+    fun tokenEntry_invalidToken_rendersTheInlineError() = runComposeUiTest {
+        val state = SignInState(showTokenEntry = true, token = "bad", error = SignInError.InvalidToken)
+        setContent { Themed { SignInScreen(FakeSignInComponent(state), showDeveloperOptions = true) } }
 
         onNodeWithText("That token", substring = true).assertExists()
-    }
-
-    @Test
-    fun validating_showsTheInFlightLabel() = runComposeUiTest {
-        val state = SignInState(token = "pat", isValidating = true)
-        setContent { Themed { SignInScreen(FakeSignInComponent(state)) } }
-
-        onNodeWithText("Signing in…").assertExists()
     }
 }
 
@@ -85,13 +128,26 @@ private fun Themed(content: @Composable () -> Unit) {
     }
 }
 
-/** A fixed-state [SignInComponent] double — records submit / token edits without a service or DI graph. */
+/** A fixed-state [SignInComponent] double — records actions without a service or DI graph. */
 private class FakeSignInComponent(initial: SignInState) : SignInComponent {
     private val _state = MutableStateFlow(initial)
     override val state: StateFlow<SignInState> = _state
 
+    var signInClicks = 0
+        private set
+    var useTokenCount = 0
+        private set
     var submitCount = 0
         private set
+
+    override fun onSignInClick() {
+        signInClicks++
+    }
+
+    override fun onUseTokenInstead() {
+        useTokenCount++
+        _state.value = _state.value.copy(showTokenEntry = true)
+    }
 
     override fun onTokenChange(token: String) {
         _state.value = _state.value.copy(token = token, error = null)

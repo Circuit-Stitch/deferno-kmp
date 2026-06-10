@@ -27,3 +27,9 @@ secure storage (ADR-0009), **per-device naming** for granular revocation (alread
 client's PAT settings, and exposed in-client via `GET/POST/PATCH/DELETE /auth/tokens`), and
 revoke-on-removal. This makes in-app PKCE (#15) a pure *no-paste minting UX* and keeps it off the
 Phase-1 critical path (blocked only by Deferno#299). See `CONTEXT.md` → **Personal access token (PAT)**.
+
+**Update (2026-06-10, Deferno#299 landed).** The system-browser bootstrap is now implemented as a
+full **Authorization Code + PKCE** flow (`/auth/native/{register,authorize,token}`) that mints the PAT —
+see **ADR-0026**, which supersedes the open question of *how* the bootstrap yields a credential. The
+revoke-on-removal posited here is now real for browser-minted tokens: the token id is known at mint
+time, stored on `Account.tokenId`, and `DELETE /auth/tokens/{id}` fires on sign-out.

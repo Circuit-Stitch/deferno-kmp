@@ -349,10 +349,12 @@ class RootComponentTest {
 }
 
 /**
- * A [SignInService] double whose [signIn] runs [onSignIn] and returns its result — lets the Auth-shell
- * test drive a valid pasted token through to an established Account without a real `/auth/me` call.
+ * A [SignInService] double whose [signIn] / [signInWithBrowser] both run [onSignIn] and return its
+ * result — lets the Auth-shell test drive a sign-in through to an established Account without a real
+ * `/auth/me` call or browser leg.
  */
 private class FakeSignInService(private val onSignIn: () -> SignInResult) : SignInService {
+    override suspend fun signInWithBrowser(): SignInResult = onSignIn()
     override suspend fun signIn(token: String): SignInResult = onSignIn()
 }
 

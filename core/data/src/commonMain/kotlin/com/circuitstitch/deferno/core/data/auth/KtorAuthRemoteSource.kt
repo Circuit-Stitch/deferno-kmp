@@ -8,8 +8,12 @@ import com.circuitstitch.deferno.core.network.requestApi
 import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.delete
 import io.ktor.client.request.url
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.appendPathSegments
+import io.ktor.http.isSuccess
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The production [AuthRemoteSource] over the shared Deferno [HttpClient] (#20). It pulls
@@ -33,6 +37,23 @@ class KtorAuthRemoteSource(
     // The candidate-token sign-in validation (#15, ADR-0023): set Authorization explicitly so the
     // bearer plugin leaves it alone — the pasted PAT is verified before any Account holds it.
     override suspend fun fetchMe(token: String): MeResult = requestMe { bearerAuth(token) }
+
+    // Revoke bypasses `requestApi` deliberately: a 204 No Content has no envelope to unwrap (the
+    // version-probe would treat the empty body as malformed). The token being revoked is sent as an
+    // explicit bearer so the plugin leaves it untouched (it authenticates the very token it deletes).
+    override suspend fun revokeToken(tokenId: String, token: String): Boolean = try {
+        val response = client.delete {
+            url { appendPathSegments("auth", "tokens", tokenId) }
+            bearerAuth(token)
+        }
+        // 204 (revoked) or 200; a 404 (already gone) is effectively success but we report it as
+        // unrevoked — the caller only logs the outcome, never blocks on it.
+        response.status.isSuccess() || response.status == HttpStatusCode.NoContent
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        false // offline / transport — best-effort, local wipe still proceeds (ADR-0026)
+    }
 
     private suspend fun requestMe(configure: HttpRequestBuilder.() -> Unit): MeResult {
         val result = client.requestApi<AuthenticatedUserDto> {

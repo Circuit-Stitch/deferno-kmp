@@ -22,10 +22,20 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.Deferno">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- OAuth redirect capture (#15, ADR-0026): the system browser returns to the app at
+                 com.circuitstitch.deferno://auth after sign-in; onNewIntent forwards it to the
+                 AuthRedirectInbox the in-flight BrowserAuthenticator awaits. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.circuitstitch.deferno" android:host="auth" />
             </intent-filter>
         </activity>
     </application>
