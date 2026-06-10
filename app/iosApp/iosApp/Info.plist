@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- Merged into the generated Info.plist (GENERATE_INFOPLIST_FILE stays YES; explicit keys win).
+     Holds only what the INFOPLIST_KEY_* build settings can't express: the custom URL scheme the
+     OAuth redirect re-enters the app on (ADR-0026) — IosBrowserAuthenticator's fixed
+     `com.circuitstitch.deferno://auth` redirect URI, forwarded by DefernoApp.onOpenURL. -->
+<dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.circuitstitch.deferno.auth-redirect</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.circuitstitch.deferno</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
