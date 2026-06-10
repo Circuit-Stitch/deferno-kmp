@@ -3,8 +3,8 @@ import SwiftUI
 
 /// The app root — the SwiftUI twin of Android's `RootShell` + `DefernoTheme` (ADR-0013/0017). It
 /// observes the shared `RootComponent`'s two-state Auth↔Main stack and the app-wide theme settings,
-/// applies the live brand theme, and renders the **Auth shell** (paste-PAT sign-in) or the **Main
-/// shell**. The Active Account drives the swap reactively — a successful sign-in flips it and the
+/// applies the live brand theme, and renders the **Auth shell** (browser-OAuth sign-in, ADR-0026) or
+/// the **Main shell**. The Active Account drives the swap reactively — a successful sign-in flips it and the
 /// surface changes out from under the sign-in screen (there is no success callback to wire).
 struct RootView: View {
     let root: RootComponent

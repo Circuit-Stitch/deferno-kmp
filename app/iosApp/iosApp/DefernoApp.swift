@@ -13,6 +13,12 @@ struct DefernoApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(root: host.root)
+                // The OAuth redirect hand-off (ADR-0026, #137): Safari re-enters the app on the
+                // registered `com.circuitstitch.deferno` scheme (CFBundleURLTypes, Info.plist); the
+                // shared inbox routes it to the in-flight browser sign-in. Non-auth URLs are ignored.
+                .onOpenURL { url in
+                    host.forwardAuthRedirect(url: url.absoluteString)
+                }
         }
     }
 }
