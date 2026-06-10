@@ -2,7 +2,7 @@ package com.circuitstitch.deferno.core.data
 
 import com.circuitstitch.deferno.core.data.account.AccountDataStore
 import com.circuitstitch.deferno.core.data.account.AccountRegistry
-import com.circuitstitch.deferno.core.data.account.InMemoryAccountRegistry
+import com.circuitstitch.deferno.core.data.account.FileAccountRegistry
 import com.circuitstitch.deferno.core.data.account.NoOpAccountDataStore
 import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
@@ -15,16 +15,16 @@ import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
 /**
- * iOS AppScope actuals (ADR-0014): an in-memory roster (a persistent Keychain/file-backed registry is
- * a follow-up) and the no-op data store. iOS per-Account isolation is enforced by the per-Account
- * encrypted DB file + Keychain key (the [com.circuitstitch.deferno.core.database] iOS driver), not a
- * separate sidecar wipe.
+ * iOS AppScope actuals (ADR-0014): the persistent file-backed roster (backup-excluded, the
+ * SharedPreferences twin — sign-in survives relaunch) and the no-op data store. iOS per-Account
+ * isolation is enforced by the per-Account encrypted DB file + Keychain key (the
+ * [com.circuitstitch.deferno.core.database] iOS driver), not a separate sidecar wipe.
  */
 @ContributesTo(AppScope::class)
 interface IosDataBindings {
     @Provides
     @SingleIn(AppScope::class)
-    fun accountRegistry(): AccountRegistry = InMemoryAccountRegistry()
+    fun accountRegistry(): AccountRegistry = FileAccountRegistry()
 
     @Provides
     @SingleIn(AppScope::class)

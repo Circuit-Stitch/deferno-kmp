@@ -6,8 +6,10 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -26,16 +28,15 @@ import kotlinx.serialization.json.put
  */
 object AccountRosterCodec {
 
-    fun encode(accounts: List<Account>): String =
-        buildJsonArray {
-            accounts.forEach { account ->
-                addJsonObject {
-                    put("id", account.id.value)
-                    put("label", account.label)
-                    account.tokenId?.let { put("token_id", it) }
-                }
-            }
-        }.toString()
+    /**
+     * The roster plus the active selection as one document, for single-file registries (e.g. the
+     * iOS `FileAccountRegistry`) whose store has no second slot for the active id the way
+     * SharedPreferences does. The codec stays dumb storage: [activeId] is not validated against
+     * [accounts] — the [AccountManager] coerces a dangling active id to "none" on load.
+     */
+    data class Document(val accounts: List<Account>, val activeId: AccountId?)
+
+    fun encode(accounts: List<Account>): String = rosterArray(accounts).toString()
 
     fun decode(serialized: String?): List<Account> {
         if (serialized.isNullOrBlank()) return emptyList()
@@ -46,12 +47,47 @@ object AccountRosterCodec {
         } catch (e: IllegalArgumentException) {
             return emptyList() // valid JSON but not an array
         }
-        return array.mapNotNull { element ->
+        return accountsOf(array)
+    }
+
+    /** Encode the roster + active selection as a `{"active": …, "roster": […]}` object ([Document]). */
+    fun encodeDocument(accounts: List<Account>, activeId: AccountId?): String =
+        buildJsonObject {
+            activeId?.let { put("active", it.value) }
+            put("roster", rosterArray(accounts))
+        }.toString()
+
+    /** Decode a [Document]; anything malformed degrades to an empty document (ADR-0009 posture). */
+    fun decodeDocument(serialized: String?): Document {
+        if (serialized.isNullOrBlank()) return Document(emptyList(), null)
+        val obj: JsonObject = try {
+            Json.parseToJsonElement(serialized) as? JsonObject ?: return Document(emptyList(), null)
+        } catch (e: SerializationException) {
+            return Document(emptyList(), null)
+        }
+        val accounts = (obj["roster"] as? JsonArray)?.let(::accountsOf).orEmpty()
+        val activeId = (obj["active"] as? JsonPrimitive)?.content
+            ?.takeIf { it.isNotBlank() }?.let(::AccountId)
+        return Document(accounts, activeId)
+    }
+
+    private fun rosterArray(accounts: List<Account>): JsonArray =
+        buildJsonArray {
+            accounts.forEach { account ->
+                addJsonObject {
+                    put("id", account.id.value)
+                    put("label", account.label)
+                    account.tokenId?.let { put("token_id", it) }
+                }
+            }
+        }
+
+    private fun accountsOf(array: JsonArray): List<Account> =
+        array.mapNotNull { element ->
             val obj = element as? JsonObject ?: return@mapNotNull null
             val id = obj["id"]?.jsonPrimitive?.content.orEmpty()
             val label = obj["label"]?.jsonPrimitive?.content.orEmpty()
             val tokenId = obj["token_id"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
             if (id.isBlank()) null else Account(AccountId(id), label, tokenId)
         }
-    }
 }
