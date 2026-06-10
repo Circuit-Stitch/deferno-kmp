@@ -1,0 +1,122 @@
+# iOS build CI (ADR-0006, the deliberate macOS follow-up flagged in ci.yml). The shared KMP core's
+# JVM-fast tests + coverage gate run on Linux in ci.yml; iOS *linking* and the SwiftUI app can only be
+# built on macOS (Kotlin/Native links the static `Deferno.framework`, then Xcode compiles the SwiftUI
+# layer + links it). This job builds that whole chain on a GitHub macOS runner: it integrates the
+# SQLCipher CocoaPod (ADR-0009 — the per-Account DB is encrypted at rest; the pod supplies the
+# `sqlite3_*` symbols the framework references *plus* `PRAGMA key`), drives the Gradle framework build
+# via the project's Run Script phase, and compiles + links the app for the iOS Simulator.
+#
+# Runner: macos-14 (Apple Silicon) — GitHub's current, long-lived macOS image (macos-13 Intel is being
+# retired). It ships Ruby 3 + CocoaPods preinstalled, so the local Ruby dance (this repo's dev machine is
+# an old Intel Mac) is a non-issue here. The arm64 simulator uses the `iosSimulatorArm64` framework slice.
+name: iOS
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & test iOS app (framework + SwiftUI, SQLCipher)
+    runs-on: macos-14
+    # Generous for the cold-cache first run: the Gradle Run Script downloads the Kotlin/Native compiler
+    # + konan deps (~1 GB) before linking. setup-gradle caches the Gradle home, so warm runs are faster.
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        # submodules: recursive — Gradle configures every module for any task (no configure-on-demand),
+        # so :speech-whisper-jni's build script (it points at the vendored third_party/whisper.cpp) must
+        # have its submodule present even though the iOS framework never executes that native build.
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      # Temurin 17 is the toolchain the build pins (ProjectConfig.JVM_TOOLCHAIN /
+      # gradle-daemon-jvm.properties). The Gradle run inside the Xcode Run Script phase (below) uses it
+      # as the daemon + project toolchain, so Foojay does not download a second JDK.
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      # Configuring the whole build touches the Android modules + :speech-whisper-jni (which declares
+      # ndkVersion = ProjectConfig.NDK_VERSION + an externalNativeBuild). The macOS runner preinstalls
+      # the Android SDK but not this exact NDK; install it + accept licences so full-project
+      # configuration — which the iOS framework task triggers — succeeds. Keep in lockstep with
+      # ProjectConfig.NDK_VERSION (and with ci.yml's matching step).
+      - name: Install Android NDK + CMake for full-project configuration (#92)
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" "ndk;30.0.14904198" "cmake;3.22.1"
+
+      # Match the iOS 17 SDK the app is developed against (the dev machine is pinned to Xcode 15.2).
+      # Pick the newest Xcode 15.x on the image; fall back to the runner default if the image has
+      # dropped the 15.x line (a newer Xcode is a useful signal, and the deployment target is iOS 16).
+      - name: Select Xcode 15.x (match the iOS 17 SDK)
+        run: |
+          XC="$(ls -d /Applications/Xcode_15.*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC/Contents/Developer"; fi
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+      # CocoaPods is preinstalled on macos-14. Cache the CDN spec data + the integrated Pods so repeat
+      # runs skip the network. Keyed on the committed Podfile.lock (Pods/ itself is gitignored).
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cocoapods
+            app/iosApp/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('app/iosApp/Podfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-
+
+      - name: pod install (SQLCipher)
+        working-directory: app/iosApp
+        run: pod install
+
+      # The single command that exercises the whole stack: xcodebuild runs the project's Run Script
+      # phase first (./gradlew :app:iosApp:embedAndSignAppleFrameworkForXcode → the static
+      # Deferno.framework for this SDK/arch), then compiles the SwiftUI sources, links them against the
+      # framework + the SQLCipher pod, and runs the iosAppTests suite (#28) on the simulator — the real
+      # signal that the framework, the SKIE-free bridge, SQLCipher, and the tests all resolve and pass
+      # (#38). The Pods workspace (not the bare .xcodeproj) is required once a pod is integrated.
+      # CODE_SIGNING_ALLOWED=NO is fine here: the tests drive the in-memory DefernoDemo, which touches no
+      # Keychain (an unsigned iOS app can't use the Keychain — see app/iosApp/README.md), so they pass
+      # unsigned. iPhone 15 (iOS 17.x) ships on the macos-14 image alongside the Xcode 15.x selected above.
+      - name: Build & test (framework + app, iOS Simulator)
+        working-directory: app/iosApp
+        # GitHub's default shell is `bash -eo pipefail`, so an xcodebuild failure propagates through the
+        # formatter pipe. xcbeautify is preinstalled on macos-14; fall back to cat if a future image drops it.
+        run: |
+          if command -v xcbeautify >/dev/null 2>&1; then FMT=(xcbeautify --renderer github-actions); else FMT=(cat); fi
+          xcodebuild \
+            -workspace iosApp.xcworkspace \
+            -scheme iosApp \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO \
+            test | "${FMT[@]}"
+
+      - name: Upload xcodebuild logs on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-build-logs
+          path: app/iosApp/build/dd/Logs/**
+          if-no-files-found: warn

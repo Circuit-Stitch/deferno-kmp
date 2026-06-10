@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.data.auth
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Production [SignInService] (#15, ADR-0023): validate-then-commit over the [AuthRemoteSource]'s
@@ -27,8 +28,21 @@ class DefaultSignInService(
                     id = AccountId(user.id.value),
                     label = user.displayName.ifBlank { user.username },
                 )
-                accountManager.addAccount(account, token)
-                SignInResult.Success(account)
+                // Establishing the Account writes the verified token to the secure vault + provisions
+                // the per-Account store. If that local infrastructure throws (e.g. the Keychain/Keystore
+                // rejects the write — an unsigned iOS build has no Keychain entitlement, so SecItem*
+                // returns errSecMissingEntitlement), it is a transient *local* failure, not an invalid
+                // token: surface Unavailable so the View shows "try again" rather than letting the
+                // exception escape the sign-in coroutine and abort the app (ADR-0009/0023). Cancellation
+                // must still propagate so a torn-down component stops cleanly.
+                try {
+                    accountManager.addAccount(account, token)
+                    SignInResult.Success(account)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    SignInResult.Unavailable
+                }
             }
             // A 401 means the pasted PAT is invalid/expired; anything else is transient. Neither
             // creates an Account — only a verified token is stored (ADR-0023).
