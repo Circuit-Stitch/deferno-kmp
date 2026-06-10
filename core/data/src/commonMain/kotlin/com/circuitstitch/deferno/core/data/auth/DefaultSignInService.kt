@@ -58,12 +58,9 @@ class DefaultSignInService(
             is AuthRedirect.Failed -> return SignInResult.Unavailable
         }
 
-        // 4. Validate the callback: an `error` param, a mismatched `state` (CSRF), or a missing `code`
-        //    are all aborts — never proceed to exchange (a tampered state must not mint a token).
-        val callback = Url(received.callbackUri)
-        val code = callback.parameters["code"]
-        if (callback.parameters["error"] != null) return SignInResult.Unavailable
-        if (callback.parameters["state"] != state || code.isNullOrBlank()) return SignInResult.Unavailable
+        // 4. Validate the callback and read the one-time code — an `error` param, a mismatched `state`
+        //    (CSRF), or a missing code all abort before exchange (a tampered redirect must not mint).
+        val code = authCode(received.callbackUri, expectedState = state) ?: return SignInResult.Unavailable
 
         // 5. Exchange the one-time code (proving the PKCE verifier) for a minted PAT.
         val minted = when (
@@ -99,6 +96,19 @@ class DefaultSignInService(
             MeResult.Unauthorized -> SignInResult.InvalidToken
             MeResult.Unavailable -> SignInResult.Unavailable
         }
+
+    /**
+     * Reads the one-time authorization `code` from a captured redirect [callbackUri], or `null` if the
+     * callback must **not** proceed to the token exchange: an `error` param, a `state` that doesn't match
+     * [expectedState] (CSRF), or a missing/blank `code`. Pure and side-effect-free, so the redirect-
+     * validation policy is unit-testable in isolation from the whole browser orchestration.
+     */
+    private fun authCode(callbackUri: String, expectedState: String): String? {
+        val params = Url(callbackUri).parameters
+        if (params["error"] != null) return null
+        if (params["state"] != expectedState) return null
+        return params["code"]?.takeUnless { it.isBlank() }
+    }
 
     /**
      * Establishes the Account from a verified [user] + its [token] (and optional server-side [tokenId]):

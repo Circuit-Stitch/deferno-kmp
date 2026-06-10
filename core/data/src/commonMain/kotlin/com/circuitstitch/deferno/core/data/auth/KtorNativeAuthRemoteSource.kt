@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.network.dto.ClientRegistrationRequest
 import com.circuitstitch.deferno.core.network.dto.ClientRegistrationResponse
 import com.circuitstitch.deferno.core.network.dto.CreateApiTokenResponseDto
 import com.circuitstitch.deferno.core.network.dto.NativeTokenRequest
+import com.circuitstitch.deferno.core.network.map
 import com.circuitstitch.deferno.core.network.requestApi
 import io.ktor.client.HttpClient
 import io.ktor.client.request.setBody
@@ -33,7 +34,7 @@ class KtorNativeAuthRemoteSource(
             url { appendPathSegments("auth", "native", "register") }
             contentType(ContentType.Application.Json)
             setBody(ClientRegistrationRequest(redirectUris = listOf(redirectUri), clientName = clientName))
-        }.mapData { ClientRegistration(it.clientId) }
+        }.map { ClientRegistration(it.clientId) }
 
     override fun authorizeUrl(
         clientId: String,
@@ -70,11 +71,5 @@ class KtorNativeAuthRemoteSource(
                     name = deviceName,
                 ),
             )
-        }.mapData { MintedToken(token = it.token, tokenId = it.id) }
-}
-
-/** Maps an [ApiResult] success payload through [transform], leaving a failure untouched. */
-private inline fun <T, R> ApiResult<T>.mapData(transform: (T) -> R): ApiResult<R> = when (this) {
-    is ApiResult.Success -> ApiResult.Success(transform(data))
-    is ApiResult.Failure -> ApiResult.Failure(error)
+        }.map { MintedToken(token = it.token, tokenId = it.id) }
 }

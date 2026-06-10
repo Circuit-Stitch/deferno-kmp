@@ -35,21 +35,7 @@ class DefaultSignInComponent(
     private val _state = MutableStateFlow(SignInState())
     override val state: StateFlow<SignInState> = _state.asStateFlow()
 
-    override fun onSignInClick() {
-        if (!beginBusy()) return
-        scope.launch {
-            val error = when (signInService.signInWithBrowser()) {
-                // Success flips the Active Account; the shell replaces this surface (ADR-0013).
-                is SignInResult.Success -> null
-                // The user backed out of the browser — not an error, just return to idle.
-                SignInResult.Cancelled -> null
-                // InvalidToken can't arise on the browser path (the token is freshly minted); fold it
-                // into the transient bucket defensively.
-                SignInResult.InvalidToken, SignInResult.Unavailable -> SignInError.Unavailable
-            }
-            _state.update { it.copy(isBusy = false, error = error) }
-        }
-    }
+    override fun onSignInClick() = launchSignIn { signInService.signInWithBrowser().toBrowserError() }
 
     override fun onUseTokenInstead() {
         _state.update { it.copy(showTokenEntry = true, error = null) }
@@ -62,16 +48,34 @@ class DefaultSignInComponent(
     override fun onSubmit() {
         val token = _state.value.token.trim()
         if (token.isEmpty()) return
+        launchSignIn { signInService.signIn(token).toPasteError() }
+    }
+
+    /**
+     * The shared launch path for both sign-in surfaces: flip the in-flight flag (so a second tap is
+     * dropped), run [attempt] on [scope], then settle `isBusy = false` with whatever [SignInError] it
+     * mapped to (`null` = success or browser-cancel; on success the shell swaps this surface away,
+     * ADR-0013). A no-op if a flow is already running.
+     */
+    private fun launchSignIn(attempt: suspend () -> SignInError?) {
         if (!beginBusy()) return
         scope.launch {
-            val error = when (signInService.signIn(token)) {
-                is SignInResult.Success -> null
-                SignInResult.InvalidToken -> SignInError.InvalidToken
-                SignInResult.Cancelled -> null
-                SignInResult.Unavailable -> SignInError.Unavailable
-            }
+            val error = attempt()
             _state.update { it.copy(isBusy = false, error = error) }
         }
+    }
+
+    // InvalidToken can't arise on the browser path (the token is freshly minted) — fold it into the
+    // transient bucket defensively. Success / Cancelled (the user backed out) settle to idle, no error.
+    private fun SignInResult.toBrowserError(): SignInError? = when (this) {
+        is SignInResult.Success, SignInResult.Cancelled -> null
+        SignInResult.InvalidToken, SignInResult.Unavailable -> SignInError.Unavailable
+    }
+
+    private fun SignInResult.toPasteError(): SignInError? = when (this) {
+        is SignInResult.Success, SignInResult.Cancelled -> null
+        SignInResult.InvalidToken -> SignInError.InvalidToken
+        SignInResult.Unavailable -> SignInError.Unavailable
     }
 
     /**

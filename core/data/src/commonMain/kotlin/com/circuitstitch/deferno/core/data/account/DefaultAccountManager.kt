@@ -48,23 +48,8 @@ class DefaultAccountManager(
     }
 
     override suspend fun removeAccount(id: AccountId) {
-        // Best-effort server-side revoke for accounts whose token id we know (browser-minted, ADR-0026),
-        // BEFORE the local wipe — so the credential dies on the server, not just on the device. Pasted /
-        // dev accounts carry no token id → local-wipe-only (their shared dev PAT must NOT be revoked).
-        // A revoke failure (offline, already-revoked) must never block sign-out, so it is swallowed.
-        val tokenId = registry.all().firstOrNull { it.id == id }?.tokenId
-        if (tokenId != null) {
-            val token = vault.getBearerToken(id)
-            if (token != null) {
-                try {
-                    authRemoteSource.value.revokeToken(tokenId, token)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Throwable) {
-                    // Swallow — local wipe still proceeds. (revokeToken itself is already best-effort.)
-                }
-            }
-        }
+        // Revoke the credential server-side before the local wipe (best-effort; never blocks sign-out).
+        revokeServerSide(id)
 
         // Secure-wipe data + token before deregistering, so a crash cannot orphan secrets (ADR-0009).
         dataStore.wipe(id)
@@ -76,6 +61,24 @@ class DefaultAccountManager(
             registry.setActive(registry.all().firstOrNull()?.id)
         }
         syncFromRegistry()
+    }
+
+    /**
+     * Best-effort server-side token revoke for accounts whose token id we know (browser-minted,
+     * ADR-0026) — so the credential dies on the server, not just on the device. Pasted / dev accounts
+     * carry no token id → skipped (their shared dev PAT must NOT be revoked). A revoke failure (offline,
+     * already-revoked) is swallowed: sign-out must never block on it (revokeToken is itself best-effort).
+     */
+    private suspend fun revokeServerSide(id: AccountId) {
+        val tokenId = registry.all().firstOrNull { it.id == id }?.tokenId ?: return
+        val token = vault.getBearerToken(id) ?: return
+        try {
+            authRemoteSource.value.revokeToken(tokenId, token)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // Swallow — local wipe still proceeds.
+        }
     }
 
     override suspend fun switchTo(id: AccountId) {

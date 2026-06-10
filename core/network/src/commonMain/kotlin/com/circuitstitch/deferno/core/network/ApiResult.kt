@@ -12,6 +12,17 @@ sealed interface ApiResult<out T> {
 }
 
 /**
+ * Maps a [ApiResult.Success] payload through [transform], leaving a [ApiResult.Failure] untouched. The
+ * canonical adapter for turning a `requestApi<Dto>` result into a domain type at a remote-source
+ * boundary without an exhaustive `when` per call site. [ApiResult.Failure] is `ApiResult<Nothing>`, so a
+ * failure passes through unchanged — no re-wrap or re-allocation.
+ */
+inline fun <T, R> ApiResult<T>.map(transform: (T) -> R): ApiResult<R> = when (this) {
+    is ApiResult.Success -> ApiResult.Success(transform(data))
+    is ApiResult.Failure -> this
+}
+
+/**
  * Why a call did not yield a payload (issue #17). Four disjoint shapes:
  *
  * - [Endpoint] — the server returned a structured [ErrorEnvelope] (a body was present and
