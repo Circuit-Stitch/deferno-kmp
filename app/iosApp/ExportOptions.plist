@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Export options for `xcodebuild -exportArchive`, used by .github/workflows/testflight.yml.
+
+  destination = upload          → exportArchive signs the .xcarchive and uploads it straight to
+                                  App Store Connect in one step (no separate altool/Transporter call).
+  method      = app-store-connect → the TestFlight / App Store distribution pipeline (Xcode 16+ name;
+                                  the pre-16 alias was `app-store`).
+  signingStyle = automatic + the workflow's `-allowProvisioningUpdates` + the App Store Connect API key
+                                  → Xcode creates/reuses the Apple Distribution cert and the App Store
+                                  provisioning profile in the cloud. No certs or .mobileprovision in git.
+  teamID      = GDV76FJJZ5       → Kyle Falconer's paid Apple Developer Program team (the only one with
+                                  an Apple Distribution authority for com.circuitstitch.deferno).
+  manageAppVersionAndBuildNumber = false → keep the CFBundleVersion the workflow stamps from the run
+                                  number (CURRENT_PROJECT_VERSION); don't let Xcode auto-bump it.
+  testFlightInternalTestingOnly = true → mark the build for internal testers only (App Store Connect
+                                  team members — i.e. you). Skips the external-tester Beta App Review
+                                  path. Flip to false (and re-upload) when you add external testers.
+  uploadSymbols = true          → ship dSYMs so TestFlight crash reports are symbolicated.
+-->
+<plist version="1.0">
+<dict>
+    <key>destination</key>
+    <string>upload</string>
+    <key>method</key>
+    <string>app-store-connect</string>
+    <key>teamID</key>
+    <string>GDV76FJJZ5</string>
+    <key>signingStyle</key>
+    <string>automatic</string>
+    <key>manageAppVersionAndBuildNumber</key>
+    <false/>
+    <key>testFlightInternalTestingOnly</key>
+    <true/>
+    <key>uploadSymbols</key>
+    <true/>
+</dict>
+</plist>

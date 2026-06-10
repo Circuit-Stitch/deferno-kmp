@@ -1,0 +1,162 @@
+# TestFlight upload (manual). The local dev machine is pinned to Xcode 15.2 (Intel/Ventura), but since
+# 2026-04-28 App Store Connect rejects any upload not built with the iOS 26 SDK / Xcode 26+ — so the
+# TestFlight build can only be produced on a runner with Xcode 26. This workflow archives the Release
+# device build (the static Deferno.framework's iosArm64 slice + the SwiftUI app + the SQLCipher pod) on
+# a macOS 15 runner under Xcode 26, then signs + uploads it to TestFlight using an App Store Connect API
+# key with cloud-managed signing — no certificates or provisioning profiles are stored in the repo.
+#
+# Kotlin/Native 2.4.0 supports up to Xcode 26.4, so the framework links cleanly against the iOS 26 SDK.
+#
+# Trigger it by hand: Actions → TestFlight → Run workflow. The build number is the workflow run number
+# (monotonic), so each run produces a TestFlight build strictly newer than the last for marketing
+# version 1.0. Internal testers (you) get it within minutes of processing — see app/iosApp/README.md.
+name: TestFlight
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  # Serialize uploads: two in-flight archives could race on the same build number / cloud signing state.
+  group: testflight
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    name: Archive & upload to TestFlight (Xcode 26)
+    # macОS 15 (Sequoia) ships Xcode 26.x — the SDK App Store Connect now requires. (macos-14 in ios.yml
+    # carries Xcode 15.x, which is fine for the simulator build/test but is rejected at upload.)
+    runs-on: macos-15
+    # Generous for the cold-cache first run: the Gradle Run Script downloads the Kotlin/Native compiler +
+    # konan deps (~1 GB) before linking the framework.
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        # submodules: recursive — full-project Gradle configuration touches :speech-whisper-jni (it points
+        # at the vendored third_party/whisper.cpp submodule), same as ios.yml. The iOS framework task
+        # triggers that configuration even though it never runs the native build.
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      # Temurin 17 is the toolchain the build pins (ProjectConfig.JVM_TOOLCHAIN /
+      # gradle-daemon-jvm.properties). The Gradle run inside the Xcode Run Script phase uses it as the
+      # daemon + project toolchain, so Foojay does not download a second JDK.
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      # Full-project configuration touches the Android modules + :speech-whisper-jni (ndkVersion +
+      # externalNativeBuild). The runner preinstalls the Android SDK but not this exact NDK; install it +
+      # accept licences so the configuration the iOS framework task triggers succeeds. Keep in lockstep
+      # with ProjectConfig.NDK_VERSION (and with ios.yml / ci.yml's matching step).
+      - name: Install Android NDK + CMake for full-project configuration (#92)
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" "ndk;30.0.14904198" "cmake;3.22.1"
+
+      # The iOS 26 SDK requirement is the whole point of this workflow — select the newest Xcode 26.x on
+      # the image (Kotlin/Native 2.4.0 supports up to 26.4). Fail loudly if the image has no Xcode 26:
+      # uploading with an older SDK would just be rejected by App Store Connect anyway.
+      - name: Select Xcode 26 (iOS 26 SDK)
+        run: |
+          XC="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$XC" ]; then
+            echo "::error::No Xcode 26 found on this runner — App Store Connect requires the iOS 26 SDK."
+            ls -d /Applications/Xcode_*.app 2>/dev/null || true
+            exit 1
+          fi
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      # CocoaPods is preinstalled on the macOS image. Cache the CDN spec data + the integrated Pods so
+      # repeat runs skip the network. Keyed on the committed Podfile.lock (Pods/ itself is gitignored).
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cocoapods
+            app/iosApp/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('app/iosApp/Podfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-
+
+      - name: pod install (SQLCipher)
+        working-directory: app/iosApp
+        run: pod install
+
+      # Materialize the App Store Connect API key (.p8) from the base64 secret. Used by both xcodebuild
+      # invocations below: -allowProvisioningUpdates uses it to create/reuse the Apple Distribution cert
+      # + App Store profile in the cloud, and destination=upload uses it to authenticate the upload.
+      - name: Write App Store Connect API key
+        env:
+          API_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+        run: |
+          if [ -z "$API_KEY_P8_BASE64" ]; then
+            echo "::error::Secret APP_STORE_CONNECT_API_KEY_P8 is empty — see app/iosApp/README.md (TestFlight)."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          echo "$API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/private_keys/AuthKey.p8"
+
+      # Archive the Release device build. xcodebuild runs the project's Run Script phase first
+      # (./gradlew :app:iosApp:embedAndSignAppleFrameworkForXcode → the iosArm64 Release Deferno.framework),
+      # then compiles + links the SwiftUI app against it + the SQLCipher pod, and signs it via cloud-managed
+      # automatic signing. CURRENT_PROJECT_VERSION = the run number → a unique, increasing CFBundleVersion.
+      - name: Archive (Release, generic iOS device)
+        working-directory: app/iosApp
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          if command -v xcbeautify >/dev/null 2>&1; then FMT=(xcbeautify --renderer github-actions); else FMT=(cat); fi
+          xcodebuild archive \
+            -workspace iosApp.xcworkspace \
+            -scheme iosApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/Deferno.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            DEVELOPMENT_TEAM=GDV76FJJZ5 \
+            CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            | "${FMT[@]}"
+
+      # Export + upload in one step (ExportOptions.plist sets destination=upload). Cloud signing again via
+      # the API key. On success the build appears in App Store Connect → TestFlight after processing.
+      - name: Export & upload to TestFlight
+        working-directory: app/iosApp
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$PWD/build/Deferno.xcarchive" \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath "$PWD/build/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      - name: Upload xcodebuild logs on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: testflight-build-logs
+          path: |
+            app/iosApp/build/Deferno.xcarchive/Logs/**
+            app/iosApp/build/export/**
+          if-no-files-found: warn
