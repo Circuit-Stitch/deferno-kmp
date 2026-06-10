@@ -1,7 +1,7 @@
 # JVM-fast path CI (ADR-0006, issue #11). Every PR compiles + tests the shared KMP core
 # on the JVM-fast path (commonTest on JVM + Android host unit tests) and enforces the
 # Kover coverage gate over the merged shared core. iOS link/test tasks self-disable on a
-# Linux runner (ADR-0006); the macOS/iOS job is a deliberate follow-up, not part of #11.
+# Linux runner (ADR-0006); the iOS app is built on a macOS runner in the separate `ios.yml`.
 name: CI
 
 on:
