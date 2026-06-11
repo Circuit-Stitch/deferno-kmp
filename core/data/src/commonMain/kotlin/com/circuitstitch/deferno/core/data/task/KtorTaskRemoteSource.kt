@@ -22,9 +22,11 @@ import io.ktor.http.appendPathSegments
  * - [fetch]    -> `GET /tasks/{id}` -> `TaskDetailDto` -> [HydrationState.Full][Task].
  * - [search]   -> `GET /tasks/search?q=…&status=…&label=…&from=…&to=…` -> summary list (#73).
  *
- * **Offline-first (ADR-0001).** Every read maps an [ApiResult.Failure] to nothing
- * (`emptyList()`/`null`) rather than throwing, so a refresh/hydrate/search that can't reach the
- * server leaves the local cache intact instead of wiping it. The endpoint paths are not load-bearing
+ * **Offline-first (ADR-0001).** The background reads map an [ApiResult.Failure] to nothing
+ * (`emptyList()`/`null`) rather than throwing, so a refresh/hydrate that can't reach the server
+ * leaves the local cache intact instead of wiping it. [search] is the exception: it reports
+ * [TaskSearchResult.Unavailable] so the foreground search UI can distinguish "couldn't search" from
+ * "no matches". The endpoint paths are not load-bearing
  * for the repository tests (those drive the fake); they follow the contract's `/tasks` + `/tasks/{id}`
  * + `/tasks/search`. The search query params match the OpenAPI REST contract: `q` (≥ 2 chars),
  * `status`, `label`, `from`, `to` — note these date params are `from`/`to`, distinct from the MCP
@@ -54,7 +56,7 @@ class KtorTaskRemoteSource(
         }
     }
 
-    override suspend fun search(query: TaskSearchQuery): List<Task> {
+    override suspend fun search(query: TaskSearchQuery): TaskSearchResult {
         val result = client.requestApi<List<TaskSummaryDto>> {
             url { appendPathSegments("tasks", "search") }
             parameter("q", query.query)
@@ -69,8 +71,8 @@ class KtorTaskRemoteSource(
             query.toDate?.let { parameter("to", it.toString()) }
         }
         return when (result) {
-            is ApiResult.Success -> result.data.map { it.toDomain() }
-            is ApiResult.Failure -> emptyList()
+            is ApiResult.Success -> TaskSearchResult.Success(result.data.map { it.toDomain() })
+            is ApiResult.Failure -> TaskSearchResult.Unavailable
         }
     }
 }

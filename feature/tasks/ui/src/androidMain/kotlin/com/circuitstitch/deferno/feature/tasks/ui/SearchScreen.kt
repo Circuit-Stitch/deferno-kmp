@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -97,15 +98,24 @@ internal fun SearchContent(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedTextField(
-                    value = state.query,
-                    onValueChange = onQueryChanged,
-                    label = { Text("Search tasks") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSubmit() }),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search),
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedTextField(
+                        value = state.query,
+                        onValueChange = onQueryChanged,
+                        label = { Text("Search tasks") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSubmit() }),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search),
+                    )
+                    // A visible submit affordance — the IME Search key alone is undiscoverable (#73).
+                    Button(onClick = onSubmit, enabled = state.canSearch && !state.isSearching) {
+                        Text("Search")
+                    }
+                }
 
                 StatusFilters(selected = state.statuses, onToggle = onStatusToggled)
                 TagsFilter(selected = state.labels, onToggle = onLabelToggled)
@@ -280,6 +290,11 @@ private fun SearchResults(state: SearchState, onResultClicked: (TaskId) -> Unit)
             }
         }
         state.isSearching -> LoadingStrip(label = "Searching…")
+        // A failed pull (offline / server error) is NOT "no matches" — say so (#73 follow-up).
+        state.searchFailed -> EmptyState(
+            title = "Search is unavailable",
+            body = "Something went wrong reaching the server. Check your connection and try again.",
+        )
         state.hasSearched -> EmptyState(
             title = "No matches",
             body = "Nothing matched your search. Try a different word or fewer filters.",

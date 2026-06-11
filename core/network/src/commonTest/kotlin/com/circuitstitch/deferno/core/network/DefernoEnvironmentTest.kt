@@ -14,7 +14,7 @@ class DefernoEnvironmentTest {
     @Test
     fun baseUrlsMatchTheVerifiedContract() {
         // Trailing slash is required so appended paths keep the `/api` prefix (see DefernoEnvironment).
-        assertEquals("https://api.deferno.app/api/", DefernoEnvironment.Production.baseUrl)
+        assertEquals("https://app.defernowork.com/api/", DefernoEnvironment.Production.baseUrl)
         assertEquals("https://app2.defernowork.com/api/", DefernoEnvironment.Staging.baseUrl)
         assertEquals("http://localhost:3000/api/", DefernoEnvironment.Local.baseUrl)
     }

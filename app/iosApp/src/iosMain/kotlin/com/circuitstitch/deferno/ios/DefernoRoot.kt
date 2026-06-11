@@ -61,9 +61,13 @@ class DefernoRoot {
         logger.i { "Deferno (iOS) starting" }
     }
 
-    // Debug dev builds talk to staging (the dev-PAT target, ADR-0012). A real environment selector by
-    // build configuration is a follow-up (mirrors DefernoApplication).
-    private val environment = DefernoEnvironment.Staging
+    // Environment by build configuration: Debug dev builds talk to staging (the dev-PAT target,
+    // ADR-0012); Release builds (archives / TestFlight) talk to production. The Xcode build phase
+    // builds the Kotlin framework for the current Xcode CONFIGURATION (embedAndSignAppleFrameworkForXcode),
+    // so `Platform.isDebugBinary` tracks Debug↔Release exactly.
+    @OptIn(ExperimentalNativeApi::class)
+    private val environment =
+        if (Platform.isDebugBinary) DefernoEnvironment.Staging else DefernoEnvironment.Production
 
     private val appComponent: AppComponent = createAppComponent(
         platform = PlatformContext(),
@@ -124,12 +128,13 @@ class DefernoRoot {
     }
 
     /**
-     * The OAuth redirect hand-off (ADR-0026, #137): the Swift URL handler (`onOpenURL` /
+     * The OAuth redirect hand-off **fallback** (ADR-0026, #137): the Swift URL handler (`onOpenURL` /
      * `application(_:open:)`) forwards every incoming URL here; a custom-scheme auth redirect is
-     * published into the AppScope [com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox] the
-     * in-flight `IosBrowserAuthenticator` awaits — the iOS twin of `MainActivity.forwardAuthRedirect`.
-     * Other URLs are ignored. (Registering the `CFBundleURLTypes` scheme and wiring `onOpenURL` is
-     * the macOS-gated device-verify follow-up, ADR-0006.)
+     * published into the AppScope [com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox] — the
+     * iOS twin of `MainActivity.forwardAuthRedirect`. Other URLs are ignored. Since the
+     * `IosBrowserAuthenticator` moved to `ASWebAuthenticationSession` (which captures its own
+     * redirect in-sheet), nothing awaits the inbox in the normal flow — publishing is then a no-op;
+     * this path only matters if the auth redirect ever arrives from an externally-opened browser.
      */
     fun forwardAuthRedirect(url: String) {
         if (url.startsWith("$AUTH_REDIRECT_SCHEME://")) {

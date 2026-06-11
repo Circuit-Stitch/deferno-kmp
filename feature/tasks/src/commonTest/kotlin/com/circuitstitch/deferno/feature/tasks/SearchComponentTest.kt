@@ -5,6 +5,7 @@ import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
+import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,12 +27,14 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class) // advanceUntilIdle() — drives the scheduler past the init fetch.
 class SearchComponentTest {
 
-    private class RecordingSearch(var results: List<com.circuitstitch.deferno.core.model.Task> = emptyList()) :
-        SearchTasks {
+    private class RecordingSearch(
+        var results: List<com.circuitstitch.deferno.core.model.Task> = emptyList(),
+        var unavailable: Boolean = false,
+    ) : SearchTasks {
         val queries = mutableListOf<TaskSearchQuery>()
-        override suspend fun search(query: TaskSearchQuery): List<com.circuitstitch.deferno.core.model.Task> {
+        override suspend fun search(query: TaskSearchQuery): TaskSearchResult {
             queries += query
-            return results
+            return if (unavailable) TaskSearchResult.Unavailable else TaskSearchResult.Success(results)
         }
     }
 
@@ -146,6 +149,31 @@ class SearchComponentTest {
             assertEquals(listOf(TaskId("a")), settled.results.map { it.id })
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun aFailedSearchSurfacesSearchFailedInsteadOfNoMatches() = runTest {
+        // The whole point of TaskSearchResult (#73 follow-up): a 503/offline pull must not render as
+        // a misleading "No matches" — the state carries searchFailed for distinct copy.
+        val search = RecordingSearch(unavailable = true)
+        val component = component(search)
+
+        component.onQueryChanged("spring")
+        component.onSubmit()
+        advanceUntilIdle()
+
+        val state = component.state.value
+        assertTrue(state.hasSearched)
+        assertTrue(state.searchFailed, "an Unavailable outcome must set searchFailed")
+        assertTrue(state.results.isEmpty())
+
+        // A subsequent successful search clears the failure.
+        search.unavailable = false
+        search.results = listOf(task("a"))
+        component.onSubmit()
+        advanceUntilIdle()
+        assertFalse(component.state.value.searchFailed)
+        assertEquals(listOf(TaskId("a")), component.state.value.results.map { it.id })
     }
 
     @Test

@@ -297,7 +297,7 @@ class OfflineTaskRepositoryTest {
         val remote = FakeTaskRemoteSource(searchResults = listOf(summary("a"), summary("b")))
         val query = TaskSearchQuery(query = "spring", statuses = setOf(WorkingState.InProgress))
 
-        val results = repo(remote = remote).search(query)
+        val results = (repo(remote = remote).search(query) as TaskSearchResult.Success).tasks
 
         assertEquals(listOf(TaskId("a"), TaskId("b")), results.map { it.id })
         assertEquals(query, remote.lastSearchQuery)
@@ -307,8 +307,9 @@ class OfflineTaskRepositoryTest {
     fun searchSkipsTheRoundTripForATooShortQuery() = runTest {
         val remote = FakeTaskRemoteSource(searchResults = listOf(summary("a")))
 
-        // Below the contract's 2-char minimum → empty, with no call reaching the remote.
-        assertTrue(repo(remote = remote).search(TaskSearchQuery(query = "a")).isEmpty())
+        // Below the contract's 2-char minimum → empty success, with no call reaching the remote.
+        val outcome = repo(remote = remote).search(TaskSearchQuery(query = "a"))
+        assertTrue((outcome as TaskSearchResult.Success).tasks.isEmpty())
         assertNull(remote.lastSearchQuery)
     }
 
@@ -318,10 +319,10 @@ class OfflineTaskRepositoryTest {
             searchResults = listOf(summary("1", title = "Zebra"), summary("2", title = "apple")),
         )
 
-        val results = repo(remote = remote).search(TaskSearchQuery("task", sort = SearchSort.TitleAsc))
+        val outcome = repo(remote = remote).search(TaskSearchQuery("task", sort = SearchSort.TitleAsc))
 
         // Case-insensitive A→Z over the server's order.
-        assertEquals(listOf("apple", "Zebra"), results.map { it.title })
+        assertEquals(listOf("apple", "Zebra"), (outcome as TaskSearchResult.Success).tasks.map { it.title })
     }
 
     @Test
@@ -336,9 +337,12 @@ class OfflineTaskRepositoryTest {
             ),
         )
 
-        val results = repo(remote = remote).search(TaskSearchQuery("task", sort = SearchSort.DeadlineAsc))
+        val outcome = repo(remote = remote).search(TaskSearchQuery("task", sort = SearchSort.DeadlineAsc))
 
-        assertEquals(listOf(TaskId("soon"), TaskId("later"), TaskId("none")), results.map { it.id })
+        assertEquals(
+            listOf(TaskId("soon"), TaskId("later"), TaskId("none")),
+            (outcome as TaskSearchResult.Success).tasks.map { it.id },
+        )
     }
 
     @Test
@@ -354,9 +358,11 @@ class OfflineTaskRepositoryTest {
     }
 
     @Test
-    fun searchReturnsEmptyWhenTheRemoteFails() = runTest {
+    fun searchStaysUnavailableWhenTheRemoteFails() = runTest {
+        // The repository must not coerce a failed search to an empty success (#73 follow-up): the
+        // overlay renders Unavailable distinctly from "no matches".
         val remote = FakeTaskRemoteSource(searchResults = listOf(summary("a")), failNext = true)
 
-        assertTrue(repo(remote = remote).search(TaskSearchQuery("query")).isEmpty())
+        assertEquals(TaskSearchResult.Unavailable, repo(remote = remote).search(TaskSearchQuery("query")))
     }
 }

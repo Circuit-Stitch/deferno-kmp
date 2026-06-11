@@ -3,6 +3,8 @@ package com.circuitstitch.deferno.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -141,5 +143,31 @@ class SearchScreenInteractionTest {
         setContent { SearchScreen(component) }
 
         composeRule.onNodeWithText("No matches").assertIsDisplayed()
+    }
+
+    @Test
+    fun failedSearch_showsTheUnavailableCopy_notNoMatches() {
+        // A 503/offline pull must not render as "No matches" (#73 follow-up).
+        val component = FakeSearchComponent(SearchState(query = "zzz", hasSearched = true, searchFailed = true))
+        setContent { SearchScreen(component) }
+
+        composeRule.onNodeWithText("Search is unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText("No matches").assertDoesNotExist()
+    }
+
+    @Test
+    fun searchButtonForwardsTheSubmit_andIsGatedOnCanSearch() {
+        val component = FakeSearchComponent(SearchState(query = "spring"))
+        setContent { SearchScreen(component) }
+
+        // hasText + hasClickAction singles out the button (the screen heading is also "Search").
+        val searchButton = composeRule.onNode(hasText("Search") and hasClickAction())
+        searchButton.performClick()
+        assertEquals(1, component.submitCount)
+
+        // Below the 2-char floor the button is disabled — a click forwards nothing.
+        component.setState(SearchState(query = "a"))
+        searchButton.performClick()
+        assertEquals(1, component.submitCount)
     }
 }

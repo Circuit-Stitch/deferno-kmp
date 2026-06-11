@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.demo
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
+import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -46,18 +47,18 @@ internal class DemoTaskRepository(initial: List<Task>) : TaskRepository {
         }
     }
 
-    override suspend fun search(query: TaskSearchQuery): List<Task> {
+    override suspend fun search(query: TaskSearchQuery): TaskSearchResult {
         // Offline demo: filter the in-memory list by the term + status/label filters (a stand-in for
         // the online `GET /tasks/search`, so the shell's Search overlay returns rows in tests, #73).
         val term = query.query.trim().lowercase()
-        if (term.length < 2) return emptyList()
-        return tasks.value.filter { task ->
+        if (term.length < 2) return TaskSearchResult.Success(emptyList())
+        return TaskSearchResult.Success(tasks.value.filter { task ->
             val matchesTerm = task.title.lowercase().contains(term) ||
                 task.description?.lowercase()?.contains(term) == true
             val matchesStatus = query.statuses.isEmpty() || task.workingState in query.statuses
             val matchesLabel = query.labels.isEmpty() || task.labels.any { it in query.labels }
             matchesTerm && matchesStatus && matchesLabel
-        }
+        })
     }
 
     /** Current snapshot of a Task (used to mirror an add-to-plan into the demo plan). */

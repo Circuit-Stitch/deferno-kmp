@@ -2,9 +2,9 @@ package com.circuitstitch.deferno.core.network
 
 /**
  * Which Deferno backend the client talks to — the base URL every request resolves against
- * (issue #17). The set is closed and the URLs are baked in (from the spec `servers` block +
- * the staging URL verified on 2026-06-06, see `contracts/CONTRACT-NOTES.md`), so a request
- * can only ever target a known host: there is no free-form "base URL" string a caller could
+ * (issue #17). The set is closed and the URLs are baked in (staging verified 2026-06-06,
+ * production verified 2026-06-10 — see `contracts/CONTRACT-NOTES.md`), so a request can
+ * only ever target a known host: there is no free-form "base URL" string a caller could
  * point at an attacker-controlled or cleartext endpoint.
  *
  * **TLS is enforced by construction:** [Production] and [Staging] are `https`; the only
@@ -25,8 +25,14 @@ package com.circuitstitch.deferno.core.network
  * Verified live against staging (#20); a regression test pins it in `DefernoHttpClientTest`.
  */
 enum class DefernoEnvironment(val baseUrl: String) {
-    /** Production: `https://api.deferno.app/api/` (spec `servers`; trailing slash — see class doc). */
-    Production("https://api.deferno.app/api/"),
+    /**
+     * Production: `https://app.defernowork.com/api/` (verified live 2026-06-10: `/api/auth/me`
+     * answers 401 like staging). The spec `servers` block's `api.deferno.app` does not resolve
+     * in DNS and was never a real host. NOTE: the native browser sign-in endpoints
+     * (`/api/auth/native/…`, ADR-0026) 404 on this host as of 2026-06-10 — browser sign-in
+     * against Production needs the backend handoff (Deferno#299) deployed there first.
+     */
+    Production("https://app.defernowork.com/api/"),
 
     /** Staging: `https://app2.defernowork.com/api/` (verified, envelope `version: 0.1`). */
     Staging("https://app2.defernowork.com/api/"),

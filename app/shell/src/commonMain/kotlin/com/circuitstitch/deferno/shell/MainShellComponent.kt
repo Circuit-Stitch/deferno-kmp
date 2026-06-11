@@ -17,6 +17,7 @@ import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
+import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.CalendarItem
@@ -221,7 +222,7 @@ class DefaultMainShellComponent(
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
     // The global-search seam (#73): a one-shot, online-only pull the Search overlay drives. Defaults
     // to "no results" so tests that don't exercise Search build without supplying it.
-    private val searchTasks: SearchTasks = SearchTasks { _ -> emptyList() },
+    private val searchTasks: SearchTasks = SearchTasks { _ -> TaskSearchResult.Success(emptyList()) },
     override val accounts: StateFlow<List<Account>> = MutableStateFlow(emptyList()),
     override val activeAccount: StateFlow<Account?> = MutableStateFlow(null),
     private val onSwitchAccount: (AccountId) -> Unit = {},

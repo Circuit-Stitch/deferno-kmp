@@ -13,8 +13,10 @@ import com.circuitstitch.deferno.core.model.TaskId
  * - [search] pulls the **global-search result** (`/tasks/search`) — a one-shot, online-only read for
  *   the search overlay (#73), NOT the observed live list (search results are never cached, ADR-0001).
  *
- * Offline-first contract (ADR-0001): a failed call returns `emptyList()`/`null` rather than throwing,
- * so a refresh that can't reach the server leaves the local cache intact instead of wiping it.
+ * Offline-first contract (ADR-0001): a failed background read returns `emptyList()`/`null` rather
+ * than throwing, so a refresh that can't reach the server leaves the local cache intact instead of
+ * wiping it. [search] alone reports failure ([TaskSearchResult.Unavailable]) — it is a foreground
+ * action whose failure must stay distinguishable from "no matches".
  */
 interface TaskRemoteSource {
 
@@ -25,8 +27,9 @@ interface TaskRemoteSource {
     suspend fun fetch(id: TaskId): Task?
 
     /**
-     * Global search (`GET /tasks/search`, #73): the summary rows matching [query]'s term + filters.
-     * `emptyList()` on failure (search is online-only — there is nothing cached to fall back to).
+     * Global search (`GET /tasks/search`, #73): the summary rows matching [query]'s term + filters,
+     * or [TaskSearchResult.Unavailable] on a failed pull (search is online-only — there is nothing
+     * cached to fall back to, and the search UI shows the failure distinctly).
      */
-    suspend fun search(query: TaskSearchQuery): List<Task>
+    suspend fun search(query: TaskSearchQuery): TaskSearchResult
 }

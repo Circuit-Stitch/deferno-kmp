@@ -2,7 +2,7 @@ package com.circuitstitch.deferno.feature.tasks
 
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
-import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 
 /**
  * The narrow read seam the global-search overlay drives (#73): a single online-only, one-shot pull.
@@ -13,8 +13,8 @@ import com.circuitstitch.deferno.core.model.Task
  */
 fun interface SearchTasks {
 
-    /** Run [query] and return the matching Tasks (`emptyList()` offline — search is online-only). */
-    suspend fun search(query: TaskSearchQuery): List<Task>
+    /** Run [query]: the matching Tasks, or [TaskSearchResult.Unavailable] on a failed pull. */
+    suspend fun search(query: TaskSearchQuery): TaskSearchResult
 
     companion object {
         /** Adapt a [TaskRepository]'s one-shot [TaskRepository.search] into the seam. */

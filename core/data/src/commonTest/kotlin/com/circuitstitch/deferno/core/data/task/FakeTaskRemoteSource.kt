@@ -31,9 +31,9 @@ class FakeTaskRemoteSource(
         return details[id]
     }
 
-    override suspend fun search(query: TaskSearchQuery): List<Task> {
+    override suspend fun search(query: TaskSearchQuery): TaskSearchResult {
         lastSearchQuery = query
-        if (failNext) return emptyList()
-        return searchResults
+        if (failNext) return TaskSearchResult.Unavailable
+        return TaskSearchResult.Success(searchResults)
     }
 }
