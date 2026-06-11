@@ -311,6 +311,10 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.kotlinx.datetime)
+    // The shared logger: main() configures it + emits the first log. Declared directly here (not
+    // relied upon transitively from core/common's `api`) because this module names the Logger type
+    // itself (amzn/kmp-logger).
+    implementation(libs.kmp.logger.log)
 
     // The pure desktop-View breakpoint test (DesktopNavKindTest) + the update-manager state-machine
     // test (UpdateManagerTest, #103). The shared shell *components* are tested in app/shell's commonTest

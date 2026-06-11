@@ -131,6 +131,14 @@ whisperJni = "1.7.1"
 # Play Asset Delivery runtime (#92, ADR-0019): the AssetPackManager core:speech uses to resolve the
 # install-time whisper-model pack's on-device location at runtime.
 playAssetDelivery = "2.3.0"
+# Logging (amzn/kmp-logger): Amazon's KMP logging facade — one `logger { }` / `Logger("Tag")`
+# API in commonMain that writes to each platform's native console (Logcat on Android, os_log on
+# iOS, println on JVM) through an inlined message lambda (zero cost when the level is disabled).
+# The PUBLISHED artifact is `kmp-logger-log`; the repo README's `kmp-logger-public` coordinate is
+# stale and 404s on Maven Central. 0.0.1 (published 2026-06-10) is the only release and ships no
+# iosX64 variant — which is why `deferno.kmp` drops the iosX64 target (a commonMain dep must
+# resolve a variant for every target, and none exists for iosX64). Pre-1.0: expect API churn.
+kmpLogger = "0.0.1"
 # iOS Swift bridging (ADR-0003): SKIE. NOT WIRED YET — no released SKIE supports Kotlin
 # 2.4.0 as of 2026-06 (latest 0.10.12, 2026-05-18, tops out at Kotlin 2.3.21), and SKIE asserts the
 # Kotlin version at *configuration* time, so applying it would fail Gradle sync on every
@@ -269,6 +277,12 @@ ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.r
 ktor-client-darwin = { group = "io.ktor", name = "ktor-client-darwin", version.ref = "ktor" }
 ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref = "ktor" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+
+# Logging facade (amzn/kmp-logger, commonMain): `api`-exposed from core/common so every core/* +
+# feature/* module gets `logger { "…" }` / `Logger("Tag").i { "…" }` over each platform's native
+# console with no per-module redeclare. Artifact is `kmp-logger-log` (NOT the README's stale
+# `kmp-logger-public`). Same `software.amazon.*` vendor namespace as kotlin-inject-anvil above.
+kmp-logger-log = { group = "software.amazon.app.kmplogger", name = "kmp-logger-log", version.ref = "kmpLogger" }
 
 # Gradle-plugin artifacts on the build-logic classpath (so convention plugins can
 # apply + type-safely configure AGP and the Kotlin Multiplatform plugin).

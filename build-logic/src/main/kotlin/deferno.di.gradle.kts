@@ -33,7 +33,7 @@ dependencies {
 
     // Both processors on every target. `kspJvm` drives the commonTest JVM-fast path;
     // `kspAndroid` covers `check`'s Android host tests; the iOS configs cover the klibs.
-    listOf("kspJvm", "kspAndroid", "kspIosX64", "kspIosArm64", "kspIosSimulatorArm64")
+    listOf("kspJvm", "kspAndroid", "kspIosArm64", "kspIosSimulatorArm64")
         .forEach { config ->
             add(config, lib("kotlin-inject-compiler"))
             add(config, lib("kotlin-inject-anvil-compiler"))

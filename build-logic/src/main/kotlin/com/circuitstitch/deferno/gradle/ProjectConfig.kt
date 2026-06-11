@@ -10,9 +10,15 @@ package com.circuitstitch.deferno.gradle
  * points here; change them in one place.
  */
 object ProjectConfig {
-    const val COMPILE_SDK = 35
-    const val MIN_SDK = 26
-    const val TARGET_SDK = 35
+    // compileSdk 36 (Android 16, was 35): amzn/kmp-logger's `kmp-logger-log-android` AAR metadata
+    // requires consumers to compile against API 36+.
+    const val COMPILE_SDK = 36
+    // minSdk 27 (Android 8.1, was 26): floored by amzn/kmp-logger's `kmp-logger-log-android`, which
+    // declares minSdk 27 — the manifest merger requires the app's minSdk ≥ every library's.
+    const val MIN_SDK = 27
+    // targetSdk kept equal to compileSdk (36, was 35): opts the app in to API 36 (Android 16) runtime
+    // behavior. Unlike compileSdk this changes runtime semantics — verify on an API 36 emulator.
+    const val TARGET_SDK = 36
 
     /**
      * The single source of truth for the application version, semver (ADR-0021, #101). One value

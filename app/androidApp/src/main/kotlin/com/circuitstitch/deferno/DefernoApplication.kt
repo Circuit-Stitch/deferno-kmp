@@ -9,6 +9,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import software.amazon.app.kmplogger.LogLevel
+import software.amazon.app.kmplogger.Logger
+import software.amazon.app.kmplogger.logger
 
 /**
  * Application entry point.
@@ -34,6 +37,15 @@ class DefernoApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Configure the shared logger ONCE per process, before anything logs (amzn/kmp-logger).
+        // The `prefix` makes every tag "Deferno: <ClassName>"; the default strategy writes to
+        // Logcat. Release builds emit only WARN + ERROR (a WARN floor); debug builds keep DEBUG.
+        Logger.configure(
+            minLogLevel = if (BuildConfig.DEBUG) LogLevel.DEBUG else LogLevel.WARN,
+            prefix = "Deferno",
+        )
+        logger.i { "Deferno (Android) starting" }
+
         appComponent = createAppComponent(
             platform = PlatformContext(this),
             // Debug dev builds talk to staging (the dev-PAT target, ADR-0012). A real environment
