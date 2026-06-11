@@ -66,6 +66,22 @@ action (start / complete / skip); the finer read states — Scheduled, Missed, a
 split — are **server-derived**.
 _Avoid_: status, OccurrenceStatus, done_on_time/done_late.
 
+**Priority** *(client, derived — never stored)*:
+A reading **derived** from a [[Task]]'s existing attributes — `desire` (how much the person wants to
+do it), `productive` (how productive it feels), and `completeBy` (urgency) — wherever the client
+needs to rank or emphasize. There is **no priority field** in the domain and the client must not
+invent one (no P0–P3 enum, no priority labels): anything that extracts or ranks "by priority" writes
+or reads those three attributes.
+_Avoid_: priority as a stored field, priority labels ("p1"), importance (use the specific attribute).
+
+**Dependency** *(client, disambiguation — say sequence or decomposition)*:
+The domain has **no blocks/blocked-by edge**. What look like "dependencies" are two existing
+relations: a **sequence** (an ordered chain via `nextTaskId` — "first X, then Y", the chain
+`fold`/promote manipulate) and a **decomposition** (a parent/child tree via `parentId` — "Y is part
+of Z", the backend's [[Subtask/Child]]). Anything extracting or displaying "dependencies" uses these
+two; a true cross-chain blocker relation does not exist and must not be faked with labels or notes.
+_Avoid_: dependency, blocker, blocked-by, prerequisite (name the relation: sequence or decomposition).
+
 ### Credentials
 
 **Personal access token (PAT)**:
@@ -176,6 +192,36 @@ above the offline-first write seam, so issuing a Command applies optimistically 
 (ADR-0001). It is not a UI; the [[View]]s and the agent are its *clients*.
 _Avoid_: dispatcher, bus, controller, menu.
 
+### Agent
+
+**Agent** *(client)*:
+The client-side capability that turns the person's own context into **proposals** — today two
+propose-only services, the [[Extractor]] and the producer of the [[Plan proposal]], running against
+the configured [[Inference engine]]. It holds no write access and **never commits anything**: the
+person accepts a proposal, and that acceptance commits through the ordinary write path. Reserved to
+grow into the Command-issuing agent the [[Command registry]] anticipates.
+_Avoid_: assistant, copilot, bot, "the AI" (name the capability or the specific service).
+
+**Extractor** *(client)*:
+The propose-only [[Agent]] service that turns a [[Brain dump]] [[Transcript]] into **draft
+[[Task]]s** — titles, decompositions (parent/child), sequences (next-task chains), `completeBy`, and
+`desire`/`productive`. Its output is always drafts for the person's review, never committed work.
+_Avoid_: parser, brain-dump AI, voice commands (routing speech to Commands — a non-goal).
+
+**Plan proposal** *(client)*:
+The [[Agent]]'s proposed **delta against the day's seeded plan** — backlog [[Task]]s worth adding
+(ranked by the derived [[Priority]]), removals when the day overflows, and an ordering — reviewed on
+the Plan [[Destination]]. Accepted entries commit through the ordinary plan verbs; the proposal is
+**never auto-applied**, and the server-seeded plan remains the substrate it amends.
+_Avoid_: generated plan, AI plan (the Agent *curates* the seeded day; it does not author it).
+
+**Inference engine** *(client)*:
+The configured backend the [[Agent]] runs against — the **premium relay** (Deferno-operated,
+per-[[Account]] entitlement) or a **local engine** on this device. The choice is an [[App setting]]
+(device-local, like the speech-engine choice); an off-device engine is **explicit opt-in, never
+silent**. Distinct from the [[Dictation]] speech engine — speech recognition never has a cloud tier.
+_Avoid_: model (an engine *hosts* a model), provider, speech engine (a different catalog).
+
 ### Voice & dictation
 
 **Dictation** *(client)*:
@@ -196,11 +242,13 @@ recognition.
 _Avoid_: recording (the transient audio, not kept), recognition result, dictation (that is the *act*).
 
 **Brain dump** *(deferred)*:
-Free-form spoken capture whose [[Transcript]] a future on-device extractor turns into **several draft
+Free-form spoken capture whose [[Transcript]] the [[Extractor]] turns into **several draft
 [[Task]]s** the person reviews before anything is created — Stage 2, **not built in v1**. Unlike
 [[Dictation]] (which fills one field and infers nothing), a brain dump is inference-heavy and will
 relax ADR-0015's "kind is explicit, never inferred." The drafts are exactly that: *drafts*, never
-auto-committed.
+auto-committed. The extractor **never runs silently**: an off-device model only by the person's
+**explicit opt-in**, and when a local engine is available it is preferred by default (the audio
+itself never leaves the device — that boundary is [[Transcript]]'s and stays absolute).
 _Avoid_: [[Dictation]] (fills one field, no inference), voice commands (a non-goal).
 
 ### Native sidecar (desktop)
