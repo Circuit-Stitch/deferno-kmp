@@ -25,12 +25,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlin.coroutines.CoroutineContext
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /**
  * The per-scene navigation root (ADR-0013 / ADR-0008 / ADR-0014): a two-state [[Shell]] selected by
@@ -93,6 +98,14 @@ class DefaultRootComponent(
     // Destination reads. Threaded down to the Main shell. Defaulted to the inert [EmptySpeechEngineCatalog]
     // (only "Automatic" → the row hides) so tests build without it; production passes the AppComponent's.
     private val speechEngineCatalog: SpeechEngineCatalog = EmptySpeechEngineCatalog,
+    /** The outbox driver's clock (#143) — injected so the flush timing is deterministic under test. */
+    private val now: () -> Instant = { Clock.System.now() },
+    /**
+     * How often the outbox driver re-flushes while a session is active (#143) — the cadence that picks
+     * up writes made during the session and retries after a transient failure (the per-entry backoff
+     * inside the processor still governs when a failed entry is ready again).
+     */
+    private val outboxFlushPeriod: Duration = 30.seconds,
     coroutineContext: CoroutineContext = Dispatchers.Main,
 ) : RootComponent, ComponentContext by componentContext {
 
@@ -104,6 +117,9 @@ class DefaultRootComponent(
 
     /** The collector mirroring the active session's settings into [_themeSettings]; cancelled on switch. */
     private var themeJob: Job? = null
+
+    /** The active session's outbox driver (#143) — flush, settings reconcile, then the periodic loop. */
+    private var outboxJob: Job? = null
 
     private sealed interface Config {
         data object Auth : Config
@@ -151,7 +167,9 @@ class DefaultRootComponent(
         when (config) {
             Config.Auth -> {
                 activeSession = null
-                // No Active Account → no per-Account settings; fall the app-wide theme back to default.
+                // No Active Account → no outbox to drive, no per-Account settings; stop the driver and
+                // fall the app-wide theme back to default.
+                driveOutboxFor(null)
                 pointThemeAt(null)
                 RootComponent.Child.Auth(
                     DefaultAuthShellComponent(
@@ -169,12 +187,15 @@ class DefaultRootComponent(
                 val account = accountManager.accounts.value.first { it.id.value == config.accountId }
                 val session = accountSession(account)
                 activeSession = session
-                // Pull this Account's tasks + today's plan + settings into the local cache on open /
-                // switch (offline-first: the repositories swallow failures, leaving the cache intact).
-                // The Views observe the local DB, so this is what surfaces real data on first open.
+                // Pull this Account's tasks + today's plan into the local cache on open / switch
+                // (offline-first: the repositories swallow failures, leaving the cache intact). The
+                // Views observe the local DB, so this is what surfaces real data on first open.
                 scope.launch { session.taskRepository.refresh() }
                 scope.launch { session.planRepository.refreshPlan(today, timeZone) }
-                scope.launch { session.settingsRepository.refresh() }
+                // Drive this Account's outbox (#143): flush the queued offline writes, THEN pull the
+                // settings snapshot (sequenced so the reconcile can't pull a server state that predates
+                // the just-flushed writes), then keep flushing periodically while the session is active.
+                driveOutboxFor(session)
                 // Re-point the app-wide theme `Flow` at THIS Account's settings (#72) — cancels the
                 // previous account's collector, so a switch never bleeds the prior account's theme.
                 pointThemeAt(session)
@@ -212,6 +233,33 @@ class DefaultRootComponent(
                 )
             }
         }
+
+    /**
+     * Re-point the outbox driver (#143) at [session] (or stop it when `null`). The driver is what
+     * actually syncs offline writes (ADR-0001, #23): without it the queued mutations sit forever and
+     * the next cold-start reconcile reverts the local optimistic state to stale server truth.
+     *
+     * On activation it flushes **before** the settings reconcile — so a queued settings PATCH reaches
+     * the server before the snapshot is pulled — then re-flushes every [outboxFlushPeriod] to pick up
+     * writes made during the session (and retries after transient failures). Cancelling the prior
+     * driver on a switch / sign-out keeps the loop bound to exactly the Active Account's outbox
+     * (account isolation, ADR-0002/0014).
+     */
+    private fun driveOutboxFor(session: AccountSession?) {
+        outboxJob?.cancel()
+        if (session == null) {
+            outboxJob = null
+            return
+        }
+        outboxJob = scope.launch {
+            session.flushOutbox(now())
+            session.settingsRepository.refresh()
+            while (true) {
+                delay(outboxFlushPeriod)
+                session.flushOutbox(now())
+            }
+        }
+    }
 
     /**
      * Re-point the app-wide theme [StateFlow] at [session]'s settings (or reset to the default when

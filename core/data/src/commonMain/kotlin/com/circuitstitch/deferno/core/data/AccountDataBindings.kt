@@ -202,12 +202,15 @@ interface AccountDataBindings {
     fun planWriter(planStore: PlanLocalStore, outbox: OutboxStore): PlanWriter =
         OutboxPlanWriter(planStore, outbox)
 
+    // The settings reconcile reads the outbox so a refresh can't clobber an un-synced optimistic
+    // settings change (#143) — a pending settings mutation is newer than the server snapshot (LWW).
     @Provides
     @SingleIn(AccountScope::class)
     fun settingsRepository(
         localStore: SettingsLocalStore,
         remoteSource: SettingsRemoteSource,
-    ): SettingsRepository = OfflineSettingsRepository(localStore, remoteSource)
+        outbox: OutboxStore,
+    ): SettingsRepository = OfflineSettingsRepository(localStore, remoteSource, outbox)
 
     @Provides
     @SingleIn(AccountScope::class)
@@ -215,10 +218,11 @@ interface AccountDataBindings {
         OutboxSettingsWriter(localStore, outbox)
 
     /**
-     * The outbox replay engine (#23). Its reconcile closure — run once after a successful flush —
-     * re-pulls the Task snapshot to LWW-merge server truth over the optimistic local state. Plan
-     * ordering reconciles per-day via the UI's `refreshPlan` (the processor is Account-scoped and has
-     * no "current day" to reconcile), so the closure stays a task refresh here.
+     * The outbox replay engine (#23), driven by the app on session activation + periodically while a
+     * session is active (#143 — the shell's RootComponent owns the triggers). Its reconcile closure —
+     * run once after a successful flush — re-pulls the Task, Calendar, and Settings snapshots to
+     * LWW-merge server truth over the optimistic local state. Plan ordering reconciles per-day via
+     * the UI's `refreshPlan` (the processor is Account-scoped and has no "current day" to reconcile).
      */
     @Provides
     @SingleIn(AccountScope::class)
@@ -227,15 +231,19 @@ interface AccountDataBindings {
         sender: OutboxRequestSender,
         taskRepository: TaskRepository,
         calendarRepository: CalendarRepository,
+        settingsRepository: SettingsRepository,
     ): OutboxProcessor = OutboxProcessor(
         store = store,
         sender = sender,
-        // After a successful flush, LWW-reconcile the Task snapshot AND re-pull the last Calendar window
-        // (so an occurrence mark/reschedule converges on server truth, #74). Plan ordering reconciles
-        // per-day via the UI's refreshPlan (the processor has no "current day").
+        // After a successful flush, LWW-reconcile the Task snapshot, re-pull the last Calendar window
+        // (so an occurrence mark/reschedule converges on server truth, #74), and re-pull the settings
+        // bag (so a flushed settings PATCH converges, #143 — its refresh skips the upsert if more
+        // settings mutations are still queued). Plan ordering reconciles per-day via the UI's
+        // refreshPlan (the processor has no "current day").
         reconcile = {
             taskRepository.refresh()
             calendarRepository.reconcile()
+            settingsRepository.refresh()
         },
     )
 }

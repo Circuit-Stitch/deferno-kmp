@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.shell
 
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
+import com.circuitstitch.deferno.core.data.outbox.FlushResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
@@ -21,6 +22,7 @@ import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.datetime.LocalDate
+import kotlin.time.Instant
 
 /**
  * The per-Account data the [RootComponent]'s Main shell is built over (ADR-0014): the offline-first
@@ -72,6 +74,14 @@ interface AccountSession {
      * failure. **Nothing is enqueued offline** (ADR-0016).
      */
     suspend fun create(payload: CreateItem.Payload): CommandResult
+
+    /**
+     * Drain this Account's offline outbox (#23, #143): replay the queued writes FIFO-with-backoff as
+     * of [now] and LWW-reconcile after a successful pass. The [RootComponent] drives it — on session
+     * activation (before the settings reconcile, so the pull can't clobber a queued change) and then
+     * periodically while the session is active.
+     */
+    suspend fun flushOutbox(now: Instant): FlushResult
 }
 
 /**
@@ -98,6 +108,9 @@ class AccountComponentSession(private val component: AccountComponent) : Account
 
     override suspend fun create(payload: CreateItem.Payload): CommandResult =
         component.commandExecutor.execute(CreateItem(payload))
+
+    override suspend fun flushOutbox(now: Instant): FlushResult =
+        component.outboxProcessor.flush(now)
 }
 
 /**
