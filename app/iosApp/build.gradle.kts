@@ -13,7 +13,10 @@ kotlin {
     // convention for a single module isn't earned yet (ADR-0004).
     jvmToolchain(17)
 
-    listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
+    // iosX64 (Intel-Mac simulator) is dropped to match the `deferno.kmp` target set: the shared
+    // modules this framework links no longer build an iosX64 variant (amzn/kmp-logger ships none),
+    // so the framework can only assemble for iosArm64 + iosSimulatorArm64 (Apple-Silicon).
+    listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
         target.binaries.framework {
             baseName = "Deferno"
             isStatic = true
@@ -80,6 +83,11 @@ kotlin {
             api(project(":core:data"))
             api(project(":core:domain"))
             api(project(":core:network"))
+
+            // The shared logger: DefernoRoot configures it + emits the first log. `implementation`
+            // (not `api`/exported) — Swift never names the Logger types, only Kotlin's iosMain does
+            // (amzn/kmp-logger). Declared directly here, not relied upon transitively from core/common.
+            implementation(libs.kmp.logger.log)
         }
     }
 }

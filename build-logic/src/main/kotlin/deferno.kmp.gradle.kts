@@ -28,7 +28,14 @@ kotlin {
 
     // Apple targets. Klibs cross-compile on any host; running iOS tests / linking
     // device frameworks happens on a macOS runner (ADR-0006).
-    iosX64()
+    //
+    // iosX64 (the Intel-Mac iOS simulator) is intentionally NOT a target. A shared commonMain
+    // dependency must resolve a variant for *every* declared target, and amzn/kmp-logger
+    // (`kmp-logger-log` 0.0.1, api-exposed from core/common) publishes only iosArm64 +
+    // iosSimulatorArm64. Re-adding iosX64 here fails `:*:compileKotlinIosX64` with an
+    // unresolved-variant error until the logger (or any other commonMain dep) ships an iosX64
+    // build. Trade-off: an Intel Mac can't run the iOS app in the simulator (Apple-Silicon Macs
+    // use the iosSimulatorArm64 variant and are unaffected).
     iosArm64()
     iosSimulatorArm64()
 

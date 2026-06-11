@@ -10,7 +10,7 @@ first to land.
 - **Language:** Kotlin
 - **UI:** Jetpack Compose (Material 3)
 - **Build:** Gradle (Kotlin DSL) with a version catalog at `gradle/libs.versions.toml` and `build-logic` convention plugins
-- **Min / target / compile SDK:** 26 / 35 / 35 — defined once in `build-logic` `ProjectConfig` (the source of truth)
+- **Min / target / compile SDK:** 27 / 36 / 36 — defined once in `build-logic` `ProjectConfig` (the source of truth)
 - **Application ID:** `com.circuitstitch.deferno`
 - **JDK:** 17 (toolchain). You don't need JDK 17 installed — the Gradle Daemon JVM toolchain (`gradle/gradle-daemon-jvm.properties`) and the project toolchain (`ProjectConfig.JVM_TOOLCHAIN`, applied via the convention plugins) auto-provision Eclipse Temurin 17 via the Foojay resolver. Launch Gradle with any JDK that can run Gradle 9.5.1 (17–25), e.g. Android Studio's bundled JDK.
 - **Kotlin:** compiled by AGP's built-in Kotlin support (AGP 9+) — there is no `org.jetbrains.kotlin.android` plugin; only the Compose compiler plugin is applied explicitly.

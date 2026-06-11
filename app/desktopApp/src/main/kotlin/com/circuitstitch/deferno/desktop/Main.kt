@@ -67,6 +67,7 @@ import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.MainShellComponent
 import com.circuitstitch.deferno.shell.OverlayRoute
 import com.circuitstitch.deferno.shell.RootComponent
+import dev.hydraulic.conveyor.control.SoftwareUpdateController
 import java.awt.Desktop
 import java.io.File
 import java.net.URI
@@ -80,6 +81,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.swing.Swing
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
+import software.amazon.app.kmplogger.LogLevel
+import software.amazon.app.kmplogger.Logger
 
 /**
  * Desktop (JVM) Compose entry point — the desktop counterpart of Android's [DefernoApplication] +
@@ -114,6 +117,14 @@ fun main() {
     // Debug dev builds talk to staging (the dev-PAT target, ADR-0012); reused to derive the web-app
     // origin for the Settings deep-links. A real environment selector is a follow-up.
     val environment = DefernoEnvironment.Staging
+
+    // Configure the shared logger ONCE per process, before the DI graph builds or anything logs
+    // (amzn/kmp-logger). The `prefix` makes tags "Deferno: <Tag>"; the default strategy prints to
+    // stdout. A shipped (Conveyor-packaged) build emits only WARN + ERROR; a dev `./gradlew run`
+    // keeps DEBUG (see startupLogLevel). main() is a top-level function (no class receiver for the
+    // `logger` extension), so log via Logger("Tag").
+    Logger.configure(minLogLevel = startupLogLevel(), prefix = "Deferno")
+    Logger("DesktopMain").i { "Deferno (desktop) starting — environment=$environment" }
 
     // The process-global AppScope DI graph (ADR-0008 G2 / ADR-0014): the cross-Account infrastructure
     // (network client + token provider, AccountManager + secure vault, registry) and a per-Account
@@ -261,6 +272,15 @@ fun main() {
         }
     }
 }
+
+/**
+ * The startup minimum log level: WARN in a shipped (Conveyor-packaged) build so only warnings +
+ * errors reach stdout in prod, DEBUG in a dev `./gradlew run`. "Packaged" is the same signal the
+ * update backend uses — [SoftwareUpdateController.getInstance] is null only for an unpackaged run
+ * (see ConveyorUpdateBackend).
+ */
+private fun startupLogLevel(): LogLevel =
+    if (SoftwareUpdateController.getInstance() != null) LogLevel.WARN else LogLevel.DEBUG
 
 /** Idempotent: add only the dev Accounts not already in the roster (empty when no PAT is configured). */
 private suspend fun seedDevAccounts(appComponent: AppComponent) {

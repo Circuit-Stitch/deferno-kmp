@@ -19,6 +19,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
+import kotlin.experimental.ExperimentalNativeApi
+import kotlin.native.Platform
 import kotlin.time.Clock
 import platform.Foundation.NSBundle
 import platform.Foundation.NSLocale
@@ -26,6 +28,9 @@ import platform.Foundation.NSURL
 import platform.Foundation.preferredLanguages
 import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationOpenSettingsURLString
+import software.amazon.app.kmplogger.LogLevel
+import software.amazon.app.kmplogger.Logger
+import software.amazon.app.kmplogger.logger
 
 /**
  * The iOS app entry — the **real** shared shell over the real DI graph (#35, ADR-0008/0014/0017),
@@ -44,6 +49,17 @@ import platform.UIKit.UIApplicationOpenSettingsURLString
  * the AppScope network client + the Keychain vault, so first-run login works regardless.
  */
 class DefernoRoot {
+
+    init {
+        // Configure the shared logger ONCE per process, before the DI graph builds or anything logs
+        // (amzn/kmp-logger). This `init` is declared first so it runs ahead of the `appComponent`
+        // property initializer below. The `prefix` makes tags "Deferno: <ClassName>"; logs route to
+        // os_log (Console.app / Xcode). A Release framework binary emits only WARN + ERROR; a Debug
+        // binary keeps DEBUG (see startupLogLevel). DefernoRoot is constructed once by SwiftUI's
+        // @main, so `configure` (which throws if called twice) is only ever called once.
+        Logger.configure(minLogLevel = startupLogLevel(), prefix = "Deferno")
+        logger.i { "Deferno (iOS) starting" }
+    }
 
     // Debug dev builds talk to staging (the dev-PAT target, ADR-0012). A real environment selector by
     // build configuration is a follow-up (mirrors DefernoApplication).
@@ -139,6 +155,15 @@ class DefernoRoot {
             .forEach { devAccount -> manager.addAccount(devAccount.account, devAccount.token) }
     }
 }
+
+/**
+ * The startup minimum log level: WARN in a Release framework binary so only warnings + errors reach
+ * os_log in prod, DEBUG in a Debug binary. [Platform.isDebugBinary] reflects the build configuration
+ * (Xcode Debug vs Release) the framework was linked for.
+ */
+@OptIn(ExperimentalNativeApi::class)
+private fun startupLogLevel(): LogLevel =
+    if (Platform.isDebugBinary) LogLevel.DEBUG else LogLevel.WARN
 
 /**
  * Build a web-app URL for [path] from the configured backend [environment] (#72) — the iOS twin of

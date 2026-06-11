@@ -165,6 +165,10 @@ dependencies {
     // The demo repositories expose Kotlin Flows; the Plan root computes today's date.
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.datetime)
+    // The shared logger: DefernoApplication.onCreate configures it + emits the first log. Declared
+    // directly here (not relied upon transitively from core/common's `api`) because this module
+    // names the Logger/LogLevel types itself (amzn/kmp-logger).
+    implementation(libs.kmp.logger.log)
 
     implementation(libs.androidx.core.ktx)
     // Android 12+ system splash (back-compat to API 23): used only to suppress the cold-start
