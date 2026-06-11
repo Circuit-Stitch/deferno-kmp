@@ -3,8 +3,9 @@
 The native macOS half of the Sidecar substrate (ADR-0024 / ADR-0025, issue **#121**): a
 Developer-ID-signed Swift agent that **launchd activates on first connect** and serves the
 language-neutral [Sidecar protocol](../../contracts/sidecar/protocol-v1.md) over a peer-authenticated
-AF_UNIX socket. It hosts **on-device dictation** (`SFSpeechRecognizer` + `AVAudioEngine`) and brokers the
-macOS **mic + Speech permissions (TCC)** the JVM cannot reach.
+AF_UNIX socket. It hosts **on-device dictation** (`SFSpeechRecognizer` + `AVAudioEngine`), delivers
+**OS notifications** (`UNUserNotificationCenter`, #123), and brokers the macOS **mic + Speech +
+notification permissions** the JVM cannot reach.
 
 The JVM `core/sidecar` client is the *other* implementation of the same wire. Both conform to
 `contracts/sidecar/protocol-v1.md` + the golden fixtures, so **swapping the Linux stub for this helper
@@ -24,7 +25,7 @@ helpers/macos/
     SidecarKit/                 all logic (unit-testable, no @main)
       Protocol/                 wire: JSONValue, SidecarFrame, codec, protocol constants, payloads
       Transport/                SocketByteStream + UnixSocketListener (launchd activation + self-bind)
-      Permissions/              TCC introspect/request (mic + Speech)
+      Permissions/              TCC introspect/request (mic + Speech + notifications)
       Speech/                   SpeechTranscriber (SFSpeech + AVAudioEngine streaming)
       Server/                   connection handler + capability providers (real + canned) + token
     DefernoSidecarCLI/          the executable: arg parsing, activation, signals, dispatchMain
@@ -83,6 +84,34 @@ SIDECAR_SIGN_IDENTITY="-" scripts/build.sh    # ad-hoc (CI without the cert)
   entitlement `com.apple.security.device.audio-input` is the hardened-runtime audio-input key; the Speech
   capability needs no entitlement (only the `NSSpeechRecognitionUsageDescription` string + the grant).
 
+## Notifications (#123) — the `.app`-bundle requirement
+
+`UNUserNotificationCenter` only exists for a **bundle-hosted** process: the framework resolves the
+process's LaunchServices bundle proxy from the executable's *enclosing `.app` bundle*, and calling
+`UNUserNotificationCenter.current()` from a bare binary — even one with an embedded `__info_plist` —
+raises an **uncatchable** NSException. So:
+
+- a bare `swift build` binary **does not advertise** the `notifications` capability (graceful
+  degradation, ADR-0025) — the JVM side keeps working, `postNotification` is simply never offered;
+- the packaged helper (#122) must place the executable **inside an `.app` bundle** for notifications
+  to light up (they then attribute to that bundle's identity/name in Notification Center).
+
+To exercise it before #122, wrap the built binary by hand (the same `Info.plist` works as the bundle's):
+
+```sh
+mkdir -p dist/DefernoSidecar.app/Contents/MacOS
+cp dist/deferno-sidecar dist/DefernoSidecar.app/Contents/MacOS/
+cp Resources/Info.plist dist/DefernoSidecar.app/Contents/
+codesign --force --sign - --options runtime \
+  --entitlements Resources/deferno-sidecar.entitlements dist/DefernoSidecar.app
+dist/DefernoSidecar.app/Contents/MacOS/deferno-sidecar --listen /tmp/s.sock --token t
+```
+
+The notification **permission** rides the `permissions` capability (`queryPermission` with
+`{"capability":"notifications"}`); the first `postNotification` against `not_determined` fires the OS
+authorization prompt and pushes `permissionChanged` as it settles, and a post without a grant fails
+`unavailable` (`notification-permission-denied`).
+
 ## launchd install (contract)
 
 `Resources/com.circuitstitch.deferno.sidecar.plist.template` is the on-demand socket-activation
@@ -124,6 +153,11 @@ What the automated build/tests prove on this machine (Xcode 15.2 / Ventura 13.7.
   signature valid and satisfies its Designated Requirement.
 - ✅ Audio never crosses the socket and no payload/Transcript text is logged (the wire layer redacts;
   `NoTranscriptLoggingTest` + the Swift `description` redaction cover this).
+- ✅ **Notifications (#123):** the bundle gate degrades exactly as designed — the bare binary omits the
+  `notifications` capability; the `.app`-wrapped binary advertises it, answers
+  `queryPermission(notifications)` from the live `UNUserNotificationCenter` state over the wire, fires
+  the real authorization request on first `postNotification`, and fails a denied post with
+  `unavailable` (`notification-permission-denied`) per the contract.
 
 What still needs a **human at the GUI** to confirm (these need real consent dialogs / a real voice / a
 real launchd session, which can't be automated headlessly):
@@ -134,6 +168,10 @@ real launchd session, which can't be automated headlessly):
   utterance (requires the on-device asset, a granted Speech+mic grant, and a live voice).
 - ⏳ The end-to-end **launchd socket-activation** path under an installed LaunchAgent (the install itself
   is #122; the `launch_activate_socket` code path is built and the self-bind path is fully exercised).
+- ⏳ **Granted-path notification delivery** (#123): the authorization prompt fired unattended on this
+  machine and resolved **denied**, so the visible-banner path needs a human once — System Settings →
+  Notifications → *Deferno Sidecar* → Allow, then re-run `postNotification` (the denied → `unavailable`
+  path and everything up to the prompt are verified above).
 
 To exercise the real engine manually once granted: `deferno-sidecar --listen /tmp/s.sock --token t`, then
 drive it from the desktop app (#119) or a socket client speaking the protocol, and speak.

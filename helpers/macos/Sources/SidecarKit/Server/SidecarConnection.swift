@@ -74,6 +74,18 @@ public final class SidecarConnection {
                 }
             case SidecarMethods.subscribeTranscript:
                 startTranscript(id: id)
+            case SidecarMethods.postNotification:
+                guard let request = PostNotificationRequest(params: params) else {
+                    send(.failure(id: id, error: SidecarError(.invalidParams, "postNotification requires a non-empty title")))
+                    return
+                }
+                provider.postNotification(request) { [weak self] error in
+                    if let error {
+                        self?.send(.failure(id: id, error: error))
+                    } else {
+                        self?.send(.response(id: id, result: nil))
+                    }
+                }
             default:
                 send(.failure(id: id, error: SidecarError(.unknownMethod, "no such method: \(method)")))
             }

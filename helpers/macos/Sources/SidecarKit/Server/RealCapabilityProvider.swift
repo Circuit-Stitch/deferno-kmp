@@ -1,13 +1,17 @@
 import Foundation
 import Speech
+import UserNotifications
 
-/// The production `CapabilityProvider`: real macOS TCC + on-device SFSpeech (ADR-0024).
+/// The production `CapabilityProvider`: real macOS TCC + on-device SFSpeech + Notification Center
+/// (ADR-0024).
 ///
-/// - `queryPermission` introspects the live mic/Speech TCC state (never prompts).
+/// - `queryPermission` introspects the live mic/Speech/notification state (never prompts).
 /// - `subscribeTranscript` ensures Speech **and** mic authorization (firing the real TCC prompts on
 ///   first use, and pushing `permissionChanged` as states settle), then streams on-device dictation.
 ///   Only one transcription runs process-wide — the mic is exclusive — so a second concurrent subscribe
 ///   fails fast with `engine-busy`.
+/// - `postNotification` ensures notification authorization the same way (prompt on first use, push as
+///   it settles), then delivers through `UNUserNotificationCenter` (#123).
 public final class RealCapabilityProvider: CapabilityProvider {
 
     public let capabilities: [String]
@@ -21,6 +25,11 @@ public final class RealCapabilityProvider: CapabilityProvider {
         var caps = [SidecarCapabilities.permissions]
         if SFSpeechRecognizer(locale: Locale(identifier: "en-US")) != nil {
             caps.append(SidecarCapabilities.speechTranscribe)
+        }
+        // Same degradation for notifications (#123): UNUserNotificationCenter exists only for a
+        // bundle-hosted process (the packaged helper, #122) — a bare dev binary must not offer it.
+        if SidecarPermissions.notificationCenterAvailable {
+            caps.append(SidecarCapabilities.notifications)
         }
         self.capabilities = caps
     }
@@ -83,7 +92,45 @@ public final class RealCapabilityProvider: CapabilityProvider {
         return handle
     }
 
+    public func postNotification(_ request: PostNotificationRequest, completion: @escaping (SidecarError?) -> Void) {
+        guard SidecarPermissions.notificationCenterAvailable else {
+            completion(SidecarError(.unavailable, "notification-center-unavailable"))
+            return
+        }
+        workQueue.async { [weak self] in
+            self?.ensureNotificationsAuthorized { granted in
+                guard granted else {
+                    completion(SidecarError(.unavailable, "notification-permission-denied"))
+                    return
+                }
+                let content = UNMutableNotificationContent()
+                content.title = request.title
+                if let body = request.body { content.body = body }
+                content.sound = .default
+                let delivery = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                UNUserNotificationCenter.current().add(delivery) { error in
+                    // Metadata only — the OS error is not echoed (it can embed content; ADR-0009).
+                    completion(error == nil ? nil : SidecarError(.internal, "notification-post-failed"))
+                }
+            } ?? completion(SidecarError(.internal, "notification-post-failed"))
+        }
+    }
+
     // MARK: TCC sequencing (Speech then mic; fire prompts on notDetermined; push as states settle)
+
+    private func ensureNotificationsAuthorized(_ done: @escaping (Bool) -> Void) {
+        switch SidecarPermissions.notificationsStatus() {
+        case .granted:
+            done(true)
+        case .notDetermined:
+            SidecarPermissions.requestNotifications { [weak self] status in
+                self?.pushPermission(SidecarPermissionCapability.notifications, status)
+                done(status == .granted)
+            }
+        default:
+            done(false)
+        }
+    }
 
     private func ensureAuthorized(_ completion: @escaping (_ granted: Bool, _ reason: String) -> Void) {
         ensureSpeech { [weak self] speechOk in

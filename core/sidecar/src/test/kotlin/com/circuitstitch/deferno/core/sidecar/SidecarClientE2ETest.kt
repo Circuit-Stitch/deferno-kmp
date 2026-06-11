@@ -41,7 +41,11 @@ class SidecarClientE2ETest {
         client.connect()
 
         assertEquals(
-            setOf(SidecarCapabilities.Permissions, SidecarCapabilities.SpeechTranscribe),
+            setOf(
+                SidecarCapabilities.Permissions,
+                SidecarCapabilities.SpeechTranscribe,
+                SidecarCapabilities.Notifications,
+            ),
             client.capabilities(),
         )
         assertIs<SidecarConnectionState.Ready>(client.state.value)
@@ -119,7 +123,13 @@ class SidecarClientE2ETest {
         val stub1 = StubHelper(path, expectedToken = TOKEN).also { it.start(); cleanups += { it.close() } }
         client.connect()
         assertEquals(
-            SidecarConnectionState.Ready(setOf(SidecarCapabilities.Permissions, SidecarCapabilities.SpeechTranscribe)),
+            SidecarConnectionState.Ready(
+                setOf(
+                    SidecarCapabilities.Permissions,
+                    SidecarCapabilities.SpeechTranscribe,
+                    SidecarCapabilities.Notifications,
+                ),
+            ),
             client.state.value,
         )
 
@@ -131,6 +141,77 @@ class SidecarClientE2ETest {
         StubHelper(path, expectedToken = TOKEN).also { it.start(); cleanups += { it.close() } }
         val result = checkNotNull(client.request(SidecarMethods.QueryPermission))
         assertEquals("speech", SidecarJson.decodeFromJsonElement(PermissionStatusWire.serializer(), result).capability)
+    }
+
+    // --- the Notification port (#123) --------------------------------------------------------------
+
+    @Test
+    fun postsANotificationWhenGranted() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub().also { it.permissionStatus = PermissionStatusValue.GRANTED }
+        val client = client(stub.path)
+        client.connect()
+
+        val port = SidecarNotificationPort(client)
+        assertTrue(port.isAvailable())
+        port.post(PostNotificationWire(title = "Deferno", body = "\"Pack for the trip\" is due soon"))
+
+        val posted = withTimeout(2_000) { stub.awaitNotification() }
+        assertEquals(PostNotificationWire("Deferno", "\"Pack for the trip\" is due soon"), posted)
+    }
+
+    @Test
+    fun refusesToPostWithoutAGrant() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub().also { it.permissionStatus = PermissionStatusValue.DENIED }
+        val client = client(stub.path)
+        client.connect()
+
+        val failure = assertFailsWith<SidecarRequestException> {
+            SidecarNotificationPort(client).post(PostNotificationWire(title = "Deferno"))
+        }
+        assertEquals(SidecarErrorCode.UNAVAILABLE, failure.error.code)
+    }
+
+    @Test
+    fun refusesANotificationWithAnEmptyTitle() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub()
+        val client = client(stub.path)
+        client.connect()
+
+        val failure = assertFailsWith<SidecarRequestException> {
+            SidecarNotificationPort(client).post(PostNotificationWire(title = ""))
+        }
+        assertEquals(SidecarErrorCode.INVALID_PARAMS, failure.error.code)
+    }
+
+    @Test
+    fun introspectsTheNotificationPermission() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub().also { it.permissionStatus = PermissionStatusValue.NOT_DETERMINED }
+        val client = client(stub.path)
+        client.connect()
+
+        assertEquals(PermissionStatusValue.NOT_DETERMINED, SidecarNotificationPort(client).permission())
+    }
+
+    @Test
+    fun observesNotificationPermissionChanges() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub().also { it.permissionStatus = PermissionStatusValue.DENIED }
+        val client = client(stub.path)
+        client.connect()
+
+        val port = SidecarNotificationPort(client)
+        // The stub pushes permissionChanged (echoing the queried capability) after answering a query —
+        // a speech-capability change must NOT reach the notifications filter, the notifications one must.
+        port.permissionChanges.test {
+            client.request(SidecarMethods.QueryPermission) // capability defaults to speech → filtered out
+            port.permission()
+            assertEquals(PermissionStatusValue.DENIED, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test

@@ -20,6 +20,9 @@ object SidecarMethods {
 
     /** Server stream: subscribe to on-device dictation; yields [TranscriptWire] events until cancelled. */
     const val SubscribeTranscript: String = "subscribeTranscript"
+
+    /** Request/response: post a user-visible OS notification ([PostNotificationWire] params, #123). */
+    const val PostNotification: String = "postNotification"
 }
 
 /** Topics a Helper sends in an unsolicited [SidecarFrame.Push]. */
@@ -35,4 +38,18 @@ object SidecarCapabilities {
 
     /** The Helper hosts an on-device speech engine reachable via [SidecarMethods.SubscribeTranscript]. */
     const val SpeechTranscribe: String = "speech.transcribe"
+
+    /** The Helper can deliver OS notifications via [SidecarMethods.PostNotification] (#123). */
+    const val Notifications: String = "notifications"
+}
+
+/**
+ * The capability ids carried inside [PermissionStatusWire.capability] / [QueryPermissionWire.capability]
+ * (the Swift Helper's `SidecarPermissionCapability`) — which *permission* a status is about, distinct
+ * from the [SidecarCapabilities] a Helper advertises.
+ */
+object SidecarPermissionCapabilities {
+    const val Microphone: String = "mic"
+    const val Speech: String = "speech"
+    const val Notifications: String = "notifications"
 }

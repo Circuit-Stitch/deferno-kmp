@@ -1,0 +1,9 @@
+{
+  "type": "request",
+  "id": 3,
+  "method": "postNotification",
+  "params": {
+    "title": "Deferno",
+    "body": "\"Pack for the trip\" is due soon"
+  }
+}

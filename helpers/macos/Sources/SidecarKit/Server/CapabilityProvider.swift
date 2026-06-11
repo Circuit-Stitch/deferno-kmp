@@ -33,6 +33,12 @@ public protocol CapabilityProvider: AnyObject {
     /// once at natural completion or failure (NOT on `cancel()` of the returned handle, where the helper
     /// stays silent per the contract). Returns a handle the connection cancels on client `cancel`/teardown.
     func startTranscript(onEvent: @escaping (TranscriptEvent) -> Void, onEnd: @escaping () -> Void) -> TranscriptHandle
+
+    /// Deliver a user-visible OS notification (#123). Completes with `nil` on success (the connection
+    /// acks with an empty `response`) or a `SidecarError` — `unavailable` without a grant (the real
+    /// provider prompts first on `not_determined`, pushing `permissionChanged` as it settles), or
+    /// `internal` when the OS refuses delivery. Params were already validated by the connection.
+    func postNotification(_ request: PostNotificationRequest, completion: @escaping (SidecarError?) -> Void)
 }
 
 /// A handle that does nothing — returned when a stream is rejected synchronously (e.g. engine busy).

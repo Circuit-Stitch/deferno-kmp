@@ -75,6 +75,24 @@ final class SidecarWireTests: XCTestCase {
         XCTAssertEqual(error.code, .unknownMethod)
     }
 
+    func testGoldenPostNotificationRequestDecodes() throws {
+        guard case .request(let id, let method, let params) = try decodeFrameBody(fixture("post-notification-request.json")) else {
+            return XCTFail("expected request")
+        }
+        XCTAssertEqual(id, 3)
+        XCTAssertEqual(method, SidecarMethods.postNotification)
+        XCTAssertEqual(
+            PostNotificationRequest(params: params),
+            PostNotificationRequest(title: "Deferno", body: "\"Pack for the trip\" is due soon")
+        )
+    }
+
+    func testPostNotificationParseRejectsAMissingOrEmptyTitle() {
+        XCTAssertNil(PostNotificationRequest(params: nil))
+        XCTAssertNil(PostNotificationRequest(params: .object(["body": .string("no title")])))
+        XCTAssertNil(PostNotificationRequest(params: .object(["title": .string("")])))
+    }
+
     // MARK: encode shape matches the contract (discriminator + omitted defaults)
 
     func testEncodeTagsTypeDiscriminator() throws {

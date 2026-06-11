@@ -67,6 +67,30 @@ class SidecarFrameSerializationTest {
     }
 
     @Test
+    fun goldenPostNotificationRequestDecodesToTheNotificationWire() {
+        val request = assertIs<SidecarFrame.Request>(decode(fixture("post-notification-request.json")))
+        assertEquals(SidecarMethods.PostNotification, request.method)
+        val wire = SidecarJson.decodeFromJsonElement(
+            PostNotificationWire.serializer(),
+            checkNotNull(request.params),
+        )
+        assertEquals(PostNotificationWire("Deferno", "\"Pack for the trip\" is due soon"), wire)
+    }
+
+    @Test
+    fun postNotificationWireOmitsAnAbsentBody() {
+        val json = SidecarJson.encodeToString(PostNotificationWire.serializer(), PostNotificationWire("t"))
+        assertFalse(json.contains("body"), json)
+    }
+
+    @Test
+    fun postNotificationWireRedactsItsUserContent() {
+        // Privacy (ADR-0009): a notification's title/body are user content — never in diagnostics.
+        val wire = PostNotificationWire(title = "SECRET-TITLE", body = "SECRET-BODY")
+        assertFalse(wire.toString().contains("SECRET"), wire.toString())
+    }
+
+    @Test
     fun transcriptWireRoundTripsEveryVariant() {
         for (event in listOf(TranscriptWire.Partial("a"), TranscriptWire.Final("b"), TranscriptWire.Failure("capture"))) {
             val json = SidecarJson.encodeToString(TranscriptWire.serializer(), event)

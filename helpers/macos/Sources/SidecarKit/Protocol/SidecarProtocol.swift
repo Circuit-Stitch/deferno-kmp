@@ -17,6 +17,8 @@ public enum SidecarMethods {
     public static let queryPermission = "queryPermission"
     /// Server stream: subscribe to on-device dictation; yields `TranscriptEvent`s until cancelled.
     public static let subscribeTranscript = "subscribeTranscript"
+    /// Request/response: post a user-visible OS notification (`PostNotificationRequest` params, #123).
+    public static let postNotification = "postNotification"
 }
 
 /// Topics the helper sends in an unsolicited `push`.
@@ -31,10 +33,13 @@ public enum SidecarCapabilities {
     public static let permissions = "permissions"
     /// Hosts an on-device speech engine reachable via `subscribeTranscript`.
     public static let speechTranscribe = "speech.transcribe"
+    /// Can deliver OS notifications via `postNotification` (#123).
+    public static let notifications = "notifications"
 }
 
 /// The capability ids used inside a `PermissionStatus.capability` field (ADR-0024).
 public enum SidecarPermissionCapability {
     public static let microphone = "mic"
     public static let speech = "speech"
+    public static let notifications = "notifications"
 }

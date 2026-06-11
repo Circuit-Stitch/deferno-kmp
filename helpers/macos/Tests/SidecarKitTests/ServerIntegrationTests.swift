@@ -49,7 +49,10 @@ final class ServerIntegrationTests: XCTestCase {
     func testHandshakeAdvertisesCapabilities() throws {
         startConnection(provider: CannedCapabilityProvider())
         let caps = try handshake()
-        XCTAssertEqual(Set(caps), [SidecarCapabilities.permissions, SidecarCapabilities.speechTranscribe])
+        XCTAssertEqual(
+            Set(caps),
+            [SidecarCapabilities.permissions, SidecarCapabilities.speechTranscribe, SidecarCapabilities.notifications]
+        )
     }
 
     func testWrongTokenIsRejectedConnectionLevel() throws {
@@ -81,6 +84,71 @@ final class ServerIntegrationTests: XCTestCase {
         }
         XCTAssertEqual(topic, SidecarTopics.permissionChanged)
         XCTAssertEqual(payload.string("status"), "denied")
+    }
+
+    func testQueryPermissionEchoesTheRequestedCapability() throws {
+        startConnection(provider: CannedCapabilityProvider(permissionStatus: .notDetermined))
+        _ = try handshake()
+        try clientCodec.writeFrame(.request(
+            id: 7,
+            method: SidecarMethods.queryPermission,
+            params: .object(["capability": .string(SidecarPermissionCapability.notifications)])
+        ))
+
+        guard case .response(let id, let result)? = try clientCodec.readFrame() else {
+            return XCTFail("expected response")
+        }
+        XCTAssertEqual(id, 7)
+        XCTAssertEqual(result?.string("capability"), "notifications")
+        XCTAssertEqual(result?.string("status"), "not_determined")
+    }
+
+    func testPostNotificationAcksWhenGranted() throws {
+        startConnection(provider: CannedCapabilityProvider())
+        _ = try handshake()
+        try clientCodec.writeFrame(.request(
+            id: 4,
+            method: SidecarMethods.postNotification,
+            params: .object(["title": .string("Deferno"), "body": .string("contract parity")])
+        ))
+
+        guard case .response(let id, let result)? = try clientCodec.readFrame() else {
+            return XCTFail("expected response")
+        }
+        XCTAssertEqual(id, 4)
+        XCTAssertNil(result, "a posted notification is an empty ack")
+    }
+
+    func testPostNotificationWithoutAGrantIsUnavailable() throws {
+        startConnection(provider: CannedCapabilityProvider(permissionStatus: .denied))
+        _ = try handshake()
+        try clientCodec.writeFrame(.request(
+            id: 5,
+            method: SidecarMethods.postNotification,
+            params: .object(["title": .string("Deferno")])
+        ))
+
+        guard case .failure(let id, let error)? = try clientCodec.readFrame() else {
+            return XCTFail("expected failure")
+        }
+        XCTAssertEqual(id, 5)
+        XCTAssertEqual(error.code, .unavailable)
+    }
+
+    func testPostNotificationWithAnEmptyTitleIsInvalidParams() throws {
+        startConnection(provider: CannedCapabilityProvider())
+        _ = try handshake()
+        try clientCodec.writeFrame(.request(
+            id: 6,
+            method: SidecarMethods.postNotification,
+            params: .object(["title": .string("")])
+        ))
+
+        guard case .failure(let id, let error)? = try clientCodec.readFrame() else {
+            return XCTFail("expected failure")
+        }
+        XCTAssertEqual(id, 6)
+        XCTAssertEqual(error.code, .invalidParams)
     }
 
     func testUnknownMethodFails() throws {

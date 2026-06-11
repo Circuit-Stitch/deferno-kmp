@@ -30,6 +30,28 @@ public struct PermissionStatus: Equatable {
     }
 }
 
+/// The `postNotification` params (#123): a user-visible OS notification to deliver. Mirrors
+/// `core/sidecar`'s `PostNotificationWire`. A missing/empty `title` is `invalid_params` — modelled as
+/// a failed parse (`init?`) so the connection rejects it before any provider runs.
+///
+/// **Privacy (ADR-0009):** the title/body are user content (a task name, a due date) — like every
+/// payload, they are never logged; only metadata may surface in diagnostics.
+public struct PostNotificationRequest: Equatable {
+    public let title: String
+    public let body: String?
+
+    public init(title: String, body: String? = nil) {
+        self.title = title
+        self.body = body
+    }
+
+    /// Parse from the opaque wire `params`; nil when malformed (no object, or a missing/empty title).
+    public init?(params: JSONValue?) {
+        guard let title = params?.string("title"), !title.isEmpty else { return nil }
+        self.init(title: title, body: params?.string("body"))
+    }
+}
+
 /// The wire form of a dictation event, carried in `stream_data.event` on the `subscribeTranscript`
 /// stream. Mirrors `core/sidecar`'s `TranscriptWire`.
 ///
