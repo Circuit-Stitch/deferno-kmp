@@ -31,6 +31,12 @@ public final class RealCapabilityProvider: CapabilityProvider {
         if SidecarPermissions.notificationCenterAvailable {
             caps.append(SidecarCapabilities.notifications)
         }
+        // And for the menu-bar status item + global hotkeys (#125): both need the window server, so a
+        // headless run (no GUI session) simply doesn't offer them.
+        if GuiSession.available {
+            caps.append(SidecarCapabilities.statusItem)
+            caps.append(SidecarCapabilities.hotkeys)
+        }
         self.capabilities = caps
     }
 
@@ -114,6 +120,67 @@ public final class RealCapabilityProvider: CapabilityProvider {
                 }
             } ?? completion(SidecarError(.internal, "notification-post-failed"))
         }
+    }
+
+    // MARK: status item + hotkeys (#125)
+    // All three run on this connection's single-threaded read loop (and `connectionClosed` on its
+    // teardown), so the per-connection state below needs no locking; the process-wide pieces
+    // (NSStatusBar, the Carbon registry) synchronise internally on the main thread.
+
+    /// This connection's status item; created on first show, removed on hide/close.
+    private var statusItemController: StatusItemController?
+
+    /// This connection's live hotkey bindings by client-chosen id (re-register replaces, close releases).
+    private var hotkeyRegistrations: [Int64: HotkeyRegistration] = [:]
+
+    public func setStatusItem(
+        visible: Bool,
+        onClick: @escaping () -> Void,
+        completion: @escaping (SidecarError?) -> Void
+    ) {
+        guard GuiSession.available else {
+            completion(SidecarError(.unavailable, "no-gui-session"))
+            return
+        }
+        if statusItemController == nil {
+            statusItemController = StatusItemController(onClick: onClick)
+        }
+        statusItemController?.setVisible(visible)
+        completion(nil)
+    }
+
+    public func registerHotkey(
+        _ request: RegisterHotkeyRequest,
+        onFire: @escaping () -> Void,
+        completion: @escaping (SidecarError?) -> Void
+    ) {
+        guard GuiSession.available else {
+            completion(SidecarError(.unavailable, "no-gui-session"))
+            return
+        }
+        hotkeyRegistrations.removeValue(forKey: request.id)?.unregister() // same id → rebind
+        guard let registration = HotkeyCenter.shared.register(
+            key: request.key,
+            modifiers: request.modifiers,
+            onFire: onFire
+        ) else {
+            completion(SidecarError(.unavailable, "hotkey-unavailable"))
+            return
+        }
+        hotkeyRegistrations[request.id] = registration
+        completion(nil)
+    }
+
+    public func unregisterHotkey(id: Int64, completion: @escaping (SidecarError?) -> Void) {
+        hotkeyRegistrations.removeValue(forKey: id)?.unregister()
+        completion(nil) // idempotent — an unknown id still acks
+    }
+
+    public func connectionClosed() {
+        statusItemController?.setVisible(false)
+        statusItemController = nil
+        hotkeyRegistrations.values.forEach { $0.unregister() }
+        hotkeyRegistrations.removeAll()
     }
 
     // MARK: TCC sequencing (Speech then mic; fire prompts on notDetermined; push as states settle)

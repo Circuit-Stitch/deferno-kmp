@@ -27,8 +27,10 @@
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
 
-    <!-- Background agent: no Dock icon, no UI of its own. -->
-    <key>LSBackgroundOnly</key>
+    <!-- Menu-bar accessory agent (#125): no Dock icon and no app menu bar, but allowed to present its
+         NSStatusItem (LSBackgroundOnly would declare it UI-less). Matches the runtime `.accessory`
+         activation policy the CLI sets in real mode. -->
+    <key>LSUIElement</key>
     <true/>
 
     <!-- TCC usage strings. Shown verbatim in the macOS permission prompts the helper triggers. Non-PII,

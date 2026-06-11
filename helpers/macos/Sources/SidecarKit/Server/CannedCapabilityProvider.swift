@@ -12,6 +12,10 @@ import Foundation
 ///   with gaps so a collector can cancel mid-stream;
 /// - `postNotification` → an empty ack when the canned status is granted, else `unavailable`
 ///   (`notification-permission-denied`) — no `UNUserNotificationCenter` is touched (#123);
+/// - `setStatusItem` → an empty ack; showing additionally simulates one click (an observable
+///   `statusItemClicked` push) — no AppKit is touched (#125);
+/// - `registerHotkey` → an empty ack then one simulated fire (`hotkeyFired` push); `unregisterHotkey`
+///   → an idempotent empty ack — no Carbon is touched (#125);
 /// - `cancel` → stops that stream.
 public final class CannedCapabilityProvider: CapabilityProvider {
 
@@ -19,6 +23,8 @@ public final class CannedCapabilityProvider: CapabilityProvider {
         SidecarCapabilities.permissions,
         SidecarCapabilities.speechTranscribe,
         SidecarCapabilities.notifications,
+        SidecarCapabilities.statusItem,
+        SidecarCapabilities.hotkeys,
     ]
     public var permissionChangeSink: ((PermissionStatus) -> Void)?
 
@@ -41,6 +47,34 @@ public final class CannedCapabilityProvider: CapabilityProvider {
                 ? nil
                 : SidecarError(.unavailable, "notification-permission-denied")
         )
+    }
+
+    public func setStatusItem(
+        visible: Bool,
+        onClick: @escaping () -> Void,
+        completion: @escaping (SidecarError?) -> Void
+    ) {
+        completion(nil)
+        // A canned "click" right after showing, so the push path is observable without a real menu
+        // bar (the same trick as queryPermission's follow-on push; mirrors the JVM stub).
+        if visible { onClick() }
+    }
+
+    public func registerHotkey(
+        _ request: RegisterHotkeyRequest,
+        onFire: @escaping () -> Void,
+        completion: @escaping (SidecarError?) -> Void
+    ) {
+        completion(nil)
+        onFire() // a canned "fire" right after registering — same observability trick
+    }
+
+    public func unregisterHotkey(id: Int64, completion: @escaping (SidecarError?) -> Void) {
+        completion(nil) // idempotent ack, like the stub
+    }
+
+    public func connectionClosed() {
+        // Nothing canned to release.
     }
 
     public func startTranscript(

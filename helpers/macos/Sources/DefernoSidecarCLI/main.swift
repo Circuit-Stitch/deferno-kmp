@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Darwin
 import SidecarKit
@@ -137,4 +138,15 @@ if let path = options.listenPath {
 installSignalHandlers()
 server.start(listenFds: listenFds)
 log("ready, mode=\(options.contractFixtures ? "contract-fixtures" : "real")")
-dispatchMain() // services .main (signal sources); never returns
+
+// Real mode in a GUI session runs the AppKit main loop: the menu-bar status item + Carbon hotkeys
+// (#125) need NSApplication's event machinery on the main thread (which also drains the main dispatch
+// queue, so the signal sources above keep firing). Contract-fixtures mode — and a headless real run,
+// which doesn't advertise those capabilities — stays on plain dispatchMain(), touching no AppKit.
+if !options.contractFixtures && GuiSession.available {
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory) // a menu-bar accessory: no Dock icon, no app menu bar
+    app.run() // never returns
+} else {
+    dispatchMain() // services .main (signal sources); never returns
+}

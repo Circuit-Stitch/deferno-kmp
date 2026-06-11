@@ -91,6 +91,43 @@ class SidecarFrameSerializationTest {
     }
 
     @Test
+    fun goldenStatusItemFixturesDecode() {
+        val request = assertIs<SidecarFrame.Request>(decode(fixture("set-status-item-request.json")))
+        assertEquals(SidecarMethods.SetStatusItem, request.method)
+        assertEquals(
+            SetStatusItemWire(visible = true),
+            SidecarJson.decodeFromJsonElement(SetStatusItemWire.serializer(), checkNotNull(request.params)),
+        )
+
+        val push = assertIs<SidecarFrame.Push>(decode(fixture("status-item-clicked-push.json")))
+        assertEquals(SidecarTopics.StatusItemClicked, push.topic)
+    }
+
+    @Test
+    fun goldenHotkeyFixturesDecode() {
+        val request = assertIs<SidecarFrame.Request>(decode(fixture("register-hotkey-request.json")))
+        assertEquals(SidecarMethods.RegisterHotkey, request.method)
+        assertEquals(
+            RegisterHotkeyWire(id = 1, key = "d", modifiers = setOf(HotkeyModifier.COMMAND, HotkeyModifier.SHIFT)),
+            SidecarJson.decodeFromJsonElement(RegisterHotkeyWire.serializer(), checkNotNull(request.params)),
+        )
+
+        val push = assertIs<SidecarFrame.Push>(decode(fixture("hotkey-fired-push.json")))
+        assertEquals(SidecarTopics.HotkeyFired, push.topic)
+        assertEquals(
+            HotkeyFiredWire(id = 1),
+            SidecarJson.decodeFromJsonElement(HotkeyFiredWire.serializer(), push.payload),
+        )
+    }
+
+    @Test
+    fun hotkeyKeyNamesCoverTheDocumentedSet() {
+        // The contract names a–z, 0–9, the named keys, and f1–f12 (26 + 10 + 4 + 12).
+        assertEquals(52, SidecarHotkeyKeys.All.size)
+        assertTrue(SidecarHotkeyKeys.All.containsAll(setOf("a", "z", "0", "9", "space", "return", "escape", "tab", "f1", "f12")))
+    }
+
+    @Test
     fun transcriptWireRoundTripsEveryVariant() {
         for (event in listOf(TranscriptWire.Partial("a"), TranscriptWire.Final("b"), TranscriptWire.Failure("capture"))) {
             val json = SidecarJson.encodeToString(TranscriptWire.serializer(), event)
