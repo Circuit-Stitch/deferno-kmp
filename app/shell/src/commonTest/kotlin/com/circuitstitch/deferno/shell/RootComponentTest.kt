@@ -20,6 +20,7 @@ import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.InMemorySpeechEnginePreference
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineId
+import com.circuitstitch.deferno.core.data.outbox.FlushResult
 import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
@@ -27,8 +28,13 @@ import com.circuitstitch.deferno.ui.FakeAuthRepository
 import com.circuitstitch.deferno.ui.FakeSettingsRepository
 import com.circuitstitch.deferno.ui.FakeSettingsWriter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,6 +42,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /**
  * The per-scene navigation root (ADR-0013 / ADR-0014): the two-state Shell selected by the Active
@@ -47,6 +55,7 @@ import kotlin.test.assertTrue
 class RootComponentTest {
 
     private val today = LocalDate(2026, 6, 6)
+    private val t0 = Instant.parse("2026-06-06T08:00:00Z")
     private val account = Account(AccountId("work"), "Work")
 
     private fun root(
@@ -61,6 +70,7 @@ class RootComponentTest {
         signInService = signInService,
         today = today,
         timeZone = "UTC",
+        now = { t0 },
         coroutineContext = Dispatchers.Unconfined,
     )
 
@@ -78,7 +88,28 @@ class RootComponentTest {
         today = today,
         timeZone = "UTC",
         speechEngineCatalog = speechEngineCatalog,
+        now = { t0 },
         coroutineContext = Dispatchers.Unconfined,
+    )
+
+    /**
+     * A root on the [TestScope]'s virtual scheduler — for the outbox-driver tests (#143), whose
+     * periodic flush loop is advanced deterministically with [advanceTimeBy].
+     */
+    private fun TestScope.rootWithVirtualTime(
+        manager: AccountManager,
+        sessionFor: (Account) -> AccountSession,
+    ) = DefaultRootComponent(
+        componentContext = DefaultComponentContext(LifecycleRegistry()),
+        accountManager = manager,
+        authRepository = FakeAuthRepository(),
+        accountSession = sessionFor,
+        signInService = FakeSignInService { SignInResult.Unavailable },
+        today = today,
+        timeZone = "UTC",
+        now = { t0 },
+        outboxFlushPeriod = 30.seconds,
+        coroutineContext = UnconfinedTestDispatcher(testScheduler),
     )
 
     private fun RootComponent.activeChild() = stack.value.active.instance
@@ -333,6 +364,81 @@ class RootComponentTest {
         assertEquals(ThemeMode.Auto, root.themeSettings.value.themeMode)
     }
 
+    // --- outbox driver (#143: offline writes must sync; the cold-start reconcile must not clobber) ---
+
+    @Test
+    fun openingMain_flushesTheOutboxBeforeTheSettingsReconcile() {
+        // The #143 startup order: the queued offline writes reach the server FIRST, so the settings
+        // pull that follows can't fetch a snapshot that predates them (the cold-start theme revert).
+        val events = mutableListOf<String>()
+        val settingsRepo = object : SettingsRepository {
+            override fun observeSettings(): Flow<UserSettings> = MutableStateFlow(UserSettings.Default)
+            override suspend fun refresh() { events += "settings.refresh" }
+        }
+        val session = FakeAccountSession(settingsRepository = settingsRepo, onFlush = { events += "flush" })
+
+        root(FakeAccountManager(active = account), session = session)
+
+        assertEquals(listOf("flush", "settings.refresh"), events)
+    }
+
+    @Test
+    fun outboxKeepsFlushingPeriodically_whileTheSessionIsActive() = runTest {
+        // Writes made DURING a session (not just at activation) must sync without waiting for the
+        // next cold start — the periodic re-flush is what picks them up (#143).
+        val manager = FakeAccountManager(active = account)
+        val session = FakeAccountSession()
+        rootWithVirtualTime(manager) { session }
+        assertEquals(1, session.flushes.size, "the activation flush")
+
+        advanceTimeBy(31.seconds)
+        assertEquals(2, session.flushes.size, "one periodic re-flush per period")
+
+        advanceTimeBy(30.seconds)
+        assertEquals(3, session.flushes.size)
+
+        // Stop the driver before runTest's run-until-idle cleanup — an active periodic loop on the
+        // virtual scheduler would otherwise never go idle.
+        manager.signOut()
+    }
+
+    @Test
+    fun signingOut_stopsTheOutboxDriver() = runTest {
+        val manager = FakeAccountManager(active = account)
+        val session = FakeAccountSession()
+        rootWithVirtualTime(manager) { session }
+        assertEquals(1, session.flushes.size)
+
+        manager.signOut()
+        advanceTimeBy(120.seconds)
+
+        // No Active Account → no driver: the signed-out Account's outbox is never flushed again.
+        assertEquals(1, session.flushes.size)
+    }
+
+    @Test
+    fun switchingAccount_rePointsTheOutboxDriver_atTheNewAccountsSession() = runTest {
+        val personal = Account(AccountId("personal"), "Personal")
+        val manager = FakeAccountManager(active = account).also { it.signIn(personal); it.activate(account.id) }
+        val workSession = FakeAccountSession()
+        val personalSession = FakeAccountSession()
+        val sessions = mapOf(account.id to workSession, personal.id to personalSession)
+        val root = rootWithVirtualTime(manager) { sessions.getValue(it.id) }
+        assertEquals(1, workSession.flushes.size)
+
+        (root.activeChild() as RootComponent.Child.Main).component
+            .let { (it as DefaultMainShellComponent).switchAccount(personal.id) }
+        advanceTimeBy(31.seconds)
+
+        // The old driver is cancelled (account isolation); the new session flushes on activation
+        // and keeps the periodic cadence.
+        assertEquals(1, workSession.flushes.size)
+        assertEquals(2, personalSession.flushes.size)
+
+        // Stop the driver before runTest's run-until-idle cleanup (see the periodic test above).
+        manager.signOut()
+    }
+
     @Test
     fun themeSettings_fallsBackToDefault_onSignOut() {
         val mono = UserSettings.Default.copy(themeFamily = ThemeFamily.Mono)
@@ -395,14 +501,23 @@ private class FakeAccountManager(active: Account? = null) : AccountManager {
     }
 }
 
-/** In-memory [AccountSession] over the in-memory demo repositories; records add-to-plan + create calls. */
+/** In-memory [AccountSession] over the in-memory demo repositories; records add-to-plan + create + flush calls. */
 private class FakeAccountSession(
     override val taskRepository: TaskRepository = DemoTaskRepository(SampleData.tasks),
     override val planRepository: PlanRepository = DemoPlanRepository(emptyList()),
     override val settingsRepository: SettingsRepository = FakeSettingsRepository(),
     override val settingsWriter: SettingsWriter = FakeSettingsWriter(),
+    /** Hook for the driver-ordering test (#143) — runs inside [flushOutbox] before it returns. */
+    private val onFlush: () -> Unit = {},
 ) : AccountSession {
     val addedToPlan = mutableListOf<TaskId>()
+    val flushes = mutableListOf<Instant>()
+
+    override suspend fun flushOutbox(now: Instant): FlushResult {
+        flushes += now
+        onFlush()
+        return FlushResult(succeeded = 0, dropped = 0, retried = 0, remaining = 0)
+    }
     val workingStateSets = mutableListOf<Pair<TaskId, com.circuitstitch.deferno.core.model.WorkingState>>()
     val created = mutableListOf<com.circuitstitch.deferno.core.domain.command.CreateItem.Payload>()
 

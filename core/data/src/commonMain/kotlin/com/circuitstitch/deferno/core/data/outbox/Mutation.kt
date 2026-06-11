@@ -120,10 +120,18 @@ sealed interface PlanMutation : Mutation {
  * | [SetDoneVisibility] | `PATCH auth/me/settings` | `{"global_done_visibility_seconds":…,"dashboard_done_visibility_seconds":…}` |
  */
 sealed interface SettingsMutation : Mutation {
-    override val target: String get() = "settings"
+    override val target: String get() = TARGET
 
     /** The optimistic local effect on the cached settings — **pure** and idempotent. */
     fun applyTo(settings: UserSettings): UserSettings
+
+    companion object {
+        /**
+         * The one settings [target] (the bag is a singleton row). The settings reconcile checks the
+         * outbox for this target so a refresh can't clobber an un-synced optimistic change (#143).
+         */
+        const val TARGET: String = "settings"
+    }
 }
 
 // --- Task intents ---
