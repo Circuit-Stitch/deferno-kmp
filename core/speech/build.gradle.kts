@@ -53,6 +53,11 @@ kotlin {
             // the engine is internal to this module; the native jar still reaches the desktop app's runtime
             // classpath transitively, and the model ships in the installer (ADR-0019).
             implementation(libs.whisper.jni)
+            // The Sidecar client (#119, ADR-0024/0025): SidecarSpeechToText drives the native Helper's
+            // dictation stream over the peer-authenticated socket. `api` because the JvmSpeechBindings
+            // @Provides signatures name SidecarClient, which the merged AppComponent (core/di) compiles
+            // against. JVM-only by design — the Helpers are native processes (ADR-0025).
+            api(project(":core:sidecar"))
         }
 
         commonTest.dependencies {
@@ -70,4 +75,12 @@ kotlin {
             implementation(libs.androidx.test.runner)
         }
     }
+}
+
+// The Linux stub Helper (#118/#119): the SidecarSpeechToText + selector tests drive the real client
+// against it over a real socket — the engine's Linux fast-path proof (ADR-0024). Declared here, not in
+// kotlin.sourceSets, because the `testFixtures(...)` capability notation is a DependencyHandler
+// extension the KMP source-set DSL doesn't expose.
+dependencies {
+    "jvmTestImplementation"(testFixtures(project(":core:sidecar")))
 }

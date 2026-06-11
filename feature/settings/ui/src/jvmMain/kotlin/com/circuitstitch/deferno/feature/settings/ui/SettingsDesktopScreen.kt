@@ -535,6 +535,9 @@ private fun SettingsCategory.rowSummary(speechEngine: SpeechEngineSettings): Str
 private fun speechEngineLabel(id: SpeechEngineId): String = when (id) {
     SpeechEngineId.Automatic -> "Automatic"
     SpeechEngineId.Whisper -> "Whisper"
+    // The Sidecar-hosted native recognizer (#119, ADR-0024) — the OS's own dictation engine
+    // (SFSpeechRecognizer on macOS), named for what it is to the user, not its plumbing.
+    SpeechEngineId.Sidecar -> "System dictation"
     // Future native fast paths get explicit labels as they land (#96/#97); fall back to a humanised id.
     else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
 }
