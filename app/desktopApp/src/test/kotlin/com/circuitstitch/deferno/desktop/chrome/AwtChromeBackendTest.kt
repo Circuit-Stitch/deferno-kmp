@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.desktop.chrome
 
+import java.awt.image.BufferedImage
 import org.junit.Assert.assertFalse
 import org.junit.Assume.assumeFalse
 import org.junit.Test
@@ -22,6 +23,8 @@ class AwtChromeBackendTest {
         assertFalse(AwtChromeBackend.badgeSupported)
         AwtChromeBackend.setBadge("3") // a silent no-op, never a throw
         AwtChromeBackend.setBadge(null)
+        // No ICON_IMAGE dock off macOS either — same silent no-op contract.
+        AwtChromeBackend.setDockIcon(BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB))
     }
 
     private fun isMac(): Boolean =
