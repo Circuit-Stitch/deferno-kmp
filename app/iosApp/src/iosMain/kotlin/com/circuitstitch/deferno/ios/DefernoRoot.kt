@@ -117,6 +117,9 @@ class DefernoRoot {
             speechToText = appComponent.speechToText,
             locale = currentLocaleTag(),
             speechEngineCatalog = appComponent.speechEngineCatalog,
+            // The AppScope connectivity monitor (#158): the outbox driver flushes on the
+            // offline→online edge and skips passes while known-offline.
+            connectivity = appComponent.connectivity,
         )
 
         lifecycle.resume()

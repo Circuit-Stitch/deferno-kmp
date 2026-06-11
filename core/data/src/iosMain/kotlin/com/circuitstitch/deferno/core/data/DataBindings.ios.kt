@@ -8,6 +8,8 @@ import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
 import com.circuitstitch.deferno.core.data.auth.DeviceName
 import com.circuitstitch.deferno.core.data.auth.IosBrowserAuthenticator
+import com.circuitstitch.deferno.core.data.connectivity.Connectivity
+import com.circuitstitch.deferno.core.data.connectivity.PathMonitorConnectivity
 import com.circuitstitch.deferno.core.scopes.AppScope
 import me.tatarka.inject.annotations.Provides
 import platform.UIKit.UIDevice
@@ -43,4 +45,13 @@ interface IosDataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun deviceName(): DeviceName = DeviceName("Deferno iOS — ${UIDevice.currentDevice.name}")
+
+    /**
+     * The connectivity seam (#71/#158, ADR-0016): the `NWPathMonitor` mirror, so the create gate
+     * answers before the POST and the outbox driver flushes on the reconnect edge. AppScope —
+     * connectivity is a process concern, not per-Account.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun connectivity(): Connectivity = PathMonitorConnectivity()
 }
