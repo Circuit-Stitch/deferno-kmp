@@ -38,6 +38,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -89,6 +90,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.swing.Swing
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
+import org.jetbrains.compose.resources.decodeToSvgPainter
 import software.amazon.app.kmplogger.LogLevel
 import software.amazon.app.kmplogger.Logger
 
@@ -263,15 +265,22 @@ fun main() {
             )
         }
 
-        // A fully transparent window icon — there is no Deferno desktop icon yet, and we never want the
-        // default AWT/Java icon to show in the title bar / taskbar.
-        val blankIcon = remember { BitmapPainter(ImageBitmap(1, 1)) }
+        // The window/taskbar icon: the brand flame — the same mark conveyor.conf ships as the
+        // packaged app icon (single-sourced off the classpath, see build.gradle.kts) — replacing the
+        // earlier transparent placeholder, which KDE rendered as a blank square in the taskbar. If
+        // the resource ever goes missing, fall back to transparent rather than crash the window (and
+        // never show the default AWT/Java icon either way).
+        val density = LocalDensity.current
+        val windowIcon = remember(density) {
+            runCatching { readClasspathResource("flame.svg").decodeToSvgPainter(density) }
+                .getOrDefault(BitmapPainter(ImageBitmap(1, 1)))
+        }
 
         Window(
             onCloseRequest = ::exitApplication,
             state = windowState,
             title = rememberWindowTitle(root),
-            icon = blankIcon,
+            icon = windowIcon,
             // Global shortcuts: Esc → shell back (dismiss the overlay, then the active pane, then fall
             // back to Plan home); Ctrl+digit → switch Destination; Ctrl+N → New; Ctrl+F → Search;
             // Ctrl+R → refresh; Ctrl+Q → quit. Bound here (not on the in-app menu) so they work
@@ -630,6 +639,11 @@ internal fun webAppUrl(environment: DefernoEnvironment, path: String): String {
  * self-update isn't available (Linux package-manager updates, or an unpackaged dev run; #103).
  */
 private const val RELEASES_URL = "https://github.com/Circuit-Stitch/deferno-kmp/releases"
+
+/** Read a classpath resource fully, throwing when absent (callers decide whether that's fatal). */
+private fun readClasspathResource(path: String): ByteArray =
+    checkNotNull(object {}.javaClass.classLoader.getResourceAsStream(path)) { "missing resource: $path" }
+        .use { it.readBytes() }
 
 /** Open [url] in the OS default browser (the Settings web deep-links, #72). Best-effort + headless-safe. */
 private fun browse(url: String) {

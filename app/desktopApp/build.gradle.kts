@@ -135,6 +135,9 @@ kotlin {
     sourceSets.named("main") {
         kotlin.srcDir(generateDesktopDevConfig)
         kotlin.srcDir(generateDesktopBuildConfig)
+        // The brand dir rides the classpath so the window/taskbar icon single-sources the same
+        // flame.svg conveyor.conf ships as the packaged app icon — no duplicated asset.
+        resources.srcDir(rootProject.layout.projectDirectory.dir("core/designsystem/brand"))
     }
 }
 
