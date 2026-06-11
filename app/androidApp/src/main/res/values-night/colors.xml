@@ -1,0 +1,6 @@
+<resources>
+    <!-- Splash background, dark mode (the device is in dark theme). Matches the flame's dark
+         icon-background circle (splash_icon_circle) so the circle disappears and the flame reads as
+         floating on a uniform dark field. See values/colors.xml for the light values. -->
+    <color name="splash_background">#1F1B16</color>
+</resources>
