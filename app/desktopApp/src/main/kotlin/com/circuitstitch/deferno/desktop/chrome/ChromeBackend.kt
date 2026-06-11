@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.desktop.chrome
 
 import java.awt.Desktop
 import java.awt.EventQueue
+import java.awt.Image
 import java.awt.Taskbar
 
 /**
@@ -35,6 +36,14 @@ interface ChromeBackend {
 
     /** Show [text] on the dock icon, or clear the badge when `null`. No-op where unsupported. */
     fun setBadge(text: String?)
+
+    /**
+     * Set the dock icon image where the desktop has one ([Taskbar.Feature.ICON_IMAGE] — macOS).
+     * Covers the unpackaged dev `run`, which otherwise shows the default Java icon in the Dock; a
+     * packaged build gets its icon from the bundle. No-op where unsupported (Linux/Windows docks
+     * take their icon from the window, which the entry point already brands).
+     */
+    fun setDockIcon(image: Image)
 }
 
 /** The real AWT [ChromeBackend] (#117) — see the interface for the capability-guard contract. */
@@ -76,6 +85,17 @@ object AwtChromeBackend : ChromeBackend {
         // The badge collector runs off a background scope; touch AWT only on the EDT.
         EventQueue.invokeLater {
             runCatching { Taskbar.getTaskbar().setIconBadge(text) }
+        }
+    }
+
+    override fun setDockIcon(image: Image) {
+        val supported = runCatching {
+            Taskbar.isTaskbarSupported() &&
+                Taskbar.getTaskbar().isSupported(Taskbar.Feature.ICON_IMAGE)
+        }.getOrDefault(false)
+        if (!supported) return
+        EventQueue.invokeLater {
+            runCatching { Taskbar.getTaskbar().setIconImage(image) }
         }
     }
 

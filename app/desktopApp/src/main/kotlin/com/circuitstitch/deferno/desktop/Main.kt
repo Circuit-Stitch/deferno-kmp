@@ -29,9 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -41,6 +43,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -122,6 +125,13 @@ fun main() {
     // surface lags the resize). AWT background colouring and software rendering were both tried and
     // didn't resolve it, so we stay on the default (GPU) renderer; revisit when Skiko/JBR Wayland
     // resize handling improves.
+
+    // Name the app "Deferno" in the macOS menu bar (so the app menu + its About/Quit items read
+    // "Deferno", not the "MainKt" main-class name) and anywhere AWT surfaces the application name.
+    // Must be set before AWT initializes — i.e. before the first Desktop/Taskbar/Window touch — so it
+    // lands here at the very top of main(). A packaged build gets the name from its bundle instead;
+    // this only governs the unpackaged dev `run`. Harmless (just an unread property) off macOS. (#117)
+    System.setProperty("apple.awt.application.name", "Deferno")
 
     val timeZone = TimeZone.currentSystemDefault()
     val today = Clock.System.todayIn(timeZone)
@@ -274,6 +284,14 @@ fun main() {
         val windowIcon = remember(density) {
             runCatching { readClasspathResource("flame.svg").decodeToSvgPainter(density) }
                 .getOrDefault(BitmapPainter(ImageBitmap(1, 1)))
+        }
+
+        // The Dock icon (#117): the same flame, rasterized for AWT. A packaged build gets its Dock
+        // icon from the bundle; this covers the unpackaged dev `run`, which otherwise shows the
+        // default Java icon. Capability-guarded inside the backend (ICON_IMAGE), so desktops whose
+        // dock takes the icon from the window (Linux/Windows) stay no-ops.
+        LaunchedEffect(windowIcon) {
+            chrome.setDockIcon(windowIcon.toAwtImage(density, LayoutDirection.Ltr, Size(512f, 512f)))
         }
 
         Window(
