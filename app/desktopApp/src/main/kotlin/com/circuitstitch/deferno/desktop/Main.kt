@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -20,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +38,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -55,6 +58,12 @@ import com.circuitstitch.deferno.core.di.createAppComponent
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.PlatformContext
+import com.circuitstitch.deferno.desktop.chrome.AwtChromeBackend
+import com.circuitstitch.deferno.desktop.chrome.ChromeBackend
+import com.circuitstitch.deferno.desktop.chrome.PlanBadge
+import com.circuitstitch.deferno.desktop.chrome.activeMainShell
+import com.circuitstitch.deferno.desktop.chrome.installAppMenuHandlers
+import com.circuitstitch.deferno.desktop.chrome.openPreferences
 import com.circuitstitch.deferno.desktop.shell.RootShell
 import com.circuitstitch.deferno.desktop.shell.label
 import com.circuitstitch.deferno.desktop.update.ConveyorUpdateBackend
@@ -81,6 +90,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.swing.Swing
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
+import org.jetbrains.compose.resources.decodeToSvgPainter
 import software.amazon.app.kmplogger.LogLevel
 import software.amazon.app.kmplogger.Logger
 
@@ -114,6 +124,7 @@ fun main() {
     // resize handling improves.
 
     val timeZone = TimeZone.currentSystemDefault()
+    val today = Clock.System.todayIn(timeZone)
     // Debug dev builds talk to staging (the dev-PAT target, ADR-0012); reused to derive the web-app
     // origin for the Settings deep-links. A real environment selector is a follow-up.
     val environment = DefernoEnvironment.Staging
@@ -150,6 +161,13 @@ fun main() {
         scope = appScope,
     )
 
+    // OS-native chrome (#117): the macOS app-menu items (About / Preferences / Quit) routed into
+    // the app, plus a dock badge carrying today's remaining-plan count. Capability-guarded inside
+    // the backend, so Linux/Windows — no native app menu, no text badge — are unaffected and keep
+    // the in-app menu bar as the only chrome.
+    val chrome: ChromeBackend = AwtChromeBackend
+    val planBadge = PlanBadge(chrome, appScope)
+
     // Honour the OS dark/light preference. Compose Desktop's isSystemInDarkTheme() doesn't read the
     // Linux desktop setting, so on Linux we ask the XDG Desktop Portal directly (KDE/GNOME implement
     // it); null elsewhere → fall back to Compose's detector (which works on Windows/macOS). It feeds
@@ -172,12 +190,17 @@ fun main() {
             authRepository = appComponent.authRepository,
             // Build the per-Account data layer for an Active Account from the DI graph (ADR-0014).
             accountSession = { account ->
-                AccountComponentSession(createAccountComponent(appComponent, account))
+                val component = createAccountComponent(appComponent, account)
+                // The dock badge follows the Active Account (#117): re-point it at this fresh
+                // session's today-plan (a session is rebuilt per activation/switch, ADR-0014);
+                // sign-out clears it via the activeAccount collector below.
+                planBadge.trackPlan(component.planRepository.observePlan(today, timeZone.id))
+                AccountComponentSession(component)
             },
             // The paste-PAT sign-in service (#15, ADR-0023) the Auth shell drives. Dev-PAT seeding still
             // runs at startup below, so a configured dev build skips the sign-in screen entirely.
             signInService = appComponent.signInService,
-            today = Clock.System.todayIn(timeZone),
+            today = today,
             timeZone = timeZone.id,
             // Settings → App Permissions is Android-only — there is no per-app OS settings screen on
             // desktop, so onOpenOsAppSettings stays the no-op default.
@@ -210,6 +233,14 @@ fun main() {
         seedDevAccounts(appComponent)
     }
 
+    // No Active Account (sign-out, or pre-auth) → nothing to count: clear the dock badge (#117).
+    // The non-null side is handled where the per-Account session is (re)built — accountSession above.
+    appScope.launch {
+        appComponent.accountManager.activeAccount.collect { account ->
+            if (account == null) planBadge.trackPlan(null)
+        }
+    }
+
     // One-shot best-effort probe so a packaged Win/Mac build surfaces an "Update available" badge at
     // launch without the user opening the menu (a no-op everywhere else). Conveyor also auto-checks in
     // the background on its own schedule; this just makes the in-app state fresh on open.
@@ -220,15 +251,36 @@ fun main() {
         // Bind the Essenty lifecycle to the window (resume/pause/stop on focus/minimise/close).
         LifecycleController(lifecycle, windowState)
 
-        // A fully transparent window icon — there is no Deferno desktop icon yet, and we never want the
-        // default AWT/Java icon to show in the title bar / taskbar.
-        val blankIcon = remember { BitmapPainter(ImageBitmap(1, 1)) }
+        // The macOS app-menu handlers (#117), installed once from the application scope — the only
+        // place exitApplication is in scope. About opens the themed dialog below; Preferences (⌘,)
+        // switches the Main shell to Settings (a no-op pre-Account); Quit (⌘Q / Dock → Quit) is the
+        // same graceful exit as window close / Ctrl+Q. Installs nothing without a native app menu.
+        var aboutVisible by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            installAppMenuHandlers(
+                backend = chrome,
+                onAbout = { aboutVisible = true },
+                onPreferences = { openPreferences(root) },
+                onQuit = ::exitApplication,
+            )
+        }
+
+        // The window/taskbar icon: the brand flame — the same mark conveyor.conf ships as the
+        // packaged app icon (single-sourced off the classpath, see build.gradle.kts) — replacing the
+        // earlier transparent placeholder, which KDE rendered as a blank square in the taskbar. If
+        // the resource ever goes missing, fall back to transparent rather than crash the window (and
+        // never show the default AWT/Java icon either way).
+        val density = LocalDensity.current
+        val windowIcon = remember(density) {
+            runCatching { readClasspathResource("flame.svg").decodeToSvgPainter(density) }
+                .getOrDefault(BitmapPainter(ImageBitmap(1, 1)))
+        }
 
         Window(
             onCloseRequest = ::exitApplication,
             state = windowState,
             title = rememberWindowTitle(root),
-            icon = blankIcon,
+            icon = windowIcon,
             // Global shortcuts: Esc → shell back (dismiss the overlay, then the active pane, then fall
             // back to Plan home); Ctrl+digit → switch Destination; Ctrl+N → New; Ctrl+F → Search;
             // Ctrl+R → refresh; Ctrl+Q → quit. Bound here (not on the in-app menu) so they work
@@ -240,6 +292,7 @@ fun main() {
             // dark boolean (Auto follows the OS preference). Before any Account is active the StateFlow
             // seeds the default (Deferno / follow-system), so the Auth shell is themed too.
             val settings by root.themeSettings.collectAsState()
+            val updateState by updateManager.state.collectAsState()
             DefernoTheme(
                 palette = when (settings.themeFamily) {
                     ThemeFamily.Deferno -> DefernoPalette.Deferno
@@ -255,7 +308,6 @@ fun main() {
                         // The menu bar belongs to the Main shell only — the Auth shell is a bare
                         // pre-Account placeholder with no Destinations/account actions (ADR-0013).
                         if (mainComponent != null) {
-                            val updateState by updateManager.state.collectAsState()
                             DefernoMenuBar(
                                 main = mainComponent,
                                 updateState = updateState,
@@ -270,6 +322,12 @@ fun main() {
                             RootShell(root)
                         }
                     }
+                }
+                if (aboutVisible) {
+                    AboutDialog(
+                        version = updateState.currentVersion,
+                        onDismiss = { aboutVisible = false },
+                    )
                 }
             }
         }
@@ -303,7 +361,7 @@ private fun handleRootKey(event: KeyEvent, root: RootComponent, onQuit: () -> Un
     if (event.type != KeyEventType.KeyDown) return false
     if (event.key == Key.Escape) return root.onBackClicked()
     if (!event.isCtrlPressed) return false
-    val main = (root.stack.value.active.instance as? RootComponent.Child.Main)?.component
+    val main = root.activeMainShell()
     return when (event.key) {
         Key.Q -> {
             onQuit()
@@ -438,6 +496,21 @@ private fun DefernoMenuBar(
     }
 }
 
+/**
+ * The About box the macOS app menu opens (#117) — themed like the rest of the app rather than a
+ * native NSPanel, the same trade the in-app menu bar makes. [version] is the running app version
+ * (the Conveyor-reported value when packaged, DesktopBuildConfig.APP_VERSION otherwise, #103).
+ */
+@Composable
+private fun AboutDialog(version: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Deferno") },
+        text = { Text("Version $version") },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
 /** A trailing toolbar button on the in-app menu bar (the desktop "+ New" / "Search" / update badge). */
 @Composable
 private fun ToolbarAction(
@@ -566,6 +639,11 @@ internal fun webAppUrl(environment: DefernoEnvironment, path: String): String {
  * self-update isn't available (Linux package-manager updates, or an unpackaged dev run; #103).
  */
 private const val RELEASES_URL = "https://github.com/Circuit-Stitch/deferno-kmp/releases"
+
+/** Read a classpath resource fully, throwing when absent (callers decide whether that's fatal). */
+private fun readClasspathResource(path: String): ByteArray =
+    checkNotNull(object {}.javaClass.classLoader.getResourceAsStream(path)) { "missing resource: $path" }
+        .use { it.readBytes() }
 
 /** Open [url] in the OS default browser (the Settings web deep-links, #72). Best-effort + headless-safe. */
 private fun browse(url: String) {
