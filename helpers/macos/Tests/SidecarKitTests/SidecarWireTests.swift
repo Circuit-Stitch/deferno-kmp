@@ -75,6 +75,76 @@ final class SidecarWireTests: XCTestCase {
         XCTAssertEqual(error.code, .unknownMethod)
     }
 
+    func testGoldenPostNotificationRequestDecodes() throws {
+        guard case .request(let id, let method, let params) = try decodeFrameBody(fixture("post-notification-request.json")) else {
+            return XCTFail("expected request")
+        }
+        XCTAssertEqual(id, 3)
+        XCTAssertEqual(method, SidecarMethods.postNotification)
+        XCTAssertEqual(
+            PostNotificationRequest(params: params),
+            PostNotificationRequest(title: "Deferno", body: "\"Pack for the trip\" is due soon")
+        )
+    }
+
+    func testPostNotificationParseRejectsAMissingOrEmptyTitle() {
+        XCTAssertNil(PostNotificationRequest(params: nil))
+        XCTAssertNil(PostNotificationRequest(params: .object(["body": .string("no title")])))
+        XCTAssertNil(PostNotificationRequest(params: .object(["title": .string("")])))
+    }
+
+    func testGoldenStatusItemFixturesDecode() throws {
+        guard case .request(let id, let method, let params) = try decodeFrameBody(fixture("set-status-item-request.json")) else {
+            return XCTFail("expected request")
+        }
+        XCTAssertEqual(id, 4)
+        XCTAssertEqual(method, SidecarMethods.setStatusItem)
+        XCTAssertEqual(SetStatusItemRequest(params: params), SetStatusItemRequest(visible: true))
+
+        guard case .push(let topic, _) = try decodeFrameBody(fixture("status-item-clicked-push.json")) else {
+            return XCTFail("expected push")
+        }
+        XCTAssertEqual(topic, SidecarTopics.statusItemClicked)
+    }
+
+    func testGoldenHotkeyFixturesDecode() throws {
+        guard case .request(let id, let method, let params) = try decodeFrameBody(fixture("register-hotkey-request.json")) else {
+            return XCTFail("expected request")
+        }
+        XCTAssertEqual(id, 5)
+        XCTAssertEqual(method, SidecarMethods.registerHotkey)
+        XCTAssertEqual(
+            RegisterHotkeyRequest(params: params),
+            RegisterHotkeyRequest(id: 1, key: "d", modifiers: [.command, .shift])
+        )
+
+        guard case .push(let topic, let payload) = try decodeFrameBody(fixture("hotkey-fired-push.json")) else {
+            return XCTFail("expected push")
+        }
+        XCTAssertEqual(topic, SidecarTopics.hotkeyFired)
+        guard case .object(let o) = payload, case .int(let firedId)? = o["id"] else {
+            return XCTFail("expected an id payload")
+        }
+        XCTAssertEqual(firedId, 1)
+    }
+
+    func testRegisterHotkeyParseEnforcesTheContract() {
+        // Unknown key, empty modifiers, unknown modifier, missing id — all invalid_params at parse.
+        XCTAssertNil(RegisterHotkeyRequest(params: .object(["id": .int(1), "key": .string("münzwurf"), "modifiers": .array([.string("command")])])))
+        XCTAssertNil(RegisterHotkeyRequest(params: .object(["id": .int(1), "key": .string("d"), "modifiers": .array([])])))
+        XCTAssertNil(RegisterHotkeyRequest(params: .object(["id": .int(1), "key": .string("d"), "modifiers": .array([.string("hyper")])])))
+        XCTAssertNil(RegisterHotkeyRequest(params: .object(["key": .string("d"), "modifiers": .array([.string("command")])])))
+    }
+
+    func testHotkeyKeyTableCoversTheDocumentedSet() {
+        // The contract names a–z, 0–9, the named keys, and f1–f12 (26 + 10 + 4 + 12) — the same set the
+        // JVM SidecarHotkeyKeys validates, so invalid keys fail identically on both implementations.
+        XCTAssertEqual(HotkeyKeyTable.keyCodes.count, 52)
+        for key in ["a", "z", "0", "9", "space", "return", "escape", "tab", "f1", "f12"] {
+            XCTAssertNotNil(HotkeyKeyTable.keyCodes[key], key)
+        }
+    }
+
     // MARK: encode shape matches the contract (discriminator + omitted defaults)
 
     func testEncodeTagsTypeDiscriminator() throws {

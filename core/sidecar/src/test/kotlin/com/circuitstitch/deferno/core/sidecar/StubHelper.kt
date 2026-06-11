@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import java.io.IOException
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
@@ -34,10 +35,21 @@ import java.util.concurrent.ConcurrentHashMap
  * fixtures). Canned behavior:
  * - handshake: validates the in-band token → [SidecarFrame.Welcome] + [capabilities]; wrong token →
  *   connection-level [SidecarFrame.Failure] (`UNAUTHENTICATED`) then close;
- * - [SidecarMethods.QueryPermission] → a [SidecarFrame.Response] **and** a follow-on
- *   [SidecarTopics.PermissionChanged] [SidecarFrame.Push] (so a collector can observe an unsolicited push);
+ * - [SidecarMethods.QueryPermission] → a [SidecarFrame.Response] echoing the queried capability
+ *   (default speech) **and** a follow-on [SidecarTopics.PermissionChanged] [SidecarFrame.Push] (so a
+ *   collector can observe an unsolicited push);
  * - [SidecarMethods.SubscribeTranscript] → a [SidecarFrame.StreamData] sequence (Partial…/Final) then
  *   [SidecarFrame.StreamEnd], with delays so a collector can cancel mid-stream;
+ * - [SidecarMethods.PostNotification] → an empty-ack [SidecarFrame.Response], recorded for
+ *   [awaitNotification]; an empty/missing title → `INVALID_PARAMS`, an un-[GRANTED][permissionStatus]
+ *   state → `UNAVAILABLE` (`notification-permission-denied`), mirroring the real Helper (#123);
+ * - [SidecarMethods.SetStatusItem] → an empty-ack [SidecarFrame.Response]; showing it additionally
+ *   pushes one [SidecarTopics.StatusItemClicked] (a canned "click", so the push path is observable
+ *   without a real menu bar — #125);
+ * - [SidecarMethods.RegisterHotkey] → an empty-ack [SidecarFrame.Response] then one
+ *   [SidecarTopics.HotkeyFired] push (a canned "fire"); a key outside [SidecarHotkeyKeys] or an empty
+ *   modifier set → `INVALID_PARAMS`. [SidecarMethods.UnregisterHotkey] → an idempotent empty ack,
+ *   recorded for [awaitUnregister];
  * - [SidecarFrame.Cancel] → stops that stream and is recorded for [awaitCancel];
  * - any other method → a [SidecarFrame.Failure] (`UNKNOWN_METHOD`).
  */
@@ -47,12 +59,17 @@ class StubHelper(
     private val capabilities: Set<String> = setOf(
         SidecarCapabilities.Permissions,
         SidecarCapabilities.SpeechTranscribe,
+        SidecarCapabilities.Notifications,
+        SidecarCapabilities.StatusItem,
+        SidecarCapabilities.Hotkeys,
     ),
 ) : AutoCloseable {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val server: ServerSocketChannel = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
     private val cancelledStreamIds = Channel<Long>(Channel.BUFFERED)
+    private val postedNotifications = Channel<PostNotificationWire>(Channel.BUFFERED)
+    private val unregisteredHotkeyIds = Channel<Long>(Channel.BUFFERED)
 
     // Accepted peer sockets, tracked so [close] can shut them explicitly: coroutine cancellation does
     // NOT interrupt a thread blocked in SocketChannel.read, so closing the channel is what unblocks the
@@ -73,6 +90,12 @@ class StubHelper(
 
     /** Suspend until the stub receives a [SidecarFrame.Cancel], returning the cancelled stream id. */
     suspend fun awaitCancel(): Long = cancelledStreamIds.receive()
+
+    /** Suspend until the stub accepts a [SidecarMethods.PostNotification], returning what was posted. */
+    suspend fun awaitNotification(): PostNotificationWire = postedNotifications.receive()
+
+    /** Suspend until the stub receives a [SidecarMethods.UnregisterHotkey], returning its hotkey id. */
+    suspend fun awaitUnregister(): Long = unregisteredHotkeyIds.receive()
 
     private suspend fun acceptLoop() {
         while (true) {
@@ -111,12 +134,123 @@ class StubHelper(
                 when (frame) {
                     is SidecarFrame.Request -> when (frame.method) {
                         SidecarMethods.QueryPermission -> {
-                            out.send(SidecarFrame.Response(frame.id, permissionElement()))
-                            out.send(SidecarFrame.Push(SidecarTopics.PermissionChanged, permissionElement()))
+                            // Echo the queried capability (absent params default to speech, per the
+                            // contract) so a notifications/mic query reads back as itself.
+                            val capability = frame.params?.let { params ->
+                                runCatching {
+                                    SidecarJson.decodeFromJsonElement(QueryPermissionWire.serializer(), params).capability
+                                }.getOrNull()
+                            } ?: SidecarPermissionCapabilities.Speech
+                            out.send(SidecarFrame.Response(frame.id, permissionElement(capability)))
+                            out.send(SidecarFrame.Push(SidecarTopics.PermissionChanged, permissionElement(capability)))
                         }
 
                         SidecarMethods.SubscribeTranscript ->
                             streamJobs[frame.id] = scope.launch { emitTranscript(out, frame.id) }
+
+                        SidecarMethods.PostNotification -> {
+                            val notification = frame.params?.let { params ->
+                                runCatching {
+                                    SidecarJson.decodeFromJsonElement(PostNotificationWire.serializer(), params)
+                                }.getOrNull()
+                            }
+                            when {
+                                notification == null || notification.title.isEmpty() -> out.send(
+                                    SidecarFrame.Failure(
+                                        frame.id,
+                                        SidecarError(
+                                            SidecarErrorCode.INVALID_PARAMS,
+                                            "postNotification requires a non-empty title",
+                                        ),
+                                    ),
+                                )
+
+                                permissionStatus != PermissionStatusValue.GRANTED -> out.send(
+                                    SidecarFrame.Failure(
+                                        frame.id,
+                                        SidecarError(SidecarErrorCode.UNAVAILABLE, "notification-permission-denied"),
+                                    ),
+                                )
+
+                                else -> {
+                                    postedNotifications.trySend(notification)
+                                    out.send(SidecarFrame.Response(frame.id))
+                                }
+                            }
+                        }
+
+                        SidecarMethods.SetStatusItem -> {
+                            val wire = frame.params?.let { params ->
+                                runCatching {
+                                    SidecarJson.decodeFromJsonElement(SetStatusItemWire.serializer(), params)
+                                }.getOrNull()
+                            }
+                            if (wire == null) {
+                                out.send(
+                                    SidecarFrame.Failure(
+                                        frame.id,
+                                        SidecarError(SidecarErrorCode.INVALID_PARAMS, "setStatusItem requires visible"),
+                                    ),
+                                )
+                            } else {
+                                out.send(SidecarFrame.Response(frame.id))
+                                // A canned "click" right after showing, so the push path is observable
+                                // without a real menu bar (the analogue of queryPermission's push).
+                                if (wire.visible) {
+                                    out.send(SidecarFrame.Push(SidecarTopics.StatusItemClicked, JsonObject(emptyMap())))
+                                }
+                            }
+                        }
+
+                        SidecarMethods.RegisterHotkey -> {
+                            val wire = frame.params?.let { params ->
+                                runCatching {
+                                    SidecarJson.decodeFromJsonElement(RegisterHotkeyWire.serializer(), params)
+                                }.getOrNull()
+                            }
+                            if (wire == null || wire.key !in SidecarHotkeyKeys.All || wire.modifiers.isEmpty()) {
+                                out.send(
+                                    SidecarFrame.Failure(
+                                        frame.id,
+                                        SidecarError(
+                                            SidecarErrorCode.INVALID_PARAMS,
+                                            "registerHotkey requires a known key and a non-empty modifier set",
+                                        ),
+                                    ),
+                                )
+                            } else {
+                                out.send(SidecarFrame.Response(frame.id))
+                                // A canned "fire" right after registering — same observability trick.
+                                out.send(
+                                    SidecarFrame.Push(
+                                        SidecarTopics.HotkeyFired,
+                                        SidecarJson.encodeToJsonElement(
+                                            HotkeyFiredWire.serializer(),
+                                            HotkeyFiredWire(wire.id),
+                                        ),
+                                    ),
+                                )
+                            }
+                        }
+
+                        SidecarMethods.UnregisterHotkey -> {
+                            val wire = frame.params?.let { params ->
+                                runCatching {
+                                    SidecarJson.decodeFromJsonElement(UnregisterHotkeyWire.serializer(), params)
+                                }.getOrNull()
+                            }
+                            if (wire == null) {
+                                out.send(
+                                    SidecarFrame.Failure(
+                                        frame.id,
+                                        SidecarError(SidecarErrorCode.INVALID_PARAMS, "unregisterHotkey requires an id"),
+                                    ),
+                                )
+                            } else {
+                                unregisteredHotkeyIds.trySend(wire.id)
+                                out.send(SidecarFrame.Response(frame.id)) // idempotent ack (unknown ids too)
+                            }
+                        }
 
                         else -> out.send(
                             SidecarFrame.Failure(
@@ -152,10 +286,10 @@ class StubHelper(
         out.send(SidecarFrame.StreamEnd(id))
     }
 
-    private fun permissionElement(): JsonElement =
+    private fun permissionElement(capability: String = SidecarPermissionCapabilities.Speech): JsonElement =
         SidecarJson.encodeToJsonElement(
             PermissionStatusWire.serializer(),
-            PermissionStatusWire("speech", permissionStatus),
+            PermissionStatusWire(capability, permissionStatus),
         )
 
     private fun transcriptElement(event: TranscriptWire): JsonElement =

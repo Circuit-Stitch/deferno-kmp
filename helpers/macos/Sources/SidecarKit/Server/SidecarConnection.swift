@@ -74,6 +74,53 @@ public final class SidecarConnection {
                 }
             case SidecarMethods.subscribeTranscript:
                 startTranscript(id: id)
+            case SidecarMethods.postNotification:
+                guard let request = PostNotificationRequest(params: params) else {
+                    send(.failure(id: id, error: SidecarError(.invalidParams, "postNotification requires a non-empty title")))
+                    return
+                }
+                provider.postNotification(request) { [weak self] error in
+                    self?.ack(id: id, error: error)
+                }
+            case SidecarMethods.setStatusItem:
+                guard let request = SetStatusItemRequest(params: params) else {
+                    send(.failure(id: id, error: SidecarError(.invalidParams, "setStatusItem requires visible")))
+                    return
+                }
+                provider.setStatusItem(
+                    visible: request.visible,
+                    onClick: { [weak self] in
+                        self?.send(.push(topic: SidecarTopics.statusItemClicked, payload: .object([:])))
+                    },
+                    completion: { [weak self] error in
+                        self?.ack(id: id, error: error)
+                    }
+                )
+            case SidecarMethods.registerHotkey:
+                guard let request = RegisterHotkeyRequest(params: params) else {
+                    send(.failure(
+                        id: id,
+                        error: SidecarError(.invalidParams, "registerHotkey requires a known key and a non-empty modifier set")
+                    ))
+                    return
+                }
+                provider.registerHotkey(
+                    request,
+                    onFire: { [weak self] in
+                        self?.send(.push(topic: SidecarTopics.hotkeyFired, payload: .object(["id": .int(request.id)])))
+                    },
+                    completion: { [weak self] error in
+                        self?.ack(id: id, error: error)
+                    }
+                )
+            case SidecarMethods.unregisterHotkey:
+                guard let request = UnregisterHotkeyRequest(params: params) else {
+                    send(.failure(id: id, error: SidecarError(.invalidParams, "unregisterHotkey requires an id")))
+                    return
+                }
+                provider.unregisterHotkey(id: request.id) { [weak self] error in
+                    self?.ack(id: id, error: error)
+                }
             default:
                 send(.failure(id: id, error: SidecarError(.unknownMethod, "no such method: \(method)")))
             }
@@ -134,6 +181,15 @@ public final class SidecarConnection {
 
     // MARK: outbound
 
+    /// The empty-ack-or-failure reply shape shared by every provider-completed unary method.
+    private func ack(id: Int64, error: SidecarError?) {
+        if let error {
+            send(.failure(id: id, error: error))
+        } else {
+            send(.response(id: id, result: nil))
+        }
+    }
+
     private func send(_ frame: SidecarFrame) {
         writeQueue.async { [weak self] in
             guard let self else { return }
@@ -158,6 +214,7 @@ public final class SidecarConnection {
         streams.removeAll()
         streamsLock.unlock()
         active.forEach { $0.handle?.cancel() } // release the mic on any open stream
+        provider.connectionClosed() // remove the status item + unregister this client's hotkeys (#125)
         // Close the fd FIRST, then drain: a write parked in a blocking Darwin.write (peer stopped reading
         // but hasn't closed) is unblocked by the close (EBADF) so the write queue drains instead of the
         // read thread deadlocking on writeQueue.sync. (The handshake-rejection path drains before this

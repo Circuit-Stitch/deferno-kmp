@@ -43,7 +43,13 @@ class RealHelperContractParityTest {
     fun connectsAuthenticatesAndSurfacesCapabilities() = withHelper { client ->
         client.connect()
         assertEquals(
-            setOf(SidecarCapabilities.Permissions, SidecarCapabilities.SpeechTranscribe),
+            setOf(
+                SidecarCapabilities.Permissions,
+                SidecarCapabilities.SpeechTranscribe,
+                SidecarCapabilities.Notifications,
+                SidecarCapabilities.StatusItem,
+                SidecarCapabilities.Hotkeys,
+            ),
             client.capabilities(),
         )
         assertIs<SidecarConnectionState.Ready>(client.state.value)
@@ -87,12 +93,55 @@ class RealHelperContractParityTest {
         client.connect()
         client.openStream(SidecarMethods.SubscribeTranscript).test {
             awaitItem() // first partial, then abandon the stream → the client sends Cancel
-            cancel()
+            // The contract permits in-flight events to race ahead of the Cancel — and unlike the in-JVM
+            // stub, this cancel crosses a real process boundary, so the canned helper's 50ms event gap
+            // is regularly outrun. Tolerate leftovers; the real assertion is the round-trip below.
+            cancelAndIgnoreRemainingEvents()
         }
         // The Helper must have handled the Cancel (released the stream) and stayed up: a follow-up
         // request on the same connection still round-trips.
         val result = checkNotNull(client.request(SidecarMethods.QueryPermission))
         assertEquals("speech", SidecarJson.decodeFromJsonElement(PermissionStatusWire.serializer(), result).capability)
+    }
+
+    @Test
+    fun postsANotificationThroughThePort() = withHelper { client ->
+        client.connect()
+        val port = SidecarNotificationPort(client)
+        assertEquals(true, port.isAvailable())
+        // The canned provider acks a granted post with an empty response — no exception is the proof.
+        port.post(PostNotificationWire(title = "Deferno", body = "contract parity"))
+    }
+
+    @Test
+    fun echoesTheQueriedPermissionCapability() = withHelper { client ->
+        client.connect()
+        assertEquals(PermissionStatusValue.GRANTED, SidecarNotificationPort(client).permission())
+    }
+
+    @Test
+    fun showsTheStatusItemAndReceivesItsClickPush() = withHelper { client ->
+        client.connect()
+        val port = SidecarStatusItemPort(client)
+        assertEquals(true, port.isAvailable())
+        port.clicks.test {
+            port.setVisible(true) // canned: ack, then one simulated click push
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun registersAHotkeyAndReceivesItsFirePush() = withHelper { client ->
+        client.connect()
+        val port = SidecarHotkeyPort(client)
+        assertEquals(true, port.isAvailable())
+        port.fires.test {
+            port.register(7, "d", setOf(HotkeyModifier.COMMAND, HotkeyModifier.SHIFT))
+            assertEquals(7L, awaitItem()) // canned: ack, then one simulated fire push
+            cancelAndIgnoreRemainingEvents()
+        }
+        port.unregister(7) // idempotent ack round-trips
     }
 
     @Test

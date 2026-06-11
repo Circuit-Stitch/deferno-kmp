@@ -42,7 +42,7 @@ app/
   desktopApp/                         ← Compose Desktop (JVM) entry point — stub for now (native desktop UI is a follow-up)
   iosApp/                             ← iOS umbrella framework (Kotlin) + Xcode project (added on macOS)
 helpers/                              ← native per-OS Sidecar Helper processes (NOT Gradle modules — built/signed on their OS)
-  macos/                              ← Swift launchd-activated Helper: SFSpeech + mic/Speech TCC over the IPC contract (SwiftPM · ADR-0024 · #121)
+  macos/                              ← Swift launchd-activated Helper: SFSpeech + mic/Speech TCC + Notification Center + menu-bar status item/global hotkeys over the IPC contract (SwiftPM · ADR-0024 · #121/#123/#125)
 docs/adr/                             ← architecture decision records
 docs/agents/                          ← agent-skill configuration (see below)
 gradle/libs.versions.toml             ← single source of truth for dependency versions

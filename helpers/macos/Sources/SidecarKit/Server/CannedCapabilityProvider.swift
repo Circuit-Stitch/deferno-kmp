@@ -6,13 +6,26 @@ import Foundation
 /// handshake, streaming, push, and cancel against the real JVM client with **no TCC / mic dependency**;
 /// the real SFSpeech + TCC paths are exercised separately (and are human-gated). Mirrors:
 ///
-/// - `queryPermission` → a `response` **and** a follow-on `permissionChanged` push (same status);
+/// - `queryPermission` → a `response` echoing the queried capability (default speech) **and** a
+///   follow-on `permissionChanged` push (same status);
 /// - `subscribeTranscript` → `partial "hel"`, `partial "hello wor"`, `final "hello world"`, `stream_end`,
 ///   with gaps so a collector can cancel mid-stream;
+/// - `postNotification` → an empty ack when the canned status is granted, else `unavailable`
+///   (`notification-permission-denied`) — no `UNUserNotificationCenter` is touched (#123);
+/// - `setStatusItem` → an empty ack; showing additionally simulates one click (an observable
+///   `statusItemClicked` push) — no AppKit is touched (#125);
+/// - `registerHotkey` → an empty ack then one simulated fire (`hotkeyFired` push); `unregisterHotkey`
+///   → an idempotent empty ack — no Carbon is touched (#125);
 /// - `cancel` → stops that stream.
 public final class CannedCapabilityProvider: CapabilityProvider {
 
-    public let capabilities = [SidecarCapabilities.permissions, SidecarCapabilities.speechTranscribe]
+    public let capabilities = [
+        SidecarCapabilities.permissions,
+        SidecarCapabilities.speechTranscribe,
+        SidecarCapabilities.notifications,
+        SidecarCapabilities.statusItem,
+        SidecarCapabilities.hotkeys,
+    ]
     public var permissionChangeSink: ((PermissionStatus) -> Void)?
 
     /// The canned status the stub reports / pushes (`GRANTED` by default, like the stub).
@@ -23,8 +36,45 @@ public final class CannedCapabilityProvider: CapabilityProvider {
     }
 
     public func queryPermission(params: JSONValue?) -> (response: PermissionStatus, push: PermissionStatus?) {
-        let status = PermissionStatus(capability: SidecarPermissionCapability.speech, status: permissionStatus)
+        let capability = params?.string("capability") ?? SidecarPermissionCapability.speech
+        let status = PermissionStatus(capability: capability, status: permissionStatus)
         return (response: status, push: status) // stub answers, then pushes the same — observable push
+    }
+
+    public func postNotification(_ request: PostNotificationRequest, completion: @escaping (SidecarError?) -> Void) {
+        completion(
+            permissionStatus == .granted
+                ? nil
+                : SidecarError(.unavailable, "notification-permission-denied")
+        )
+    }
+
+    public func setStatusItem(
+        visible: Bool,
+        onClick: @escaping () -> Void,
+        completion: @escaping (SidecarError?) -> Void
+    ) {
+        completion(nil)
+        // A canned "click" right after showing, so the push path is observable without a real menu
+        // bar (the same trick as queryPermission's follow-on push; mirrors the JVM stub).
+        if visible { onClick() }
+    }
+
+    public func registerHotkey(
+        _ request: RegisterHotkeyRequest,
+        onFire: @escaping () -> Void,
+        completion: @escaping (SidecarError?) -> Void
+    ) {
+        completion(nil)
+        onFire() // a canned "fire" right after registering — same observability trick
+    }
+
+    public func unregisterHotkey(id: Int64, completion: @escaping (SidecarError?) -> Void) {
+        completion(nil) // idempotent ack, like the stub
+    }
+
+    public func connectionClosed() {
+        // Nothing canned to release.
     }
 
     public func startTranscript(

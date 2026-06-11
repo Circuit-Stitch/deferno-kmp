@@ -97,11 +97,36 @@ do **not** bump the version. Bump only on a breaking wire change.
 The seed surface that proves the three traffic shapes (#118); it grows additively (#119/#120/#123+).
 
 - **Capability `permissions`** — method `queryPermission` (request/response → `PermissionStatus`) and
-  topic `permissionChanged` (push → `PermissionStatus`).
+  topic `permissionChanged` (push → `PermissionStatus`). `queryPermission` takes optional params
+  `{ "capability": string }` naming which permission to introspect (default `"speech"`); the response
+  echoes that capability. Introspection **never prompts** — a capability's first real use is what fires
+  the OS prompt, pushing `permissionChanged` as the state settles.
   `PermissionStatus = { "capability": string, "status": "granted"|"denied"|"not_determined"|"restricted"|"unknown" }`
+  v1 permission capability ids: `"mic"`, `"speech"`, `"notifications"` (#123).
 - **Capability `speech.transcribe`** — method `subscribeTranscript` (server stream of `TranscriptEvent`).
   `TranscriptEvent` is `{ "type": "partial", "text": string }` | `{ "type": "final", "text": string }` |
   `{ "type": "failure", "reason": string }` (a non-PII reason).
+- **Capability `notifications`** (#123) — method `postNotification` (request/response → empty ack).
+  `params = { "title": string, "body"?: string }`; `title` must be non-empty (`invalid_params`
+  otherwise). The first post against a `not_determined` permission fires the OS authorization prompt
+  (pushing `permissionChanged` with capability `"notifications"` as it settles); posting without a
+  grant fails `unavailable` (`notification-permission-denied`), and an OS-level delivery error fails
+  `internal` (`notification-post-failed`). The title/body are user content — the payload privacy rules
+  below apply to them in full.
+- **Capability `statusItem`** (#125) — method `setStatusItem` (request/response → empty ack) and topic
+  `statusItemClicked` (push → `{}`). `params = { "visible": boolean }` (`invalid_params` when absent).
+  While visible, each click on the helper's menu-bar status item pushes `statusItemClicked`; the
+  helper removes the item when the requesting connection closes, so it appears only while the app runs.
+- **Capability `hotkeys`** (#125) — methods `registerHotkey` / `unregisterHotkey` (request/response →
+  empty ack) and topic `hotkeyFired` (push → `{ "id": int }`).
+  `RegisterHotkeyRequest = { "id": int, "key": string, "modifiers": string[] }` — `id` is the
+  client-chosen handle echoed back in every `hotkeyFired` push; registering an already-registered `id`
+  **replaces** it. `key` is a single character `a`–`z` / `0`–`9` or a named key (`space`, `return`,
+  `escape`, `tab`, `f1`–`f12`), interpreted at the **ANSI key position** (layout-independent);
+  `modifiers` is a non-empty subset of `command` | `option` | `control` | `shift`. An unknown
+  key/modifier or empty modifier list is `invalid_params`; an OS-level registration rejection is
+  `unavailable` (`hotkey-unavailable`). `unregisterHotkey` params are `{ "id": int }` (idempotent —
+  unknown ids ack). The helper unregisters all of a connection's hotkeys when it closes.
 
 ## Privacy
 

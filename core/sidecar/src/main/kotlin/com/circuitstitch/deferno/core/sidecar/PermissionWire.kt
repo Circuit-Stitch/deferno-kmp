@@ -19,6 +19,14 @@ data class PermissionStatusWire(
 )
 
 /**
+ * The optional [SidecarMethods.QueryPermission] params: which permission to introspect (a
+ * [SidecarPermissionCapabilities] id). Absent params default to [SidecarPermissionCapabilities.Speech]
+ * (the headline dictation gate) on the Helper side; the response echoes the queried capability.
+ */
+@Serializable
+data class QueryPermissionWire(val capability: String)
+
+/**
  * A capability's permission state on the wire. Decoding is tolerant (ADR-0005): an unrecognized value
  * coerces to [UNKNOWN] via [SidecarJson]'s `coerceInputValues`.
  */
