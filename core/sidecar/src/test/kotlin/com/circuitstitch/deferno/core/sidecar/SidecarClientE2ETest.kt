@@ -25,6 +25,12 @@ import kotlin.test.assertTrue
 class SidecarClientE2ETest {
 
     private val TOKEN = "shared-in-band-token"
+
+    // Last-resort failure bound, not an expectation: the awaited round-trips complete in milliseconds,
+    // but a loaded runner (full `check`, 2-core CI) can starve a test worker for whole seconds — a 2s
+    // deadline flaked under exactly that (#161). Generous on purpose; it only costs time when failing.
+    private val DEADLINE_MILLIS = 30_000L
+
     private val cleanups = mutableListOf<() -> Unit>()
 
     @AfterTest
@@ -106,7 +112,7 @@ class SidecarClientE2ETest {
             cancel()
         }
 
-        val cancelledId = withTimeout(2_000) { stub.awaitCancel() }
+        val cancelledId = withTimeout(DEADLINE_MILLIS) { stub.awaitCancel() }
         assertTrue(cancelledId > 0, "expected the Helper to receive a Cancel for the open stream")
     }
 
@@ -125,7 +131,7 @@ class SidecarClientE2ETest {
 
         // Drop the Helper; the client's reader sees EOF and transitions to Disconnected.
         stub1.close()
-        withTimeout(2_000) { client.state.first { it is SidecarConnectionState.Disconnected } }
+        withTimeout(DEADLINE_MILLIS) { client.state.first { it is SidecarConnectionState.Disconnected } }
 
         // A fresh Helper binds the same path; the next request re-dials transparently.
         StubHelper(path, expectedToken = TOKEN).also { it.start(); cleanups += { it.close() } }
