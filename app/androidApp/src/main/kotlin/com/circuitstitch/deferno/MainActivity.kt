@@ -1,20 +1,25 @@
 package com.circuitstitch.deferno
 
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import com.arkivanov.decompose.retainedComponent
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
@@ -38,6 +43,10 @@ import kotlinx.datetime.todayIn
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Android 12+ system splash (Theme.Deferno.Starting): the flame in a dark paper-2 circle over a
+        // light/dark-aware background. installSplashScreen() applies it (with back-compat) and hands the
+        // window to Theme.Deferno at the first frame, which is when the splash dismisses.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         val app = application as DefernoApplication
@@ -119,22 +128,40 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        enableEdgeToEdge()
+        // Fully transparent system bars (transparent scrims) so edge-to-edge app content shows behind
+        // them instead of the bright nav-bar contrast scrim the auto default paints in light mode. Icon
+        // colours follow the app theme (set in setContent below).
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+        )
         setContent {
             // Drive the theme from the Active Account's settings so Appearance changes apply LIVE
             // across the whole app (#72): the family selects the palette, and the mode resolves to a
             // dark boolean (Auto follows the OS). Before any account is active the StateFlow seeds the
             // default (Deferno / follow-system), so the Auth shell is themed too (ADR-0002/0014).
             val settings by root.themeSettings.collectAsState()
+            val darkTheme = settings.themeMode.resolveDark(isSystemInDarkTheme())
             DefernoTheme(
                 palette = when (settings.themeFamily) {
                     ThemeFamily.Deferno -> DefernoPalette.Deferno
                     ThemeFamily.Mono -> DefernoPalette.Mono
                 },
-                darkTheme = settings.themeMode.resolveDark(isSystemInDarkTheme()),
+                darkTheme = darkTheme,
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     RootShell(root)
+                }
+            }
+
+            // System-bar icon colours follow the app theme (light theme -> dark icons, dark -> light).
+            // The bars themselves are transparent (see enableEdgeToEdge), so the app content shows
+            // through behind them rather than a bright nav-bar contrast scrim.
+            val lightIcons = !darkTheme
+            LaunchedEffect(lightIcons) {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = lightIcons
+                    isAppearanceLightNavigationBars = lightIcons
                 }
             }
         }
