@@ -99,16 +99,19 @@ raises an **uncatchable** NSException. So:
 - the packaged helper (#122) must place the executable **inside an `.app` bundle** for notifications
   to light up (they then attribute to that bundle's identity/name in Notification Center).
 
-To exercise it before #122, wrap the built binary by hand (the same `Info.plist` works as the bundle's):
+To exercise it before #122, `scripts/wrap-app.sh` wraps the built binary into `dist/Deferno.app`
+(same env knobs as `scripts/build.sh`, e.g. `SIDECAR_SIGN_IDENTITY="-"` for ad-hoc):
 
 ```sh
-mkdir -p dist/DefernoSidecar.app/Contents/MacOS
-cp dist/deferno-sidecar dist/DefernoSidecar.app/Contents/MacOS/
-cp Resources/Info.plist dist/DefernoSidecar.app/Contents/
-codesign --force --sign - --options runtime \
-  --entitlements Resources/deferno-sidecar.entitlements dist/DefernoSidecar.app
-dist/DefernoSidecar.app/Contents/MacOS/deferno-sidecar --listen /tmp/s.sock --token t
+scripts/build.sh && scripts/wrap-app.sh
+dist/Deferno.app/Contents/MacOS/deferno-sidecar --listen /tmp/s.sock --token t
 ```
+
+The wrap *is* the user-facing identity: Notification Center banners and the System Settings ▸
+Notifications row show the bundle's name and icon, so the bundle is named **Deferno.app** (the
+product, not the helper — and LaunchServices falls back to the on-disk file name whenever it
+differs from `CFBundleName`) and carries `Deferno.icns`, rendered by `scripts/render-icon.swift`
+from the product launcher icon onto Apple's rounded-rect macOS icon grid.
 
 The notification **permission** rides the `permissions` capability (`queryPermission` with
 `{"capability":"notifications"}`); the first `postNotification` against `not_determined` fires the OS
@@ -181,6 +184,12 @@ What the automated build/tests prove on this machine (Xcode 15.2 / Ventura 13.7.
   `setStatusItem` (clicking it pushed `statusItemClicked` over the socket), a real Carbon registration
   fired `hotkeyFired {id}` pushes for actual ⌘⇧D keystrokes, and closing the connection removed the
   item and released the binding (verified via the helper's accessibility tree).
+- ✅ **Granted-path notification delivery (#123):** with the grant flipped on in System Settings, a
+  live `postNotification` from the `Deferno.app` wrap presented a real Notification Center banner
+  (and `queryPermission(notifications)` reports `granted` over the wire). The banner shows the
+  product identity — "Deferno" + the flame icon — which is exactly why the wrap carries that name
+  and `Deferno.icns` (see the Notifications section above). Note rapid re-posts with identical
+  title/body get collapsed by Notification Center; vary the body when eyeballing repeats.
 
 What still needs a **human at the GUI** to confirm (these need real consent dialogs / a real voice / a
 real launchd session, which can't be automated headlessly):
@@ -191,10 +200,6 @@ real launchd session, which can't be automated headlessly):
   utterance (requires the on-device asset, a granted Speech+mic grant, and a live voice).
 - ⏳ The end-to-end **launchd socket-activation** path under an installed LaunchAgent (the install itself
   is #122; the `launch_activate_socket` code path is built and the self-bind path is fully exercised).
-- ⏳ **Granted-path notification delivery** (#123): the authorization prompt fired unattended on this
-  machine and resolved **denied**, so the visible-banner path needs a human once — System Settings →
-  Notifications → *Deferno Sidecar* → Allow, then re-run `postNotification` (the denied → `unavailable`
-  path and everything up to the prompt are verified above).
 - ⏳ **Eyeballing the flame icon** (#125): the live verification ran with the lid closed (no
   framebuffer), so the item was driven through the accessibility tree rather than seen; one glance at
   the menu bar with the lid open confirms the visual.

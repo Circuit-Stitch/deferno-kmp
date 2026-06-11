@@ -14,10 +14,21 @@
 <dict>
     <key>CFBundleIdentifier</key>
     <string>com.circuitstitch.deferno.sidecar</string>
+    <!-- The user-facing identity is the PRODUCT ("Deferno"), not the helper: this name is what
+         Notification Center banners, the System Settings ▸ Notifications row, and the TCC prompts
+         show. LaunchServices only honors CFBundleName/CFBundleDisplayName when they match the .app's
+         on-disk name (else it shows the file name), so the wrap (scripts/wrap-app.sh) names the
+         bundle Deferno.app to match. -->
     <key>CFBundleName</key>
-    <string>Deferno Sidecar</string>
+    <string>Deferno</string>
+    <key>CFBundleDisplayName</key>
+    <string>Deferno</string>
     <key>CFBundleExecutable</key>
     <string>deferno-sidecar</string>
+    <!-- Deferno.icns — rendered from the product launcher icon by scripts/wrap-app.sh; only present
+         (and only meaningful) in the .app wrap. -->
+    <key>CFBundleIconFile</key>
+    <string>Deferno</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
