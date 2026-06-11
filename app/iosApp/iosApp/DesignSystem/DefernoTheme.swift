@@ -111,7 +111,19 @@ struct DefernoThemeModifier: ViewModifier {
         return content
             .environment(\.defernoColors, colors)
             .tint(colors.primary)
-            .preferredColorScheme(isDark ? .dark : .light)
+            .preferredColorScheme(settings.themeMode.preferredColorScheme)
+    }
+}
+
+extension ThemeMode {
+    /// The scene-level colour-scheme override for this mode. Light/Dark pin the scene; Auto must be
+    /// `nil` — `preferredColorScheme` propagates to the whole scene and overrides the very
+    /// `\.colorScheme` environment value the modifier reads, so a concrete value here latches the
+    /// launch-time appearance and "Follow system" never sees an OS appearance change again.
+    var preferredColorScheme: ColorScheme? {
+        if self === ThemeMode.light { return .light }
+        if self === ThemeMode.dark { return .dark }
+        return nil
     }
 }
 
