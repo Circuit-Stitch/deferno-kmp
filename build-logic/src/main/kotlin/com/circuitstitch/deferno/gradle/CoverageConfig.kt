@@ -66,6 +66,15 @@ object CoverageConfig {
         // contract and the roster (de)serialization (AccountRosterCodec, commonTest) ARE measured.
         "com.circuitstitch.deferno.core.data.account.SharedPreferencesAccountRegistry*",
         "com.circuitstitch.deferno.core.data.account.AndroidAccountDataStore*",
+        // Platform connectivity actuals (issue #158): thin mirrors of an OS reachability signal
+        // (Android ConnectivityManager callback, iOS NWPathMonitor, the desktop NetworkInterface
+        // probe) that only fire on a real device / desktop network stack — exercised manually, not
+        // the headless JVM gate (same rationale as the secure-storage actuals). The Connectivity
+        // seam, AssumeOnlineConnectivity, and the platform-neutral PollingConnectivity ARE measured
+        // (commonMain/commonTest).
+        "com.circuitstitch.deferno.core.data.connectivity.NetworkCallbackConnectivity*",
+        "com.circuitstitch.deferno.core.data.connectivity.PathMonitorConnectivity*",
+        "com.circuitstitch.deferno.core.data.connectivity.NetworkInterfaceProbeKt",
         // On-device speech-to-text platform actuals (issues #92/#94, ADR-0018): the per-platform whisper.cpp
         // engines and their glue — Android's NDK/CMake/JNI engine + AudioRecord capture + JNI loader + Play
         // Asset Delivery locator (#92), and the desktop `whisper-jni` engine + TargetDataLine capture +

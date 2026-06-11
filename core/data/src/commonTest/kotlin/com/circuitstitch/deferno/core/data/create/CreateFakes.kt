@@ -23,9 +23,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
-/** A [Connectivity] whose online/offline state is set by the test. */
-class FakeConnectivity(var online: Boolean = true) : Connectivity {
-    override suspend fun isOnline(): Boolean = online
+/** A [Connectivity] whose online/offline state is set by the test (`online.value = …`). */
+class FakeConnectivity(online: Boolean = true) : Connectivity {
+    override val online = MutableStateFlow(online)
 }
 
 /**

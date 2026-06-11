@@ -119,7 +119,8 @@ abstract class AppComponent(
     abstract val accountDatabaseFactory: AccountDatabaseFactory
     // The online-only create flow (#71, ADR-0016): the CreateWriter (AccountScope) gates on this
     // process-global connectivity + POSTs through this shared remote source, so both are re-exposed
-    // here for the child AccountScope to consume.
+    // here for the child AccountScope to consume. The connectivity monitor is also what the shell's
+    // outbox driver observes for the reconnect-triggered flush (#158).
     abstract val itemRemoteSource: ItemRemoteSource
     abstract val connectivity: Connectivity
 }

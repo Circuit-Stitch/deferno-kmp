@@ -10,6 +10,8 @@ import com.circuitstitch.deferno.core.data.auth.AndroidBrowserAuthenticator
 import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
 import com.circuitstitch.deferno.core.data.auth.DeviceName
+import com.circuitstitch.deferno.core.data.connectivity.Connectivity
+import com.circuitstitch.deferno.core.data.connectivity.NetworkCallbackConnectivity
 import com.circuitstitch.deferno.core.database.DatabaseKeyStore
 import com.circuitstitch.deferno.core.scopes.AppScope
 import me.tatarka.inject.annotations.Provides
@@ -44,4 +46,13 @@ interface AndroidDataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun deviceName(): DeviceName = DeviceName("Deferno Android — ${Build.MODEL}")
+
+    /**
+     * The connectivity seam (#71/#158, ADR-0016): the default-network callback mirror, so the create
+     * gate answers before the POST and the outbox driver flushes on the reconnect edge. AppScope —
+     * connectivity is a process concern, not per-Account.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun connectivity(context: Context): Connectivity = NetworkCallbackConnectivity(context)
 }

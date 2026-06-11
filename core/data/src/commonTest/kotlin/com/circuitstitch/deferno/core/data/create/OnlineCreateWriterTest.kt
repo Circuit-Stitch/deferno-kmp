@@ -109,7 +109,7 @@ class OnlineCreateWriterTest {
     @Test
     fun offlineCreateReturnsOfflineAndEnqueuesNothingNorCallsTheServer() = runTest {
         val f = Fixture()
-        f.connectivity.online = false
+        f.connectivity.online.value = false
 
         val result = f.writer.createTask(CreateTaskPayload(title = "buy milk"))
 

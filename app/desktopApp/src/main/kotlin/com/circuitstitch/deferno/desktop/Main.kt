@@ -196,6 +196,9 @@ fun main() {
             // AppScope graph — the Settings Destination's "Speech engine" row reads + writes it (whisper is
             // now a real desktop option, no longer only "Automatic").
             speechEngineCatalog = appComponent.speechEngineCatalog,
+            // The AppScope connectivity monitor (#158): the outbox driver flushes on the
+            // offline→online edge and skips passes while known-offline.
+            connectivity = appComponent.connectivity,
             coroutineContext = Dispatchers.Swing,
         )
     }

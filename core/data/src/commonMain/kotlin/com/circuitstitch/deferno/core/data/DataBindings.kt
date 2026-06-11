@@ -24,8 +24,6 @@ import com.circuitstitch.deferno.core.data.auth.OAuthClientStore
 import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.calendar.KtorCalendarRemoteSource
-import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
-import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.create.KtorItemRemoteSource
 import com.circuitstitch.deferno.core.data.outbox.KtorOutboxRequestSender
@@ -182,15 +180,6 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun itemRemoteSource(client: HttpClient): ItemRemoteSource = KtorItemRemoteSource(client)
-
-    /**
-     * The connectivity seam the online-only create gate consults (#71, ADR-0016). The v1 default
-     * assumes online and lets the create call's own transport failure be the signal; a platform-aware
-     * actual is a non-breaking follow-up. AppScope — connectivity is a process concern, not per-Account.
-     */
-    @Provides
-    @SingleIn(AppScope::class)
-    fun connectivity(): Connectivity = AssumeOnlineConnectivity()
 
     /** The outbox's network sender (#23), replaying queued requests over the shared client. */
     @Provides

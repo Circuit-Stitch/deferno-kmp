@@ -10,6 +10,8 @@ import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.SignInService
+import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
+import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
@@ -29,6 +31,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlin.coroutines.CoroutineContext
@@ -106,6 +110,13 @@ class DefaultRootComponent(
      * inside the processor still governs when a failed entry is ready again).
      */
     private val outboxFlushPeriod: Duration = 30.seconds,
+    /**
+     * The AppScope connectivity signal (#158): the offline→online edge triggers an immediate outbox
+     * flush, and a flush pass is skipped while known-offline. Defaults to assume-online — the
+     * pre-#158 behaviour (no edge ever fires, no pass is ever skipped) — so tests and a platform
+     * without a monitor are unchanged; production passes the AppComponent's platform monitor.
+     */
+    private val connectivity: Connectivity = AssumeOnlineConnectivity(),
     coroutineContext: CoroutineContext = Dispatchers.Main,
 ) : RootComponent, ComponentContext by componentContext {
 
@@ -244,6 +255,12 @@ class DefaultRootComponent(
      * writes made during the session (and retries after transient failures). Cancelling the prior
      * driver on a switch / sign-out keeps the loop bound to exactly the Active Account's outbox
      * (account isolation, ADR-0002/0014).
+     *
+     * The [connectivity] signal shapes both legs (#158): a pass is skipped while known-offline — so a
+     * long offline stretch can't walk a queued write into the replay engine's give-up policy
+     * (`maxAttempts` measures real server failures, not flight mode) — and the offline→online edge
+     * triggers an immediate flush-then-reconcile instead of waiting out the tick (the reconcile also
+     * recovers the settings pull an offline activation could only fail).
      */
     private fun driveOutboxFor(session: AccountSession?) {
         outboxJob?.cancel()
@@ -252,11 +269,20 @@ class DefaultRootComponent(
             return
         }
         outboxJob = scope.launch {
-            session.flushOutbox(now())
+            val online = connectivity.online
+            if (online.value) session.flushOutbox(now())
             session.settingsRepository.refresh()
+            launch {
+                // The reconnect edge: `online` is distinct-until-changed, so after dropping the
+                // current value every `true` is an offline→online transition.
+                online.drop(1).filter { it }.collect {
+                    session.flushOutbox(now())
+                    session.settingsRepository.refresh()
+                }
+            }
             while (true) {
                 delay(outboxFlushPeriod)
-                session.flushOutbox(now())
+                if (online.value) session.flushOutbox(now())
             }
         }
     }

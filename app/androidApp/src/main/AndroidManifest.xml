@@ -6,6 +6,10 @@
          Runtime-requested on first mic tap; audio is recognized on-device and never leaves the device. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Connectivity monitoring (#158): the default-network callback behind the reconnect-triggered
+         outbox flush + the online-only create gate (normal permission, granted at install). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:name=".DefernoApplication"
         android:allowBackup="true"

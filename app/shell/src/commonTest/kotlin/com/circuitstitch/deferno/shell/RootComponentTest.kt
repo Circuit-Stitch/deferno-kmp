@@ -5,6 +5,8 @@ import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.SignInResult
 import com.circuitstitch.deferno.core.data.auth.SignInService
+import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
+import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
@@ -34,6 +36,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
@@ -98,6 +101,7 @@ class RootComponentTest {
      */
     private fun TestScope.rootWithVirtualTime(
         manager: AccountManager,
+        connectivity: Connectivity = AssumeOnlineConnectivity(),
         sessionFor: (Account) -> AccountSession,
     ) = DefaultRootComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
@@ -109,6 +113,7 @@ class RootComponentTest {
         timeZone = "UTC",
         now = { t0 },
         outboxFlushPeriod = 30.seconds,
+        connectivity = connectivity,
         coroutineContext = UnconfinedTestDispatcher(testScheduler),
     )
 
@@ -439,6 +444,77 @@ class RootComponentTest {
         manager.signOut()
     }
 
+    // --- reconnect-triggered flush (#158: the offline→online edge; known-offline burns no attempts) ---
+
+    @Test
+    fun reconnect_flushesTheOutboxImmediately_withoutWaitingOutTheTick() = runTest {
+        val manager = FakeAccountManager(active = account)
+        val session = FakeAccountSession()
+        val connectivity = FakeConnectivity(online = true)
+        rootWithVirtualTime(manager, connectivity = connectivity) { session }
+        assertEquals(1, session.flushes.size, "the activation flush")
+
+        connectivity.online.value = false
+        advanceTimeBy(5.seconds) // well inside the tick — recovery must not be bounded by it
+        connectivity.online.value = true
+        runCurrent()
+
+        assertEquals(2, session.flushes.size, "the reconnect edge flushes immediately, not at the next tick")
+
+        manager.signOut()
+    }
+
+    @Test
+    fun whileKnownOffline_periodicPassesAreSkipped_soQueuedWritesCannotBurnAttempts() = runTest {
+        val manager = FakeAccountManager(active = account)
+        val session = FakeAccountSession()
+        val connectivity = FakeConnectivity(online = true)
+        rootWithVirtualTime(manager, connectivity = connectivity) { session }
+        assertEquals(1, session.flushes.size)
+
+        connectivity.online.value = false
+        advanceTimeBy(95.seconds) // three ticks' worth of flight mode
+
+        // No pass runs while known-offline: a long offline stretch must not walk the queued writes
+        // into the replay engine's give-up policy (#158) — maxAttempts measures real server failures.
+        assertEquals(1, session.flushes.size, "offline ticks burn no attempts")
+
+        connectivity.online.value = true
+        runCurrent()
+        assertEquals(2, session.flushes.size, "the reconnect edge")
+
+        advanceTimeBy(31.seconds)
+        assertEquals(3, session.flushes.size, "the periodic cadence resumes once online")
+
+        manager.signOut()
+    }
+
+    @Test
+    fun activationWhileOffline_skipsTheActivationFlush_untilTheReconnectEdge() = runTest {
+        val events = mutableListOf<String>()
+        val settingsRepo = object : SettingsRepository {
+            override fun observeSettings(): Flow<UserSettings> = MutableStateFlow(UserSettings.Default)
+            override suspend fun refresh() { events += "settings.refresh" }
+        }
+        val manager = FakeAccountManager(active = account)
+        val session = FakeAccountSession(settingsRepository = settingsRepo, onFlush = { events += "flush" })
+        val connectivity = FakeConnectivity(online = false)
+        rootWithVirtualTime(manager, connectivity = connectivity) { session }
+
+        // Known-offline at activation: the flush is skipped (it could only burn an attempt); the
+        // settings refresh still runs — and fails harmlessly offline, unchanged from #143.
+        assertEquals(listOf("settings.refresh"), events)
+
+        connectivity.online.value = true
+        runCurrent()
+
+        // The reconnect edge re-runs the activation sequence — flush FIRST, then the settings
+        // reconcile, preserving the #143 ordering (the pull can't predate the just-flushed writes).
+        assertEquals(listOf("settings.refresh", "flush", "settings.refresh"), events)
+
+        manager.signOut()
+    }
+
     @Test
     fun themeSettings_fallsBackToDefault_onSignOut() {
         val mono = UserSettings.Default.copy(themeFamily = ThemeFamily.Mono)
@@ -462,6 +538,11 @@ class RootComponentTest {
 private class FakeSignInService(private val onSignIn: () -> SignInResult) : SignInService {
     override suspend fun signInWithBrowser(): SignInResult = onSignIn()
     override suspend fun signIn(token: String): SignInResult = onSignIn()
+}
+
+/** A [Connectivity] whose online/offline state the test drives (`online.value = …`) (#158). */
+private class FakeConnectivity(online: Boolean) : Connectivity {
+    override val online = MutableStateFlow(online)
 }
 
 /**
