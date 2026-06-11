@@ -45,6 +45,8 @@ class SidecarClientE2ETest {
                 SidecarCapabilities.Permissions,
                 SidecarCapabilities.SpeechTranscribe,
                 SidecarCapabilities.Notifications,
+                SidecarCapabilities.StatusItem,
+                SidecarCapabilities.Hotkeys,
             ),
             client.capabilities(),
         )
@@ -128,6 +130,8 @@ class SidecarClientE2ETest {
                     SidecarCapabilities.Permissions,
                     SidecarCapabilities.SpeechTranscribe,
                     SidecarCapabilities.Notifications,
+                    SidecarCapabilities.StatusItem,
+                    SidecarCapabilities.Hotkeys,
                 ),
             ),
             client.state.value,
@@ -212,6 +216,70 @@ class SidecarClientE2ETest {
             assertEquals(PermissionStatusValue.DENIED, awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // --- the status-item + hotkey ports (#125) -----------------------------------------------------
+
+    @Test
+    fun showsTheStatusItemAndObservesItsClicks() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub()
+        val client = client(stub.path)
+        client.connect()
+
+        val port = SidecarStatusItemPort(client)
+        assertTrue(port.isAvailable())
+        port.clicks.test {
+            port.setVisible(true) // the stub acks, then pushes one canned click
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+        port.setVisible(false) // hide acks without a click push
+    }
+
+    @Test
+    fun registersAHotkeyAndObservesItsFires() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub()
+        val client = client(stub.path)
+        client.connect()
+
+        val port = SidecarHotkeyPort(client)
+        assertTrue(port.isAvailable())
+        port.fires.test {
+            port.register(7, "d", setOf(HotkeyModifier.COMMAND, HotkeyModifier.SHIFT))
+            assertEquals(7L, awaitItem()) // the stub acks, then pushes one canned fire
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        port.unregister(7)
+        assertEquals(7L, withTimeout(2_000) { stub.awaitUnregister() })
+    }
+
+    @Test
+    fun refusesAnUnknownHotkeyKey() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub()
+        val client = client(stub.path)
+        client.connect()
+
+        val failure = assertFailsWith<SidecarRequestException> {
+            SidecarHotkeyPort(client).register(1, "münzwurf", setOf(HotkeyModifier.COMMAND))
+        }
+        assertEquals(SidecarErrorCode.INVALID_PARAMS, failure.error.code)
+    }
+
+    @Test
+    fun refusesAHotkeyWithoutModifiers() = runBlocking {
+        if (!posixSupported()) return@runBlocking
+        val stub = startStub()
+        val client = client(stub.path)
+        client.connect()
+
+        val failure = assertFailsWith<SidecarRequestException> {
+            SidecarHotkeyPort(client).register(1, "d", emptySet())
+        }
+        assertEquals(SidecarErrorCode.INVALID_PARAMS, failure.error.code)
     }
 
     @Test

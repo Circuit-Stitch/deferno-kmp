@@ -1,0 +1,7 @@
+{
+  "type": "push",
+  "topic": "hotkeyFired",
+  "payload": {
+    "id": 1
+  }
+}

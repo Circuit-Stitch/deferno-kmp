@@ -47,6 +47,8 @@ class RealHelperContractParityTest {
                 SidecarCapabilities.Permissions,
                 SidecarCapabilities.SpeechTranscribe,
                 SidecarCapabilities.Notifications,
+                SidecarCapabilities.StatusItem,
+                SidecarCapabilities.Hotkeys,
             ),
             client.capabilities(),
         )
@@ -115,6 +117,31 @@ class RealHelperContractParityTest {
     fun echoesTheQueriedPermissionCapability() = withHelper { client ->
         client.connect()
         assertEquals(PermissionStatusValue.GRANTED, SidecarNotificationPort(client).permission())
+    }
+
+    @Test
+    fun showsTheStatusItemAndReceivesItsClickPush() = withHelper { client ->
+        client.connect()
+        val port = SidecarStatusItemPort(client)
+        assertEquals(true, port.isAvailable())
+        port.clicks.test {
+            port.setVisible(true) // canned: ack, then one simulated click push
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun registersAHotkeyAndReceivesItsFirePush() = withHelper { client ->
+        client.connect()
+        val port = SidecarHotkeyPort(client)
+        assertEquals(true, port.isAvailable())
+        port.fires.test {
+            port.register(7, "d", setOf(HotkeyModifier.COMMAND, HotkeyModifier.SHIFT))
+            assertEquals(7L, awaitItem()) // canned: ack, then one simulated fire push
+            cancelAndIgnoreRemainingEvents()
+        }
+        port.unregister(7) // idempotent ack round-trips
     }
 
     @Test

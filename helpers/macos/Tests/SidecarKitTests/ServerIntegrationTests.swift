@@ -51,7 +51,13 @@ final class ServerIntegrationTests: XCTestCase {
         let caps = try handshake()
         XCTAssertEqual(
             Set(caps),
-            [SidecarCapabilities.permissions, SidecarCapabilities.speechTranscribe, SidecarCapabilities.notifications]
+            [
+                SidecarCapabilities.permissions,
+                SidecarCapabilities.speechTranscribe,
+                SidecarCapabilities.notifications,
+                SidecarCapabilities.statusItem,
+                SidecarCapabilities.hotkeys,
+            ]
         )
     }
 
@@ -149,6 +155,97 @@ final class ServerIntegrationTests: XCTestCase {
         }
         XCTAssertEqual(id, 6)
         XCTAssertEqual(error.code, .invalidParams)
+    }
+
+    func testSetStatusItemAcksThenPushesACannedClick() throws {
+        startConnection(provider: CannedCapabilityProvider())
+        _ = try handshake()
+        try clientCodec.writeFrame(.request(
+            id: 8,
+            method: SidecarMethods.setStatusItem,
+            params: .object(["visible": .bool(true)])
+        ))
+
+        guard case .response(let id, let result)? = try clientCodec.readFrame() else {
+            return XCTFail("expected response")
+        }
+        XCTAssertEqual(id, 8)
+        XCTAssertNil(result)
+
+        guard case .push(let topic, _)? = try clientCodec.readFrame() else {
+            return XCTFail("expected push")
+        }
+        XCTAssertEqual(topic, SidecarTopics.statusItemClicked)
+    }
+
+    func testSetStatusItemWithoutVisibleIsInvalidParams() throws {
+        startConnection(provider: CannedCapabilityProvider())
+        _ = try handshake()
+        try clientCodec.writeFrame(.request(id: 9, method: SidecarMethods.setStatusItem, params: nil))
+        guard case .failure(let id, let error)? = try clientCodec.readFrame() else {
+            return XCTFail("expected failure")
+        }
+        XCTAssertEqual(id, 9)
+        XCTAssertEqual(error.code, .invalidParams)
+    }
+
+    func testRegisterHotkeyAcksThenPushesACannedFire() throws {
+        startConnection(provider: CannedCapabilityProvider())
+        _ = try handshake()
+        try clientCodec.writeFrame(.request(
+            id: 10,
+            method: SidecarMethods.registerHotkey,
+            params: .object(["id": .int(7), "key": .string("d"), "modifiers": .array([.string("command"), .string("shift")])])
+        ))
+
+        guard case .response(let id, let result)? = try clientCodec.readFrame() else {
+            return XCTFail("expected response")
+        }
+        XCTAssertEqual(id, 10)
+        XCTAssertNil(result)
+
+        guard case .push(let topic, let payload)? = try clientCodec.readFrame() else {
+            return XCTFail("expected push")
+        }
+        XCTAssertEqual(topic, SidecarTopics.hotkeyFired)
+        guard case .object(let o) = payload, case .int(let firedId)? = o["id"] else {
+            return XCTFail("expected an id payload")
+        }
+        XCTAssertEqual(firedId, 7)
+    }
+
+    func testRegisterHotkeyRejectsUnknownKeysAndEmptyModifiers() throws {
+        startConnection(provider: CannedCapabilityProvider())
+        _ = try handshake()
+        let badParams: [JSONValue] = [
+            .object(["id": .int(1), "key": .string("münzwurf"), "modifiers": .array([.string("command")])]),
+            .object(["id": .int(1), "key": .string("d"), "modifiers": .array([])]),
+            .object(["id": .int(1), "key": .string("d"), "modifiers": .array([.string("hyper")])]),
+        ]
+        for (index, params) in badParams.enumerated() {
+            let id = Int64(20 + index)
+            try clientCodec.writeFrame(.request(id: id, method: SidecarMethods.registerHotkey, params: params))
+            guard case .failure(let failedId, let error)? = try clientCodec.readFrame() else {
+                return XCTFail("expected failure for params #\(index)")
+            }
+            XCTAssertEqual(failedId, id)
+            XCTAssertEqual(error.code, .invalidParams)
+        }
+    }
+
+    func testUnregisterHotkeyIsAnIdempotentAck() throws {
+        startConnection(provider: CannedCapabilityProvider())
+        _ = try handshake()
+        try clientCodec.writeFrame(.request(
+            id: 11,
+            method: SidecarMethods.unregisterHotkey,
+            params: .object(["id": .int(99)]) // never registered — still acks
+        ))
+        guard case .response(let id, let result)? = try clientCodec.readFrame() else {
+            return XCTFail("expected response")
+        }
+        XCTAssertEqual(id, 11)
+        XCTAssertNil(result)
     }
 
     func testUnknownMethodFails() throws {

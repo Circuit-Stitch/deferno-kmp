@@ -19,12 +19,22 @@ public enum SidecarMethods {
     public static let subscribeTranscript = "subscribeTranscript"
     /// Request/response: post a user-visible OS notification (`PostNotificationRequest` params, #123).
     public static let postNotification = "postNotification"
+    /// Request/response: show/hide the helper's menu-bar status item (`SetStatusItemRequest`, #125).
+    public static let setStatusItem = "setStatusItem"
+    /// Request/response: register a global hotkey (`RegisterHotkeyRequest`; replaces its id, #125).
+    public static let registerHotkey = "registerHotkey"
+    /// Request/response: unregister a global hotkey (`UnregisterHotkeyRequest`; idempotent, #125).
+    public static let unregisterHotkey = "unregisterHotkey"
 }
 
 /// Topics the helper sends in an unsolicited `push`.
 public enum SidecarTopics {
     /// A capability's permission state changed out-of-band (payload: `PermissionStatus`).
     public static let permissionChanged = "permissionChanged"
+    /// The visible menu-bar status item was clicked (payload: `{}`, #125).
+    public static let statusItemClicked = "statusItemClicked"
+    /// A registered global hotkey fired (payload: `{ "id": int }`, #125).
+    public static let hotkeyFired = "hotkeyFired"
 }
 
 /// Capability ids the helper advertises in `welcome`.
@@ -35,6 +45,10 @@ public enum SidecarCapabilities {
     public static let speechTranscribe = "speech.transcribe"
     /// Can deliver OS notifications via `postNotification` (#123).
     public static let notifications = "notifications"
+    /// Can host a menu-bar status item (`setStatusItem`, #125).
+    public static let statusItem = "statusItem"
+    /// Can register global hotkeys (`registerHotkey`, #125).
+    public static let hotkeys = "hotkeys"
 }
 
 /// The capability ids used inside a `PermissionStatus.capability` field (ADR-0024).

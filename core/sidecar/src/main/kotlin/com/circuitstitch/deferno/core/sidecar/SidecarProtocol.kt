@@ -23,12 +23,27 @@ object SidecarMethods {
 
     /** Request/response: post a user-visible OS notification ([PostNotificationWire] params, #123). */
     const val PostNotification: String = "postNotification"
+
+    /** Request/response: show/hide the Helper's menu-bar status item ([SetStatusItemWire] params, #125). */
+    const val SetStatusItem: String = "setStatusItem"
+
+    /** Request/response: register a global hotkey ([RegisterHotkeyWire] params; replaces its id, #125). */
+    const val RegisterHotkey: String = "registerHotkey"
+
+    /** Request/response: unregister a global hotkey ([UnregisterHotkeyWire] params; idempotent, #125). */
+    const val UnregisterHotkey: String = "unregisterHotkey"
 }
 
 /** Topics a Helper sends in an unsolicited [SidecarFrame.Push]. */
 object SidecarTopics {
     /** A capability's permission state changed out-of-band (payload: [PermissionStatusWire]). */
     const val PermissionChanged: String = "permissionChanged"
+
+    /** The visible menu-bar status item was clicked (payload: `{}`, #125). */
+    const val StatusItemClicked: String = "statusItemClicked"
+
+    /** A registered global hotkey fired (payload: [HotkeyFiredWire], #125). */
+    const val HotkeyFired: String = "hotkeyFired"
 }
 
 /** Capability ids a Helper advertises in [SidecarFrame.Welcome] (D4). */
@@ -41,6 +56,12 @@ object SidecarCapabilities {
 
     /** The Helper can deliver OS notifications via [SidecarMethods.PostNotification] (#123). */
     const val Notifications: String = "notifications"
+
+    /** The Helper can host a menu-bar status item ([SidecarMethods.SetStatusItem], #125). */
+    const val StatusItem: String = "statusItem"
+
+    /** The Helper can register global hotkeys ([SidecarMethods.RegisterHotkey], #125). */
+    const val Hotkeys: String = "hotkeys"
 }
 
 /**

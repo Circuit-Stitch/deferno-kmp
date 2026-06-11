@@ -39,6 +39,23 @@ public protocol CapabilityProvider: AnyObject {
     /// provider prompts first on `not_determined`, pushing `permissionChanged` as it settles), or
     /// `internal` when the OS refuses delivery. Params were already validated by the connection.
     func postNotification(_ request: PostNotificationRequest, completion: @escaping (SidecarError?) -> Void)
+
+    /// Show/hide this connection's menu-bar status item (#125). `onClick` fires once per click while
+    /// visible (the connection routes it as a `statusItemClicked` push); the first call's closure is
+    /// kept for the connection's lifetime. Completes `nil` on success.
+    func setStatusItem(visible: Bool, onClick: @escaping () -> Void, completion: @escaping (SidecarError?) -> Void)
+
+    /// Register (or — same `id` — rebind) a global hotkey (#125); `onFire` fires per press (routed as a
+    /// `hotkeyFired` push). Completes `nil` on success or `unavailable` when the OS refuses the binding.
+    /// Params were already validated by the connection.
+    func registerHotkey(_ request: RegisterHotkeyRequest, onFire: @escaping () -> Void, completion: @escaping (SidecarError?) -> Void)
+
+    /// Unregister the hotkey `id` (idempotent — an unknown id still completes `nil`, #125).
+    func unregisterHotkey(id: Int64, completion: @escaping (SidecarError?) -> Void)
+
+    /// The connection closed: release per-connection UI state — remove the status item, unregister
+    /// every hotkey this connection registered (#125). Open transcript streams are cancelled separately.
+    func connectionClosed()
 }
 
 /// A handle that does nothing — returned when a stream is rejected synchronously (e.g. engine busy).

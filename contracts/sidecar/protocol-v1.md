@@ -113,6 +113,20 @@ The seed surface that proves the three traffic shapes (#118); it grows additivel
   grant fails `unavailable` (`notification-permission-denied`), and an OS-level delivery error fails
   `internal` (`notification-post-failed`). The title/body are user content — the payload privacy rules
   below apply to them in full.
+- **Capability `statusItem`** (#125) — method `setStatusItem` (request/response → empty ack) and topic
+  `statusItemClicked` (push → `{}`). `params = { "visible": boolean }` (`invalid_params` when absent).
+  While visible, each click on the helper's menu-bar status item pushes `statusItemClicked`; the
+  helper removes the item when the requesting connection closes, so it appears only while the app runs.
+- **Capability `hotkeys`** (#125) — methods `registerHotkey` / `unregisterHotkey` (request/response →
+  empty ack) and topic `hotkeyFired` (push → `{ "id": int }`).
+  `RegisterHotkeyRequest = { "id": int, "key": string, "modifiers": string[] }` — `id` is the
+  client-chosen handle echoed back in every `hotkeyFired` push; registering an already-registered `id`
+  **replaces** it. `key` is a single character `a`–`z` / `0`–`9` or a named key (`space`, `return`,
+  `escape`, `tab`, `f1`–`f12`), interpreted at the **ANSI key position** (layout-independent);
+  `modifiers` is a non-empty subset of `command` | `option` | `control` | `shift`. An unknown
+  key/modifier or empty modifier list is `invalid_params`; an OS-level registration rejection is
+  `unavailable` (`hotkey-unavailable`). `unregisterHotkey` params are `{ "id": int }` (idempotent —
+  unknown ids ack). The helper unregisters all of a connection's hotkeys when it closes.
 
 ## Privacy
 

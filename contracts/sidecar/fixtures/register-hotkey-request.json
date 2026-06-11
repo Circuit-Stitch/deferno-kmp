@@ -1,0 +1,10 @@
+{
+  "type": "request",
+  "id": 5,
+  "method": "registerHotkey",
+  "params": {
+    "id": 1,
+    "key": "d",
+    "modifiers": ["command", "shift"]
+  }
+}
