@@ -4,5 +4,28 @@
       all in-app colours via DefernoTheme; this only needs to provide a sensible
       no-action-bar window background for launch.
     -->
-    <style name="Theme.Deferno" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      App window theme (the post-splash window). The parent is a Light Material theme, but the window
+      background is pointed at the -night-aware splash_background colour so the window follows the
+      device light/dark setting and matches the splash — no light flash on dark devices before Compose
+      draws its Surface. All in-app content colours are owned by DefernoTheme.
+    -->
+    <style name="Theme.Deferno" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
+
+    <!--
+      Cold-start launch theme (Android 12+ system splash via androidx core-splashscreen). The flame
+      sits in a dark paper-2 icon-background circle (so its white card/eyes always read), centred on a
+      window background that follows the device light/dark setting via -night colour resources. In dark
+      mode the circle matches the background and disappears; in light mode it reads as a dark brand
+      chip. The splash dismisses at the first frame (no keep-on-screen hold) and installSplashScreen()
+      in MainActivity hands the window to Theme.Deferno.
+    -->
+    <style name="Theme.Deferno.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_icon_circle</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Deferno</item>
+    </style>
 </resources>

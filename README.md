@@ -67,7 +67,7 @@ real code lands feature by feature.
 
 - **Architecture:** shared Kotlin Multiplatform core (models, networking, persistence, sync, presentation + navigation) with native UI per platform — see [ADR-0003](docs/adr/0003-kmp-shared-presentation-native-ui.md)
 - **Application ID:** `com.circuitstitch.deferno`
-- **minSdk / targetSdk / compileSdk:** 26 / 35 / 35
+- **minSdk / targetSdk / compileSdk:** 27 / 36 / 36
 - **Android UI:** Jetpack Compose (Material 3)
 - **Build:** Gradle 9.5.1 + AGP 9.2.1 (Kotlin compiled by AGP's built-in Kotlin support — there is no
   separate `org.jetbrains.kotlin.android` plugin)

@@ -15,14 +15,14 @@ plugins {
 
 android {
     namespace = "com.circuitstitch.deferno.baselineprofile"
-    // Keep in sync with ProjectConfig.COMPILE_SDK / TARGET_SDK (35). minSdk is 28 — the floor Baseline
-    // Profile generation requires on the target device (above the app's own minSdk 26; this test APK
-    // never ships, and the emulator is well past 28).
-    compileSdk = 35
+    // Keep in sync with ProjectConfig.COMPILE_SDK (36) / TARGET_SDK (36). minSdk is 28 — the floor
+    // Baseline Profile generation requires on the target device (above the app's own minSdk 27; this
+    // test APK never ships, and the emulator is well past 28).
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 28
-        targetSdk = 35
+        targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

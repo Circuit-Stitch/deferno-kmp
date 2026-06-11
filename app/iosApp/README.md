@@ -4,7 +4,8 @@ The iOS application entry point. Two halves live here:
 
 - **`build.gradle.kts`** — the `:app:iosApp` Gradle module. It bundles the shared **app
   shell** (`:app:shell`) + the DI graph (`:core:di`) + every feature slice into a single
-  static **`Deferno.framework`** (targets `iosX64`, `iosArm64`, `iosSimulatorArm64`) and
+  static **`Deferno.framework`** (targets `iosArm64`, `iosSimulatorArm64` — `iosX64`/Intel-Mac
+  simulator dropped to match the shared modules' target set; see `deferno.kmp.gradle.kts`) and
   **`export(...)`s** the shell + feature Decompose components, the domain model, and the
   Decompose/coroutines/datetime types their public API exposes so SwiftUI can render them.
   This half builds on any host for klib compilation; the framework binary links on a
