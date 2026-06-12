@@ -153,6 +153,10 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         is MainShellComponent.OverlayChild.New ->
             NewDesktopScreen(child.component, Modifier.fillMaxSize())
 
+        // The in-app Help → Feedback surface (#375): comment + file attachments (AWT file dialog).
+        is MainShellComponent.OverlayChild.Feedback ->
+            FeedbackDesktopScreen(child.component, Modifier.fillMaxSize())
+
         MainShellComponent.OverlayChild.Placeholder ->
             OverlayPlaceholder(onDismiss)
     }

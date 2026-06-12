@@ -105,10 +105,12 @@ class DefernoRoot {
             timeZone = timeZone.id,
             // Settings → App Permissions: deep-link to this app's iOS Settings screen (#72).
             onOpenOsAppSettings = { openExternalUrl(UIApplicationOpenSettingsURLString) },
-            // Settings → Data & Privacy / Help & Feedback: no client endpoint at v0.1 (ADR-0015), so
-            // these are REACHABLE web actions — open the web app's surface (the origin tracks the env).
+            // Settings → Data & Privacy: no client endpoint at v0.1 (ADR-0015), so it stays a REACHABLE
+            // web action — open the web app's surface (the origin tracks the env).
             onOpenDataExportImport = { openExternalUrl(webAppUrl(environment, "settings/data")) },
-            onOpenSubmitFeedback = { openExternalUrl(webAppUrl(environment, "feedback")) },
+            // Settings → Help & Feedback (#375): an in-app shell overlay now (the `Feedback` OverlayChild,
+            // surfaced to SwiftUI via ShellBridge.overlayFeedback). Submits through this AppScope service.
+            feedbackRepository = appComponent.feedbackRepository,
             // Settings → Security & 2FA: open the Active Account's Zitadel console URL in Safari.
             onOpenConsoleUrl = { url -> openExternalUrl(url) },
             // Dictation (#92, ADR-0018): the AppScope speech engine + the device locale it recognizes.

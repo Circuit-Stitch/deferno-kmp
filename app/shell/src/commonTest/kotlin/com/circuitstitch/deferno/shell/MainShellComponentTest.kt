@@ -338,18 +338,18 @@ class MainShellComponentTest {
     }
 
     @Test
-    fun settingsSubmitFeedback_bubblesOpenSubmitFeedbackToTheHost() {
-        // AC #4: the reachable submit-feedback web action routes up to the host.
+    fun settingsSubmitFeedback_opensTheInAppFeedbackOverlay() {
+        // #375: feedback is an in-app surface now — the Settings tap opens the Feedback overlay over the
+        // foreground Destination (the same overlay primitive Search/New ride), not a host web redirect.
         val outputs = mutableListOf<MainShellComponent.Output>()
         val shell = shell(output = outputs::add)
         shell.selectDestination(Destination.Settings)
 
         shell.settings().onOpenSubmitFeedback()
 
-        assertEquals(
-            listOf<MainShellComponent.Output>(MainShellComponent.Output.OpenSubmitFeedback),
-            outputs,
-        )
+        val child = shell.overlay.value.child?.instance
+        assertTrue(child is MainShellComponent.OverlayChild.Feedback, "the Feedback overlay is pushed")
+        assertEquals(emptyList(), outputs, "feedback no longer bubbles to the host")
     }
 
     @Test

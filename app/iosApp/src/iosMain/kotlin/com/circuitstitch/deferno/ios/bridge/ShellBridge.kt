@@ -203,6 +203,12 @@ fun overlaySearch(child: MainShellComponent.OverlayChild) =
 fun overlayNew(child: MainShellComponent.OverlayChild) =
     (child as? MainShellComponent.OverlayChild.New)?.component
 
+// The in-app Help → Feedback overlay (#375). The SwiftUI feedback View + its file picker are a macOS
+// follow-up (this target builds its klib on any host but links only on a Mac); the component + its
+// state are ready here so the Swift side can render the form the same way it renders New.
+fun overlayFeedback(child: MainShellComponent.OverlayChild) =
+    (child as? MainShellComponent.OverlayChild.Feedback)?.component
+
 fun settingsChildIsList(child: SettingsComponent.SettingsChild): Boolean =
     child is SettingsComponent.SettingsChild.List
 

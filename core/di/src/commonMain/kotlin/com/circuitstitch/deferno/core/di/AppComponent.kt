@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
+import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
@@ -111,6 +112,14 @@ abstract class AppComponent(
      * Surfaced here for the desktop shell and to compile-validate the binding on every target.
      */
     abstract val dictationPermissionSettings: DictationPermissionSettings
+
+    /**
+     * In-app Help → Feedback (#375): presign attachments → byte-exact PUT → submit the comment. An
+     * AppScope service (it rides the shared authed client whose bearer plugin attaches the Active
+     * Account's PAT per request), surfaced here so the Android feedback screen can drive it without
+     * per-Account wiring.
+     */
+    abstract val feedbackRepository: FeedbackRepository
 
     // --- Bindings re-exposed for the child AccountScope (ADR-0014) ---
     // kotlin-inject-anvil does not auto-propagate a parent's contributed @Provides into a child merge;

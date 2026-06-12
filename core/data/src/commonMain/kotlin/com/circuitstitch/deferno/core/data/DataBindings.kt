@@ -26,6 +26,8 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.calendar.KtorCalendarRemoteSource
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.create.KtorItemRemoteSource
+import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
+import com.circuitstitch.deferno.core.data.feedback.KtorFeedbackRepository
 import com.circuitstitch.deferno.core.data.outbox.KtorOutboxRequestSender
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.KtorPlanRemoteSource
@@ -36,6 +38,7 @@ import com.circuitstitch.deferno.core.data.task.KtorTaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.network.BearerTokenProvider
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
+import com.circuitstitch.deferno.core.network.UploadHttpClient
 import com.circuitstitch.deferno.core.scopes.AppScope
 import com.circuitstitch.deferno.core.secure.SecretVault
 import io.ktor.client.HttpClient
@@ -185,4 +188,16 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun outboxRequestSender(client: HttpClient): OutboxRequestSender = KtorOutboxRequestSender(client)
+
+    /**
+     * In-app Help → Feedback (#375): presign → byte-exact PUT → submit. Rides the shared authed
+     * [client] (the bearer plugin attaches the Active Account's PAT) plus the bare [uploadClient] for
+     * the presigned-URL PUTs (no base/no auth — an extra Authorization header would break S3 SigV4).
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun feedbackRepository(
+        client: HttpClient,
+        uploadClient: UploadHttpClient,
+    ): FeedbackRepository = KtorFeedbackRepository(client, uploadClient)
 }
