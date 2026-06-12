@@ -93,14 +93,10 @@ class MainActivity : ComponentActivity() {
                         Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     )
                 },
-                // Settings → Help & Feedback: likewise reachable, not dead text — open the web app's
-                // feedback surface (AC #4).
-                onOpenSubmitFeedback = {
-                    val url = webAppUrl(appComponent.environment, "feedback")
-                    appContext.startActivity(
-                        Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                },
+                // Settings → Help & Feedback (#375): the in-app feedback form is now a shell overlay
+                // (the Settings tap opens it over the foreground Destination), submitting through this
+                // AppScope service — the authed client attaches the Active Account's PAT per request.
+                feedbackRepository = appComponent.feedbackRepository,
                 // Settings → Security & 2FA: open the Active Account's Zitadel console URL in a browser.
                 onOpenConsoleUrl = { url ->
                     val intent = Intent(Intent.ACTION_VIEW, url.toUri())

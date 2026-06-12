@@ -22,4 +22,9 @@ interface NetworkBindings {
         environment: DefernoEnvironment,
         tokenProvider: BearerTokenProvider,
     ): HttpClient = DefernoHttpClient(environment, tokenProvider)
+
+    /** The bare upload client for presigned-URL PUTs (#375) — no base URL, no bearer (see [UploadHttpClient]). */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun uploadHttpClient(): UploadHttpClient = UploadHttpClient(buildUploadHttpClient())
 }

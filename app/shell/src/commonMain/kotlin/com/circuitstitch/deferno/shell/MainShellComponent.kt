@@ -13,6 +13,8 @@ import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
+import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
+import com.circuitstitch.deferno.core.data.feedback.FeedbackResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
@@ -162,6 +164,9 @@ interface MainShellComponent {
 
         /** The New create surface (#71): the kind picker + per-kind form, online-only create (ADR-0016). */
         class New(val component: NewComponent) : OverlayChild
+
+        /** The in-app Help → Feedback surface (#375): comment + attachments, online-only submit. */
+        class Feedback(val component: FeedbackComponent) : OverlayChild
     }
 
     sealed interface Output {
@@ -176,9 +181,6 @@ interface MainShellComponent {
 
         /** A Settings "Data & Privacy → export/import" tap — the host deep-links the web app (#72, AC #3). */
         data object OpenDataExportImport : Output
-
-        /** A Settings "Help & Feedback → submit" tap — the host deep-links the web app (#72, AC #4). */
-        data object OpenSubmitFeedback : Output
 
         /** A Settings "Security & 2FA" tap — the host opens the Zitadel console URL when present (#72). */
         data object OpenConsoleUrl : Output
@@ -201,6 +203,9 @@ sealed interface OverlayRoute {
      * pre-dates the form to a chosen day (the Calendar FAB, #74) — `null` opens an undated form.
      */
     data class New(val date: LocalDate? = null) : OverlayRoute
+
+    /** The in-app Help → Feedback surface (#375), opened from Settings → Help & Feedback. */
+    data object Feedback : OverlayRoute
 }
 
 class DefaultMainShellComponent(
@@ -225,6 +230,9 @@ class DefaultMainShellComponent(
     // The global-search seam (#73): a one-shot, online-only pull the Search overlay drives. Defaults
     // to "no results" so tests that don't exercise Search build without supplying it.
     private val searchTasks: SearchTasks = SearchTasks { _ -> TaskSearchResult.Success(emptyList()) },
+    // The in-app Help → Feedback service (#375) the Feedback overlay submits through (presign → PUT →
+    // submit). AppScope; defaulted to a no-op Offline so shell tests build without supplying it.
+    private val feedbackRepository: FeedbackRepository = NoopFeedbackRepository,
     override val accounts: StateFlow<List<Account>> = MutableStateFlow(emptyList()),
     override val activeAccount: StateFlow<Account?> = MutableStateFlow(null),
     private val onSwitchAccount: (AccountId) -> Unit = {},
@@ -419,6 +427,14 @@ class DefaultMainShellComponent(
                     onOpenDictationPermissionSettings = onOpenDictationPermissionSettings,
                 ),
             )
+
+            OverlayRoute.Feedback -> MainShellComponent.OverlayChild.Feedback(
+                DefaultFeedbackComponent(
+                    repository = feedbackRepository,
+                    onDone = ::dismissOverlay,
+                    launch = { block -> overlayScope.launch { block() } },
+                ),
+            )
         }
 
     private fun onSearchOutput(output: SearchComponent.Output) {
@@ -480,12 +496,14 @@ class DefaultMainShellComponent(
             // OS / web deep-links cross the app boundary (an Android Intent), so they land at the host (#72).
             SettingsComponent.Output.OpenOsAppSettings ->
                 this.output(MainShellComponent.Output.OpenOsAppSettings)
-            // Export/import + feedback have no client endpoint at v0.1, so they are reachable web
-            // actions: re-emit for the host to deep-link the web app (AC #3/#4, ADR-0015).
+            // Export/import has no client endpoint at v0.1, so it stays a reachable web action: re-emit
+            // for the host to deep-link the web app (AC #3, ADR-0015).
             SettingsComponent.Output.OpenDataExportImport ->
                 this.output(MainShellComponent.Output.OpenDataExportImport)
+            // Feedback is now an in-app surface (#375): open the Feedback overlay over the foreground
+            // Destination, the same overlay primitive Search/New ride — no web round-trip.
             SettingsComponent.Output.OpenSubmitFeedback ->
-                this.output(MainShellComponent.Output.OpenSubmitFeedback)
+                openOverlay(OverlayRoute.Feedback)
             SettingsComponent.Output.OpenConsoleUrl ->
                 this.output(MainShellComponent.Output.OpenConsoleUrl)
             // "View profile" is a lateral switch within the shell — handle it here (the shell owns the
@@ -554,4 +572,10 @@ private val NoopOccurrenceEditor = object : OccurrenceEditor {
     override suspend fun mark(itemId: String, action: OccurrenceAction) {}
     override suspend fun clear(itemId: String) {}
     override suspend fun reschedule(itemId: String, newDate: LocalDate) {}
+}
+
+/** No-op feedback service — the shell's test default when no AppComponent supplies one (#375). */
+internal val NoopFeedbackRepository = object : FeedbackRepository {
+    override suspend fun submit(draft: com.circuitstitch.deferno.core.data.feedback.FeedbackDraft): FeedbackResult =
+        FeedbackResult.Offline
 }

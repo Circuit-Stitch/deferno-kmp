@@ -214,10 +214,12 @@ fun main() {
             timeZone = timeZone.id,
             // Settings → App Permissions is Android-only — there is no per-app OS settings screen on
             // desktop, so onOpenOsAppSettings stays the no-op default.
-            // Settings → Data & Privacy / Help & Feedback have no client endpoint at v0.1 (ADR-0015):
-            // open the web app's surface in the default browser (origin derived from the environment).
+            // Settings → Data & Privacy has no client endpoint at v0.1 (ADR-0015): open the web app's
+            // surface in the default browser (origin derived from the environment).
             onOpenDataExportImport = { browse(webAppUrl(environment, "settings/data")) },
-            onOpenSubmitFeedback = { browse(webAppUrl(environment, "feedback")) },
+            // Settings → Help & Feedback (#375): an in-app shell overlay now, submitting through this
+            // AppScope service (the authed client carries the Active Account's PAT).
+            feedbackRepository = appComponent.feedbackRepository,
             // Settings → Security & 2FA: open the Active Account's Zitadel console URL in the browser.
             onOpenConsoleUrl = { url -> browse(url) },
             // Dictation (#94, ADR-0018): the on-device whisper engine from the AppScope DI graph (the

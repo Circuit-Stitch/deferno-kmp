@@ -287,6 +287,10 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         // The New create surface (#71): the kind picker + per-kind form + online-only create.
         is MainShellComponent.OverlayChild.New ->
             NewScreen(child.component, Modifier.fillMaxSize())
+
+        // The in-app Help → Feedback surface (#375): comment + file attachments, online-only submit.
+        is MainShellComponent.OverlayChild.Feedback ->
+            FeedbackScreen(child.component, Modifier.fillMaxSize())
     }
 }
 

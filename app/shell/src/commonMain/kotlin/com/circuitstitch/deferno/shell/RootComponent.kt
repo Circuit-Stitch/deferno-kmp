@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
+import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
@@ -83,8 +84,11 @@ class DefaultRootComponent(
     private val onOpenOsAppSettings: () -> Unit = {},
     /** Open the web app's data export/import surface (Settings → Data & Privacy, #72 AC #3). Host-handled. */
     private val onOpenDataExportImport: () -> Unit = {},
-    /** Open the web app's submit-feedback surface (Settings → Help & Feedback, #72 AC #4). Host-handled. */
-    private val onOpenSubmitFeedback: () -> Unit = {},
+    /**
+     * The in-app Help → Feedback service (#375) the Settings → Feedback overlay submits through. AppScope
+     * (the authed client carries the Active Account's PAT). Defaulted to a no-op so tests build without it.
+     */
+    private val feedbackRepository: FeedbackRepository = NoopFeedbackRepository,
     /** Open the Active Account's Zitadel console URL, if any (Settings → Security & 2FA stub, #72). */
     private val onOpenConsoleUrl: (String) -> Unit = {},
     // Dictation (#92, ADR-0018): the on-device SpeechToText (the AppScope selector) the New surface's mic
@@ -229,6 +233,8 @@ class DefaultRootComponent(
                         // The online-only create seam (#71, ADR-0016): the New overlay dispatches the
                         // CreateItem command through this Account's command executor.
                         create = session::create,
+                        // The in-app Help → Feedback service (#375) the Feedback overlay submits through.
+                        feedbackRepository = feedbackRepository,
                         // Dictation (#92, ADR-0018): the AppScope speech engine + device locale the New
                         // surface's mic drives, threaded through to DefaultNewComponent.
                         speechToText = speechToText,
@@ -270,10 +276,10 @@ class DefaultRootComponent(
             // them (#72). App permissions opens the OS settings; the console URL is resolved from the
             // Active Account's /auth/me identity (only admins carry one — a no-op when absent).
             MainShellComponent.Output.OpenOsAppSettings -> onOpenOsAppSettings()
-            // Export/import + feedback have no client endpoint at v0.1 — open the web app instead, the
-            // same ACTION_VIEW plumbing the console URL uses (AC #3/#4, ADR-0015).
+            // Export/import has no client endpoint at v0.1 — open the web app instead, the same
+            // ACTION_VIEW plumbing the console URL uses (AC #3, ADR-0015). Feedback is now in-app (#375):
+            // the shell handles it via the Feedback overlay, so it no longer reaches the host.
             MainShellComponent.Output.OpenDataExportImport -> onOpenDataExportImport()
-            MainShellComponent.Output.OpenSubmitFeedback -> onOpenSubmitFeedback()
             MainShellComponent.Output.OpenConsoleUrl -> onOpenConsoleUrl()
             // "View profile" is a lateral switch the shell already performed; nothing for the host.
             MainShellComponent.Output.OpenProfile -> Unit
