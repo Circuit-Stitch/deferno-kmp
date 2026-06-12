@@ -100,7 +100,10 @@ class SidecarClientE2ETest {
 
         client.openStream(SidecarMethods.SubscribeTranscript).test(timeout = DEADLINE) {
             awaitItem() // first partial, then we abandon the stream
-            cancel()
+            // Ignore-remaining (not plain cancel()): the stub keeps streaming until the Cancel
+            // reaches it, so the second partial can already sit in Turbine's buffer — a legitimate
+            // in-flight event, not a leak; plain cancel() flakes on ensureAllEventsConsumed.
+            cancelAndIgnoreRemainingEvents()
         }
 
         val cancelledId = withTimeout(DEADLINE) { stub.awaitCancel() }
