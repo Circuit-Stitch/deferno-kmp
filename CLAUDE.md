@@ -27,6 +27,7 @@ core/                                 ← shared KMP foundations
   model · common · network · database · secure · data · domain · designsystem
   di/                                 ← compile-time DI scope graph (process/app → Account → scene, ADR-0008)
   sidecar/                            ← OS-agnostic JVM Sidecar client + JSON IPC contract to native Helpers (JVM-only · deferno.jvm.library · ADR-0024/0025)
+  agent/                              ← propose-only Agent inference substrate: InferenceEngine seam + Koog Anthropic-format engine (ADR-0027 · #147)
 feature/                              ← shared KMP feature slices (Decompose component + ViewModel + state; commonMain + iOS)
   auth · tasks · plan
   tasks/ui · plan/ui                  ← per-slice Compose Views (deferno.compose.library: Android + JVM, NO iOS — #27)

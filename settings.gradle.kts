@@ -50,6 +50,13 @@ include(":core:speech")
 // DTOs, condensed to domain at the edge by core:speech #119 / permissions #120, ADR-0011), so it stays
 // cheaply extractable to its own repo later.
 include(":core:sidecar")
+// The propose-only [[Agent]]'s inference substrate (ADR-0027, #147): the InferenceEngine seam —
+// typed prompt + kotlinx-serializable result schema in, validated instance out — and the
+// Koog-backed Anthropic-format engine (a dev's own key against the Anthropic API today; the
+// Deferno-operated relay later, same wire format). A device capability bound at AppScope like
+// core:speech (engine choice is an [[App setting]]); it holds no write access — proposals commit
+// through the ordinary Command path only after the person accepts them.
+include(":core:agent")
 include(":core:data")
 include(":core:domain")
 include(":core:designsystem")

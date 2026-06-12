@@ -35,6 +35,11 @@ kotlin {
             // + per-platform engine multibinding merge here. `api` because AppComponent re-exposes
             // `speechToText: SpeechToText` for the shell's Dictation surface, leaking the seam type.
             api(project(":core:speech"))
+            // Agent inference is an AppScope device capability too (ADR-0027, #147): the
+            // InferenceEngine seam + the Koog Anthropic-format engine merge here via AgentBindings.
+            // `api` because the merged AppComponent implements AgentBindings (a public supertype),
+            // so the contributed interface must resolve on every consumer's compile classpath.
+            api(project(":core:agent"))
         }
 
         jvmMain.dependencies {

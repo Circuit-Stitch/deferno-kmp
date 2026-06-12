@@ -10,6 +10,20 @@
          outbox flush + the online-only create gate (normal permission, granted at install). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Koog AARs over-declare minSdk 35 (ADR-0027, #147): their convention plugin sets a blanket
+         `minSdk = 35` on every Android artifact, but the modules core/agent consumes hold NO
+         android.*/androidx.* API at all (verified against the 1.0.0 tag — their androidMain sets are
+         plain-Kotlin actuals), so the declaration is packaging, not an API floor, and overriding it
+         is safe down to this app's minSdk 27. The list is every ai.koog AAR on the runtime classpath
+         (namespace = artifact name dotted); a Koog bump that adds an artifact fails the manifest
+         merge loudly with the exact name to append. -->
+    <uses-sdk tools:overrideLibrary="ai.koog.agents.tools, ai.koog.agents.utils,
+        ai.koog.http.client.core, ai.koog.http.client.ktor,
+        ai.koog.prompt.executor.anthropic.client, ai.koog.prompt.executor.clients,
+        ai.koog.prompt.executor.model, ai.koog.prompt.llm, ai.koog.prompt.markdown,
+        ai.koog.prompt.model, ai.koog.prompt.structure, ai.koog.serialization.core,
+        ai.koog.utils" />
+
     <application
         android:name=".DefernoApplication"
         android:allowBackup="true"
