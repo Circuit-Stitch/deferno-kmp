@@ -82,6 +82,13 @@ include(":feature:settings:ui")
 // in the app entry points below. Sits above feature/* and below app/*.
 include(":app:shell")
 
+// The shell's Compose Views sibling (#175): the shared New-form atoms (kind picker, dictating
+// Title/Notes rows, date/start/end rows, status + Dictation feedback) in commonMain, on the Compose
+// platforms only (Android + desktop, no iOS) — the ADR-0004 #27 `:ui` pattern applied to :app:shell,
+// whose own module stays Compose-free (the Compose compiler is module-wide and would break its iOS
+// target). The Android overlay and the desktop window render these atoms and keep chrome only.
+include(":app:shell:ui")
+
 // The bespoke native (JNI) whisper library (#92, ADR-0018 — the repo's first native code): a classic
 // `com.android.library` module (the only Android module type whose DSL exposes externalNativeBuild/NDK)
 // that compiles the vendored whisper.cpp submodule into a `.so` consumed by core:speech's androidMain.

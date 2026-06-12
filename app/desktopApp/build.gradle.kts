@@ -245,10 +245,9 @@ dependencies {
     // Just the core Material icon set (the glyphs the nav rail/drawer uses) — not the ≈37 MB
     // `materialIconsExtended` set, which the bundled desktop distribution would otherwise ship.
     implementation(libs.compose.material.icons.core)
-    // Compose Resources runtime: the New surface's Dictation mic loads the shared design-system glyph
-    // `Res.drawable.ic_mic` (#94) via `painterResource` — material-icons-core has no Mic. core:designsystem
-    // packages the asset (publicResClass); this brings the `org.jetbrains.compose.resources` loader the
-    // desktop calls (an `implementation` dep there isn't on this module's compile classpath).
+    // Compose Resources runtime: Main.kt decodes the shared brand flame.svg window/taskbar icon via
+    // `decodeToSvgPainter`. (The New surface's mic glyph moved with the shared form atoms to
+    // :app:shell:ui, #175.)
     implementation(libs.compose.components.resources)
 
     // The shared, Compose-free app Shell (ADR-0017): the desktop renders these components
@@ -258,6 +257,9 @@ dependencies {
     // Decompose + coroutines + datetime, but its core/feature deps are `implementation`, so the ones
     // the desktop host references directly are named below.
     implementation(project(":app:shell"))
+    // The shell's shared New-form atoms (#175): the desktop NewDesktopScreen is chrome (width-capped
+    // window layout) around the stateless commonMain atoms — the ADR-0004 #27 pattern.
+    implementation(project(":app:shell:ui"))
 
     // The compile-time DI graph (#68, ADR-0014): the desktop builds the process-global AppComponent and
     // a per-Account AccountComponent off the JVM graph (createAppComponent / createAccountComponent),
