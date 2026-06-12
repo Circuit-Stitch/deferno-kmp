@@ -1,13 +1,11 @@
 package com.circuitstitch.deferno.core.speech
 
-import com.circuitstitch.deferno.core.sidecar.PermissionStatusValue
 import com.circuitstitch.deferno.core.sidecar.SidecarException
-import com.circuitstitch.deferno.core.sidecar.SidecarPermissionCapabilities
-import com.circuitstitch.deferno.core.sidecar.SidecarPermissionPort
 import com.circuitstitch.deferno.core.sidecar.SidecarSecurityException
 import com.circuitstitch.deferno.core.sidecar.SidecarSpeechPort
 import com.circuitstitch.deferno.core.sidecar.SidecarSpeechReadiness
 import com.circuitstitch.deferno.core.sidecar.SidecarUnavailableException
+import com.circuitstitch.deferno.core.sidecar.SpeechPreflight
 import com.circuitstitch.deferno.core.sidecar.TranscriptWire
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -15,22 +13,22 @@ import kotlinx.coroutines.flow.flow
 /**
  * The Sidecar-hosted native speech engine (#119, ADR-0024): dictation runs in the per-OS native Helper
  * (SFSpeechRecognizer on macOS, #121) and reaches the JVM through the [SidecarSpeechPort] — the typed
- * capability port that keeps the wire mechanics inside core/sidecar. The seam stays at the
- * **Transcript altitude** (ADR-0018): the Helper owns its own mic + recognizer and emits **text — no
- * PCM ever crosses the socket**; this engine condenses the port's contract-owned [TranscriptWire] to
- * the domain [TranscriptEvent] at the edge (ADR-0011).
+ * capability port that keeps the wire mechanics **and the TCC permission vocabulary** inside
+ * core/sidecar (#172). The seam stays at the **Transcript altitude** (ADR-0018): the Helper owns its
+ * own mic + recognizer and emits **text — no PCM ever crosses the socket**; this engine condenses the
+ * port's contract-owned [TranscriptWire] to the domain [TranscriptEvent] at the edge (ADR-0011).
  *
  * **Availability is the Helper's ready signal**, not optimism ([SidecarSpeechPort.readiness]):
- * [SpeechAvailability.Available] only when the Helper is connected, advertised `speech.transcribe` in
- * its `welcome` (it only does so when it can genuinely construct the on-device recognizer), and the
- * Speech TCC permission isn't denied/restricted. The two degraded states stay distinct: **no Helper
- * bound** — the permanent, normal state on Linux/Windows — reports
- * [UnavailableReason.NotInstalled] ("not available on this device"), while a present-but-not-ready
- * Helper reports [UnavailableReason.NotReady]; either way the [SpeechToTextSelector] keeps the
- * always-available whisper floor (ADR-0018/0024). A `not_determined` permission stays Available:
- * introspection never prompts — [listen]'s permission **preflight** (#120) is what resolves it, firing
- * the real OS prompts via [SidecarPermissionPort.request] before the Helper's mic engages, and a
- * settled denial surfaces as the typed [SpeechError.PermissionDenied] (never a capture-failure guess).
+ * [SpeechAvailability.Available] only on [SidecarSpeechReadiness.Ready]. The two degraded states stay
+ * distinct: **no Helper bound** — the permanent, normal state on Linux/Windows — reports
+ * [UnavailableReason.NotInstalled] ("not available on this device"), while every present-but-not-ready
+ * reason (capability missing, a foreclosed gate, an unresponsive Helper) collapses to
+ * [UnavailableReason.NotReady] — no UI consumes the finer reasons yet (#172); either way the
+ * [SpeechToTextSelector] keeps the always-available whisper floor (ADR-0018/0024). A `not_determined`
+ * permission stays Available: introspection never prompts — [listen] runs the port's
+ * [preflight][SidecarSpeechPort.preflight] (#120), which fires the real OS prompts before the Helper's
+ * mic engages, and a settled denial surfaces as the typed [SpeechError.PermissionDenied] (never a
+ * capture-failure guess).
  *
  * **English-only v1 (ADR-0018):** a non-English locale reports [UnavailableReason.UnsupportedLocale]
  * locally, without dialing.
@@ -43,7 +41,6 @@ import kotlinx.coroutines.flow.flow
  */
 internal class SidecarSpeechToText(
     private val port: SidecarSpeechPort,
-    private val permissions: SidecarPermissionPort,
 ) : SpeechToText {
 
     override val id: SpeechEngineId = SpeechEngineId.Sidecar
@@ -62,7 +59,10 @@ internal class SidecarSpeechToText(
         else -> when (port.readiness()) {
             SidecarSpeechReadiness.Ready -> SpeechAvailability.Available
             SidecarSpeechReadiness.NoHelper -> SpeechAvailability.Unavailable(UnavailableReason.NotInstalled)
-            SidecarSpeechReadiness.NotReady -> SpeechAvailability.Unavailable(UnavailableReason.NotReady)
+            SidecarSpeechReadiness.CapabilityMissing,
+            is SidecarSpeechReadiness.PermissionBlocked,
+            SidecarSpeechReadiness.NotResponding,
+            -> SpeechAvailability.Unavailable(UnavailableReason.NotReady)
         }
     }
 
@@ -71,7 +71,7 @@ internal class SidecarSpeechToText(
             emit(TranscriptEvent.Error(SpeechError.Unavailable))
             return@flow
         }
-        if (permissionsForeclosed()) {
+        if (port.preflight() is SpeechPreflight.Blocked) {
             emit(TranscriptEvent.Error(SpeechError.PermissionDenied))
             return@flow
         }
@@ -81,24 +81,6 @@ internal class SidecarSpeechToText(
             emit(TranscriptEvent.Error(e.toSpeechError()))
         }
     }
-
-    /**
-     * The #120 preflight: resolve Speech + mic **before** engaging the Helper's mic, so a foreclosed
-     * permission surfaces as a typed [SpeechError.PermissionDenied] (→ the New surface's
-     * `PermissionPermanentlyDenied` + settings deep-link) instead of a capture failure. `not_determined`
-     * fires the real OS prompt via [SidecarPermissionPort.request] — Speech first, then mic, the same
-     * order the Helper's own first-use `ensureAuthorized` prompts in — and only a settled
-     * denied/restricted forecloses; `unknown` (no Helper, a Helper that doesn't broker permissions, an
-     * unreadable reply) stays open so the subscribe path can still prompt on first real use.
-     */
-    private suspend fun permissionsForeclosed(): Boolean =
-        listOf(SidecarPermissionCapabilities.Speech, SidecarPermissionCapabilities.Microphone).any { capability ->
-            val settled = when (val now = permissions.status(capability)) {
-                PermissionStatusValue.NOT_DETERMINED -> permissions.request(capability)
-                else -> now
-            }
-            settled == PermissionStatusValue.DENIED || settled == PermissionStatusValue.RESTRICTED
-        }
 
     /** Condense the contract-owned wire event to the domain event at the edge (ADR-0011). */
     private fun TranscriptWire.toEvent(): TranscriptEvent = when (this) {

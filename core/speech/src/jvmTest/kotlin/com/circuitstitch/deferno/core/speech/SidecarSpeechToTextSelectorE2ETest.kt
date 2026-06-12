@@ -140,10 +140,9 @@ class SidecarSpeechToTextSelectorE2ETest {
     private fun selector(sidecarClient: SidecarClient, floor: FakeSpeechToText): SpeechToTextSelector =
         SpeechToTextSelector(
             engines = setOf(
-                // The real #120 permission port too: listen()'s preflight runs against the stub Helper.
+                // The real #120 permission port too: the port's preflight runs against the stub Helper.
                 SidecarSpeechToText(
-                    DefaultSidecarSpeechPort(sidecarClient),
-                    DefaultSidecarPermissionPort(sidecarClient),
+                    DefaultSidecarSpeechPort(sidecarClient, DefaultSidecarPermissionPort(sidecarClient)),
                 ),
                 floor,
             ),

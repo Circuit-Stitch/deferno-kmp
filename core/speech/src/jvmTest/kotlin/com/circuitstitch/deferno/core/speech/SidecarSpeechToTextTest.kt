@@ -1,12 +1,12 @@
 package com.circuitstitch.deferno.core.speech
 
 import app.cash.turbine.test
-import com.circuitstitch.deferno.core.sidecar.PermissionStatusValue
 import com.circuitstitch.deferno.core.sidecar.SidecarConnectionLostException
-import com.circuitstitch.deferno.core.sidecar.SidecarPermissionCapabilities
+import com.circuitstitch.deferno.core.sidecar.SidecarDictationPermission
 import com.circuitstitch.deferno.core.sidecar.SidecarSecurityException
 import com.circuitstitch.deferno.core.sidecar.SidecarSpeechReadiness
 import com.circuitstitch.deferno.core.sidecar.SidecarUnavailableException
+import com.circuitstitch.deferno.core.sidecar.SpeechPreflight
 import com.circuitstitch.deferno.core.sidecar.TranscriptWire
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -51,12 +51,22 @@ class SidecarSpeechToTextTest {
     }
 
     @Test
-    fun reportsNotReadyWhenTheHelperIsPresentButNotReady() = runTest {
-        val engine = engine(FakeSidecarSpeechPort(readiness = SidecarSpeechReadiness.NotReady))
-        assertEquals(
-            SpeechAvailability.Unavailable(UnavailableReason.NotReady),
-            engine.availability("en-US"),
+    fun reportsNotReadyForEveryPresentButNotReadyReason() = runTest {
+        // The finer reasons (#172) have no SpeechAvailability consumer yet — they all collapse to
+        // NotReady; only the absent-Helper state stays distinct (NotInstalled, above).
+        val reasons = listOf(
+            SidecarSpeechReadiness.CapabilityMissing,
+            SidecarSpeechReadiness.PermissionBlocked(SidecarDictationPermission.Microphone),
+            SidecarSpeechReadiness.NotResponding,
         )
+        for (reason in reasons) {
+            val engine = engine(FakeSidecarSpeechPort(readiness = reason))
+            assertEquals(
+                SpeechAvailability.Unavailable(UnavailableReason.NotReady),
+                engine.availability("en-US"),
+                "for $reason",
+            )
+        }
     }
 
     @Test
@@ -154,93 +164,36 @@ class SidecarSpeechToTextTest {
         }
     }
 
-    // --- listen(): the #120 permission preflight ------------------------------------------------------
+    // --- listen(): the seam-owned permission preflight (#120/#172) -----------------------------------
 
     @Test
-    fun grantedPermissionsStreamWithoutPrompting() = runTest {
+    fun aClearPreflightStreamsAndRunsExactlyOnce() = runTest {
         val port = FakeSidecarSpeechPort(events = listOf(TranscriptWire.Final("hello")))
-        val permissions = FakeSidecarPermissionPort() // everything granted
 
-        engine(port, permissions).listen("en-US", ContinuityHint.Utterance).test {
+        engine(port).listen("en-US", ContinuityHint.Utterance).test {
             assertEquals(TranscriptEvent.Final("hello"), awaitItem())
             awaitComplete()
         }
-        assertEquals(emptyList(), permissions.requested, "a settled grant must never prompt")
+        assertEquals(1, port.preflights, "listen() must run the port's preflight before subscribing")
     }
 
     @Test
-    fun aSettledDenialForeclosesWithoutPromptingOrTouchingTheMic() = runTest {
-        for (settled in listOf(PermissionStatusValue.DENIED, PermissionStatusValue.RESTRICTED)) {
-            val port = FakeSidecarSpeechPort(events = listOf(TranscriptWire.Final("never")))
-            val permissions = FakeSidecarPermissionPort(
-                statuses = mutableMapOf(SidecarPermissionCapabilities.Microphone to settled),
+    fun aBlockedPreflightEmitsTheTypedPermissionErrorWithoutTouchingTheMic() = runTest {
+        // The prompting choreography (order, TCC condensing) is the port's contract, pinned by
+        // core/sidecar's SidecarSpeechPortTest — the engine only maps the settled outcome (#172).
+        for (gate in SidecarDictationPermission.entries) {
+            val port = FakeSidecarSpeechPort(
+                preflight = SpeechPreflight.Blocked(gate),
+                events = listOf(TranscriptWire.Final("never")),
             )
 
-            engine(port, permissions).listen("en-US", ContinuityHint.Utterance).test {
-                assertEquals(TranscriptEvent.Error(SpeechError.PermissionDenied), awaitItem(), "for $settled")
+            engine(port).listen("en-US", ContinuityHint.Utterance).test {
+                assertEquals(TranscriptEvent.Error(SpeechError.PermissionDenied), awaitItem(), "for $gate")
                 awaitComplete()
             }
             assertEquals(0, port.subscriptions, "a foreclosed permission must never engage the Helper's mic")
-            assertEquals(emptyList(), permissions.requested, "a terminal denial must never re-prompt")
         }
     }
 
-    @Test
-    fun notDeterminedPromptsSpeechThenMicAndStreamsOnGrant() = runTest {
-        val port = FakeSidecarSpeechPort(events = listOf(TranscriptWire.Final("hello")))
-        val permissions = FakeSidecarPermissionPort(
-            statuses = mutableMapOf(
-                SidecarPermissionCapabilities.Speech to PermissionStatusValue.NOT_DETERMINED,
-                SidecarPermissionCapabilities.Microphone to PermissionStatusValue.NOT_DETERMINED,
-            ),
-            requestOutcome = PermissionStatusValue.GRANTED,
-        )
-
-        engine(port, permissions).listen("en-US", ContinuityHint.Utterance).test {
-            assertEquals(TranscriptEvent.Final("hello"), awaitItem())
-            awaitComplete()
-        }
-        // The discrete not-determined → request → granted flow, in the Helper's own prompt order.
-        assertEquals(
-            listOf(SidecarPermissionCapabilities.Speech, SidecarPermissionCapabilities.Microphone),
-            permissions.requested,
-        )
-    }
-
-    @Test
-    fun notDeterminedSettlingDeniedEmitsTheTypedPermissionError() = runTest {
-        val port = FakeSidecarSpeechPort(events = listOf(TranscriptWire.Final("never")))
-        val permissions = FakeSidecarPermissionPort(
-            statuses = mutableMapOf(SidecarPermissionCapabilities.Speech to PermissionStatusValue.NOT_DETERMINED),
-            requestOutcome = PermissionStatusValue.DENIED,
-        )
-
-        engine(port, permissions).listen("en-US", ContinuityHint.Utterance).test {
-            assertEquals(TranscriptEvent.Error(SpeechError.PermissionDenied), awaitItem())
-            awaitComplete()
-        }
-        assertEquals(0, port.subscriptions)
-    }
-
-    @Test
-    fun unknownPermissionStateStaysOpenAndSubscribes() = runTest {
-        // No Helper-brokered permissions / an unreadable reply: introspection has nothing to say, so
-        // the subscribe path must stay reachable (its first real use is what would prompt).
-        val port = FakeSidecarSpeechPort(events = listOf(TranscriptWire.Final("hello")))
-        val permissions = FakeSidecarPermissionPort(
-            statuses = mutableMapOf(SidecarPermissionCapabilities.Speech to PermissionStatusValue.UNKNOWN),
-        )
-
-        engine(port, permissions).listen("en-US", ContinuityHint.Utterance).test {
-            assertEquals(TranscriptEvent.Final("hello"), awaitItem())
-            awaitComplete()
-        }
-        assertEquals(1, port.subscriptions)
-        assertEquals(emptyList(), permissions.requested, "unknown is not not_determined — never prompt on it")
-    }
-
-    private fun engine(
-        port: FakeSidecarSpeechPort,
-        permissions: FakeSidecarPermissionPort = FakeSidecarPermissionPort(),
-    ): SidecarSpeechToText = SidecarSpeechToText(port, permissions)
+    private fun engine(port: FakeSidecarSpeechPort): SidecarSpeechToText = SidecarSpeechToText(port)
 }

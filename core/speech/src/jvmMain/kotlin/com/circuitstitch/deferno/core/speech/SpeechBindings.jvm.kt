@@ -40,7 +40,7 @@ interface JvmSpeechBindings {
     @IntoSet
     @SingleIn(AppScope::class)
     fun sidecarSpeechEngine(client: SidecarClient, permissions: SidecarPermissionPort): SpeechToText =
-        SidecarSpeechToText(DefaultSidecarSpeechPort(client), permissions)
+        SidecarSpeechToText(DefaultSidecarSpeechPort(client, permissions))
 
     /**
      * The dictation-permission settings deep-link (#120): live introspection over the same

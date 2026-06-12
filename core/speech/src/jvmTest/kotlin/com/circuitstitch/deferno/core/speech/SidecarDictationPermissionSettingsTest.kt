@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.speech
 
+import com.circuitstitch.deferno.core.sidecar.FakeSidecarPermissionPort
 import com.circuitstitch.deferno.core.sidecar.PermissionStatusValue
 import com.circuitstitch.deferno.core.sidecar.SidecarPermissionCapabilities
 import kotlinx.coroutines.test.runTest

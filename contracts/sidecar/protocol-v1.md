@@ -111,6 +111,11 @@ The seed surface that proves the three traffic shapes (#118); it grows additivel
 - **Capability `speech.transcribe`** — method `subscribeTranscript` (server stream of `TranscriptEvent`).
   `TranscriptEvent` is `{ "type": "partial", "text": string }` | `{ "type": "final", "text": string }` |
   `{ "type": "failure", "reason": string }` (a non-PII reason).
+  **Dictation prompt order (#172):** dictation needs two permission gates — `"speech"` and `"mic"` —
+  and they resolve **in that order**: a Helper's own first-use authorization (`subscribeTranscript`
+  against undetermined gates) prompts speech recognition first, then the microphone, and a client
+  running a `requestPermission` preflight MUST issue the same sequence, so the person sees the same
+  two prompts in the same order regardless of which side initiates.
 - **Capability `notifications`** (#123) — method `postNotification` (request/response → empty ack).
   `params = { "title": string, "body"?: string }`; `title` must be non-empty (`invalid_params`
   otherwise). The first post against a `not_determined` permission fires the OS authorization prompt

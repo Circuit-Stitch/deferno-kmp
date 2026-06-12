@@ -1,18 +1,15 @@
-package com.circuitstitch.deferno.core.speech
+package com.circuitstitch.deferno.core.sidecar
 
-import com.circuitstitch.deferno.core.sidecar.PermissionStatusValue
-import com.circuitstitch.deferno.core.sidecar.PermissionStatusWire
-import com.circuitstitch.deferno.core.sidecar.SidecarPermissionPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 
 /**
- * A scriptable [SidecarPermissionPort] for the [SidecarSpeechToText] preflight tests (#120): per-capability
- * canned statuses plus the canned outcome a `not_determined` request settles to — the same model as the
- * stub Helper's TCC. The real port over the real socket is exercised by core/sidecar's
- * `SidecarPermissionPortE2ETest`; the engine here only needs the seam.
+ * A scriptable [SidecarPermissionPort] for [DefaultSidecarSpeechPort]'s preflight tests (#120/#172):
+ * per-capability canned statuses plus the canned outcome a `not_determined` request settles to — the
+ * same model as the [StubHelper]'s TCC. The real port over the real socket is exercised by
+ * [SidecarPermissionPortE2ETest]; the speech port's preflight only needs the seam.
  */
-internal class FakeSidecarPermissionPort(
+class FakeSidecarPermissionPort(
     /** Per-capability canned status; an unscripted capability reads GRANTED. */
     val statuses: MutableMap<String, PermissionStatusValue> = mutableMapOf(),
     /** What a request against a NOT_DETERMINED status settles it to. */
