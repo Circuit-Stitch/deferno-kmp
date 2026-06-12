@@ -1,0 +1,67 @@
+package com.circuitstitch.deferno.shell
+
+import com.circuitstitch.deferno.core.data.connectivity.Connectivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
+import kotlin.time.Duration
+import kotlin.time.Instant
+
+/**
+ * Drives an Active Account's offline outbox (#143/#158). On [drive] it flushes the queued writes (when
+ * online) **before** the settings reconcile — sequenced so the settings pull can't fetch a snapshot that
+ * predates the just-flushed writes (the #143 cold-start theme revert) — then re-runs that pair on the
+ * offline→online edge and re-flushes every [flushPeriod] while online. [drive] cancels any prior
+ * session's loop first, so the driver is bound to exactly the Active Account (account isolation,
+ * ADR-0002/0014); [stop] tears it down on sign-out so a signed-out Account's outbox is never flushed again.
+ * Both cancel cooperatively (no join), so an in-flight flush from the prior session may still complete —
+ * matching the pre-extraction `RootComponent.driveOutboxFor` behaviour.
+ *
+ * The [connectivity] signal shapes both legs (#158): a periodic pass is skipped while known-offline — so a
+ * long offline stretch can't walk a queued write into the replay engine's give-up policy (`maxAttempts`
+ * measures real server failures, not flight mode) — and the offline→online edge triggers an immediate
+ * flush-then-reconcile instead of waiting out the tick.
+ *
+ * It owns a single parent [Job] on [scope] (the component's lifecycle scope), so the reconnect-edge
+ * collector is a child and a [stop] / re-[drive] cancels the whole loop. Extracted from `RootComponent`
+ * so this flush timing has one home and a focused test (a virtual clock + a fake [Connectivity]).
+ */
+class OutboxDriver(
+    private val scope: CoroutineScope,
+    private val connectivity: Connectivity,
+    private val now: () -> Instant,
+    private val flushPeriod: Duration,
+) {
+    private var job: Job? = null
+
+    /** Re-point the driver at [session] (cancelling any prior session's loop first). */
+    fun drive(session: AccountSession) {
+        job?.cancel()
+        job = scope.launch {
+            val online = connectivity.online
+            if (online.value) session.flushOutbox(now())
+            session.settingsRepository.refresh()
+            launch {
+                // The reconnect edge: `online` is distinct-until-changed, so after dropping the current
+                // value every `true` is an offline→online transition.
+                online.drop(1).filter { it }.collect {
+                    session.flushOutbox(now())
+                    session.settingsRepository.refresh()
+                }
+            }
+            while (true) {
+                delay(flushPeriod)
+                if (online.value) session.flushOutbox(now())
+            }
+        }
+    }
+
+    /** Stop driving (sign-out / no Active Account): the prior Account's outbox is never flushed again. */
+    fun stop() {
+        job?.cancel()
+        job = null
+    }
+}
