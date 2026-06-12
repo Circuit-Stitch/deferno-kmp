@@ -23,17 +23,22 @@ binary; and the backend owns the domain language and already auto-seeds the dail
   PAT auth → entitlement check → verbatim forward. The client points Koog's stock
   Anthropic client at the relay URL — zero custom wire code, and Claude-native structured output and
   prompt caching survive. Prompts ship with the app; improving them is an app release.
-- **The agent is propose-only: it holds no tools and no write access.** It maps context to a typed
+- **The agent is propose-only: read-only lookup tools are allowed; write tools are not.** It may use
+  deterministic reference-lookup tools over the local Item cache/search indexes to resolve existing
+  Items the person mentions; lookup never queries the server. It then maps context to a typed
   proposal — draft Tasks (decomposition + sequence + `completeBy` + `desire`/`productive`) or a plan
-  delta — and the *person's acceptance* commits through the **existing Command path**: `CreateItem`
-  for accepted drafts (online-only, ADR-0016) and the `AddToPlan`/`RemoveFromPlan`/`ReorderPlan`
-  Commands for accepted plan deltas (offline-first through the outbox via `OutboxPlanWriter`). The
-  Command registry (ADR-0007) remains the designated seam for a future tool-holding agent; it gains
-  no LLM caller in v1.
+  delta. The *person's acceptance* commits through the **existing Command path**: `CreateItem` for
+  accepted drafts (offline-first once client-supplied Item ids land) and the
+  `AddToPlan`/`RemoveFromPlan`/`ReorderPlan` Commands for accepted plan deltas (offline-first through
+  the outbox via `OutboxPlanWriter`). The Command registry (ADR-0007) remains the designated seam for
+  any future write-capable agent; v1 gets no write tool caller.
 - **Extraction targets only fields the domain already has.** "Priority" is a *derived* reading of
   `desire`/`productive`/`completeBy`, never a stored field; "dependencies" are the existing
   **sequence** (`nextTaskId` chains) and **decomposition** (`parentId` trees) relations. No new
-  backend fields, no blocks/blocked-by edge.
+  backend fields, no blocks/blocked-by edge. Existing Items are referenced by their human-facing
+  `ref` in agent-visible proposals and resolved back to UUIDs by the client before commit; draft Items
+  may use opaque local ids in the same structural slots until acceptance. Stale or unresolved refs
+  preserve the draft and enter a repair path instead of being silently dropped.
 - **Surfaces:** Brain dump is a **mode on the New surface** (beside the dictation mic, ending in a
   draft-review list); the plan proposal is an affordance on the **Plan** Destination opening a
   review-the-delta sheet. The frozen v1 Destination set (ADR-0015) is unchanged.
@@ -42,8 +47,10 @@ binary; and the backend owns the domain language and already auto-seeds the dail
 engine-catalog entry). *Backend agent endpoints* (duplicates agent
 logic in two languages the moment a local tier exists). *Server-fetched prompts* (a versioned
 cross-repo prompt contract isn't warranted yet). *Write-tool agent in v1* (guardrail design without a
-v1 need — both flows are propose-then-confirm). *Strict on-device only* (no iOS path, weak extraction
-quality; human review already bounds model risk). *OpenAI-compatible facade on the relay* (the
+v1 need — both flows are propose-then-confirm). *No tools at all* (too weak for references to distant
+existing Items in the person's graph; local read-only lookup preserves the propose-only safety boundary).
+*Strict on-device only* (no iOS path, weak extraction quality; human review already bounds model risk).
+*OpenAI-compatible facade on the relay* (the
 translation layer drops provider-native structured output — the capability extraction depends on
 most).
 

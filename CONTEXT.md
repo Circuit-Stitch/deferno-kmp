@@ -45,6 +45,19 @@ These three are routinely conflated; in this client they are kept distinct:
 
 ### Item state (disambiguating "status")
 
+**Item kind** *(client disambiguation)*:
+Task, Habit, Chore, and Event are kinds of one converged [[Item]] family. Treat them as shared Item
+capabilities first; name a specific kind only when the domain behavior is genuinely kind-specific.
+_Avoid_: separate Task/Habit/Chore/Event lanes, task-only path, divergent kind work.
+
+**Item anchor** *(client)*:
+A compact, local-only reference summary returned by [[Reference lookup]] so an [[Agent]] proposal can
+attach drafts to existing Items without carrying full Item records. It includes identity and
+disambiguation fields only: the human-facing `ref` (`{org_slug}-{sequence}`), kind, title, parent,
+deadline, creation date, and description; the client may carry the UUID internally for validation and
+commit, but the agent-visible anchor is the `ref`.
+_Avoid_: full Item model, history payload, comment payload.
+
 The API overloads `status` across three unrelated axes (and ships six wire enums with inconsistent
 casing). The client names them distinctly and condenses them in the DTO→domain mapper; the wire
 DTOs stay faithful, the domain types are clean.
@@ -197,15 +210,18 @@ _Avoid_: dispatcher, bus, controller, menu.
 **Agent** *(client)*:
 The client-side capability that turns the person's own context into **proposals** — today two
 propose-only services, the [[Extractor]] and the producer of the [[Plan proposal]], running against
-the configured [[Inference engine]]. It holds no write access and **never commits anything**: the
-person accepts a proposal, and that acceptance commits through the ordinary write path. Reserved to
-grow into the Command-issuing agent the [[Command registry]] anticipates.
+the configured [[Inference engine]], with read-only [[Reference lookup]] tools when it must resolve
+existing [[Item]]s. It holds no write access and **never commits anything**: the person accepts a
+proposal, and that acceptance commits through the ordinary write path. Reserved to grow into the
+Command-issuing agent the [[Command registry]] anticipates.
 _Avoid_: assistant, copilot, bot, "the AI" (name the capability or the specific service).
 
 **Extractor** *(client)*:
 The propose-only [[Agent]] service that turns a [[Brain dump]] [[Transcript]] into **draft
 [[Task]]s** — titles, decompositions (parent/child), sequences (next-task chains), `completeBy`, and
-`desire`/`productive`. Its output is always drafts for the person's review, never committed work.
+`desire`/`productive`. Drafts may use opaque local ids in the same structural slots as Item ids so
+parent/child and sequence refs have something stable to point at before acceptance. Its output is
+always drafts for the person's review, never committed work.
 _Avoid_: parser, brain-dump AI, voice commands (routing speech to Commands — a non-goal).
 
 **Plan proposal** *(client)*:
@@ -215,12 +231,26 @@ the Plan [[Destination]]. Accepted entries commit through the ordinary plan verb
 **never auto-applied**, and the server-seeded plan remains the substrate it amends.
 _Avoid_: generated plan, AI plan (the Agent *curates* the seeded day; it does not author it).
 
+**Proposal recovery** *(client)*:
+When a proposal references an [[Item anchor]] that can no longer be resolved, the client preserves the
+person's draft/proposal and asks them to repair or discard the affected part. Stale references are a
+review problem, not a reason to silently trash generated work; a missing parent can be resolved by
+saving the draft at the root/top level, while a missing child relation can be removed.
+_Avoid_: silently dropping drafts, auto-committing a guessed replacement.
+
 **Inference engine** *(client)*:
 The configured backend the [[Agent]] runs against — the **Deferno relay** (Deferno-operated,
 per-[[Account]] entitlement) or a **local engine** on this device. The choice is an [[App setting]]
 (device-local, like the speech-engine choice); an off-device engine is **explicit opt-in, never
 silent**. Distinct from the [[Dictation]] speech engine — speech recognition never has a cloud tier.
 _Avoid_: model (an engine *hosts* a model), provider, speech engine (a different catalog).
+
+**Reference lookup** *(client)*:
+Read-only [[Agent]] tools that resolve the person's spoken/written references to existing [[Item]]s
+through deterministic function calls and **local** search indexes. They may return Item anchors for
+proposals to reference; they never mutate data, never query the server, and never bypass the person's
+review/acceptance step.
+_Avoid_: write tool, server search, autonomous write agent, commit tool.
 
 ### Voice & dictation
 

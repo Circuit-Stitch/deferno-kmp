@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.agent
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.LocalDate
 import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertIs
@@ -39,18 +40,15 @@ class AnthropicStructuredOutputIntegrationTest {
                 endpoint = AnthropicEndpoint(baseUrl = baseUrl, credentials = { apiKey }),
             )
 
-            val result = engine.infer(
-                InferenceRequest(
-                    instructions = "Extract the distinct actionable tasks from the person's note " +
-                        "as draft tasks. Set completeBy (an ISO date) only when the note names a " +
-                        "deadline, and productive=true for chores and upkeep.",
-                    content = "I need to mow the lawn, and then sharpen the mower blades before " +
-                        "Friday 2026-06-12.",
-                    schema = InferenceSchema(DraftTasks.serializer()),
+            val result = Extractor(engine).extract(
+                transcript = Transcript(
+                    "I need to mow the lawn, and then sharpen the mower blades before Friday.",
                 ),
+                today = LocalDate(2026, 6, 8),
+                timeZone = "America/Los_Angeles",
             )
 
-            val drafts = assertIs<InferenceResult.Success<DraftTasks>>(result).value.drafts
+            val drafts = assertIs<InferenceResult.Success<DraftTaskProposal>>(result).value.drafts
             assertTrue(drafts.isNotEmpty(), "live structured output should extract at least one draft")
             assertTrue(
                 drafts.all { it.title.isNotBlank() },
