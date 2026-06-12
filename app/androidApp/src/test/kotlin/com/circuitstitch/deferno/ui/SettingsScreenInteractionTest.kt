@@ -31,8 +31,8 @@ import org.robolectric.RobolectricTestRunner
  * Compose UI interaction tests (#72) for the Settings tier-3 drill-down, run on the JVM via
  * Robolectric. They guard the View wiring the component test can't: tapping a category row drills
  * into its detail (and the back arrow returns to the list), an Appearance theme choice forwards the
- * intent to the writer, and the drag-and-drop toggle forwards its intent. Driven over the real
- * [DefaultSettingsComponent] on top of the in-memory settings fakes (the same harness pattern as
+ * intent to the editor seam (#173), and the drag-and-drop toggle forwards its intent. Driven over the
+ * real [DefaultSettingsComponent] on top of the in-memory settings fakes (the same harness pattern as
  * the Profile interaction tests).
  */
 @RunWith(RobolectricTestRunner::class)
@@ -44,12 +44,12 @@ class SettingsScreenInteractionTest {
 
     private fun component(
         repo: FakeSettingsRepository = FakeSettingsRepository(),
-        writer: FakeSettingsWriter = FakeSettingsWriter(repo),
+        editor: FakeSettingsEditor = FakeSettingsEditor(repo),
         speechEngineCatalog: SpeechEngineCatalog = FakeSpeechEngineCatalog(),
     ) = DefaultSettingsComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         settingsRepository = repo,
-        settingsWriter = writer,
+        settingsEditor = editor,
         speechEngineCatalog = speechEngineCatalog,
         coroutineContext = Dispatchers.Unconfined,
     )
@@ -85,26 +85,26 @@ class SettingsScreenInteractionTest {
     @Test
     fun appearance_selectingMono_forwardsTheThemeIntent() {
         val repo = FakeSettingsRepository()
-        val writer = FakeSettingsWriter(repo)
-        setContent { SettingsScreen(component(repo, writer)) }
+        val editor = FakeSettingsEditor(repo)
+        setContent { SettingsScreen(component(repo, editor)) }
 
         composeRule.onNodeWithText("Appearance").performClick()
         composeRule.onNodeWithText("Mono").performClick()
 
-        assertTrue("a theme write was forwarded", writer.themeChanges.isNotEmpty())
-        assertEquals(ThemeFamily.Mono, writer.themeChanges.last().first)
+        assertTrue("a theme write was forwarded", editor.themeChanges.isNotEmpty())
+        assertEquals(ThemeFamily.Mono, editor.themeChanges.last().first)
     }
 
     @Test
     fun taskBehavior_togglingDragAndDrop_forwardsTheIntent() {
         val repo = FakeSettingsRepository()
-        val writer = FakeSettingsWriter(repo)
-        setContent { SettingsScreen(component(repo, writer)) }
+        val editor = FakeSettingsEditor(repo)
+        setContent { SettingsScreen(component(repo, editor)) }
 
         composeRule.onNodeWithText("Task behavior").performClick()
         composeRule.onNodeWithText("Drag and drop (experimental)").performClick()
 
-        assertEquals(listOf(true), writer.dragAndDropChanges)
+        assertEquals(listOf(true), editor.dragAndDropChanges)
     }
 
     @Test
@@ -117,7 +117,7 @@ class SettingsScreenInteractionTest {
                 DefaultSettingsComponent(
                     componentContext = DefaultComponentContext(LifecycleRegistry()),
                     settingsRepository = repo,
-                    settingsWriter = FakeSettingsWriter(repo),
+                    settingsEditor = FakeSettingsEditor(repo),
                     output = outputs::add,
                     coroutineContext = Dispatchers.Unconfined,
                 ),
@@ -143,7 +143,7 @@ class SettingsScreenInteractionTest {
                 DefaultSettingsComponent(
                     componentContext = DefaultComponentContext(LifecycleRegistry()),
                     settingsRepository = repo,
-                    settingsWriter = FakeSettingsWriter(repo),
+                    settingsEditor = FakeSettingsEditor(repo),
                     output = outputs::add,
                     coroutineContext = Dispatchers.Unconfined,
                 ),
@@ -189,7 +189,7 @@ class SettingsScreenInteractionTest {
         composeRule.onNodeWithText("Whisper").assertIsDisplayed()
         composeRule.onNodeWithText("Automatic").performClick()
 
-        // Persisted device-locally through the catalog — never the synced SettingsWriter.
+        // Persisted device-locally through the catalog — never the synced SettingsEditor.
         assertEquals(listOf(SpeechEngineId.Automatic), catalog.selects)
     }
 

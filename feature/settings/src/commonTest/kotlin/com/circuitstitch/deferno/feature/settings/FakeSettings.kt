@@ -1,7 +1,6 @@
 package com.circuitstitch.deferno.feature.settings
 
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
-import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
@@ -23,11 +22,11 @@ class FakeSettingsRepository(initial: UserSettings = UserSettings.Default) : Set
 }
 
 /**
- * In-memory [SettingsWriter] for the [SettingsComponent] tests (#72). Records each intent and mirrors
- * the optimistic apply into [repo] so the component's observed [SettingsComponent.settings] reflects
- * the write (as the real `OutboxSettingsWriter` does against the local store).
+ * In-memory [SettingsEditor] for the [SettingsComponent] tests (#72/#173). Records each intent and
+ * mirrors the optimistic apply into [repo] so the component's observed [SettingsComponent.settings]
+ * reflects the write (as the real command-backed editor does through `OutboxSettingsWriter`).
  */
-class FakeSettingsWriter(private val repo: FakeSettingsRepository) : SettingsWriter {
+class FakeSettingsEditor(private val repo: FakeSettingsRepository) : SettingsEditor {
     var themeChanges = mutableListOf<Pair<ThemeFamily, ThemeMode>>()
         private set
     var trackingChanges = mutableListOf<Boolean>()
@@ -64,7 +63,7 @@ class FakeSettingsWriter(private val repo: FakeSettingsRepository) : SettingsWri
 /**
  * In-memory [SpeechEngineCatalog] for the [SettingsComponent] speech-engine tests (#93). Returns a fixed
  * [fixedOptions] list and records each [select] so the test can assert the device-local choice was
- * persisted through the catalog (the analogue of [FakeSettingsWriter] for the App setting).
+ * persisted through the catalog (the analogue of [FakeSettingsEditor] for the App setting).
  */
 class FakeSpeechEngineCatalog(
     private val fixedOptions: List<SpeechEngineOption> = emptyList(),

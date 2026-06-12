@@ -53,7 +53,7 @@ class NewOverlayInteractionTest {
             planRepository = DemoPlanRepository(emptyList()),
             authRepository = FakeAuthRepository(),
             settingsRepository = settingsRepo,
-            settingsWriter = FakeSettingsWriter(settingsRepo),
+            settingsEditor = FakeSettingsEditor(settingsRepo),
             account = sampleAccount,
             today = LocalDate(2026, 6, 6),
             timeZone = "UTC",

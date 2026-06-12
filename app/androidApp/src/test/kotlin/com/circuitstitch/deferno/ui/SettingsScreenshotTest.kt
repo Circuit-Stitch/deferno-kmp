@@ -42,7 +42,7 @@ class SettingsScreenshotTest {
     ) = DefaultSettingsComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         settingsRepository = FakeSettingsRepository(),
-        settingsWriter = FakeSettingsWriter(),
+        settingsEditor = FakeSettingsEditor(),
         speechEngineCatalog = speechEngineCatalog,
         coroutineContext = Dispatchers.Unconfined,
     ).also { if (category != null) it.openCategory(category) }

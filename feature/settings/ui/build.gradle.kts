@@ -59,7 +59,8 @@ kotlin {
         }
         // The desktop render/screenshot test (#85, cf. #39): a Compose-Multiplatform UI test on the
         // JVM-fast path (no device) over a real DefaultSettingsComponent + in-memory settings fakes.
-        // core:data supplies the SettingsRepository/SettingsWriter the fakes implement.
+        // core:data supplies the SettingsRepository the repository fake implements (the write fake
+        // implements feature:settings' narrow SettingsEditor seam, #173).
         jvmTest.dependencies {
             implementation(project(":core:data"))
             implementation(libs.compose.ui.test.junit4)

@@ -10,7 +10,6 @@ import com.arkivanov.decompose.router.stack.push
 import com.arkivanov.decompose.value.Value
 import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
-import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
@@ -84,8 +83,10 @@ data class SpeechEngineSettings(
  *
  * The backed categories observe the Active Account's [UserSettings] as one shared [settings] StateFlow
  * (offline-first, ADR-0001 — seeded with [UserSettings.Default] so the detail screens always have a
- * value) and write through [SettingsWriter] (optimistic local apply + outbox enqueue — Appearance
- * applies **live** because the same `Flow` drives the app-wide theme). Host-level concerns the slice
+ * value) and write through the narrow [SettingsEditor] seam (#173): the shell backs it with the command
+ * registry (ADR-0007 — each intent a per-field `SettingsCommand`, dispatched to the optimistic local
+ * apply + outbox enqueue, so Appearance applies **live** because the same `Flow` drives the app-wide
+ * theme). Host-level concerns the slice
  * can't own — opening OS app settings, the Zitadel console URL, or the Profile Destination — are
  * emitted as [Output] for the shell to route (the same Output-up routing Plan/Tasks/Profile use).
  */
@@ -109,7 +110,7 @@ interface SettingsComponent {
     /** Back out of an open category detail to the list (pop); `false` when already at the list root. */
     fun onBack(): Boolean
 
-    // --- backed-category intents (optimistic apply + persist via SettingsWriter) ---
+    // --- backed-category intents (optimistic apply + persist via the command-backed SettingsEditor) ---
 
     /** Appearance: set the theme family — applies live + persists (#72). */
     fun onThemeFamilyChanged(family: ThemeFamily)
@@ -188,7 +189,7 @@ interface SettingsComponent {
 class DefaultSettingsComponent(
     componentContext: ComponentContext,
     private val settingsRepository: SettingsRepository,
-    private val settingsWriter: SettingsWriter,
+    private val settingsEditor: SettingsEditor,
     private val output: (SettingsComponent.Output) -> Unit = {},
     // The device-local speech-engine [[App setting]] (#93, ADR-0018): the AppScope catalog over the
     // registered engines + device-local preference. Defaulted to the inert [EmptySpeechEngineCatalog] so
@@ -259,27 +260,27 @@ class DefaultSettingsComponent(
         }
 
     override fun onThemeFamilyChanged(family: ThemeFamily) {
-        scope.launch { settingsWriter.setTheme(family, settings.value.themeMode) }
+        scope.launch { settingsEditor.setTheme(family, settings.value.themeMode) }
     }
 
     override fun onThemeModeChanged(mode: ThemeMode) {
-        scope.launch { settingsWriter.setTheme(settings.value.themeFamily, mode) }
+        scope.launch { settingsEditor.setTheme(settings.value.themeFamily, mode) }
     }
 
     override fun onDragAndDropChanged(enabled: Boolean) {
-        scope.launch { settingsWriter.setDragAndDrop(enabled) }
+        scope.launch { settingsEditor.setDragAndDrop(enabled) }
     }
 
     override fun onDoneVisibilityChanged(globalSeconds: Long?, dashboardSeconds: Long?) {
-        scope.launch { settingsWriter.setDoneVisibility(globalSeconds, dashboardSeconds) }
+        scope.launch { settingsEditor.setDoneVisibility(globalSeconds, dashboardSeconds) }
     }
 
     override fun onTrackingChanged(enabled: Boolean) {
-        scope.launch { settingsWriter.setTracking(enabled) }
+        scope.launch { settingsEditor.setTracking(enabled) }
     }
 
     override fun onSpeechEngineSelected(id: SpeechEngineId) {
-        // Device-local persist (App setting, #93) — not the synced SettingsWriter. A selection doesn't
+        // Device-local persist (App setting, #93) — not the synced SettingsEditor. A selection doesn't
         // change availability, so reflect the new choice in place rather than re-querying the options.
         speechEngineCatalog.select(id)
         _speechEngine.value = _speechEngine.value.copy(selected = id)

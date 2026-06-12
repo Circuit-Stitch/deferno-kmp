@@ -1,6 +1,8 @@
 package com.circuitstitch.deferno.core.domain.command
 
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.ThemeFamily
+import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -22,7 +24,8 @@ class CommandExecutorTest {
         plan: FakePlanWriter,
         create: FakeCreateWriter = FakeCreateWriter(),
         occurrence: FakeOccurrenceWriter = FakeOccurrenceWriter(),
-    ) = CommandExecutor(task, plan, create, occurrence)
+        settings: FakeSettingsWriter = FakeSettingsWriter(),
+    ) = CommandExecutor(task, plan, create, occurrence, settings)
 
     @Test
     fun bindsEveryTaskCommandToTheRightWriterCallAndArgs() = runTest {
@@ -210,17 +213,24 @@ class CommandExecutorTest {
             val pw = FakePlanWriter()
             val cw = FakeCreateWriter(result = CreateResultFixtures.createdFor(kind))
             val ow = FakeOccurrenceWriter()
+            val sw = FakeSettingsWriter()
 
-            val result = executor(tw, pw, cw, ow).execute(sampleCommand(kind)) // null current → gate skipped
+            val result = executor(tw, pw, cw, ow, sw).execute(sampleCommand(kind)) // null current → gate skipped
 
             assertEquals(CommandResult.Accepted(kind), result, "kind $kind should be Accepted")
             val isPlan = kind in CommandKind.planKinds
             val isCreate = kind in CommandKind.createKinds
             val isOccurrence = kind in CommandKind.occurrenceKinds
+            val isSettings = kind in CommandKind.settingsKinds
             assertEquals(if (isPlan) 1 else 0, pw.calls.size, "kind $kind plan-writer calls")
-            assertEquals(if (isPlan || isCreate || isOccurrence) 0 else 1, tw.calls.size, "kind $kind task-writer calls")
+            assertEquals(
+                if (isPlan || isCreate || isOccurrence || isSettings) 0 else 1,
+                tw.calls.size,
+                "kind $kind task-writer calls",
+            )
             assertEquals(if (isCreate) 1 else 0, cw.calls.size, "kind $kind create-writer calls")
             assertEquals(if (isOccurrence) 1 else 0, ow.calls.size, "kind $kind occurrence-writer calls")
+            assertEquals(if (isSettings) 1 else 0, sw.calls.size, "kind $kind settings-writer calls")
         }
     }
 
@@ -288,6 +298,49 @@ class CommandExecutorTest {
             ow.calls,
         )
         assertTrue(tw.calls.isEmpty(), "occurrence commands must not touch the task writer")
+    }
+
+    @Test
+    fun settingsCommandsRouteToTheSettingsWriterOfflineFirst() = runTest {
+        // Per-field User-setting verbs (#173), 1:1 with the SettingsWriter seam — offline-first like the
+        // Task edits (the writer optimistically applies + enqueues), so each dispatch is Accepted.
+        val tw = FakeTaskWriter()
+        val sw = FakeSettingsWriter()
+        val ex = executor(tw, FakePlanWriter(), settings = sw)
+
+        assertEquals(CommandResult.Accepted(CommandKind.SetTheme), ex.execute(SetTheme(ThemeFamily.Mono, ThemeMode.Dark)))
+        assertEquals(CommandResult.Accepted(CommandKind.SetTracking), ex.execute(SetTracking(enabled = true)))
+        assertEquals(CommandResult.Accepted(CommandKind.SetDragAndDrop), ex.execute(SetDragAndDrop(enabled = false)))
+        assertEquals(CommandResult.Accepted(CommandKind.SetDoneVisibility), ex.execute(SetDoneVisibility(259200L, null)))
+
+        assertEquals(
+            listOf<FakeSettingsWriter.Call>(
+                FakeSettingsWriter.Call.SetTheme(ThemeFamily.Mono, ThemeMode.Dark),
+                FakeSettingsWriter.Call.SetTracking(true),
+                FakeSettingsWriter.Call.SetDragAndDrop(false),
+                FakeSettingsWriter.Call.SetDoneVisibility(259200L, null),
+            ),
+            sw.calls,
+        )
+        assertTrue(tw.calls.isEmpty(), "settings commands must not touch the task writer")
+    }
+
+    @Test
+    fun settingsCommandsPassTheEnablementGateRegardlessOfAnyCachedRow() = runTest {
+        // A settings write targets the Account's settings bag, not a Task row (#173), so the pre-flight
+        // enabledFor gate has no per-Task rule to apply: even a (mistakenly) supplied cached row in a
+        // terminal, tombstoned state must not reject the write — the `else -> true` arm, like the
+        // edit / organize kinds.
+        val sw = FakeSettingsWriter()
+        val ex = executor(FakeTaskWriter(), FakePlanWriter(), settings = sw)
+
+        val result = ex.execute(
+            SetTracking(enabled = true),
+            current = task(workingState = WorkingState.Done, deleted = true),
+        )
+
+        assertEquals(CommandResult.Accepted(CommandKind.SetTracking), result)
+        assertEquals(listOf<FakeSettingsWriter.Call>(FakeSettingsWriter.Call.SetTracking(true)), sw.calls)
     }
 
     @Test

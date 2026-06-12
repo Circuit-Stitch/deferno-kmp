@@ -12,8 +12,8 @@ import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.ui.FakeAuthRepository
+import com.circuitstitch.deferno.ui.FakeSettingsEditor
 import com.circuitstitch.deferno.ui.FakeSettingsRepository
-import com.circuitstitch.deferno.ui.FakeSettingsWriter
 import com.circuitstitch.deferno.ui.sampleAccount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.LocalDate
@@ -41,7 +41,7 @@ class MainShellComponentTest {
         auth: AuthRepository = FakeAuthRepository(),
         account: Account = sampleAccount,
         settingsRepo: FakeSettingsRepository = FakeSettingsRepository(),
-        settingsWriter: FakeSettingsWriter = FakeSettingsWriter(settingsRepo),
+        settingsEditor: FakeSettingsEditor = FakeSettingsEditor(settingsRepo),
         output: (MainShellComponent.Output) -> Unit = {},
         create: suspend (com.circuitstitch.deferno.core.domain.command.CreateItem.Payload) -> com.circuitstitch.deferno.core.domain.command.CommandResult =
             { com.circuitstitch.deferno.core.domain.command.CommandResult.Offline(com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem) },
@@ -51,7 +51,7 @@ class MainShellComponentTest {
         planRepository = planRepo,
         authRepository = auth,
         settingsRepository = settingsRepo,
-        settingsWriter = settingsWriter,
+        settingsEditor = settingsEditor,
         account = account,
         today = today,
         timeZone = "UTC",
