@@ -21,7 +21,10 @@ CREATE TABLE eventEntity (
     deleted_at       TEXT,
     hydration_state  TEXT NOT NULL,
     description      TEXT,
-    series_id        TEXT
+    series_id        TEXT,
+    -- Appended for migration 2->3 (#348) — ADD COLUMN appends, so these live at the table's end.
+    start_time_of_day TEXT,
+    end_time_of_day  TEXT
 );
 
 CREATE INDEX eventEntity_owner_org_id ON eventEntity(owner_org_id);
@@ -36,9 +39,9 @@ SELECT * FROM eventEntity WHERE id = ?;
 insertOrReplace:
 INSERT OR REPLACE INTO eventEntity(
     id, org_slug, owner_org_id, ref, sequence, title, definition_state, recurrence_type,
-    recurrence_days, all_day, complete_by, end_time, labels, parent_id, pinned, date_created,
-    deleted_at, hydration_state, description, series_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    recurrence_days, all_day, complete_by, end_time, start_time_of_day, end_time_of_day, labels,
+    parent_id, pinned, date_created, deleted_at, hydration_state, description, series_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteById:
 DELETE FROM eventEntity WHERE id = ?;

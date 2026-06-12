@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OccurrenceState
 import com.circuitstitch.deferno.core.model.RecurrenceFrequency
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
@@ -22,6 +23,10 @@ fun String.decodeNewlineList(): List<String> = if (isEmpty()) emptyList() else s
 
 /** Parses a stored RFC3339 timestamp, or `null` when the column is null. */
 fun String?.toInstantOrNull(): Instant? = this?.let(Instant::parse)
+
+/** Parses a stored "HH:MM[:SS]" time-of-day, or `null` when absent/unparseable (#348, defensive). */
+fun String?.toLocalTimeOrNull(): LocalTime? =
+    this?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
 
 /** Defensive decode: an unrecognised stored token degrades to [DefinitionState.Active] (never throws). */
 fun String.toDefinitionStateOrDefault(): DefinitionState =

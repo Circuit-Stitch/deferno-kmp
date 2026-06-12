@@ -41,6 +41,7 @@ sealed interface ItemView {
         @SerialName("parent_id") val parentId: String? = null,
         val children: List<String> = emptyList(),
         @SerialName("complete_by") val completeBy: String? = null,
+        @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
         val productive: Double? = null,
         val desire: Double? = null,
         val pinned: Boolean = false,
@@ -65,6 +66,7 @@ sealed interface ItemView {
         val labels: List<String> = emptyList(),
         @SerialName("parent_id") val parentId: String? = null,
         @SerialName("complete_by") val completeBy: String? = null,
+        @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
         val pinned: Boolean = false,
         @SerialName("date_created") val dateCreated: String,
         @SerialName("deleted_at") val deletedAt: String? = null,
@@ -88,6 +90,7 @@ sealed interface ItemView {
         val labels: List<String> = emptyList(),
         @SerialName("parent_id") val parentId: String? = null,
         @SerialName("complete_by") val completeBy: String? = null,
+        @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
         val pinned: Boolean = false,
         @SerialName("date_created") val dateCreated: String,
         @SerialName("deleted_at") val deletedAt: String? = null,
@@ -98,7 +101,7 @@ sealed interface ItemView {
         @SerialName("cadence_mode") val cadenceMode: String? = null,
     ) : ItemView
 
-    /** The `event` variant — adds `all_day` + `end_time` over the shared recurring base. */
+    /** The `event` variant — adds `all_day` + `end_time` + start/end time-of-day over the recurring base. */
     @Serializable
     @SerialName("event")
     data class Event(
@@ -121,6 +124,8 @@ sealed interface ItemView {
         @SerialName("subtask_template") val subtaskTemplate: List<String> = emptyList(),
         @SerialName("all_day") val allDay: Boolean = false,
         @SerialName("end_time") val endTime: String? = null,
+        @SerialName("start_time_of_day") val startTimeOfDay: String? = null,
+        @SerialName("end_time_of_day") val endTimeOfDay: String? = null,
     ) : ItemView
 }
 

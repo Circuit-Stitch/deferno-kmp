@@ -48,6 +48,7 @@ class SqlDelightHabitLocalStore(
             labels = e.labels,
             parent_id = e.parent_id,
             complete_by = e.complete_by,
+            deadline_time_of_day = e.deadline_time_of_day,
             pinned = e.pinned,
             date_created = e.date_created,
             deleted_at = e.deleted_at,

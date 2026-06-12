@@ -30,6 +30,7 @@ data class HabitDetailDto(
     val labels: List<String> = emptyList(),
     @SerialName("parent_id") val parentId: String? = null,
     @SerialName("complete_by") val completeBy: String? = null,
+    @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
     val pinned: Boolean = false,
     @SerialName("date_created") val dateCreated: String,
     @SerialName("deleted_at") val deletedAt: String? = null,
@@ -51,6 +52,7 @@ data class ChoreDetailDto(
     val labels: List<String> = emptyList(),
     @SerialName("parent_id") val parentId: String? = null,
     @SerialName("complete_by") val completeBy: String? = null,
+    @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
     val pinned: Boolean = false,
     @SerialName("date_created") val dateCreated: String,
     @SerialName("deleted_at") val deletedAt: String? = null,
@@ -81,4 +83,6 @@ data class EventDetailDto(
     @SerialName("series_id") val seriesId: String? = null,
     @SerialName("all_day") val allDay: Boolean = false,
     @SerialName("end_time") val endTime: String? = null,
+    @SerialName("start_time_of_day") val startTimeOfDay: String? = null,
+    @SerialName("end_time_of_day") val endTimeOfDay: String? = null,
 )

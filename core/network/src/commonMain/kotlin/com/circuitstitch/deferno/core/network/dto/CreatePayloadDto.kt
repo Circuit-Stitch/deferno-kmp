@@ -21,6 +21,7 @@ data class CreateTaskPayload(
     val title: String,
     val description: String? = null,
     @SerialName("complete_by") val completeBy: String? = null,
+    @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
     val labels: List<String>? = null,
     @SerialName("parent_id") val parentId: String? = null,
     val productive: Double? = null,
@@ -34,6 +35,7 @@ data class CreateHabitPayload(
     val recurrence: RecurrenceDto,
     val description: String? = null,
     @SerialName("complete_by") val completeBy: String? = null,
+    @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
     val labels: List<String>? = null,
 )
 
@@ -45,16 +47,22 @@ data class CreateChorePayload(
     @SerialName("cadence_mode") val cadenceMode: String? = null,
     val description: String? = null,
     @SerialName("complete_by") val completeBy: String? = null,
+    @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
     val labels: List<String>? = null,
 )
 
-/** `POST /events`. A fixed-window definition: [completeBy] start + optional [endTime]/[allDay]. */
+/**
+ * `POST /events`. A fixed-window definition: [completeBy] start day + optional [endTime] end day,
+ * with [startTimeOfDay]/[endTimeOfDay] ("HH:MM") for the clock time on each axis (#348). `all_day`
+ * is **not** sent — the server derives it (true iff both time-of-day fields are absent).
+ */
 @Serializable
 data class CreateEventPayload(
     val title: String,
     @SerialName("complete_by") val completeBy: String,
     @SerialName("end_time") val endTime: String? = null,
-    @SerialName("all_day") val allDay: Boolean = false,
+    @SerialName("start_time_of_day") val startTimeOfDay: String? = null,
+    @SerialName("end_time_of_day") val endTimeOfDay: String? = null,
     val recurrence: RecurrenceDto? = null,
     val description: String? = null,
     val labels: List<String>? = null,

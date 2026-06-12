@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.model
 
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
@@ -24,6 +25,8 @@ data class Chore(
     val labels: List<String> = emptyList(),
     val parentId: TaskId? = null,
     val completeBy: Instant? = null,
+    // The deadline's clock time (#348); `null` = no time-of-day. Wire `deadline_time_of_day`.
+    val deadlineTimeOfDay: LocalTime? = null,
     val pinned: Boolean = false,
     val sequence: Long? = null,
     val ref: String? = null,

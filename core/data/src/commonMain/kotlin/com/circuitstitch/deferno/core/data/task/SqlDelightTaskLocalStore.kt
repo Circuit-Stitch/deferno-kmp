@@ -59,6 +59,7 @@ class SqlDelightTaskLocalStore(
             parent_id = e.parent_id,
             child_ids = e.child_ids,
             complete_by = e.complete_by,
+            deadline_time_of_day = e.deadline_time_of_day,
             productive = e.productive,
             desire = e.desire,
             pinned = e.pinned,

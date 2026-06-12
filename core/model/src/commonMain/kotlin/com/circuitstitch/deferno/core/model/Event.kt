@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.model
 
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
@@ -10,6 +11,11 @@ import kotlin.time.Instant
  *
  * **Definition vs Occurrence (glossary).** This is the *definition*; one dated firing is a separate
  * [Occurrence] with its own [OccurrenceState].
+ *
+ * **Time-of-day (#348).** [completeBy]/[endTime] carry the start/end *days*; [startTimeOfDay]/
+ * [endTimeOfDay] carry the clock time within them (`null` = all-day). [allDay] is now **derived,
+ * read-only** server-side (true iff both times are `null`) and ignored on input — kept for one
+ * deprecation cycle.
  */
 data class Event(
     val id: EventId,
@@ -20,6 +26,10 @@ data class Event(
     val allDay: Boolean = false,
     val completeBy: Instant? = null,
     val endTime: Instant? = null,
+    // The start/end clock times (#348), "HH:MM" on the wire (`start_time_of_day`/`end_time_of_day`);
+    // `null` = all-day on that axis. The day comes from [completeBy]/[endTime].
+    val startTimeOfDay: LocalTime? = null,
+    val endTimeOfDay: LocalTime? = null,
     val labels: List<String> = emptyList(),
     val parentId: TaskId? = null,
     val pinned: Boolean = false,

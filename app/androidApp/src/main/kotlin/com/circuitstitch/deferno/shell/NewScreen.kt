@@ -34,6 +34,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.shell.ui.NewDateField
+import com.circuitstitch.deferno.shell.ui.NewDeadlineTimeField
 import com.circuitstitch.deferno.shell.ui.NewDictationMessage
 import com.circuitstitch.deferno.shell.ui.NewEventEndField
 import com.circuitstitch.deferno.shell.ui.NewEventStartField
@@ -148,6 +149,8 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
             if (state.selectedKind != ItemKind.Event) {
                 Spacer(Modifier.padding(top = 8.dp))
                 NewDateField(value = state.date, onValueChange = component::setDate)
+                Spacer(Modifier.padding(top = 8.dp))
+                NewDeadlineTimeField(value = state.deadlineTime, onValueChange = component::setDeadlineTime)
             }
 
             // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2): a required start +

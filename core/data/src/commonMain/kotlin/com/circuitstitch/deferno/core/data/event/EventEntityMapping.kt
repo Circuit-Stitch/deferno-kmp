@@ -5,6 +5,7 @@ import com.circuitstitch.deferno.core.data.recurring.encodeNewlineList
 import com.circuitstitch.deferno.core.data.recurring.toDefinitionStateOrDefault
 import com.circuitstitch.deferno.core.data.recurring.toHydrationStateOrDefault
 import com.circuitstitch.deferno.core.data.recurring.toInstantOrNull
+import com.circuitstitch.deferno.core.data.recurring.toLocalTimeOrNull
 import com.circuitstitch.deferno.core.data.recurring.toRecurrenceFrequencyOrDefault
 import com.circuitstitch.deferno.core.database.sql.EventEntity
 import com.circuitstitch.deferno.core.model.Event
@@ -26,6 +27,8 @@ fun EventEntity.toDomain(): Event = Event(
     allDay = all_day != 0L,
     completeBy = complete_by.toInstantOrNull(),
     endTime = end_time.toInstantOrNull(),
+    startTimeOfDay = start_time_of_day.toLocalTimeOrNull(),
+    endTimeOfDay = end_time_of_day.toLocalTimeOrNull(),
     labels = labels.decodeNewlineList(),
     parentId = parent_id?.let(::TaskId),
     pinned = pinned != 0L,
@@ -52,6 +55,8 @@ fun Event.toEntity(): EventEntity = EventEntity(
     all_day = if (allDay) 1L else 0L,
     complete_by = completeBy?.toString(),
     end_time = endTime?.toString(),
+    start_time_of_day = startTimeOfDay?.toString(),
+    end_time_of_day = endTimeOfDay?.toString(),
     labels = labels.encodeNewlineList(),
     parent_id = parentId?.value,
     pinned = if (pinned) 1L else 0L,

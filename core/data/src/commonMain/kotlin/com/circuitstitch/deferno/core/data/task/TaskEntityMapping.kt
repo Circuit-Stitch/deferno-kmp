@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
@@ -38,6 +39,7 @@ fun TaskEntity.toDomain(): Task = Task(
     parentId = parent_id?.let(::TaskId),
     children = child_ids.decodeNewlineList().map(::TaskId),
     completeBy = complete_by.toInstantOrNull(),
+    deadlineTimeOfDay = deadline_time_of_day.toLocalTimeOrNull(),
     productive = productive,
     desire = desire,
     pinned = pinned != 0L,
@@ -65,6 +67,7 @@ fun Task.toEntity(): TaskEntity = TaskEntity(
     parent_id = parentId?.value,
     child_ids = children.map { it.value }.encodeNewlineList(),
     complete_by = completeBy?.toString(),
+    deadline_time_of_day = deadlineTimeOfDay?.toString(),
     productive = productive,
     desire = desire,
     pinned = if (pinned) 1L else 0L,
@@ -85,6 +88,10 @@ private fun String.decodeNewlineList(): List<String> =
 
 /** Parses a stored RFC3339 timestamp, or `null` when the column is null. */
 private fun String?.toInstantOrNull(): Instant? = this?.let(Instant::parse)
+
+/** Parses a stored "HH:MM[:SS]" time-of-day, or `null` when absent/unparseable (#348, defensive). */
+private fun String?.toLocalTimeOrNull(): LocalTime? =
+    this?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
 
 /** Defensive decode: an unrecognised stored token degrades to [WorkingState.Open] (never throws). */
 private fun String.toWorkingStateOrDefault(): WorkingState =

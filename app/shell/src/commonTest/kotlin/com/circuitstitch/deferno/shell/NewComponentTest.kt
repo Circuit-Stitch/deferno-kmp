@@ -2,6 +2,8 @@ package com.circuitstitch.deferno.shell
 
 import com.circuitstitch.deferno.core.domain.command.CreateItem
 import com.circuitstitch.deferno.core.model.ItemKind
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -42,6 +44,36 @@ class NewComponentTest {
         assertNull(event.description, "blank notes must be null, not \"\"")
         assertNull(event.endTime, "an absent end must be null, not \"\"")
         assertFalse(event.completeBy.isEmpty(), "the start is never an empty string")
+    }
+
+    @Test
+    fun eventPayloadDerivesStartAndEndTimeOfDayFromTheInstants() {
+        // #348: an Event must stay timed (not all-day), so the chosen start/end clock rides as
+        // start_/end_time_of_day. In UTC the instants' clock is the local clock.
+        val event = (NewState(selectedKind = ItemKind.Event, title = "standup", start = start, end = end)
+            .toPayload(tz = "UTC") as CreateItem.Payload.Event).payload
+        assertEquals("09:00", event.startTimeOfDay)
+        assertEquals("10:00", event.endTimeOfDay)
+
+        val dateOnly = (NewState(selectedKind = ItemKind.Event, title = "standup", date = LocalDate(2026, 6, 20))
+            .toPayload(tz = "UTC") as CreateItem.Payload.Event).payload
+        assertNull(dateOnly.startTimeOfDay, "a date-only Event has no clock ⇒ server derives all-day")
+    }
+
+    @Test
+    fun taskPayloadCarriesDeadlineTimeOfDayOnlyWithADate() {
+        val timed = (NewState(
+            selectedKind = ItemKind.Task,
+            title = "call",
+            date = LocalDate(2026, 6, 20),
+            deadlineTime = LocalTime(14, 30),
+        ).toPayload(tz = "UTC") as CreateItem.Payload.Task).payload
+        assertEquals("14:30", timed.deadlineTimeOfDay)
+
+        // A time with no date is meaningless — it must not be sent.
+        val noDate = (NewState(selectedKind = ItemKind.Task, title = "call", deadlineTime = LocalTime(14, 30))
+            .toPayload(tz = "UTC") as CreateItem.Payload.Task).payload
+        assertNull(noDate.deadlineTimeOfDay, "no date ⇒ no deadline_time_of_day")
     }
 
     @Test

@@ -39,6 +39,7 @@ class TaskEntityQueriesTest {
         parent_id = parentId,
         child_ids = "",
         complete_by = null,
+        deadline_time_of_day = null,
         productive = null,
         desire = null,
         pinned = 0,

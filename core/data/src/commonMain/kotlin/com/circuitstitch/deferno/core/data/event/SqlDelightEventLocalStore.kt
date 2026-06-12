@@ -43,6 +43,8 @@ class SqlDelightEventLocalStore(
             all_day = e.all_day,
             complete_by = e.complete_by,
             end_time = e.end_time,
+            start_time_of_day = e.start_time_of_day,
+            end_time_of_day = e.end_time_of_day,
             labels = e.labels,
             parent_id = e.parent_id,
             pinned = e.pinned,

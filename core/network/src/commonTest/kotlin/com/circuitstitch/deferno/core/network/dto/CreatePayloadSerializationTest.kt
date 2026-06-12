@@ -53,4 +53,25 @@ class CreatePayloadSerializationTest {
         assertFalse(habit.contains("complete_by"), "a bare Habit omits complete_by")
         assertContains(habit, "\"recurrence\"")
     }
+
+    @Test
+    fun timeOfDayFieldsSerializeWhenSetAndAreOmittedWhenAbsent() {
+        // #348: the deadline/start/end clock rides as snake_case "HH:MM" strings, omitted when null.
+        val task = DefernoJson.encodeToString(
+            CreateTaskPayload(title = "x", completeBy = "2026-06-20T00:00:00Z", deadlineTimeOfDay = "14:30"),
+        )
+        assertContains(task, "\"deadline_time_of_day\":\"14:30\"")
+        assertFalse(
+            DefernoJson.encodeToString(CreateTaskPayload(title = "x")).contains("deadline_time_of_day"),
+            "a bare Task omits deadline_time_of_day",
+        )
+
+        val event = DefernoJson.encodeToString(
+            CreateEventPayload(title = "x", completeBy = start, startTimeOfDay = "09:00", endTimeOfDay = "10:00"),
+        )
+        assertContains(event, "\"start_time_of_day\":\"09:00\"")
+        assertContains(event, "\"end_time_of_day\":\"10:00\"")
+        // `all_day` is server-derived now (#348) — the client never sends it.
+        assertFalse(event.contains("all_day"), "all_day is derived server-side, not sent on create")
+    }
 }

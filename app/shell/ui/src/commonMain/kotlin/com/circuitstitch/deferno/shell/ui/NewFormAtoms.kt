@@ -32,6 +32,7 @@ import com.circuitstitch.deferno.shell.NewState
 import com.circuitstitch.deferno.shell.NewStatus
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import org.jetbrains.compose.resources.painterResource
 
 // The shared, stateless **New**-form atoms (#175): the platform-neutral pieces of the New create
@@ -230,6 +231,33 @@ fun NewDateField(
         singleLine = true,
         isError = text.isNotBlank() && runCatching { LocalDate.parse(text.trim()) }.getOrNull() == null,
         modifier = modifier.fillMaxWidth().semantics { contentDescription = "Date" },
+    )
+}
+
+/**
+ * The Task/Habit/Chore **deadline time-of-day** row (#348): an `HH:MM` text input that maps to a
+ * [LocalTime] via the same parse-or-clear contract as [NewDateField] — a parseable value pushes a
+ * real [LocalTime] up, an unparseable/blank one clears it (an all-day deadline). Shown beneath the
+ * Date for the non-Event kinds; an Event's clock lives in its start/end instants instead. A native
+ * time picker is a follow-up (consistent with the ISO date/instant text entry).
+ */
+@Composable
+fun NewDeadlineTimeField(
+    value: LocalTime?,
+    onValueChange: (LocalTime?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var text by remember(value) { mutableStateOf(value?.toString() ?: "") }
+    OutlinedTextField(
+        value = text,
+        onValueChange = {
+            text = it
+            onValueChange(runCatching { LocalTime.parse(it.trim()) }.getOrNull())
+        },
+        label = { Text("Time (optional, e.g. 14:30)") },
+        singleLine = true,
+        isError = text.isNotBlank() && runCatching { LocalTime.parse(text.trim()) }.getOrNull() == null,
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = "Deadline time" },
     )
 }
 
