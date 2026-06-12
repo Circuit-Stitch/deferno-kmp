@@ -1,10 +1,13 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
+import com.circuitstitch.deferno.core.data.asSnapshot
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
 import com.circuitstitch.deferno.core.network.dto.TaskSummaryDto
+import com.circuitstitch.deferno.core.network.map
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import com.circuitstitch.deferno.core.network.mapper.toWireToken
 import com.circuitstitch.deferno.core.network.requestApi
@@ -22,9 +25,10 @@ import io.ktor.http.appendPathSegments
  * - [fetch]    -> `GET /tasks/{id}` -> `TaskDetailDto` -> [HydrationState.Full][Task].
  * - [search]   -> `GET /tasks/search?q=…&status=…&label=…&from=…&to=…` -> summary list (#73).
  *
- * **Offline-first (ADR-0001).** The background reads map an [ApiResult.Failure] to nothing
- * (`emptyList()`/`null`) rather than throwing, so a refresh/hydrate that can't reach the server
- * leaves the local cache intact instead of wiping it. [search] is the exception: it reports
+ * **Offline-first (ADR-0001).** [fetchAll] reports [RemoteSnapshot.Unavailable] on failure (distinct
+ * from an [RemoteSnapshot.Available] empty snapshot) and [fetch] returns `null` on failure-or-missing,
+ * rather than throwing, so a refresh/hydrate that can't reach the server leaves the local cache intact
+ * instead of wiping it. [search] is the exception: it reports
  * [TaskSearchResult.Unavailable] so the foreground search UI can distinguish "couldn't search" from
  * "no matches". The endpoint paths are not load-bearing
  * for the repository tests (those drive the fake); they follow the contract's `/tasks` + `/tasks/{id}`
@@ -36,15 +40,10 @@ class KtorTaskRemoteSource(
     private val client: HttpClient,
 ) : TaskRemoteSource {
 
-    override suspend fun fetchAll(): List<Task> {
-        val result = client.requestApi<List<TaskSummaryDto>> {
-            get("tasks")
-        }
-        return when (result) {
-            is ApiResult.Success -> result.data.map { it.toDomain() }
-            is ApiResult.Failure -> emptyList()
-        }
-    }
+    override suspend fun fetchAll(): RemoteSnapshot<List<Task>> =
+        client.requestApi<List<TaskSummaryDto>> { get("tasks") }
+            .map { summaries -> summaries.map { it.toDomain() } }
+            .asSnapshot()
 
     override suspend fun fetch(id: TaskId): Task? {
         val result = client.requestApi<TaskDetailDto> {

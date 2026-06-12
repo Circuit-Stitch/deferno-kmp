@@ -1,8 +1,10 @@
 package com.circuitstitch.deferno.core.data.settings
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
+import com.circuitstitch.deferno.core.data.asSnapshot
 import com.circuitstitch.deferno.core.model.UserSettings
-import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.UserSettingsDto
+import com.circuitstitch.deferno.core.network.map
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import com.circuitstitch.deferno.core.network.requestApi
 import io.ktor.client.HttpClient
@@ -22,13 +24,10 @@ class KtorSettingsRemoteSource(
     private val client: HttpClient,
 ) : SettingsRemoteSource {
 
-    override suspend fun fetchSettings(): UserSettings? {
-        val result = client.requestApi<UserSettingsDto> {
+    override suspend fun fetchSettings(): RemoteSnapshot<UserSettings> =
+        client.requestApi<UserSettingsDto> {
             url { appendPathSegments("auth", "me", "settings") }
         }
-        return when (result) {
-            is ApiResult.Success -> result.data.toDomain()
-            is ApiResult.Failure -> null
-        }
-    }
+            .map { it.toDomain() }
+            .asSnapshot()
 }

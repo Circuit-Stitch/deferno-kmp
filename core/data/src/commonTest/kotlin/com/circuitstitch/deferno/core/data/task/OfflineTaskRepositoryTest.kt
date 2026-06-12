@@ -192,8 +192,21 @@ class OfflineTaskRepositoryTest {
 
         repo(local, remote).refresh()
 
-        // The empty result was a failure, not a real empty snapshot, so "a" is NOT purged.
+        // Unavailable (couldn't reach the server), NOT a real empty snapshot, so "a" is NOT purged.
         assertEquals(setOf(TaskId("a")), local.allIds())
+    }
+
+    @Test
+    fun refreshWithAGenuinelyEmptyServerSnapshotPurgesTheCache() = runTest {
+        // The bug the explicit RemoteSnapshot fixes: a reachable server that genuinely emptied
+        // (Available, empty) must reconcile the stale local rows away — distinct from an Unavailable
+        // pull, which leaves them. The old `emptyList() == offline` conflation could never purge to empty.
+        val local = FakeTaskLocalStore(mapOf(TaskId("a") to summary("a"), TaskId("b") to summary("b")))
+        val remote = FakeTaskRemoteSource(snapshot = emptyList()) // reachable, genuinely-empty server
+
+        repo(local, remote).refresh()
+
+        assertTrue(local.allIds().isEmpty())
     }
 
     // --- hydration on open ---

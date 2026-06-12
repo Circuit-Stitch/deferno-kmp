@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
@@ -29,8 +30,9 @@ import kotlin.test.assertTrue
  * Behaviour of [KtorTaskRemoteSource] (#22), driven by Ktor's MockEngine on the JVM-fast path
  * (ADR-0006) — no real network. Proves the two reads hit the right `/tasks` + `/tasks/{id}` paths,
  * map the wire envelope through the #18 DTO->domain mappers (summary -> Summary, detail -> Full),
- * and honour the offline-first contract: an error response yields `emptyList()`/`null` so a failed
- * refresh/hydrate leaves the cache intact rather than wiping it (ADR-0001).
+ * and honour the offline-first contract: an error response yields [RemoteSnapshot.Unavailable]
+ * (fetchAll) / `null` (fetch) so a failed refresh/hydrate leaves the cache intact, while a genuine
+ * empty list is [RemoteSnapshot.Available] and reconciles (ADR-0001).
  */
 class KtorTaskRemoteSourceTest {
 
@@ -56,7 +58,7 @@ class KtorTaskRemoteSourceTest {
         var captured: HttpRequestData? = null
         val source = KtorTaskRemoteSource(client { req -> captured = req; respondJson(listEnvelope) })
 
-        val tasks = source.fetchAll()
+        val tasks = (source.fetchAll() as RemoteSnapshot.Available).value
 
         assertTrue(captured?.url?.encodedPath?.endsWith("/tasks") == true)
         assertEquals(listOf(TaskId("a"), TaskId("b")), tasks.map { it.id })
@@ -81,10 +83,21 @@ class KtorTaskRemoteSourceTest {
     }
 
     @Test
-    fun fetchAllReturnsEmptyOnFailureSoTheCacheStaysIntact() = runTest {
+    fun fetchAllReportsUnavailableOnFailureSoTheCacheStaysIntact() = runTest {
         val source = KtorTaskRemoteSource(client { respond("", HttpStatusCode.Unauthorized) })
 
-        assertTrue(source.fetchAll().isEmpty())
+        assertEquals(RemoteSnapshot.Unavailable, source.fetchAll())
+    }
+
+    @Test
+    fun fetchAllMapsAGenuineEmptyListToAvailableEmpty_notUnavailable() = runTest {
+        // The safety property behind the empty-snapshot purge: a real 200 with data:[] must be
+        // Available(empty) — which reconciles and purges the cache — NOT Unavailable (which would skip).
+        val source = KtorTaskRemoteSource(client { respondJson("""{"version":"0.1","data":[]}""") })
+
+        val result = source.fetchAll()
+
+        assertTrue(result is RemoteSnapshot.Available && result.value.isEmpty())
     }
 
     @Test

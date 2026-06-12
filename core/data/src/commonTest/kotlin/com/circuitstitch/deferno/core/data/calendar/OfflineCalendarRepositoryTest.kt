@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.data.calendar
 
 import app.cash.turbine.test
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.CalendarSource
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -74,6 +75,21 @@ class OfflineCalendarRepositoryTest {
     }
 
     @Test
+    fun anEmptyServerWindowBlanksTheCachedWindow() = runTest {
+        // The bug the explicit RemoteSnapshot fixes: a reachable server with no items in the window
+        // (Available, empty) must replace-with-empty — distinct from a failed pull, which writes nothing.
+        val store = RecordingCalendarLocalStore()
+        val remote = FakeCalendarRemoteSource(result = emptyList()) // reachable, empty window
+        val repo = OfflineCalendarRepository(store, remote, { emptyMap() })
+
+        repo.refreshWindow(from, to, "UTC")
+
+        // The window IS replaced (with an empty span), unlike the Unavailable case above.
+        assertEquals(1, store.replacedWindows.size)
+        assertEquals(0, store.replacedWindows.single().third.size)
+    }
+
+    @Test
     fun reconcileReplaysTheLastWindow_andIsANoOpBeforeAnyRefresh() = runTest {
         val store = RecordingCalendarLocalStore()
         val remote = FakeCalendarRemoteSource(result = listOf(item()))
@@ -93,9 +109,9 @@ class OfflineCalendarRepositoryTest {
 /** A [CalendarRemoteSource] returning a scripted [result] (null = failure) and recording its calls. */
 private class FakeCalendarRemoteSource(private val result: List<CalendarItem>?) : CalendarRemoteSource {
     val calls = mutableListOf<Triple<LocalDate, LocalDate, String>>()
-    override suspend fun fetchWindow(from: LocalDate, to: LocalDate, tz: String): List<CalendarItem>? {
+    override suspend fun fetchWindow(from: LocalDate, to: LocalDate, tz: String): RemoteSnapshot<List<CalendarItem>> {
         calls += Triple(from, to, tz)
-        return result
+        return result?.let { RemoteSnapshot.Available(it) } ?: RemoteSnapshot.Unavailable
     }
 }
 

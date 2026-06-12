@@ -24,12 +24,9 @@ import com.circuitstitch.deferno.feature.signin.DefaultSignInComponent
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlin.coroutines.CoroutineContext
@@ -127,8 +124,8 @@ class DefaultRootComponent(
     /** The collector mirroring the active session's settings into [_themeSettings]; cancelled on switch. */
     private var themeJob: Job? = null
 
-    /** The active session's outbox driver (#143) — flush, settings reconcile, then the periodic loop. */
-    private var outboxJob: Job? = null
+    /** The active session's outbox driver (#143/#158): flush, settings reconcile, then the periodic loop. */
+    private val outboxDriver = OutboxDriver(scope, connectivity, now, outboxFlushPeriod)
 
     private sealed interface Config {
         data object Auth : Config
@@ -178,7 +175,7 @@ class DefaultRootComponent(
                 activeSession = null
                 // No Active Account → no outbox to drive, no per-Account settings; stop the driver and
                 // fall the app-wide theme back to default.
-                driveOutboxFor(null)
+                outboxDriver.stop()
                 pointThemeAt(null)
                 RootComponent.Child.Auth(
                     DefaultAuthShellComponent(
@@ -204,7 +201,7 @@ class DefaultRootComponent(
                 // Drive this Account's outbox (#143): flush the queued offline writes, THEN pull the
                 // settings snapshot (sequenced so the reconcile can't pull a server state that predates
                 // the just-flushed writes), then keep flushing periodically while the session is active.
-                driveOutboxFor(session)
+                outboxDriver.drive(session)
                 // Re-point the app-wide theme `Flow` at THIS Account's settings (#72) — cancels the
                 // previous account's collector, so a switch never bleeds the prior account's theme.
                 pointThemeAt(session)
@@ -244,48 +241,6 @@ class DefaultRootComponent(
                 )
             }
         }
-
-    /**
-     * Re-point the outbox driver (#143) at [session] (or stop it when `null`). The driver is what
-     * actually syncs offline writes (ADR-0001, #23): without it the queued mutations sit forever and
-     * the next cold-start reconcile reverts the local optimistic state to stale server truth.
-     *
-     * On activation it flushes **before** the settings reconcile — so a queued settings PATCH reaches
-     * the server before the snapshot is pulled — then re-flushes every [outboxFlushPeriod] to pick up
-     * writes made during the session (and retries after transient failures). Cancelling the prior
-     * driver on a switch / sign-out keeps the loop bound to exactly the Active Account's outbox
-     * (account isolation, ADR-0002/0014).
-     *
-     * The [connectivity] signal shapes both legs (#158): a pass is skipped while known-offline — so a
-     * long offline stretch can't walk a queued write into the replay engine's give-up policy
-     * (`maxAttempts` measures real server failures, not flight mode) — and the offline→online edge
-     * triggers an immediate flush-then-reconcile instead of waiting out the tick (the reconcile also
-     * recovers the settings pull an offline activation could only fail).
-     */
-    private fun driveOutboxFor(session: AccountSession?) {
-        outboxJob?.cancel()
-        if (session == null) {
-            outboxJob = null
-            return
-        }
-        outboxJob = scope.launch {
-            val online = connectivity.online
-            if (online.value) session.flushOutbox(now())
-            session.settingsRepository.refresh()
-            launch {
-                // The reconnect edge: `online` is distinct-until-changed, so after dropping the
-                // current value every `true` is an offline→online transition.
-                online.drop(1).filter { it }.collect {
-                    session.flushOutbox(now())
-                    session.settingsRepository.refresh()
-                }
-            }
-            while (true) {
-                delay(outboxFlushPeriod)
-                if (online.value) session.flushOutbox(now())
-            }
-        }
-    }
 
     /**
      * Re-point the app-wide theme [StateFlow] at [session]'s settings (or reset to the default when

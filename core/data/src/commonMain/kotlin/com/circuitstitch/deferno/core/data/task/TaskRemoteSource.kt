@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 
@@ -13,15 +14,21 @@ import com.circuitstitch.deferno.core.model.TaskId
  * - [search] pulls the **global-search result** (`/tasks/search`) — a one-shot, online-only read for
  *   the search overlay (#73), NOT the observed live list (search results are never cached, ADR-0001).
  *
- * Offline-first contract (ADR-0001): a failed background read returns `emptyList()`/`null` rather
- * than throwing, so a refresh that can't reach the server leaves the local cache intact instead of
- * wiping it. [search] alone reports failure ([TaskSearchResult.Unavailable]) — it is a foreground
- * action whose failure must stay distinguishable from "no matches".
+ * Offline-first contract (ADR-0001): a failed background read does not throw, so a refresh that can't
+ * reach the server leaves the local cache intact instead of wiping it. [fetchAll] carries this in its
+ * type — [RemoteSnapshot.Unavailable] on failure, distinct from an [RemoteSnapshot.Available] *empty*
+ * snapshot (a genuinely empty server, which the reconcile must honour by purging). [fetch] returns
+ * `null` on failure-or-missing (a no-op-on-null hydrate has no purge to get wrong). [search] reports
+ * [TaskSearchResult.Unavailable] — a foreground action whose failure must stay distinct from "no matches".
  */
 interface TaskRemoteSource {
 
-    /** The full snapshot of summary Tasks; `emptyList()` on failure (cache left intact). */
-    suspend fun fetchAll(): List<Task>
+    /**
+     * The full snapshot of summary Tasks as [RemoteSnapshot.Available] (possibly empty), or
+     * [RemoteSnapshot.Unavailable] on failure — so the reconcile purges on a genuine empty snapshot
+     * but leaves the cache intact when the pull couldn't reach the server.
+     */
+    suspend fun fetchAll(): RemoteSnapshot<List<Task>>
 
     /** The full (hydrated) Task for [id], or `null` when missing / on failure. */
     suspend fun fetch(id: TaskId): Task?

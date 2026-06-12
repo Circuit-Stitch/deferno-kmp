@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.settings
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.UserSettings
 
 /**
@@ -11,8 +12,9 @@ import com.circuitstitch.deferno.core.model.UserSettings
 interface SettingsRemoteSource {
 
     /**
-     * Pulls the current settings, or `null` on any failure (offline-first, ADR-0001) — a failed pull
-     * leaves the cached settings untouched, so the UI keeps observing the last-known values.
+     * Pulls the current settings as [RemoteSnapshot.Available], or [RemoteSnapshot.Unavailable] on any
+     * failure (offline-first, ADR-0001) — a failed pull leaves the cached settings untouched, so the UI
+     * keeps observing the last-known values.
      */
-    suspend fun fetchSettings(): UserSettings?
+    suspend fun fetchSettings(): RemoteSnapshot<UserSettings>
 }
