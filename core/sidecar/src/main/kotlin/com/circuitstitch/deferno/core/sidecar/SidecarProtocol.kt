@@ -18,6 +18,13 @@ object SidecarMethods {
     /** Request/response: query one capability's current permission state → [PermissionStatusWire]. */
     const val QueryPermission: String = "queryPermission"
 
+    /**
+     * Request/response: resolve one capability's permission *without* engaging the capability (#120) —
+     * prompts iff `not_determined`, answers the settled [PermissionStatusWire], pushes
+     * [SidecarTopics.PermissionChanged] as it settles.
+     */
+    const val RequestPermission: String = "requestPermission"
+
     /** Server stream: subscribe to on-device dictation; yields [TranscriptWire] events until cancelled. */
     const val SubscribeTranscript: String = "subscribeTranscript"
 

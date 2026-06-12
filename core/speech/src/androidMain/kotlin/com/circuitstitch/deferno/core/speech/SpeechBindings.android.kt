@@ -35,6 +35,14 @@ interface AndroidSpeechBindings {
         SettingsSpeechEnginePreference(
             SharedPreferencesSettings(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)),
         )
+
+    /**
+     * No shared-layer permission deep-link on Android (#120): the View owns the RECORD_AUDIO prompt and
+     * the app-settings intent (`MainActivity.onOpenOsAppSettings`), so the shared seam has nothing to open.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun dictationPermissionSettings(): DictationPermissionSettings = DictationPermissionSettings { null }
 }
 
 private const val PREFS_NAME = "deferno_speech"

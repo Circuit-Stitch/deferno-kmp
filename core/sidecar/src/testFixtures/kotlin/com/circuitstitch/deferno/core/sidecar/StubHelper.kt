@@ -38,6 +38,9 @@ import java.util.concurrent.ConcurrentHashMap
  * - [SidecarMethods.QueryPermission] → a [SidecarFrame.Response] echoing the queried capability
  *   (default speech) **and** a follow-on [SidecarTopics.PermissionChanged] [SidecarFrame.Push] (so a
  *   collector can observe an unsolicited push);
+ * - [SidecarMethods.RequestPermission] → the canned TCC prompt (#120): a [NOT_DETERMINED][permissionStatus]
+ *   state settles to [requestOutcome] (any other state just reports itself — a denial is terminal,
+ *   re-requesting never re-prompts), then the same response + follow-on push shape as a query;
  * - [SidecarMethods.SubscribeTranscript] → a [SidecarFrame.StreamData] sequence (Partial…/Final) then
  *   [SidecarFrame.StreamEnd], with delays so a collector can cancel mid-stream;
  * - [SidecarMethods.PostNotification] → an empty-ack [SidecarFrame.Response], recorded for
@@ -72,6 +75,12 @@ class StubHelper(
 
     /** The canned permission state the stub reports / pushes (the [SidecarMethods.QueryPermission] result). */
     var permissionStatus: PermissionStatusValue = PermissionStatusValue.GRANTED
+
+    /**
+     * What a [SidecarMethods.RequestPermission] against a [NOT_DETERMINED][PermissionStatusValue.NOT_DETERMINED]
+     * [permissionStatus] settles it to — the canned "person answered the TCC prompt" (#120).
+     */
+    var requestOutcome: PermissionStatusValue = PermissionStatusValue.GRANTED
 
     /** Bind the socket and start accepting. The socket is chmod'd `0600` so the client's PosixPeerTrust passes. */
     fun start() {
@@ -135,6 +144,22 @@ class StubHelper(
                                     SidecarJson.decodeFromJsonElement(QueryPermissionWire.serializer(), params).capability
                                 }.getOrNull()
                             } ?: SidecarPermissionCapabilities.Speech
+                            out.send(SidecarFrame.Response(frame.id, permissionElement(capability)))
+                            out.send(SidecarFrame.Push(SidecarTopics.PermissionChanged, permissionElement(capability)))
+                        }
+
+                        SidecarMethods.RequestPermission -> {
+                            val capability = frame.params?.let { params ->
+                                runCatching {
+                                    SidecarJson.decodeFromJsonElement(RequestPermissionWire.serializer(), params).capability
+                                }.getOrNull()
+                            } ?: SidecarPermissionCapabilities.Speech
+                            // The canned TCC prompt (#120): only a NOT_DETERMINED state "prompts" and
+                            // settles (to [requestOutcome]); any other state reports itself unchanged —
+                            // a denial is terminal, re-requesting never re-prompts (the contract).
+                            if (permissionStatus == PermissionStatusValue.NOT_DETERMINED) {
+                                permissionStatus = requestOutcome
+                            }
                             out.send(SidecarFrame.Response(frame.id, permissionElement(capability)))
                             out.send(SidecarFrame.Push(SidecarTopics.PermissionChanged, permissionElement(capability)))
                         }

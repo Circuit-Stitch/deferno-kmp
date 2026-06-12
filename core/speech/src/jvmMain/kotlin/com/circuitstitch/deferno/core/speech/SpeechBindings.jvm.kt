@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.speech
 import com.circuitstitch.deferno.core.scopes.AppScope
 import com.circuitstitch.deferno.core.sidecar.DefaultSidecarSpeechPort
 import com.circuitstitch.deferno.core.sidecar.SidecarClient
+import com.circuitstitch.deferno.core.sidecar.SidecarPermissionPort
 import com.russhwolf.settings.PreferencesSettings
 import me.tatarka.inject.annotations.IntoSet
 import me.tatarka.inject.annotations.Provides
@@ -38,8 +39,18 @@ interface JvmSpeechBindings {
     @Provides
     @IntoSet
     @SingleIn(AppScope::class)
-    fun sidecarSpeechEngine(client: SidecarClient): SpeechToText =
-        SidecarSpeechToText(DefaultSidecarSpeechPort(client))
+    fun sidecarSpeechEngine(client: SidecarClient, permissions: SidecarPermissionPort): SpeechToText =
+        SidecarSpeechToText(DefaultSidecarSpeechPort(client), permissions)
+
+    /**
+     * The dictation-permission settings deep-link (#120): live introspection over the same
+     * process-wide [SidecarPermissionPort] (from core/di's `SidecarBindings`), picking the blocked
+     * capability's macOS Privacy pane at click time. Null off-macOS — the affordance simply no-ops.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun dictationPermissionSettings(permissions: SidecarPermissionPort): DictationPermissionSettings =
+        SidecarDictationPermissionSettings(permissions)
 
     @Provides
     @SingleIn(AppScope::class)

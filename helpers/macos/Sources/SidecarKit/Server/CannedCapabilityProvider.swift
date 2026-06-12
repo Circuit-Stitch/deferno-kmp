@@ -8,6 +8,9 @@ import Foundation
 ///
 /// - `queryPermission` → a `response` echoing the queried capability (default speech) **and** a
 ///   follow-on `permissionChanged` push (same status);
+/// - `requestPermission` → the canned TCC prompt (#120): a `not_determined` status settles to
+///   `requestOutcome` (any other status reports itself unchanged — a denial is terminal, re-requesting
+///   never re-prompts), then the same response + follow-on push shape as a query;
 /// - `subscribeTranscript` → `partial "hel"`, `partial "hello wor"`, `final "hello world"`, `stream_end`,
 ///   with gaps so a collector can cancel mid-stream;
 /// - `postNotification` → an empty ack when the canned status is granted, else `unavailable`
@@ -28,17 +31,38 @@ public final class CannedCapabilityProvider: CapabilityProvider {
     ]
     public var permissionChangeSink: ((PermissionStatus) -> Void)?
 
-    /// The canned status the stub reports / pushes (`GRANTED` by default, like the stub).
-    private let permissionStatus: PermissionStatusValue
+    /// The canned status the stub reports / pushes (`GRANTED` by default, like the stub). Mutable for
+    /// the same reason the stub's is: a `requestPermission` against `not_determined` settles it (#120).
+    private var permissionStatus: PermissionStatusValue
 
-    public init(permissionStatus: PermissionStatusValue = .granted) {
+    /// What a `requestPermission` against a `not_determined` status settles it to — the canned
+    /// "person answered the TCC prompt" (#120), mirroring the stub's `requestOutcome`.
+    private let requestOutcome: PermissionStatusValue
+
+    public init(
+        permissionStatus: PermissionStatusValue = .granted,
+        requestOutcome: PermissionStatusValue = .granted
+    ) {
         self.permissionStatus = permissionStatus
+        self.requestOutcome = requestOutcome
     }
 
     public func queryPermission(params: JSONValue?) -> (response: PermissionStatus, push: PermissionStatus?) {
         let capability = params?.string("capability") ?? SidecarPermissionCapability.speech
         let status = PermissionStatus(capability: capability, status: permissionStatus)
         return (response: status, push: status) // stub answers, then pushes the same — observable push
+    }
+
+    public func requestPermission(
+        params: JSONValue?,
+        completion: @escaping (PermissionStatus, PermissionStatus?) -> Void
+    ) {
+        let capability = params?.string("capability") ?? SidecarPermissionCapability.speech
+        // The canned TCC prompt (#120): only not_determined "prompts" and settles; anything else
+        // reports itself unchanged (a denial is terminal — the contract).
+        if permissionStatus == .notDetermined { permissionStatus = requestOutcome }
+        let status = PermissionStatus(capability: capability, status: permissionStatus)
+        completion(status, status) // answer, then push the settled state — the stub's observable push
     }
 
     public func postNotification(_ request: PostNotificationRequest, completion: @escaping (SidecarError?) -> Void) {

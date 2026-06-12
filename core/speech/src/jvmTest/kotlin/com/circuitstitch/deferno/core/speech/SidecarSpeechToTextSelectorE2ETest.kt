@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.speech
 
 import app.cash.turbine.test
+import com.circuitstitch.deferno.core.sidecar.DefaultSidecarPermissionPort
 import com.circuitstitch.deferno.core.sidecar.DefaultSidecarSpeechPort
 import com.circuitstitch.deferno.core.sidecar.PermissionStatusValue
 import com.circuitstitch.deferno.core.sidecar.SidecarCapabilities
@@ -138,7 +139,14 @@ class SidecarSpeechToTextSelectorE2ETest {
     /** The selector under test: the real sidecar engine + the floor, rank-picked (Automatic, #93). */
     private fun selector(sidecarClient: SidecarClient, floor: FakeSpeechToText): SpeechToTextSelector =
         SpeechToTextSelector(
-            engines = setOf(SidecarSpeechToText(DefaultSidecarSpeechPort(sidecarClient)), floor),
+            engines = setOf(
+                // The real #120 permission port too: listen()'s preflight runs against the stub Helper.
+                SidecarSpeechToText(
+                    DefaultSidecarSpeechPort(sidecarClient),
+                    DefaultSidecarPermissionPort(sidecarClient),
+                ),
+                floor,
+            ),
             preference = InMemorySpeechEnginePreference(SpeechEngineId.Automatic),
         )
 

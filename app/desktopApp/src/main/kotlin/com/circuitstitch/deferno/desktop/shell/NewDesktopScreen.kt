@@ -64,7 +64,8 @@ fun NewDesktopScreen(component: NewComponent, modifier: Modifier = Modifier) {
     val state by component.state.collectAsState()
 
     // Toggle [[Dictation]] into [field] (#94): tapping the active field's mic again stops it. Desktop has
-    // no in-app permission prompt — the OS gates mic access; a capture failure surfaces as a gentle error.
+    // no in-app permission prompt — the sidecar engine resolves macOS TCC itself (the #120 preflight:
+    // the OS prompt fires on first use; a settled denial lands as PermissionPermanentlyDenied below).
     fun onMic(field: DictationField) {
         if (state.dictation == DictationStatus.Listening && state.dictationField == field) {
             component.stopDictation()
@@ -141,8 +142,12 @@ fun NewDesktopScreen(component: NewComponent, modifier: Modifier = Modifier) {
                     modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Notes" },
                 )
 
-                // The gentle Dictation feedback (#94): a recognition/capture error, never a silent failure.
-                DictationMessage(status = state.dictation)
+                // The gentle Dictation feedback (#94): a recognition/capture error, never a silent
+                // failure — with the System Settings deep-link on a foreclosed permission (#120).
+                DictationMessage(
+                    status = state.dictation,
+                    onOpenSettings = component::openDictationPermissionSettings,
+                )
 
                 // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2). The form surfaces a
                 // required start + optional end so a real Event create succeeds. Inputs take an ISO-8601
@@ -249,22 +254,36 @@ private fun MicButton(
 }
 
 /**
- * The gentle Dictation status line (#94, ADR-0018): a soft recognition/capture-error note, never a silent
- * failure. Silent while idle or listening (the streaming text itself is the listening feedback). The
- * permission states never arise on desktop (the OS gates the mic, not an in-app prompt) but are handled
- * totally over the sealed [DictationStatus].
+ * The gentle Dictation status line (#94, ADR-0018): a soft recognition/capture-error note, never a
+ * silent failure. Silent while idle or listening (the streaming text itself is the listening feedback).
+ * [DictationStatus.PermissionPermanentlyDenied] is real on desktop since #120 — the sidecar engine
+ * settles macOS TCC by genuine introspection/prompt — so it additionally offers the **Open System
+ * Settings** deep-link ([onOpenSettings], host-routed to the blocked capability's Privacy pane).
  */
 @Composable
-private fun DictationMessage(status: DictationStatus, modifier: Modifier = Modifier) {
-    val message = when (status) {
-        is DictationStatus.Error -> "Couldn't hear that — try the mic again."
-        DictationStatus.PermissionDenied,
-        DictationStatus.PermissionPermanentlyDenied,
-        -> "Dictation needs microphone access."
-        DictationStatus.Idle, DictationStatus.Listening -> return
+private fun DictationMessage(
+    status: DictationStatus,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    when (status) {
+        is DictationStatus.Error -> DictationNote("Couldn't hear that — try the mic again.", modifier)
+        DictationStatus.PermissionDenied -> DictationNote("Dictation needs microphone access.", modifier)
+        DictationStatus.PermissionPermanentlyDenied -> Column(modifier.fillMaxWidth()) {
+            DictationNote("Dictation needs microphone access, which is turned off for Deferno.")
+            TextButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.semantics { contentDescription = "Open System Settings" },
+            ) { Text("Open System Settings") }
+        }
+        DictationStatus.Idle, DictationStatus.Listening -> Unit
     }
+}
+
+@Composable
+private fun DictationNote(text: String, modifier: Modifier = Modifier) {
     Text(
-        text = message,
+        text = text,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
         modifier = modifier.fillMaxWidth().semantics { contentDescription = "Dictation status" },

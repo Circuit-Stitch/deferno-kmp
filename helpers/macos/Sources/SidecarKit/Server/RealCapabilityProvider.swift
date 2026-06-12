@@ -6,6 +6,9 @@ import UserNotifications
 /// (ADR-0024).
 ///
 /// - `queryPermission` introspects the live mic/Speech/notification state (never prompts).
+/// - `requestPermission` (#120) resolves a permission *without* engaging the capability: it fires the
+///   real TCC prompt iff `not_determined` (pushing `permissionChanged` as the state settles) and
+///   answers the settled state; any other state answers immediately, unprompted.
 /// - `subscribeTranscript` ensures Speech **and** mic authorization (firing the real TCC prompts on
 ///   first use, and pushing `permissionChanged` as states settle), then streams on-device dictation.
 ///   Only one transcription runs process-wide — the mic is exclusive — so a second concurrent subscribe
@@ -44,6 +47,32 @@ public final class RealCapabilityProvider: CapabilityProvider {
         // The capability to query; default to speech (the headline dictation gate). #120 drives mic too.
         let capability = params?.string("capability") ?? SidecarPermissionCapability.speech
         return (response: SidecarPermissions.status(forCapability: capability), push: nil)
+    }
+
+    public func requestPermission(
+        params: JSONValue?,
+        completion: @escaping (PermissionStatus, PermissionStatus?) -> Void
+    ) {
+        let capability = params?.string("capability") ?? SidecarPermissionCapability.speech
+        let current = SidecarPermissions.status(forCapability: capability)
+        guard current.status == .notDetermined else {
+            // Settled (granted/denied/restricted) or unintrospectable: report it without prompting —
+            // a TCC denial is terminal; only the System Settings Privacy pane flips it (#120).
+            completion(current, nil)
+            return
+        }
+        let settle: (PermissionStatusValue) -> Void = { [weak self] status in
+            // The prompt settled a real state change: push it like the first-use prompts do, then
+            // answer the request itself with the settled state (push: nil — already routed).
+            self?.pushPermission(capability, status)
+            completion(PermissionStatus(capability: capability, status: status), nil)
+        }
+        switch capability {
+        case SidecarPermissionCapability.microphone: SidecarPermissions.requestMicrophone(settle)
+        case SidecarPermissionCapability.speech: SidecarPermissions.requestSpeech(settle)
+        case SidecarPermissionCapability.notifications: SidecarPermissions.requestNotifications(settle)
+        default: completion(current, nil) // unreachable: an unknown id never reads notDetermined
+        }
     }
 
     public func startTranscript(

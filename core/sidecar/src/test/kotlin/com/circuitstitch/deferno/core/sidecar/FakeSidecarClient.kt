@@ -42,7 +42,12 @@ internal class FakeSidecarClient(
 
     private val _state = MutableStateFlow<SidecarConnectionState>(SidecarConnectionState.Disconnected)
     override val state: StateFlow<SidecarConnectionState> = _state
-    override val pushes: SharedFlow<SidecarPush> = MutableSharedFlow()
+
+    private val _pushes = MutableSharedFlow<SidecarPush>()
+    override val pushes: SharedFlow<SidecarPush> = _pushes
+
+    /** Script an unsolicited Helper push (e.g. a [SidecarTopics.PermissionChanged], #120). */
+    suspend fun push(push: SidecarPush) = _pushes.emit(push)
 
     var connects: Int = 0
         private set

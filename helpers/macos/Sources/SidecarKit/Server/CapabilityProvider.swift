@@ -29,6 +29,17 @@ public protocol CapabilityProvider: AnyObject {
     /// mirror the stub; the real provider returns `nil`).
     func queryPermission(params: JSONValue?) -> (response: PermissionStatus, push: PermissionStatus?)
 
+    /// Answer `requestPermission` (#120): resolve the capability's permission *without* engaging the
+    /// capability — fire the OS prompt iff `not_determined` (the completion may wait on the person),
+    /// then complete with the **settled** state; any other state completes immediately, unprompted (a
+    /// TCC denial is terminal — only System Settings flips it). The optional `push` mirrors
+    /// `queryPermission`'s (the canned provider pushes; the real provider pushes a settling prompt
+    /// through `permissionChangeSink` instead and completes `push: nil`).
+    func requestPermission(
+        params: JSONValue?,
+        completion: @escaping (_ response: PermissionStatus, _ push: PermissionStatus?) -> Void
+    )
+
     /// Open a transcript stream. `onEvent` delivers `partial`/`final`/`failure`; `onEnd` fires exactly
     /// once at natural completion or failure (NOT on `cancel()` of the returned handle, where the helper
     /// stays silent per the contract). Returns a handle the connection cancels on client `cancel`/teardown.

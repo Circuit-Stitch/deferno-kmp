@@ -83,6 +83,14 @@ interface NewComponent {
      * "needs microphone access" state — and, when [permanentlyDenied], offer the OS-settings deep-link.
      */
     fun dictationPermissionDenied(permanentlyDenied: Boolean)
+
+    /**
+     * The [DictationStatus.PermissionPermanentlyDenied] affordance (#120): open the OS surface where
+     * the person can flip the foreclosed permission. Routed to the host (the desktop deep-links the
+     * blocked capability's macOS Privacy pane via live Sidecar introspection); a no-op where the View
+     * owns its own deep-link (Android's app-settings intent).
+     */
+    fun openDictationPermissionSettings()
 }
 
 /** Which text field a [[Dictation]] fills (#92). The mic affordance sits on each. */
@@ -99,7 +107,12 @@ sealed interface DictationStatus {
     /** RECORD_AUDIO was denied — the gentle "needs microphone access" (the View offers a retry). */
     data object PermissionDenied : DictationStatus
 
-    /** RECORD_AUDIO was permanently denied — the View additionally deep-links to OS settings. */
+    /**
+     * The permission is permanently foreclosed — the View additionally deep-links to OS settings.
+     * Reached two ways: the Android View reports a "don't ask again" RECORD_AUDIO denial (#92), or the
+     * engine itself settles a typed [SpeechError.PermissionDenied] via real introspection / a real
+     * answered TCC prompt (#120) — a macOS denial never re-prompts, so it is permanent by definition.
+     */
     data object PermissionPermanentlyDenied : DictationStatus
 
     /** Recognition failed (engine/capture/unavailable) — surfaced gently, never a silent failure. */
@@ -174,6 +187,9 @@ class DefaultNewComponent(
     private val speech: SpeechToText? = null,
     private val locale: String = "en-US",
     private val dictationScope: CoroutineScope? = null,
+    // The PermissionPermanentlyDenied affordance (#120), host-routed like [create]: the desktop opens
+    // the blocked permission's OS settings pane; defaulted to a no-op for the View-owned hosts (Android).
+    private val onOpenDictationPermissionSettings: () -> Unit = {},
 ) : NewComponent {
 
     private val _state = MutableStateFlow(NewState(date = initialDate))
@@ -242,7 +258,17 @@ class DefaultNewComponent(
                         }
                     is TranscriptEvent.Error ->
                         _state.update {
-                            it.copy(dictationField = null, dictation = DictationStatus.Error(event.reason))
+                            it.copy(
+                                dictationField = null,
+                                dictation = when (event.reason) {
+                                    // The engine settled a real permission denial (#120 — introspected
+                                    // or prompted-and-refused, never inferred from a capture failure):
+                                    // terminal until flipped in OS settings, so render the deep-link
+                                    // state, not a generic retry note.
+                                    SpeechError.PermissionDenied -> DictationStatus.PermissionPermanentlyDenied
+                                    else -> DictationStatus.Error(event.reason)
+                                },
+                            )
                         }
                 }
             }
@@ -257,6 +283,8 @@ class DefaultNewComponent(
             if (it.dictationField != null) it.copy(dictationField = null, dictation = DictationStatus.Idle) else it
         }
     }
+
+    override fun openDictationPermissionSettings() = onOpenDictationPermissionSettings()
 
     override fun dictationPermissionDenied(permanentlyDenied: Boolean) {
         dictationJob?.cancel()

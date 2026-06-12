@@ -196,6 +196,12 @@ real launchd session, which can't be automated headlessly):
 
 - ⏳ The real **mic + Speech TCC prompts** firing and being granted (introspection/request code is in
   `SidecarPermissions`; subscribing fires them on first use).
+- ⏳ **`requestPermission` (#120) against the rebuilt binary**: the helper grew the explicit
+  `requestPermission` method (+ the canned `--fixture-request-outcome` flag) after the last Mac
+  build/sign — rebuild with `scripts/build.sh`, re-run the Swift tests + the JVM
+  `RealHelperContractParityTest` (its `resolvesAPermissionThroughTheRealRequestFlow` leg needs the new
+  binary), and confirm a real `requestPermission("mic")` against a fresh TCC state fires the prompt
+  *without* starting capture and answers the settled state.
 - ⏳ **On-device `SFSpeechRecognizer` producing real Partial/Final transcripts** for a spoken `en-US`
   utterance (requires the on-device asset, a granted Speech+mic grant, and a live voice).
 - ⏳ The end-to-end **launchd socket-activation** path under an installed LaunchAgent (the install itself

@@ -72,6 +72,15 @@ public final class SidecarConnection {
                 if let push = result.push {
                     send(.push(topic: SidecarTopics.permissionChanged, payload: push.json))
                 }
+            case SidecarMethods.requestPermission:
+                // Completion-shaped (#120): the real provider's TCC prompt waits on the person; the
+                // single-threaded read loop stays free for other traffic meanwhile.
+                provider.requestPermission(params: params) { [weak self] response, push in
+                    self?.send(.response(id: id, result: response.json))
+                    if let push {
+                        self?.send(.push(topic: SidecarTopics.permissionChanged, payload: push.json))
+                    }
+                }
             case SidecarMethods.subscribeTranscript:
                 startTranscript(id: id)
             case SidecarMethods.postNotification:

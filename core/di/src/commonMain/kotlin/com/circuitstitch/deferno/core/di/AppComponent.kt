@@ -14,6 +14,7 @@ import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.database.AccountDatabaseFactory
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.AppScope
+import com.circuitstitch.deferno.core.speech.DictationPermissionSettings
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.scopes.PlatformContext
@@ -101,6 +102,15 @@ abstract class AppComponent(
      * surface and to compile-validate its binding on every target.
      */
     abstract val speechEngineCatalog: SpeechEngineCatalog
+
+    /**
+     * Where the OS lets the person flip a foreclosed [[Dictation]] permission (#120): the desktop New
+     * surface's "Open System Settings" affordance resolves through it (live Sidecar introspection →
+     * the blocked capability's macOS Privacy pane); the View-owned-permission hosts (Android, iOS)
+     * bind a null deep-link. An [[App setting]]-shaped device capability — AppScope, never per-Account.
+     * Surfaced here for the desktop shell and to compile-validate the binding on every target.
+     */
+    abstract val dictationPermissionSettings: DictationPermissionSettings
 
     // --- Bindings re-exposed for the child AccountScope (ADR-0014) ---
     // kotlin-inject-anvil does not auto-propagate a parent's contributed @Provides into a child merge;
