@@ -130,6 +130,9 @@ dependencies {
     // Android-native *Views* that render them (RootShell, MainShell's NavigationSuiteScaffold, NewScreen,
     // in src/main/.../shell) — the phone nav surface, not a desktop/iOS layout stretched (ADR-0007).
     implementation(project(":app:shell"))
+    // The shell's shared New-form atoms (#175): the Android NewScreen is chrome (overlay layout +
+    // the RECORD_AUDIO round-trip) around the stateless commonMain atoms — the ADR-0004 #27 pattern.
+    implementation(project(":app:shell:ui"))
     // The feature slices: the logic modules supply the component types the Views reference directly
     // (PlanComponent, TasksComponent, …); the `:ui` submodules supply the Android-native screens.
     // core:designsystem provides DefernoTheme for the Compose host.
