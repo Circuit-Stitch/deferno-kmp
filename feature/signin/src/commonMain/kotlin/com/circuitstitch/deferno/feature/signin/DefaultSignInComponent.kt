@@ -1,13 +1,11 @@
 package com.circuitstitch.deferno.feature.signin
 
 import com.arkivanov.decompose.ComponentContext
-import com.arkivanov.essenty.lifecycle.doOnDestroy
+import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.auth.SignInResult
 import com.circuitstitch.deferno.core.data.auth.SignInService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,8 +27,7 @@ class DefaultSignInComponent(
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : SignInComponent, ComponentContext by componentContext {
 
-    private val scope: CoroutineScope = CoroutineScope(coroutineContext + SupervisorJob())
-        .also { s -> lifecycle.doOnDestroy { s.cancel() } }
+    private val scope: CoroutineScope = componentScope(coroutineContext)
 
     private val _state = MutableStateFlow(SignInState())
     override val state: StateFlow<SignInState> = _state.asStateFlow()

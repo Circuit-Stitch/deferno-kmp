@@ -16,6 +16,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":core:common")) // componentScope() (#174)
             // The feature slices the Main shell composes into its Destination graph — the *logic*
             // modules only (the Compose Views live in each slice's `:ui` submodule, consumed directly
             // by the app entry points, ADR-0004 #27).

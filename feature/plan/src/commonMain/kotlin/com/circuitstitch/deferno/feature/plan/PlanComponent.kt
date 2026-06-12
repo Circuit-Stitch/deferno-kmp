@@ -1,14 +1,12 @@
 package com.circuitstitch.deferno.feature.plan
 
 import com.arkivanov.decompose.ComponentContext
-import com.arkivanov.essenty.lifecycle.doOnDestroy
+import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -50,8 +48,7 @@ class DefaultPlanComponent(
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : PlanComponent, ComponentContext by componentContext {
 
-    private val scope: CoroutineScope = CoroutineScope(coroutineContext + SupervisorJob())
-        .also { s -> lifecycle.doOnDestroy { s.cancel() } }
+    private val scope: CoroutineScope = componentScope(coroutineContext)
 
     private val refreshing = MutableStateFlow(false)
 

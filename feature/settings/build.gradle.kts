@@ -9,6 +9,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":core:common")) // componentScope() (#174)
             implementation(project(":core:model"))
             implementation(project(":core:data"))
             // The device-local speech-engine [[App setting]] (#93): the Settings Destination reads the

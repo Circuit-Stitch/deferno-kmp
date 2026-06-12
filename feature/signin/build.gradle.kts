@@ -9,6 +9,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":core:common")) // componentScope() (#174)
             implementation(project(":core:model"))
             // The SignInService seam (#15, ADR-0023): validate a pasted PAT → establish the Account.
             implementation(project(":core:data"))

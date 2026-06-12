@@ -9,6 +9,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":core:common")) // componentScope() (#174)
             implementation(project(":core:model"))
             implementation(project(":core:domain"))
             implementation(project(":core:data"))

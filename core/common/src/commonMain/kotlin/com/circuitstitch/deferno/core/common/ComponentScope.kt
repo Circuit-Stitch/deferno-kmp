@@ -1,4 +1,4 @@
-package com.circuitstitch.deferno.feature.tasks
+package com.circuitstitch.deferno.core.common
 
 import com.arkivanov.decompose.ComponentContext
 import com.arkivanov.essenty.lifecycle.doOnDestroy
@@ -12,8 +12,11 @@ import kotlin.coroutines.CoroutineContext
  * destroyed, so its state-observation coroutines never outlive it. [context] is the dispatcher the
  * state is produced on — `Dispatchers.Default` in production (the View observes via Compose on the
  * main thread), overridden with a test dispatcher in `commonTest` for deterministic runs.
+ *
+ * The one lifecycle binding every feature component and the shell share (#174) — define it once here
+ * rather than once per slice.
  */
-internal fun ComponentContext.componentScope(context: CoroutineContext): CoroutineScope {
+fun ComponentContext.componentScope(context: CoroutineContext): CoroutineScope {
     val scope = CoroutineScope(context + SupervisorJob())
     lifecycle.doOnDestroy { scope.cancel() }
     return scope

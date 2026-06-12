@@ -8,7 +8,7 @@ import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.router.stack.pop
 import com.arkivanov.decompose.router.stack.push
 import com.arkivanov.decompose.value.Value
-import com.arkivanov.essenty.lifecycle.doOnDestroy
+import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.model.ThemeFamily
@@ -20,8 +20,6 @@ import com.circuitstitch.deferno.core.speech.SpeechEngineId
 import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -201,8 +199,7 @@ class DefaultSettingsComponent(
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : SettingsComponent, ComponentContext by componentContext {
 
-    private val scope: CoroutineScope = CoroutineScope(coroutineContext + SupervisorJob())
-        .also { s -> lifecycle.doOnDestroy { s.cancel() } }
+    private val scope: CoroutineScope = componentScope(coroutineContext)
 
     // Plain-data configs (serializer = null → no state restoration wired in v1, matching the feature
     // components). The root is List; each category detail is pushed as Category(category).
