@@ -1,10 +1,10 @@
 package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
-import com.circuitstitch.deferno.core.data.chore.ChoreRepository
-import com.circuitstitch.deferno.core.data.event.EventRepository
-import com.circuitstitch.deferno.core.data.habit.HabitRepository
-import com.circuitstitch.deferno.core.data.occurrence.OccurrenceRepository
+import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
+import com.circuitstitch.deferno.core.data.event.EventLocalStore
+import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
@@ -62,20 +62,22 @@ abstract class AccountComponent(
     abstract val settingsWriter: SettingsWriter
 
     /**
-     * The recurring-kind read repositories (#71). Exposing them anchors anvil's compile-time validation
-     * of the create flow's AccountScope chain (the CreateWriter seeds the same local stores these
-     * observe), and lets the shell observe a freshly created Habit/Chore/Event like a Task.
+     * The recurring-kind read seams (#71): the local stores are the read interface — reads are local
+     * `Flow`s only (ADR-0001), and the former one-impl repository wrappers added nothing over them
+     * (#171). Exposing the stores anchors anvil's compile-time validation of the create flow's
+     * AccountScope chain (the CreateWriter seeds these same stores), and lets the shell observe a
+     * freshly created Habit/Chore/Event like a Task.
      */
-    abstract val habitRepository: HabitRepository
-    abstract val choreRepository: ChoreRepository
-    abstract val eventRepository: EventRepository
+    abstract val habitLocalStore: HabitLocalStore
+    abstract val choreLocalStore: ChoreLocalStore
+    abstract val eventLocalStore: EventLocalStore
 
     /**
-     * The Occurrence (firing-level) read repository (#71, AC #4). Exposing it anchors anvil's
-     * compile-time validation of the Occurrence chain (store → DB) and gives the firing read source a
-     * real accessor — observe-only over the local cache, like the recurring-definition repositories.
+     * The Occurrence (firing-level) read seam (#71 AC #4, #171): observe-only over the local cache,
+     * like the recurring-definition stores. Exposing it anchors anvil's compile-time validation of
+     * the Occurrence chain (store → DB).
      */
-    abstract val occurrenceRepository: OccurrenceRepository
+    abstract val occurrenceLocalStore: OccurrenceLocalStore
 
     /**
      * The Calendar feed read repository (#74): the windowed month grid + day agenda source, observed

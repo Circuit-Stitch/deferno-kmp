@@ -6,28 +6,20 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.calendar.OccurrenceWriter
 import com.circuitstitch.deferno.core.data.calendar.OfflineCalendarRepository
 import com.circuitstitch.deferno.core.data.calendar.OutboxOccurrenceWriter
-import com.circuitstitch.deferno.core.data.calendar.RepositorySeriesKindSource
+import com.circuitstitch.deferno.core.data.calendar.LocalStoreSeriesKindSource
 import com.circuitstitch.deferno.core.data.calendar.SeriesKindSource
 import com.circuitstitch.deferno.core.data.calendar.SqlDelightCalendarLocalStore
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
-import com.circuitstitch.deferno.core.data.chore.ChoreRepository
-import com.circuitstitch.deferno.core.data.chore.OfflineChoreRepository
 import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.CreateWriter
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.create.OnlineCreateWriter
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.event.EventRepository
-import com.circuitstitch.deferno.core.data.event.OfflineEventRepository
 import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
-import com.circuitstitch.deferno.core.data.habit.HabitRepository
-import com.circuitstitch.deferno.core.data.habit.OfflineHabitRepository
 import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
-import com.circuitstitch.deferno.core.data.occurrence.OccurrenceRepository
-import com.circuitstitch.deferno.core.data.occurrence.OfflineOccurrenceRepository
 import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
@@ -125,25 +117,6 @@ interface AccountDataBindings {
         taskStore: TaskLocalStore,
     ): PlanRepository = OfflinePlanRepository(planStore, remoteSource, taskStore)
 
-    // The recurring read repositories (#71): observe-only Flows over the local stores, mirroring
-    // OfflineTaskRepository so a created definition surfaces with no manual refresh (ADR-0001).
-    @Provides
-    @SingleIn(AccountScope::class)
-    fun habitRepository(localStore: HabitLocalStore): HabitRepository = OfflineHabitRepository(localStore)
-
-    @Provides
-    @SingleIn(AccountScope::class)
-    fun choreRepository(localStore: ChoreLocalStore): ChoreRepository = OfflineChoreRepository(localStore)
-
-    @Provides
-    @SingleIn(AccountScope::class)
-    fun eventRepository(localStore: EventLocalStore): EventRepository = OfflineEventRepository(localStore)
-
-    @Provides
-    @SingleIn(AccountScope::class)
-    fun occurrenceRepository(localStore: OccurrenceLocalStore): OccurrenceRepository =
-        OfflineOccurrenceRepository(localStore)
-
     // The Calendar feed cache + series->kind index (#74): the local source of truth the month grid +
     // day agenda observe; a window refresh full-replaces the span and a write applies optimistically here.
     @Provides
@@ -155,10 +128,10 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun seriesKindSource(
-        habits: HabitRepository,
-        chores: ChoreRepository,
-        events: EventRepository,
-    ): SeriesKindSource = RepositorySeriesKindSource(habits, chores, events)
+        habits: HabitLocalStore,
+        chores: ChoreLocalStore,
+        events: EventLocalStore,
+    ): SeriesKindSource = LocalStoreSeriesKindSource(habits, chores, events)
 
     @Provides
     @SingleIn(AccountScope::class)

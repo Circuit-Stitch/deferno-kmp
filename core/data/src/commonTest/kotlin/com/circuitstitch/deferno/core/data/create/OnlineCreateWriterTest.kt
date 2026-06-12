@@ -1,7 +1,6 @@
 package com.circuitstitch.deferno.core.data.create
 
 import app.cash.turbine.test
-import com.circuitstitch.deferno.core.data.habit.OfflineHabitRepository
 import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
@@ -92,12 +91,11 @@ class OnlineCreateWriterTest {
     }
 
     @Test
-    fun onlineCreateHabitSeedsTheHabitStoreAndTheRepositoryObservesIt() = runTest {
+    fun onlineCreateHabitSeedsTheHabitStoreAndItsObserveFlowSurfacesIt() = runTest {
         val f = Fixture()
         f.remote.habitResult = ApiResult.Success(habit("h-1"))
-        val repo = OfflineHabitRepository(f.habitStore)
 
-        repo.observeHabits().test {
+        f.habitStore.observeActive().test {
             assertTrue(awaitItem().isEmpty())
             val result = f.writer.createHabit(CreateHabitPayload(title = "stretch", recurrence = RecurrenceDto("daily")))
             assertEquals(CreateResult.Created(ItemKind.Habit, "h-1"), result)
