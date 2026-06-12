@@ -241,6 +241,16 @@ extractor). Always **on-device**: the audio never leaves the device and is never
 recognition.
 _Avoid_: recording (the transient audio, not kept), recognition result, dictation (that is the *act*).
 
+**Preflight** *(client, desktop)*:
+The **prompting resolution of [[Dictation]]'s two OS permission gates** — speech recognition first,
+then the microphone, the same order the [[Sidecar helper]]'s own first-use prompts fire in (specified
+in the [[Sidecar protocol]]) — run by the speech port before the Helper's mic engages. An undetermined
+gate fires the real OS prompt; a settled denial blocks and names **which** gate; an unknown state stays
+clear so the first real subscribe can still prompt. Owned by the port: OS permission vocabulary (TCC
+states) never crosses it. Distinct from **readiness**, the introspect-only signal that never prompts.
+_Avoid_: permission check (ambiguous between this and readiness introspection), TCC (the macOS
+implementation detail behind the seam).
+
 **Brain dump** *(deferred)*:
 Free-form spoken capture whose [[Transcript]] the [[Extractor]] turns into **several draft
 [[Task]]s** the person reviews before anything is created — Stage 2, **not built in v1**. Unlike
