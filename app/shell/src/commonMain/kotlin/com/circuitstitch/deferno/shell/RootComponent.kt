@@ -102,6 +102,8 @@ class DefaultRootComponent(
     // Destination reads. Threaded down to the Main shell. Defaulted to the inert [EmptySpeechEngineCatalog]
     // (only "Automatic" → the row hides) so tests build without it; production passes the AppComponent's.
     private val speechEngineCatalog: SpeechEngineCatalog = EmptySpeechEngineCatalog,
+    /** The New surface's foreclosed-dictation-permission deep-link (#120). Host-handled, like the rest. */
+    private val onOpenDictationPermissionSettings: () -> Unit = {},
     /** The outbox driver's clock (#143) — injected so the flush timing is deterministic under test. */
     private val now: () -> Instant = { Clock.System.now() },
     /**
@@ -240,6 +242,8 @@ class DefaultRootComponent(
                         locale = locale,
                         // The device-local speech-engine App setting (#93) the Settings Destination reads.
                         speechEngineCatalog = speechEngineCatalog,
+                        // The foreclosed-permission deep-link (#120), threaded to the New overlay.
+                        onOpenDictationPermissionSettings = onOpenDictationPermissionSettings,
                     ),
                 )
             }

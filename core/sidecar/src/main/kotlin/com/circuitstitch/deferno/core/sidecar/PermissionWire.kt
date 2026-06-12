@@ -27,6 +27,14 @@ data class PermissionStatusWire(
 data class QueryPermissionWire(val capability: String)
 
 /**
+ * The optional [SidecarMethods.RequestPermission] params (#120): which permission to resolve. Same
+ * shape and Helper-side default as [QueryPermissionWire], but a distinct type — the two methods'
+ * params can evolve independently (additive contract, ADR-0025).
+ */
+@Serializable
+data class RequestPermissionWire(val capability: String)
+
+/**
  * A capability's permission state on the wire. Decoding is tolerant (ADR-0005): an unrecognized value
  * coerces to [UNKNOWN] via [SidecarJson]'s `coerceInputValues`.
  */

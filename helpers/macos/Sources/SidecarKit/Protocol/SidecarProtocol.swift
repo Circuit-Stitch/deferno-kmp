@@ -15,6 +15,9 @@ public let sidecarMaxFrameBytes: Int = 1 * 1024 * 1024
 public enum SidecarMethods {
     /// Request/response: query one capability's current permission state → `PermissionStatus`.
     public static let queryPermission = "queryPermission"
+    /// Request/response: resolve one capability's permission *without* engaging the capability (#120) —
+    /// prompts iff `not_determined`, answers the settled `PermissionStatus`, pushes `permissionChanged`.
+    public static let requestPermission = "requestPermission"
     /// Server stream: subscribe to on-device dictation; yields `TranscriptEvent`s until cancelled.
     public static let subscribeTranscript = "subscribeTranscript"
     /// Request/response: post a user-visible OS notification (`PostNotificationRequest` params, #123).
@@ -39,7 +42,7 @@ public enum SidecarTopics {
 
 /// Capability ids the helper advertises in `welcome`.
 public enum SidecarCapabilities {
-    /// Can answer `queryPermission` and emit `permissionChanged`.
+    /// Can answer `queryPermission` / `requestPermission` and emit `permissionChanged`.
     public static let permissions = "permissions"
     /// Hosts an on-device speech engine reachable via `subscribeTranscript`.
     public static let speechTranscribe = "speech.transcribe"

@@ -1,7 +1,9 @@
 package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.scopes.AppScope
+import com.circuitstitch.deferno.core.sidecar.DefaultSidecarPermissionPort
 import com.circuitstitch.deferno.core.sidecar.SidecarClient
+import com.circuitstitch.deferno.core.sidecar.SidecarPermissionPort
 import com.circuitstitch.deferno.core.sidecar.SidecarSocketPath
 import com.circuitstitch.deferno.core.sidecar.SidecarTokenSource
 import com.circuitstitch.deferno.core.sidecar.unixSocketSidecarClient
@@ -29,4 +31,15 @@ interface SidecarBindings {
     @SingleIn(AppScope::class)
     fun sidecarClient(): SidecarClient =
         unixSocketSidecarClient(SidecarSocketPath.default()) { SidecarTokenSource.resolve().orEmpty() }
+
+    /**
+     * The **Permission capability port** (#120) over the same process-wide client. It lives here, not
+     * in any one capability's bindings, for the same reason the client does: permissions are
+     * cross-capability (mic + Speech drive dictation now; notifications ride the identical port,
+     * #123) — no single capability owns the concept.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun sidecarPermissionPort(client: SidecarClient): SidecarPermissionPort =
+        DefaultSidecarPermissionPort(client)
 }

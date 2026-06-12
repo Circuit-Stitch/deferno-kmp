@@ -128,4 +128,31 @@ class NewComponentDictationTest {
         c.dictationPermissionDenied(permanentlyDenied = true)
         assertEquals(DictationStatus.PermissionPermanentlyDenied, c.state.value.dictation)
     }
+
+    @Test
+    fun typedPermissionError_landsAsPermanentlyDenied_notAGenericError() = runTest(UnconfinedTestDispatcher()) {
+        // The engine settled a real denial via introspection/prompt (#120): terminal until flipped in
+        // OS settings — the surface must offer the deep-link state, never a "try again" note.
+        val events = MutableSharedFlow<TranscriptEvent>(extraBufferCapacity = 16)
+        val c = component(events = events)
+        c.startDictation(DictationField.Title)
+
+        events.emit(TranscriptEvent.Error(SpeechError.PermissionDenied))
+        assertEquals(DictationStatus.PermissionPermanentlyDenied, c.state.value.dictation)
+        assertNull(c.state.value.dictationField)
+    }
+
+    @Test
+    fun openDictationPermissionSettings_routesToTheHost() = runTest(UnconfinedTestDispatcher()) {
+        var opened = 0
+        val c = DefaultNewComponent(
+            create = { CommandResult.Offline(CommandKind.CreateItem) },
+            onCreated = {},
+            launch = { },
+            onOpenDictationPermissionSettings = { opened++ },
+        )
+
+        c.openDictationPermissionSettings()
+        assertEquals(1, opened, "the affordance is host-routed (#120) — the View stays a thin renderer")
+    }
 }

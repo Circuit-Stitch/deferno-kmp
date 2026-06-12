@@ -120,6 +120,19 @@ class RealHelperContractParityTest {
     }
 
     @Test
+    fun resolvesAPermissionThroughTheRealRequestFlow() = withHelper(
+        // The #120 canned TCC prompt: the helper settles a not_determined request to the canned outcome.
+        fixturePermission = "not_determined",
+        fixtureRequestOutcome = "granted",
+    ) { client ->
+        val port = DefaultSidecarPermissionPort(client)
+        assertEquals(PermissionStatusValue.NOT_DETERMINED, port.status(SidecarPermissionCapabilities.Microphone))
+        assertEquals(PermissionStatusValue.GRANTED, port.request(SidecarPermissionCapabilities.Microphone))
+        // Settled: introspection now reports the grant (and still never prompts).
+        assertEquals(PermissionStatusValue.GRANTED, port.status(SidecarPermissionCapabilities.Microphone))
+    }
+
+    @Test
     fun showsTheStatusItemAndReceivesItsClickPush() = withHelper { client ->
         client.connect()
         val port = SidecarStatusItemPort(client)
@@ -156,7 +169,12 @@ class RealHelperContractParityTest {
      * Spawn the real Helper bound to a fresh temp socket in `--contract-fixtures` mode, hand the block a
      * real client, and tear both down. No-ops (skips) when the signed binary isn't available.
      */
-    private fun withHelper(clientToken: String = token, block: suspend (SidecarClient) -> Unit) {
+    private fun withHelper(
+        clientToken: String = token,
+        fixturePermission: String = "granted",
+        fixtureRequestOutcome: String = "granted",
+        block: suspend (SidecarClient) -> Unit,
+    ) {
         val binary = locateHelper() ?: return // skip: not on macOS / binary not built
         runBlocking {
             val socket = socketDir().resolve("h.sock")
@@ -166,7 +184,8 @@ class RealHelperContractParityTest {
                 "--listen", socket.toString(),
                 "--token", token,
                 "--contract-fixtures",
-                "--fixture-permission", "granted",
+                "--fixture-permission", fixturePermission,
+                "--fixture-request-outcome", fixtureRequestOutcome,
             ).redirectErrorStream(true).start()
             cleanups += { runCatching { process.destroyForcibly() } }
 

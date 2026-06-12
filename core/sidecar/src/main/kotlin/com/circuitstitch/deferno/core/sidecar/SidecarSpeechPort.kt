@@ -81,23 +81,28 @@ class DefaultSidecarSpeechPort(private val client: SidecarClient) : SidecarSpeec
         }
 
     /**
-     * Whether the Speech TCC state forecloses recognition. Only `denied`/`restricted` block —
-     * `not_determined`/`unknown` (including a reply this client can't read) stay selectable so the
-     * first real subscribe can fire the OS prompt. Skipped when the Helper doesn't broker permissions;
-     * #120 widens this into the full permission UX.
+     * Whether a TCC state forecloses recognition — **Speech or mic** (#120 widened this from Speech
+     * alone: a mic-denied Helper can't dictate either, and reporting NotReady is what keeps the
+     * selector on the whisper floor). Only `denied`/`restricted` block — `not_determined`/`unknown`
+     * (including a reply this client can't read) stay selectable so the engine's permission preflight
+     * (or the first real subscribe) can fire the OS prompt. Skipped when the Helper doesn't broker
+     * permissions. Introspection only — never prompts. A *failed* query stays a thrown
+     * [SidecarException] (→ NotReady in [readiness]'s catch) — deliberately stricter than
+     * [DefaultSidecarPermissionPort]'s degrade-to-unknown: a Helper that can't even answer a query is
+     * not ready, whereas the UX port must never crash a settings click.
      */
     private suspend fun speechPermissionBlocked(): Boolean {
         if (SidecarCapabilities.Permissions !in client.capabilities()) return false
-        val result = client.request(
-            SidecarMethods.QueryPermission,
-            SidecarJson.encodeToJsonElement(
-                QueryPermissionWire.serializer(),
-                QueryPermissionWire(SidecarPermissionCapabilities.Speech),
-            ),
-        ) ?: return false
-        val status = runCatching {
-            SidecarJson.decodeFromJsonElement(PermissionStatusWire.serializer(), result).status
-        }.getOrDefault(PermissionStatusValue.UNKNOWN) // an unreadable reply ≈ unknown: stay selectable
-        return status == PermissionStatusValue.DENIED || status == PermissionStatusValue.RESTRICTED
+        return listOf(SidecarPermissionCapabilities.Speech, SidecarPermissionCapabilities.Microphone)
+            .any { capability ->
+                val result = client.request(
+                    SidecarMethods.QueryPermission,
+                    SidecarJson.encodeToJsonElement(QueryPermissionWire.serializer(), QueryPermissionWire(capability)),
+                ) ?: return@any false
+                val status = runCatching {
+                    SidecarJson.decodeFromJsonElement(PermissionStatusWire.serializer(), result).status
+                }.getOrDefault(PermissionStatusValue.UNKNOWN) // an unreadable reply ≈ unknown: stay selectable
+                status == PermissionStatusValue.DENIED || status == PermissionStatusValue.RESTRICTED
+            }
     }
 }

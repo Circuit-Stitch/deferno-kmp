@@ -1,0 +1,8 @@
+{
+  "type": "request",
+  "id": 4,
+  "method": "requestPermission",
+  "params": {
+    "capability": "mic"
+  }
+}

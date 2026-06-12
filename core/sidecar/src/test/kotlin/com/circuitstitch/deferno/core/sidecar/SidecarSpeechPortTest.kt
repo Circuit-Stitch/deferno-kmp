@@ -21,13 +21,15 @@ class SidecarSpeechPortTest {
     // --- readiness: the ready signal -----------------------------------------------------------------
 
     @Test
-    fun readyWhenTheHelperAdvertisesSpeechAndPermissionIsGranted() = runTest {
+    fun readyWhenTheHelperAdvertisesSpeechAndPermissionsAreGranted() = runTest {
         val client = FakeSidecarClient(permissionStatus = PermissionStatusValue.GRANTED)
 
         assertEquals(SidecarSpeechReadiness.Ready, DefaultSidecarSpeechPort(client).readiness())
+        // Both dictation gates are introspected (#120): Speech first, then mic.
+        assertEquals(2, client.requests)
         assertEquals(SidecarMethods.QueryPermission, client.lastRequestMethod)
         assertEquals(
-            QueryPermissionWire(SidecarPermissionCapabilities.Speech),
+            QueryPermissionWire(SidecarPermissionCapabilities.Microphone),
             SidecarJson.decodeFromJsonElement(QueryPermissionWire.serializer(), client.lastRequestParams!!),
         )
     }

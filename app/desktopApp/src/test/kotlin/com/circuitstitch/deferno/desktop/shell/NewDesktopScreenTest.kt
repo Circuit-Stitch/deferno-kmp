@@ -20,6 +20,7 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.speech.ContinuityHint
 import com.circuitstitch.deferno.core.speech.SpeechAvailability
 import com.circuitstitch.deferno.core.speech.SpeechEngineId
+import com.circuitstitch.deferno.core.speech.SpeechError
 import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.speech.TranscriptEvent
 import com.circuitstitch.deferno.shell.DefaultNewComponent
@@ -30,6 +31,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -83,6 +85,32 @@ class NewDesktopScreenTest {
     }
 
     @Test
+    fun foreclosedPermission_rendersTheSystemSettingsDeepLink() = runComposeUiTest {
+        // The #120 flow, faked at the engine seam: the mic tap preflights a foreclosed TCC permission
+        // and the surface lands in PermissionPermanentlyDenied — which must render the gentle note plus
+        // the host-routed "Open System Settings" affordance (never a dead "try again").
+        var opened = 0
+        val component = DefaultNewComponent(
+            create = { CommandResult.Offline(CommandKind.CreateItem) },
+            onCreated = {},
+            launch = { _ -> },
+            speech = PermissionDeniedFakeSpeech,
+            locale = "en-US",
+            dictationScope = CoroutineScope(Dispatchers.Unconfined),
+            onOpenDictationPermissionSettings = { opened++ },
+        )
+        setContent { Themed { NewDesktopScreen(component) } }
+        waitForIdle()
+
+        onAllNodesWithContentDescription("Dictate")[0].performClick()
+        waitForIdle()
+        assertEquals(DictationStatus.PermissionPermanentlyDenied, component.state.value.dictation)
+
+        onNodeWithContentDescription("Open System Settings").performClick()
+        assertEquals(1, opened)
+    }
+
+    @Test
     fun micAffordance_appearsWhenEngineAvailable_andTogglesIntoListening() = runComposeUiTest {
         // An available on-device engine is wired (Dispatchers.Unconfined runs the init availability probe
         // synchronously, so dictationAvailable is true before first composition).
@@ -120,6 +148,20 @@ private object AvailableFakeSpeech : SpeechToText {
     override val supportsContinuous: Boolean = true
     override suspend fun availability(locale: String): SpeechAvailability = SpeechAvailability.Available
     override fun listen(locale: String, continuityHint: ContinuityHint): Flow<TranscriptEvent> = emptyFlow()
+}
+
+/**
+ * An available engine whose listen() settles a typed permission denial (#120) — the seam-level fake of
+ * the sidecar engine's preflight finding mic/Speech TCC foreclosed (available because a `not_determined`
+ * permission keeps the engine selectable; the denial settles at listen time).
+ */
+private object PermissionDeniedFakeSpeech : SpeechToText {
+    override val id: SpeechEngineId = SpeechEngineId("fake-denied")
+    override val rank: Int = 0
+    override val supportsContinuous: Boolean = true
+    override suspend fun availability(locale: String): SpeechAvailability = SpeechAvailability.Available
+    override fun listen(locale: String, continuityHint: ContinuityHint): Flow<TranscriptEvent> =
+        flowOf(TranscriptEvent.Error(SpeechError.PermissionDenied))
 }
 
 @Composable

@@ -229,6 +229,12 @@ fun main() {
             // AppScope graph — the Settings Destination's "Speech engine" row reads + writes it (whisper is
             // now a real desktop option, no longer only "Automatic").
             speechEngineCatalog = appComponent.speechEngineCatalog,
+            // The New surface's foreclosed-dictation-permission deep-link (#120): introspect the Sidecar
+            // permission port live at click time and open the blocked capability's macOS Privacy pane
+            // (mic or Speech Recognition). Off-macOS deepLink() is null and the click no-ops.
+            onOpenDictationPermissionSettings = {
+                appScope.launch { appComponent.dictationPermissionSettings.deepLink()?.let(::browse) }
+            },
             // The AppScope connectivity monitor (#158): the outbox driver flushes on the
             // offline→online edge and skips passes while known-offline.
             connectivity = appComponent.connectivity,

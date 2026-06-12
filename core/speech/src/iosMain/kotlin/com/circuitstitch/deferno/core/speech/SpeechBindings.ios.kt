@@ -24,4 +24,12 @@ interface IosSpeechBindings {
     @SingleIn(AppScope::class)
     fun speechEnginePreference(): SpeechEnginePreference =
         SettingsSpeechEnginePreference(NSUserDefaultsSettings.Factory().create("deferno_speech"))
+
+    /**
+     * No shared-layer permission deep-link on iOS (#120): the SwiftUI View will own the permission
+     * prompt + `UIApplication.openSettingsURLString`, like Android's View-owned posture.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun dictationPermissionSettings(): DictationPermissionSettings = DictationPermissionSettings { null }
 }

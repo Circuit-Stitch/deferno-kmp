@@ -109,6 +109,51 @@ final class ServerIntegrationTests: XCTestCase {
         XCTAssertEqual(result?.string("status"), "not_determined")
     }
 
+    func testRequestPermissionSettlesNotDeterminedThenPushes() throws {
+        // The #120 canned TCC prompt: not_determined settles to the canned outcome; response then push.
+        startConnection(provider: CannedCapabilityProvider(permissionStatus: .notDetermined, requestOutcome: .denied))
+        _ = try handshake()
+        try clientCodec.writeFrame(.request(
+            id: 2,
+            method: SidecarMethods.requestPermission,
+            params: .object(["capability": .string(SidecarPermissionCapability.microphone)])
+        ))
+
+        guard case .response(let id, let result)? = try clientCodec.readFrame() else {
+            return XCTFail("expected response")
+        }
+        XCTAssertEqual(id, 2)
+        XCTAssertEqual(result?.string("capability"), "mic")
+        XCTAssertEqual(result?.string("status"), "denied")
+
+        guard case .push(let topic, let payload)? = try clientCodec.readFrame() else {
+            return XCTFail("expected push")
+        }
+        XCTAssertEqual(topic, SidecarTopics.permissionChanged)
+        XCTAssertEqual(payload.string("status"), "denied")
+
+        // A denial is terminal: re-requesting reports it unchanged, never re-"prompts" (the contract).
+        try clientCodec.writeFrame(.request(id: 3, method: SidecarMethods.requestPermission, params: nil))
+        guard case .response(let id2, let result2)? = try clientCodec.readFrame() else {
+            return XCTFail("expected response")
+        }
+        XCTAssertEqual(id2, 3)
+        XCTAssertEqual(result2?.string("status"), "denied")
+    }
+
+    func testRequestPermissionReportsASettledGrantWithoutPrompting() throws {
+        startConnection(provider: CannedCapabilityProvider(permissionStatus: .granted, requestOutcome: .denied))
+        _ = try handshake()
+        try clientCodec.writeFrame(.request(id: 9, method: SidecarMethods.requestPermission, params: nil))
+
+        guard case .response(let id, let result)? = try clientCodec.readFrame() else {
+            return XCTFail("expected response")
+        }
+        XCTAssertEqual(id, 9)
+        XCTAssertEqual(result?.string("capability"), "speech")
+        XCTAssertEqual(result?.string("status"), "granted", "a settled state never re-settles to the outcome")
+    }
+
     func testPostNotificationAcksWhenGranted() throws {
         startConnection(provider: CannedCapabilityProvider())
         _ = try handshake()

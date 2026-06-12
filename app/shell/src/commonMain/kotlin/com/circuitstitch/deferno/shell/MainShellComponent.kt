@@ -242,6 +242,9 @@ class DefaultMainShellComponent(
     // inert [EmptySpeechEngineCatalog] (only "Automatic" → the Settings row hides) so the many shell tests
     // build without it; production threads the real catalog from the AppComponent (like speechToText).
     private val speechEngineCatalog: SpeechEngineCatalog = EmptySpeechEngineCatalog,
+    // The New surface's PermissionPermanentlyDenied affordance (#120), host-routed to the OS settings
+    // surface for the foreclosed dictation permission. Defaulted to a no-op like the other host actions.
+    private val onOpenDictationPermissionSettings: () -> Unit = {},
 ) : MainShellComponent, ComponentContext by componentContext {
 
     override val destinations: List<Destination> = Destination.entries
@@ -410,6 +413,8 @@ class DefaultMainShellComponent(
                     speech = speechToText,
                     locale = locale,
                     dictationScope = overlayScope,
+                    // The foreclosed-permission deep-link (#120), routed through to the host.
+                    onOpenDictationPermissionSettings = onOpenDictationPermissionSettings,
                 ),
             )
         }

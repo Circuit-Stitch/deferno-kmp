@@ -96,11 +96,16 @@ do **not** bump the version. Bump only on a breaking wire change.
 
 The seed surface that proves the three traffic shapes (#118); it grows additively (#119/#120/#123+).
 
-- **Capability `permissions`** — method `queryPermission` (request/response → `PermissionStatus`) and
-  topic `permissionChanged` (push → `PermissionStatus`). `queryPermission` takes optional params
-  `{ "capability": string }` naming which permission to introspect (default `"speech"`); the response
-  echoes that capability. Introspection **never prompts** — a capability's first real use is what fires
-  the OS prompt, pushing `permissionChanged` as the state settles.
+- **Capability `permissions`** — methods `queryPermission` / `requestPermission` (request/response →
+  `PermissionStatus`) and topic `permissionChanged` (push → `PermissionStatus`). Both take optional
+  params `{ "capability": string }` naming which permission (default `"speech"`); the response echoes
+  that capability. `queryPermission` introspects and **never prompts** — a capability's first real use
+  fires the OS prompt on its own (`subscribeTranscript`, `postNotification`), pushing
+  `permissionChanged` as the state settles. `requestPermission` (#120) resolves the permission
+  *without* engaging the capability (no capture starts): on `not_determined` it fires the OS
+  authorization prompt, answers with the **settled** state, and pushes `permissionChanged`; in any
+  other state it just reports the current state without prompting (an OS denial is terminal —
+  re-requesting never re-prompts; only the OS settings surface flips it).
   `PermissionStatus = { "capability": string, "status": "granted"|"denied"|"not_determined"|"restricted"|"unknown" }`
   v1 permission capability ids: `"mic"`, `"speech"`, `"notifications"` (#123).
 - **Capability `speech.transcribe`** — method `subscribeTranscript` (server stream of `TranscriptEvent`).

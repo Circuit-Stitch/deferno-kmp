@@ -30,4 +30,12 @@ enum class SpeechError {
 
     /** The recognition engine itself failed mid-stream (native error, out of memory). */
     Engine,
+
+    /**
+     * The OS permission behind the engine's capture/recognition is **foreclosed** — denied or
+     * restricted, settled by real introspection or a real prompt the person answered (#120). It is
+     * terminal until flipped in the OS settings surface (a TCC denial never re-prompts), so the UI
+     * treats it as permanently denied and offers the settings deep-link, not a retry.
+     */
+    PermissionDenied,
 }

@@ -59,6 +59,17 @@ class SidecarFrameSerializationTest {
     }
 
     @Test
+    fun goldenRequestPermissionRequestDecodesToTheRequestWire() {
+        val request = assertIs<SidecarFrame.Request>(decode(fixture("request-permission-request.json")))
+        assertEquals(SidecarMethods.RequestPermission, request.method)
+        val wire = SidecarJson.decodeFromJsonElement(
+            RequestPermissionWire.serializer(),
+            checkNotNull(request.params),
+        )
+        assertEquals(RequestPermissionWire(SidecarPermissionCapabilities.Microphone), wire)
+    }
+
+    @Test
     fun goldenStreamPayloadDecodesToTheTranscriptWire() {
         val data = assertIs<SidecarFrame.StreamData>(decode(fixture("transcript-stream-data.json")))
         val event = SidecarJson.decodeFromJsonElement(TranscriptWire.serializer(), data.event)

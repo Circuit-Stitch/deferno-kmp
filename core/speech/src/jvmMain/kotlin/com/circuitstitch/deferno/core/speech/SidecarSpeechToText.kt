@@ -1,6 +1,9 @@
 package com.circuitstitch.deferno.core.speech
 
+import com.circuitstitch.deferno.core.sidecar.PermissionStatusValue
 import com.circuitstitch.deferno.core.sidecar.SidecarException
+import com.circuitstitch.deferno.core.sidecar.SidecarPermissionCapabilities
+import com.circuitstitch.deferno.core.sidecar.SidecarPermissionPort
 import com.circuitstitch.deferno.core.sidecar.SidecarSecurityException
 import com.circuitstitch.deferno.core.sidecar.SidecarSpeechPort
 import com.circuitstitch.deferno.core.sidecar.SidecarSpeechReadiness
@@ -25,7 +28,9 @@ import kotlinx.coroutines.flow.flow
  * [UnavailableReason.NotInstalled] ("not available on this device"), while a present-but-not-ready
  * Helper reports [UnavailableReason.NotReady]; either way the [SpeechToTextSelector] keeps the
  * always-available whisper floor (ADR-0018/0024). A `not_determined` permission stays Available:
- * introspection never prompts — the first real subscribe is what fires the OS prompt.
+ * introspection never prompts — [listen]'s permission **preflight** (#120) is what resolves it, firing
+ * the real OS prompts via [SidecarPermissionPort.request] before the Helper's mic engages, and a
+ * settled denial surfaces as the typed [SpeechError.PermissionDenied] (never a capture-failure guess).
  *
  * **English-only v1 (ADR-0018):** a non-English locale reports [UnavailableReason.UnsupportedLocale]
  * locally, without dialing.
@@ -38,6 +43,7 @@ import kotlinx.coroutines.flow.flow
  */
 internal class SidecarSpeechToText(
     private val port: SidecarSpeechPort,
+    private val permissions: SidecarPermissionPort,
 ) : SpeechToText {
 
     override val id: SpeechEngineId = SpeechEngineId.Sidecar
@@ -65,12 +71,34 @@ internal class SidecarSpeechToText(
             emit(TranscriptEvent.Error(SpeechError.Unavailable))
             return@flow
         }
+        if (permissionsForeclosed()) {
+            emit(TranscriptEvent.Error(SpeechError.PermissionDenied))
+            return@flow
+        }
         try {
             port.transcripts().collect { emit(it.toEvent()) }
         } catch (e: SidecarException) {
             emit(TranscriptEvent.Error(e.toSpeechError()))
         }
     }
+
+    /**
+     * The #120 preflight: resolve Speech + mic **before** engaging the Helper's mic, so a foreclosed
+     * permission surfaces as a typed [SpeechError.PermissionDenied] (→ the New surface's
+     * `PermissionPermanentlyDenied` + settings deep-link) instead of a capture failure. `not_determined`
+     * fires the real OS prompt via [SidecarPermissionPort.request] — Speech first, then mic, the same
+     * order the Helper's own first-use `ensureAuthorized` prompts in — and only a settled
+     * denied/restricted forecloses; `unknown` (no Helper, a Helper that doesn't broker permissions, an
+     * unreadable reply) stays open so the subscribe path can still prompt on first real use.
+     */
+    private suspend fun permissionsForeclosed(): Boolean =
+        listOf(SidecarPermissionCapabilities.Speech, SidecarPermissionCapabilities.Microphone).any { capability ->
+            val settled = when (val now = permissions.status(capability)) {
+                PermissionStatusValue.NOT_DETERMINED -> permissions.request(capability)
+                else -> now
+            }
+            settled == PermissionStatusValue.DENIED || settled == PermissionStatusValue.RESTRICTED
+        }
 
     /** Condense the contract-owned wire event to the domain event at the edge (ADR-0011). */
     private fun TranscriptWire.toEvent(): TranscriptEvent = when (this) {
@@ -81,9 +109,13 @@ internal class SidecarSpeechToText(
 
     /** Map the Helper's non-PII failure reasons onto the seam's [SpeechError] buckets. */
     private fun String.toSpeechError(): SpeechError = when (this) {
-        // The Helper's mic was refused or is already exclusively held (its `engine-busy`).
-        "microphone-permission-denied", "engine-busy" -> SpeechError.Capture
-        // speech-permission-denied / recognizer-unavailable / recognition-failed / anything newer.
+        // The Helper *knows* TCC refused (#120) — typed, not inferred from a capture failure: the
+        // in-stream backstop for a denial that lands mid-flight (revoked in Settings, or settled
+        // denied by the first-use prompt when the preflight read `unknown`).
+        "microphone-permission-denied", "speech-permission-denied" -> SpeechError.PermissionDenied
+        // The Helper's mic is already exclusively held by another dictation (its `engine-busy`).
+        "engine-busy" -> SpeechError.Capture
+        // recognizer-unavailable / recognition-failed / anything newer.
         else -> SpeechError.Engine
     }
 

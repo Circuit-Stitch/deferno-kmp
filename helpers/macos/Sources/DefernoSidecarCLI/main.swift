@@ -28,6 +28,7 @@ struct Options {
     var tokenFile: String?
     var contractFixtures = false
     var fixturePermission: PermissionStatusValue = .granted
+    var fixtureRequestOutcome: PermissionStatusValue = .granted
 }
 
 func parse(_ argv: [String]) -> Options {
@@ -54,6 +55,7 @@ func parse(_ argv: [String]) -> Options {
               --token-file <path>            read the token from a 0600 file
               --contract-fixtures            serve the canned stub-parity responses (no TCC/mic)
               --fixture-permission <status>  canned permission status (granted|denied|…)
+              --fixture-request-outcome <s>  what a requestPermission settles not_determined to (#120)
               --version | --help
             """)
             exit(0)
@@ -64,6 +66,8 @@ func parse(_ argv: [String]) -> Options {
         case "--contract-fixtures": options.contractFixtures = true
         case "--fixture-permission":
             options.fixturePermission = PermissionStatusValue(rawValue: value(arg)) ?? .granted
+        case "--fixture-request-outcome":
+            options.fixtureRequestOutcome = PermissionStatusValue(rawValue: value(arg)) ?? .granted
         default:
             fail("unknown argument: \(arg)")
         }
@@ -110,7 +114,10 @@ do {
 }
 
 let providerFactory: () -> CapabilityProvider = options.contractFixtures
-    ? { CannedCapabilityProvider(permissionStatus: options.fixturePermission) }
+    ? { CannedCapabilityProvider(
+            permissionStatus: options.fixturePermission,
+            requestOutcome: options.fixtureRequestOutcome
+        ) }
     : { RealCapabilityProvider() }
 
 let server = SidecarServer(token: token, providerFactory: providerFactory)

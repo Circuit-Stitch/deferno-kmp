@@ -93,6 +93,15 @@ final class SidecarWireTests: XCTestCase {
         XCTAssertNil(PostNotificationRequest(params: .object(["title": .string("")])))
     }
 
+    func testGoldenRequestPermissionRequestDecodes() throws {
+        guard case .request(let id, let method, let params) = try decodeFrameBody(fixture("request-permission-request.json")) else {
+            return XCTFail("expected request")
+        }
+        XCTAssertEqual(id, 4)
+        XCTAssertEqual(method, SidecarMethods.requestPermission)
+        XCTAssertEqual(params?.string("capability"), SidecarPermissionCapability.microphone)
+    }
+
     func testGoldenStatusItemFixturesDecode() throws {
         guard case .request(let id, let method, let params) = try decodeFrameBody(fixture("set-status-item-request.json")) else {
             return XCTFail("expected request")
