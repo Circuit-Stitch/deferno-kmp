@@ -6,7 +6,7 @@ import com.arkivanov.decompose.router.stack.StackNavigation
 import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.router.stack.replaceAll
 import com.arkivanov.decompose.value.Value
-import com.arkivanov.essenty.lifecycle.doOnDestroy
+import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.SignInService
@@ -22,11 +22,8 @@ import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
 import com.circuitstitch.deferno.feature.signin.DefaultSignInComponent
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -122,8 +119,7 @@ class DefaultRootComponent(
     coroutineContext: CoroutineContext = Dispatchers.Main,
 ) : RootComponent, ComponentContext by componentContext {
 
-    private val scope = CoroutineScope(coroutineContext + SupervisorJob())
-        .also { s -> lifecycle.doOnDestroy { s.cancel() } }
+    private val scope = componentScope(coroutineContext)
 
     private val _themeSettings = MutableStateFlow(UserSettings.Default)
     override val themeSettings: StateFlow<UserSettings> = _themeSettings.asStateFlow()

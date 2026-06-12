@@ -1,15 +1,13 @@
 package com.circuitstitch.deferno.feature.calendar
 
 import com.arkivanov.decompose.ComponentContext
-import com.arkivanov.essenty.lifecycle.doOnDestroy
+import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -82,8 +80,7 @@ class DefaultCalendarComponent(
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : CalendarComponent, ComponentContext by componentContext {
 
-    private val scope: CoroutineScope = CoroutineScope(coroutineContext + SupervisorJob())
-        .also { s -> lifecycle.doOnDestroy { s.cancel() } }
+    private val scope: CoroutineScope = componentScope(coroutineContext)
 
     private val visibleMonth = MutableStateFlow(today.firstOfMonth())
     private val selectedDay = MutableStateFlow(today)

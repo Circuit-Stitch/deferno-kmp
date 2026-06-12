@@ -1,14 +1,12 @@
 package com.circuitstitch.deferno.feature.auth
 
 import com.arkivanov.decompose.ComponentContext
-import com.arkivanov.essenty.lifecycle.doOnDestroy
+import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.MeResult
 import com.circuitstitch.deferno.core.model.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,8 +56,7 @@ class DefaultAuthComponent(
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : AuthComponent, ComponentContext by componentContext {
 
-    private val scope: CoroutineScope = CoroutineScope(coroutineContext + SupervisorJob())
-        .also { s -> lifecycle.doOnDestroy { s.cancel() } }
+    private val scope: CoroutineScope = componentScope(coroutineContext)
 
     private val _state = MutableStateFlow<AuthState>(AuthState.Loading)
     override val state: StateFlow<AuthState> = _state.asStateFlow()

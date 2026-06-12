@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.feature.tasks
 
 import com.arkivanov.decompose.ComponentContext
+import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.task.MIN_SEARCH_QUERY_LENGTH
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.data.task.TaskRepository
