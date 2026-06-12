@@ -84,8 +84,14 @@ internal class WhisperSpeechToText(
             }
         } catch (_: EndOfUtterance) {
             // Normal completion: the speaker stopped, the Final was already emitted.
+        } catch (_: MicPermissionDeniedException) {
+            // macOS TCC refused the app's own mic (#116) — inferred from the failure's shape, since the
+            // Helper can't introspect the JVM app's TCC row. Typed so the New surface offers the System
+            // Settings deep-link, not a retry. Must precede the IllegalStateException catch: it is a
+            // subtype (catchers that don't know denials degrade to Capture).
+            emit(TranscriptEvent.Error(SpeechError.PermissionDenied))
         } catch (_: IllegalStateException) {
-            // The mic line could not capture (no device, line busy, access revoked mid-session).
+            // The mic line could not capture (no device, line busy, seized mid-session).
             emit(TranscriptEvent.Error(SpeechError.Capture))
         } finally {
             WhisperBridge.freeContext(context)

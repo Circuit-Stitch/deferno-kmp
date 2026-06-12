@@ -22,6 +22,9 @@ import javax.sound.sampled.TargetDataLine
  * If no microphone exists, the line can't open, or it's revoked/seized mid-session, the flow fails with an
  * [IllegalStateException] so [WhisperSpeechToText] can surface a [SpeechError.Capture] — the same contract
  * the Android source uses (the OS owns the mic-permission prompt; on desktop the platform gates access).
+ * On macOS, a failure shaped like a TCC access denial fails with the [MicPermissionDeniedException]
+ * subtype instead ([MicCaptureFailures], #116), so the engine surfaces the typed
+ * [SpeechError.PermissionDenied] and the UI offers the System Settings deep-link, not a retry.
  */
 internal class MicAudioSource(
     private val sampleRate: Int = 16_000,
@@ -44,21 +47,22 @@ internal class MicAudioSource(
         val chunkBytes = samplesPerChunk * BYTES_PER_SAMPLE
 
         // getLine throws IllegalArgumentException when no capture line of this type exists (e.g. a headless
-        // box with no mic); open throws LineUnavailableException when the device is missing/busy. Map both
-        // to IllegalStateException so the engine surfaces a single SpeechError.Capture (mirrors Android).
+        // box with no mic); open throws LineUnavailableException when the device is missing/busy/denied;
+        // SecurityException is an access refusal. MicCaptureFailures maps each to the engine's
+        // IllegalStateException contract, denial-shaped ones on macOS to the typed subtype (#116).
         val line: TargetDataLine = try {
             (AudioSystem.getLine(info) as TargetDataLine).also { l ->
                 l.open(format, chunkBytes * LINE_BUFFER_CHUNKS) // a few chunks of headroom against jitter
                 l.start()
             }
         } catch (e: LineUnavailableException) {
-            close(IllegalStateException("Microphone unavailable", e))
+            close(MicCaptureFailures.classify("Microphone unavailable", e))
             return@callbackFlow
         } catch (e: IllegalArgumentException) {
             close(IllegalStateException("No microphone capture line", e))
             return@callbackFlow
         } catch (e: SecurityException) {
-            close(IllegalStateException("Microphone access denied", e))
+            close(MicCaptureFailures.classify("Microphone access denied", e))
             return@callbackFlow
         }
 
@@ -71,7 +75,7 @@ internal class MicAudioSource(
                 trySend(pcm16LeToFloat(buffer, read))
             }
         } catch (e: Exception) {
-            close(IllegalStateException("Microphone read failed", e))
+            close(MicCaptureFailures.classify("Microphone read failed", e))
         }
 
         awaitClose {
