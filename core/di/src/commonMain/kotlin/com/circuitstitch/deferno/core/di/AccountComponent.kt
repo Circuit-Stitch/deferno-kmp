@@ -8,7 +8,6 @@ import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
-import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.model.Account
@@ -55,11 +54,13 @@ abstract class AccountComponent(
     abstract val taskRepository: TaskRepository
     abstract val planRepository: PlanRepository
 
-    /** The user's settings — observed for the Settings Destination + the app-wide live theme (#72). */
+    /**
+     * The user's settings — observed for the Settings Destination + the app-wide live theme (#72).
+     * There is deliberately no `SettingsWriter` accessor: User-setting writes route through the
+     * [commandExecutor] like every other write (#173, ADR-0007), which anchors the settings write
+     * chain's compile-time validation.
+     */
     abstract val settingsRepository: SettingsRepository
-
-    /** The settings write seam (#72): optimistic local apply + outbox enqueue for `PATCH /auth/me/settings`. */
-    abstract val settingsWriter: SettingsWriter
 
     /**
      * The recurring-kind read seams (#71): the local stores are the read interface — reads are local

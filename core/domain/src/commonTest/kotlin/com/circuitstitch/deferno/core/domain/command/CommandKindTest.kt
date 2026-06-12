@@ -45,6 +45,10 @@ class CommandKindTest {
                 CommandKind.MarkOccurrence to "occurrence.mark",
                 CommandKind.ClearOccurrence to "occurrence.clear",
                 CommandKind.RescheduleOccurrence to "occurrence.reschedule",
+                CommandKind.SetTheme to "settings.set-theme",
+                CommandKind.SetTracking to "settings.set-tracking",
+                CommandKind.SetDragAndDrop to "settings.set-drag-and-drop",
+                CommandKind.SetDoneVisibility to "settings.set-done-visibility",
             ),
             CommandKind.entries.associateWith { it.id.value },
         )
@@ -148,25 +152,30 @@ class CommandKindTest {
     }
 
     @Test
-    fun taskPlanCreateAndOccurrenceKindsPartitionTheCatalog() {
-        assertEquals(
-            CommandKind.entries.toSet(),
-            (CommandKind.taskKinds + CommandKind.planKinds + CommandKind.createKinds + CommandKind.occurrenceKinds).toSet(),
+    fun taskPlanCreateOccurrenceAndSettingsKindsPartitionTheCatalog() {
+        val partitions = listOf(
+            CommandKind.taskKinds,
+            CommandKind.planKinds,
+            CommandKind.createKinds,
+            CommandKind.occurrenceKinds,
+            CommandKind.settingsKinds,
         )
-        assertTrue(CommandKind.taskKinds.none { it in CommandKind.planKinds }, "the filters must be disjoint")
-        assertTrue(CommandKind.taskKinds.none { it in CommandKind.createKinds }, "the filters must be disjoint")
-        assertTrue(CommandKind.taskKinds.none { it in CommandKind.occurrenceKinds }, "the filters must be disjoint")
-        assertTrue(CommandKind.planKinds.none { it in CommandKind.createKinds }, "the filters must be disjoint")
-        assertTrue(CommandKind.planKinds.none { it in CommandKind.occurrenceKinds }, "the filters must be disjoint")
-        assertTrue(CommandKind.createKinds.none { it in CommandKind.occurrenceKinds }, "the filters must be disjoint")
+        assertEquals(CommandKind.entries.toSet(), partitions.flatten().toSet())
+        for (i in partitions.indices) {
+            for (j in i + 1 until partitions.size) {
+                assertTrue(partitions[i].none { it in partitions[j] }, "the filters must be disjoint")
+            }
+        }
         assertTrue(CommandKind.planKinds.all { it.category == CommandCategory.Plan })
         assertTrue(CommandKind.createKinds.all { it.category == CommandCategory.Create })
         assertTrue(CommandKind.occurrenceKinds.all { it.category == CommandCategory.Occurrence })
+        assertTrue(CommandKind.settingsKinds.all { it.category == CommandCategory.Settings })
         assertTrue(
             CommandKind.taskKinds.none {
                 it.category == CommandCategory.Plan ||
                     it.category == CommandCategory.Create ||
-                    it.category == CommandCategory.Occurrence
+                    it.category == CommandCategory.Occurrence ||
+                    it.category == CommandCategory.Settings
             },
         )
     }

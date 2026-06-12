@@ -47,6 +47,9 @@ enum class CommandCategory {
 
     /** Acting on one dated firing from the Calendar — mark / clear / reschedule ([CommandKind.MarkOccurrence] …). */
     Occurrence,
+
+    /** The Active Account's User-setting writes ([CommandKind.SetTheme] …) — the backed Settings categories (#173). */
+    Settings,
 }
 
 /**
@@ -112,6 +115,18 @@ enum class CommandKind(
     MarkOccurrence(CommandId("occurrence.mark"), CommandCategory.Occurrence),
     ClearOccurrence(CommandId("occurrence.clear"), CommandCategory.Occurrence),
     RescheduleOccurrence(CommandId("occurrence.reschedule"), CommandCategory.Occurrence),
+
+    // User-setting writes (#173): the Settings Destination's backed categories route through the
+    // registry like every other write — per-field verbs, 1:1 with the `SettingsWriter` seam (the
+    // granularity settled on the issue; matches RenameTask/SetTaskDeadline's grain, never one
+    // PatchSettings). Offline-first (optimistic apply + outbox enqueue, ADR-0001 — Appearance applies
+    // live), so NOT onlineOnly; they target the Account's settings bag (no Task row), so no
+    // [enabledFor] rule applies. Appended at the end (CommandIds are a public contract — never
+    // reorder/rename existing entries).
+    SetTheme(CommandId("settings.set-theme"), CommandCategory.Settings),
+    SetTracking(CommandId("settings.set-tracking"), CommandCategory.Settings),
+    SetDragAndDrop(CommandId("settings.set-drag-and-drop"), CommandCategory.Settings),
+    SetDoneVisibility(CommandId("settings.set-done-visibility"), CommandCategory.Settings),
     ;
 
     /**
@@ -126,9 +141,9 @@ enum class CommandKind(
      * returns `true`: an offline write to an uncached row must never be blocked — it still enqueues and
      * reconciles on replay, matching `OutboxTaskWriter`'s "absent row still enqueues" behaviour.
      *
-     * Edit / schedule / organize / plan kinds always apply (a clear or a relabel is valid in any
-     * state; plan membership is a list concern the caller already knows), so only the status verbs and
-     * the destructive delete carry a real rule.
+     * Edit / schedule / organize / plan / settings kinds always apply (a clear or a relabel is valid in
+     * any state; plan membership is a list concern the caller already knows; a User-setting write has no
+     * Task row at all, #173), so only the status verbs and the destructive delete carry a real rule.
      */
     fun enabledFor(task: Task?): Boolean = when (this) {
         OpenTask -> task == null || task.workingState != WorkingState.Open
@@ -147,7 +162,8 @@ enum class CommandKind(
             get() = entries.filter {
                 it.category != CommandCategory.Plan &&
                     it.category != CommandCategory.Create &&
-                    it.category != CommandCategory.Occurrence
+                    it.category != CommandCategory.Occurrence &&
+                    it.category != CommandCategory.Settings
             }
 
         /** The catalog a Plan view offers. */
@@ -158,5 +174,8 @@ enum class CommandKind(
 
         /** The catalog the Calendar day agenda offers for acting on a firing (#74). */
         val occurrenceKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Occurrence }
+
+        /** The User-setting catalog the Settings Destination's backed categories drive (#173). */
+        val settingsKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Settings }
     }
 }

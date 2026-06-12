@@ -4,7 +4,6 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.outbox.FlushResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
-import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.AddToPlan
 import com.circuitstitch.deferno.core.domain.command.ClearOccurrence
@@ -13,13 +12,20 @@ import com.circuitstitch.deferno.core.domain.command.CommandResult
 import com.circuitstitch.deferno.core.domain.command.CreateItem
 import com.circuitstitch.deferno.core.domain.command.MarkOccurrence
 import com.circuitstitch.deferno.core.domain.command.RescheduleOccurrence
+import com.circuitstitch.deferno.core.domain.command.SetDoneVisibility
+import com.circuitstitch.deferno.core.domain.command.SetDragAndDrop
+import com.circuitstitch.deferno.core.domain.command.SetTheme
+import com.circuitstitch.deferno.core.domain.command.SetTracking
 import com.circuitstitch.deferno.core.domain.command.taskCommandFor
 import com.circuitstitch.deferno.core.di.AccountComponent
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.ThemeFamily
+import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
+import com.circuitstitch.deferno.feature.settings.SettingsEditor
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.datetime.LocalDate
 import kotlin.time.Instant
@@ -43,8 +49,14 @@ interface AccountSession {
      */
     val settingsRepository: SettingsRepository
 
-    /** The settings write seam (#72): optimistic local apply + outbox enqueue for `PATCH /auth/me/settings`. */
-    val settingsWriter: SettingsWriter
+    /**
+     * The User-setting write seam the Settings Destination drives (#72, #173): each backed-category
+     * intent maps to its per-field `SettingsCommand` and dispatches through the command executor
+     * (optimistic local apply + outbox enqueue for `PATCH /auth/me/settings`), so the feature layer
+     * never touches the registry — or `SettingsWriter` — directly (mirrors [workingStateEditor] /
+     * [occurrenceEditor]).
+     */
+    val settingsEditor: SettingsEditor
 
     /** Add [taskId] to the ([date], [tz]) plan — optimistic apply + outbox enqueue (ADR-0001/0007). */
     suspend fun addToPlan(taskId: TaskId, date: LocalDate, tz: String)
@@ -93,7 +105,6 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val taskRepository: TaskRepository get() = component.taskRepository
     override val planRepository: PlanRepository get() = component.planRepository
     override val settingsRepository: SettingsRepository get() = component.settingsRepository
-    override val settingsWriter: SettingsWriter get() = component.settingsWriter
     override val calendarRepository: CalendarRepository get() = component.calendarRepository
 
     override suspend fun addToPlan(taskId: TaskId, date: LocalDate, tz: String) {
@@ -105,6 +116,9 @@ class AccountComponentSession(private val component: AccountComponent) : Account
 
     override val occurrenceEditor: OccurrenceEditor =
         commandOccurrenceEditor(component.commandExecutor)
+
+    override val settingsEditor: SettingsEditor =
+        commandSettingsEditor(component.commandExecutor)
 
     override suspend fun create(payload: CreateItem.Payload): CommandResult =
         component.commandExecutor.execute(CreateItem(payload))
@@ -140,5 +154,31 @@ internal fun commandOccurrenceEditor(executor: CommandExecutor): OccurrenceEdito
 
         override suspend fun reschedule(itemId: String, newDate: LocalDate) {
             executor.execute(RescheduleOccurrence(itemId, newDate))
+        }
+    }
+
+/**
+ * A [SettingsEditor] backed by a [CommandExecutor] (#173): each backed-category intent maps to its
+ * per-field `SettingsCommand` ([SetTheme] / [SetTracking] / [SetDragAndDrop] / [SetDoneVisibility])
+ * and dispatches it through the registry (ADR-0007) — the optimistic apply + outbox enqueue stays
+ * inside `OutboxSettingsWriter` (ADR-0001), only the call path changed. The User-setting mirror of
+ * [commandOccurrenceEditor]; shared by production and tests so the mapping isn't duplicated.
+ */
+internal fun commandSettingsEditor(executor: CommandExecutor): SettingsEditor =
+    object : SettingsEditor {
+        override suspend fun setTheme(family: ThemeFamily, mode: ThemeMode) {
+            executor.execute(SetTheme(family, mode))
+        }
+
+        override suspend fun setTracking(enabled: Boolean) {
+            executor.execute(SetTracking(enabled))
+        }
+
+        override suspend fun setDragAndDrop(enabled: Boolean) {
+            executor.execute(SetDragAndDrop(enabled))
+        }
+
+        override suspend fun setDoneVisibility(globalSeconds: Long?, dashboardSeconds: Long?) {
+            executor.execute(SetDoneVisibility(globalSeconds, dashboardSeconds))
         }
     }

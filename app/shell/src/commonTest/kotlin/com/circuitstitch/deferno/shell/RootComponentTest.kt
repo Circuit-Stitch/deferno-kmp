@@ -9,7 +9,6 @@ import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
-import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
@@ -27,8 +26,8 @@ import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
 import com.circuitstitch.deferno.ui.FakeAuthRepository
+import com.circuitstitch.deferno.ui.FakeSettingsEditor
 import com.circuitstitch.deferno.ui.FakeSettingsRepository
-import com.circuitstitch.deferno.ui.FakeSettingsWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -587,7 +586,7 @@ private class FakeAccountSession(
     override val taskRepository: TaskRepository = DemoTaskRepository(SampleData.tasks),
     override val planRepository: PlanRepository = DemoPlanRepository(emptyList()),
     override val settingsRepository: SettingsRepository = FakeSettingsRepository(),
-    override val settingsWriter: SettingsWriter = FakeSettingsWriter(),
+    override val settingsEditor: com.circuitstitch.deferno.feature.settings.SettingsEditor = FakeSettingsEditor(),
     /** Hook for the driver-ordering test (#143) — runs inside [flushOutbox] before it returns. */
     private val onFlush: () -> Unit = {},
 ) : AccountSession {

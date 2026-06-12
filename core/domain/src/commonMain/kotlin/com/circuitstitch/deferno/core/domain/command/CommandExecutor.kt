@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.data.calendar.OccurrenceWriter
 import com.circuitstitch.deferno.core.data.create.CreateResult
 import com.circuitstitch.deferno.core.data.create.CreateWriter
 import com.circuitstitch.deferno.core.data.plan.PlanWriter
+import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskWriter
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -33,6 +34,7 @@ class CommandExecutor(
     private val planWriter: PlanWriter,
     private val createWriter: CreateWriter,
     private val occurrenceWriter: OccurrenceWriter,
+    private val settingsWriter: SettingsWriter,
 ) {
     /**
      * Run [command], first gating on [CommandKind.enabledFor].
@@ -73,6 +75,12 @@ class CommandExecutor(
             is MarkOccurrence -> occurrenceWriter.mark(command.occurrenceItemId, command.action)
             is ClearOccurrence -> occurrenceWriter.clear(command.occurrenceItemId)
             is RescheduleOccurrence -> occurrenceWriter.reschedule(command.occurrenceItemId, command.newDate)
+            // User-setting writes (#173): per-field verbs, 1:1 with the SettingsWriter seam — offline-first
+            // (the writer optimistically applies to the local cache, so Appearance applies live, + enqueues).
+            is SetTheme -> settingsWriter.setTheme(command.family, command.mode)
+            is SetTracking -> settingsWriter.setTracking(command.enabled)
+            is SetDragAndDrop -> settingsWriter.setDragAndDrop(command.enabled)
+            is SetDoneVisibility -> settingsWriter.setDoneVisibility(command.globalSeconds, command.dashboardSeconds)
         }
         return CommandResult.Accepted(command.kind)
     }

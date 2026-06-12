@@ -3,7 +3,6 @@ package com.circuitstitch.deferno.ui
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.MeResult
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
-import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.HydrationState
@@ -27,6 +26,7 @@ import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileState
+import com.circuitstitch.deferno.feature.settings.SettingsEditor
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
@@ -248,10 +248,11 @@ internal class FakeSettingsRepository(initial: UserSettings = sampleUserSettings
 }
 
 /**
- * In-memory [SettingsWriter] for the shell / Settings View tests (#72). Records each intent and
- * mirrors the optimistic apply into [repo] so the observed settings reflect the write (live-apply).
+ * In-memory [SettingsEditor] for the shell / Settings View tests (#72/#173) — the narrow seam the
+ * Settings Destination drives (command-backed in production). Records each intent and mirrors the
+ * optimistic apply into [repo] so the observed settings reflect the write (live-apply).
  */
-internal class FakeSettingsWriter(private val repo: FakeSettingsRepository = FakeSettingsRepository()) : SettingsWriter {
+internal class FakeSettingsEditor(private val repo: FakeSettingsRepository = FakeSettingsRepository()) : SettingsEditor {
     val themeChanges = mutableListOf<Pair<ThemeFamily, ThemeMode>>()
     val trackingChanges = mutableListOf<Boolean>()
     val dragAndDropChanges = mutableListOf<Boolean>()

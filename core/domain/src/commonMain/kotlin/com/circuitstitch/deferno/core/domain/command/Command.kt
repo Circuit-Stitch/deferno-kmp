@@ -3,6 +3,8 @@ package com.circuitstitch.deferno.core.domain.command
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.ThemeFamily
+import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
 import com.circuitstitch.deferno.core.network.dto.CreateChorePayload
 import com.circuitstitch.deferno.core.network.dto.CreateEventPayload
@@ -253,6 +255,40 @@ data class ClearOccurrence(override val occurrenceItemId: String) : OccurrenceCo
 /** Reschedule a firing to [newDate] (Events only in v1 — habit/chore reschedule is server-unimplemented). */
 data class RescheduleOccurrence(override val occurrenceItemId: String, val newDate: LocalDate) : OccurrenceCommand {
     override val kind: CommandKind get() = CommandKind.RescheduleOccurrence
+}
+
+// --- Settings: the Active Account's UserSettings (#72, #173) — OFFLINE-FIRST, 1:1 with SettingsWriter ---
+//
+// Per-field verbs (the granularity settled on #173): each backed Settings category's write is its own
+// command, matching the catalog's existing grain (RenameTask / SetTaskDeadline — never one PatchTask).
+// They mirror the `SettingsWriter` seam 1:1 — and deliberately echo the outbox's `SettingsMutation`
+// names (`core:data`'s SetTheme/SetTracking/…), so the registry, writer, and queue read identically.
+// The target is the Account's single settings bag (no row id), so the sealed interface carries no
+// operand of its own and [CommandKind.enabledFor] has no per-Task rule to apply — a settings write is
+// valid in any state. Offline-first like the Task edits: optimistic local apply (Appearance applies
+// LIVE — the same `Flow` drives the app-wide theme) + outbox enqueue of `PATCH /auth/me/settings`.
+
+/** A [Command] writing one field-group of the Active Account's `UserSettings` (mirrors `SettingsMutation`). */
+sealed interface SettingsCommand : Command
+
+/** Set the appearance — theme family + mode (Appearance category). Applies live + persists. */
+data class SetTheme(val family: ThemeFamily, val mode: ThemeMode) : SettingsCommand {
+    override val kind: CommandKind get() = CommandKind.SetTheme
+}
+
+/** Toggle analytics/tracking (Data & Privacy category). */
+data class SetTracking(val enabled: Boolean) : SettingsCommand {
+    override val kind: CommandKind get() = CommandKind.SetTracking
+}
+
+/** Toggle the experimental drag-and-drop affordance (Task behavior category). */
+data class SetDragAndDrop(val enabled: Boolean) : SettingsCommand {
+    override val kind: CommandKind get() = CommandKind.SetDragAndDrop
+}
+
+/** Set the done-visibility windows in seconds (Task behavior category); `null` clears a window. */
+data class SetDoneVisibility(val globalSeconds: Long?, val dashboardSeconds: Long?) : SettingsCommand {
+    override val kind: CommandKind get() = CommandKind.SetDoneVisibility
 }
 
 /**

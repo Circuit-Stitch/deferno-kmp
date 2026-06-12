@@ -21,10 +21,11 @@ import kotlin.test.assertTrue
 /**
  * [DefaultSettingsComponent] (#72, ADR-0007 tier 3): the tier-3 drill-down — opening a category pushes
  * its detail child and [onBack] pops cleanly back to the list; the backed-category intents call the
- * writer (and the change is reflected in the observed [SettingsComponent.settings] StateFlow — the
- * live-apply round-trip); the coming-soon categories open a stub detail (no crash, no dead tap); and
- * the host-routed intents (App Permissions / Security 2FA / Account-Profile) emit the right [Output].
- * Driven on [Dispatchers.Unconfined] so the writer's optimistic apply is observable synchronously.
+ * narrow [SettingsEditor] seam (#173 — never `SettingsWriter` directly; the change is reflected in the
+ * observed [SettingsComponent.settings] StateFlow — the live-apply round-trip); the coming-soon
+ * categories open a stub detail (no crash, no dead tap); and the host-routed intents (App Permissions /
+ * Security 2FA / Account-Profile) emit the right [Output]. Driven on [Dispatchers.Unconfined] so the
+ * editor's optimistic apply is observable synchronously.
  */
 class SettingsComponentTest {
 
@@ -32,18 +33,18 @@ class SettingsComponentTest {
         initial: UserSettings = UserSettings.Default,
         output: (SettingsComponent.Output) -> Unit = {},
         speechEngineCatalog: SpeechEngineCatalog = FakeSpeechEngineCatalog(),
-    ): Triple<DefaultSettingsComponent, FakeSettingsRepository, FakeSettingsWriter> {
+    ): Triple<DefaultSettingsComponent, FakeSettingsRepository, FakeSettingsEditor> {
         val repo = FakeSettingsRepository(initial)
-        val writer = FakeSettingsWriter(repo)
+        val editor = FakeSettingsEditor(repo)
         val component = DefaultSettingsComponent(
             componentContext = DefaultComponentContext(LifecycleRegistry()),
             settingsRepository = repo,
-            settingsWriter = writer,
+            settingsEditor = editor,
             output = output,
             speechEngineCatalog = speechEngineCatalog,
             coroutineContext = Dispatchers.Unconfined,
         )
-        return Triple(component, repo, writer)
+        return Triple(component, repo, editor)
     }
 
     /** A catalog offering Automatic + an available Whisper — the Android v1 shape (a real engine present). */
@@ -76,30 +77,30 @@ class SettingsComponentTest {
     }
 
     @Test
-    fun appearanceFamilyAndMode_callTheWriter_andReflectInSettings() {
-        val (component, _, writer) = component(initial = UserSettings.Default)
+    fun appearanceFamilyAndMode_callTheEditor_andReflectInSettings() {
+        val (component, _, editor) = component(initial = UserSettings.Default)
 
         component.onThemeFamilyChanged(ThemeFamily.Mono)
-        assertEquals(listOf(ThemeFamily.Mono to ThemeMode.Auto), writer.themeChanges)
+        assertEquals(listOf(ThemeFamily.Mono to ThemeMode.Auto), editor.themeChanges)
         assertEquals(ThemeFamily.Mono, component.settings.value.themeFamily)
 
         component.onThemeModeChanged(ThemeMode.Dark)
         // The second change carries the already-applied family — independent fields don't clobber.
-        assertEquals(ThemeFamily.Mono to ThemeMode.Dark, writer.themeChanges.last())
+        assertEquals(ThemeFamily.Mono to ThemeMode.Dark, editor.themeChanges.last())
         assertEquals(ThemeMode.Dark, component.settings.value.themeMode)
     }
 
     @Test
-    fun taskBehaviorAndDataPrivacyToggles_callTheWriter() {
-        val (component, _, writer) = component()
+    fun taskBehaviorAndDataPrivacyToggles_callTheEditor() {
+        val (component, _, editor) = component()
 
         component.onDragAndDropChanged(true)
         component.onTrackingChanged(true)
         component.onDoneVisibilityChanged(259200L, 86400L)
 
-        assertEquals(listOf(true), writer.dragAndDropChanges)
-        assertEquals(listOf(true), writer.trackingChanges)
-        assertEquals(listOf<Pair<Long?, Long?>>(259200L to 86400L), writer.doneVisibilityChanges)
+        assertEquals(listOf(true), editor.dragAndDropChanges)
+        assertEquals(listOf(true), editor.trackingChanges)
+        assertEquals(listOf<Pair<Long?, Long?>>(259200L to 86400L), editor.doneVisibilityChanges)
         assertEquals(true, component.settings.value.dragAndDropEnabled)
         assertEquals(true, component.settings.value.trackingEnabled)
     }
@@ -206,7 +207,7 @@ class SettingsComponentTest {
 
         component.onSpeechEngineSelected(SpeechEngineId.Automatic)
 
-        // Persisted device-locally through the catalog (App setting) — NOT the synced SettingsWriter.
+        // Persisted device-locally through the catalog (App setting) — NOT the synced SettingsEditor.
         assertEquals(listOf(SpeechEngineId.Automatic), catalog.selects)
         assertEquals(SpeechEngineId.Automatic, catalog.current)
         assertEquals(SpeechEngineId.Automatic, component.speechEngine.value.selected)

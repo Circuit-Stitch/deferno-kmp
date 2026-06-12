@@ -15,7 +15,6 @@ import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
-import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.Account
@@ -36,6 +35,7 @@ import com.circuitstitch.deferno.feature.profile.DefaultProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.settings.DefaultSettingsComponent
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
+import com.circuitstitch.deferno.feature.settings.SettingsEditor
 import com.circuitstitch.deferno.feature.tasks.DefaultSearchComponent
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
@@ -209,7 +209,9 @@ class DefaultMainShellComponent(
     private val planRepository: PlanRepository,
     private val authRepository: AuthRepository,
     private val settingsRepository: SettingsRepository,
-    private val settingsWriter: SettingsWriter,
+    // The Settings Destination's User-setting write seam (#72/#173): command-backed in production
+    // (AccountSession routes each intent through the command executor, ADR-0007).
+    private val settingsEditor: SettingsEditor,
     private val account: Account,
     private val today: LocalDate,
     private val timeZone: String,
@@ -370,7 +372,7 @@ class DefaultMainShellComponent(
                     DefaultSettingsComponent(
                         componentContext = childContext,
                         settingsRepository = settingsRepository,
-                        settingsWriter = settingsWriter,
+                        settingsEditor = settingsEditor,
                         output = ::onSettingsOutput,
                         // The device-local speech-engine App setting (#93) + the device locale its
                         // availability is queried for — sourced from AppScope, not this Account's settings.

@@ -11,7 +11,6 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
-import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.ThemeFamily
@@ -24,6 +23,7 @@ import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import com.circuitstitch.deferno.feature.settings.DefaultSettingsComponent
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
+import com.circuitstitch.deferno.feature.settings.SettingsEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,21 +35,21 @@ import kotlin.test.assertTrue
  * The desktop Settings render test (#85, cf. #39) — a Compose-Multiplatform UI test on the JVM-fast path
  * (no device) over a real [DefaultSettingsComponent] + in-memory settings fakes. It covers the category
  * list (the coming-soon rows present, the App Permissions row omitted on desktop), the Appearance detail
- * (choosing a theme family persists through the writer — the live re-theme signal), and a coming-soon
- * stub detail. The drill-down/back logic itself is unit-tested in feature:settings.
+ * (choosing a theme family persists through the editor seam, #173 — the live re-theme signal), and a
+ * coming-soon stub detail. The drill-down/back logic itself is unit-tested in feature:settings.
  */
 @OptIn(ExperimentalTestApi::class)
 class SettingsDesktopScreenTest {
 
     private fun component(
         repo: FakeSettingsRepository,
-        writer: FakeSettingsWriter,
+        editor: FakeSettingsEditor,
         category: SettingsCategory? = null,
         speechEngineCatalog: SpeechEngineCatalog = FakeSpeechEngineCatalog(),
     ): SettingsComponent = DefaultSettingsComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         settingsRepository = repo,
-        settingsWriter = writer,
+        settingsEditor = editor,
         speechEngineCatalog = speechEngineCatalog,
         coroutineContext = Dispatchers.Unconfined,
     ).also { if (category != null) it.openCategory(category) }
@@ -57,7 +57,7 @@ class SettingsDesktopScreenTest {
     @Test
     fun categoryList_showsComingSoonRows_omitsAppPermissions() = runComposeUiTest {
         val repo = FakeSettingsRepository()
-        setContent { Themed { SettingsDesktopScreen(component(repo, FakeSettingsWriter(repo))) } }
+        setContent { Themed { SettingsDesktopScreen(component(repo, FakeSettingsEditor(repo))) } }
 
         onNodeWithText("Appearance").assertExists()
         // The two unbacked categories render as coming-soon rows (no dead ends, ADR-0015).
@@ -82,7 +82,7 @@ class SettingsDesktopScreenTest {
             ),
         )
         setContent {
-            Themed { SettingsDesktopScreen(component(repo, FakeSettingsWriter(repo), speechEngineCatalog = catalog)) }
+            Themed { SettingsDesktopScreen(component(repo, FakeSettingsEditor(repo), speechEngineCatalog = catalog)) }
         }
 
         onNodeWithText("Speech engine").performClick()
@@ -92,22 +92,22 @@ class SettingsDesktopScreenTest {
     }
 
     @Test
-    fun appearanceDetail_choosingMono_persistsThroughWriter() = runComposeUiTest {
+    fun appearanceDetail_choosingMono_persistsThroughEditor() = runComposeUiTest {
         val repo = FakeSettingsRepository()
-        val writer = FakeSettingsWriter(repo)
-        setContent { Themed { SettingsDesktopScreen(component(repo, writer, SettingsCategory.Appearance)) } }
+        val editor = FakeSettingsEditor(repo)
+        setContent { Themed { SettingsDesktopScreen(component(repo, editor, SettingsCategory.Appearance)) } }
 
         onNodeWithText("Theme").assertExists()
         onNodeWithText("Mono").performClick()
         // The live re-theme signal: the same UserSettings flow drives the desktop window's theme.
-        assertTrue(writer.themeChanges.any { it.first == ThemeFamily.Mono })
+        assertTrue(editor.themeChanges.any { it.first == ThemeFamily.Mono })
     }
 
     @Test
     fun integrationsDetail_showsComingSoonStub() = runComposeUiTest {
         val repo = FakeSettingsRepository()
         setContent {
-            Themed { SettingsDesktopScreen(component(repo, FakeSettingsWriter(repo), SettingsCategory.Integrations)) }
+            Themed { SettingsDesktopScreen(component(repo, FakeSettingsEditor(repo), SettingsCategory.Integrations)) }
         }
         onNodeWithText("Coming soon").assertExists()
     }
@@ -127,8 +127,8 @@ private class FakeSettingsRepository(initial: UserSettings = UserSettings.Defaul
     override suspend fun refresh() { /* offline fake: nothing to pull */ }
 }
 
-/** In-memory [SettingsWriter] recording each theme write + mirroring the optimistic apply into [repo]. */
-private class FakeSettingsWriter(private val repo: FakeSettingsRepository) : SettingsWriter {
+/** In-memory [SettingsEditor] recording each theme write + mirroring the optimistic apply into [repo]. */
+private class FakeSettingsEditor(private val repo: FakeSettingsRepository) : SettingsEditor {
     val themeChanges = mutableListOf<Pair<ThemeFamily, ThemeMode>>()
 
     override suspend fun setTheme(family: ThemeFamily, mode: ThemeMode) {

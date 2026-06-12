@@ -4,6 +4,8 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.ThemeFamily
+import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
@@ -43,6 +45,10 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.MarkOccurrence -> MarkOccurrence("ce-1", OccurrenceAction.Complete)
     CommandKind.ClearOccurrence -> ClearOccurrence("ce-1")
     CommandKind.RescheduleOccurrence -> RescheduleOccurrence("ce-1", SAMPLE_DATE)
+    CommandKind.SetTheme -> SetTheme(ThemeFamily.Mono, ThemeMode.Dark)
+    CommandKind.SetTracking -> SetTracking(enabled = true)
+    CommandKind.SetDragAndDrop -> SetDragAndDrop(enabled = true)
+    CommandKind.SetDoneVisibility -> SetDoneVisibility(259200L, 86400L)
 }
 
 /** Concise [Task] fixture for the enablement tests. */

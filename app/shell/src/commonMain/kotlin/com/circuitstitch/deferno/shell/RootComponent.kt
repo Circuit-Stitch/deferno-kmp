@@ -215,7 +215,7 @@ class DefaultRootComponent(
                         planRepository = session.planRepository,
                         authRepository = authRepository,
                         settingsRepository = session.settingsRepository,
-                        settingsWriter = session.settingsWriter,
+                        settingsEditor = session.settingsEditor,
                         account = account,
                         today = today,
                         timeZone = timeZone,
