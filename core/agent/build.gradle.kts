@@ -20,6 +20,8 @@ kotlin {
         commonMain.dependencies {
             // The DI scope markers (AppScope) the @ContributesTo InferenceEngine binding references.
             api(project(":core:scopes"))
+            // Extractor proposals reuse the shared Item vocabulary and date/time domain types.
+            api(project(":core:model"))
             // `api`: KSerializer appears on the seam's public surface (InferenceSchema), so the
             // serialization runtime must reach every consumer (the json artifact api-exposes core).
             api(libs.kotlinx.serialization.json)

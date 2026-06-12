@@ -8,6 +8,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
@@ -32,8 +33,8 @@ class KoogInferenceEngineTest {
 
     private val expected = DraftTasks(
         drafts = listOf(
-            Draft(title = "Mow the lawn", productive = true),
-            Draft(title = "Sharpen the mower blades", completeBy = "2026-06-12"),
+            DraftTask(id = "mow", title = "Mow the lawn", productive = 1.0),
+            DraftTask(id = "sharpen", title = "Sharpen the mower blades", completeBy = LocalDate(2026, 6, 12)),
         ),
     )
 
