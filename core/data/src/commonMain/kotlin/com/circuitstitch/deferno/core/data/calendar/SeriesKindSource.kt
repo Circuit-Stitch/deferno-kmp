@@ -1,8 +1,8 @@
 package com.circuitstitch.deferno.core.data.calendar
 
-import com.circuitstitch.deferno.core.data.chore.ChoreRepository
-import com.circuitstitch.deferno.core.data.event.EventRepository
-import com.circuitstitch.deferno.core.data.habit.HabitRepository
+import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
+import com.circuitstitch.deferno.core.data.event.EventLocalStore
+import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.model.ItemKind
 import kotlinx.coroutines.flow.first
 
@@ -22,20 +22,20 @@ fun interface SeriesKindSource {
 }
 
 /**
- * The production [SeriesKindSource] over the three recurring-definition repositories (#71). It takes a
- * one-shot snapshot of each repo's observe `Flow` ([first]) and tags every id with its kind.
+ * The production [SeriesKindSource] over the three recurring-definition local stores (#71). It takes a
+ * one-shot snapshot of each store's active-definition `Flow` ([first]) and tags every id with its kind.
  */
-class RepositorySeriesKindSource(
-    private val habits: HabitRepository,
-    private val chores: ChoreRepository,
-    private val events: EventRepository,
+class LocalStoreSeriesKindSource(
+    private val habits: HabitLocalStore,
+    private val chores: ChoreLocalStore,
+    private val events: EventLocalStore,
 ) : SeriesKindSource {
 
     override suspend fun currentSeriesKinds(): Map<String, ItemKind> {
         val index = mutableMapOf<String, ItemKind>()
-        habits.observeHabits().first().forEach { index[it.id.value] = ItemKind.Habit }
-        chores.observeChores().first().forEach { index[it.id.value] = ItemKind.Chore }
-        events.observeEvents().first().forEach { index[it.id.value] = ItemKind.Event }
+        habits.observeActive().first().forEach { index[it.id.value] = ItemKind.Habit }
+        chores.observeActive().first().forEach { index[it.id.value] = ItemKind.Chore }
+        events.observeActive().first().forEach { index[it.id.value] = ItemKind.Event }
         return index
     }
 }
