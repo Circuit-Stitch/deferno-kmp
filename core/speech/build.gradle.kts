@@ -53,10 +53,11 @@ kotlin {
             // the engine is internal to this module; the native jar still reaches the desktop app's runtime
             // classpath transitively, and the model ships in the installer (ADR-0019).
             implementation(libs.whisper.jni)
-            // The Sidecar client (#119, ADR-0024/0025): SidecarSpeechToText drives the native Helper's
-            // dictation stream over the peer-authenticated socket. `api` because the JvmSpeechBindings
-            // @Provides signatures name SidecarClient, which the merged AppComponent (core/di) compiles
-            // against. JVM-only by design — the Helpers are native processes (ADR-0025).
+            // The Sidecar substrate (#119, ADR-0024/0025): SidecarSpeechToText consumes the typed
+            // SidecarSpeechPort (the capability-port seam — wire mechanics stay in core/sidecar).
+            // `api` because the JvmSpeechBindings @Provides signatures name SidecarClient and
+            // DefaultSidecarSpeechPort, which the merged AppComponent (core/di) compiles against.
+            // JVM-only by design — the Helpers are native processes (ADR-0025).
             api(project(":core:sidecar"))
         }
 

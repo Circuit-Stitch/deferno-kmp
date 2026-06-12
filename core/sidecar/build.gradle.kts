@@ -14,10 +14,10 @@ plugins {
 
 dependencies {
     // The wire contract: a polymorphic sealed Frame hierarchy + JsonElement payloads, decoded with a
-    // tolerant reader (ADR-0005), mirroring core/network's DTO layer. `api`: JsonElement is part of the
-    // public client surface (request/openStream params, stream events) and SidecarJson is the canonical
-    // codec a consumer (#119's SidecarSpeechToText) decodes those events with.
-    api(libs.kotlinx.serialization.json)
+    // tolerant reader (ADR-0005), mirroring core/network's DTO layer. `implementation`, deliberately:
+    // the wire mechanics (SidecarJson, JsonElement payloads) stay inside this module's capability ports
+    // (SidecarSpeechPort, SidecarNotificationPort, …) — a consumer sees typed wire DTOs, never the codec.
+    implementation(libs.kotlinx.serialization.json)
     // Flow / StateFlow / SharedFlow are part of the public client surface (openStream, pushes, state),
     // so `api` keeps them on consumers' compile classpath.
     api(libs.kotlinx.coroutines.core)

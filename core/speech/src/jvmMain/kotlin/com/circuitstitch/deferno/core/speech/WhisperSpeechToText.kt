@@ -40,13 +40,13 @@ internal class WhisperSpeechToText(
     override val supportsContinuous: Boolean = true
 
     override suspend fun availability(locale: String): SpeechAvailability = when {
-        !locale.isEnglish() -> SpeechAvailability.Unavailable(UnavailableReason.UnsupportedLocale)
+        !locale.isEnglishLocale() -> SpeechAvailability.Unavailable(UnavailableReason.UnsupportedLocale)
         modelLocator.modelPath() == null -> SpeechAvailability.Unavailable(UnavailableReason.ModelMissing)
         else -> SpeechAvailability.Available
     }
 
     override fun listen(locale: String, continuityHint: ContinuityHint): Flow<TranscriptEvent> = flow {
-        if (!locale.isEnglish()) {
+        if (!locale.isEnglishLocale()) {
             emit(TranscriptEvent.Error(SpeechError.Unavailable))
             return@flow
         }
@@ -104,7 +104,6 @@ internal class WhisperSpeechToText(
         return out
     }
 
-    private fun String.isEnglish(): Boolean = lowercase().startsWith("en")
 
     /** Control-flow sentinel that ends the capture loop once the utterance settles (caught locally). */
     private class EndOfUtterance : RuntimeException() {

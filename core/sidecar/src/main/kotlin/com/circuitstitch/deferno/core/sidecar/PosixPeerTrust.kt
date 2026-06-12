@@ -37,22 +37,10 @@ class PosixPeerTrust(
             // A non-POSIX filesystem — the wrong PeerTrust for this OS (a Windows pipe needs an ACL check).
             throw SidecarSecurityException("cannot verify POSIX permissions of $address", e)
         }
-        if (perms.any { it in NON_OWNER_PERMISSIONS }) {
+        if (!perms.isOwnerOnly()) {
             throw SidecarSecurityException(
                 "Sidecar socket at $address is group/other-accessible (must be owner-only): $perms",
             )
         }
-    }
-
-    private companion object {
-        /** Any of these set means the socket is reachable beyond its owner — rejected. */
-        val NON_OWNER_PERMISSIONS: Set<PosixFilePermission> = setOf(
-            PosixFilePermission.GROUP_READ,
-            PosixFilePermission.GROUP_WRITE,
-            PosixFilePermission.GROUP_EXECUTE,
-            PosixFilePermission.OTHERS_READ,
-            PosixFilePermission.OTHERS_WRITE,
-            PosixFilePermission.OTHERS_EXECUTE,
-        )
     }
 }

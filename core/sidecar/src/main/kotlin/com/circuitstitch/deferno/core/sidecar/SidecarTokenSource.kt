@@ -3,7 +3,6 @@ package com.circuitstitch.deferno.core.sidecar
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.attribute.PosixFilePermission
 
 /**
  * Resolves the in-band auth token the client sends in its [SidecarFrame.Hello] (peer-auth leg 2,
@@ -57,16 +56,6 @@ object SidecarTokenSource {
         }.getOrNull() ?: return false
         if (owner != expected) return false
         val perms = runCatching { Files.getPosixFilePermissions(path) }.getOrNull() ?: return false
-        return perms.none { it in NON_OWNER_PERMISSIONS }
+        return perms.isOwnerOnly() // the same predicate PosixPeerTrust applies to the socket path
     }
-
-    /** Any of these set means the token file is readable/plantable beyond its owner — refused. */
-    private val NON_OWNER_PERMISSIONS: Set<PosixFilePermission> = setOf(
-        PosixFilePermission.GROUP_READ,
-        PosixFilePermission.GROUP_WRITE,
-        PosixFilePermission.GROUP_EXECUTE,
-        PosixFilePermission.OTHERS_READ,
-        PosixFilePermission.OTHERS_WRITE,
-        PosixFilePermission.OTHERS_EXECUTE,
-    )
 }

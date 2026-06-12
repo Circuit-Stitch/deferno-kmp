@@ -1,6 +1,6 @@
 package com.circuitstitch.deferno.core.sidecar
 
-import java.nio.file.FileSystems
+import com.circuitstitch.deferno.core.sidecar.SidecarTestHarness.Companion.posixSupported
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
@@ -107,7 +107,4 @@ class SidecarTokenSourceTest {
         Files.setPosixFilePermissions(file, PosixFilePermissions.fromString(perms))
         return file
     }
-
-    private fun posixSupported(): Boolean =
-        FileSystems.getDefault().supportedFileAttributeViews().contains("posix")
 }

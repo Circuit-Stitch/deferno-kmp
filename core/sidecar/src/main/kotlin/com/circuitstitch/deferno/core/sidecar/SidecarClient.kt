@@ -83,7 +83,13 @@ sealed interface SidecarConnectionState {
 
 /**
  * Convenience constructor for the production wiring (ADR-0024): a client over an AF_UNIX socket at
- * [path], authenticating with the in-band [token]. (#119 wires this into the DI graph.)
+ * [path], authenticating with the in-band token. The [token] supplier is evaluated **per handshake**,
+ * so a token provisioned after startup (the #122 first-run LaunchAgent install) authenticates on the
+ * next re-dial without an app restart. (#119 wires this into the DI graph.)
  */
-fun unixSocketSidecarClient(path: Path, token: String): SidecarClient =
+fun unixSocketSidecarClient(path: Path, token: () -> String): SidecarClient =
     DefaultSidecarClient(UnixSocketTransport(path), token)
+
+/** [unixSocketSidecarClient] with a fixed [token] (tests, dev runs with a known secret). */
+fun unixSocketSidecarClient(path: Path, token: String): SidecarClient =
+    unixSocketSidecarClient(path) { token }

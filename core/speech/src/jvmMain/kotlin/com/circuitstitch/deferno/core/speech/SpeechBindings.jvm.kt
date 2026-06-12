@@ -1,10 +1,8 @@
 package com.circuitstitch.deferno.core.speech
 
 import com.circuitstitch.deferno.core.scopes.AppScope
+import com.circuitstitch.deferno.core.sidecar.DefaultSidecarSpeechPort
 import com.circuitstitch.deferno.core.sidecar.SidecarClient
-import com.circuitstitch.deferno.core.sidecar.SidecarSocketPath
-import com.circuitstitch.deferno.core.sidecar.SidecarTokenSource
-import com.circuitstitch.deferno.core.sidecar.unixSocketSidecarClient
 import com.russhwolf.settings.PreferencesSettings
 import me.tatarka.inject.annotations.IntoSet
 import me.tatarka.inject.annotations.Provides
@@ -24,13 +22,11 @@ import java.util.prefs.Preferences
  * - the Sidecar-hosted native fast path ([SidecarSpeechToText], #119, ADR-0024) — ranked above the
  *   floor, Available only when a native Helper is bound at the well-known socket and reports the
  *   speech engine genuinely ready (so on Linux/Windows, or a Mac without the Helper, the selector
- *   simply keeps whisper).
+ *   simply keeps whisper). It speaks through its [DefaultSidecarSpeechPort] over the **process-wide
+ *   [SidecarClient]** — provided by core/di's `SidecarBindings` (one socket, one handshake, shared
+ *   with the #120 permission ports and future capability ports), not owned by this module.
  *
- * The [SidecarClient] is itself an AppScope singleton (one socket, one handshake, shared by the
- * engine now and the #120 permission ports / future capability ports later), dialing the per-OS
- * well-known path with the out-of-band token ([SidecarTokenSource]; an unprovisioned token resolves
- * empty and the handshake simply fails → graceful degradation, never an error). The engine
- * [[App setting]] is backed by `java.util.prefs` (the cross-desktop store).
+ * The engine [[App setting]] is backed by `java.util.prefs` (the cross-desktop store).
  */
 @ContributesTo(AppScope::class)
 interface JvmSpeechBindings {
@@ -42,12 +38,8 @@ interface JvmSpeechBindings {
     @Provides
     @IntoSet
     @SingleIn(AppScope::class)
-    fun sidecarSpeechEngine(client: SidecarClient): SpeechToText = SidecarSpeechToText(client)
-
-    @Provides
-    @SingleIn(AppScope::class)
-    fun sidecarClient(): SidecarClient =
-        unixSocketSidecarClient(SidecarSocketPath.default(), SidecarTokenSource.resolve().orEmpty())
+    fun sidecarSpeechEngine(client: SidecarClient): SpeechToText =
+        SidecarSpeechToText(DefaultSidecarSpeechPort(client))
 
     @Provides
     @SingleIn(AppScope::class)

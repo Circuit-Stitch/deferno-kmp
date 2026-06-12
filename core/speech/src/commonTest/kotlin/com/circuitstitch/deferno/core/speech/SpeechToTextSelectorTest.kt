@@ -44,6 +44,32 @@ class SpeechToTextSelectorTest {
     }
 
     @Test
+    fun anAbsentFastPath_neverMasksARealEnginesReason() = runTest {
+        // Fresh desktop install, no Helper: the higher-ranked sidecar engine reports NotInstalled (its
+        // permanent normal state off-macOS) while whisper's model is still arriving. The surfaced reason
+        // must be the actionable ModelMissing ("Downloading…"), not the fast path's permanent absence.
+        val whisper = FakeSpeechToText(whisperId, rank = 0, availability = SpeechAvailability.Unavailable(UnavailableReason.ModelMissing))
+        val native = FakeSpeechToText(nativeId, rank = 10, availability = SpeechAvailability.Unavailable(UnavailableReason.NotInstalled))
+        val selector = selector(whisper, native)
+
+        assertEquals(
+            SpeechAvailability.Unavailable(UnavailableReason.ModelMissing),
+            selector.availability("en-US"),
+        )
+    }
+
+    @Test
+    fun notInstalledSurfaces_whenEveryEngineIsAbsent() = runTest {
+        val native = FakeSpeechToText(nativeId, rank = 10, availability = SpeechAvailability.Unavailable(UnavailableReason.NotInstalled))
+        val selector = selector(native)
+
+        assertEquals(
+            SpeechAvailability.Unavailable(UnavailableReason.NotInstalled),
+            selector.availability("en-US"),
+        )
+    }
+
+    @Test
     fun whisperIsTheFloor_chosenWhenItIsTheOnlyAvailableEngine() = runTest {
         val whisper = FakeSpeechToText(whisperId, rank = 0, availability = SpeechAvailability.Available)
         val native = FakeSpeechToText(nativeId, rank = 10, availability = SpeechAvailability.Unavailable(UnavailableReason.NotReady))

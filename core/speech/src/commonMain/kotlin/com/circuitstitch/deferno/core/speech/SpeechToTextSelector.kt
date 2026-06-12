@@ -35,13 +35,18 @@ class SpeechToTextSelector(
      * is [SpeechAvailability.Available] when some engine could be selected for a normal utterance;
      * otherwise it surfaces the highest-ranked engine's [SpeechAvailability.Unavailable] reason (so the
      * UI can say *why* — model still arriving, English-only, …), or [UnavailableReason.NoEngine] when
-     * none is registered.
+     * none is registered. One exception: an **absent optional fast path**
+     * ([UnavailableReason.NotInstalled] — e.g. the Sidecar engine on a machine with no Helper, its
+     * permanent normal state) never masks a real engine's actionable reason; it surfaces only when
+     * every registered engine is absent.
      */
     override suspend fun availability(locale: String): SpeechAvailability {
         if (select(locale, ContinuityHint.Utterance) != null) return SpeechAvailability.Available
-        val fallbackReason = engines
-            .maxByOrNull { it.rank }
-            ?.let { (it.availability(locale) as? SpeechAvailability.Unavailable)?.reason }
+        val reasons = engines
+            .sortedByDescending { it.rank }
+            .mapNotNull { (it.availability(locale) as? SpeechAvailability.Unavailable)?.reason }
+        val fallbackReason = reasons.firstOrNull { it != UnavailableReason.NotInstalled }
+            ?: reasons.firstOrNull()
             ?: UnavailableReason.NoEngine
         return SpeechAvailability.Unavailable(fallbackReason)
     }
