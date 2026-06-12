@@ -68,6 +68,14 @@ value class SpeechEngineId(val value: String) {
          */
         val Automatic: SpeechEngineId = SpeechEngineId("automatic")
 
+        /**
+         * The Sidecar-hosted native recognizer (ADR-0024): dictation runs in the per-OS native Helper
+         * (SFSpeechRecognizer on macOS, #121) and streams Transcript text — never PCM — over the
+         * peer-authenticated socket. Registered on the JVM target only; outranks [Whisper] when the
+         * Helper reports genuinely ready (#119).
+         */
+        val Sidecar: SpeechEngineId = SpeechEngineId("sidecar")
+
         /** The composite [SpeechToTextSelector] itself (the app-facing engine over all registered engines). */
         val Selector: SpeechEngineId = SpeechEngineId("selector")
 

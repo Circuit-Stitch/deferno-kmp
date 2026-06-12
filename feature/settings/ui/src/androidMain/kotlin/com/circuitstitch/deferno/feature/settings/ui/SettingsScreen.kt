@@ -544,6 +544,9 @@ private fun speechEngineNote(option: SpeechEngineOption): String? = when (option
             UnavailableReason.UnsupportedLocale -> "Not available for your language"
             UnavailableReason.NoEngine -> "Not available on this device"
             UnavailableReason.NotReady -> "Preparing…"
+            // An absent optional fast path (a Sidecar engine never registers on Android today, but the
+            // reason is platform-neutral) — permanent, never the transient "Preparing…".
+            UnavailableReason.NotInstalled -> "Not available on this device"
         }
     }
 }

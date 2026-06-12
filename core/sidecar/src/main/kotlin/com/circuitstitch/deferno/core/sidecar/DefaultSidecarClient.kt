@@ -40,7 +40,12 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class DefaultSidecarClient(
     private val transport: Transport,
-    private val token: String,
+    /**
+     * Resolved **per handshake**, not at construction: the client re-dials whenever a Helper (re)binds
+     * the socket, and a token provisioned after startup (the #122 first-run LaunchAgent install) must
+     * authenticate on that re-dial without an app restart.
+     */
+    private val token: () -> String,
     private val protocolVersion: Int = SIDECAR_PROTOCOL_VERSION,
     private val handshakeTimeoutMillis: Long = 5_000,
     parentScope: CoroutineScope? = null,
@@ -94,7 +99,7 @@ class DefaultSidecarClient(
             val sess = Session(connection)
             sess.readerJob = scope.launch { runReader(sess) }
             try {
-                writeFrame(sess, SidecarFrame.Hello(token, protocolVersion))
+                writeFrame(sess, SidecarFrame.Hello(token(), protocolVersion))
                 val welcome = withTimeout(handshakeTimeoutMillis) { sess.handshake.await() }
                 sess.capabilities = welcome.capabilities
                 session = sess

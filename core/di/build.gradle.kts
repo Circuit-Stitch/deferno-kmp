@@ -36,5 +36,12 @@ kotlin {
             // `speechToText: SpeechToText` for the shell's Dictation surface, leaking the seam type.
             api(project(":core:speech"))
         }
+
+        jvmMain.dependencies {
+            // The JVM-only Sidecar substrate (ADR-0024/0025): SidecarBindings provides the process-wide
+            // SidecarClient every capability port shares (#119 speech now, #120 permissions next). `api`
+            // because SidecarClient appears on the bindings' (merged-component) public surface.
+            api(project(":core:sidecar"))
+        }
     }
 }

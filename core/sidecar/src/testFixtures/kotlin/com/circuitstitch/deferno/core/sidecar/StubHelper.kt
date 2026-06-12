@@ -56,13 +56,7 @@ import java.util.concurrent.ConcurrentHashMap
 class StubHelper(
     val path: Path,
     private val expectedToken: String,
-    private val capabilities: Set<String> = setOf(
-        SidecarCapabilities.Permissions,
-        SidecarCapabilities.SpeechTranscribe,
-        SidecarCapabilities.Notifications,
-        SidecarCapabilities.StatusItem,
-        SidecarCapabilities.Hotkeys,
-    ),
+    private val capabilities: Set<String> = DEFAULT_CAPABILITIES,
 ) : AutoCloseable {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -322,7 +316,16 @@ class StubHelper(
         }
     }
 
-    private companion object {
-        const val STREAM_GAP_MILLIS = 50L
+    companion object {
+        /** Everything the full reference Helper advertises (#118/#123/#125) — the constructor default. */
+        val DEFAULT_CAPABILITIES: Set<String> = setOf(
+            SidecarCapabilities.Permissions,
+            SidecarCapabilities.SpeechTranscribe,
+            SidecarCapabilities.Notifications,
+            SidecarCapabilities.StatusItem,
+            SidecarCapabilities.Hotkeys,
+        )
+
+        private const val STREAM_GAP_MILLIS = 50L
     }
 }
