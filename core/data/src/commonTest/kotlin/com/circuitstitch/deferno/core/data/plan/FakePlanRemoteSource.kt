@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.plan
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.datetime.LocalDate
 
@@ -13,8 +14,8 @@ class FakePlanRemoteSource(
     var failNext: Boolean = false,
 ) : PlanRemoteSource {
 
-    override suspend fun fetchPlan(date: LocalDate, tz: String): List<TaskId>? {
-        if (failNext) return null
-        return plan
+    override suspend fun fetchPlan(date: LocalDate, tz: String): RemoteSnapshot<List<TaskId>> {
+        if (failNext) return RemoteSnapshot.Unavailable
+        return RemoteSnapshot.Available(plan)
     }
 }

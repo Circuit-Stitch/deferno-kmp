@@ -1,8 +1,10 @@
 package com.circuitstitch.deferno.core.data.plan
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
+import com.circuitstitch.deferno.core.data.asSnapshot
 import com.circuitstitch.deferno.core.model.TaskId
-import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.TaskSummaryDto
+import com.circuitstitch.deferno.core.network.map
 import com.circuitstitch.deferno.core.network.requestApi
 import io.ktor.client.HttpClient
 import io.ktor.client.request.parameter
@@ -24,15 +26,12 @@ class KtorPlanRemoteSource(
     private val client: HttpClient,
 ) : PlanRemoteSource {
 
-    override suspend fun fetchPlan(date: LocalDate, tz: String): List<TaskId>? {
-        val result = client.requestApi<List<TaskSummaryDto>> {
+    override suspend fun fetchPlan(date: LocalDate, tz: String): RemoteSnapshot<List<TaskId>> =
+        client.requestApi<List<TaskSummaryDto>> {
             url { appendPathSegments("tasks", "plan") }
             parameter("date", date.toString())
             parameter("tz", tz)
         }
-        return when (result) {
-            is ApiResult.Success -> result.data.map { TaskId(it.id) }
-            is ApiResult.Failure -> null
-        }
-    }
+            .map { summaries -> summaries.map { TaskId(it.id) } }
+            .asSnapshot()
 }

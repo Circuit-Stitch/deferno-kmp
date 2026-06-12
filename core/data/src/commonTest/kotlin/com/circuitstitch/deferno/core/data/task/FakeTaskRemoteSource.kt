@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 
@@ -21,9 +22,9 @@ class FakeTaskRemoteSource(
     var lastSearchQuery: TaskSearchQuery? = null
         private set
 
-    override suspend fun fetchAll(): List<Task> {
-        if (failNext) return emptyList()
-        return snapshot
+    override suspend fun fetchAll(): RemoteSnapshot<List<Task>> {
+        if (failNext) return RemoteSnapshot.Unavailable
+        return RemoteSnapshot.Available(snapshot)
     }
 
     override suspend fun fetch(id: TaskId): Task? {

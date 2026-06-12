@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.settings
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import io.ktor.client.HttpClient
@@ -19,7 +20,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -43,22 +43,22 @@ class KtorSettingsRemoteSourceTest {
         var captured: HttpRequestData? = null
         val source = KtorSettingsRemoteSource(client { req -> captured = req; respondJson(settingsEnvelope) })
 
-        val settings = source.fetchSettings()
+        val settings = (source.fetchSettings() as RemoteSnapshot.Available).value
 
         assertTrue(captured?.url?.encodedPath?.endsWith("/auth/me/settings") == true)
-        assertEquals(ThemeFamily.Mono, settings?.themeFamily)
-        assertEquals(ThemeMode.Dark, settings?.themeMode)
-        assertEquals("America/Los_Angeles", settings?.timeZone)
-        assertEquals(259200L, settings?.globalDoneVisibilitySeconds)
-        assertEquals(true, settings?.trackingEnabled)
-        assertEquals(true, settings?.dragAndDropEnabled)
+        assertEquals(ThemeFamily.Mono, settings.themeFamily)
+        assertEquals(ThemeMode.Dark, settings.themeMode)
+        assertEquals("America/Los_Angeles", settings.timeZone)
+        assertEquals(259200L, settings.globalDoneVisibilitySeconds)
+        assertEquals(true, settings.trackingEnabled)
+        assertEquals(true, settings.dragAndDropEnabled)
     }
 
     @Test
-    fun fetchSettingsReturnsNullOnFailureSoTheCacheStays() = runTest {
+    fun fetchSettingsReportsUnavailableOnFailureSoTheCacheStays() = runTest {
         val source = KtorSettingsRemoteSource(client { respond("", HttpStatusCode.Unauthorized) })
 
-        assertNull(source.fetchSettings())
+        assertEquals(RemoteSnapshot.Unavailable, source.fetchSettings())
     }
 
     private fun client(

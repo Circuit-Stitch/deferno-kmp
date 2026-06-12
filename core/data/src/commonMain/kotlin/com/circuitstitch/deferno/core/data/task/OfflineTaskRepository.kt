@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -25,9 +26,11 @@ import kotlinx.coroutines.flow.Flow
  *   server-side and is no longer even returned as a tombstone, so it is hard-deleted locally. We
  *   diff `local.allIds() - snapshotIds` (in Kotlin — the schema avoids the empty `NOT IN ()` footgun).
  *
- * A failed pull yields an empty list ([TaskRemoteSource] returns `emptyList()` offline) — which we
- * treat as "no snapshot" and skip the reconcile entirely, so a refresh that can't reach the server
- * leaves the cache intact rather than purging everything.
+ * An [RemoteSnapshot.Unavailable] pull (the server couldn't be reached) skips the reconcile entirely,
+ * so a refresh that can't reach the server leaves the cache intact. An [RemoteSnapshot.Available]
+ * snapshot is always reconciled — even when it is *empty* (a server that genuinely emptied), which the
+ * "remove locally-absent" diff then purges. (The old `emptyList()`-means-offline conflation could never
+ * purge a cache to empty, since empty read as "couldn't fetch".)
  *
  * **Hydration ([hydrate]).** Opening a Task pulls its full detail and upserts it, upgrading the
  * cached row summary -> full; a missing/failed detail is a no-op (the summary stays).
@@ -42,11 +45,12 @@ class OfflineTaskRepository(
     override fun observeTask(id: TaskId): Flow<Task?> = localStore.observe(id)
 
     override suspend fun refresh() {
-        val snapshot = remoteSource.fetchAll()
-        // An empty result is the offline-first failure signal (the remote returns emptyList() when
-        // it can't reach the server). Skipping the reconcile leaves the cache intact rather than
-        // mistaking "couldn't fetch" for "the server has no tasks" and purging everything.
-        if (snapshot.isEmpty()) return
+        // Unavailable = couldn't reach the server → skip, leaving the cache intact (offline-first).
+        // An Available snapshot reconciles even when empty: a genuinely-empty server purges the cache.
+        val snapshot = when (val result = remoteSource.fetchAll()) {
+            is RemoteSnapshot.Available -> result.value
+            RemoteSnapshot.Unavailable -> return
+        }
 
         val snapshotIds = snapshot.mapTo(mutableSetOf()) { it.id }
 

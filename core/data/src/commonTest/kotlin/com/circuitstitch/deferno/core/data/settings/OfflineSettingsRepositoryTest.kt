@@ -17,8 +17,8 @@ import kotlin.time.Instant
 /**
  * The offline-first behaviour of [OfflineSettingsRepository] (#72, ADR-0001), against the in-memory
  * fakes. Covers: [observeSettings] emits from the local store `Flow` only (never the network),
- * seeding [UserSettings.Default] before the first refresh; [refresh] upserts the remote snapshot; a
- * failed remote (null) leaves the cache intact; and the #143 hardening — a refresh never overwrites
+ * seeding [UserSettings.Default] before the first refresh; [refresh] upserts the remote snapshot; an
+ * Unavailable remote pull leaves the cache intact; and the #143 hardening — a refresh never overwrites
  * the row while an un-synced settings mutation is pending in the outbox (LWW: the local optimistic
  * change is newer than the server snapshot). Mirrors [com.circuitstitch.deferno.core.data.plan.OfflinePlanRepositoryTest].
  */

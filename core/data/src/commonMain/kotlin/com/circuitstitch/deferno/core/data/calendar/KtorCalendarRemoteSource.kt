@@ -1,8 +1,10 @@
 package com.circuitstitch.deferno.core.data.calendar
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
+import com.circuitstitch.deferno.core.data.asSnapshot
 import com.circuitstitch.deferno.core.model.CalendarItem
-import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.CalendarEventDto
+import com.circuitstitch.deferno.core.network.map
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import com.circuitstitch.deferno.core.network.requestApi
 import io.ktor.client.HttpClient
@@ -26,19 +28,16 @@ class KtorCalendarRemoteSource(
     private val client: HttpClient,
 ) : CalendarRemoteSource {
 
-    override suspend fun fetchWindow(from: LocalDate, to: LocalDate, tz: String): List<CalendarItem>? {
-        val result = client.requestApi<List<CalendarEventDto>> {
+    override suspend fun fetchWindow(from: LocalDate, to: LocalDate, tz: String): RemoteSnapshot<List<CalendarItem>> =
+        client.requestApi<List<CalendarEventDto>> {
             url { appendPathSegments("tasks", "calendar") }
             parameter("start", from.toString())
             parameter("end", to.toString())
             parameter("tz", tz)
         }
-        return when (result) {
-            is ApiResult.Success -> {
+            .map { events ->
                 val zone = runCatching { TimeZone.of(tz) }.getOrDefault(TimeZone.UTC)
-                result.data.map { it.toDomain(zone) }
+                events.map { it.toDomain(zone) }
             }
-            is ApiResult.Failure -> null
-        }
-    }
+            .asSnapshot()
 }

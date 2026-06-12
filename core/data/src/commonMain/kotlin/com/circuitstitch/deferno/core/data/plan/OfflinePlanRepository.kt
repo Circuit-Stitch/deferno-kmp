@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.plan
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.data.task.TaskLocalStore
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -14,8 +15,9 @@ import kotlinx.datetime.LocalDate
  *
  * **Reconcile ([refreshPlan]).** `/tasks/plan` is an ordered full snapshot per `(date, tz)`
  * (CONTRACT-NOTES -> Items), so a refresh pulls the ordered ids and the local store does a full
- * per-day replace (delete the day, re-insert the fresh ordered set, atomically). A failed pull
- * (the remote returns `null` offline) skips the replace, leaving the cached plan intact.
+ * per-day replace (delete the day, re-insert the fresh ordered set, atomically). An
+ * [RemoteSnapshot.Unavailable] pull skips the replace, leaving the cached plan intact; an
+ * [RemoteSnapshot.Available] (possibly empty) one replaces — an empty day clears the ordering.
  *
  * **Resolve ([observePlan]).** The plan store holds only the ordering; the Tasks live in the Task
  * cache and are reconciled independently. So the repository [combine]s the ordered ids with the
@@ -37,7 +39,10 @@ class OfflinePlanRepository(
         }
 
     override suspend fun refreshPlan(date: LocalDate, tz: String) {
-        val ordered = remoteSource.fetchPlan(date, tz) ?: return
+        val ordered = when (val result = remoteSource.fetchPlan(date, tz)) {
+            is RemoteSnapshot.Available -> result.value
+            RemoteSnapshot.Unavailable -> return
+        }
         planStore.replacePlan(date, tz, ordered)
     }
 }

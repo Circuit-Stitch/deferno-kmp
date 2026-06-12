@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.settings
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.UserSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,8 +35,8 @@ class FakeSettingsRemoteSource(var next: UserSettings? = null) : SettingsRemoteS
     var fetchCount = 0
         private set
 
-    override suspend fun fetchSettings(): UserSettings? {
+    override suspend fun fetchSettings(): RemoteSnapshot<UserSettings> {
         fetchCount++
-        return next
+        return next?.let { RemoteSnapshot.Available(it) } ?: RemoteSnapshot.Unavailable
     }
 }

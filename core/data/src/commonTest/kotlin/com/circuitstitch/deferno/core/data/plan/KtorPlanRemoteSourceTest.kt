@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.plan
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.TaskId
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -19,7 +20,6 @@ import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -46,17 +46,17 @@ class KtorPlanRemoteSourceTest {
         var captured: HttpRequestData? = null
         val source = KtorPlanRemoteSource(client { req -> captured = req; respondJson(planEnvelope) })
 
-        val ids = source.fetchPlan(date, tz)
+        val ids = (source.fetchPlan(date, tz) as RemoteSnapshot.Available).value
 
         assertTrue(captured?.url?.encodedPath?.endsWith("/tasks/plan") == true)
         assertEquals(listOf(TaskId("c"), TaskId("a"), TaskId("b")), ids)
     }
 
     @Test
-    fun fetchPlanReturnsNullOnFailureSoTheCachedPlanStays() = runTest {
+    fun fetchPlanReportsUnavailableOnFailureSoTheCachedPlanStays() = runTest {
         val source = KtorPlanRemoteSource(client { respond("", HttpStatusCode.Unauthorized) })
 
-        assertNull(source.fetchPlan(date, tz))
+        assertEquals(RemoteSnapshot.Unavailable, source.fetchPlan(date, tz))
     }
 
     private fun client(

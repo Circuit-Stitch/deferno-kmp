@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.calendar
 
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.CalendarItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.LocalDate
@@ -47,8 +48,12 @@ class OfflineCalendarRepository(
 
     override suspend fun refreshWindow(from: LocalDate, to: LocalDate, tz: String) {
         lastWindow = Window(from, to, tz)
-        // Fetch first: a failed pull writes nothing, so the cached window is never blanked (ADR-0001).
-        val items = remoteSource.fetchWindow(from, to, tz) ?: return
+        // Fetch first: an Unavailable pull writes nothing, so the cached window is never blanked
+        // (ADR-0001); an Available (possibly empty) window is written through — an empty span blanks it.
+        val items = when (val result = remoteSource.fetchWindow(from, to, tz)) {
+            is RemoteSnapshot.Available -> result.value
+            RemoteSnapshot.Unavailable -> return
+        }
         localStore.replaceSeriesKinds(seriesKindSource.currentSeriesKinds())
         localStore.replaceWindow(from, to, items)
     }

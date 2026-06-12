@@ -111,6 +111,24 @@ class OfflinePlanRepositoryTest {
     }
 
     @Test
+    fun refreshWithAGenuinelyEmptyPlanClearsTheDay() = runTest {
+        // A reachable server with an empty plan (Available, empty) clears the day — distinct from an
+        // Unavailable pull (above), which leaves the cached ordering intact.
+        val key = FakePlanLocalStore.PlanKey(date, tz)
+        val local = FakePlanLocalStore(mapOf(key to listOf(TaskId("a"))))
+        val tasks = FakeTaskLocalStore(mapOf(TaskId("a") to task("a")))
+        val remote = FakePlanRemoteSource(plan = emptyList()) // reachable, empty plan
+
+        val repository = repo(local, remote, tasks)
+        repository.observePlan(date, tz).test {
+            assertEquals(listOf(TaskId("a")), awaitItem().map { it.id })
+            repository.refreshPlan(date, tz)
+            assertTrue(awaitItem().isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun observePlanReEmitsAfterARefresh() = runTest {
         val local = FakePlanLocalStore()
         val remote = FakePlanRemoteSource()
