@@ -77,6 +77,17 @@ class StubHelper(
     var permissionStatus: PermissionStatusValue = PermissionStatusValue.GRANTED
 
     /**
+     * When set, [SidecarMethods.SubscribeTranscript] streams partials forever instead of the finite
+     * three-then-[SidecarFrame.StreamEnd] sequence — for the cancel test, whose premise ("the stream
+     * is still open when the collector abandons it") is otherwise a race: a starved test thread can
+     * lose 100ms between `awaitItem()` and cancelling, the finite stream completes on its own, the
+     * client (correctly) sends no [SidecarFrame.Cancel] for a stream that already ended, and
+     * `awaitCancel` times out. Endless makes cancellation the *only* way the stream ends, so the
+     * Cancel frame is guaranteed under any scheduling.
+     */
+    var endlessTranscript: Boolean = false
+
+    /**
      * What a [SidecarMethods.RequestPermission] against a [NOT_DETERMINED][PermissionStatusValue.NOT_DETERMINED]
      * [permissionStatus] settles it to — the canned "person answered the TCC prompt" (#120).
      */
@@ -297,6 +308,14 @@ class StubHelper(
     }
 
     private suspend fun emitTranscript(out: Outbound, id: Long) {
+        if (endlessTranscript) {
+            var n = 0
+            while (true) { // ends only by Cancel (streamJobs cancellation) or teardown
+                out.send(SidecarFrame.StreamData(id, transcriptElement(TranscriptWire.Partial("partial $n"))))
+                n++
+                delay(STREAM_GAP_MILLIS)
+            }
+        }
         out.send(SidecarFrame.StreamData(id, transcriptElement(TranscriptWire.Partial("hel"))))
         delay(STREAM_GAP_MILLIS)
         out.send(SidecarFrame.StreamData(id, transcriptElement(TranscriptWire.Partial("hello wor"))))

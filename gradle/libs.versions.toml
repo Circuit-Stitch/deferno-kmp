@@ -131,6 +131,15 @@ whisperJni = "1.7.1"
 # Play Asset Delivery runtime (#92, ADR-0019): the AssetPackManager core:speech uses to resolve the
 # install-time whisper-model pack's on-device location at runtime.
 playAssetDelivery = "2.3.0"
+# Client-side Agent inference (ADR-0027, #147): Koog 1.0, JetBrains' Kotlin AI framework — STABLE
+# modules only (the beta stream — agents-mcp, LiteRT, the non-Anthropic clients — publishes as
+# `1.0.0-beta` and is out of v1). Built with Kotlin 2.3.10 (fine from 2.4.0 consumers) and publishes
+# every target this repo declares (jvm, android, iosArm64, iosSimulatorArm64). It pulls Ktor 3.3.3;
+# Gradle resolves upward to this catalog's `ktor` — compatible across Ktor 3.x minors. Caveat: every
+# Koog AAR over-declares `minSdk 35` (a blanket convention-plugin value, not an API floor — the
+# consumed modules hold no android.* API), overridden via tools:overrideLibrary in app/androidApp's
+# manifest; a version bump that adds an ai.koog artifact fails the manifest merge with the name to append.
+koog = "1.0.0"
 # Logging (amzn/kmp-logger): Amazon's KMP logging facade — one `logger { }` / `Logger("Tag")`
 # API in commonMain that writes to each platform's native console (Logcat on Android, os_log on
 # iOS, println on JVM) through an inlined message lambda (zero cost when the level is disabled).
@@ -277,6 +286,17 @@ ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.r
 ktor-client-darwin = { group = "io.ktor", name = "ktor-client-darwin", version.ref = "ktor" }
 ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref = "ktor" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+
+# Agent inference (ADR-0027, #147) — the minimal stable Koog set for "one Anthropic-format call with
+# structured output": the stock Anthropic client (`AnthropicLLMClient` + settings + model catalog),
+# the executor + structured-output layer (`MultiLLMPromptExecutor`, `executeStructured`,
+# `StructureFixingParser`; `prompt-executor-model` api-exposes `prompt-structure`), and the
+# Ktor-backed `KoogHttpClient.Factory` (Koog 1.0 decoupled its clients from Ktor; `http-client-ktor`
+# holds the only multiplatform factory). Per-target Ktor *engines* come from this catalog's own ktor
+# entries (OkHttp on Android/JVM, Darwin on iOS), exactly as in core/network.
+koog-prompt-executor-anthropic-client = { group = "ai.koog", name = "prompt-executor-anthropic-client", version.ref = "koog" }
+koog-prompt-executor-model = { group = "ai.koog", name = "prompt-executor-model", version.ref = "koog" }
+koog-http-client-ktor = { group = "ai.koog", name = "http-client-ktor", version.ref = "koog" }
 
 # Logging facade (amzn/kmp-logger, commonMain): `api`-exposed from core/common so every core/* +
 # feature/* module gets `logger { "…" }` / `Logger("Tag").i { "…" }` over each platform's native

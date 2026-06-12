@@ -94,13 +94,21 @@ class SidecarClientE2ETest {
     @Test
     fun cancellingTheStreamTellsTheHelperToStop() = runBlocking {
         if (!posixSupported()) return@runBlocking
-        val stub = harness.startStub()
+        // Endless stream: the test's premise is "the stream is still open when we abandon it", and
+        // with the finite three-partial stub that premise itself raced the scheduler — starved past
+        // the two 50ms gaps, the stream completed on its own, the client correctly sent no Cancel,
+        // and awaitCancel timed out. Endless makes cancellation the only way this stream ends, so
+        // the Cancel frame is guaranteed under any scheduling.
+        val stub = harness.startStub().also { it.endlessTranscript = true }
         val client = harness.client(stub.path)
         client.connect()
 
         client.openStream(SidecarMethods.SubscribeTranscript).test(timeout = DEADLINE) {
             awaitItem() // first partial, then we abandon the stream
-            cancel()
+            // Ignore-remaining (not plain cancel()): the stub streams until the Cancel reaches it,
+            // so further partials can already sit in Turbine's buffer — legitimate in-flight
+            // events, not a leak; plain cancel() flakes on ensureAllEventsConsumed.
+            cancelAndIgnoreRemainingEvents()
         }
 
         val cancelledId = withTimeout(DEADLINE) { stub.awaitCancel() }
