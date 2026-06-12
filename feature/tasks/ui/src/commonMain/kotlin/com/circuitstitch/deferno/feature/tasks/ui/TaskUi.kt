@@ -32,6 +32,7 @@ import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.designsystem.theme.plexMono
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
+import kotlinx.datetime.LocalTime
 
 // Shared building blocks for the Tasks Views (#27). These are thin, stateless Composables — they
 // render a [Task] and surface taps via callbacks; all logic stays in the shared components (#25).
@@ -40,6 +41,13 @@ import com.circuitstitch.deferno.core.model.WorkingState
 
 /** Minimum height for a tappable row/control — design-principles.md "≥44–48dp" touch targets. */
 internal val MinTouchTarget = 48.dp
+
+/** A [LocalTime] as a friendly 12-hour clock, e.g. `14:30` → "2:30 PM" (#348 display). */
+internal fun LocalTime.toDisplayTime(): String {
+    val h12 = (hour % 12).let { if (it == 0) 12 else it }
+    val suffix = if (hour < 12) "AM" else "PM"
+    return "$h12:${minute.toString().padStart(2, '0')} $suffix"
+}
 
 /**
  * A calm, single-line section header for a pane: a title (marked as a heading for screen readers)
@@ -186,6 +194,14 @@ internal fun TaskRow(task: Task, onClick: () -> Unit, modifier: Modifier = Modif
                         text = ref,
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = plexMono(),
+                        color = MaterialTheme.defernoColors.inkMuted,
+                    )
+                }
+                // The deadline clock (#348), shown only when the task carries one (not all-day).
+                task.deadlineTimeOfDay?.let { time ->
+                    Text(
+                        text = "Due ${time.toDisplayTime()}",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.defernoColors.inkMuted,
                     )
                 }

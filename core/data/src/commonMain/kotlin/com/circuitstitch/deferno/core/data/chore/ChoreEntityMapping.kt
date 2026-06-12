@@ -5,6 +5,7 @@ import com.circuitstitch.deferno.core.data.recurring.encodeNewlineList
 import com.circuitstitch.deferno.core.data.recurring.toDefinitionStateOrDefault
 import com.circuitstitch.deferno.core.data.recurring.toHydrationStateOrDefault
 import com.circuitstitch.deferno.core.data.recurring.toInstantOrNull
+import com.circuitstitch.deferno.core.data.recurring.toLocalTimeOrNull
 import com.circuitstitch.deferno.core.data.recurring.toRecurrenceFrequencyOrDefault
 import com.circuitstitch.deferno.core.database.sql.ChoreEntity
 import com.circuitstitch.deferno.core.model.Chore
@@ -27,6 +28,7 @@ fun ChoreEntity.toDomain(): Chore = Chore(
     labels = labels.decodeNewlineList(),
     parentId = parent_id?.let(::TaskId),
     completeBy = complete_by.toInstantOrNull(),
+    deadlineTimeOfDay = deadline_time_of_day.toLocalTimeOrNull(),
     pinned = pinned != 0L,
     sequence = sequence,
     ref = ref,
@@ -52,6 +54,7 @@ fun Chore.toEntity(): ChoreEntity = ChoreEntity(
     labels = labels.encodeNewlineList(),
     parent_id = parentId?.value,
     complete_by = completeBy?.toString(),
+    deadline_time_of_day = deadlineTimeOfDay?.toString(),
     pinned = if (pinned) 1L else 0L,
     date_created = dateCreated.toString(),
     deleted_at = deletedAt?.toString(),

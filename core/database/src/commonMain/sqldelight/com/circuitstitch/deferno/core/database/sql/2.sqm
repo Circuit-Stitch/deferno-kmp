@@ -1,0 +1,13 @@
+-- Migration 2 -> 3: add time-of-day columns (#348).
+--
+-- The backend split the deadline/start "WHEN" into a date axis (`complete_by`/`end_time`) and a
+-- clock axis carried separately as "HH:MM". These columns persist that clock so it survives the
+-- DTO -> domain -> DB -> UI round-trip; `NULL` = all-day (no clock). Plain ADD COLUMN — the v1
+-- ambiguity is behind us (ADR-0022 runbook). Existing rows get NULL, i.e. all-day, which is correct
+-- for pre-#348 data.
+
+ALTER TABLE taskEntity ADD COLUMN deadline_time_of_day TEXT;
+ALTER TABLE habitEntity ADD COLUMN deadline_time_of_day TEXT;
+ALTER TABLE choreEntity ADD COLUMN deadline_time_of_day TEXT;
+ALTER TABLE eventEntity ADD COLUMN start_time_of_day TEXT;
+ALTER TABLE eventEntity ADD COLUMN end_time_of_day TEXT;

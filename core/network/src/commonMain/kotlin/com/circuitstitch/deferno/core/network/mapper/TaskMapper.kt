@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
 import com.circuitstitch.deferno.core.network.dto.TaskSummaryDto
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
@@ -35,6 +36,7 @@ fun TaskSummaryDto.toDomain(): Task = Task(
     parentId = parentId?.let(::TaskId),
     children = children.map(::TaskId),
     completeBy = completeBy.toInstantOrNull(),
+    deadlineTimeOfDay = deadlineTimeOfDay.toLocalTimeOrNull(),
     productive = productive,
     desire = desire,
     pinned = pinned,
@@ -62,6 +64,7 @@ fun TaskDetailDto.toDomain(): Task = Task(
     parentId = parentId?.let(::TaskId),
     children = children.map(::TaskId),
     completeBy = completeBy.toInstantOrNull(),
+    deadlineTimeOfDay = deadlineTimeOfDay.toLocalTimeOrNull(),
     productive = productive,
     desire = desire,
     pinned = pinned,
@@ -91,6 +94,7 @@ fun ItemView.asTaskOrNull(): Task? = when (this) {
         parentId = parentId?.let(::TaskId),
         children = children.map(::TaskId),
         completeBy = completeBy.toInstantOrNull(),
+        deadlineTimeOfDay = deadlineTimeOfDay.toLocalTimeOrNull(),
         productive = productive,
         desire = desire,
         pinned = pinned,
@@ -113,3 +117,11 @@ fun ItemView.asTaskOrNull(): Task? = when (this) {
  * through the same `kotlin.time.Instant` parse.
  */
 private fun String?.toInstantOrNull(): Instant? = this?.let(Instant::parse)
+
+/**
+ * Parses a wire "HH:MM" (or "HH:MM:SS") time-of-day to a [LocalTime], or `null` when absent or
+ * unparseable — tolerant by design (#348), so a malformed clock degrades to "no time-of-day" rather
+ * than crashing the read, matching [com.circuitstitch.deferno.core.network.DefernoJson]'s posture.
+ */
+internal fun String?.toLocalTimeOrNull(): LocalTime? =
+    this?.let { runCatching { LocalTime.parse(it) }.getOrNull() }

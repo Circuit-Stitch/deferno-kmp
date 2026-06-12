@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.model
 
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
@@ -29,6 +30,9 @@ data class Task(
     val parentId: TaskId? = null,
     val children: List<TaskId> = emptyList(),
     val completeBy: Instant? = null,
+    // The deadline's clock time (#348). `completeBy` carries the day; this carries "HH:MM" within it.
+    // `null` = no time-of-day (all-day / end-of-day deadline). Wire `deadline_time_of_day`.
+    val deadlineTimeOfDay: LocalTime? = null,
     val productive: Double? = null,
     val desire: Double? = null,
     val pinned: Boolean = false,

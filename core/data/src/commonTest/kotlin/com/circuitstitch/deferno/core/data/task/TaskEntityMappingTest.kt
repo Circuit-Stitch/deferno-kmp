@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -41,6 +42,24 @@ class TaskEntityMappingTest {
         )
 
         assertEquals(task, task.toEntity().toDomain())
+    }
+
+    @Test
+    fun deadlineTimeOfDayRoundTripsThroughTheRow() {
+        // #348: the deadline clock must survive the DB round-trip (it's the all-day-vs-timed signal).
+        val timed = Task(
+            id = TaskId("t-tod"),
+            orgSlug = "u-e4h2qk",
+            title = "Timed deadline",
+            workingState = WorkingState.Open,
+            completeBy = Instant.parse("2026-06-20T12:00:00Z"),
+            deadlineTimeOfDay = LocalTime(14, 30),
+            dateCreated = created,
+            hydration = HydrationState.Summary,
+        )
+        assertEquals(timed, timed.toEntity().toDomain())
+        // Absent (all-day) survives as null.
+        assertEquals(null, timed.copy(deadlineTimeOfDay = null).toEntity().toDomain().deadlineTimeOfDay)
     }
 
     @Test
@@ -170,5 +189,6 @@ class TaskEntityMappingTest {
         hydration_state = hydrationState,
         description = null,
         next_task_id = null,
+        deadline_time_of_day = null,
     )
 }

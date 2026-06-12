@@ -22,7 +22,9 @@ CREATE TABLE habitEntity (
     deleted_at       TEXT,
     hydration_state  TEXT NOT NULL,
     description      TEXT,
-    series_id        TEXT
+    series_id        TEXT,
+    -- Appended for migration 2->3 (#348) — ADD COLUMN appends, so it lives at the table's end.
+    deadline_time_of_day TEXT
 );
 
 CREATE INDEX habitEntity_owner_org_id ON habitEntity(owner_org_id);
@@ -38,9 +40,9 @@ SELECT * FROM habitEntity WHERE id = ?;
 insertOrReplace:
 INSERT OR REPLACE INTO habitEntity(
     id, org_slug, owner_org_id, ref, sequence, title, definition_state, recurrence_type,
-    recurrence_days, labels, parent_id, complete_by, pinned, date_created, deleted_at,
-    hydration_state, description, series_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    recurrence_days, labels, parent_id, complete_by, deadline_time_of_day, pinned, date_created,
+    deleted_at, hydration_state, description, series_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteById:
 DELETE FROM habitEntity WHERE id = ?;

@@ -50,10 +50,13 @@ import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.Month
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 
 // Stateless building blocks for the Calendar View (#74): a month grid + a day agenda over Occurrences.
 // Kept in commonMain (Android + desktop) so both platform screens share them. Gentle by default — no
@@ -62,6 +65,13 @@ import kotlinx.datetime.plus
 
 /** Minimum height for a tappable control — design-principles.md "≥44–48dp" touch targets. */
 internal val MinTouchTarget = 48.dp
+
+/** A [LocalTime] as a friendly 12-hour clock, e.g. `14:30` → "2:30 PM" (#348 agenda display). */
+internal fun LocalTime.toClock(): String {
+    val h12 = (hour % 12).let { if (it == 0) 12 else it }
+    val suffix = if (hour < 12) "AM" else "PM"
+    return "$h12:${minute.toString().padStart(2, '0')} $suffix"
+}
 
 private val WEEKDAY_LABELS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
@@ -331,11 +341,23 @@ internal fun AgendaRow(
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                // The firing's start clock (#348), shown only for timed rows (not all-day). The start
+                // instant carries the real time-of-day; projected for display.
+                // ponytail: device zone is fine for a single-user v1 — thread the account TimeZone when
+                // device-zone ≠ account-zone matters.
+                if (!item.allDay) {
+                    Text(
+                        text = item.start.toLocalDateTime(TimeZone.currentSystemDefault()).time.toClock(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.defernoColors.inkMuted,
+                    )
+                }
+            }
             Spacer(Modifier.width(12.dp))
             AgendaStatusChip(item.status)
         }

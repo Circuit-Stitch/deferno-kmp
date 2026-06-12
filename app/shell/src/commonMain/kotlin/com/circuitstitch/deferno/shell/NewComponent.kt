@@ -20,8 +20,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
 /**
@@ -59,6 +61,13 @@ interface NewComponent {
      * is the field the Calendar FAB pre-dates to the selected day.
      */
     fun setDate(date: LocalDate?)
+
+    /**
+     * Set the Task/Habit/Chore **deadline time-of-day** (#348) — the clock within the [setDate] day,
+     * sent as `deadline_time_of_day` ("HH:MM"); `null` clears it (all-day deadline). Ignored for an
+     * Event, whose clock lives in its [setStart]/[setEnd] instants instead.
+     */
+    fun setDeadlineTime(time: LocalTime?)
 
     /** Submit the per-kind form via the online-only create path. */
     fun submit()
@@ -134,6 +143,9 @@ data class NewState(
     // The item's date (#74): the Task/Habit/Chore `complete_by` anchor, and the Event's fallback start.
     // The Calendar FAB pre-dates this to the selected day; the New form surfaces it for the non-Event kinds.
     val date: LocalDate? = null,
+    // The Task/Habit/Chore deadline clock (#348) within [date], sent as `deadline_time_of_day`. Null =
+    // all-day. Ignored for an Event (its clock is in [start]/[end]).
+    val deadlineTime: LocalTime? = null,
     val status: NewStatus = NewStatus.Editing,
     // Dictation (#92, ADR-0018), orthogonal to the create [status]. [dictationAvailable] gates whether the
     // mic affordance is offered at all (the engine is available: model present + supported locale);
@@ -220,6 +232,7 @@ class DefaultNewComponent(
     override fun setStart(start: Instant?) = _state.update { it.copy(start = start, status = NewStatus.Editing) }
     override fun setEnd(end: Instant?) = _state.update { it.copy(end = end, status = NewStatus.Editing) }
     override fun setDate(date: LocalDate?) = _state.update { it.copy(date = date, status = NewStatus.Editing) }
+    override fun setDeadlineTime(time: LocalTime?) = _state.update { it.copy(deadlineTime = time, status = NewStatus.Editing) }
 
     override fun submit() {
         val snapshot = _state.value
@@ -325,12 +338,22 @@ class DefaultNewComponent(
  */
 internal fun NewState.toPayload(tz: String = "UTC"): CreateItem.Payload {
     val notesOrNull = notes.ifBlank { null }
+    val zone = runCatching { TimeZone.of(tz) }.getOrDefault(TimeZone.UTC)
     // The pre-dated day becomes a start-of-day instant in the Active Account's zone (#74). Null stays
     // null (omitted by the tolerant serializer), so an undated create is byte-identical to before.
-    val dateInstant = date?.atStartOfDayIn(runCatching { TimeZone.of(tz) }.getOrDefault(TimeZone.UTC))
+    val dateInstant = date?.atStartOfDayIn(zone)
+    // The deadline clock (#348) rides as `deadline_time_of_day`; the server combines it with the date
+    // of `complete_by` (in the account zone) and recomputes the instant. Gated on a date — a time with
+    // no day is meaningless. "HH:MM" via LocalTime.toString().
+    val deadlineWire = if (dateInstant != null) deadlineTime?.toString() else null
     return when (selectedKind) {
         ItemKind.Task -> CreateItem.Payload.Task(
-            CreateTaskPayload(title = title.trim(), description = notesOrNull, completeBy = dateInstant?.toString()),
+            CreateTaskPayload(
+                title = title.trim(),
+                description = notesOrNull,
+                completeBy = dateInstant?.toString(),
+                deadlineTimeOfDay = deadlineWire,
+            ),
         )
         ItemKind.Habit -> CreateItem.Payload.Habit(
             CreateHabitPayload(
@@ -338,6 +361,7 @@ internal fun NewState.toPayload(tz: String = "UTC"): CreateItem.Payload {
                 recurrence = RecurrenceDto(type = "daily"),
                 description = notesOrNull,
                 completeBy = dateInstant?.toString(),
+                deadlineTimeOfDay = deadlineWire,
             ),
         )
         ItemKind.Chore -> CreateItem.Payload.Chore(
@@ -346,6 +370,7 @@ internal fun NewState.toPayload(tz: String = "UTC"): CreateItem.Payload {
                 recurrence = RecurrenceDto(type = "daily"),
                 description = notesOrNull,
                 completeBy = dateInstant?.toString(),
+                deadlineTimeOfDay = deadlineWire,
             ),
         )
         ItemKind.Event -> CreateItem.Payload.Event(
@@ -355,6 +380,11 @@ internal fun NewState.toPayload(tz: String = "UTC"): CreateItem.Payload {
                 // defensive far-future fallback a non-submittable Event never reaches (`canSubmit`).
                 completeBy = (start ?: dateInstant ?: Instant.DISTANT_FUTURE).toString(),
                 endTime = end?.toString(),
+                // The clock the server needs to keep the event timed, not all-day (#348): the local
+                // time of the chosen start/end in the account zone. Absent (a date-only/fallback start)
+                // ⇒ no time-of-day ⇒ the server derives an all-day event.
+                startTimeOfDay = start?.toLocalDateTime(zone)?.time?.toString(),
+                endTimeOfDay = end?.toLocalDateTime(zone)?.time?.toString(),
                 description = notesOrNull,
             ),
         )

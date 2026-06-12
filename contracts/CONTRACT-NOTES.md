@@ -110,11 +110,47 @@ fine read state (`scheduled`, `missed`, and the `done_on_time`/`done_late` split
   **intent-shaped minimal bodies**: each outbox intent emits a `JsonObject` with only the keys it
   changes (value or explicit null per intent). Hard serializer rule: **never emit an absent field.**
 
+## Time-of-day (#348) — verified live against staging 2026-06-12
+
+The deadline/start "WHEN" is split into a **date axis** (`complete_by`/`end_time`, RFC3339 instants) and a
+separate **clock axis** carried as `"HH:MM"` strings. The clock fields are **the source of truth** for
+the time:
+
+- **Task/Chore/Habit** carry `deadline_time_of_day`; **Event** carries `start_time_of_day` +
+  `end_time_of_day`. Additive, nullable; the tolerant reader ignores them where unmodelled.
+- **On write the server recomputes `complete_by`**: it takes the *date* of the `complete_by` you send
+  (interpreted **in the user's timezone**) and combines it with `*_time_of_day`. Verified: sent
+  `complete_by:2026-06-20T00:00:00Z` (UTC midnight) + `deadline_time_of_day:"14:30"` → got back
+  `complete_by:2026-06-19T21:30:00Z` (the date landed on the 19th because midnight-UTC is the 19th in
+  the user's tz). **Send `complete_by` as start-of-day in the *account* tz** so the intended date
+  survives. The clock you put in `complete_by` is discarded — `*_time_of_day` wins.
+- **On read the clock comes back as `"HH:MM:SS"`** (note the seconds — parse leniently). When
+  `*_time_of_day` is **null**, `complete_by` normalizes to the inclusive end-of-day sentinel `23:59:59`
+  — so do **not** render `complete_by`'s clock as a real time unless `*_time_of_day` is present.
+- **`all_day` is derived, read-only**: `true` iff both time-of-day fields are null. It is **ignored on
+  input** (the client no longer sends it) and kept on the wire one deprecation cycle.
+
+## Attachments / feedback presign (#375) — verified live 2026-06-12
+
+Presign endpoints are **envelope-wrapped** (`{version, data:{attachments:[…]}}`); each
+`PresignResponse` carries a **`headers` map the PUT MUST send byte-exact** (real S3 mode; empty in
+LocalFs dev). Verified against real S3: the signed set is
+`content-length;content-type;host;x-amz-server-side-encryption;x-amz-server-side-encryption-aws-kms-key-id`.
+The `headers` map returns only `content-type` + the two `x-amz-*kms` values — **`host` and
+`content-length` are NOT in the map**; the HTTP client sets them automatically. Because `content-length`
+is signed, the **PUT body length must equal the `size_bytes` sent at presign** (mismatch → 403
+`SignatureDoesNotMatch`), so presign with the exact byte count and PUT exactly those bytes. `POST
+/feedback` accepts `attachment_ids` as **bare id strings** (the `{id,caption}` object form is optional).
+
 ## Sync (ADR-0001, #22)
 
-- **No `updated_at`/`rev`/`ETag`/`If-Match` anywhere** (verified) → server is **last-write-wins** by
-  construction; the client owns all conflict resolution. No `?since=`/delta/sync-token; no cursor
-  paging (offset-only `$top`/`$skip` on `/items`). Soft-delete tombstones (`deleted_at`) are visible.
+- **No `?since=`/delta/sync-token; no cursor paging** (offset-only `$top`/`$skip` on `/items`).
+  Soft-delete tombstones (`deleted_at`) are visible. Sync stays **last-write-wins** — the client owns
+  conflict resolution.
+- ⚠️ **`rev` + `updated_at` now appear on the wire** (verified on staging 2026-06-12; a Task read carries
+  `"rev":8,"updated_at":…` — they were absent when this doc first said "no `updated_at`/`rev` anywhere").
+  The backend added optimistic-concurrency fields; **the client still ignores them** (tolerant reader),
+  so the LWW posture is unchanged until we deliberately decide to honor `rev`/`If-Match`.
 - Sync model: **full-snapshot pull, reconcile by UUID `id` + honor `deleted_at`.** Expect fan-out
   (per-recurring-def occurrences are date-windowed; per-task comments/attachments are separate GETs);
   hydrate lazily (summary → full on demand).

@@ -1997,7 +1997,7 @@
                     "attachments"
                 ],
                 "summary": "Presign uploads for an event occurrence",
-                "description": "Batch-presign S3 PUT URLs for files to attach to a specific Event occurrence. The response is returned unwrapped (no envelope).",
+                "description": "Batch-presign S3 PUT URLs for files to attach to a specific Event occurrence.",
                 "operationId": "presign_event_occurrence_attachments",
                 "parameters": [
                     {
@@ -2036,7 +2036,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/AttachmentPresignBatchResponse"
+                                    "$ref": "#/components/schemas/Envelope_AttachmentPresignBatchResponse"
                                 }
                             }
                         }
@@ -2791,7 +2791,7 @@
                     "feedback"
                 ],
                 "summary": "Presign feedback attachment uploads",
-                "description": "Batch-presign S3 PUT URLs for feedback attachments. The browser uploads to each URL, then references the returned ids when submitting feedback. The response is returned unwrapped (no envelope).",
+                "description": "Batch-presign S3 PUT URLs for feedback attachments. The browser uploads to each URL, then references the returned ids when submitting feedback.",
                 "operationId": "presign_attachments",
                 "requestBody": {
                     "content": {
@@ -2809,7 +2809,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/FeedbackPresignBatchResponse"
+                                    "$ref": "#/components/schemas/Envelope_FeedbackPresignBatchResponse"
                                 }
                             }
                         }
@@ -3140,6 +3140,16 @@
                                 }
                             }
                         }
+                    },
+                    "404": {
+                        "description": "Habit not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
                     }
                 },
                 "security": [
@@ -3267,6 +3277,16 @@
                     },
                     "401": {
                         "description": "Not authenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Habit not found",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -3762,7 +3782,7 @@
                     "items"
                 ],
                 "summary": "Convert an item to another kind",
-                "description": "Convert an item from its current kind into `to` (Task/Habit/Chore/Event), preserving its id. `complete_by` is required for Event/Chore/Habit; `recurrence` is additionally required for Chore/Habit (optional for Event); `end_time` is Event-only. Converting to the current kind is idempotent and returns 200; a real conversion returns 201. The response is the converted polymorphic view.",
+                "description": "Convert an item from its current kind into `to` (Task/Habit/Chore/Event), preserving its id. `complete_by` is required for Event/Chore/Habit; `recurrence` is additionally required for Chore/Habit (optional for Event); `end_time` and `end_time_of_day` are Event-only. `time_of_day` sets the destination's time-of-day on the `complete_by` axis: send a value to set it, `null` to clear it (all-day), or omit it to carry the source's time-of-day across the kind change. Converting to the current kind is idempotent and returns 200; a real conversion returns 201. The response is the converted polymorphic view.",
                 "operationId": "convert_item",
                 "parameters": [
                     {
@@ -3808,7 +3828,7 @@
                         }
                     },
                     "400": {
-                        "description": "Invalid conversion (missing/invalid complete_by, recurrence, or end_time)",
+                        "description": "Invalid conversion (missing/invalid complete_by, recurrence, or end_time; end_time or end_time_of_day on a non-Event destination)",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -5409,7 +5429,7 @@
                     "attachments"
                 ],
                 "summary": "Presign uploads for a task",
-                "description": "Batch-presign S3 PUT URLs for files to attach to a Task. The browser uploads to each URL, then calls the commit endpoint. The response is returned unwrapped (no envelope).",
+                "description": "Batch-presign S3 PUT URLs for files to attach to a Task. The browser uploads to each URL, then calls the commit endpoint.",
                 "operationId": "presign_task_attachments",
                 "parameters": [
                     {
@@ -5439,7 +5459,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/AttachmentPresignBatchResponse"
+                                    "$ref": "#/components/schemas/Envelope_AttachmentPresignBatchResponse"
                                 }
                             }
                         }
@@ -6783,7 +6803,14 @@
                             "null"
                         ],
                         "format": "date-time",
-                        "description": "Event-only. Optional. Must be `>= complete_by` when present."
+                        "description": "Event-only end instant. Send a value to set it (must be\n`>= complete_by`); `null` or omitted leaves it unset (the end has\nno source equivalent). Rejected \u2014 value OR explicit null \u2014 when\n`to` is not Event, matching `end_time_of_day` (#348)."
+                    },
+                    "end_time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Event-only end as a local time of day, `\"HH:MM\"`. Send a value to\nset it; `null` or omitted leaves it unset (the end has no source\nequivalent). Rejected when `to` is not Event."
                     },
                     "recurrence": {
                         "oneOf": [
@@ -6795,6 +6822,13 @@
                                 "description": "Required when `to = Habit | Chore`; optional for Event; ignored\nwhen `to = Task` (Tasks are non-recurring by definition)."
                             }
                         ]
+                    },
+                    "time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Time-of-day for the destination's `complete_by` axis\n(`deadline_time_of_day` on Task/Chore/Habit, `start_time_of_day`\non Event), `\"HH:MM\"`. Send a value to set it, `null` to clear it\n(all-day), or omit to carry the source's time-of-day across the\nkind change."
                     },
                     "to": {
                         "$ref": "#/components/schemas/ItemKind"
@@ -6963,6 +6997,13 @@
                         ],
                         "format": "date-time"
                     },
+                    "end_time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Optional end as a local time of day, `\"HH:MM\"`. Omit for an\nall-day end. Independently optional from `start_time_of_day`."
+                    },
                     "labels": {
                         "type": "array",
                         "items": {
@@ -6992,6 +7033,13 @@
                                 "$ref": "#/components/schemas/Recurrence"
                             }
                         ]
+                    },
+                    "start_time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Optional start as a local time of day, `\"HH:MM\"`. Omit for an\nall-day start."
                     },
                     "subtask_template": {
                         "type": "array",
@@ -7111,6 +7159,13 @@
                             "null"
                         ],
                         "format": "date-time"
+                    },
+                    "deadline_time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Optional deadline as a local time of day, `\"HH:MM\"`. Omit for the\nend of the user's day."
                     },
                     "description": {
                         "type": "string"
@@ -7253,6 +7308,50 @@
                 },
                 "additionalProperties": {
                     "description": "Optional structured detail beyond `code` and `message` (for\nexample `limit_bytes` or `hint`). Flattened directly under\n`error`, so these machine-readable fields sit alongside `code`\nand `message`."
+                }
+            },
+            "Envelope_AttachmentPresignBatchResponse": {
+                "type": "object",
+                "description": "Serializable envelope. Use `Versioned::ok(data)` for success paths;\n`Versioned::error(code, message)` for failures (or compose via the\n`IntoResponse` impl on `ApiError`).",
+                "required": [
+                    "version"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "description": "Response to an attachment presign request: one entry per file in the\nbatch, each carrying the new attachment id, a presigned PUT URL, and\nthe URL's expiry.",
+                        "required": [
+                            "attachments"
+                        ],
+                        "properties": {
+                            "attachments": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/PresignResponse"
+                                }
+                            }
+                        }
+                    },
+                    "error": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/EnvelopeError"
+                            }
+                        ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
+                    "version": {
+                        "type": "string"
+                    }
                 }
             },
             "Envelope_AttachmentView": {
@@ -7952,7 +8051,7 @@
                             },
                             "all_day": {
                                 "type": "boolean",
-                                "description": "Whether the event is all-day in the originating provider (no\nstart/end clock time, only a date). Defaults to `false` for\nDeferno-native and legacy rows."
+                                "description": "Derived, read-only: true iff `start_time_of_day` and\n`end_time_of_day` are both `None`. Kept on the wire for one\ndeprecation cycle so existing readers don't break; the value is\nignored on input."
                             },
                             "assignee": {
                                 "type": [
@@ -8009,6 +8108,13 @@
                                     "null"
                                 ],
                                 "format": "date-time"
+                            },
+                            "end_time_of_day": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "description": "End time-of-day template; same semantics as `start_time_of_day`\nbut for `end_time`. Independently optional."
                             },
                             "external": {
                                 "oneOf": [
@@ -8110,6 +8216,13 @@
                                     "null"
                                 ],
                                 "format": "uuid"
+                            },
+                            "start_time_of_day": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "description": "Start time-of-day template, applied per occurrence in the user's\ntimezone (`None` = no time; the start instant normalizes to the\ninclusive end-of-day sentinel `23:59:59`)."
                             },
                             "status": {
                                 "$ref": "#/components/schemas/DefStatus"
@@ -8232,6 +8345,50 @@
                             },
                             "username": {
                                 "type": "string"
+                            }
+                        }
+                    },
+                    "error": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/EnvelopeError"
+                            }
+                        ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
+                    "version": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Envelope_FeedbackPresignBatchResponse": {
+                "type": "object",
+                "description": "Serializable envelope. Use `Versioned::ok(data)` for success paths;\n`Versioned::error(code, message)` for failures (or compose via the\n`IntoResponse` impl on `ApiError`).",
+                "required": [
+                    "version"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "description": "Schema is renamed `FeedbackPresignBatchResponse` in the OpenAPI\ncomponents to avoid colliding with the structurally-distinct\nattachment presign response\n(`handlers::task_attachments::PresignBatchResponse`).",
+                        "required": [
+                            "attachments"
+                        ],
+                        "properties": {
+                            "attachments": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/PresignResponse"
+                                }
                             }
                         }
                     },
@@ -8843,7 +9000,7 @@
                                     },
                                     "all_day": {
                                         "type": "boolean",
-                                        "description": "Whether the event is all-day in the originating provider (no\nstart/end clock time, only a date). Defaults to `false` for\nDeferno-native and legacy rows."
+                                        "description": "Derived, read-only: true iff `start_time_of_day` and\n`end_time_of_day` are both `None`. Kept on the wire for one\ndeprecation cycle so existing readers don't break; the value is\nignored on input."
                                     },
                                     "assignee": {
                                         "type": [
@@ -8900,6 +9057,13 @@
                                             "null"
                                         ],
                                         "format": "date-time"
+                                    },
+                                    "end_time_of_day": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "description": "End time-of-day template; same semantics as `start_time_of_day`\nbut for `end_time`. Independently optional."
                                     },
                                     "external": {
                                         "oneOf": [
@@ -9001,6 +9165,13 @@
                                             "null"
                                         ],
                                         "format": "uuid"
+                                    },
+                                    "start_time_of_day": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "description": "Start time-of-day template, applied per occurrence in the user's\ntimezone (`None` = no time; the start instant normalizes to the\ninclusive end-of-day sentinel `23:59:59`)."
                                     },
                                     "status": {
                                         "$ref": "#/components/schemas/DefStatus"
@@ -9608,6 +9779,13 @@
                                     "date_created": {
                                         "type": "string",
                                         "format": "date-time"
+                                    },
+                                    "deadline_time_of_day": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "description": "Deadline time-of-day, interpreted in the user's timezone (`None` =\nno time; `complete_by` normalizes to the inclusive end-of-day\nsentinel `23:59:59`). Same name and semantics as Chore/Habit."
                                     },
                                     "deleted_at": {
                                         "type": [
@@ -10315,6 +10493,13 @@
                             "date_created": {
                                 "type": "string",
                                 "format": "date-time"
+                            },
+                            "deadline_time_of_day": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "description": "Deadline time-of-day, interpreted in the user's timezone (`None` =\nno time; `complete_by` normalizes to the inclusive end-of-day\nsentinel `23:59:59`). Same name and semantics as Chore/Habit."
                             },
                             "deleted_at": {
                                 "type": [
@@ -11253,6 +11438,13 @@
                                             "type": "string",
                                             "format": "date-time"
                                         },
+                                        "deadline_time_of_day": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ],
+                                            "description": "Deadline time-of-day, `None` = no time; additive on the wire."
+                                        },
                                         "descendant_done": {
                                             "type": [
                                                 "integer",
@@ -11753,7 +11945,7 @@
                     },
                     "all_day": {
                         "type": "boolean",
-                        "description": "Whether the event is all-day in the originating provider (no\nstart/end clock time, only a date). Defaults to `false` for\nDeferno-native and legacy rows."
+                        "description": "Derived, read-only: true iff `start_time_of_day` and\n`end_time_of_day` are both `None`. Kept on the wire for one\ndeprecation cycle so existing readers don't break; the value is\nignored on input."
                     },
                     "assignee": {
                         "type": [
@@ -11810,6 +12002,13 @@
                             "null"
                         ],
                         "format": "date-time"
+                    },
+                    "end_time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "End time-of-day template; same semantics as `start_time_of_day`\nbut for `end_time`. Independently optional."
                     },
                     "external": {
                         "oneOf": [
@@ -11911,6 +12110,13 @@
                             "null"
                         ],
                         "format": "uuid"
+                    },
+                    "start_time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Start time-of-day template, applied per occurrence in the user's\ntimezone (`None` = no time; the start instant normalizes to the\ninclusive end-of-day sentinel `23:59:59`)."
                     },
                     "status": {
                         "$ref": "#/components/schemas/DefStatus"
@@ -12835,7 +13041,8 @@
                 "required": [
                     "attachment_id",
                     "put_url",
-                    "expires_at"
+                    "expires_at",
+                    "headers"
                 ],
                 "properties": {
                     "attachment_id": {
@@ -12845,6 +13052,16 @@
                     "expires_at": {
                         "type": "string",
                         "format": "date-time"
+                    },
+                    "headers": {
+                        "type": "object",
+                        "description": "#375: headers the client MUST send byte-exact on the PUT \u2014 they are\nsigned into `put_url` (S3 mode: the SSE-KMS pair + content-type), so\na PUT without them is a guaranteed 403 `SignatureDoesNotMatch`.\nEmpty in LocalFs (dev) mode.",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "propertyNames": {
+                            "type": "string"
+                        }
                     },
                     "put_url": {
                         "type": "string"
@@ -13262,6 +13479,13 @@
                         "type": "string",
                         "format": "date-time"
                     },
+                    "deadline_time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Deadline time-of-day, interpreted in the user's timezone (`None` =\nno time; `complete_by` normalizes to the inclusive end-of-day\nsentinel `23:59:59`). Same name and semantics as Chore/Habit."
+                    },
                     "deleted_at": {
                         "type": [
                             "string",
@@ -13670,6 +13894,13 @@
                         "type": "string",
                         "format": "date-time"
                     },
+                    "deadline_time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Deadline time-of-day, `None` = no time; additive on the wire."
+                    },
                     "descendant_done": {
                         "type": [
                             "integer",
@@ -13924,7 +14155,15 @@
                             "string",
                             "null"
                         ],
-                        "format": "date-time"
+                        "format": "date-time",
+                        "description": "Send a value to set it, `null` to clear it (no end), or omit to\nleave it unchanged \u2014 clearable like `end_time_of_day`, its other\nhalf of the end WHEN axis (#348)."
+                    },
+                    "end_time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "End as a local time of day, `\"HH:MM\"`. Send a value to set it,\n`null` to clear it (all-day end), or omit to leave it unchanged."
                     },
                     "labels": {
                         "type": [
@@ -13964,6 +14203,13 @@
                             "null"
                         ],
                         "description": "For recurring events: \"this\" | \"following\" | \"all\". Ignored for\nnon-recurring events (no `series_id`)."
+                    },
+                    "start_time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Start as a local time of day, `\"HH:MM\"`. Send a value to set it,\n`null` to clear it (all-day start), or omit to leave it unchanged."
                     },
                     "status": {
                         "oneOf": [
@@ -14164,7 +14410,15 @@
                             "string",
                             "null"
                         ],
-                        "format": "date-time"
+                        "format": "date-time",
+                        "description": "Send a value to set it, `null` to clear it, or omit to leave it\nunchanged \u2014 the same `Patch` encoding the Habit / Chore / Event\nupdate payloads use (#348)."
+                    },
+                    "deadline_time_of_day": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Deadline as a local time of day, `\"HH:MM\"`. Send a value to set it,\n`null` to clear it (all-day), or omit to leave it unchanged."
                     },
                     "description": {
                         "type": [
