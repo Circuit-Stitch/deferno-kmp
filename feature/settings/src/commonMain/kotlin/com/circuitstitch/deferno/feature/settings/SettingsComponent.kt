@@ -143,8 +143,8 @@ interface SettingsComponent {
     fun onOpenDataExportImport()
 
     /**
-     * Help & Feedback: ask the host to open the web app's submit-feedback surface. Same deferral as
-     * export/import — no in-app feedback endpoint at v0.1, but the tap is **reachable** (AC #4).
+     * Help & Feedback: ask the shell to open the in-app Feedback form (#375). Compose-free here — the
+     * slice only emits; the shell opens the Feedback overlay (the same primitive Search/New ride).
      */
     fun onOpenSubmitFeedback()
 
@@ -173,7 +173,7 @@ interface SettingsComponent {
         /** Open the web app's data export/import surface (Data & Privacy — no client endpoint at v0.1). */
         data object OpenDataExportImport : Output
 
-        /** Open the web app's submit-feedback surface (Help & Feedback — no client endpoint at v0.1). */
+        /** Open the in-app Feedback form (Help & Feedback — the shell hosts it as an overlay, #375). */
         data object OpenSubmitFeedback : Output
 
         /** Open the Zitadel admin console (Security & 2FA stub) — handled only when a URL is present. */

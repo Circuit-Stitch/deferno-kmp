@@ -289,12 +289,12 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
 @Composable
 private fun HelpFeedbackDetail(component: SettingsComponent) {
     Text(
-        text = "Have a question or a suggestion? Feedback runs in the Deferno web app — " +
-            "there’s no in-app endpoint yet. Open the web app to send it.",
+        text = "Have a question, a bug, or a suggestion? Send it straight to the Deferno team — " +
+            "attach files if it helps.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
-    // Reachable web action, not dead prose (AC #4): the host deep-links the web app's feedback surface.
+    // Opens the in-app Feedback form overlay (#375) — the shell handles the submit, no web round-trip.
     TextButton(
         onClick = component::onOpenSubmitFeedback,
         modifier = Modifier.heightIn(min = MinTouchTarget),

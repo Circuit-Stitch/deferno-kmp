@@ -147,8 +147,8 @@ class SettingsComponentTest {
 
     @Test
     fun helpFeedback_submit_emitsOpenSubmitFeedback() {
-        // Submit-feedback is likewise reachable, not static text (AC #4): the tap asks the host to
-        // deep-link the web app's feedback surface.
+        // Submit-feedback is reachable, not static text (AC #4): the tap asks the shell to open the
+        // in-app Feedback overlay (#375).
         val outputs = mutableListOf<SettingsComponent.Output>()
         val (component, _, _) = component(output = outputs::add)
 
