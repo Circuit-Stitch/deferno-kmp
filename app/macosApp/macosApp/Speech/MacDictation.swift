@@ -12,7 +12,15 @@ import Speech
 final class MacDictation: NativeDictation {
 
     func isAvailable(locale: String) -> Bool {
-        SFSpeechRecognizer(locale: Locale(identifier: locale))?.supportsOnDeviceRecognition ?? false
+        // The recognizer must support on-device recognition for this locale...
+        guard SFSpeechRecognizer(locale: Locale(identifier: locale))?.supportsOnDeviceRecognition == true else {
+            return false
+        }
+        // ...AND there must be a real audio input device. With no mic, `outputFormat(forBus:0)` still
+        // reports a default format (so the engine's zero-format guard passes) but `audioEngine.start()`
+        // fails — so detect the no-mic case here and simply don't offer the mic (it would only fail).
+        // Device enumeration needs no TCC; permission is still requested on first capture.
+        return AVCaptureDevice.default(for: .audio) != nil
     }
 
     func start(
@@ -37,14 +45,25 @@ final class MacDictation: NativeDictation {
                     onError("unsupported-locale"); return
                 }
                 guard handle.adopt(transcriber) else { return } // stop already ran while we were authorizing
-                transcriber.start(onEvent: { event in
-                    switch event {
-                    case .partial(let text): onPartial(text)
-                    case .final(let text): onFinal(text)
-                    case .failure(let reason): onError(reason)
-                    @unknown default: onError("recognition-failed")
+                // installTapOnBus can raise an NSException on a format/hardware mismatch — wrap it so it
+                // degrades to a gentle onError instead of aborting (Kotlin/Native can't catch Obj-C throws).
+                // The BOOL/NSError** Obj-C shim imports into Swift as a throwing call.
+                do {
+                    try DFNExceptionCatcher.catchException {
+                        transcriber.start(onEvent: { event in
+                            switch event {
+                            case .partial(let text): onPartial(text)
+                            case .final(let text): onFinal(text)
+                            case .failure(let reason): onError(reason)
+                            @unknown default: onError("recognition-failed")
+                            }
+                        }, onEnd: {})
                     }
-                }, onEnd: {})
+                } catch {
+                    NSLog("[Deferno] dictation audio setup raised: %@", error.localizedDescription)
+                    handle.stop()
+                    onError("audio-setup-failed")
+                }
             }
         }
         return handle

@@ -13,6 +13,9 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+    # Mixed Swift/Obj-C: the bridging header exposes DFNExceptionCatcher (wraps AVFoundation NSExceptions
+    # that Kotlin/Native can't catch). Path is relative to SRCROOT (app/macosApp).
+    SWIFT_OBJC_BRIDGING_HEADER: macosApp/macosApp-Bridging-Header.h
     PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macos
     MARKETING_VERSION: "0.1"
     CURRENT_PROJECT_VERSION: "1"

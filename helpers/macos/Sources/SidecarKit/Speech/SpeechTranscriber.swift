@@ -70,7 +70,12 @@ public final class SpeechTranscriber {
             emitFailureAndEnd("no-audio-input", onEvent)
             return
         }
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak request] buffer, _ in
+        // Pass `nil`, not the explicit `format`: on macOS, installing a tap with `outputFormat(forBus:0)`
+        // raises "Failed to create tap due to format mismatch" (the bus's float/deinterleaved layout —
+        // e.g. 2 ch, 44100 Hz, Float32 — doesn't round-trip through the explicit AVAudioFormat). `nil`
+        // uses the node's own bus format directly, which the on-device recognizer accepts; the guard above
+        // still rejects the genuine no-input-device case. (ADR-0029 Phase 2 — also hardens the Helper.)
+        input.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak request] buffer, _ in
             request?.append(buffer) // realtime audio thread — append only, no socket work here
         }
         tapInstalled = true
