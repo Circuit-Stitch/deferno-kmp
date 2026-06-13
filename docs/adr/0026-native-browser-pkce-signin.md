@@ -79,3 +79,38 @@ resolved in DNS), and `DefernoRoot` now selects the environment by build configu
 (`Platform.isDebugBinary`: Debug → Staging, Release/TestFlight → Production). Note: as of 2026-06-10
 the `/api/auth/native/*` endpoints 404 on the prod host — browser sign-in against Production needs
 the backend handoff (Deferno#299) deployed there.
+
+**Amendment (2026-06-13) — macOS uses a loopback redirect (real external browser), not
+`ASWebAuthenticationSession` and not a custom scheme (#189).** macOS deliberately **diverges from iOS**:
+`MacBrowserAuthenticator` is the twin of the JVM desktop **`LoopbackBrowserAuthenticator`**, not
+`IosBrowserAuthenticator`. It opens the authorize URL in the user's **default browser**
+(`NSWorkspace.openURL`) and captures the redirect on a **`127.0.0.1:{ephemeral}` loopback listener** (RFC
+8252 §7.3 — a native POSIX-socket accept), the desktop `redirect_uri` the backend allows.
+
+*Considered & rejected, in order:*
+
+- *`ASWebAuthenticationSession` (the iOS choice).* On macOS it presents a **chromeless, mostly-empty
+  separate window** plus, for a non-ephemeral session, a **cookie-consent prompt** before the user even
+  sees the form — both wrong for a desktop, where users expect their **real browser** (full chrome,
+  existing logged-in/SSO sessions, password manager). iOS adopted the session to avoid bouncing a *phone*
+  user to Safari; on a desktop that bounce is the **expected** OAuth pattern (gh CLI, 1Password, Slack).
+- *A `com.circuitstitch.deferno://` custom-scheme redirect (the Android mechanism) captured via
+  `AuthRedirectInbox`.* Tried first; **rejected after testing**: on macOS the browser hands the
+  custom-scheme URL to **LaunchServices**, which pops a Safari *"allow this site to open the app?"* prompt
+  and **launches a second app process** instead of delivering the redirect to the running one — so the
+  in-flight sign-in's inbox never sees it. (`LSMultipleInstancesProhibited` + a single `Window` scene
+  reduce the spawning, but the prompt is intrinsic to custom schemes.) Loopback keeps LaunchServices out
+  of the loop entirely: the redirect is just an HTTP request to localhost, the browser lands on a real
+  "you can close this" page, and the running app is never left.
+
+The custom-scheme registration (`CFBundleURLTypes`) + `forwardAuthRedirect` → inbox path is **retained as
+a fallback** for an externally-opened redirect (as on iOS), but is not the primary capture path.
+
+The one capability the external browser **loses** is `ASWebAuthenticationSession`'s close/cancel event: a
+real browser gives the launching app no tab-close signal, so there is **no automatic `Cancelled`** on
+this path — an abandoned sign-in would otherwise hang on the listener. Two mitigations: the loopback
+`accept` self-frees after the backend's 5-min code TTL, and a shared **"Need to try again?" affordance**
+(`SignInComponent.onRetry()`) cancels the stalled attempt and starts a fresh one. It renders where the
+app stays foreground during sign-in — **macOS, Android, desktop** — but **not iOS**, whose modal session
+sheet occludes the Auth screen and already cancels on close. A focus-based heuristic (reset on app
+re-activation) was rejected as too fragile (Cmd-Tab back to copy a password would misfire).

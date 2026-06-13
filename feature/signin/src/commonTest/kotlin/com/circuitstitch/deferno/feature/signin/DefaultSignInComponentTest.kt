@@ -100,6 +100,30 @@ class DefaultSignInComponentTest {
         assertEquals(1, service.browserCalls)
     }
 
+    @Test
+    fun onRetry_whileBusy_cancelsTheStalledLegAndStartsAfresh() = runTest {
+        // The external browser gives no close event (ADR-0026): a started-then-abandoned sign-in is
+        // stuck busy. onRetry must cancel that leg and open a fresh one — not be dropped as "already busy".
+        val gate = CompletableDeferred<Unit>()
+        val service = FakeSignInService(SignInResult.Success(account)).apply { this.gate = gate }
+        val component = component(service)
+
+        component.onSignInClick()
+        advanceUntilIdle() // first leg now waiting on the gate
+        assertTrue(component.state.value.isBusy)
+        assertEquals(1, service.browserCalls)
+
+        component.onRetry()
+        advanceUntilIdle()
+        assertEquals(2, service.browserCalls) // a fresh leg started
+        assertTrue(component.state.value.isBusy)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(component.state.value.isBusy)
+        assertNull(component.state.value.error)
+    }
+
     // --- dev paste fallback ---
 
     @Test

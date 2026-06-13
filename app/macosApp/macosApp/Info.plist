@@ -2,15 +2,27 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <!-- Merged into the generated Info.plist (GENERATE_INFOPLIST_FILE stays YES; explicit keys win) — the
-     macOS twin of app/iosApp/iosApp/Info.plist. Holds only what the INFOPLIST_KEY_* build settings
-     can't express: the custom URL scheme the OAuth redirect re-enters the app on (ADR-0026, #137),
-     forwarded by DefernoApp.onOpenURL → DefernoRoot.forwardAuthRedirect. The real browser OAuth leg
-     is #189; paste-PAT sign-in needs no redirect.
+     macOS twin of app/iosApp/iosApp/Info.plist. Holds what the INFOPLIST_KEY_* build settings can't
+     express: the app name, single-instance behavior, and the custom URL scheme the OAuth redirect
+     re-enters the app on (ADR-0026, #189), forwarded by DefernoApp.onOpenURL → forwardAuthRedirect.
 
      Optional dev-PAT seeding (DefernoRoot.seedDevAccounts, ADR-0012): add `DevAccounts` +
      `DevStagingToken` string keys here LOCALLY to open on real staging data without typing — kept out
      of git (no PAT ships); absent → nothing is seeded. -->
 <dict>
+	<!-- The user-visible app name. Without these the synthesized CFBundleName is the Xcode target name
+	     "macosApp", which shows in the menu bar and (title-less scenes) the window title (#189). -->
+	<key>CFBundleName</key>
+	<string>Deferno</string>
+	<key>CFBundleDisplayName</key>
+	<string>Deferno</string>
+	<!-- Single instance (#189): the OAuth redirect re-enters via the custom scheme below. Without this,
+	     LaunchServices launches a SECOND app process to handle the redirect instead of delivering it to
+	     the running one — so the in-flight sign-in's AuthRedirectInbox never sees it. YES routes the URL
+	     to the live instance's onOpenURL. (ASWebAuthenticationSession sidesteps this by capturing the
+	     redirect in-process; the external-browser path relies on LaunchServices, hence this key.) -->
+	<key>LSMultipleInstancesProhibited</key>
+	<true/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

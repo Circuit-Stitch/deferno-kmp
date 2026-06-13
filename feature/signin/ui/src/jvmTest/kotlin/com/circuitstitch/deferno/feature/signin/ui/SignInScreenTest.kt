@@ -56,6 +56,25 @@ class SignInScreenTest {
     }
 
     @Test
+    fun busy_offersTheTryAgainAffordance_andWiresRetry() = runComposeUiTest {
+        // The external browser gives no close event (ADR-0026); the busy state must offer a restart.
+        // The primary button reads "Signing in…" while busy, so the only "Sign in" is the retry button.
+        val fake = FakeSignInComponent(SignInState(isBusy = true))
+        setContent { Themed { SignInScreen(fake) } }
+
+        onNodeWithText("Need to try again?").assertExists()
+        onNodeWithText("Sign in").performClick()
+        assertEquals(1, fake.retryCount)
+    }
+
+    @Test
+    fun idle_doesNotOfferTheTryAgainAffordance() = runComposeUiTest {
+        setContent { Themed { SignInScreen(FakeSignInComponent(SignInState())) } }
+
+        onNodeWithText("Need to try again?", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun unavailableError_rendersInline() = runComposeUiTest {
         val state = SignInState(error = SignInError.Unavailable)
         setContent { Themed { SignInScreen(FakeSignInComponent(state)) } }
@@ -135,6 +154,8 @@ private class FakeSignInComponent(initial: SignInState) : SignInComponent {
 
     var signInClicks = 0
         private set
+    var retryCount = 0
+        private set
     var useTokenCount = 0
         private set
     var submitCount = 0
@@ -142,6 +163,10 @@ private class FakeSignInComponent(initial: SignInState) : SignInComponent {
 
     override fun onSignInClick() {
         signInClicks++
+    }
+
+    override fun onRetry() {
+        retryCount++
     }
 
     override fun onUseTokenInstead() {

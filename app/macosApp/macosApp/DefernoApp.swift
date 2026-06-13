@@ -17,11 +17,16 @@ struct DefernoApp: App {
     @State private var showExtractor = false
 
     var body: some Scene {
-        WindowGroup {
+        // A single `Window` (not a `WindowGroup`): Deferno is a one-window app, and the OAuth redirect
+        // re-entering via the custom scheme must NOT spawn a second window — it has to land on the live
+        // shell so the in-flight sign-in's inbox receives it (#189). The explicit title also names the
+        // window "Deferno" regardless of the bundle name.
+        Window("Deferno", id: "main") {
             RootView(root: host.root)
-                // OAuth redirect fallback (ADR-0026, #137): paste-PAT sign-in needs no redirect, but if
-                // the registered `com.circuitstitch.deferno` scheme (project.yml URL types) ever re-enters
-                // the app from an external browser (#189), the shared inbox still routes it.
+                // OAuth redirect (ADR-0026, #137): the system browser returns to the registered
+                // `com.circuitstitch.deferno` scheme (project.yml URL types); forward it to the shared
+                // inbox the in-flight `MacBrowserAuthenticator` awaits. On macOS this is the PRIMARY
+                // capture path (#189), not just a fallback.
                 .onOpenURL { url in
                     host.forwardAuthRedirect(url: url.absoluteString)
                 }
