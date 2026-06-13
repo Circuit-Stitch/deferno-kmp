@@ -13,6 +13,7 @@ import SwiftUI
 /// only the local "More" sheet flag.
 struct MainShellView: View {
     let component: MainShellComponent
+    let onBrainDump: () -> Void
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.defernoColors) private var colors
     @StateObject private var destinations: DestinationStackObserver
@@ -20,8 +21,9 @@ struct MainShellView: View {
     @StateObject private var accounts: AccountsObserver
     @State private var showMore = false
 
-    init(component: MainShellComponent) {
+    init(component: MainShellComponent, onBrainDump: @escaping () -> Void) {
         self.component = component
+        self.onBrainDump = onBrainDump
         _destinations = StateObject(wrappedValue: DestinationStackObserver(ShellBridgeKt.destinationStackBridge(component: component)))
         _overlay = StateObject(wrappedValue: OverlaySlotObserver(ShellBridgeKt.overlaySlotBridge(component: component)))
         _accounts = StateObject(wrappedValue: AccountsObserver(ShellBridgeKt.accountSwitcherBridge(component: component)))
@@ -56,10 +58,38 @@ struct MainShellView: View {
         NavigationSplitView {
             sidebar
         } detail: {
-            VStack(spacing: 0) {
-                topBar
-                bodyWithFab
+            destinationBody
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .toolbar { windowToolbar }
+                // The title bar tracks the foreground Destination (Plan / Calendar / Tasks …) rather
+                // than shouting the brand — the macOS-idiomatic sidebar-app title. The window itself
+                // stays named "Deferno" (Window scene + Dock icon) for ⌘-tab / the Window menu.
+                .navigationTitle(activeName)
+        }
+    }
+
+    /// The window's native title-bar actions (macOS): the account switcher sits leading next to the
+    /// sidebar toggle; Search · Brain dump · New task trail to the top-right (New rightmost). This is
+    /// the desktop counterpart of the Android shell chrome's trailing glyph row — Brain dump opens the
+    /// on-device Extractor (the same sheet as the ⌘⇧E menu), New mirrors the FAB's pre-dating behaviour.
+    @ToolbarContentBuilder
+    private var windowToolbar: some ToolbarContent {
+        if accounts.accounts.count > 1 {
+            ToolbarItem(placement: .navigation) { accountSwitcher }
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button { ShellBridgeKt.openSearchOverlay(component: component) } label: {
+                Image(systemName: "magnifyingglass")
             }
+            .help("Search")
+            Button(action: onBrainDump) {
+                Image(systemName: "brain.head.profile")
+            }
+            .help("Brain dump")
+            Button(action: onNewTapped) {
+                Image(systemName: "plus")
+            }
+            .help("New task")
         }
     }
 
@@ -216,7 +246,6 @@ struct MainShellView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Deferno")
     }
 
     // MARK: Overlay (Search / New) as a sheet

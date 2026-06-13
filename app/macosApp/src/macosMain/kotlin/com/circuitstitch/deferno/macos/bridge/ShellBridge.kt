@@ -366,3 +366,30 @@ fun openSearchOverlay(component: MainShellComponent) = component.openOverlay(Ove
 
 /** Open the New create overlay, undated (the shell FAB on a non-Calendar Destination, #71). */
 fun openNewOverlay(component: MainShellComponent) = component.openOverlay(OverlayRoute.New(null))
+
+/** The active Main shell, or null when the Auth shell is foreground. */
+private fun RootComponent.activeMain(): MainShellComponent? =
+    (stack.value.active.instance as? RootComponent.Child.Main)?.component
+
+/**
+ * Open New on the active shell — pre-dated to the Calendar's selected day when Calendar is foreground
+ * (#74), undated elsewhere. The ⌘N menu command's seam: it fires outside the View tree, so it reaches
+ * the foreground Destination through the root (the desktop twin of the FAB's `onNewTapped`).
+ */
+fun openNewOnActiveShell(root: RootComponent) {
+    val main = root.activeMain() ?: return
+    when (val active = main.stack.value.active.instance) {
+        is MainShellComponent.DestinationChild.Calendar -> active.component.onNewForSelectedDay()
+        else -> main.openOverlay(OverlayRoute.New(null))
+    }
+}
+
+/** Refresh whichever Destination is foreground — the View → Refresh / ⌘R menu command. No-op elsewhere. */
+fun refreshActiveDestination(root: RootComponent) {
+    val main = root.activeMain() ?: return
+    when (val active = main.stack.value.active.instance) {
+        is MainShellComponent.DestinationChild.Plan -> active.component.onRefresh()
+        is MainShellComponent.DestinationChild.Tasks -> active.component.list.onRefresh()
+        else -> Unit
+    }
+}

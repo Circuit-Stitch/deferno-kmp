@@ -22,7 +22,7 @@ struct DefernoApp: App {
         // shell so the in-flight sign-in's inbox receives it (#189). The explicit title also names the
         // window "Deferno" regardless of the bundle name.
         Window("Deferno", id: "main") {
-            RootView(root: host.root)
+            RootView(root: host.root, onBrainDump: { showExtractor = true })
                 // OAuth redirect (ADR-0026, #137): the system browser returns to the registered
                 // `com.circuitstitch.deferno` scheme (project.yml URL types); forward it to the shared
                 // inbox the in-flight `MacBrowserAuthenticator` awaits. On macOS this is the PRIMARY
@@ -35,6 +35,18 @@ struct DefernoApp: App {
                 }
         }
         .commands {
+            // ⌘N opens the New-task overlay on the foreground Destination (pre-dated on Calendar, #74) —
+            // the standard File → New slot, routed through the root since commands fire outside the View.
+            CommandGroup(replacing: .newItem) {
+                Button("New Task") { ShellBridgeKt.openNewOnActiveShell(root: host.root) }
+                    .keyboardShortcut("n", modifiers: .command)
+            }
+            // Refresh the foreground Destination (⌘R) — the menu home for what used to be each pane's
+            // "Refresh" button (the desktop twin of the Compose menu bar's View → Refresh).
+            CommandMenu("View") {
+                Button("Refresh") { ShellBridgeKt.refreshActiveDestination(root: host.root) }
+                    .keyboardShortcut("r", modifiers: .command)
+            }
             // The Phase-3 demo trigger lives in a menu (⌘⇧E), not the shared shell — it's a macOS-app
             // dev surface for exercising the on-device Extractor, not a shipped product flow yet.
             CommandMenu("Apple Intelligence") {
