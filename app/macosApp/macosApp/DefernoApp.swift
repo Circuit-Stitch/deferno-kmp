@@ -10,12 +10,25 @@ import SwiftUI
 @main
 struct DefernoApp: App {
     // Phase 2 (ADR-0029): the in-process dictation engine (SidecarKit `SpeechTranscriber`, on-device).
-    // The New surface's mic drives it; TCC is attributed to this app's own identity.
-    @State private var host = DefernoDemoRoot(dictation: MacDictation())
+    // Phase 3 (ADR-0029): the in-process inference engine (Foundation Models, on-device). Both run under
+    // this app's own identity (no Helper); the inference engine drives `host.draftTasks` (the Extractor).
+    @State private var host = DefernoDemoRoot(dictation: MacDictation(), inference: MacInference())
+    @State private var showExtractor = false
 
     var body: some Scene {
         WindowGroup {
             RootView(root: host.root)
+                .sheet(isPresented: $showExtractor) {
+                    DraftExtractorView(bridge: host.draftTasks)
+                }
+        }
+        .commands {
+            // The Phase-3 demo trigger lives in a menu (⌘⇧E), not the shared shell — it's a macOS-app
+            // dev surface for exercising the on-device Extractor, not a shipped product flow yet.
+            CommandMenu("Apple Intelligence") {
+                Button("Extract Draft Tasks…") { showExtractor = true }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+            }
         }
     }
 }

@@ -75,6 +75,17 @@ wholesale reversal.
   KMP's default hierarchy template). macOS binds the `NotConfiguredInferenceEngine` floor until the
   Phase-3 Swift engine lands.
 
+Phase 3 refined decision 3's "guided generation" wording. Because the schema is a **runtime Kotlin
+contract** (`InferenceSchema.serializer`), not a Swift `@Generable` type, the engine doesn't use
+FoundationModels' `@Generable` guided generation; it steers a plain `LanguageModelSession` with a
+by-example shape derived from the serializer descriptor (`InferenceSchema.jsonSkeleton()`) and decodes
+the free-text reply, **adapting the parser to the model** rather than the reverse — a generic,
+descriptor-guided `coerceToSchema()` (in `core/agent`, so every target shares it) trims a datetime in a
+date field to its calendar date, unquotes a quoted number, and maps a `"none"` placeholder in a nullable
+field to `null` before the schema validates. Output that still fails is the typed `MalformedOutput`. This
+keeps validation Kotlin-owned (the propose-only invariant) without coupling the seam to Swift's
+generation API, and the on-device model's confusion over exact JSON shape stops being a hard failure.
+
 The cost is a `macosArm64` variant on every `core/*`/`feature/*` module (klibs cross-compile on any
 host; linking the framework needs a Mac, ADR-0006), the `deferno.di` convention gaining a
 `kspMacosArm64` processor config (anvil emits each merged component's `create()` per target via

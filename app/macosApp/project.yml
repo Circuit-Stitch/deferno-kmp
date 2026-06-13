@@ -47,6 +47,11 @@ settings:
       - "Security"
       - "-framework"
       - "Network"
+      # Apple Intelligence / Foundation Models (ADR-0029 Phase 3) — macOS 26 only. Weak-linked so the
+      # app still loads on the 14.0 deployment target; all uses are `@available(macOS 26, *)`-guarded
+      # and gate on `SystemLanguageModel.availability` at runtime (MacInference.swift).
+      - "-weak_framework"
+      - "FoundationModels"
 
 # The macOS Sidecar Helper's Swift package, linked as a LOCAL dependency (ADR-0029 Phase 2) so the app
 # reuses SidecarKit (SpeechTranscriber / SidecarPermissions) in-process. Path is relative to this spec.

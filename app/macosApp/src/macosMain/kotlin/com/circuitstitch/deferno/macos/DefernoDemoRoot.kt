@@ -38,6 +38,8 @@ import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
+import com.circuitstitch.deferno.macos.agent.DraftTasksBridge
+import com.circuitstitch.deferno.macos.agent.NativeInference
 import com.circuitstitch.deferno.macos.demo.DemoPlanRepository
 import com.circuitstitch.deferno.macos.demo.DemoTaskRepository
 import com.circuitstitch.deferno.macos.demo.SampleData
@@ -71,8 +73,16 @@ import kotlin.time.Instant
  * [dictation] is the Phase-2 in-process speech seam (ADR-0029): the Swift app passes a [NativeDictation]
  * over `SidecarKit.SpeechTranscriber`, so the New surface's mic dictates on-device. `null` (the default)
  * leaves dictation unavailable (the mic stays hidden) — keeping the harness runnable without it.
+ *
+ * [inference] is the Phase-3 in-process inference seam (ADR-0029): the Swift app passes a
+ * [NativeInference] over Apple Intelligence's Foundation Models, exposed to SwiftUI as [draftTasks] (the
+ * propose-only Brain-dump Extractor over the on-device model). `null` (the default) leaves [draftTasks]
+ * `null` — the harness still runs, the Apple-Intelligence panel just reports the engine unavailable.
  */
-class DefernoDemoRoot(dictation: NativeDictation? = null) {
+class DefernoDemoRoot(
+    dictation: NativeDictation? = null,
+    inference: NativeInference? = null,
+) {
 
     init {
         // Configure the uniform logger once (ADR-0029): os_log-backed on macOS, identical call shape to
@@ -83,11 +93,20 @@ class DefernoDemoRoot(dictation: NativeDictation? = null) {
 
     private val lifecycle = LifecycleRegistry()
     private val timeZone = TimeZone.currentSystemDefault()
+    private val today = Clock.System.todayIn(timeZone)
     private val session = DemoAccountSession()
 
     // In-process dictation (Phase 2): wrap the injected Swift transcriber, or the Unavailable floor.
     private val speechToText: SpeechToText =
         dictation?.let { NativeSpeechToText(it) } ?: UnavailableSpeechToText
+
+    /**
+     * In-process inference (Phase 3): the on-device Brain-dump Extractor over the injected Foundation
+     * Models engine, or `null` when no engine is injected. Demo-direct wiring — the real DI graph binds
+     * the same engine via `MacosAgentBindings` once the engine-choice App setting lands (#150 / Phase 1b).
+     */
+    val draftTasks: DraftTasksBridge? =
+        inference?.let { DraftTasksBridge(it, today, timeZone.id) }
 
     /** The shared navigation root the SwiftUI `RootView` renders. Opens on the Main shell (seeded Account). */
     val root: RootComponent = DefaultRootComponent(
@@ -96,7 +115,7 @@ class DefernoDemoRoot(dictation: NativeDictation? = null) {
         authRepository = DemoAuthRepository,
         accountSession = { session },
         signInService = DemoSignInService,
-        today = Clock.System.todayIn(timeZone),
+        today = today,
         timeZone = timeZone.id,
         // Phase 2: the New surface's mic drives this on-device engine (ADR-0029). Locale stays the
         // DefaultRootComponent en-US default for the spike.

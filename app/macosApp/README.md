@@ -49,6 +49,34 @@ the mic/Speech usage strings live in `project.yml` (`INFOPLIST_KEY_NS*UsageDescr
 sandboxed (ad-hoc dev signing), so no entitlement is needed. To dictate: open New → tap the mic → grant
 Speech + Microphone → speak; partials stream into the field, settling on a final.
 
+## Phase 3 — on-device inference (Apple Intelligence, ADR-0029)
+
+The Brain-dump **Extractor** (transcript → draft Tasks, propose-only) runs **on-device, in-process** over
+Apple Intelligence's Foundation Models: `macosApp/AI/MacInference.swift` implements the shared Kotlin
+`NativeInference` port (`src/macosMain/.../agent/NativeInference.kt`) with a `LanguageModelSession`. The
+model runs fully on-device, so the transcript never leaves the Mac (ADR-0009/0027); only JSON text crosses
+the seam. **Kotlin keeps ownership of the schema and validation** — `NativeInferenceEngine` decodes the
+model's reply against the request's `InferenceSchema` (`core:agent`), so the propose-only contract and the
+typed `InferenceResult` failure modes are unchanged.
+
+Two `core:agent` pieces make a small on-device model fit a strict Kotlin schema (both generic, derived from
+the serializer descriptor — no Extractor-specific knowledge):
+
+- **`InferenceSchema.jsonSkeleton()`** emits a by-example shape (`{"drafts":[{"id":"string",…}]}`) that
+  steers the model to the exact keys + types, so it doesn't guess the root key or use integer ids.
+- **`InferenceSchema.parse()` → `coerceToSchema()`** adapts the model's natural JSON to the schema: a
+  datetime in a date field is trimmed to the calendar date, a quoted `"0.8"` is unquoted to a number, and a
+  `"none"` placeholder in a nullable field becomes `null`. Anything still invalid is the typed
+  `MalformedOutput`, never a crash.
+
+FoundationModels is macOS 26+; the app deploys to 14.0, so it is **weak-linked** (`-weak_framework
+FoundationModels` in `project.yml`) and every use is `@available(macOS 26, *)`-guarded + gated on
+`SystemLanguageModel.availability` — on an older Mac (or one without Apple Intelligence) the seam answers
+`NotConfigured` and nothing runs. **Try it:** launch → menu **Apple Intelligence ▸ Extract Draft Tasks…**
+(⌘⇧E) → edit the sample transcript → **Extract** → the proposed drafts list (nothing is committed). This is
+a macOS-app dev surface, not yet a shipped product flow; the real DI binding (`MacosAgentBindings`) injects
+the same engine once the engine-choice App setting lands (#150 / Phase 1b).
+
 ## Notes / Phase-1 shortcuts
 
 - **No CocoaPods** (unlike iosApp's SQLCipher): the Phase-1 demo opens no DB, so the system `-lsqlite3`

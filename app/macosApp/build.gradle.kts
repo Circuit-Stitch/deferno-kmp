@@ -72,6 +72,11 @@ kotlin {
             // The shared logger (DefernoDemoRoot configures it + emits the first log) — the uniform
             // facade (ADR-0029), os_log-backed on macOS. `implementation`: Swift never names it.
             implementation(project(":core:common"))
+
+            // Phase 3 (ADR-0029): the InferenceEngine seam + the propose-only Extractor the on-device
+            // Foundation Models engine drives. NOT exported — Swift names only the app-module bridge
+            // types (NativeInference / DraftTasksBridge / DraftPreview), never a core:agent symbol.
+            implementation(project(":core:agent"))
         }
     }
 }
