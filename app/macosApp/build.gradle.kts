@@ -8,10 +8,10 @@ plugins {
 // Kotlin/Native iOS framework, so this is a real macOS target). Klibs cross-compile on any host;
 // linking the framework binary happens on macOS (ADR-0006).
 //
-// Phase 1 renders the shared shell over an in-memory **demo** harness (DefernoDemoRoot) — no backend,
-// no DI graph, no encrypted DB — so the SwiftUI Views are runnable today. The real DefernoRoot over
-// the DI graph (the macOS twin of DefernoApplication + MainActivity) is Phase 1b. This mirrors how
-// app/iosApp started (the DefernoDemo scaffold predated the real DefernoRoot, #51 → #35).
+// DefernoRoot renders the shared shell over the **real DI graph** (the macOS twin of DefernoApplication
+// + MainActivity, ADR-0029 Phase 1b / #188): the AppScope network client + Keychain vault drive the
+// Auth shell + paste-PAT sign-in, and an Active Account opens the encrypted per-Account DB (SQLCipher,
+// linked in the Xcode app). Mirrors app/iosApp's DefernoRoot.
 kotlin {
     // Keep in lockstep with ProjectConfig.JVM_TOOLCHAIN (the build's source of truth). Bespoke
     // Apple-only framework module — can't apply the deferno.* conventions (different target set), and
@@ -62,15 +62,21 @@ kotlin {
             api(libs.kotlinx.coroutines.core)
             api(libs.kotlinx.datetime)
 
-            // The Phase-1 demo harness (DefernoDemoRoot) builds DefaultRootComponent over in-memory
-            // fakes that implement the data-layer repository + session seams + the command/domain types
-            // the AccountSession exposes. NOT exported (Swift never names these) — `api` so macosMain
-            // compiles against them; the SearchSort the SKIE-free bridge surfaces lives in core:data.
+            // Kotlin-only (NOT exported): DefernoRoot builds the real AppComponent + per-Account
+            // AccountComponent over this DI/data graph (ADR-0008/0014) and constructs
+            // DefaultRootComponent — the macOS analogue of DefernoApplication + MainActivity. Swift never
+            // names these types; it only holds the assembled RootComponent + the SKIE-free bridges. `api`
+            // so macosMain compiles against them and their transitive AppScope bindings (Keychain vault,
+            // native SQLCipher driver, Darwin Ktor engine) link into the framework. The SearchSort the
+            // SKIE-free bridge surfaces also lives in core:data.
+            api(project(":core:di"))
+            api(project(":core:scopes"))
             api(project(":core:data"))
             api(project(":core:domain"))
+            api(project(":core:network"))
 
-            // The shared logger (DefernoDemoRoot configures it + emits the first log) — the uniform
-            // facade (ADR-0029), os_log-backed on macOS. `implementation`: Swift never names it.
+            // The shared logger (DefernoRoot configures it + emits the first log) — the uniform facade
+            // (ADR-0029), os_log-backed on macOS. `implementation`: Swift never names it.
             implementation(project(":core:common"))
 
             // Phase 3 (ADR-0029): the InferenceEngine seam + the propose-only Extractor the on-device

@@ -10,27 +10,38 @@ macOS target (ADR-0029).
 - `build.gradle.kts` — the bespoke framework module (`macosArm64`, static `Deferno.framework`, the same
   `export(...)` list as iosApp). Mirrors iosApp; applies no convention plugin (ADR-0004).
 - `src/macosMain/kotlin/.../macos/`
-  - `DefernoDemoRoot.kt` — **Phase 1** demo host: builds the real `DefaultRootComponent` over in-memory
-    fakes (no backend, no DI graph, no encrypted DB), seeded with one Active Account so the app opens on
-    the Main shell. The macOS analogue of iOS's `DefernoRoot`, but fixture-backed (the iOS `DefernoDemo`
-    precedent). Phase 1b swaps in the real `DefernoRoot` over the DI graph + paste-PAT sign-in.
+  - `DefernoRoot.kt` — the app host (**Phase 1b**): builds the process-global `AppComponent` over the real
+    DI graph (network + Keychain + roster) and constructs `DefaultRootComponent`, the macOS analogue of
+    iOS's `DefernoRoot` / Android's `DefernoApplication` + `MainActivity` (AppKit instead of UIKit). Opens
+    on the Auth shell; a pasted staging PAT flips the Active Account and the Main shell renders over the
+    real data layer. Retains the Phase-2 `dictation` + Phase-3 `inference`/`draftTasks` seams.
   - `bridge/` — the hand-written **SKIE-free bridge** (copied from iosApp; pure Kotlin/Decompose, no
     UIKit), observed by the SwiftUI Views until SKIE supports Kotlin 2.4.0.
-  - `DefernoDemo.kt`, `demo/` — the Plan+Tasks demo components + in-memory repositories.
+  - `TasksRoot.kt` — the Swift-facing Tasks + Plan Destination roots (flatten the Decompose generics for
+    SwiftUI; built by `ShellBridge`).
 - `macosApp/` — the SwiftUI sources (copied from iosApp; per ADR-0028 the View bodies may diverge for
   macOS). macOS-only fixes vs iOS: system background colors → `NSColor`, no `textInputAutocapitalization`,
-  no size classes (always the wide layout), and `SQLiteExtensionShims.swift` (see below).
+  no size classes (always the wide layout), and `SQLiteLegacyShims.swift` (see below).
 - `project.yml` — the **XcodeGen** spec (source of truth). The `.xcodeproj` is generated, not committed.
 
 ## Build & run
 
 ```sh
 cd app/macosApp
+./build.sh           # xcodegen generate + pod install + xcodebuild
+./build.sh --open    # …then launch the built .app
+```
+
+XcodeGen generates the `.xcodeproj`; CocoaPods (SQLCipher) layers a `.xcworkspace` on top, so it's a
+two-step setup — `pod install` must follow every `xcodegen generate` (regeneration drops the pod
+integration), and the **workspace** is what gets built. `build.sh` wraps exactly that; the equivalent
+by hand:
+
+```sh
 xcodegen generate                                              # regenerate macosApp.xcodeproj from project.yml
-xcodebuild -project macosApp.xcodeproj -scheme macosApp \
+pod install                                                    # integrate SQLCipher → macosApp.xcworkspace
+xcodebuild -workspace macosApp.xcworkspace -scheme macosApp \
   -configuration Debug -destination 'platform=macOS,arch=arm64' build
-open "$(xcodebuild -project macosApp.xcodeproj -scheme macosApp -showBuildSettings \
-  | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{d=$2} / FULL_PRODUCT_NAME /{n=$2} END{print d"/"n}')"
 ```
 
 A pre-build phase runs `./gradlew :app:macosApp:embedAndSignAppleFrameworkForXcode`, which stages the
@@ -77,11 +88,23 @@ FoundationModels` in `project.yml`) and every use is `@available(macOS 26, *)`-g
 a macOS-app dev surface, not yet a shipped product flow; the real DI binding (`MacosAgentBindings`) injects
 the same engine once the engine-choice App setting lands (#150 / Phase 1b).
 
-## Notes / Phase-1 shortcuts
+## Phase 1b — real DI graph + paste-PAT sign-in (ADR-0029, #188)
 
-- **No CocoaPods** (unlike iosApp's SQLCipher): the Phase-1 demo opens no DB, so the system `-lsqlite3`
-  satisfies the statically-linked SQLiter symbols. The two extension-loader symbols macOS omits
-  (`SQLITE_OMIT_LOAD_EXTENSION`) are stubbed in `SQLiteExtensionShims.swift` (never called — no DB opens).
-  Phase 1b links a full SQLite (e.g. SQLCipher) for the real encrypted per-Account DB.
-- Ad-hoc code signing for local dev; TCC/notarization signing (Phase 2+) is a Mac-session concern kept
-  out of git (ADR-0009/0029).
+`DefernoApp.swift` hosts `DefernoRoot` over the real DI graph. **Try it:** launch → the **Auth shell** →
+**Use a token instead** → paste a staging PAT (ADR-0023) → the Active Account flips → the **Main shell**
+renders over the real data layer → **Profile** loads the `/auth/me` staging identity. Optional dev-PAT
+seeding: add `DevAccounts` + `DevStagingToken` string keys to `macosApp/Info.plist` locally (kept out of
+git) to open on real staging data without typing.
+
+- **SQLCipher via CocoaPods** — the SAME pod `app/iosApp` uses (Zetetic's stock `SQLCipher ~> 4.6`), so
+  macOS and iOS link an identical, proven build. It exports the standard `sqlite3_*` symbols the shared
+  SQLiter driver references (including the deprecated ones the cinterop still wraps but never calls), so
+  there's no shim. It is the **sole** sqlite provider (the app links no `-lsqlite3`, so no duplicate
+  symbols) plus real `PRAGMA key` encryption-at-rest (ADR-0009) — so the moment an Account goes active,
+  the encrypted per-Account DB opens. (SwiftPM's skiptools/swift-sqlcipher was tried first per #188 but
+  its amalgamation drops deprecated APIs under `SQLITE_OMIT_DEPRECATED`, which would have needed link-time
+  stubs — CocoaPods avoids that, matching iOS exactly. SidecarKit stays a local SwiftPM package.)
+- The custom URL scheme (`com.circuitstitch.deferno`, for the OAuth redirect fallback / #189) is registered
+  via a partial `macosApp/Info.plist` merged into the generated one (`GENERATE_INFOPLIST_FILE` stays YES).
+- Ad-hoc code signing for local dev; TCC/notarization signing is a Mac-session concern kept out of git
+  (ADR-0009/0029).
