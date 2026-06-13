@@ -39,6 +39,13 @@ kotlin {
     iosArm64()
     iosSimulatorArm64()
 
+    // The native macOS target (ADR-0029): a genuinely-native SwiftUI/AppKit Mac app links a real
+    // `macosArm64` Deferno.framework (Mac Catalyst can't link a Kotlin/Native iOS framework — no
+    // `macabi` slice). Apple-Silicon only, matching the iOS target set. Most Apple platform code is
+    // shared with iOS via the default-hierarchy `appleMain` source set; the genuine iOS-vs-macOS
+    // divergences (the logging backend, the Koog inference engine) are isolated per source set.
+    macosArm64()
+
     sourceSets {
         commonTest.dependencies {
             implementation(kotlin("test"))

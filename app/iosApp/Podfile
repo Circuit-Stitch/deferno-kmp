@@ -12,5 +12,9 @@
 platform :ios, '16.0'
 
 target 'iosApp' do
-  pod 'SQLCipher', '~> 4.6'
+  # :inhibit_warnings — sqlite3.c (the SQLite amalgamation SQLCipher vendors) emits ~117
+  # -Wshorten-64-to-32 warnings under Xcode's default warning set. They're intentional, safe
+  # truncations in upstream SQLite (lengths are bounded by SQLITE_MAX_LENGTH, which fits an int),
+  # not our code — silence them for this pod only so they don't drown the build log.
+  pod 'SQLCipher', '~> 4.6', :inhibit_warnings => true
 end

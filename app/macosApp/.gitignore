@@ -1,0 +1,8 @@
+# The Xcode project is GENERATED from project.yml by XcodeGen (`cd app/macosApp && xcodegen generate`)
+# — project.yml is the source of truth, so the generated project + Xcode user state are not committed.
+macosApp.xcodeproj/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+
+# Gradle staging dir for the Kotlin framework (embedAndSignAppleFrameworkForXcode → build/xcode-frameworks).
+build/

@@ -1,0 +1,95 @@
+# XcodeGen spec for the native macOS app (ADR-0029). Generates macosApp.xcodeproj from this
+# declarative source of truth — cleaner + less error-prone than a hand-edited .pbxproj. SQLCipher (for
+# the encrypted per-Account DB, ADR-0029 Phase 1b / #188) is linked via **CocoaPods** — the SAME pod
+# app/iosApp uses (Zetetic's stock `SQLCipher ~> 4.6` amalgamation), so the shared SQLiter driver's
+# `sqlite3_*` symbols (including the deprecated ones it still references) resolve with no shim. See the
+# Podfile. Because the pod integrates by editing the generated project, the build is a two-step flow:
+#   cd app/macosApp && xcodegen generate && pod install     # then build the .xcworkspace
+name: macosApp
+options:
+  bundleIdPrefix: com.circuitstitch.deferno
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    # Mixed Swift/Obj-C: the bridging header exposes DFNExceptionCatcher (wraps AVFoundation NSExceptions
+    # that Kotlin/Native can't catch). Path is relative to SRCROOT (app/macosApp).
+    SWIFT_OBJC_BRIDGING_HEADER: macosApp/macosApp-Bridging-Header.h
+    PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macos
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: YES
+    # The custom URL scheme (CFBundleURLTypes) the OAuth redirect re-enters on (ADR-0026, #137) can't be
+    # expressed by an INFOPLIST_KEY_* setting, so a partial Info.plist carries it; GENERATE_INFOPLIST_FILE
+    # stays YES and merges the synthesized + INFOPLIST_KEY_* keys on top (explicit keys win). Mirrors iosApp.
+    INFOPLIST_FILE: macosApp/Info.plist
+    INFOPLIST_KEY_NSHumanReadableCopyright: ""
+    # Dictation TCC usage strings (ADR-0029 Phase 2): the in-process SpeechTranscriber prompts under THIS
+    # app's identity, so the strings live here (not in the launchd Helper's embedded plist, ADR-0024). The
+    # app is not sandboxed (ad-hoc dev signing), so the usage strings alone satisfy mic/Speech TCC — no
+    # entitlement is needed. (When the app gains the App Sandbox, add com.apple.security.device.audio-input.)
+    INFOPLIST_KEY_NSMicrophoneUsageDescription: "Deferno transcribes your dictation on-device to fill in a new item."
+    INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Deferno recognizes your speech on-device to fill in a new item — the audio never leaves your Mac."
+    # Local dev: ad-hoc sign so a headless xcodebuild + a local launch work without a Dev account.
+    # TCC/notarization signing (Phase 2+) is a Mac-session concern, kept out of git (ADR-0009/0029).
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGNING_ALLOWED: YES
+    # The shared Kotlin/Native static `Deferno.framework`, staged by the gradle pre-build phase into
+    # $(SRCROOT)/build/xcode-frameworks (the iosApp pattern). Linked, plus the system libs the linked
+    # graph references: Security (Keychain vault), Network (NWPathMonitor). The `sqlite3_*` symbols the
+    # statically-linked SQLiter driver references are NOT satisfied by the system `-lsqlite3` (no codec) —
+    # the CocoaPods `SQLCipher` (Podfile) is their SOLE provider (its link flags flow in via $(inherited)
+    # from the Pods xcconfig), so there's exactly one sqlite implementation (no duplicate symbols) plus
+    # real `PRAGMA key` encryption-at-rest (ADR-0009). The SQLiter cinterop's own system-sqlite linker opt
+    # is not propagated into the app, so SQLCipher cleanly satisfies the undefined symbols (exactly as
+    # app/iosApp does — and the stock pod still ships the deprecated `sqlite3_*` the cinterop wraps).
+    FRAMEWORK_SEARCH_PATHS:
+      - "$(inherited)"
+      - "$(SRCROOT)/build/xcode-frameworks"
+    OTHER_LDFLAGS:
+      - "$(inherited)"
+      - "-framework"
+      - "Deferno"
+      - "-framework"
+      - "Security"
+      - "-framework"
+      - "Network"
+      # Apple Intelligence / Foundation Models (ADR-0029 Phase 3) — macOS 26 only. Weak-linked so the
+      # app still loads on the 14.0 deployment target; all uses are `@available(macOS 26, *)`-guarded
+      # and gate on `SystemLanguageModel.availability` at runtime (MacInference.swift).
+      - "-weak_framework"
+      - "FoundationModels"
+
+# The macOS Sidecar Helper's Swift package, linked as a LOCAL SwiftPM dependency (ADR-0029 Phase 2) so
+# the app reuses SpeechTranscriber / SidecarPermissions in-process. Path is relative to this spec.
+# (SQLCipher is CocoaPods, not SwiftPM — see the Podfile + the OTHER_LDFLAGS note above.)
+packages:
+  SidecarKit:
+    path: ../../helpers/macos
+
+targets:
+  macosApp:
+    type: application
+    platform: macOS
+    sources:
+      - path: macosApp
+    dependencies:
+      - package: SidecarKit
+        product: SidecarKit
+    preBuildScripts:
+      - name: "Build shared Kotlin framework"
+        basedOnDependencyAnalysis: false
+        script: |
+          # Builds + stages the shared Kotlin/Native static `Deferno.framework` for the current Xcode
+          # CONFIGURATION/SDK/ARCHS into $SRCROOT/build/xcode-frameworks (FRAMEWORK_SEARCH_PATHS). The
+          # IDE-support guard mirrors app/iosApp.
+          if [ "YES" = "$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED" ]; then
+            echo "Skipping Gradle: invoked from Kotlin IDE build support."
+            exit 0
+          fi
+          cd "$SRCROOT/../.."
+          ./gradlew :app:macosApp:embedAndSignAppleFrameworkForXcode

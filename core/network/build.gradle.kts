@@ -35,15 +35,16 @@ kotlin {
         }
 
         // Per-target engines (ADR-0003 native-per-platform). OkHttp drives Android + the
-        // desktop/JVM target; Darwin (NSURLSession) drives iOS. The commonMain config is
-        // engine-agnostic, so these supply only the engine.
+        // desktop/JVM target; Darwin (NSURLSession) drives both Apple targets (iOS + macOS,
+        // ADR-0029) from the shared appleMain. The commonMain config is engine-agnostic, so these
+        // supply only the engine.
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
         }
         jvmMain.dependencies {
             implementation(libs.ktor.client.okhttp)
         }
-        iosMain.dependencies {
+        appleMain.dependencies {
             implementation(libs.ktor.client.darwin)
         }
 

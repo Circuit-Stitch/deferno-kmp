@@ -51,7 +51,7 @@
 		DC7FD732D8796105D096EC7A /* Pods-iosApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.release.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.release.xcconfig"; sourceTree = "<group>"; };
 		DE0001000000000000000001 /* DefernoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoApp.swift; sourceTree = "<group>"; };
 		DE0001000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		DE0001000000000000000003 /* iosApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iosApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DE0001000000000000000003 /* Deferno.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Deferno.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DE0001000000000000000010 /* ObservableState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservableState.swift; sourceTree = "<group>"; };
 		DE0001000000000000000011 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		DE0001000000000000000012 /* CommonViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonViews.swift; sourceTree = "<group>"; };
@@ -103,7 +103,6 @@
 				85FCC65B3A9A22AD7A207747 /* Pods-iosApp.debug.xcconfig */,
 				DC7FD732D8796105D096EC7A /* Pods-iosApp.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -153,7 +152,7 @@
 		DE0003000000000000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				DE0001000000000000000003 /* iosApp.app */,
+				DE0001000000000000000003 /* Deferno.app */,
 				DE0001000000000000000020 /* iosAppTests.xctest */,
 			);
 			name = Products;
@@ -290,7 +289,7 @@
 			);
 			name = iosApp;
 			productName = iosApp;
-			productReference = DE0001000000000000000003 /* iosApp.app */;
+			productReference = DE0001000000000000000003 /* Deferno.app */;
 			productType = "com.apple.product-type.application";
 		};
 		DE0005000000000000000020 /* iosAppTests */ = {
@@ -533,6 +532,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GDV76FJJZ5;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
@@ -569,6 +569,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GDV76FJJZ5;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",

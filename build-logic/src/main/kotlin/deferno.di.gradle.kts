@@ -32,8 +32,10 @@ dependencies {
     add("commonMainImplementation", lib("kotlin-inject-anvil-runtimeOptional"))
 
     // Both processors on every target. `kspJvm` drives the commonTest JVM-fast path;
-    // `kspAndroid` covers `check`'s Android host tests; the iOS configs cover the klibs.
-    listOf("kspJvm", "kspAndroid", "kspIosArm64", "kspIosSimulatorArm64")
+    // `kspAndroid` covers `check`'s Android host tests; the iOS + macOS (ADR-0029) configs cover the
+    // native klibs. anvil emits each merged component's create() per platform via expect/actual, so a
+    // missing per-target KSP config means a missing `actual fun create…Component` on that target.
+    listOf("kspJvm", "kspAndroid", "kspIosArm64", "kspIosSimulatorArm64", "kspMacosArm64")
         .forEach { config ->
             add(config, lib("kotlin-inject-compiler"))
             add(config, lib("kotlin-inject-anvil-compiler"))

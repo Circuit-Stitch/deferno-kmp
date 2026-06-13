@@ -25,38 +25,59 @@ kotlin {
             // `api`: KSerializer appears on the seam's public surface (InferenceSchema), so the
             // serialization runtime must reach every consumer (the json artifact api-exposes core).
             api(libs.kotlinx.serialization.json)
-            // The engine's credential-cache mutex + rethrown CancellationException are named directly.
+            // InferenceEngine.infer is suspend; the seam + NotConfiguredInferenceEngine name it.
             implementation(libs.kotlinx.coroutines.core)
-            // Koog 1.0, stable modules only (ADR-0027): the stock Anthropic client, the executor +
-            // structured-output layer, and the Ktor-backed KoogHttpClient factory. Internal to the
-            // KoogInferenceEngine — the seam exposes no Koog type, so the boundary stays fake-able.
-            implementation(libs.koog.prompt.executor.anthropic.client)
-            implementation(libs.koog.prompt.executor.model)
-            implementation(libs.koog.http.client.ktor)
-            // `api`: the engine's injectable base HttpClient (the MockEngine test seam) is a public
-            // constructor parameter, same rationale as core/network's client surface.
-            api(libs.ktor.client.core)
         }
 
-        // Per-target Ktor engines (ADR-0003 native-per-platform), as in core/network: Koog's
-        // http-client-ktor ships no engine, and the default `HttpClient()` discovers one at runtime.
-        androidMain.dependencies {
-            implementation(libs.ktor.client.okhttp)
+        // The Koog-backed engine (KoogInferenceEngine + the AppScope AgentBindings) lives in the
+        // shared `src/hosted` directory, compiled into Android/JVM/iOS only — Koog publishes no
+        // macosArm64 klib (ADR-0029), so macOS gets the NotConfiguredInferenceEngine floor + its own
+        // MacosAgentBindings (src/macosMain) until the Swift FoundationModels engine is injected at
+        // the seam (Phase 3). Sharing one srcDir across the three targets keeps a single copy without
+        // a custom intermediate source set (which fights KMP's default hierarchy template).
+        // ponytail: one shared dir, not three copies and not a hand-wired hierarchy.
+        androidMain {
+            kotlin.srcDir("src/hosted/kotlin")
+            // Per-target Ktor engine (ADR-0003) + the Koog 1.0 stable set + the injectable base
+            // HttpClient the engine + its MockEngine test seam name.
+            dependencies {
+                implementation(libs.ktor.client.okhttp)
+                implementation(libs.ktor.client.core)
+                implementation(libs.koog.prompt.executor.anthropic.client)
+                implementation(libs.koog.prompt.executor.model)
+                implementation(libs.koog.http.client.ktor)
+            }
         }
-        jvmMain.dependencies {
-            implementation(libs.ktor.client.okhttp)
+        jvmMain {
+            kotlin.srcDir("src/hosted/kotlin")
+            dependencies {
+                implementation(libs.ktor.client.okhttp)
+                implementation(libs.ktor.client.core)
+                implementation(libs.koog.prompt.executor.anthropic.client)
+                implementation(libs.koog.prompt.executor.model)
+                implementation(libs.koog.http.client.ktor)
+            }
         }
-        iosMain.dependencies {
-            implementation(libs.ktor.client.darwin)
+        iosMain {
+            kotlin.srcDir("src/hosted/kotlin")
+            dependencies {
+                implementation(libs.ktor.client.darwin)
+                implementation(libs.ktor.client.core)
+                implementation(libs.koog.prompt.executor.anthropic.client)
+                implementation(libs.koog.prompt.executor.model)
+                implementation(libs.koog.http.client.ktor)
+            }
         }
 
         commonTest.dependencies {
-            // InferenceEngine.infer is suspend; the seam tests drive it via runTest
-            // (ADR-0006 JVM-fast path).
+            // The seam tests (FakeInferenceEngine, NotConfiguredInferenceEngine) drive the suspend
+            // infer() via runTest (ADR-0006 JVM-fast path); they name no Koog type, so they stay
+            // multiplatform (and compile on macOS).
             implementation(libs.kotlinx.coroutines.test)
-            // MockEngine: the in-process engine the KoogInferenceEngine tests answer with canned
-            // Anthropic-format responses (no real network — ADR-0006), injected as the engine's
-            // base HttpClient.
+        }
+        jvmTest.dependencies {
+            // The KoogInferenceEngine tests (the hosted engine) run on the JVM-fast path: MockEngine
+            // answers canned Anthropic-format responses (no real network — ADR-0006).
             implementation(libs.ktor.client.mock)
         }
     }

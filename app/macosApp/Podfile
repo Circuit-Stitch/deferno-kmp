@@ -1,0 +1,24 @@
+# SQLCipher for the macOS encrypted per-Account database (ADR-0009, ADR-0029 Phase 1b / #188) — the
+# same pod app/iosApp uses, so macOS and iOS link an identical, proven SQLCipher build.
+#
+# The shared Kotlin static `Deferno.framework` opens the DB via SQLiter (`native-driver`) with an
+# `Encryption(key=…)` config that applies the key through `PRAGMA key` — so the app must link a SQLite
+# build that understands it. SQLCipher (CommonCrypto provider) supplies the standard `sqlite3_*` symbols
+# the framework references (including the deprecated ones SQLiter's cinterop still wraps but never calls)
+# *plus* real at-rest encryption. We link **only** SQLCipher (the app target's `OTHER_LDFLAGS` carries no
+# `-lsqlite3`), so there is exactly one sqlite implementation and no duplicate symbols. `linkSqlite` is
+# effectively false already — the cinterop's system-sqlite linker opt is not propagated into the consuming
+# app, so SQLCipher cleanly satisfies the undefined symbols.
+#
+# CocoaPods is layered ON TOP of the XcodeGen-generated project, so the build is a two-step flow:
+#   xcodegen generate && pod install        # then build via the generated macosApp.xcworkspace
+# (re-run `pod install` after every `xcodegen generate`, since regeneration drops the pod integration).
+platform :osx, '14.0'
+
+target 'macosApp' do
+  # :inhibit_warnings — sqlite3.c (the SQLite amalgamation SQLCipher vendors) emits ~117
+  # -Wshorten-64-to-32 warnings under Xcode's default warning set. They're intentional, safe
+  # truncations in upstream SQLite (lengths are bounded by SQLITE_MAX_LENGTH, which fits an int),
+  # not our code — silence them for this pod only so they don't drown the build log.
+  pod 'SQLCipher', '~> 4.6', :inhibit_warnings => true
+end
