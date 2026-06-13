@@ -33,12 +33,16 @@ import com.circuitstitch.deferno.core.model.User
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.speech.SpeechToText
+import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import com.circuitstitch.deferno.macos.demo.DemoPlanRepository
 import com.circuitstitch.deferno.macos.demo.DemoTaskRepository
 import com.circuitstitch.deferno.macos.demo.SampleData
+import com.circuitstitch.deferno.macos.speech.NativeDictation
+import com.circuitstitch.deferno.macos.speech.NativeSpeechToText
 import com.circuitstitch.deferno.shell.AccountSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.RootComponent
@@ -63,8 +67,12 @@ import kotlin.time.Instant
  * + its `demo` package): the Views are genuine renderers of the shared Decompose components — only the
  * data source is a fixture. State is produced on `Dispatchers.Main` (the [DefaultRootComponent] default),
  * so observation hops straight to the SwiftUI main thread.
+ *
+ * [dictation] is the Phase-2 in-process speech seam (ADR-0029): the Swift app passes a [NativeDictation]
+ * over `SidecarKit.SpeechTranscriber`, so the New surface's mic dictates on-device. `null` (the default)
+ * leaves dictation unavailable (the mic stays hidden) — keeping the harness runnable without it.
  */
-class DefernoDemoRoot {
+class DefernoDemoRoot(dictation: NativeDictation? = null) {
 
     init {
         // Configure the uniform logger once (ADR-0029): os_log-backed on macOS, identical call shape to
@@ -77,6 +85,10 @@ class DefernoDemoRoot {
     private val timeZone = TimeZone.currentSystemDefault()
     private val session = DemoAccountSession()
 
+    // In-process dictation (Phase 2): wrap the injected Swift transcriber, or the Unavailable floor.
+    private val speechToText: SpeechToText =
+        dictation?.let { NativeSpeechToText(it) } ?: UnavailableSpeechToText
+
     /** The shared navigation root the SwiftUI `RootView` renders. Opens on the Main shell (seeded Account). */
     val root: RootComponent = DefaultRootComponent(
         componentContext = DefaultComponentContext(lifecycle),
@@ -86,6 +98,9 @@ class DefernoDemoRoot {
         signInService = DemoSignInService,
         today = Clock.System.todayIn(timeZone),
         timeZone = timeZone.id,
+        // Phase 2: the New surface's mic drives this on-device engine (ADR-0029). Locale stays the
+        // DefaultRootComponent en-US default for the spike.
+        speechToText = speechToText,
     )
 
     init {

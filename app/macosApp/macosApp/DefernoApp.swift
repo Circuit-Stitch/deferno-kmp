@@ -9,7 +9,9 @@ import SwiftUI
 /// is Phase 1b. Bridged by the hand-written SKIE-free bridge until SKIE supports Kotlin 2.4.0.
 @main
 struct DefernoApp: App {
-    @State private var host = DefernoDemoRoot()
+    // Phase 2 (ADR-0029): the in-process dictation engine (SidecarKit `SpeechTranscriber`, on-device).
+    // The New surface's mic drives it; TCC is attributed to this app's own identity.
+    @State private var host = DefernoDemoRoot(dictation: MacDictation())
 
     var body: some Scene {
         WindowGroup {

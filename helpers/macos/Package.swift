@@ -30,6 +30,10 @@ let package = Package(
     ],
     products: [
         .executable(name: "deferno-sidecar", targets: ["DefernoSidecarCLI"]),
+        // The capability library, reused in-process by the native macOS app (ADR-0029 Phase 2): the same
+        // SpeechTranscriber / SidecarPermissions sources the launchd Helper serves over the socket, linked
+        // directly into app/macosApp instead. The Linux CLI path is unaffected.
+        .library(name: "SidecarKit", targets: ["SidecarKit"]),
     ],
     targets: [
         // SidecarKit is pure Swift + Darwin + Speech/AVFoundation. launchd's launch_activate_socket()

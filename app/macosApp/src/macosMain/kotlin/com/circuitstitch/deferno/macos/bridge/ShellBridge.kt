@@ -24,6 +24,8 @@ import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.macos.TasksRoot
 import com.circuitstitch.deferno.shell.AuthShellComponent
 import com.circuitstitch.deferno.shell.Destination
+import com.circuitstitch.deferno.shell.DictationField
+import com.circuitstitch.deferno.shell.DictationStatus
 import com.circuitstitch.deferno.shell.MainShellComponent
 import com.circuitstitch.deferno.shell.NavSlot
 import com.circuitstitch.deferno.shell.NewComponent
@@ -238,6 +240,26 @@ fun profileIsUnavailable(state: ProfileState): Boolean = state is ProfileState.U
 fun newStatusIsSubmitting(state: NewState): Boolean = state.status is NewStatus.Submitting
 fun newStatusIsOffline(state: NewState): Boolean = state.status is NewStatus.Offline
 fun newStatusFailedMessage(state: NewState): String? = (state.status as? NewStatus.Failed)?.message
+
+// Dictation (#92, ADR-0018 / ADR-0029 Phase 2) — Swift reads the lifecycle off the sealed DictationStatus
+// without naming its subclasses, and toggles the mic per field.
+/** Whether [field]'s mic is currently capturing (the View shows it active). */
+fun dictationListeningField(state: NewState, field: DictationField): Boolean =
+    state.dictation is DictationStatus.Listening && state.dictationField == field
+
+/**
+ * A gentle, non-PII message for a settled dictation problem (permission/engine), or `null` when idle /
+ * listening — so the View shows it only when there's something honest to say (never a silent failure).
+ */
+fun dictationMessage(state: NewState): String? = when (state.dictation) {
+    is DictationStatus.PermissionDenied ->
+        "Microphone access is needed to dictate."
+    is DictationStatus.PermissionPermanentlyDenied ->
+        "Microphone access is off — enable it in System Settings › Privacy & Security."
+    is DictationStatus.Error ->
+        "Couldn't transcribe just now. Try again."
+    else -> null
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Destination registry — Swift reads name/slot for label/icon + selection (View concern, ADR-0013)

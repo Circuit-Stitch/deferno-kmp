@@ -37,6 +37,18 @@ A pre-build phase runs `./gradlew :app:macosApp:embedAndSignAppleFrameworkForXco
 Kotlin framework into `build/xcode-frameworks` (where `FRAMEWORK_SEARCH_PATHS` points). To iterate on the
 Kotlin side alone: `./gradlew :app:macosApp:linkDebugFrameworkMacosArm64`.
 
+## Phase 2 — in-process dictation (ADR-0029)
+
+The New surface's mic dictates **on-device, in-process**: `macosApp/Speech/MacDictation.swift` implements the
+shared Kotlin `NativeDictation` port over `SidecarKit.SpeechTranscriber` (the same Swift the launchd Helper
+serves over a socket, ADR-0024 — but called directly here, no Helper). Kotlin owns the `Flow`
+(`src/macosMain/.../speech/NativeDictation.kt` adapts it to the `core:speech` `SpeechToText` seam); Swift just
+opens the mic and pushes Transcript text. `helpers/macos` is linked as a **local SwiftPM dependency** (its
+`Package.swift` now exposes a `SidecarKit` library product). TCC is attributed to **this app's own identity**:
+the mic/Speech usage strings live in `project.yml` (`INFOPLIST_KEY_NS*UsageDescription`), and the app is not
+sandboxed (ad-hoc dev signing), so no entitlement is needed. To dictate: open New → tap the mic → grant
+Speech + Microphone → speak; partials stream into the field, settling on a final.
+
 ## Notes / Phase-1 shortcuts
 
 - **No CocoaPods** (unlike iosApp's SQLCipher): the Phase-1 demo opens no DB, so the system `-lsqlite3`

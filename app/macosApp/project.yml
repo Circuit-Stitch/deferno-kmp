@@ -18,6 +18,12 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_NSHumanReadableCopyright: ""
+    # Dictation TCC usage strings (ADR-0029 Phase 2): the in-process SpeechTranscriber prompts under THIS
+    # app's identity, so the strings live here (not in the launchd Helper's embedded plist, ADR-0024). The
+    # app is not sandboxed (ad-hoc dev signing), so the usage strings alone satisfy mic/Speech TCC — no
+    # entitlement is needed. (When the app gains the App Sandbox, add com.apple.security.device.audio-input.)
+    INFOPLIST_KEY_NSMicrophoneUsageDescription: "Deferno transcribes your dictation on-device to fill in a new item."
+    INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Deferno recognizes your speech on-device to fill in a new item — the audio never leaves your Mac."
     # Local dev: ad-hoc sign so a headless xcodebuild + a local launch work without a Dev account.
     # TCC/notarization signing (Phase 2+) is a Mac-session concern, kept out of git (ADR-0009/0029).
     CODE_SIGN_IDENTITY: "-"
@@ -39,12 +45,21 @@ settings:
       - "-framework"
       - "Network"
 
+# The macOS Sidecar Helper's Swift package, linked as a LOCAL dependency (ADR-0029 Phase 2) so the app
+# reuses SidecarKit (SpeechTranscriber / SidecarPermissions) in-process. Path is relative to this spec.
+packages:
+  SidecarKit:
+    path: ../../helpers/macos
+
 targets:
   macosApp:
     type: application
     platform: macOS
     sources:
       - path: macosApp
+    dependencies:
+      - package: SidecarKit
+        product: SidecarKit
     preBuildScripts:
       - name: "Build shared Kotlin framework"
         basedOnDependencyAnalysis: false
