@@ -36,6 +36,11 @@ kotlin {
             // core:designsystem packages the asset (publicResClass) but declares the loader as
             // `implementation`, so this module names its own dependency.
             implementation(libs.compose.components.resources)
+            // The ShellChrome drawer's per-Destination glyphs (Plan/Calendar/Tasks/Profile/Settings) +
+            // the menu/search icons: `material-icons-core` (the small set, not the ≈37 MB extended) — the
+            // same choice the shell + per-slice UI modules make. The JetBrains Compose Multiplatform
+            // artifact, so it resolves for both the Android and JVM compilations from commonMain.
+            implementation(libs.compose.material.icons.core.kmp)
         }
     }
 }

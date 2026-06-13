@@ -452,6 +452,22 @@ class MainShellComponentTest {
         assertNull(shell.overlay.value.child, "overlay dismissed back to origin")
     }
 
+    // --- Brain dump overlay route (ADR-0027) ---
+
+    @Test
+    fun brainDump_opensAboveTheForegroundDestination_andDismissesBackToOrigin() {
+        val shell = shell()
+        assertNull(shell.overlay.value.child, "no overlay initially")
+
+        shell.openOverlay(OverlayRoute.BrainDump)
+        val child = shell.overlay.value.child?.instance
+        assertTrue(child is MainShellComponent.OverlayChild.BrainDump, "the Brain dump overlay is pushed above the foreground")
+        assertEquals(Destination.Plan, shell.activeDestination(), "the foreground Destination is untouched")
+
+        shell.dismissOverlay()
+        assertNull(shell.overlay.value.child, "overlay dismissed back to origin")
+    }
+
     @Test
     fun searchResultTap_opensThatTaskInTheTasksDestination_andDismissesTheOverlay() {
         val shell = shell()

@@ -2,36 +2,26 @@ package com.circuitstitch.deferno.desktop.shell
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.PermanentDrawerSheet
-import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.ic_add_task
+import com.circuitstitch.deferno.core.designsystem.resources.ic_voice_chat
 import com.circuitstitch.deferno.feature.calendar.ui.CalendarDesktopScreen
 import com.circuitstitch.deferno.feature.plan.ui.PlanDesktopScreen
 import com.circuitstitch.deferno.feature.profile.ui.ProfileDesktopScreen
@@ -40,65 +30,56 @@ import com.circuitstitch.deferno.feature.tasks.ui.SearchDesktopScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksDesktopScreen
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.MainShellComponent
+import com.circuitstitch.deferno.shell.OverlayRoute
+import com.circuitstitch.deferno.shell.ui.BrainDumpPlaceholder
+import com.circuitstitch.deferno.shell.ui.ShellChrome
+import com.circuitstitch.deferno.shell.ui.label
+import org.jetbrains.compose.resources.painterResource
 
 /**
- * The **Main shell** View, desktop edition (ADR-0013 / ADR-0017): it hosts the shared
- * [MainShellComponent]'s Destination graph in a desktop-native navigation surface. Rather than reuse
- * the Android `NavigationSuiteScaffold` (an Android-only adaptive artifact), it renders the desktop's
- * own nav suite — a persistent [NavigationRail] that **expands into a [PermanentNavigationDrawer]** on a
- * wide window. It lists **every** registered [Destination] directly (the `NavSlot` Primary/Secondary
- * distinction is a no-op on desktop — there is no compact "More") and renders the foreground
- * Destination's screen as content, with the shell-level **overlay route** layered above it (ADR-0015).
+ * The **Main shell** View, desktop edition (ADR-0013 / ADR-0017): it renders the **shared** [ShellChrome]
+ * reveal drawer — the very chrome the Android shell uses (the #27 "Compose Views in a sibling Android+JVM
+ * module" pattern applied to the shell) — over the [MainShellComponent]'s Destination graph, with the
+ * shell-level **overlay route** ([OverlayHost]) layered above it (ADR-0015). The chrome's menu toggle
+ * slides the content aside to reveal the navigation menu underneath; its top-bar actions open Brain dump
+ * (voice_chat) and New (add_task).
  *
- * The rail ↔ drawer choice is driven purely by the **continuous available width** (ADR-0008 G1 — never
- * a device-type check) via [desktopNavKindFor]; the View is otherwise a pure renderer of the shared
- * stack, so resizing across the breakpoint never drops state (G5).
+ * Desktop keeps its in-app menu bar + keyboard shortcuts (Main.kt) for desktop-class input; the reveal
+ * drawer is the pointer-driven navigation surface alongside it. Width-driven rail↔drawer adaptation is
+ * gone — the one chrome serves every window size.
  */
 @Composable
 fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
     val stack by component.stack.subscribeAsState()
     val overlay by component.overlay.subscribeAsState()
     val active = stack.active.instance
+
+    // Drawer open/close is View state. There is no system-back on desktop, so the drawer closes by
+    // toggling the menu button or tapping the slid-aside content (ShellChrome); Esc stays the
+    // overlay/pane back (Main.kt → RootComponent.onBackClicked()).
+    var drawerOpen by remember { mutableStateOf(false) }
+
     Box(modifier.fillMaxSize()) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            when (desktopNavKindFor(maxWidth.value.toInt())) {
-                DesktopNavKind.Drawer ->
-                    PermanentNavigationDrawer(
-                        drawerContent = {
-                            PermanentDrawerSheet(Modifier.width(DrawerWidth)) {
-                                component.destinations.forEach { destination ->
-                                    NavigationDrawerItem(
-                                        label = { Text(destination.label) },
-                                        selected = destination == active.destination,
-                                        onClick = { component.selectDestination(destination) },
-                                        icon = { Icon(destination.icon, contentDescription = null) },
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                    )
-                                }
-                            }
-                        },
-                    ) {
-                        DestinationContent(active)
-                    }
+        ShellChrome(
+            component = component,
+            activeDestination = active.destination,
+            drawerOpen = drawerOpen,
+            onDrawerOpenChange = { drawerOpen = it },
+            // The Calendar pre-dates New to its selected day (#74); elsewhere New is undated — the desktop
+            // counterpart of the Android calendar FAB. Reads the live active child at click time.
+            onNew = {
+                when (val a = component.stack.value.active.instance) {
+                    is MainShellComponent.DestinationChild.Calendar -> a.component.onNewForSelectedDay()
+                    else -> component.openOverlay(OverlayRoute.New())
+                }
+            },
+            // Desktop loads the shared composeResources glyphs off the JVM classpath (see ShellChrome KDoc).
+            brainDumpIcon = painterResource(Res.drawable.ic_voice_chat),
+            newIcon = painterResource(Res.drawable.ic_add_task),
+            body = { DestinationContent(active) },
+        )
 
-                DesktopNavKind.Rail ->
-                    Row(Modifier.fillMaxSize()) {
-                        NavigationRail {
-                            component.destinations.forEach { destination ->
-                                NavigationRailItem(
-                                    selected = destination == active.destination,
-                                    onClick = { component.selectDestination(destination) },
-                                    icon = { Icon(destination.icon, contentDescription = null) },
-                                    label = { Text(destination.label) },
-                                )
-                            }
-                        }
-                        DestinationContent(active)
-                    }
-            }
-        }
-
-        // The shell-level overlay route sits above the whole nav suite (ADR-0015); shell back (Esc)
+        // The shell-level overlay route sits above the whole chrome (ADR-0015); shell back (Esc)
         // dismisses it first (routed through the shared MainShellComponent.onBack()).
         overlay.child?.instance?.let { child ->
             OverlayHost(child = child, onDismiss = component::dismissOverlay)
@@ -109,8 +90,8 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
 /**
  * Renders the foreground Destination's desktop screen, filling the content area. Plan + Tasks render
  * their existing desktop Views, Settings (#85) its tier-3 drill-down, Profile (#84) its identity hub,
- * and Calendar (#74) its month grid + day agenda (two-pane on a wide window) — every v1 Destination now
- * has a native desktop View (ADR-0017).
+ * and Calendar (#74) its month grid + day agenda (two-pane on a wide window) — every v1 Destination has
+ * a native desktop View (ADR-0017).
  */
 @Composable
 private fun DestinationContent(active: MainShellComponent.DestinationChild) {
@@ -137,12 +118,10 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
 }
 
 /**
- * The shell-level overlay above the foreground Destination (ADR-0015): an opaque surface layered over
- * the whole nav suite, dismissed first by shell back (Esc). Search (#86) and New (#87) now render their
- * real desktop Views — each an opaque [Surface] that owns its own Close/Cancel affordance (routed back
- * through the shared component's dismiss Output); the v1 [OverlayChild.Placeholder] route (the shared
- * mechanism's stand-in, not opened on desktop) keeps a dismissible placeholder. Overlays are reachable
- * via the View menu + Ctrl+F/Ctrl+N (Main.kt).
+ * The shell-level overlay above the foreground Destination (ADR-0015): Search (#86) and New (#87) render
+ * their real desktop Views, Feedback (#375) the comment + AWT file-attach surface, Brain dump (ADR-0027)
+ * the shared placeholder, and the v1 [OverlayChild.Placeholder] a dismissible stand-in. Each is dismissed
+ * by shell back (Esc) / its own Close affordance.
  */
 @Composable
 private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () -> Unit) {
@@ -156,6 +135,10 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         // The in-app Help → Feedback surface (#375): comment + file attachments (AWT file dialog).
         is MainShellComponent.OverlayChild.Feedback ->
             FeedbackDesktopScreen(child.component, Modifier.fillMaxSize())
+
+        // Brain dump (ADR-0027): the shared placeholder until #150 wires the Extractor.
+        MainShellComponent.OverlayChild.BrainDump ->
+            BrainDumpPlaceholder(onDismiss = onDismiss)
 
         MainShellComponent.OverlayChild.Placeholder ->
             OverlayPlaceholder(onDismiss)
@@ -208,45 +191,3 @@ private fun ComingSoon(destination: Destination, modifier: Modifier = Modifier) 
         )
     }
 }
-
-/** The desktop nav-suite shapes: a compact [Rail] or, on a wide window, an expanded [Drawer]. */
-enum class DesktopNavKind { Rail, Drawer }
-
-/** Width of the permanent navigation drawer when expanded. */
-private val DrawerWidth = 260.dp
-
-/**
- * At/above this available width the desktop nav suite expands from a rail to a permanent drawer. Past
- * the app's mobile breakpoints (600/840dp) because a desktop window is wide by default and only the
- * roomiest windows benefit from the always-labelled drawer beside the (often two-pane) content.
- */
-internal const val DRAWER_MIN_WIDTH_DP = 1240
-
-/**
- * Map the continuous window width (dp) to the desktop nav-suite shape (ADR-0008 G1 / ADR-0007
- * size-class adaptation): a [NavigationRail] until [DRAWER_MIN_WIDTH_DP], then a
- * [PermanentNavigationDrawer]. Reads only the width metric — never device-type checks. Pure +
- * internal so the breakpoint is unit-tested directly.
- */
-internal fun desktopNavKindFor(widthDp: Int): DesktopNavKind =
-    if (widthDp >= DRAWER_MIN_WIDTH_DP) DesktopNavKind.Drawer else DesktopNavKind.Rail
-
-/** The nav-suite label for a [Destination] — a View concern, kept out of the shared registry. */
-internal val Destination.label: String
-    get() = when (this) {
-        Destination.Plan -> "Plan"
-        Destination.Calendar -> "Calendar"
-        Destination.Tasks -> "Tasks"
-        Destination.Profile -> "Profile"
-        Destination.Settings -> "Settings"
-    }
-
-/** The nav-suite icon for a [Destination] — a View concern, kept out of the shared registry. */
-private val Destination.icon: ImageVector
-    get() = when (this) {
-        Destination.Plan -> Icons.Filled.Home
-        Destination.Calendar -> Icons.Filled.DateRange
-        Destination.Tasks -> Icons.AutoMirrored.Filled.List
-        Destination.Profile -> Icons.Filled.Person
-        Destination.Settings -> Icons.Filled.Settings
-    }

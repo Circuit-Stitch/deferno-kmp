@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.performClick
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
@@ -14,7 +16,6 @@ import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
 import com.circuitstitch.deferno.shell.DefaultMainShellComponent
-import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.MainShell
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.Dispatchers
@@ -26,23 +27,20 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Roborazzi screenshot baselines (#70, ADR-0015) for the Main shell's **adaptive nav suite** at the
- * three size classes — compact (bottom bar `Plan · Calendar · Tasks · More`), medium (rail), and
- * expanded (drawer, secondaries listed directly, no "More"). Each pins its width via `@Config`, the
- * same metric the production View reads through `currentWindowAdaptiveInfo()` (ADR-0008 G1), and drives
- * a real [DefaultMainShellComponent] over the in-memory demo repositories on [Dispatchers.Unconfined]
- * (the same harness the interaction tests use). Record with `:app:androidApp:recordRoborazziDebug`.
+ * Roborazzi screenshot baselines (#175 follow-up) for the Main shell's shared [ShellChrome] reveal
+ * drawer: the **closed** state (the slim top bar — menu · voice_chat · add_task — clear of the status
+ * bar, over the home content) in light + dark, and the **open** state (the content slid aside to reveal
+ * the navigation menu underneath). It drives a real [DefaultMainShellComponent] over the in-memory demo
+ * repositories on [Dispatchers.Unconfined] (the same harness the interaction test uses). Record with
+ * `:app:androidApp:recordRoborazziDebug`.
  */
 @RunWith(RobolectricTestRunner::class)
 class MainShellNavScreenshotTest {
 
-    // Deliberately stays on the v1 `createComposeRule` (the other UI tests migrated to the v2 rule).
-    // Unlike those, this baseline drives a *real* DefaultMainShellComponent whose adaptive nav suite
-    // animates its selected-item state, so the captured frame depends on effects running immediately
-    // — the Unconfined semantics these goldens were recorded under. The v2 rule swaps in a
-    // StandardTestDispatcher that queues those effects instead, changing what a re-record would
-    // capture. Keep v1 and suppress the deprecation rather than re-baseline a real animated screen for
-    // a test-dispatcher swap.
+    // Stays on the v1 `createComposeRule` (cf. the other UI tests' v2 rule): this baseline drives a real
+    // DefaultMainShellComponent whose chrome animates the drawer reveal, so the captured frame depends on
+    // the autoAdvance + Unconfined timing these goldens are recorded under (a v2 StandardTestDispatcher
+    // would queue those effects and change a re-record).
     @get:Rule
     @Suppress("DEPRECATION")
     val composeRule = createComposeRule()
@@ -60,36 +58,35 @@ class MainShellNavScreenshotTest {
         coroutineContext = Dispatchers.Unconfined,
     )
 
-    private fun capture(name: String, darkTheme: Boolean = false, content: @Composable () -> Unit) {
+    private fun setContent(darkTheme: Boolean = false, content: @Composable () -> Unit) {
         composeRule.setContent {
             DefernoTheme(palette = DefernoPalette.Deferno, darkTheme = darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) { content() }
             }
         }
-        composeRule.onRoot().captureRoboImage("src/test/screenshots/$name.png")
     }
 
     @Test
     @Config(qualifiers = "w400dp-h800dp")
-    fun compact_bottomBar_light() = capture("shell_nav_compact_light") { MainShell(shell()) }
-
-    @Test
-    @Config(qualifiers = "w400dp-h800dp")
-    fun compact_bottomBar_dark() = capture("shell_nav_compact_dark", darkTheme = true) { MainShell(shell()) }
-
-    // A secondary Destination (Profile) foreground on compact: "More" reads as selected, the secondary
-    // is NOT a direct bar item, and the Profile screen renders as content (ADR-0015).
-    @Test
-    @Config(qualifiers = "w400dp-h800dp")
-    fun compact_moreSelected_light() = capture("shell_nav_compact_more_selected_light") {
-        MainShell(shell().also { it.selectDestination(Destination.Profile) })
+    fun drawerClosed_light() {
+        setContent { MainShell(shell()) }
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/shell_chrome_closed_light.png")
     }
 
     @Test
-    @Config(qualifiers = "w700dp-h800dp")
-    fun medium_rail_light() = capture("shell_nav_medium_light") { MainShell(shell()) }
+    @Config(qualifiers = "w400dp-h800dp")
+    fun drawerClosed_dark() {
+        setContent(darkTheme = true) { MainShell(shell()) }
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/shell_chrome_closed_dark.png")
+    }
 
+    // The menu button slides the content aside to reveal the drawer menu underneath (account header +
+    // Search + the destination rows). autoAdvance settles the reveal animation before the capture.
     @Test
-    @Config(qualifiers = "w1280dp-h800dp")
-    fun expanded_drawer_light() = capture("shell_nav_expanded_light") { MainShell(shell()) }
+    @Config(qualifiers = "w400dp-h800dp")
+    fun drawerOpen_light() {
+        setContent { MainShell(shell()) }
+        composeRule.onNodeWithContentDescription("Menu").performClick()
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/shell_chrome_open_light.png")
+    }
 }
