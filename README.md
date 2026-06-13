@@ -14,8 +14,13 @@ module layout. The build instructions below are for the Android target — the f
   a Gradle Daemon JVM toolchain (`gradle/gradle-daemon-jvm.properties`) and the project toolchain
   (`ProjectConfig.JVM_TOOLCHAIN`, applied via the `build-logic` convention plugins), and
   auto-provisions Eclipse Temurin 17 on first run.
-- **Android SDK** with platform 35 and build-tools (install via Android Studio's SDK Manager).
-- A device or emulator running **Android 8.0 (API 26)** or newer.
+- **Android SDK** with platform 36 and build-tools 36. **Android Studio is optional** — only the SDK
+  itself is required, so you can install just the command-line tools (see
+  [macOS without Android Studio](#macos-without-android-studio)).
+- **NDK `30.0.14904198` + CMake `3.22.1`**, but only to build the `:speech-whisper-jni` native module
+  (whisper.cpp speech-to-text). The pinned NDK version is `ProjectConfig.NDK_VERSION`; skip both if you
+  aren't building that module.
+- A device or emulator running **Android 8.1 (API 27)** or newer.
 
 ## Getting started
 
@@ -24,12 +29,16 @@ network access. Open the project in **Android Studio** (Open → select this dir
 Gradle sync finish, or from the command line:
 
 ```sh
+git submodule update --init --recursive  # pulls third_party/whisper.cpp (needed by :speech-whisper-jni)
 ./gradlew build                          # build + test every module (Android/JVM; iOS klibs)
 ./gradlew :app:androidApp:assembleDebug  # build the debug APK
 ./gradlew :app:androidApp:installDebug   # install on a connected device/emulator
 ./gradlew check                          # run local unit tests (commonTest on JVM + Android host)
 ./gradlew :core:model:koverHtmlReport    # coverage report for a module (Kover, ADR-0006)
 ```
+
+The `whisper.cpp` submodule is only needed by the `:speech-whisper-jni` native module; the rest of the
+project builds without it.
 
 > iOS klibs cross-compile on any host, but running iOS tests and linking the iOS framework require
 > macOS (ADR-0006); on Linux/Windows those tasks self-disable. Build the iOS app from the
@@ -42,6 +51,36 @@ sdk.dir=/path/to/Android/Sdk
 ```
 
 `local.properties` is git-ignored — it's machine-specific.
+
+### macOS without Android Studio
+
+Android Studio is a convenience, not a requirement — Gradle only needs the Android SDK. On a Mac
+that's tight on disk (or any headless/CLI workflow), install just the command-line tools via
+[Homebrew](https://brew.sh) and let `sdkmanager` fetch the SDK packages. This skips the ~3 GB IDE and
+its bundled JDK entirely.
+
+```sh
+brew install --cask android-commandlinetools     # SDK tools only — no IDE, no bundled JDK
+brew install --cask temurin@17                    # a JDK to launch Gradle, if you don't have one
+
+export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+
+# Accept licenses, then install the SDK packages the project needs:
+yes | sdkmanager --licenses
+sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" \
+           "ndk;30.0.14904198" "cmake;3.22.1"     # NDK + CMake only for :speech-whisper-jni
+```
+
+Then point Gradle at the SDK by writing `local.properties` in the repo root:
+
+```properties
+sdk.dir=/opt/homebrew/share/android-commandlinetools
+```
+
+The cask symlinks `sdkmanager`, `adb`, and friends into `/opt/homebrew/bin`; add the `ANDROID_HOME`
+export to your `~/.zshrc` so tools that read it directly (and new shells) find the SDK. Any editor
+works for development — VS Code with the Kotlin extension, or your editor of choice plus the Gradle
+CLI above.
 
 ## Project structure
 
