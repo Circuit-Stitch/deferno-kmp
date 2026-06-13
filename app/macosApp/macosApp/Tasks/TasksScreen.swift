@@ -36,15 +36,31 @@ struct TasksScreen: View {
             hasTree: tree.current != nil
         )
         if horizontalSizeClass != .compact {
-            HStack(spacing: 0) {
-                TaskListView(component: root.list)
-                    .frame(width: 340)
-                Divider()
-                secondaryPane(slot)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            regularLayout(slot)
         } else {
             compactPane(slot)
+        }
+    }
+
+    /// The two-pane (regular width) layout with **per-pane minimums** feeding the window's dynamic
+    /// floor (#194). With a detail/tree open: list ≥280, detail ≥250 — the window refuses to shrink
+    /// past their sum rather than crushing the detail to a one-character sliver. With nothing open the
+    /// list is the sole pane and fills the width, so the floor drops to just the list min (~280). The
+    /// list↔detail divider stays static (no `HSplitView` — out of scope).
+    @ViewBuilder
+    private func regularLayout(_ slot: SecondarySlot) -> some View {
+        switch slot {
+        case .none:
+            TaskListView(component: root.list)
+                .frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
+        case .detail, .tree:
+            HStack(spacing: 0) {
+                TaskListView(component: root.list)
+                    .frame(minWidth: 280, idealWidth: 340)
+                Divider()
+                secondaryPane(slot)
+                    .frame(minWidth: 250, maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 

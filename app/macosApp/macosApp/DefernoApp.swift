@@ -23,11 +23,12 @@ struct DefernoApp: App {
         // window "Deferno" regardless of the bundle name.
         Window("Deferno", id: "main") {
             RootView(root: host.root, onBrainDump: { showExtractor = true })
-                // Floor the window so it can't shrink the two-pane Tasks layout (sidebar + 340pt list +
-                // detail) until the detail pane wraps one character per line. With
-                // `.windowResizability(.contentMinSize)` below, this min frame becomes the window's
-                // minimum size; it still grows freely.
-                .frame(minWidth: 820, minHeight: 520)
+                // No global minWidth (#194): the window's floor is *dynamic* — it tracks the panes
+                // currently open (sidebar + list + detail each carry their own `minWidth`, summed by
+                // `.windowResizability(.contentMinSize)` below). Collapse the sidebar / deselect the
+                // task and the window shrinks to just the list. A modest height floor keeps a pane
+                // header + a row visible.
+                .frame(minHeight: 360)
                 // OAuth redirect (ADR-0026, #137): the system browser returns to the registered
                 // `com.circuitstitch.deferno` scheme (project.yml URL types); forward it to the shared
                 // inbox the in-flight `MacBrowserAuthenticator` awaits. On macOS this is the PRIMARY

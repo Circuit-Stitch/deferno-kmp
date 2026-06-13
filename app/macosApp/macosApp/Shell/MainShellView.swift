@@ -20,6 +20,7 @@ struct MainShellView: View {
     @StateObject private var overlay: OverlaySlotObserver
     @StateObject private var accounts: AccountsObserver
     @State private var showMore = false
+    @State private var sidebarWidth: CGFloat = 220
 
     init(component: MainShellComponent, onBrainDump: @escaping () -> Void) {
         self.component = component
@@ -234,18 +235,34 @@ struct MainShellView: View {
     // MARK: Sidebar (regular)
 
     private var sidebar: some View {
+        // Below ~130pt the rows collapse to an icon rail (SF Symbol only) — NavigationSplitView has no
+        // native rail, so we read the live column width (GeometryReader → preference) and swap to
+        // `.labelStyle(.iconOnly)` rather than render truncated "Calen…" stubs (#194). The Label keeps
+        // its full title for VoiceOver even when hidden, and `.help(name)` gives a hover tooltip.
         List {
             ForEach(allDestinations) { dest in
                 let name = ShellBridgeKt.destinationName(destination: dest)
                 let selected = name == activeName
                 Button { component.selectDestination(destination: dest) } label: {
-                    Label(name, systemImage: icon(name))
-                        .foregroundStyle(selected ? colors.primary : colors.onSurface)
+                    Group {
+                        if sidebarWidth < 130 {
+                            Label(name, systemImage: icon(name)).labelStyle(.iconOnly)
+                        } else {
+                            Label(name, systemImage: icon(name))
+                        }
+                    }
+                    .foregroundStyle(selected ? colors.primary : colors.onSurface)
                 }
+                .help(name)
                 .listRowBackground(selected ? colors.primaryContainer : Color.clear)
             }
         }
         .listStyle(.sidebar)
+        .navigationSplitViewColumnWidth(min: 64, ideal: 220, max: 320)
+        .background(GeometryReader { geo in
+            Color.clear.preference(key: SidebarWidthKey.self, value: geo.size.width)
+        })
+        .onPreferenceChange(SidebarWidthKey.self) { sidebarWidth = $0 }
     }
 
     // MARK: Overlay (Search / New) as a sheet
@@ -294,4 +311,10 @@ struct MainShellView: View {
         default: return "circle"
         }
     }
+}
+
+/// Carries the sidebar's live rendered width up so `sidebar` can swap to the icon rail below ~130pt (#194).
+private struct SidebarWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
