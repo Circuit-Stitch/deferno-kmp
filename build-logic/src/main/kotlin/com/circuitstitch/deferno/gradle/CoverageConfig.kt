@@ -92,6 +92,11 @@ object CoverageConfig {
         "com.circuitstitch.deferno.core.speech.MicAudioSource*",
         "com.circuitstitch.deferno.core.speech.*ModelLocator*",
         "com.circuitstitch.deferno.core.speech.SettingsSpeechEnginePreference*",
+        // The Agent inference-engine [[App setting]] store adapter (#150): multiplatform-settings-backed,
+        // exercised through the platform store on a real device, not the headless gate (same rationale as
+        // the speech preference above). The InferenceEngineCatalog, InMemoryInferenceEnginePreference, and
+        // FakeRelayEntitlement ARE measured (commonMain/commonTest).
+        "com.circuitstitch.deferno.core.agent.SettingsInferenceEnginePreference*",
         // Compose @Composable glue (ADR-0006: "thin UI glue"; Views are screenshot-tested, not
         // unit-tested on the headless JVM gate). The design-system colour *tokens* ARE measured
         // (designsystem commonTest); the @Composable theme + typography builders that resolve fonts

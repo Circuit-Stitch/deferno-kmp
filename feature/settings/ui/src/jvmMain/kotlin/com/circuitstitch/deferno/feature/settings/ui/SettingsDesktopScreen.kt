@@ -94,9 +94,12 @@ fun SettingsDesktopScreen(component: SettingsComponent, modifier: Modifier = Mod
     }
 }
 
-/** The desktop category list omits App Permissions — there is no per-app OS settings screen (ADR-0017). */
+/**
+ * The desktop category list omits App Permissions (no per-app OS settings screen, ADR-0017) and the
+ * Agent row (#150 ships the Agent surface on Android only; desktop gets it when a desktop engine lands).
+ */
 private val DesktopCategories: List<SettingsCategory> =
-    SettingsCategory.entries.filter { it != SettingsCategory.AppPermissions }
+    SettingsCategory.entries.filter { it != SettingsCategory.AppPermissions && it != SettingsCategory.Agent }
 
 // --- category list (root) ---
 
@@ -191,6 +194,9 @@ private fun CategoryDetail(
                 // App Permissions is omitted from the desktop list (no per-app OS settings screen,
                 // ADR-0017), so this branch is unreachable on desktop — kept only to stay exhaustive.
                 SettingsCategory.AppPermissions -> Unit
+
+                // Agent (#150) is Android-only for now; filtered from DesktopCategories, never opened here.
+                SettingsCategory.Agent -> Unit
             }
         }
     }
@@ -505,6 +511,7 @@ private val SettingsCategory.title: String
         SettingsCategory.Appearance -> "Appearance"
         SettingsCategory.TaskBehavior -> "Task behavior"
         SettingsCategory.SpeechEngine -> "Speech engine"
+        SettingsCategory.Agent -> "Agent"
         SettingsCategory.DataPrivacy -> "Data & Privacy"
         SettingsCategory.HelpFeedback -> "Help & Feedback"
         SettingsCategory.AppPermissions -> "App Permissions"

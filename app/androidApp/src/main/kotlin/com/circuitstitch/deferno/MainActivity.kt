@@ -111,6 +111,10 @@ class MainActivity : ComponentActivity() {
                 // Speech engine App setting (#93, ADR-0018): the device-local engine catalog from the same
                 // AppScope graph — the Settings Destination's "Speech engine" row reads + writes it.
                 speechEngineCatalog = appComponent.speechEngineCatalog,
+                // Agent inference-engine choice + entitlement gate (#150, ADR-0027): the device-local engine
+                // selection + per-Account relay entitlement from the same AppScope graph — the Settings
+                // "Agent" row reads + writes it.
+                inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
                 // The AppScope connectivity monitor (#158): the outbox driver flushes on the
                 // offline→online edge and skips passes while known-offline.
                 connectivity = appComponent.connectivity,

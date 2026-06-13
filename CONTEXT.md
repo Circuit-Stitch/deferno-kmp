@@ -239,11 +239,18 @@ saving the draft at the root/top level, while a missing child relation can be re
 _Avoid_: silently dropping drafts, auto-committing a guessed replacement.
 
 **Inference engine** *(client)*:
-The configured backend the [[Agent]] runs against — the **Deferno relay** (Deferno-operated,
-per-[[Account]] entitlement) or a **local engine** on this device. The choice is an [[App setting]]
-(device-local, like the speech-engine choice); an off-device engine is **explicit opt-in, never
-silent**. Distinct from the [[Dictation]] speech engine — speech recognition never has a cloud tier.
-_Avoid_: model (an engine *hosts* a model), provider, speech engine (a different catalog).
+The backend the [[Agent]] runs against, chosen from a **catalog** of two-or-more options on the
+Settings [[Destination]]: **Off** (the **default** — the Agent stands down; AI is never forced on, and
+a later onboarding step asks whether to use AI at all), one or more **on-device engines** (available to
+**everyone**, ungated), and **Deferno relay** cloud engine(s) (Deferno-operated, gated by per-[[Account]]
+**entitlement**). The choice is an [[App setting]] (device-local, like the speech-engine choice).
+On-device inference is ungated; an off-device (relay) engine is **explicit opt-in** — *selecting* it is
+the consent — and **never silent**. An engine *hosts* a **model** (the relay exposes the models an
+entitlement covers); picking a specific model is a sub-choice **within** the chosen engine, and gating is
+**per-origin** (every cloud model needs entitlement; every on-device model is free), never per-model.
+Distinct from the [[Dictation]] speech engine — speech recognition never has a cloud tier.
+_Avoid_: model (an engine *hosts* a model — a sub-choice, not the engine), provider, speech engine (a
+different catalog).
 
 **Reference lookup** *(client)*:
 Read-only [[Agent]] tools that resolve the person's spoken/written references to existing [[Item]]s
@@ -342,8 +349,9 @@ _Avoid_: app setting (the device-local kind), preference (ambiguous between the 
 
 **App setting** *(client, device-local)*:
 A preference scoped to **this install on this device** — **never synced, never crossing [[Account]]s**.
-Covers OS/app permissions, device notification preferences, and the [[Dictation]] **speech-engine
-choice**. Lives in a device-local store, *not* in [[User setting]]s, because the thing it configures is a
+Covers OS/app permissions, device notification preferences, the [[Dictation]] **speech-engine
+choice**, and the [[Agent]]'s **inference-engine choice**. Lives in a device-local store, *not* in
+[[User setting]]s, because the thing it configures is a
 device capability (an engine available on one device may be absent on another). Surfaced on the same
 **Settings** [[Destination]] alongside [[User setting]]s.
 _Avoid_: [[User setting]] (the synced, per-Account kind), system/OS setting (those live in the platform

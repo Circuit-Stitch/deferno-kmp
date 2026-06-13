@@ -8,6 +8,9 @@ import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.router.stack.pop
 import com.arkivanov.decompose.router.stack.push
 import com.arkivanov.decompose.value.Value
+import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
+import com.circuitstitch.deferno.core.agent.InferenceEngineId
+import com.circuitstitch.deferno.core.agent.InferenceEngineOption
 import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.model.ThemeFamily
@@ -44,6 +47,10 @@ enum class SettingsCategory(val backed: Boolean) {
     Appearance(backed = true),
     TaskBehavior(backed = true),
     SpeechEngine(backed = true),
+    // The Agent inference-engine choice (#150) — like [SpeechEngine] a device-local [[App setting]] over
+    // the [SettingsComponent.inferenceEngine] read model, not `UserSettings`. Row shown only when this
+    // device has an inference engine; the cloud option is gated on the Account's relay entitlement.
+    Agent(backed = true),
     DataPrivacy(backed = true),
     HelpFeedback(backed = true),
     AppPermissions(backed = true),
@@ -70,6 +77,27 @@ data class SpeechEngineSettings(
     companion object {
         /** The pre-options seed (no engines queried yet): the persisted choice with an empty option list. */
         fun seed(selected: SpeechEngineId): SpeechEngineSettings = SpeechEngineSettings(emptyList(), selected)
+    }
+}
+
+/**
+ * The Settings Destination's view of the device-local **inference-engine choice** (#150, ADR-0027) — the
+ * [SettingsCategory.Agent] category's state. [options] is each engine registered on this device (each with
+ * its availability — a cloud engine is `RequiresPremium` until the Account is entitled), [selected] is the
+ * current device-local choice (default [InferenceEngineId.Off]). [available] is true only when the device
+ * has an engine to offer beyond Off; the View shows the Agent row only then (hidden where no engine has
+ * landed yet, like speech). "Off" is the View's always-present default above [options].
+ */
+data class InferenceEngineSettings(
+    val options: List<InferenceEngineOption>,
+    val selected: InferenceEngineId,
+) {
+    /** Whether the device has any engine to offer beyond the implicit Off (drives the row's visibility). */
+    val available: Boolean get() = options.isNotEmpty()
+
+    companion object {
+        /** The pre-options seed (no engines queried yet): the persisted choice with an empty option list. */
+        fun seed(selected: InferenceEngineId): InferenceEngineSettings = InferenceEngineSettings(emptyList(), selected)
     }
 }
 
@@ -102,6 +130,14 @@ interface SettingsComponent {
      */
     val speechEngine: StateFlow<SpeechEngineSettings>
 
+    /**
+     * The Agent's device-local inference-engine choice ([SettingsCategory.Agent], #150, ADR-0027) — the
+     * engine selection (Off / on-device / cloud) over the Active Account's relay entitlement, sourced from
+     * the AppScope [InferenceEngineCatalog], **not** the synced [settings]. It never syncs; the View shows
+     * the row only when [InferenceEngineSettings.available], with the cloud option disabled until entitled.
+     */
+    val inferenceEngine: StateFlow<InferenceEngineSettings>
+
     /** Drill into [category]'s detail (push). */
     fun openCategory(category: SettingsCategory)
 
@@ -132,6 +168,14 @@ interface SettingsComponent {
      * `listen()` time (never cloud), so the choice is honoured the moment that engine becomes available.
      */
     fun onSpeechEngineSelected(id: SpeechEngineId)
+
+    /**
+     * Agent: set the device-local inference-engine choice (#150, ADR-0027) — persists device-locally via
+     * the [InferenceEngineCatalog], **never** synced. Selecting the cloud engine is the explicit opt-in;
+     * the gate still requires the Account to be entitled before any cloud call is made. Selecting an
+     * on-device engine is ungated; [InferenceEngineId.Off] stands the Agent fully down.
+     */
+    fun onInferenceEngineSelected(id: InferenceEngineId)
 
     // --- host-routed intents (Output up to the shell) ---
 
@@ -197,6 +241,11 @@ class DefaultSettingsComponent(
     // The device locale the catalog queries engine availability for (a non-English locale reports
     // unavailable rather than mis-transcribing, ADR-0018). Defaulted for tests.
     private val locale: String = "en-US",
+    // The Agent inference-engine choice + entitlement gate (#150, ADR-0027): the AppScope catalog over the
+    // device-local engine selection + the Account's relay entitlement. Defaulted to the inert
+    // [InferenceEngineCatalog.Inert] (no engine → row hidden) so existing Settings tests build without
+    // supplying it (like the speech default).
+    private val inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : SettingsComponent, ComponentContext by componentContext {
 
@@ -231,11 +280,23 @@ class DefaultSettingsComponent(
     private val _speechEngine = MutableStateFlow(SpeechEngineSettings.seed(speechEngineCatalog.selected()))
     override val speechEngine: StateFlow<SpeechEngineSettings> = _speechEngine.asStateFlow()
 
+    // The Agent inference-engine choice (#150). Seeded synchronously with the persisted selection (an empty
+    // option list → row hidden); the init below fills the options once entitlement (a suspend read)
+    // resolves. Device-local — sourced from the AppScope catalog, never the synced settings.
+    private val _inferenceEngine = MutableStateFlow(InferenceEngineSettings.seed(inferenceEngineCatalog.selected()))
+    override val inferenceEngine: StateFlow<InferenceEngineSettings> = _inferenceEngine.asStateFlow()
+
     init {
         scope.launch {
             _speechEngine.value = SpeechEngineSettings(
                 options = speechEngineCatalog.options(locale),
                 selected = speechEngineCatalog.selected(),
+            )
+        }
+        scope.launch {
+            _inferenceEngine.value = InferenceEngineSettings(
+                options = inferenceEngineCatalog.options(),
+                selected = inferenceEngineCatalog.selected(),
             )
         }
     }
@@ -281,6 +342,13 @@ class DefaultSettingsComponent(
         // change availability, so reflect the new choice in place rather than re-querying the options.
         speechEngineCatalog.select(id)
         _speechEngine.value = _speechEngine.value.copy(selected = id)
+    }
+
+    override fun onInferenceEngineSelected(id: InferenceEngineId) {
+        // Device-local persist (App setting, #150) — not the synced SettingsEditor. A selection doesn't
+        // change availability/entitlement, so reflect the new choice in place rather than re-querying.
+        inferenceEngineCatalog.select(id)
+        _inferenceEngine.value = _inferenceEngine.value.copy(selected = id)
     }
 
     override fun onOpenDataExportImport() = output(SettingsComponent.Output.OpenDataExportImport)

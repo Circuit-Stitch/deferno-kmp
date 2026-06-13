@@ -22,6 +22,9 @@ kotlin {
             // The Speech engine row renders core:speech types directly (SpeechEngineId / SpeechAvailability
             // labels, the option list) — the device-local App setting (#93, ADR-0018).
             implementation(project(":core:speech"))
+            // The Agent row renders core:agent's AgentSettings (opt-in + entitlement) — the device-local
+            // App setting (#150, ADR-0027).
+            implementation(project(":core:agent"))
 
             implementation(libs.decompose)
             implementation(libs.decompose.extensions.compose)

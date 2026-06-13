@@ -17,6 +17,7 @@ import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserSettings
+import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
@@ -100,6 +101,11 @@ class DefaultRootComponent(
     // Destination reads. Threaded down to the Main shell. Defaulted to the inert [EmptySpeechEngineCatalog]
     // (only "Automatic" → the row hides) so tests build without it; production passes the AppComponent's.
     private val speechEngineCatalog: SpeechEngineCatalog = EmptySpeechEngineCatalog,
+    // The Agent inference-engine choice + entitlement gate (#150, ADR-0027): the AppScope catalog the
+    // Settings Destination reads. Threaded down to the Main shell. Defaulted to the inert
+    // [InferenceEngineCatalog.Inert] (no engine → the Agent row hides) so tests build without it;
+    // production passes the AppComponent's.
+    private val inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
     /** The New surface's foreclosed-dictation-permission deep-link (#120). Host-handled, like the rest. */
     private val onOpenDictationPermissionSettings: () -> Unit = {},
     /** The outbox driver's clock (#143) — injected so the flush timing is deterministic under test. */
@@ -241,6 +247,8 @@ class DefaultRootComponent(
                         locale = locale,
                         // The device-local speech-engine App setting (#93) the Settings Destination reads.
                         speechEngineCatalog = speechEngineCatalog,
+                        // The Agent inference-engine choice + entitlement gate (#150) the Settings reads.
+                        inferenceEngineCatalog = inferenceEngineCatalog,
                         // The foreclosed-permission deep-link (#120), threaded to the New overlay.
                         onOpenDictationPermissionSettings = onOpenDictationPermissionSettings,
                     ),

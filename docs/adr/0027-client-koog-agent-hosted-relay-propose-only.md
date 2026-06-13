@@ -13,11 +13,18 @@ binary; and the backend owns the domain language and already auto-seeds the dail
   `deferno.di`, iOS target included), built on **Koog 1.0 — stable modules only** (provider
   abstraction, `@Serializable` structured output with repair). One implementation serves every
   inference tier; the beta modules (`agents-mcp`, LiteRT) are out of v1.
-- **Inference is tiered: local preferred when available, off-device only by explicit opt-in, never
-  silent.** Launch sequencing inverts the end-state on purpose: **v1 ships hosted-only** (still
-  opt-in) to exercise the full pipeline; local engines follow (desktop Ollama, Android LiteRT when
-  its Koog module matures; iOS deferred with its app). Engine choice and the opt-in are **App
-  settings** (device-local); the relay entitlement is per-Account.
+- **The inference engine is a single device-local choice, defaulting to Off.** The person picks from a
+  2-to-many catalog — **Off** (default; the agent stands down; AI is never forced on, and a later
+  onboarding step asks whether to use AI at all), **on-device** engines (ungated, available to
+  everyone), and **Deferno-cloud** engine(s) (per-Account entitlement). There is **no separate opt-in
+  toggle**: *selecting a cloud engine is the explicit opt-in*, and nothing off-device happens silently.
+  Gating is **per-origin** — every cloud model needs entitlement, every on-device model is free — never
+  the whole agent and never per-model (an engine *hosts* a model; the model sub-pick is deferred, v1 is
+  one global agent-model). Launch sequencing inverts the end-state on purpose: **v1 ships cloud-only**
+  (no on-device engine yet → effectively premium-first) to exercise the full pipeline; on-device
+  engines follow (desktop Ollama, Android LiteRT when its Koog module matures; iOS deferred with its
+  app). The engine choice is an **App setting** (device-local); the relay entitlement is per-Account,
+  server-enforced (the client reads a fake-able flag).
 - **Hosted inference sits behind a thin Deferno-operated relay** — the OSS constraint forces the
   provider key behind a Deferno-operated endpoint. The relay is an **Anthropic-format passthrough**:
   PAT auth → entitlement check → verbatim forward. The client points Koog's stock

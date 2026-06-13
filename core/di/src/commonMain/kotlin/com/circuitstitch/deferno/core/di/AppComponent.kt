@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
+import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.database.AccountDatabaseFactory
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.AppScope
@@ -103,6 +104,17 @@ abstract class AppComponent(
      * surface and to compile-validate its binding on every target.
      */
     abstract val speechEngineCatalog: SpeechEngineCatalog
+
+    /**
+     * The Agent's device-local **inference-engine choice** + cloud gate the Settings Destination renders
+     * and every Agent surface consults (#150, ADR-0027): the engine selection [[App setting]] (Off /
+     * on-device / Deferno-cloud) over the per-Account relay entitlement (relay base URL from the
+     * [environment]). An AppScope **device capability** — the selection is device-local (never synced), the
+     * entitlement is enforced server-side, not by a graph scope. On-device engines are ungated; only the
+     * cloud relay is entitlement-gated. Surfaced here for the Settings surface and to compile-validate the
+     * binding on every target (macOS included, where the inference floor is NotConfigured).
+     */
+    abstract val inferenceEngineCatalog: InferenceEngineCatalog
 
     /**
      * Where the OS lets the person flip a foreclosed [[Dictation]] permission (#120): the desktop New
