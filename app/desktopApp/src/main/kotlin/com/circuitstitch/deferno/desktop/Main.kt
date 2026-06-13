@@ -68,7 +68,6 @@ import com.circuitstitch.deferno.desktop.chrome.activeMainShell
 import com.circuitstitch.deferno.desktop.chrome.installAppMenuHandlers
 import com.circuitstitch.deferno.desktop.chrome.openPreferences
 import com.circuitstitch.deferno.desktop.shell.RootShell
-import com.circuitstitch.deferno.desktop.shell.label
 import com.circuitstitch.deferno.desktop.update.ConveyorUpdateBackend
 import com.circuitstitch.deferno.desktop.update.UpdateAction
 import com.circuitstitch.deferno.desktop.update.UpdateManager
@@ -79,6 +78,7 @@ import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.MainShellComponent
 import com.circuitstitch.deferno.shell.OverlayRoute
 import com.circuitstitch.deferno.shell.RootComponent
+import com.circuitstitch.deferno.shell.ui.label
 import dev.hydraulic.conveyor.control.SoftwareUpdateController
 import java.awt.Desktop
 import java.io.File

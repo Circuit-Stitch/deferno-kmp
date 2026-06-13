@@ -167,6 +167,14 @@ interface MainShellComponent {
 
         /** The in-app Help → Feedback surface (#375): comment + attachments, online-only submit. */
         class Feedback(val component: FeedbackComponent) : OverlayChild
+
+        /**
+         * The **Brain dump** surface (ADR-0027): the home for the dictation-driven Extractor. A
+         * stateless placeholder for now — the [InferenceEngine] ships with no credential and returns
+         * `Failure.NotConfigured` until #150 wires the relay, so there is nothing to capture/extract
+         * yet. When #150 lands this grows a real component (`class BrainDump(val component: …)`).
+         */
+        data object BrainDump : OverlayChild
     }
 
     sealed interface Output {
@@ -206,6 +214,9 @@ sealed interface OverlayRoute {
 
     /** The in-app Help → Feedback surface (#375), opened from Settings → Help & Feedback. */
     data object Feedback : OverlayRoute
+
+    /** The **Brain dump** surface (ADR-0027), opened from the shell top bar's voice_chat action. */
+    data object BrainDump : OverlayRoute
 }
 
 class DefaultMainShellComponent(
@@ -435,6 +446,10 @@ class DefaultMainShellComponent(
                     launch = { block -> overlayScope.launch { block() } },
                 ),
             )
+
+            // Brain dump (ADR-0027): a stateless placeholder route until #150 wires the Extractor's
+            // inference credential — nothing to construct yet.
+            OverlayRoute.BrainDump -> MainShellComponent.OverlayChild.BrainDump
         }
 
     private fun onSearchOutput(output: SearchComponent.Output) {
