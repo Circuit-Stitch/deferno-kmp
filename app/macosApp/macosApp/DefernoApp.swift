@@ -23,6 +23,11 @@ struct DefernoApp: App {
         // window "Deferno" regardless of the bundle name.
         Window("Deferno", id: "main") {
             RootView(root: host.root, onBrainDump: { showExtractor = true })
+                // Floor the window so it can't shrink the two-pane Tasks layout (sidebar + 340pt list +
+                // detail) until the detail pane wraps one character per line. With
+                // `.windowResizability(.contentMinSize)` below, this min frame becomes the window's
+                // minimum size; it still grows freely.
+                .frame(minWidth: 820, minHeight: 520)
                 // OAuth redirect (ADR-0026, #137): the system browser returns to the registered
                 // `com.circuitstitch.deferno` scheme (project.yml URL types); forward it to the shared
                 // inbox the in-flight `MacBrowserAuthenticator` awaits. On macOS this is the PRIMARY
@@ -34,6 +39,8 @@ struct DefernoApp: App {
                     DraftExtractorView(bridge: host.draftTasks)
                 }
         }
+        // Honour the content's min frame as the window's minimum size (the window still resizes up).
+        .windowResizability(.contentMinSize)
         .commands {
             // ⌘N opens the New-task overlay on the foreground Destination (pre-dated on Calendar, #74) —
             // the standard File → New slot, routed through the root since commands fire outside the View.
