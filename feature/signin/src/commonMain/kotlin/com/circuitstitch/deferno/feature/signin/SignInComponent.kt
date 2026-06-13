@@ -21,6 +21,13 @@ data class SignInState(
     /** The browser **Sign in** button is live whenever a flow isn't already running. */
     val canStartBrowser: Boolean get() = !isBusy
 
+    /**
+     * A browser sign-in is in flight, so the "Need to try again?" escape hatch is offered. The external
+     * browser (macOS/desktop/Android) gives the app no tab-close event (ADR-0026), so an abandoned
+     * sign-in can't auto-cancel — this lets the user restart. Not the paste path (no browser to abandon).
+     */
+    val canRetryBrowser: Boolean get() = isBusy && !showTokenEntry
+
     /** The dev paste button is live only with a non-blank token and no flow already running. */
     val canSubmitToken: Boolean get() = token.isNotBlank() && !isBusy
 }
@@ -49,6 +56,13 @@ interface SignInComponent {
 
     /** The user tapped **Sign in** — start the system-browser OAuth + PKCE flow. */
     fun onSignInClick()
+
+    /**
+     * The user tapped "Need to try again?" while a browser sign-in is in flight. The external browser
+     * gives no close event (ADR-0026), so a started-then-abandoned flow would spin forever; this cancels
+     * the stalled attempt and starts a fresh one. Only meaningful (and offered) while [SignInState.canRetryBrowser].
+     */
+    fun onRetry()
 
     /** The user tapped the developer "Use a token instead" affordance — reveal the paste field. */
     fun onUseTokenInstead()

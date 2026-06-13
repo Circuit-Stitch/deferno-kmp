@@ -47,6 +47,16 @@ struct SignInView: View {
                     .foregroundStyle(colors.inkMuted)
                     .multilineTextAlignment(.center)
 
+                // The external browser gives no close event (ADR-0026), so a started-then-abandoned
+                // sign-in can't auto-cancel — offer an explicit restart while the leg is in flight.
+                if value.canRetryBrowser {
+                    Text("Need to try again?")
+                        .font(.footnote)
+                        .foregroundStyle(colors.inkMuted)
+                    Button("Sign in") { component.onRetry() }
+                        .font(.footnote)
+                }
+
                 // Browser-path error (the paste path shows its error inline under the field instead).
                 if let error = value.error, !value.showTokenEntry {
                     errorText(error)

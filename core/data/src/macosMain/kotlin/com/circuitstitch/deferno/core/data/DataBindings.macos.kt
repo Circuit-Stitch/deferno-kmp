@@ -20,8 +20,10 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
  * ([FileAccountRegistry]) and connectivity ([PathMonitorConnectivity]) are the same cross-Apple
  * `appleMain` implementations iOS uses; the two that genuinely differ are bound here:
  *  - [DeviceName] is the real host name (`NSHost.currentHost.localizedName`) — macOS has no `UIDevice`;
- *  - [BrowserAuthenticator] is the [MacBrowserAuthenticator] Phase-0 stub (the real
- *    `ASWebAuthenticationSession`/`NSWindow` leg is #189) — paste-PAT sign-in doesn't need it.
+ *  - [BrowserAuthenticator] is [MacBrowserAuthenticator] (#189), the desktop loopback flow (the twin of
+ *    the JVM `LoopbackBrowserAuthenticator`): it opens the user's real default browser and captures the
+ *    redirect on a `127.0.0.1` listener — NOT a custom scheme (which LaunchServices second-instances on
+ *    macOS) and NOT iOS's `ASWebAuthenticationSession`. See the ADR-0026 macOS amendment.
  *
  * macOS per-Account isolation rides the per-Account encrypted DB file + Keychain key (the shared
  * `appleMain` SQLDelight driver), like iOS — no separate sidecar wipe.

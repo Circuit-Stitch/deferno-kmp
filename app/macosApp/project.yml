@@ -19,6 +19,17 @@ settings:
     # that Kotlin/Native can't catch). Path is relative to SRCROOT (app/macosApp).
     SWIFT_OBJC_BRIDGING_HEADER: macosApp/macosApp-Bridging-Header.h
     PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macos
+    # The app name "Deferno" (the built product is Deferno.app, executable Deferno). This is the source
+    # of CFBundleName, which the menu bar + Finder read (#189) — a partial-Info.plist CFBundleName gets
+    # overwritten by GENERATE_INFOPLIST_FILE's synthesized $(PRODUCT_NAME), so it must be set here. The
+    # Xcode TARGET stays "macosApp" (so the scheme + CocoaPods `Pods-macosApp` integration are unchanged).
+    PRODUCT_NAME: Deferno
+    # …but the Swift MODULE name must NOT become "Deferno": the Kotlin framework is also named `Deferno`,
+    # so a "Deferno" app module shadows it — `import Deferno` self-imports and every framework symbol
+    # (BridgeKt, StateFlowBridge, *Component) goes "cannot find type". Pin the module name to the old
+    # target name to keep the framework import resolving (#189). PRODUCT_MODULE_NAME defaults to
+    # PRODUCT_NAME, so it has to be set explicitly.
+    PRODUCT_MODULE_NAME: macosApp
     MARKETING_VERSION: "0.1"
     CURRENT_PROJECT_VERSION: "1"
     GENERATE_INFOPLIST_FILE: YES
@@ -27,6 +38,11 @@ settings:
     # stays YES and merges the synthesized + INFOPLIST_KEY_* keys on top (explicit keys win). Mirrors iosApp.
     INFOPLIST_FILE: macosApp/Info.plist
     INFOPLIST_KEY_NSHumanReadableCopyright: ""
+    # The Dock/Finder app icon: the flame brandmark, generated from the iOS 1024 source into
+    # macosApp/Assets.xcassets/AppIcon.appiconset (#189). Without this the app shows the generic icon.
+    # (The app NAME lives in the partial Info.plist — CFBundleName/CFBundleDisplayName — alongside the
+    # URL scheme + single-instance keys, since CFBundleName has no INFOPLIST_KEY_* equivalent.)
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     # Dictation TCC usage strings (ADR-0029 Phase 2): the in-process SpeechTranscriber prompts under THIS
     # app's identity, so the strings live here (not in the launchd Helper's embedded plist, ADR-0024). The
     # app is not sandboxed (ad-hoc dev signing), so the usage strings alone satisfy mic/Speech TCC — no

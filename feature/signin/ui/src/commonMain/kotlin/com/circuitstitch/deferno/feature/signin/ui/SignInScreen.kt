@@ -50,6 +50,7 @@ fun SignInScreen(
     SignInContent(
         state = state,
         onSignInClick = component::onSignInClick,
+        onRetry = component::onRetry,
         onUseTokenInstead = component::onUseTokenInstead,
         onTokenChange = component::onTokenChange,
         onSubmit = component::onSubmit,
@@ -63,6 +64,7 @@ fun SignInScreen(
 internal fun SignInContent(
     state: SignInState,
     onSignInClick: () -> Unit,
+    onRetry: () -> Unit,
     onUseTokenInstead: () -> Unit,
     onTokenChange: (String) -> Unit,
     onSubmit: () -> Unit,
@@ -102,6 +104,21 @@ internal fun SignInContent(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 12.dp),
                 )
+
+                // The external browser gives no close event (ADR-0026), so a started-then-abandoned
+                // sign-in can't auto-cancel — offer an explicit restart while the leg is in flight.
+                if (state.canRetryBrowser) {
+                    Text(
+                        text = "Need to try again?",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                    TextButton(onClick = onRetry, modifier = Modifier.padding(top = 4.dp)) {
+                        Text(text = "Sign in")
+                    }
+                }
 
                 // Browser-path error (the paste path shows its error inline on the field instead).
                 val error = state.error
