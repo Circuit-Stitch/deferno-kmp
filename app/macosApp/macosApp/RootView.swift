@@ -8,11 +8,13 @@ import SwiftUI
 /// surface changes out from under the sign-in screen (there is no success callback to wire).
 struct RootView: View {
     let root: RootComponent
+    let onBrainDump: () -> Void
     @StateObject private var stack: RootStackObserver
     @StateObject private var theme: StateFlowObserver<UserSettings>
 
-    init(root: RootComponent) {
+    init(root: RootComponent, onBrainDump: @escaping () -> Void) {
         self.root = root
+        self.onBrainDump = onBrainDump
         _stack = StateObject(wrappedValue: RootStackObserver(ShellBridgeKt.rootStackBridge(component: root)))
         _theme = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.themeSettingsBridge(component: root)))
     }
@@ -26,7 +28,7 @@ struct RootView: View {
     private var content: some View {
         let child = stack.active
         if let main = ShellBridgeKt.rootChildMain(child: child) {
-            MainShellView(component: main)
+            MainShellView(component: main, onBrainDump: onBrainDump)
         } else if let auth = ShellBridgeKt.rootChildAuth(child: child) {
             SignInView(component: auth.signIn)
         }

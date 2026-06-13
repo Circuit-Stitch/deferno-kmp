@@ -13,15 +13,18 @@ import SwiftUI
 /// only the local "More" sheet flag.
 struct MainShellView: View {
     let component: MainShellComponent
+    let onBrainDump: () -> Void
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.defernoColors) private var colors
     @StateObject private var destinations: DestinationStackObserver
     @StateObject private var overlay: OverlaySlotObserver
     @StateObject private var accounts: AccountsObserver
     @State private var showMore = false
+    @State private var sidebarWidth: CGFloat = 220
 
-    init(component: MainShellComponent) {
+    init(component: MainShellComponent, onBrainDump: @escaping () -> Void) {
         self.component = component
+        self.onBrainDump = onBrainDump
         _destinations = StateObject(wrappedValue: DestinationStackObserver(ShellBridgeKt.destinationStackBridge(component: component)))
         _overlay = StateObject(wrappedValue: OverlaySlotObserver(ShellBridgeKt.overlaySlotBridge(component: component)))
         _accounts = StateObject(wrappedValue: AccountsObserver(ShellBridgeKt.accountSwitcherBridge(component: component)))
@@ -56,10 +59,38 @@ struct MainShellView: View {
         NavigationSplitView {
             sidebar
         } detail: {
-            VStack(spacing: 0) {
-                topBar
-                bodyWithFab
+            destinationBody
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .toolbar { windowToolbar }
+                // The title bar tracks the foreground Destination (Plan / Calendar / Tasks …) rather
+                // than shouting the brand — the macOS-idiomatic sidebar-app title. The window itself
+                // stays named "Deferno" (Window scene + Dock icon) for ⌘-tab / the Window menu.
+                .navigationTitle(activeName)
+        }
+    }
+
+    /// The window's native title-bar actions (macOS): the account switcher sits leading next to the
+    /// sidebar toggle; Search · Brain dump · New task trail to the top-right (New rightmost). This is
+    /// the desktop counterpart of the Android shell chrome's trailing glyph row — Brain dump opens the
+    /// on-device Extractor (the same sheet as the ⌘⇧E menu), New mirrors the FAB's pre-dating behaviour.
+    @ToolbarContentBuilder
+    private var windowToolbar: some ToolbarContent {
+        if accounts.accounts.count > 1 {
+            ToolbarItem(placement: .navigation) { accountSwitcher }
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button { ShellBridgeKt.openSearchOverlay(component: component) } label: {
+                Image(systemName: "magnifyingglass")
             }
+            .help("Search")
+            Button(action: onBrainDump) {
+                Image(systemName: "brain.head.profile")
+            }
+            .help("Brain dump")
+            Button(action: onNewTapped) {
+                Image(systemName: "plus")
+            }
+            .help("New task")
         }
     }
 
@@ -204,19 +235,34 @@ struct MainShellView: View {
     // MARK: Sidebar (regular)
 
     private var sidebar: some View {
+        // Below ~130pt the rows collapse to an icon rail (SF Symbol only) — NavigationSplitView has no
+        // native rail, so we read the live column width (GeometryReader → preference) and swap to
+        // `.labelStyle(.iconOnly)` rather than render truncated "Calen…" stubs (#194). The Label keeps
+        // its full title for VoiceOver even when hidden, and `.help(name)` gives a hover tooltip.
         List {
             ForEach(allDestinations) { dest in
                 let name = ShellBridgeKt.destinationName(destination: dest)
                 let selected = name == activeName
                 Button { component.selectDestination(destination: dest) } label: {
-                    Label(name, systemImage: icon(name))
-                        .foregroundStyle(selected ? colors.primary : colors.onSurface)
+                    Group {
+                        if sidebarWidth < 130 {
+                            Label(name, systemImage: icon(name)).labelStyle(.iconOnly)
+                        } else {
+                            Label(name, systemImage: icon(name))
+                        }
+                    }
+                    .foregroundStyle(selected ? colors.primary : colors.onSurface)
                 }
+                .help(name)
                 .listRowBackground(selected ? colors.primaryContainer : Color.clear)
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Deferno")
+        .navigationSplitViewColumnWidth(min: 64, ideal: 220, max: 320)
+        .background(GeometryReader { geo in
+            Color.clear.preference(key: SidebarWidthKey.self, value: geo.size.width)
+        })
+        .onPreferenceChange(SidebarWidthKey.self) { sidebarWidth = $0 }
     }
 
     // MARK: Overlay (Search / New) as a sheet
@@ -265,4 +311,10 @@ struct MainShellView: View {
         default: return "circle"
         }
     }
+}
+
+/// Carries the sidebar's live rendered width up so `sidebar` can swap to the icon rail below ~130pt (#194).
+private struct SidebarWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
