@@ -27,19 +27,25 @@ final class MacDictation: NativeDictation {
         // which the New surface renders as the "enable it in System Settings" state (#120).
         ensureAuthorized { granted in
             guard granted else { onError("permission-denied"); return }
-            // Qualified: macOS 26's Speech framework also vends a `SpeechTranscriber`, so name SidecarKit's.
-            guard let transcriber = SidecarKit.SpeechTranscriber(localeIdentifier: locale) else {
-                onError("unsupported-locale"); return
-            }
-            guard handle.adopt(transcriber) else { return } // stop already ran while we were authorizing
-            transcriber.start(onEvent: { event in
-                switch event {
-                case .partial(let text): onPartial(text)
-                case .final(let text): onFinal(text)
-                case .failure(let reason): onError(reason)
-                @unknown default: onError("recognition-failed")
+            // AVAudioEngine mic setup (installTapOnBus + start) MUST run on the main thread. The TCC
+            // completion fires on a background xpc queue, and configuring the engine there raises an
+            // NSException — which Kotlin/Native's terminate handler turns into an abort (the Phase-2
+            // crash). Hop to main before touching the audio engine.
+            DispatchQueue.main.async {
+                // Qualified: macOS 26's Speech framework also vends a `SpeechTranscriber`, so name SidecarKit's.
+                guard let transcriber = SidecarKit.SpeechTranscriber(localeIdentifier: locale) else {
+                    onError("unsupported-locale"); return
                 }
-            }, onEnd: {})
+                guard handle.adopt(transcriber) else { return } // stop already ran while we were authorizing
+                transcriber.start(onEvent: { event in
+                    switch event {
+                    case .partial(let text): onPartial(text)
+                    case .final(let text): onFinal(text)
+                    case .failure(let reason): onError(reason)
+                    @unknown default: onError("recognition-failed")
+                    }
+                }, onEnd: {})
+            }
         }
         return handle
     }
