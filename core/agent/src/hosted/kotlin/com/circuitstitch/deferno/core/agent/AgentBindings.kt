@@ -12,8 +12,8 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
  * scope.
  *
  * `@Provides` over the abstract [InferenceEngine] return type (not the impl) so the merged graph
- * exposes the seam; the engine-catalog multibinding (relay / local engines) arrives with #150's
- * engine choice, mirroring `SpeechBindings`.
+ * exposes the seam; the engine catalog + entitlement gate that drive the endpoint live in
+ * `InferenceEngineBindings` (#150), mirroring `SpeechBindings`.
  */
 @ContributesTo(AppScope::class)
 interface AgentBindings {
@@ -22,12 +22,14 @@ interface AgentBindings {
     fun inferenceEngine(endpoint: AnthropicEndpoint): InferenceEngine = KoogInferenceEngine(endpoint)
 
     /**
-     * The endpoint until #150's engine choice + off-device opt-in [[App setting]] land: the
-     * Anthropic API base with **no credential**, so every call answers
-     * [InferenceResult.Failure.NotConfigured] and nothing off-device can happen silently
-     * (ADR-0009 / ADR-0027). #150 replaces this provider with the settings-driven configuration
-     * (the relay URL + PAT, or a developer key).
+     * The settings-driven cloud endpoint (#150): it points at the relay base URL the
+     * [InferenceEngineCatalog] resolves from the environment, and reads its credential through the catalog —
+     * which yields a credential only when the **cloud relay is the selected engine** and the Account is
+     * **entitled**, otherwise `null`. So every call answers [InferenceResult.Failure.NotConfigured]
+     * **without any network request** until that gate is open (ADR-0009 / ADR-0027). The catalog is read
+     * per call, so changing the selection or the entitlement takes effect with no restart (#150 AC4).
      */
     @Provides
-    fun anthropicEndpoint(): AnthropicEndpoint = AnthropicEndpoint()
+    fun anthropicEndpoint(catalog: InferenceEngineCatalog): AnthropicEndpoint =
+        AnthropicEndpoint(baseUrl = catalog.relayBaseUrl, credentials = { catalog.credential() })
 }

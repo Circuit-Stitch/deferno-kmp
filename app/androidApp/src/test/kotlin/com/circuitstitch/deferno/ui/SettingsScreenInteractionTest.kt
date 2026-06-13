@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -9,6 +10,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.agent.FakeRelayEntitlement
+import com.circuitstitch.deferno.core.agent.InMemoryInferenceEnginePreference
+import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
+import com.circuitstitch.deferno.core.agent.InferenceEngineId
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.speech.SpeechAvailability
@@ -46,12 +51,24 @@ class SettingsScreenInteractionTest {
         repo: FakeSettingsRepository = FakeSettingsRepository(),
         editor: FakeSettingsEditor = FakeSettingsEditor(repo),
         speechEngineCatalog: SpeechEngineCatalog = FakeSpeechEngineCatalog(),
+        inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
     ) = DefaultSettingsComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         settingsRepository = repo,
         settingsEditor = editor,
         speechEngineCatalog = speechEngineCatalog,
+        inferenceEngineCatalog = inferenceEngineCatalog,
         coroutineContext = Dispatchers.Unconfined,
+    )
+
+    /** A catalog with the cloud relay engine present (Agent row available) + flippable entitlement. */
+    private fun agentCatalog(
+        selected: InferenceEngineId = InferenceEngineId.Off,
+        entitled: Boolean = false,
+    ) = InferenceEngineCatalog.forRelay(
+        baseUrl = "https://relay/",
+        preference = InMemoryInferenceEnginePreference(selected),
+        entitlement = FakeRelayEntitlement(entitled),
     )
 
     private fun setContent(content: @Composable () -> Unit) {
@@ -211,5 +228,49 @@ class SettingsScreenInteractionTest {
         // Drilling in, the per-engine note explains WHY (the ModelMissing → "Downloading…" mapping).
         composeRule.onNodeWithText("Speech engine").performClick()
         composeRule.onNodeWithText("Downloading…").assertIsDisplayed()
+    }
+
+    // --- Agent: the device-local opt-in App setting + entitlement gate (#150, ADR-0027) ---
+
+    @Test
+    fun agentRow_isHidden_whenThisDeviceHasNoEngine() {
+        // The inert default gate has no engine → the Agent row never shows (like the speech row).
+        setContent { SettingsScreen(component()) }
+
+        composeRule.onNodeWithText("Agent").assertDoesNotExist()
+    }
+
+    @Test
+    fun agent_entitled_showsConsentCopy_andSelectingCloudPersistsDeviceLocally() {
+        // AC1: the consent copy is shown; selecting the cloud engine is the opt-in and persists through the
+        // catalog (device-local), never the synced SettingsEditor.
+        val catalog = agentCatalog(selected = InferenceEngineId.Off, entitled = true)
+        val editor = FakeSettingsEditor(FakeSettingsRepository())
+        setContent { SettingsScreen(component(editor = editor, inferenceEngineCatalog = catalog)) }
+
+        composeRule.onNodeWithText("Agent").performClick()
+        composeRule.onNodeWithText("Deferno cloud AI").assertIsDisplayed()
+        // The consent copy names the off-device send before the cloud engine is chosen.
+        composeRule.onNodeWithText("off your device", substring = true).assertIsDisplayed()
+
+        composeRule.onNodeWithText("Deferno cloud AI").performClick()
+
+        assertEquals(InferenceEngineId.DefernoCloud, catalog.selected())
+        assertTrue("the selection never touched the synced settings editor", editor.trackingChanges.isEmpty())
+    }
+
+    @Test
+    fun agent_notEntitled_rendersADisabledCloudOption_thatCannotBeSelected() {
+        // AC2: a not-entitled Account sees the cloud engine disabled "Premium" — it can't be selected, so no
+        // inference is ever attempted; the selection stays Off.
+        val catalog = agentCatalog(selected = InferenceEngineId.Off, entitled = false)
+        setContent { SettingsScreen(component(inferenceEngineCatalog = catalog)) }
+
+        composeRule.onNodeWithText("Agent").performClick()
+        composeRule.onNodeWithText("Premium — not available for your account yet").assertIsDisplayed()
+
+        // The cloud option is a disabled, unselected radio — it cannot be chosen, so no inference is attempted.
+        composeRule.onNodeWithText("Deferno cloud AI").assertIsNotEnabled()
+        assertEquals(InferenceEngineId.Off, catalog.selected())
     }
 }

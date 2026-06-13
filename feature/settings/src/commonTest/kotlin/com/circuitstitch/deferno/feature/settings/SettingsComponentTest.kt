@@ -2,6 +2,11 @@ package com.circuitstitch.deferno.feature.settings
 
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.agent.FakeRelayEntitlement
+import com.circuitstitch.deferno.core.agent.InMemoryInferenceEnginePreference
+import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
+import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
+import com.circuitstitch.deferno.core.agent.InferenceEngineId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
@@ -33,6 +38,7 @@ class SettingsComponentTest {
         initial: UserSettings = UserSettings.Default,
         output: (SettingsComponent.Output) -> Unit = {},
         speechEngineCatalog: SpeechEngineCatalog = FakeSpeechEngineCatalog(),
+        inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
     ): Triple<DefaultSettingsComponent, FakeSettingsRepository, FakeSettingsEditor> {
         val repo = FakeSettingsRepository(initial)
         val editor = FakeSettingsEditor(repo)
@@ -42,10 +48,21 @@ class SettingsComponentTest {
             settingsEditor = editor,
             output = output,
             speechEngineCatalog = speechEngineCatalog,
+            inferenceEngineCatalog = inferenceEngineCatalog,
             coroutineContext = Dispatchers.Unconfined,
         )
         return Triple(component, repo, editor)
     }
+
+    /** A catalog with the cloud relay engine present (so the Agent row is available) + flippable entitlement. */
+    private fun agentCatalog(
+        selected: InferenceEngineId = InferenceEngineId.Off,
+        entitled: Boolean = false,
+    ) = InferenceEngineCatalog.forRelay(
+        baseUrl = "https://relay/",
+        preference = InMemoryInferenceEnginePreference(selected),
+        entitlement = FakeRelayEntitlement(entitled),
+    )
 
     /** A catalog offering Automatic + an available Whisper — the Android v1 shape (a real engine present). */
     private fun whisperCatalog() = FakeSpeechEngineCatalog(
@@ -179,9 +196,9 @@ class SettingsComponentTest {
 
     @Test
     fun everyWireframeCategoryIsListed_backedAndUnbacked() {
-        // The catalog must render ALL categories (#72): eight backed (incl. the device-local Speech
-        // engine, #93) + two coming-soon stubs.
-        assertEquals(8, SettingsCategory.entries.count { it.backed })
+        // The catalog must render ALL categories (#72): nine backed (incl. the device-local Speech
+        // engine #93 + the Agent opt-in #150) + two coming-soon stubs.
+        assertEquals(9, SettingsCategory.entries.count { it.backed })
         assertEquals(
             listOf(SettingsCategory.Security2FA, SettingsCategory.Integrations),
             SettingsCategory.entries.filterNot { it.backed },
@@ -253,5 +270,61 @@ class SettingsComponentTest {
         assertEquals(SettingsCategory.SpeechEngine, detail.category)
 
         assertTrue(component.onBack(), "back pops the Speech engine detail to the list")
+    }
+
+    // --- Agent: the device-local inference-engine choice + per-Account entitlement gate (#150, ADR-0027) ---
+
+    @Test
+    fun inferenceEngine_defaultCatalog_isUnavailable_soTheRowHides() {
+        // The inert default (shell/Settings without a real catalog): no engine → row hidden, Off selected.
+        val (component, _, _) = component()
+        assertFalse(component.inferenceEngine.value.available, "no engine in the inert catalog → Agent row hidden")
+        assertEquals(InferenceEngineId.Off, component.inferenceEngine.value.selected)
+    }
+
+    @Test
+    fun inferenceEngine_entitled_offersTheCloudEngineEnabled() {
+        val (component, _, _) = component(inferenceEngineCatalog = agentCatalog(entitled = true))
+        val state = component.inferenceEngine.value
+        assertTrue(state.available, "the relay engine is present → the Agent row shows")
+        val cloud = state.options.single()
+        assertEquals(InferenceEngineId.DefernoCloud, cloud.id)
+        assertEquals(InferenceEngineAvailability.Available, cloud.availability)
+    }
+
+    @Test
+    fun inferenceEngine_notEntitled_showsTheCloudEngineDisabledPremium() {
+        // AC2: not entitled → the row shows but the cloud option is disabled "Premium" — no inference attempted.
+        val (component, _, _) = component(inferenceEngineCatalog = agentCatalog(entitled = false))
+        val state = component.inferenceEngine.value
+        assertTrue(state.available)
+        assertEquals(InferenceEngineAvailability.RequiresPremium, state.options.single().availability)
+    }
+
+    @Test
+    fun selectingAnEngine_persistsThroughTheCatalog_andReflectsImmediately() {
+        val catalog = agentCatalog(selected = InferenceEngineId.Off, entitled = true)
+        val (component, _, _) = component(inferenceEngineCatalog = catalog)
+
+        component.onInferenceEngineSelected(InferenceEngineId.DefernoCloud)
+
+        // Persisted device-locally through the catalog (App setting) — NOT the synced SettingsEditor.
+        assertEquals(InferenceEngineId.DefernoCloud, catalog.selected())
+        assertEquals(InferenceEngineId.DefernoCloud, component.inferenceEngine.value.selected)
+
+        component.onInferenceEngineSelected(InferenceEngineId.Off)
+        assertEquals(InferenceEngineId.Off, catalog.selected())
+        assertEquals(InferenceEngineId.Off, component.inferenceEngine.value.selected)
+    }
+
+    @Test
+    fun agentCategory_drillsDownAndBacksOut_likeAnyCategory() {
+        val (component, _, _) = component(inferenceEngineCatalog = agentCatalog(entitled = true))
+
+        component.openCategory(SettingsCategory.Agent)
+        val detail = assertIs<SettingsComponent.SettingsChild.Detail>(component.stack.value.active.instance)
+        assertEquals(SettingsCategory.Agent, detail.category)
+
+        assertTrue(component.onBack(), "back pops the Agent detail to the list")
     }
 }

@@ -22,6 +22,7 @@ import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.CalendarItem
+import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
@@ -263,6 +264,11 @@ class DefaultMainShellComponent(
     // inert [EmptySpeechEngineCatalog] (only "Automatic" → the Settings row hides) so the many shell tests
     // build without it; production threads the real catalog from the AppComponent (like speechToText).
     private val speechEngineCatalog: SpeechEngineCatalog = EmptySpeechEngineCatalog,
+    // The Agent inference-engine choice + entitlement gate (#150, ADR-0027): the AppScope catalog the
+    // Settings Destination reads. Defaulted to the inert [InferenceEngineCatalog.Inert] (no engine → the
+    // Agent row hides) so the many shell tests build without it; production threads the real catalog from
+    // the AppComponent (like speechEngineCatalog).
+    private val inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
     // The New surface's PermissionPermanentlyDenied affordance (#120), host-routed to the OS settings
     // surface for the foreclosed dictation permission. Defaulted to a no-op like the other host actions.
     private val onOpenDictationPermissionSettings: () -> Unit = {},
@@ -397,6 +403,9 @@ class DefaultMainShellComponent(
                         // availability is queried for — sourced from AppScope, not this Account's settings.
                         speechEngineCatalog = speechEngineCatalog,
                         locale = locale,
+                        // The Agent inference-engine choice + entitlement gate (#150) — sourced from
+                        // AppScope, device-local selection + per-Account entitlement, not synced settings.
+                        inferenceEngineCatalog = inferenceEngineCatalog,
                         coroutineContext = coroutineContext,
                     ),
                 )

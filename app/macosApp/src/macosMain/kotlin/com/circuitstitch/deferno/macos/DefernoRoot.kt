@@ -141,6 +141,9 @@ class DefernoRoot(
             speechToText = speechToText,
             locale = currentLocaleTag(),
             speechEngineCatalog = appComponent.speechEngineCatalog,
+            // Agent inference-engine choice + entitlement gate (#150): threaded from the AppScope graph; macOS
+            // has no Agent Settings surface yet and the inference floor is NotConfigured, but the gate exists app-wide.
+            inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
             // The AppScope connectivity monitor (#158): the outbox driver flushes on the
             // offline→online edge and skips passes while known-offline.
             connectivity = appComponent.connectivity,

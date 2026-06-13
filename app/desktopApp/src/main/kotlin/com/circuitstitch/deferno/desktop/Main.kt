@@ -231,6 +231,10 @@ fun main() {
             // AppScope graph — the Settings Destination's "Speech engine" row reads + writes it (whisper is
             // now a real desktop option, no longer only "Automatic").
             speechEngineCatalog = appComponent.speechEngineCatalog,
+            // Agent inference-engine choice + entitlement gate (#150, ADR-0027): threaded from the AppScope
+            // graph so the gate exists app-wide; the desktop Settings hides the Agent row until a desktop
+            // engine lands.
+            inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
             // The New surface's foreclosed-dictation-permission deep-link (#120): introspect the Sidecar
             // permission port live at click time and open the blocked capability's macOS Privacy pane
             // (mic or Speech Recognition). Off-macOS deepLink() is null and the click no-ops.

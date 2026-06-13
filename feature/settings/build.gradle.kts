@@ -16,6 +16,10 @@ kotlin {
             // AppScope SpeechEngineCatalog (registered engines + their availability + the device-local
             // choice) — distinct from the synced UserSettings the other categories drive (ADR-0018).
             api(project(":core:speech"))
+            // The Agent opt-in + entitlement gate (#150): the Settings Destination reads the AppScope
+            // AgentGate (device-local opt-in + per-Account relay entitlement) — `api` because
+            // AgentSettings appears on the component's public surface, like the speech catalog above.
+            api(project(":core:agent"))
             // `api`, not `implementation`: the component interface exposes Decompose (`ComponentContext`,
             // the tier-3 `ChildStack`) and coroutines (`StateFlow`) in its public signatures, so the View
             // consumer (`:feature:settings:ui`) must see them. Mirrors `:feature:profile`.

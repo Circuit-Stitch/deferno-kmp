@@ -35,6 +35,10 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
+import com.circuitstitch.deferno.core.agent.InferenceEngineId
+import com.circuitstitch.deferno.core.agent.InferenceEngineOption
+import com.circuitstitch.deferno.core.agent.InferenceEngineOrigin
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -43,6 +47,7 @@ import com.circuitstitch.deferno.core.speech.SpeechAvailability
 import com.circuitstitch.deferno.core.speech.SpeechEngineId
 import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import com.circuitstitch.deferno.core.speech.UnavailableReason
+import com.circuitstitch.deferno.feature.settings.InferenceEngineSettings
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
@@ -64,12 +69,14 @@ fun SettingsScreen(component: SettingsComponent, modifier: Modifier = Modifier) 
     val stack by component.stack.subscribeAsState()
     val settings by component.settings.collectAsState()
     val speechEngine by component.speechEngine.collectAsState()
+    val inferenceEngine by component.inferenceEngine.collectAsState()
 
     when (val child = stack.active.instance) {
         SettingsComponent.SettingsChild.List ->
             SettingsListContent(
                 onOpenCategory = component::openCategory,
                 speechEngine = speechEngine,
+                inferenceEngine = inferenceEngine,
                 modifier = modifier,
             )
 
@@ -78,6 +85,7 @@ fun SettingsScreen(component: SettingsComponent, modifier: Modifier = Modifier) 
                 category = child.category,
                 settings = settings,
                 speechEngine = speechEngine,
+                inferenceEngine = inferenceEngine,
                 component = component,
                 modifier = modifier,
             )
@@ -90,6 +98,7 @@ fun SettingsScreen(component: SettingsComponent, modifier: Modifier = Modifier) 
 internal fun SettingsListContent(
     onOpenCategory: (SettingsCategory) -> Unit,
     speechEngine: SpeechEngineSettings,
+    inferenceEngine: InferenceEngineSettings,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -101,9 +110,12 @@ internal fun SettingsListContent(
                 // The device-local Speech engine row shows only when this device has a real engine (#93,
                 // ADR-0018) — hidden on platforms whose engine hasn't landed yet (desktop/iOS, #94/#95).
                 if (category == SettingsCategory.SpeechEngine && !speechEngine.available) return@forEach
+                // The Agent row shows only when this device has an inference engine to offer (#150); the
+                // cloud option itself reflects not-entitled, so it stays visible when entitlement is absent (AC2).
+                if (category == SettingsCategory.Agent && !inferenceEngine.available) return@forEach
                 CategoryRow(
                     label = category.title,
-                    summary = category.rowSummary(speechEngine),
+                    summary = category.rowSummary(speechEngine, inferenceEngine),
                     onClick = { onOpenCategory(category) },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -143,6 +155,7 @@ private fun CategoryDetail(
     category: SettingsCategory,
     settings: UserSettings,
     speechEngine: SpeechEngineSettings,
+    inferenceEngine: InferenceEngineSettings,
     component: SettingsComponent,
     modifier: Modifier = Modifier,
 ) {
@@ -159,6 +172,7 @@ private fun CategoryDetail(
                 SettingsCategory.Appearance -> AppearanceDetail(settings, component)
                 SettingsCategory.TaskBehavior -> TaskBehaviorDetail(settings, component)
                 SettingsCategory.SpeechEngine -> SpeechEngineDetail(speechEngine, component::onSpeechEngineSelected)
+                SettingsCategory.Agent -> AgentDetail(inferenceEngine, component::onInferenceEngineSelected)
                 SettingsCategory.DataPrivacy -> DataPrivacyDetail(settings, component)
                 SettingsCategory.HelpFeedback -> HelpFeedbackDetail(component)
                 SettingsCategory.AppPermissions -> AppPermissionsDetail(component)
@@ -215,6 +229,40 @@ private fun SpeechEngineDetail(state: SpeechEngineSettings, onSelect: (SpeechEng
             note = speechEngineNote(option),
             selected = state.selected == option.id,
             onSelect = { onSelect(option.id) },
+        )
+    }
+}
+
+@Composable
+private fun AgentDetail(state: InferenceEngineSettings, onSelect: (InferenceEngineId) -> Unit) {
+    // The App-setting nature + the AI consent, stated plainly (AC1): device-local, never synced; an
+    // on-device engine keeps your text local, the cloud engine sends it off-device, and "Off" runs nothing.
+    // Picking the cloud engine is the explicit opt-in — it still needs your account to be entitled (AC2).
+    Text(
+        text = "The Agent can turn a brain dump into draft tasks and suggest changes to your plan. Choose " +
+            "which engine it uses — or turn it off. An on-device engine keeps your text on this device; " +
+            "Deferno’s cloud AI sends it off your device to generate proposals (you always review before " +
+            "anything is saved). It’s off by default, and this choice stays on this device, not synced to " +
+            "your account.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.defernoColors.inkMuted,
+    )
+    // "Off" is always offered first (the default); then each engine registered on this device. A cloud
+    // engine the Account isn't entitled to is shown **disabled** ("Premium"), never selectable (AC2).
+    EngineChoiceRow(
+        label = "Off",
+        note = "The Agent stays off. Nothing is sent anywhere.",
+        selected = state.selected == InferenceEngineId.Off,
+        onSelect = { onSelect(InferenceEngineId.Off) },
+    )
+    state.options.forEach { option ->
+        val locked = option.availability is InferenceEngineAvailability.RequiresPremium
+        EngineChoiceRow(
+            label = inferenceEngineLabel(option.id),
+            note = inferenceEngineNote(option),
+            selected = state.selected == option.id,
+            onSelect = { onSelect(option.id) },
+            enabled = !locked,
         )
     }
 }
@@ -399,15 +447,22 @@ private fun ChoiceRow(label: String, selected: Boolean, onSelect: () -> Unit) {
 
 /** A radio row that, unlike [ChoiceRow], carries an optional [note] subtitle (the engine availability). */
 @Composable
-private fun EngineChoiceRow(label: String, note: String?, selected: Boolean, onSelect: () -> Unit) {
+private fun EngineChoiceRow(
+    label: String,
+    note: String?,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    enabled: Boolean = true,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
-            .selectable(selected = selected, onClick = onSelect),
+            // `enabled = false` (a cloud engine with no entitlement) makes the row inert — not selectable (AC2).
+            .selectable(selected = selected, enabled = enabled, onClick = onSelect),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(selected = selected, onClick = null)
+        RadioButton(selected = selected, onClick = null, enabled = enabled)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
@@ -428,14 +483,16 @@ private fun ToggleRow(
     description: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
 ) {
     Row(
         // The whole row is the toggle target (≥48dp), so tapping the label flips it too — and the
         // Switch defers its click to the row (onCheckedChange = null) so there is one click handler.
+        // `enabled = false` (e.g. an Agent row with no entitlement) makes the whole row inert (AC2).
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
-            .toggleable(value = checked, onValueChange = onCheckedChange),
+            .toggleable(value = checked, enabled = enabled, onValueChange = onCheckedChange),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -447,7 +504,7 @@ private fun ToggleRow(
             )
         }
         Spacer(Modifier.width(12.dp))
-        Switch(checked = checked, onCheckedChange = null)
+        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 
@@ -500,6 +557,7 @@ private val SettingsCategory.title: String
         SettingsCategory.Appearance -> "Appearance"
         SettingsCategory.TaskBehavior -> "Task behavior"
         SettingsCategory.SpeechEngine -> "Speech engine"
+        SettingsCategory.Agent -> "Agent"
         SettingsCategory.DataPrivacy -> "Data & Privacy"
         SettingsCategory.HelpFeedback -> "Help & Feedback"
         SettingsCategory.AppPermissions -> "App Permissions"
@@ -513,7 +571,10 @@ private val SettingsCategory.title: String
  * The category-row summary line: the Speech engine row shows the current choice (and flags it when the
  * chosen engine isn't usable yet — AC #3); the unbacked categories show "Coming soon"; the rest show none.
  */
-private fun SettingsCategory.rowSummary(speechEngine: SpeechEngineSettings): String? = when {
+private fun SettingsCategory.rowSummary(
+    speechEngine: SpeechEngineSettings,
+    inferenceEngine: InferenceEngineSettings,
+): String? = when {
     this == SettingsCategory.SpeechEngine -> {
         val selectedOption = speechEngine.options.firstOrNull { it.id == speechEngine.selected }
         val label = speechEngineLabel(speechEngine.selected)
@@ -521,6 +582,11 @@ private fun SettingsCategory.rowSummary(speechEngine: SpeechEngineSettings): Str
         // (selected ∉ options) — both mean it can't transcribe now, so the row must reflect that (AC3).
         val unavailable = selectedOption == null || selectedOption.availability is SpeechAvailability.Unavailable
         if (unavailable) "$label · unavailable" else label
+    }
+    // The Agent row reflects the selected engine — "Off" by default (#150).
+    this == SettingsCategory.Agent -> when (inferenceEngine.selected) {
+        InferenceEngineId.Off -> "Off"
+        else -> inferenceEngineLabel(inferenceEngine.selected)
     }
     !backed -> "Coming soon"
     else -> null
@@ -548,6 +614,23 @@ private fun speechEngineNote(option: SpeechEngineOption): String? = when (option
             // reason is platform-neutral) — permanent, never the transient "Preparing…".
             UnavailableReason.NotInstalled -> "Not available on this device"
         }
+    }
+}
+
+/** The human label for an inference-engine id (View concern, like the speech-engine labels). */
+private fun inferenceEngineLabel(id: InferenceEngineId): String = when (id) {
+    InferenceEngineId.Off -> "Off"
+    InferenceEngineId.DefernoCloud -> "Deferno cloud AI"
+    // On-device runtimes + a future BYO engine get explicit labels as they land; fall back to a humanised id.
+    else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+}
+
+/** The per-engine subtitle: where it runs, or *why* it isn't selectable yet (the premium upsell, AC2). */
+private fun inferenceEngineNote(option: InferenceEngineOption): String? = when (option.availability) {
+    InferenceEngineAvailability.RequiresPremium -> "Premium — not available for your account yet"
+    InferenceEngineAvailability.Available -> when (option.origin) {
+        InferenceEngineOrigin.OnDevice -> "Runs on this device"
+        InferenceEngineOrigin.DefernoCloud -> "Sends your text off-device to Deferno’s hosted AI"
     }
 }
 

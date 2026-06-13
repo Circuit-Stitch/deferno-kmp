@@ -27,6 +27,11 @@ kotlin {
             api(libs.kotlinx.serialization.json)
             // InferenceEngine.infer is suspend; the seam + NotConfiguredInferenceEngine name it.
             implementation(libs.kotlinx.coroutines.core)
+            // DefernoEnvironment: the engine catalog reads the relay base URL from it (#150).
+            implementation(project(":core:network"))
+            // The device-local Agent opt-in [[App setting]] (#150) over multiplatform-settings, the
+            // same commonMain `Settings` API core/speech introduced — each platform supplies the store.
+            implementation(libs.multiplatform.settings)
         }
 
         // The Koog-backed engine (KoogInferenceEngine + the AppScope AgentBindings) lives in the

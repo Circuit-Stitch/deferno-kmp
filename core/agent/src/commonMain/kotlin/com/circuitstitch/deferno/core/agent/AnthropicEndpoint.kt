@@ -6,7 +6,7 @@ package com.circuitstitch.deferno.core.agent
  * entitlement) when it lands. Pointing elsewhere is a *configuration* change, never a wire-format
  * one — that equivalence is the whole relay design.
  *
- * Engine choice and the off-device opt-in are #150's [[App setting]]; this is only the coordinate
+ * The engine choice is #150's [[App setting]] ([InferenceEngineCatalog]); this is only the coordinate
  * pair the bound engine reads per call.
  */
 class AnthropicEndpoint(

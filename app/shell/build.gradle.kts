@@ -37,6 +37,10 @@ kotlin {
             // Dictation drives. The production engine is resolved from the DI graph (AppComponent) and
             // threaded in by the host; tests pass a fake or omit it (dictation simply unavailable).
             implementation(project(":core:speech"))
+            // The Agent opt-in + entitlement gate (#150, ADR-0027): the AgentGate the shell threads from
+            // the AppComponent into the Settings Destination (like the speech catalog). Default AgentGate.Inert
+            // in tests.
+            implementation(project(":core:agent"))
             implementation(project(":core:data"))
             implementation(project(":core:domain"))
             implementation(project(":core:network"))
