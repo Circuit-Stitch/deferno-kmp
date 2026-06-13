@@ -110,6 +110,9 @@ include(":speech-model-pack")
 include(":app:androidApp")
 include(":app:desktopApp")
 include(":app:iosApp")
+// Native macOS SwiftUI app (ADR-0029): a bespoke macosArm64 framework module (the macOS twin of
+// app:iosApp), linked by the SwiftUI Xcode app under app/macosApp/macosApp.
+include(":app:macosApp")
 
 // Startup Baseline Profile generator (cold-start AOT): a `com.android.test` Macrobenchmark module that
 // drives app/androidApp's launch and emits the profile the release APK bundles. Tooling, not shippable.

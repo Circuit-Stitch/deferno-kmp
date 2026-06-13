@@ -38,7 +38,9 @@ kotlin {
         jvmMain.dependencies {
             implementation(libs.sqldelight.sqlite.driver)
         }
-        iosMain.dependencies {
+        // Both Apple targets (iOS + macOS, ADR-0029) ride the SQLDelight native driver + SQLiter
+        // encryption from the shared appleMain.
+        appleMain.dependencies {
             implementation(libs.sqldelight.native.driver)
         }
 
