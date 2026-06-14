@@ -1,25 +1,37 @@
 package com.circuitstitch.deferno.core.agent
 
 import com.circuitstitch.deferno.core.scopes.AppScope
+import me.tatarka.inject.annotations.IntoMap
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
 /**
- * The app-facing [InferenceEngine] binding (ADR-0027), an AppScope process-singleton: like speech, a
+ * The app-facing [InferenceEngine] bindings (ADR-0027), AppScope process-singletons: like speech, a
  * **device capability, identity-independent** — bound at AppScope, not AccountScope (ADR-0014). The
- * relay's per-[[Account]] entitlement is the relay's concern, enforced server-side, not a graph
- * scope.
+ * relay's per-[[Account]] entitlement is the relay's concern, enforced server-side, not a graph scope.
  *
- * `@Provides` over the abstract [InferenceEngine] return type (not the impl) so the merged graph
- * exposes the seam; the engine catalog + entitlement gate that drive the endpoint live in
- * `InferenceEngineBindings` (#150), mirroring `SpeechBindings`.
+ * Compiled into Android/JVM/iOS (the `hosted` source dir) — the targets that run Koog. The seam itself
+ * is the [RoutingInferenceEngine] over the `Map<InferenceEngineId, InferenceEngine>` multibinding; the
+ * Koog cloud engine is one `@IntoMap` entry (Android adds the on-device floor). macOS has neither (no
+ * Koog klib) and binds [NotConfiguredInferenceEngine] directly (`MacosAgentBindings`).
  */
 @ContributesTo(AppScope::class)
 interface AgentBindings {
+    /** The app-facing seam: route each call to the selected engine, or NotConfigured (ADR-0027, #150). */
     @Provides
     @SingleIn(AppScope::class)
-    fun inferenceEngine(endpoint: AnthropicEndpoint): InferenceEngine = KoogInferenceEngine(endpoint)
+    fun inferenceEngine(
+        engines: Map<InferenceEngineId, InferenceEngine>,
+        catalog: InferenceEngineCatalog,
+    ): InferenceEngine = RoutingInferenceEngine(engines, catalog)
+
+    /** The Anthropic-format cloud relay engine, keyed by its id for the router to select. */
+    @Provides
+    @IntoMap
+    @SingleIn(AppScope::class)
+    fun cloudInferenceEngine(endpoint: AnthropicEndpoint): Pair<InferenceEngineId, InferenceEngine> =
+        InferenceEngineId.DefernoCloud to KoogInferenceEngine(endpoint)
 
     /**
      * The settings-driven cloud endpoint (#150): it points at the relay base URL the

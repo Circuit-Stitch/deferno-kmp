@@ -97,6 +97,12 @@ object CoverageConfig {
         // the speech preference above). The InferenceEngineCatalog, InMemoryInferenceEnginePreference, and
         // FakeRelayEntitlement ARE measured (commonMain/commonTest).
         "com.circuitstitch.deferno.core.agent.SettingsInferenceEnginePreference*",
+        // The on-device deterministic-floor engine (ADR-0027): the vendored shacl-aio crate
+        // (libshacl_aio.so over JNA) wrapped at the inference seam — native code that loads only on a
+        // real device, exercised on-device, not the headless gate (same rationale as WhisperSpeechToText).
+        // The `*` also catches the file-facade holding its private shacl→DraftTask mapper. The
+        // RoutingInferenceEngine + parseFloorExtractorInput it leans on are commonMain and ARE measured.
+        "com.circuitstitch.deferno.core.agent.ShaclFloorInferenceEngine*",
         // Compose @Composable glue (ADR-0006: "thin UI glue"; Views are screenshot-tested, not
         // unit-tested on the headless JVM gate). The design-system colour *tokens* ARE measured
         // (designsystem commonTest); the @Composable theme + typography builders that resolve fonts

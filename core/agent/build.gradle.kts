@@ -51,6 +51,9 @@ kotlin {
                 implementation(libs.koog.prompt.executor.anthropic.client)
                 implementation(libs.koog.prompt.executor.model)
                 implementation(libs.koog.http.client.ktor)
+                // The on-device deterministic floor (libshacl_aio.so over JNA) the ShaclFloorInferenceEngine
+                // wraps — Android-only, like core/speech's :speech-whisper-jni dependency.
+                implementation(project(":shacl-floor"))
             }
         }
         jvmMain {
