@@ -10,6 +10,7 @@ import com.arkivanov.decompose.router.slot.dismiss
 import com.arkivanov.decompose.value.MutableValue
 import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.data.task.TaskRepository
+import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.CoroutineContext
@@ -61,7 +62,9 @@ class DefaultTasksComponent(
 
     // Slot configs are plain data (serializer = null below → no state restoration wired in v1, so no
     // kotlinx.serialization dependency on the feature module). They key which child each slot holds.
-    private data class DetailConfig(val taskId: TaskId)
+    // initialTask seeds the detail's first frame from the row the opener already had in memory (no DB
+    // read), so the title/body show immediately instead of popping in. Not persisted (serializer = null).
+    private data class DetailConfig(val taskId: TaskId, val initialTask: Task? = null)
     private data class TreeConfig(val rootId: TaskId)
 
     private val detailNavigation = SlotNavigation<DetailConfig>()
@@ -91,6 +94,7 @@ class DefaultTasksComponent(
                 taskRepository = taskRepository,
                 output = ::onDetailOutput,
                 workingStateEditor = workingStateEditor,
+                initialTask = config.initialTask,
                 coroutineContext = coroutineContext,
             )
         }
@@ -114,7 +118,8 @@ class DefaultTasksComponent(
     private fun onListOutput(output: TaskListComponent.Output) {
         when (output) {
             is TaskListComponent.Output.TaskSelected -> {
-                detailNavigation.activate(DetailConfig(output.id))
+                val seed = list.state.value.tasks.firstOrNull { it.id == output.id }
+                detailNavigation.activate(DetailConfig(output.id, seed))
                 _activePane.value = TaskPane.Detail
             }
         }
@@ -144,7 +149,8 @@ class DefaultTasksComponent(
             }
             // Drilling into a child opens its detail alongside the list (co-resident), not a new stack.
             is TaskTreeComponent.Output.ChildSelected -> {
-                detailNavigation.activate(DetailConfig(output.id))
+                val seed = tree.value.child?.instance?.state?.value?.children?.firstOrNull { it.id == output.id }
+                detailNavigation.activate(DetailConfig(output.id, seed))
                 _activePane.value = TaskPane.Detail
             }
         }

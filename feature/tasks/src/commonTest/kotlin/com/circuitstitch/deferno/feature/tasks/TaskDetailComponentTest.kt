@@ -15,18 +15,21 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 private fun TestScope.taskDetailComponent(
     id: TaskId,
     repo: FakeTaskRepository,
     output: (TaskDetailComponent.Output) -> Unit = {},
     editor: WorkingStateEditor = WorkingStateEditor.NONE,
+    initialTask: Task? = null,
 ) = DefaultTaskDetailComponent(
     componentContext = DefaultComponentContext(LifecycleRegistry()),
     taskId = id,
     taskRepository = repo,
     output = output,
     workingStateEditor = editor,
+    initialTask = initialTask,
     coroutineContext = StandardTestDispatcher(testScheduler),
 )
 
@@ -60,6 +63,17 @@ class TaskDetailComponentTest {
         }
 
         assertEquals(listOf(TaskId("a")), repo.hydrateCalls)
+    }
+
+    @Test
+    fun seedsTheInitialTaskSoTheTitleIsAvailableBeforeTheRowIsObserved() = runTest {
+        // The opener hands over the summary it already had on screen: state exposes it on the very first
+        // value (before any collection), so the pane's title/body render immediately — no async pop-in.
+        val seed = task("a", title = "Seeded")
+        val component = taskDetailComponent(TaskId("a"), FakeTaskRepository(listOf(seed)), initialTask = seed)
+
+        assertEquals("Seeded", component.state.value.task?.title)
+        assertTrue(component.state.value.isHydrating) // still enriches summary → full in the background
     }
 
     @Test
