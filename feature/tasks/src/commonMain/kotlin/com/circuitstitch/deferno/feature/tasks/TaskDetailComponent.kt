@@ -19,7 +19,13 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atTime
+import kotlinx.datetime.toInstant
 import kotlin.coroutines.CoroutineContext
+import kotlin.time.Instant
 
 /** One node of the Task's recursive subtask tree: the child [task] and its own [children] subtree. */
 data class SubtaskNode(val task: Task, val children: List<SubtaskNode>)
@@ -71,6 +77,23 @@ interface TaskDetailComponent {
      */
     fun onSetWorkingState(target: WorkingState)
 
+    /**
+     * Set or clear this Task's deadline DUE date — issued as a Command through the injected [setDeadline]
+     * seam (optimistic local apply + outbox enqueue, ADR-0001). [date] is the user-picked day at the
+     * device zone; it is combined with the Task's current `deadlineTimeOfDay` (or start-of-day when none,
+     * matching the create form) into the `completeBy` instant the write seam wants. A `null` [date]
+     * **clears** the deadline (the explicit `ClearTaskDeadline` path). The local DB Flow then re-emits the
+     * new `completeBy` into [state].
+     */
+    fun onSetDeadline(date: LocalDate?)
+
+    /**
+     * Replace this Task's LABELS with [labels] (an empty list clears them) — issued as a Command through
+     * the injected [setLabels] seam (optimistic local apply + outbox enqueue, ADR-0001). The local DB Flow
+     * then re-emits the new labels into [state].
+     */
+    fun onSetLabels(labels: List<String>)
+
     /** Toggle a subtask between Done and Open (the tree's checkbox) — reuses the working-state write seam. */
     fun onToggleSubtaskDone(subtask: Task)
 
@@ -120,6 +143,13 @@ class DefaultTaskDetailComponent(
     // The online-only create seam for "add subtask" (parent, title) — wired from the shell's create
     // command. Defaults to a no-op for the same reason as the editors above.
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
+    // The deadline DUE-date write seam (taskId, completeBy) — a non-null Instant sets the deadline, a
+    // `null` clears it. Wired from the shell's command executor (Set/ClearTaskDeadline); defaults to a
+    // no-op like the editors above so the read/navigation-only tests build without it.
+    private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    // The LABELS write seam (taskId, labels) — replaces the Task's label set (empty clears). Wired from
+    // the shell's command executor (SetTaskLabels); defaults to a no-op for the same reason.
+    private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : TaskDetailComponent, ComponentContext by componentContext {
 
@@ -204,6 +234,22 @@ class DefaultTaskDetailComponent(
         // stale transition (the state the Task is already in) before any write — ADR-0007.
         val current = state.value.task
         scope.launch { workingStateEditor.setWorkingState(taskId, target, current) }
+    }
+
+    override fun onSetDeadline(date: LocalDate?) {
+        // Reuse the create form's date→completeBy conversion (NewState.toPayload): a picked day becomes a
+        // start-of-day instant in the device zone, except here we keep the Task's existing time-of-day so
+        // the deadline clock survives a date change (the create form has no existing clock, so it lands on
+        // start-of-day — byte-identical to date.atStartOfDayIn(zone)). `null` clears the deadline.
+        val completeBy: Instant? = date?.let {
+            val timeOfDay = state.value.task?.deadlineTimeOfDay ?: DEFAULT_DEADLINE_TIME
+            it.atTime(timeOfDay).toInstant(TimeZone.currentSystemDefault())
+        }
+        scope.launch { setDeadline(taskId, completeBy) }
+    }
+
+    override fun onSetLabels(labels: List<String>) {
+        scope.launch { setLabels(taskId, labels) }
     }
 
     override fun onToggleSubtaskDone(subtask: Task) {
@@ -292,3 +338,10 @@ internal fun subtreeOf(rootId: TaskId, all: List<Task>): List<SubtaskNode> {
 /** Flattens a subtask tree to the list of its Tasks (for progress counting). */
 internal fun List<SubtaskNode>.flatten(): List<Task> =
     flatMap { listOf(it.task) + it.children.flatten() }
+
+/**
+ * The clock a picked deadline DUE date lands on when the Task has no `deadlineTimeOfDay` of its own —
+ * start-of-day (00:00), so `date.atTime(this).toInstant(zone)` equals `date.atStartOfDayIn(zone)`, the
+ * exact bare-date behavior the create form (`NewState.toPayload`) produces.
+ */
+private val DEFAULT_DEADLINE_TIME: LocalTime = LocalTime(0, 0)

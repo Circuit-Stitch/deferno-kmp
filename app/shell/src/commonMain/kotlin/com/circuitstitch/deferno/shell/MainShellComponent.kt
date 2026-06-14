@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
+import kotlin.time.Instant
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -255,6 +256,10 @@ class DefaultMainShellComponent(
     // The Task detail's online-only comments + attachments source, threaded into the detail (overlay +
     // Tasks Destination). Defaulted to the no-op so the many shell tests build without supplying it.
     private val taskDetailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
+    // The Task detail's editable-PROPERTIES write seams (DUE date + LABELS), threaded into the detail
+    // (overlay + Tasks Destination). Defaulted to no-ops so the many shell tests build without them.
+    private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     // The global-search seam (#73): a one-shot, online-only pull the Search overlay drives. Defaults
     // to "no results" so tests that don't exercise Search build without supplying it.
     private val searchTasks: SearchTasks = SearchTasks { _ -> TaskSearchResult.Success(emptyList()) },
@@ -405,6 +410,8 @@ class DefaultMainShellComponent(
                         workingStateEditor = workingStateEditor,
                         taskDetailRepository = taskDetailRepository,
                         createSubtask = createSubtask,
+                        setDeadline = setDeadline,
+                        setLabels = setLabels,
                         coroutineContext = coroutineContext,
                     ),
                 )
@@ -493,6 +500,8 @@ class DefaultMainShellComponent(
                     workingStateEditor = workingStateEditor,
                     detailRepository = taskDetailRepository,
                     createSubtask = createSubtask,
+                    setDeadline = setDeadline,
+                    setLabels = setLabels,
                     coroutineContext = coroutineContext,
                 ),
             )
