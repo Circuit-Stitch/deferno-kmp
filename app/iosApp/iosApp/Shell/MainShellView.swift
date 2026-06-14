@@ -109,6 +109,17 @@ struct MainShellView: View {
             .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
             .accessibilityLabel("Menu")
             Spacer()
+            // Brain dump (ADR-0027) — present for chrome parity with Android's two trailing actions, but
+            // inactive: the dictation-driven extractor isn't wired on iOS (no overlay, no inference until
+            // #150). Enable it (open OverlayRoute.BrainDump) once that lands.
+            Button {} label: {
+                Image(systemName: "waveform")
+                    .font(.title3)
+                    .foregroundStyle(colors.onSurface)
+            }
+            .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
+            .accessibilityLabel("Brain dump")
+            .disabled(true)
             Button { onNewTapped() } label: {
                 Image(systemName: "plus")
                     .font(.title3.weight(.semibold))
