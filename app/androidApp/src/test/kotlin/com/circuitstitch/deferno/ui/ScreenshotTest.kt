@@ -9,11 +9,18 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.core.model.Attachment
+import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.UserId
+import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
+import com.circuitstitch.deferno.feature.tasks.SubtaskNode
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import com.circuitstitch.deferno.feature.tasks.TaskListState
 import com.circuitstitch.deferno.feature.tasks.TaskTreeState
+import kotlin.time.Instant
 import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TaskListScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TaskTreeScreen
@@ -56,6 +63,39 @@ class ScreenshotTest {
         hydration = com.circuitstitch.deferno.core.model.HydrationState.Full,
     )
 
+    /** A full detail state showing the web-parity sections: a recursive subtask tree, comments, attachments. */
+    private val populatedDetail = TaskDetailState(
+        task = hydratedTask,
+        isHydrating = false,
+        subtasks = listOf(
+            SubtaskNode(
+                sampleTask("1a", "Draft the announcement", workingState = WorkingState.Done, parentId = "1"),
+                listOf(SubtaskNode(sampleTask("1ai", "Outline the key points", parentId = "1a"), emptyList())),
+            ),
+            SubtaskNode(sampleTask("1b", "Schedule the post", parentId = "1"), emptyList()),
+        ),
+        subtaskDone = 1,
+        subtaskTotal = 3,
+        comments = listOf(
+            Comment(
+                id = "c1", taskId = TaskId("1"), body = "Kicking this off — aiming for end of week.",
+                createdBy = UserId("me"), createdAt = Instant.parse("2026-04-17T10:00:00Z"),
+            ),
+            Comment(
+                id = "c2", taskId = TaskId("1"), body = "Sounds good, I'll cover the social copy.",
+                createdBy = UserId("other"), createdAt = Instant.parse("2026-04-17T11:30:00Z"),
+            ),
+        ),
+        currentUserId = UserId("me"),
+        attachments = listOf(
+            Attachment(
+                id = "a1", filename = "launch-brief.pdf", mime = "application/pdf", size = 248_000L,
+                url = "https://example.test/a1", createdBy = UserId("me"),
+                createdAt = Instant.parse("2026-04-17T09:00:00Z"),
+            ),
+        ),
+    )
+
     @Test
     fun taskList_populated_light() = capture("task_list_populated_light") {
         TaskListScreen(FakeTaskListComponent(TaskListState(tasks = SampleTasks.list)))
@@ -73,7 +113,7 @@ class ScreenshotTest {
 
     @Test
     fun taskDetail_hydrated_light() = capture("task_detail_hydrated_light") {
-        TaskDetailScreen(FakeTaskDetailComponent(TaskDetailState(task = hydratedTask, isHydrating = false)))
+        TaskDetailScreen(FakeTaskDetailComponent(populatedDetail))
     }
 
     @Test

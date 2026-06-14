@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.outbox.FlushResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.AddToPlan
 import com.circuitstitch.deferno.core.domain.command.ClearOccurrence
@@ -41,6 +42,9 @@ import kotlin.time.Instant
  */
 interface AccountSession {
     val taskRepository: TaskRepository
+
+    /** The Task detail's online-only comments + attachments source (the web-parity detail sections). */
+    val taskDetailRepository: TaskDetailRepository
     val planRepository: PlanRepository
 
     /**
@@ -103,6 +107,7 @@ interface AccountSession {
  */
 class AccountComponentSession(private val component: AccountComponent) : AccountSession {
     override val taskRepository: TaskRepository get() = component.taskRepository
+    override val taskDetailRepository: TaskDetailRepository get() = component.taskDetailRepository
     override val planRepository: PlanRepository get() = component.planRepository
     override val settingsRepository: SettingsRepository get() = component.settingsRepository
     override val calendarRepository: CalendarRepository get() = component.calendarRepository
