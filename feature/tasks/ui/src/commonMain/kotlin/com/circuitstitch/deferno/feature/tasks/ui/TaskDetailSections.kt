@@ -166,13 +166,33 @@ private fun AddSubtaskField(onAdd: (String) -> Unit) {
     )
 }
 
-// --- Attachments (read-only in v1) ---
+// --- Attachments ---
 
-/** The read-only attachment list: filename + size/type, tapping opens the signed URL in the platform. */
+/**
+ * The attachment list: filename + size/type + optional caption, tapping a row opens the signed URL in
+ * the platform. An "Add file" affordance launches the platform file picker ([onAddClick]; the picker +
+ * byte read are the host's androidMain glue), and each row offers Delete + an inline caption editor.
+ * [isUploading] disables Add while a PUT is in flight.
+ */
 @Composable
-internal fun AttachmentsSection(attachments: List<Attachment>, modifier: Modifier = Modifier) {
+internal fun AttachmentsSection(
+    attachments: List<Attachment>,
+    isUploading: Boolean,
+    onAddClick: () -> Unit,
+    onDelete: (String) -> Unit,
+    onSetCaption: (String, String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(modifier.fillMaxWidth()) {
         SectionHeader("Attachments", trailing = attachments.size.toString())
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Button(onClick = onAddClick, enabled = !isUploading) {
+                Text(if (isUploading) "Uploading…" else "Add file")
+            }
+        }
         if (attachments.isEmpty()) {
             Text(
                 "No attachments.",
@@ -180,27 +200,69 @@ internal fun AttachmentsSection(attachments: List<Attachment>, modifier: Modifie
                 color = MaterialTheme.defernoColors.inkMuted,
             )
         } else {
-            val uriHandler = LocalUriHandler.current
-            attachments.forEach { a ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = MinTouchTarget)
-                        .clickable(onClickLabel = "Open ${a.filename}") { uriHandler.openUri(a.url) }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(a.filename, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-                        Text(
-                            text = "${formatBytes(a.size)} · ${a.mime}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.defernoColors.inkMuted,
-                            maxLines = 1,
-                        )
-                    }
+            attachments.forEach { a -> AttachmentRow(a, onDelete, onSetCaption) }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentRow(
+    attachment: Attachment,
+    onDelete: (String) -> Unit,
+    onSetCaption: (String, String) -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    var editing by remember(attachment.id) { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClickLabel = "Open ${attachment.filename}") { uriHandler.openUri(attachment.url) },
+            ) {
+                Text(attachment.filename, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                Text(
+                    text = "${formatBytes(attachment.size)} · ${attachment.mime}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.defernoColors.inkMuted,
+                    maxLines = 1,
+                )
+                attachment.caption?.takeIf { it.isNotBlank() }?.let { caption ->
+                    Text(caption, style = MaterialTheme.typography.bodyMedium)
                 }
             }
+            TextButton(
+                onClick = { onDelete(attachment.id) },
+                modifier = Modifier.semantics { contentDescription = "Delete ${attachment.filename}" },
+            ) { Text("Delete") }
+        }
+        if (editing) {
+            var draft by remember(attachment.id) { mutableStateOf(attachment.caption.orEmpty()) }
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                placeholder = { Text("Caption") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            )
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { editing = false }) { Text("Cancel") }
+                Button(
+                    onClick = {
+                        if (draft.isNotBlank()) onSetCaption(attachment.id, draft)
+                        editing = false
+                    },
+                    enabled = draft.isNotBlank(),
+                ) { Text("Save") }
+            }
+        } else {
+            TextButton(
+                onClick = { editing = true },
+                modifier = Modifier.semantics { contentDescription = "Edit caption for ${attachment.filename}" },
+            ) { Text(if (attachment.caption.isNullOrBlank()) "Add caption" else "Edit caption") }
         }
     }
 }

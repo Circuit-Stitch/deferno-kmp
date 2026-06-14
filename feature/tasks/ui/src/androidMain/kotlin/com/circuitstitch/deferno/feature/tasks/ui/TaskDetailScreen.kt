@@ -1,5 +1,10 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -18,10 +23,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.designsystem.theme.plexMono
 import com.circuitstitch.deferno.core.model.Task
@@ -38,6 +45,15 @@ import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 @Composable
 fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifier) {
     val state by component.state.collectAsState()
+    val context = LocalContext.current
+    // The Storage Access Framework picker owns the file → bytes glue (cf. the feedback FeedbackScreen);
+    // it reads each picked file through the ContentResolver and hands them to the component.
+    val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        val files = uris.take(MaxAttachments)
+            .mapNotNull { readAttachmentUpload(context, it) }
+            .filter { it.bytes.size <= MaxAttachmentBytes }
+        if (files.isNotEmpty()) component.onAddAttachments(files)
+    }
     TaskDetailContent(
         state = state,
         onClose = component::onCloseClicked,
@@ -49,8 +65,26 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
         onPostComment = component::onPostComment,
         onEditComment = component::onEditComment,
         onDeleteComment = component::onDeleteComment,
+        onAddAttachment = { pickFiles.launch("*/*") },
+        onDeleteAttachment = component::onDeleteAttachment,
+        onSetAttachmentCaption = component::onSetAttachmentCaption,
         modifier = modifier,
     )
+}
+
+// The web's attachment limits: at most 5 files per add, 25 MB each.
+private const val MaxAttachments = 5
+private const val MaxAttachmentBytes = 25 * 1024 * 1024
+
+/** Resolve a picked [uri] into an [AttachmentUpload] — its display name, MIME type, and bytes. */
+private fun readAttachmentUpload(context: Context, uri: Uri): AttachmentUpload? {
+    val resolver = context.contentResolver
+    val mime = resolver.getType(uri) ?: "application/octet-stream"
+    val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst()) cursor.getString(0) else null
+    } ?: uri.lastPathSegment ?: "attachment"
+    val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+    return AttachmentUpload(filename = name, contentType = mime, bytes = bytes)
 }
 
 /** Stateless body — rendered directly by screenshot/UI tests with fixed inputs. */
@@ -66,6 +100,9 @@ internal fun TaskDetailContent(
     onPostComment: (String) -> Unit,
     onEditComment: (String, String) -> Unit,
     onDeleteComment: (String) -> Unit,
+    onAddAttachment: () -> Unit,
+    onDeleteAttachment: (String) -> Unit,
+    onSetAttachmentCaption: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val task = state.task
@@ -92,6 +129,9 @@ internal fun TaskDetailContent(
                 onPostComment = onPostComment,
                 onEditComment = onEditComment,
                 onDeleteComment = onDeleteComment,
+                onAddAttachment = onAddAttachment,
+                onDeleteAttachment = onDeleteAttachment,
+                onSetAttachmentCaption = onSetAttachmentCaption,
             )
         }
     }
@@ -109,6 +149,9 @@ private fun TaskBody(
     onPostComment: (String) -> Unit,
     onEditComment: (String, String) -> Unit,
     onDeleteComment: (String) -> Unit,
+    onAddAttachment: () -> Unit,
+    onDeleteAttachment: (String) -> Unit,
+    onSetAttachmentCaption: (String, String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -153,7 +196,13 @@ private fun TaskBody(
         )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        AttachmentsSection(attachments = state.attachments)
+        AttachmentsSection(
+            attachments = state.attachments,
+            isUploading = state.isUploadingAttachment,
+            onAddClick = onAddAttachment,
+            onDelete = onDeleteAttachment,
+            onSetCaption = onSetAttachmentCaption,
+        )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         CommentsSection(

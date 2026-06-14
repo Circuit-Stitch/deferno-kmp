@@ -38,6 +38,9 @@ kotlin {
             // `implementation`, so this module declares its own dependency to reference them directly.
             implementation(project(":core:data"))
             implementation(libs.decompose.extensions.compose)
+            // The Task detail's attachment picker uses the Storage Access Framework via
+            // `rememberLauncherForActivityResult` (androidx.activity.compose) — Android-only glue.
+            implementation(libs.androidx.activity.compose)
             // Adaptive list/detail Panes (#29, ADR-0007 tier-2): the Android-native `TasksScreen`
             // renders the co-resident detail/tree slots as 1 or 2 panes by window size class via M3
             // `ListDetailPaneScaffold` (+ `currentWindowAdaptiveInfo()` for the continuous width metric,

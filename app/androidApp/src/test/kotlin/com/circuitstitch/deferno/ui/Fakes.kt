@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.ui
 
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.MeResult
+import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
@@ -124,6 +125,9 @@ internal class FakeTaskDetailComponent(
     val commentsPosted = mutableListOf<String>()
     val commentsEdited = mutableListOf<Pair<String, String>>()
     val commentsDeleted = mutableListOf<String>()
+    val attachmentsAdded = mutableListOf<List<AttachmentUpload>>()
+    val attachmentsDeleted = mutableListOf<String>()
+    val attachmentCaptions = mutableListOf<Pair<String, String>>()
 
     override fun onCloseClicked() { closeCount++ }
     override fun onShowTreeClicked() { showTreeCount++ }
@@ -135,6 +139,9 @@ internal class FakeTaskDetailComponent(
     override fun onPostComment(body: String) { commentsPosted += body }
     override fun onEditComment(commentId: String, body: String) { commentsEdited += (commentId to body) }
     override fun onDeleteComment(commentId: String) { commentsDeleted += commentId }
+    override fun onAddAttachments(files: List<AttachmentUpload>) { attachmentsAdded += files }
+    override fun onDeleteAttachment(attachmentId: String) { attachmentsDeleted += attachmentId }
+    override fun onSetAttachmentCaption(attachmentId: String, caption: String) { attachmentCaptions += attachmentId to caption }
 }
 
 /** Records the global-search overlay's intents for the SearchScreen interaction test (#73). */
