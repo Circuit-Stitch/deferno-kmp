@@ -1,17 +1,20 @@
 import Deferno
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The in-app **Help → Feedback** overlay (#375) — the SwiftUI twin of the shared `FeedbackForm`, a thin
 /// renderer of `FeedbackComponent` (opened from Settings → Help & Feedback). A category chip picker over a
-/// subject + body, sent through the **online-only** seam (ADR-0016): on success the shell dismisses; offline
-/// shows a gentle "reconnect to send"; a server error shows a gentle message — never a silent failure. It
-/// mirrors `NewItemView`'s structure exactly, so the two overlay forms read the same.
+/// subject + body plus optional file attachments, sent through the **online-only** seam (ADR-0016): on
+/// success the shell dismisses; offline shows a gentle "reconnect to send"; a server error shows a gentle
+/// message — never a silent failure. It mirrors `NewItemView`'s structure exactly, so the two overlay forms
+/// read the same.
 ///
-/// ponytail: text-only — file attachments are omitted (the shared form's `onAttach == nil` path). Add a
-/// `.fileImporter` + a Swift `Data`→`KotlinByteArray` bridge when iOS attachment uploads matter.
+/// Attachments use `.fileImporter`; each picked file's bytes cross to the shared component as `NSData`
+/// (`ShellBridgeKt.feedbackAddAttachment`) — the iOS twin of Android's SAF + `ContentResolver` read.
 struct FeedbackView: View {
     let component: FeedbackComponent
     @StateObject private var state: StateFlowObserver<FeedbackState>
+    @State private var importing = false
     @Environment(\.defernoColors) private var colors
 
     init(component: FeedbackComponent) {
@@ -40,6 +43,7 @@ struct FeedbackView: View {
                         .lineLimit(4...8)
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("Feedback body")
+                    attachments(value)
                     statusMessage(value)
                     sendButton(value)
                 }
@@ -47,6 +51,37 @@ struct FeedbackView: View {
             }
         }
         .background(colors.background)
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            if case .success(let urls) = result { urls.forEach(addAttachment) }
+        }
+    }
+
+    @ViewBuilder
+    private func attachments(_ value: FeedbackState) -> some View {
+        Button("Attach files") { importing = true }
+            .font(.subheadline)
+            .accessibilityLabel("Attach files")
+        ForEach(value.attachments.indices, id: \.self) { i in
+            HStack {
+                Text(value.attachments[i].filename)
+                    .font(.subheadline).lineLimit(1).truncationMode(.middle)
+                    .accessibilityLabel("Attachment \(value.attachments[i].filename)")
+                Spacer()
+                Button("Remove") { component.removeAttachment(index: Int32(i)) }
+                    .font(.subheadline)
+                    .accessibilityLabel("Remove \(value.attachments[i].filename)")
+            }
+        }
+    }
+
+    /// Read a picked file's bytes and hand them to the shared component. `.fileImporter` returns
+    /// security-scoped URLs, so we bracket the read with start/stop access (no-op for in-app URLs).
+    private func addAttachment(_ url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { return }
+        let mime = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType?.preferredMIMEType ?? "application/octet-stream"
+        ShellBridgeKt.feedbackAddAttachment(component: component, filename: url.lastPathComponent, contentType: mime, data: data)
     }
 
     private func categoryPicker(_ value: FeedbackState) -> some View {

@@ -30,6 +30,7 @@ import com.circuitstitch.deferno.shell.AuthShellComponent
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.FeedbackCategory
 import com.circuitstitch.deferno.shell.FeedbackComponent
+import com.circuitstitch.deferno.shell.FeedbackFile
 import com.circuitstitch.deferno.shell.FeedbackState
 import com.circuitstitch.deferno.shell.FeedbackStatus
 import com.circuitstitch.deferno.shell.MainShellComponent
@@ -39,11 +40,16 @@ import com.circuitstitch.deferno.shell.NewState
 import com.circuitstitch.deferno.shell.NewStatus
 import com.circuitstitch.deferno.shell.OverlayRoute
 import com.circuitstitch.deferno.shell.RootComponent
+import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.readBytes
+import kotlinx.cinterop.reinterpret
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import platform.Foundation.NSData
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.isoDayNumber
@@ -217,12 +223,29 @@ fun overlayTaskDetail(child: MainShellComponent.OverlayChild) =
     (child as? MainShellComponent.OverlayChild.TaskDetail)?.component
 
 // The in-app Help → Feedback overlay (#375), opened from Settings → Help & Feedback. The SwiftUI
-// FeedbackView renders this the same way it renders New; file attachments are an iOS follow-up (the
-// shared form's text-only path), so the Swift side binds category/subject/body + the send lifecycle.
+// FeedbackView renders this the same way it renders New, including file attachments — the Swift side
+// picks files (`.fileImporter`) and hands their bytes here as `NSData` (the iOS twin of Android's SAF
+// + ContentResolver read); category/subject/body + the send lifecycle bind to the component directly.
 fun overlayFeedback(child: MainShellComponent.OverlayChild) =
     (child as? MainShellComponent.OverlayChild.Feedback)?.component
 
 fun feedbackStateBridge(component: FeedbackComponent): StateFlowBridge<FeedbackState> = StateFlowBridge(component.state)
+
+/**
+ * Add a file the iOS picker resolved (#375). Swift can't build a [FeedbackFile] (its `bytes` is a
+ * Kotlin `ByteArray`), so it passes the picked file's [data] as `NSData` and this copies it across —
+ * the iOS counterpart to Android's `ContentResolver`-read in `FeedbackScreen`.
+ */
+@OptIn(ExperimentalForeignApi::class)
+fun feedbackAddAttachment(
+    component: FeedbackComponent,
+    filename: String,
+    contentType: String,
+    data: NSData,
+) {
+    val bytes = data.bytes?.reinterpret<ByteVar>()?.readBytes(data.length.toInt()) ?: ByteArray(0)
+    component.addAttachments(listOf(FeedbackFile(filename = filename, contentType = contentType, bytes = bytes)))
+}
 
 // FeedbackStatus is a sealed type; Swift reads these instead of casting Kotlin/Native class names (as New does).
 fun feedbackStatusIsSubmitting(state: FeedbackState): Boolean = state.status is FeedbackStatus.Submitting
