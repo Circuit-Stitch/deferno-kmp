@@ -13,6 +13,11 @@ import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.flow.update
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atTime
+import kotlinx.datetime.toInstant
 import kotlin.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -29,6 +34,8 @@ private fun TestScope.taskDetailComponent(
     editor: WorkingStateEditor = WorkingStateEditor.NONE,
     detail: TaskDetailRepository = TaskDetailRepository.NONE,
     createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
+    setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
 ) = DefaultTaskDetailComponent(
     componentContext = DefaultComponentContext(LifecycleRegistry()),
     taskId = id,
@@ -37,6 +44,8 @@ private fun TestScope.taskDetailComponent(
     workingStateEditor = editor,
     detailRepository = detail,
     createSubtask = createSubtask,
+    setDeadline = setDeadline,
+    setLabels = setLabels,
     coroutineContext = StandardTestDispatcher(testScheduler),
 )
 
@@ -279,6 +288,86 @@ class TaskDetailComponentTest {
         advanceUntilIdle()
 
         assertEquals(listOf(TaskId("a") to "New step"), added)
+    }
+
+    @Test
+    fun setDeadlineCombinesThePickedDateWithTheTaskTimeOfDay() = runTest {
+        // The Task carries an existing deadline clock — a date pick must keep it (the clock survives a
+        // date change), combined at the device zone into the completeBy Instant the seam records.
+        val withClock = task("a").copy(deadlineTimeOfDay = LocalTime(9, 30))
+        val recorded = mutableListOf<Pair<TaskId, Instant?>>()
+        val component = taskDetailComponent(
+            TaskId("a"),
+            FakeTaskRepository(listOf(withClock)),
+            setDeadline = { id, instant -> recorded += id to instant },
+        )
+        val picked = LocalDate(2026, 6, 20)
+
+        // Subscribe so the StateFlow (WhileSubscribed) observes the row carrying its 9:30 clock — exactly
+        // the live UI's posture (the detail is always being rendered when the date picker fires).
+        component.state.test {
+            var item = awaitItem()
+            while (item.task?.deadlineTimeOfDay != LocalTime(9, 30)) item = awaitItem()
+
+            component.onSetDeadline(picked)
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val expected = picked.atTime(LocalTime(9, 30)).toInstant(TimeZone.currentSystemDefault())
+        assertEquals(listOf<Pair<TaskId, Instant?>>(TaskId("a") to expected), recorded)
+    }
+
+    @Test
+    fun setDeadlineWithNoTaskTimeOfDayLandsOnStartOfDay() = runTest {
+        // No existing clock ⇒ the create form's bare-date behavior: start-of-day in the device zone.
+        val recorded = mutableListOf<Pair<TaskId, Instant?>>()
+        val component = taskDetailComponent(
+            TaskId("a"),
+            FakeTaskRepository(listOf(task("a"))),
+            setDeadline = { id, instant -> recorded += id to instant },
+        )
+        advanceUntilIdle()
+
+        val picked = LocalDate(2026, 6, 20)
+        component.onSetDeadline(picked)
+        advanceUntilIdle()
+
+        val expected = picked.atTime(LocalTime(0, 0)).toInstant(TimeZone.currentSystemDefault())
+        assertEquals(listOf<Pair<TaskId, Instant?>>(TaskId("a") to expected), recorded)
+    }
+
+    @Test
+    fun setDeadlineWithNullClearsTheDeadline() = runTest {
+        val recorded = mutableListOf<Pair<TaskId, Instant?>>()
+        val component = taskDetailComponent(
+            TaskId("a"),
+            FakeTaskRepository(listOf(task("a"))),
+            setDeadline = { id, instant -> recorded += id to instant },
+        )
+        advanceUntilIdle()
+
+        component.onSetDeadline(null)
+        advanceUntilIdle()
+
+        // A null date reaches the seam as a null completeBy — the explicit clear.
+        assertEquals(listOf<Pair<TaskId, Instant?>>(TaskId("a") to null), recorded)
+    }
+
+    @Test
+    fun setLabelsForwardsTheListToTheSeam() = runTest {
+        val recorded = mutableListOf<Pair<TaskId, List<String>>>()
+        val component = taskDetailComponent(
+            TaskId("a"),
+            FakeTaskRepository(listOf(task("a"))),
+            setLabels = { id, labels -> recorded += id to labels },
+        )
+        advanceUntilIdle()
+
+        component.onSetLabels(listOf("home", "urgent"))
+        advanceUntilIdle()
+
+        assertEquals(listOf(TaskId("a") to listOf("home", "urgent")), recorded)
     }
 
     @Test

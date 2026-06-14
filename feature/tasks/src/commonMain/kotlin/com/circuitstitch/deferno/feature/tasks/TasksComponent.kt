@@ -14,6 +14,7 @@ import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.CoroutineContext
+import kotlin.time.Instant
 
 /**
  * Which pane was **most recently brought to the foreground**. The slots ([TasksComponent.detail],
@@ -61,6 +62,10 @@ class DefaultTasksComponent(
     // down into the detail slot. Both default to no-ops so existing tests build without supplying them.
     private val taskDetailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
+    // The detail's editable-PROPERTIES write seams (DUE date + LABELS), threaded down into the detail
+    // slot. Both default to no-ops so existing tests/callers build without supplying them.
+    private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     private val coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : TasksComponent, ComponentContext by componentContext {
 
@@ -98,6 +103,8 @@ class DefaultTasksComponent(
                 workingStateEditor = workingStateEditor,
                 detailRepository = taskDetailRepository,
                 createSubtask = createSubtask,
+                setDeadline = setDeadline,
+                setLabels = setLabels,
                 coroutineContext = coroutineContext,
             )
         }

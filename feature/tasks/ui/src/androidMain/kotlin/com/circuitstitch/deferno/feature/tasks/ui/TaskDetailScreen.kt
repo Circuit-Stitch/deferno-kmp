@@ -35,6 +35,7 @@ import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
+import kotlinx.datetime.LocalDate
 
 /**
  * The Task detail pane (#27). Thin renderer of [TaskDetailComponent]: observes the hydrating row and
@@ -59,6 +60,8 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
         onClose = component::onCloseClicked,
         onAddToPlan = component::onAddToPlanClicked,
         onSetWorkingState = component::onSetWorkingState,
+        onSetDeadline = component::onSetDeadline,
+        onSetLabels = component::onSetLabels,
         onToggleSubtask = component::onToggleSubtaskDone,
         onOpenSubtask = { component.onSubtaskClicked(it.id) },
         onAddSubtask = component::onAddSubtask,
@@ -94,6 +97,8 @@ internal fun TaskDetailContent(
     onClose: () -> Unit,
     onAddToPlan: () -> Unit,
     onSetWorkingState: (WorkingState) -> Unit,
+    onSetDeadline: (LocalDate?) -> Unit,
+    onSetLabels: (List<String>) -> Unit,
     onToggleSubtask: (Task) -> Unit,
     onOpenSubtask: (Task) -> Unit,
     onAddSubtask: (String) -> Unit,
@@ -123,6 +128,8 @@ internal fun TaskDetailContent(
                 state = state,
                 onAddToPlan = onAddToPlan,
                 onSetWorkingState = onSetWorkingState,
+                onSetDeadline = onSetDeadline,
+                onSetLabels = onSetLabels,
                 onToggleSubtask = onToggleSubtask,
                 onOpenSubtask = onOpenSubtask,
                 onAddSubtask = onAddSubtask,
@@ -143,6 +150,8 @@ private fun TaskBody(
     state: TaskDetailState,
     onAddToPlan: () -> Unit,
     onSetWorkingState: (WorkingState) -> Unit,
+    onSetDeadline: (LocalDate?) -> Unit,
+    onSetLabels: (List<String>) -> Unit,
     onToggleSubtask: (Task) -> Unit,
     onOpenSubtask: (Task) -> Unit,
     onAddSubtask: (String) -> Unit,
@@ -184,6 +193,13 @@ private fun TaskBody(
             onClick = onAddToPlan,
             modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
         ) { Text("Add to today's plan") }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        PropertiesSection(
+            task = task,
+            onSetDeadline = onSetDeadline,
+            onSetLabels = onSetLabels,
+        )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         SubtasksSection(

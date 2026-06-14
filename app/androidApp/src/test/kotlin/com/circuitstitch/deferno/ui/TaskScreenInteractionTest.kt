@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.TaskId
@@ -98,9 +99,10 @@ class TaskScreenInteractionTest {
 
         // The inline subtask checkbox forwards a done-toggle for that child.
         composeRule.onNodeWithContentDescription("Mark “Draft the announcement” done").performClick()
-        // The Activity composer forwards the posted comment text.
-        composeRule.onNodeWithText("Add a comment…").performTextInput("Looks good")
-        composeRule.onNodeWithText("Post").performClick()
+        // The Activity composer forwards the posted comment text. With the PROPERTIES section added
+        // (#195) the detail is taller, so scroll the composer into view before interacting.
+        composeRule.onNodeWithText("Add a comment…").performScrollTo().performTextInput("Looks good")
+        composeRule.onNodeWithText("Post").performScrollTo().performClick()
 
         assertEquals(listOf(TaskId("1a")), component.subtaskToggles)
         assertEquals(listOf("Looks good"), component.commentsPosted)
