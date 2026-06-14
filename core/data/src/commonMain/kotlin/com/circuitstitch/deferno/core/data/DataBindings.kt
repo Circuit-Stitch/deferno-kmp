@@ -164,10 +164,17 @@ interface DataBindings {
     @SingleIn(AppScope::class)
     fun taskRemoteSource(client: HttpClient): TaskRemoteSource = KtorTaskRemoteSource(client)
 
-    /** The Task detail's online-only comments + attachments source over the shared client (read-on-open). */
+    /**
+     * The Task detail's online-only comments + attachments source over the shared authed [client]
+     * (read-on-open) plus the bare [uploadClient] for the presigned attachment PUTs (no base/no auth —
+     * an extra Authorization header would break S3 SigV4, same as the feedback upload above).
+     */
     @Provides
     @SingleIn(AppScope::class)
-    fun taskDetailRepository(client: HttpClient): TaskDetailRepository = KtorTaskDetailRepository(client)
+    fun taskDetailRepository(
+        client: HttpClient,
+        uploadClient: UploadHttpClient,
+    ): TaskDetailRepository = KtorTaskDetailRepository(client, uploadClient)
 
     @Provides
     @SingleIn(AppScope::class)

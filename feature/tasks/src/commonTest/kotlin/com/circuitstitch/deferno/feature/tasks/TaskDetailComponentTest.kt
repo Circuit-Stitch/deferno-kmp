@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.feature.tasks
 import app.cash.turbine.test
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
@@ -43,19 +44,32 @@ private fun TestScope.taskDetailComponent(
 private class FakeTaskDetailRepository(
     var commentsResult: List<Comment>? = emptyList(),
     var attachmentsResult: List<Attachment>? = emptyList(),
+    var uploadResult: Boolean = true,
     private val userId: UserId? = UserId("me"),
 ) : TaskDetailRepository {
     var commentsCalls = 0
         private set
+    var attachmentsCalls = 0
+        private set
     val posted = mutableListOf<Pair<TaskId, String>>()
     val edited = mutableListOf<Pair<String, String>>()
     val deleted = mutableListOf<String>()
+    val uploaded = mutableListOf<Pair<TaskId, List<AttachmentUpload>>>()
+    val deletedAttachments = mutableListOf<Pair<TaskId, String>>()
 
     override suspend fun comments(taskId: TaskId): List<Comment>? { commentsCalls++; return commentsResult }
     override suspend fun postComment(taskId: TaskId, body: String): Boolean { posted += taskId to body; return true }
     override suspend fun editComment(commentId: String, body: String): Boolean { edited += commentId to body; return true }
     override suspend fun deleteComment(commentId: String): Boolean { deleted += commentId; return true }
-    override suspend fun attachments(taskId: TaskId): List<Attachment>? = attachmentsResult
+    override suspend fun attachments(taskId: TaskId): List<Attachment>? { attachmentsCalls++; return attachmentsResult }
+    override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>): Boolean {
+        uploaded += taskId to files
+        return uploadResult
+    }
+    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String): Boolean {
+        deletedAttachments += taskId to attachmentId
+        return true
+    }
     override suspend fun currentUserId(): UserId? = userId
 }
 
@@ -260,5 +274,46 @@ class TaskDetailComponentTest {
         advanceUntilIdle()
 
         assertEquals(listOf(TaskId("a") to "New step"), added)
+    }
+
+    @Test
+    fun addAttachmentsForwardsAndReloads_ignoringEmpty() = runTest {
+        val detail = FakeTaskDetailRepository()
+        val component = taskDetailComponent(TaskId("a"), FakeTaskRepository(listOf(task("a"))), detail = detail)
+        advanceUntilIdle() // the init attachment load (attachmentsCalls == 1)
+
+        component.onAddAttachments(emptyList()) // ignored — no upload, no reload
+        component.onAddAttachments(listOf(AttachmentUpload("f.pdf", "application/pdf", byteArrayOf(1, 2))))
+        advanceUntilIdle()
+
+        assertEquals(1, detail.uploaded.size)
+        assertEquals(TaskId("a"), detail.uploaded.single().first)
+        assertEquals(2, detail.attachmentsCalls) // initial load + reload after the upload
+    }
+
+    @Test
+    fun addAttachments_uploadFailure_doesNotReload() = runTest {
+        val detail = FakeTaskDetailRepository(uploadResult = false)
+        val component = taskDetailComponent(TaskId("a"), FakeTaskRepository(listOf(task("a"))), detail = detail)
+        advanceUntilIdle()
+
+        component.onAddAttachments(listOf(AttachmentUpload("f.pdf", "application/pdf", byteArrayOf(1))))
+        advanceUntilIdle()
+
+        assertEquals(1, detail.uploaded.size)
+        assertEquals(1, detail.attachmentsCalls) // initial load only — a failed upload re-fetches nothing
+    }
+
+    @Test
+    fun deleteAttachmentForwardsAndReloads() = runTest {
+        val detail = FakeTaskDetailRepository()
+        val component = taskDetailComponent(TaskId("a"), FakeTaskRepository(listOf(task("a"))), detail = detail)
+        advanceUntilIdle()
+
+        component.onDeleteAttachment("att1")
+        advanceUntilIdle()
+
+        assertEquals(listOf(TaskId("a") to "att1"), detail.deletedAttachments)
+        assertEquals(2, detail.attachmentsCalls) // initial load + reload after the delete
     }
 }

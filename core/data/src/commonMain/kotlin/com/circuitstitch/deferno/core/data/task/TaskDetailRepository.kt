@@ -5,6 +5,13 @@ import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 
+/** A file the user picked to attach to a Task — its [filename], MIME [contentType], and raw [bytes]. */
+class AttachmentUpload(
+    val filename: String,
+    val contentType: String,
+    val bytes: ByteArray,
+)
+
 /**
  * The Task detail's **online-only** extras — comments and attachments (the web detail's Activity
  * thread + attachment grid). Deliberately NOT offline-first like [TaskRepository]: these are
@@ -28,8 +35,17 @@ interface TaskDetailRepository {
     /** Delete comment [commentId]. Returns `true` on success. */
     suspend fun deleteComment(commentId: String): Boolean
 
-    /** The attachments on [taskId]; `null` if they couldn't load. Read-only in v1 (no upload/delete). */
+    /** The attachments on [taskId]; `null` if they couldn't load. */
     suspend fun attachments(taskId: TaskId): List<Attachment>?
+
+    /**
+     * Upload [files] to [taskId] (presign → byte-exact PUT → commit, mirroring the feedback flow).
+     * Returns `true` only if every file committed; the caller re-fetches the list on success.
+     */
+    suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>): Boolean
+
+    /** Delete attachment [attachmentId] from [taskId]. Returns `true` on success. */
+    suspend fun deleteAttachment(taskId: TaskId, attachmentId: String): Boolean
 
     /**
      * The signed-in user's [UserId] (`GET /auth/me`), used by the detail to decide which comments offer
@@ -45,6 +61,8 @@ interface TaskDetailRepository {
             override suspend fun editComment(commentId: String, body: String): Boolean = false
             override suspend fun deleteComment(commentId: String): Boolean = false
             override suspend fun attachments(taskId: TaskId): List<Attachment> = emptyList()
+            override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>): Boolean = false
+            override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String): Boolean = false
             override suspend fun currentUserId(): UserId? = null
         }
     }

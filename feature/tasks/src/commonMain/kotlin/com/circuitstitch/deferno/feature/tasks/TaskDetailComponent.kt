@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.feature.tasks
 
 import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.common.componentScope
+import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Attachment
@@ -43,6 +44,7 @@ data class TaskDetailState(
     val commentsError: Boolean = false,
     val isPostingComment: Boolean = false,
     val attachments: List<Attachment> = emptyList(),
+    val isUploadingAttachment: Boolean = false,
     val currentUserId: UserId? = null,
 )
 
@@ -86,6 +88,12 @@ interface TaskDetailComponent {
 
     /** Delete one of this user's comments, then re-fetch the thread. */
     fun onDeleteComment(commentId: String)
+
+    /** Upload [files] to this Task (presign → PUT → commit), then re-fetch the list. No-op on empty. */
+    fun onAddAttachments(files: List<AttachmentUpload>)
+
+    /** Delete an attachment by [attachmentId], then re-fetch the list. */
+    fun onDeleteAttachment(attachmentId: String)
 
     sealed interface Output {
         data object Closed : Output
@@ -136,6 +144,7 @@ class DefaultTaskDetailComponent(
                 commentsError = ex.commentsError,
                 isPostingComment = ex.isPostingComment,
                 attachments = ex.attachments,
+                isUploadingAttachment = ex.isUploadingAttachment,
                 currentUserId = ex.currentUserId,
             )
         }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), TaskDetailState(isHydrating = true))
@@ -149,8 +158,16 @@ class DefaultTaskDetailComponent(
             }
         }
         scope.launch { extras.update { it.copy(currentUserId = detailRepository.currentUserId()) } }
-        scope.launch { extras.update { it.copy(attachments = detailRepository.attachments(taskId) ?: emptyList()) } }
+        loadAttachments()
         loadComments()
+    }
+
+    private fun loadAttachments() {
+        scope.launch {
+            val attachments = detailRepository.attachments(taskId)
+            // null = couldn't load; keep whatever we already have rather than blanking the list.
+            extras.update { it.copy(attachments = attachments ?: it.attachments) }
+        }
     }
 
     private fun loadComments() {
@@ -222,6 +239,20 @@ class DefaultTaskDetailComponent(
         scope.launch { if (detailRepository.deleteComment(commentId)) loadComments() }
     }
 
+    override fun onAddAttachments(files: List<AttachmentUpload>) {
+        if (files.isEmpty()) return
+        scope.launch {
+            extras.update { it.copy(isUploadingAttachment = true) }
+            val ok = detailRepository.uploadAttachments(taskId, files)
+            extras.update { it.copy(isUploadingAttachment = false) }
+            if (ok) loadAttachments()
+        }
+    }
+
+    override fun onDeleteAttachment(attachmentId: String) {
+        scope.launch { if (detailRepository.deleteAttachment(taskId, attachmentId)) loadAttachments() }
+    }
+
     /** The mutable extras the [state] combine folds in — the online-only sections + identity. */
     private data class Extras(
         val comments: List<Comment> = emptyList(),
@@ -229,6 +260,7 @@ class DefaultTaskDetailComponent(
         val commentsError: Boolean = false,
         val isPostingComment: Boolean = false,
         val attachments: List<Attachment> = emptyList(),
+        val isUploadingAttachment: Boolean = false,
         val currentUserId: UserId? = null,
     )
 }

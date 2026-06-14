@@ -166,13 +166,32 @@ private fun AddSubtaskField(onAdd: (String) -> Unit) {
     )
 }
 
-// --- Attachments (read-only in v1) ---
+// --- Attachments ---
 
-/** The read-only attachment list: filename + size/type, tapping opens the signed URL in the platform. */
+/**
+ * The attachment list: filename + size/type, tapping a row opens the signed URL in the platform. An
+ * "Add file" affordance launches the platform file picker ([onAddClick]; the picker + byte read are the
+ * host's androidMain glue), and each row offers Delete. [isUploading] disables Add while a PUT is in
+ * flight.
+ */
 @Composable
-internal fun AttachmentsSection(attachments: List<Attachment>, modifier: Modifier = Modifier) {
+internal fun AttachmentsSection(
+    attachments: List<Attachment>,
+    isUploading: Boolean,
+    onAddClick: () -> Unit,
+    onDelete: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(modifier.fillMaxWidth()) {
         SectionHeader("Attachments", trailing = attachments.size.toString())
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Button(onClick = onAddClick, enabled = !isUploading) {
+                Text(if (isUploading) "Uploading…" else "Add file")
+            }
+        }
         if (attachments.isEmpty()) {
             Text(
                 "No attachments.",
@@ -186,11 +205,14 @@ internal fun AttachmentsSection(attachments: List<Attachment>, modifier: Modifie
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = MinTouchTarget)
-                        .clickable(onClickLabel = "Open ${a.filename}") { uriHandler.openUri(a.url) }
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(onClickLabel = "Open ${a.filename}") { uriHandler.openUri(a.url) },
+                    ) {
                         Text(a.filename, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
                         Text(
                             text = "${formatBytes(a.size)} · ${a.mime}",
@@ -199,6 +221,10 @@ internal fun AttachmentsSection(attachments: List<Attachment>, modifier: Modifie
                             maxLines = 1,
                         )
                     }
+                    TextButton(
+                        onClick = { onDelete(a.id) },
+                        modifier = Modifier.semantics { contentDescription = "Delete ${a.filename}" },
+                    ) { Text("Delete") }
                 }
             }
         }
