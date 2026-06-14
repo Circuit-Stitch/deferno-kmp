@@ -47,8 +47,32 @@ struct MainShellView: View {
                 content
                     .frame(width: geo.size.width, height: geo.size.height)
                     .shadow(color: .black.opacity(0.18 * fraction), radius: 8, x: -2)
+                    // The slid-aside content is the dismiss target: tap or drag-left to close. Sized to the
+                    // content (NOT ignoresSafeArea, which would make the Color fill the whole screen and
+                    // swallow taps meant for the drawer underneath) and laid over the card *before* the
+                    // offset, so it rides with the card. allowsHitTesting only once fully open, so an opening
+                    // edge-drag (fraction rising while still "closed") passes straight through to that drag.
+                    .overlay {
+                        if fraction > 0 {
+                            Color.black.opacity(0.32 * fraction)
+                                .contentShape(Rectangle())
+                                .onTapGesture { setDrawer(false) }
+                                .gesture(drawerDrag(drawerWidth))
+                                .allowsHitTesting(drawerOpen)
+                        }
+                    }
                     .offset(x: fraction * drawerWidth)
-                    .overlay { if drawerOpen { scrim(drawerWidth, fraction: fraction) } }
+                // Left-edge swipe-to-open handle: a freeform inward swipe opens the drawer, tracking the
+                // finger (mirrors ShellChrome's edge handle). Inset below the top bar so it never eats the
+                // hamburger tap. Present only while closed; the content (above) handles closing.
+                if !drawerOpen {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(drawerDrag(drawerWidth))
+                        .frame(width: 24)
+                        .frame(maxHeight: .infinity)
+                        .padding(.top, 56)
+                }
             }
         }
         .background(colors.background.ignoresSafeArea())
@@ -75,7 +99,7 @@ struct MainShellView: View {
 
     private var topBar: some View {
         HStack(spacing: 4) {
-            Button { withAnimation(.easeOut(duration: 0.25)) { drawerOpen.toggle() } } label: {
+            Button { setDrawer(!drawerOpen) } label: {
                 Image(systemName: "line.3.horizontal")
                     .font(.title3)
                     .foregroundStyle(colors.onSurface)
@@ -132,13 +156,13 @@ struct MainShellView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                 drawerRow(label: "Search", system: "magnifyingglass", selected: false) {
-                    closeDrawer()
+                    setDrawer(false)
                     ShellBridgeKt.openSearchOverlay(component: component)
                 }
                 ForEach(component.destinations) { dest in
                     let name = ShellBridgeKt.destinationName(destination: dest)
                     drawerRow(label: name, system: icon(name), selected: name == activeName) {
-                        closeDrawer()
+                        setDrawer(false)
                         component.selectDestination(destination: dest)
                     }
                 }
@@ -192,28 +216,27 @@ struct MainShellView: View {
 
     // MARK: Drawer open/close
 
-    private func closeDrawer() {
-        withAnimation(.easeOut(duration: 0.25)) { drawerOpen = false }
+    private static let drawerAnimation = Animation.spring(response: 0.32, dampingFraction: 0.86)
+
+    private func setDrawer(_ open: Bool) {
+        withAnimation(Self.drawerAnimation) { drawerOpen = open }
     }
 
-    /// The dimmed slid-aside content: tap to close, or drag it back toward the edge (finger-tracking,
-    /// settling to the nearer end on release).
-    private func scrim(_ drawerWidth: CGFloat, fraction: CGFloat) -> some View {
-        Color.black.opacity(0.32 * fraction)
-            .ignoresSafeArea()
-            .contentShape(Rectangle())
-            .onTapGesture { closeDrawer() }
-            .gesture(
-                DragGesture(minimumDistance: 5)
-                    .onChanged { dragX = min($0.translation.width, 0) }
-                    .onEnded { value in
-                        let predicted = 1 + value.predictedEndTranslation.width / drawerWidth
-                        withAnimation(.easeOut(duration: 0.25)) {
-                            drawerOpen = predicted >= 0.5
-                            dragX = nil
-                        }
-                    }
-            )
+    /// The finger-tracking drawer drag, shared by the closed-state edge handle (opens) and the open scrim
+    /// (closes): track the finger 1:1 via `dragX`, then on release settle to the nearer end — folding the
+    /// fling velocity in via `predictedEndTranslation`, so a fast flick commits even from a short drag
+    /// (momentum). `dragX` is raw translation; `openFraction` clamps it against the current open base, so
+    /// the one gesture serves both directions (open from 0, close from 1).
+    private func drawerDrag(_ drawerWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { dragX = $0.translation.width }
+            .onEnded { value in
+                let predicted = (drawerOpen ? 1 : 0) + value.predictedEndTranslation.width / drawerWidth
+                withAnimation(Self.drawerAnimation) {
+                    drawerOpen = predicted >= 0.5
+                    dragX = nil
+                }
+            }
     }
 
     // MARK: Overlay (Search / New / Plan-tapped Task detail / Help→Feedback) as a sheet
