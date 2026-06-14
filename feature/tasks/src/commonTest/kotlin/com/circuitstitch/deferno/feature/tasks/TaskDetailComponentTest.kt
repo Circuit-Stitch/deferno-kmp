@@ -56,6 +56,7 @@ private class FakeTaskDetailRepository(
     val deleted = mutableListOf<String>()
     val uploaded = mutableListOf<Pair<TaskId, List<AttachmentUpload>>>()
     val deletedAttachments = mutableListOf<Pair<TaskId, String>>()
+    val captioned = mutableListOf<Pair<String, String>>()
 
     override suspend fun comments(taskId: TaskId): List<Comment>? { commentsCalls++; return commentsResult }
     override suspend fun postComment(taskId: TaskId, body: String): Boolean { posted += taskId to body; return true }
@@ -68,6 +69,10 @@ private class FakeTaskDetailRepository(
     }
     override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String): Boolean {
         deletedAttachments += taskId to attachmentId
+        return true
+    }
+    override suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String): Boolean {
+        captioned += attachmentId to caption
         return true
     }
     override suspend fun currentUserId(): UserId? = userId
@@ -315,5 +320,19 @@ class TaskDetailComponentTest {
 
         assertEquals(listOf(TaskId("a") to "att1"), detail.deletedAttachments)
         assertEquals(2, detail.attachmentsCalls) // initial load + reload after the delete
+    }
+
+    @Test
+    fun setAttachmentCaptionForwardsAndReloads_ignoringBlank() = runTest {
+        val detail = FakeTaskDetailRepository()
+        val component = taskDetailComponent(TaskId("a"), FakeTaskRepository(listOf(task("a"))), detail = detail)
+        advanceUntilIdle()
+
+        component.onSetAttachmentCaption("att1", "   ") // blank — ignored, no write/reload
+        component.onSetAttachmentCaption("att1", "  Receipt  ") // trimmed
+        advanceUntilIdle()
+
+        assertEquals(listOf("att1" to "Receipt"), detail.captioned)
+        assertEquals(2, detail.attachmentsCalls) // initial load + reload after the caption set
     }
 }

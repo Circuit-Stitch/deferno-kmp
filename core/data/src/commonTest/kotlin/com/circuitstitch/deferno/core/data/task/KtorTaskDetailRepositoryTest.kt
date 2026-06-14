@@ -255,6 +255,28 @@ class KtorTaskDetailRepositoryTest {
         assertFalse(repo.deleteAttachment(TaskId("t1"), "att-1"))
     }
 
+    private val attachmentEnvelope = """
+        {"version":"0.1","data":{"id":"a1","filename":"receipt.pdf","mime":"application/pdf","size":1234,
+         "url":"https://files/a1","caption":"Receipt","created_by":"u1","created_at":"2026-04-17T10:00:00Z"}}
+    """.trimIndent()
+
+    @Test
+    fun updateAttachmentCaptionPatchesThePathWithTheCaption() = runTest {
+        var captured: HttpRequestData? = null
+        val repo = KtorTaskDetailRepository(client { req -> captured = req; respondJson(attachmentEnvelope) })
+
+        assertTrue(repo.updateAttachmentCaption(TaskId("t1"), "att-1", "Receipt"))
+        assertEquals(HttpMethod.Patch, captured?.method)
+        assertTrue(captured?.url?.encodedPath?.endsWith("/tasks/t1/attachments/att-1") == true)
+        assertTrue((captured?.body as? TextContent)?.text?.contains("Receipt") == true)
+    }
+
+    @Test
+    fun updateAttachmentCaptionReturnsFalseOnFailure() = runTest {
+        val repo = KtorTaskDetailRepository(client { respond("", HttpStatusCode.UnprocessableEntity) })
+        assertFalse(repo.updateAttachmentCaption(TaskId("t1"), "att-1", "Receipt"))
+    }
+
     @Test
     fun currentUserIdResolvesFromAuthMe() = runTest {
         var captured: HttpRequestData? = null

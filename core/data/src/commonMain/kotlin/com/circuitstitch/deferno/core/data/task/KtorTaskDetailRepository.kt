@@ -17,6 +17,7 @@ import com.circuitstitch.deferno.core.network.dto.CommitAttachmentsPayload
 import com.circuitstitch.deferno.core.network.dto.CreateCommentPayload
 import com.circuitstitch.deferno.core.network.dto.PresignRequestDto
 import com.circuitstitch.deferno.core.network.dto.PresignResponseDto
+import com.circuitstitch.deferno.core.network.dto.UpdateAttachmentCaptionPayload
 import com.circuitstitch.deferno.core.network.dto.UpdateCommentPayload
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import com.circuitstitch.deferno.core.network.requestApi
@@ -152,6 +153,16 @@ class KtorTaskDetailRepository(
             return false
         }
         return response.status.isSuccess()
+    }
+
+    override suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String): Boolean {
+        val result = client.requestApi<AttachmentViewDto> {
+            method = HttpMethod.Patch
+            url { appendPathSegments("tasks", taskId.value, "attachments", attachmentId) }
+            contentType(ContentType.Application.Json)
+            setBody(UpdateAttachmentCaptionPayload(caption))
+        }
+        return result is ApiResult.Success
     }
 
     // Bypasses `requestApi` deliberately: this DELETE replies 204 No Content, whose empty body the

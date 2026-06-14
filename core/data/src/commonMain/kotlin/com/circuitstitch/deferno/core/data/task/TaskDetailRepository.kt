@@ -47,6 +47,9 @@ interface TaskDetailRepository {
     /** Delete attachment [attachmentId] from [taskId]. Returns `true` on success. */
     suspend fun deleteAttachment(taskId: TaskId, attachmentId: String): Boolean
 
+    /** Set or change attachment [attachmentId]'s [caption] (on [taskId]). Returns `true` on success. */
+    suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String): Boolean
+
     /**
      * The signed-in user's [UserId] (`GET /auth/me`), used by the detail to decide which comments offer
      * edit/delete affordances; `null` if it couldn't resolve (the server still enforces authorization).
@@ -63,6 +66,7 @@ interface TaskDetailRepository {
             override suspend fun attachments(taskId: TaskId): List<Attachment> = emptyList()
             override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>): Boolean = false
             override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String): Boolean = false
+            override suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String): Boolean = false
             override suspend fun currentUserId(): UserId? = null
         }
     }

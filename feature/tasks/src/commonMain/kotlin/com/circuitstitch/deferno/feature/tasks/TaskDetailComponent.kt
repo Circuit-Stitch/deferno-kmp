@@ -95,6 +95,9 @@ interface TaskDetailComponent {
     /** Delete an attachment by [attachmentId], then re-fetch the list. */
     fun onDeleteAttachment(attachmentId: String)
 
+    /** Set or change an attachment's caption, then re-fetch the list. No-op on a blank caption. */
+    fun onSetAttachmentCaption(attachmentId: String, caption: String)
+
     sealed interface Output {
         data object Closed : Output
         data class TreeRequested(val id: TaskId) : Output
@@ -251,6 +254,12 @@ class DefaultTaskDetailComponent(
 
     override fun onDeleteAttachment(attachmentId: String) {
         scope.launch { if (detailRepository.deleteAttachment(taskId, attachmentId)) loadAttachments() }
+    }
+
+    override fun onSetAttachmentCaption(attachmentId: String, caption: String) {
+        val trimmed = caption.trim()
+        if (trimmed.isEmpty()) return
+        scope.launch { if (detailRepository.updateAttachmentCaption(taskId, attachmentId, trimmed)) loadAttachments() }
     }
 
     /** The mutable extras the [state] combine folds in — the online-only sections + identity. */

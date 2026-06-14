@@ -67,6 +67,7 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
         onDeleteComment = component::onDeleteComment,
         onAddAttachment = { pickFiles.launch("*/*") },
         onDeleteAttachment = component::onDeleteAttachment,
+        onSetAttachmentCaption = component::onSetAttachmentCaption,
         modifier = modifier,
     )
 }
@@ -101,6 +102,7 @@ internal fun TaskDetailContent(
     onDeleteComment: (String) -> Unit,
     onAddAttachment: () -> Unit,
     onDeleteAttachment: (String) -> Unit,
+    onSetAttachmentCaption: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val task = state.task
@@ -129,6 +131,7 @@ internal fun TaskDetailContent(
                 onDeleteComment = onDeleteComment,
                 onAddAttachment = onAddAttachment,
                 onDeleteAttachment = onDeleteAttachment,
+                onSetAttachmentCaption = onSetAttachmentCaption,
             )
         }
     }
@@ -148,6 +151,7 @@ private fun TaskBody(
     onDeleteComment: (String) -> Unit,
     onAddAttachment: () -> Unit,
     onDeleteAttachment: (String) -> Unit,
+    onSetAttachmentCaption: (String, String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -197,6 +201,7 @@ private fun TaskBody(
             isUploading = state.isUploadingAttachment,
             onAddClick = onAddAttachment,
             onDelete = onDeleteAttachment,
+            onSetCaption = onSetAttachmentCaption,
         )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
