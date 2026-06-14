@@ -54,7 +54,9 @@ struct MainShellView: View {
                     // edge-drag (fraction rising while still "closed") passes straight through to that drag.
                     .overlay {
                         if fraction > 0 {
-                            Color.black.opacity(0.32 * fraction)
+                            // Transparent — the revealed card is NOT dimmed; this layer exists only as the
+                            // dismiss target (contentShape makes Color.clear hit-testable).
+                            Color.clear
                                 .contentShape(Rectangle())
                                 .onTapGesture { setDrawer(false) }
                                 .gesture(drawerDrag(drawerWidth))
