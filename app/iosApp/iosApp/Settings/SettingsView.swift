@@ -12,6 +12,7 @@ struct SettingsView: View {
     @StateObject private var stack: SettingsStackObserver
     @StateObject private var settings: StateFlowObserver<UserSettings>
     @StateObject private var speech: StateFlowObserver<SpeechEngineSettings>
+    @StateObject private var inference: StateFlowObserver<InferenceEngineSettings>
     @Environment(\.defernoColors) private var colors
 
     init(component: SettingsComponent) {
@@ -19,6 +20,7 @@ struct SettingsView: View {
         _stack = StateObject(wrappedValue: SettingsStackObserver(ShellBridgeKt.settingsStackBridge(component: component)))
         _settings = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.settingsStateBridge(component: component)))
         _speech = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.speechEngineBridge(component: component)))
+        _inference = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.inferenceEngineBridge(component: component)))
     }
 
     var body: some View {
@@ -38,8 +40,14 @@ struct SettingsView: View {
 
     private var categoryList: some View {
         let categories = ShellBridgeKt.settingsCategories().filter { category in
-            // Hide the SpeechEngine row until a real engine is registered on the device (#95).
-            ShellBridgeKt.settingsCategoryName(category: category) != "SpeechEngine" || speech.value.available
+            // Hide the device-local engine rows until one is actually registered (matches Android, which
+            // hides them too): SpeechEngine until an iOS speech engine ships (#95), Agent until an
+            // inference engine is available (#150) — otherwise the row would open an empty "coming soon".
+            switch ShellBridgeKt.settingsCategoryName(category: category) {
+            case "SpeechEngine": return speech.value.available
+            case "Agent": return inference.value.available
+            default: return true
+            }
         }
         return List {
             ForEach(categories) { category in
@@ -68,6 +76,7 @@ struct SettingsView: View {
         case "Appearance": appearanceDetail
         case "TaskBehavior": taskBehaviorDetail
         case "SpeechEngine": speechDetail
+        case "Agent": agentDetail
         case "DataPrivacy": dataPrivacyDetail
         case "HelpFeedback": linkDetail(text: "Tell us what's working and what isn't.", action: "Send feedback") { component.onOpenSubmitFeedback() }
         case "AppPermissions": linkDetail(text: "Manage microphone and notification access in iOS Settings.", action: "Open app settings") { component.onOpenAppPermissions() }
@@ -117,6 +126,50 @@ struct SettingsView: View {
             Text("Dictation uses an on-device speech engine. There isn't one available on this device yet.")
                 .font(.subheadline).foregroundStyle(colors.inkMuted)
         }
+    }
+
+    private var agentDetail: some View {
+        let value = inference.value
+        return VStack(alignment: .leading, spacing: 16) {
+            Text("The agent can turn a brain dump into draft tasks and suggest changes to your plan. Choose where it runs — or keep it off.")
+                .font(.subheadline).foregroundStyle(colors.inkMuted)
+            section("Engine") {
+                // "Off" is always offered first (the default); then each engine registered on this device.
+                // A cloud engine the Account isn't entitled to is shown disabled, never selectable.
+                agentRow(label: "Off", note: "The agent stays off. Nothing is sent anywhere.",
+                         selected: ShellBridgeKt.inferenceOffSelected(state: value), locked: false) {
+                    ShellBridgeKt.inferenceSelectOff(component: component)
+                }
+                ForEach(0..<Int(ShellBridgeKt.inferenceOptionCount(state: value)), id: \.self) { i in
+                    let index = Int32(i)
+                    agentRow(label: ShellBridgeKt.inferenceOptionLabel(state: value, index: index),
+                             note: ShellBridgeKt.inferenceOptionNote(state: value, index: index),
+                             selected: ShellBridgeKt.inferenceOptionSelected(state: value, index: index),
+                             locked: ShellBridgeKt.inferenceOptionLocked(state: value, index: index)) {
+                        ShellBridgeKt.inferenceSelectOption(component: component, state: value, index: index)
+                    }
+                }
+            }
+        }
+    }
+
+    private func agentRow(label: String, note: String, selected: Bool, locked: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                    .foregroundStyle(selected ? colors.primary : colors.inkMuted)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label).foregroundStyle(colors.onSurface)
+                    Text(note).font(.caption).foregroundStyle(colors.inkMuted)
+                }
+                Spacer()
+            }
+            .frame(minHeight: Layout.minTouchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(locked)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     private var dataPrivacyDetail: some View {
@@ -226,6 +279,7 @@ struct SettingsView: View {
         case "Appearance": return "Appearance"
         case "TaskBehavior": return "Task behavior"
         case "SpeechEngine": return "Speech engine"
+        case "Agent": return "Agent"
         case "DataPrivacy": return "Data & Privacy"
         case "HelpFeedback": return "Help & Feedback"
         case "AppPermissions": return "App Permissions"

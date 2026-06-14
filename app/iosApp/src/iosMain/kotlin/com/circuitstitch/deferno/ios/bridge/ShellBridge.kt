@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.feature.calendar.CalendarComponent
 import com.circuitstitch.deferno.feature.calendar.CalendarState
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileState
+import com.circuitstitch.deferno.feature.settings.InferenceEngineSettings
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
@@ -14,6 +15,9 @@ import com.circuitstitch.deferno.feature.signin.SignInComponent
 import com.circuitstitch.deferno.feature.signin.SignInState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
+import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
+import com.circuitstitch.deferno.core.agent.InferenceEngineId
+import com.circuitstitch.deferno.core.agent.InferenceEngineOrigin
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -162,6 +166,7 @@ fun profileStateBridge(component: ProfileComponent): ProfileStateBridge = Profil
 fun settingsStackBridge(component: SettingsComponent): SettingsStackBridge = SettingsStackBridge(component.stack)
 fun settingsStateBridge(component: SettingsComponent): StateFlowBridge<UserSettings> = StateFlowBridge(component.settings)
 fun speechEngineBridge(component: SettingsComponent): StateFlowBridge<SpeechEngineSettings> = StateFlowBridge(component.speechEngine)
+fun inferenceEngineBridge(component: SettingsComponent): StateFlowBridge<InferenceEngineSettings> = StateFlowBridge(component.inferenceEngine)
 
 fun searchStateBridge(component: SearchComponent): StateFlowBridge<SearchState> = StateFlowBridge(component.state)
 fun newStateBridge(component: NewComponent): StateFlowBridge<NewState> = StateFlowBridge(component.state)
@@ -287,6 +292,35 @@ fun speechSelectedKey(settings: SpeechEngineSettings): String = settings.selecte
 /** Select a speech engine without Swift naming the `SpeechEngineId` value class. */
 fun selectSpeechEngine(component: SettingsComponent, option: SpeechEngineOption) =
     component.onSpeechEngineSelected(option.id)
+
+// Agent / inference-engine settings (#150) — index-based accessors so no core:agent type crosses into
+// Swift (core:agent isn't in the framework's `export` list, unlike core:speech). Mirrors Android's
+// AgentDetail: an "Off" row first, then each registered engine, a cloud engine shown disabled until the
+// Account is entitled (RequiresPremium).
+fun inferenceOffSelected(state: InferenceEngineSettings): Boolean = state.selected == InferenceEngineId.Off
+fun inferenceSelectOff(component: SettingsComponent) = component.onInferenceEngineSelected(InferenceEngineId.Off)
+fun inferenceOptionCount(state: InferenceEngineSettings): Int = state.options.size
+fun inferenceOptionSelected(state: InferenceEngineSettings, index: Int): Boolean =
+    state.selected == state.options[index].id
+fun inferenceOptionLocked(state: InferenceEngineSettings, index: Int): Boolean =
+    state.options[index].availability is InferenceEngineAvailability.RequiresPremium
+fun inferenceSelectOption(component: SettingsComponent, state: InferenceEngineSettings, index: Int) =
+    component.onInferenceEngineSelected(state.options[index].id)
+fun inferenceOptionLabel(state: InferenceEngineSettings, index: Int): String =
+    when (state.options[index].id) {
+        InferenceEngineId.DefernoCloud -> "Deferno cloud AI"
+        else -> state.options[index].id.value
+    }
+fun inferenceOptionNote(state: InferenceEngineSettings, index: Int): String {
+    val option = state.options[index]
+    return when (option.availability) {
+        is InferenceEngineAvailability.RequiresPremium -> "Premium — not available for your account yet"
+        is InferenceEngineAvailability.Available -> when (option.origin) {
+            InferenceEngineOrigin.OnDevice -> "Runs on this device"
+            InferenceEngineOrigin.DefernoCloud -> "Sends your text off-device to Deferno's hosted AI"
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Calendar — LocalDate is an opaque Kotlin type; Swift gets grid days from here & passes them back
