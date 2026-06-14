@@ -24,6 +24,10 @@ import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.ios.TasksRoot
 import com.circuitstitch.deferno.shell.AuthShellComponent
 import com.circuitstitch.deferno.shell.Destination
+import com.circuitstitch.deferno.shell.FeedbackCategory
+import com.circuitstitch.deferno.shell.FeedbackComponent
+import com.circuitstitch.deferno.shell.FeedbackState
+import com.circuitstitch.deferno.shell.FeedbackStatus
 import com.circuitstitch.deferno.shell.MainShellComponent
 import com.circuitstitch.deferno.shell.NavSlot
 import com.circuitstitch.deferno.shell.NewComponent
@@ -207,11 +211,23 @@ fun overlayNew(child: MainShellComponent.OverlayChild) =
 fun overlayTaskDetail(child: MainShellComponent.OverlayChild) =
     (child as? MainShellComponent.OverlayChild.TaskDetail)?.component
 
-// The in-app Help → Feedback overlay (#375). The SwiftUI feedback View + its file picker are a macOS
-// follow-up (this target builds its klib on any host but links only on a Mac); the component + its
-// state are ready here so the Swift side can render the form the same way it renders New.
+// The in-app Help → Feedback overlay (#375), opened from Settings → Help & Feedback. The SwiftUI
+// FeedbackView renders this the same way it renders New; file attachments are an iOS follow-up (the
+// shared form's text-only path), so the Swift side binds category/subject/body + the send lifecycle.
 fun overlayFeedback(child: MainShellComponent.OverlayChild) =
     (child as? MainShellComponent.OverlayChild.Feedback)?.component
+
+fun feedbackStateBridge(component: FeedbackComponent): StateFlowBridge<FeedbackState> = StateFlowBridge(component.state)
+
+// FeedbackStatus is a sealed type; Swift reads these instead of casting Kotlin/Native class names (as New does).
+fun feedbackStatusIsSubmitting(state: FeedbackState): Boolean = state.status is FeedbackStatus.Submitting
+fun feedbackStatusIsOffline(state: FeedbackState): Boolean = state.status is FeedbackStatus.Offline
+fun feedbackStatusFailedMessage(state: FeedbackState): String? = (state.status as? FeedbackStatus.Failed)?.message
+
+// The ordered categories the chip picker renders (Swift reads label + equality without naming the enum).
+fun feedbackCategories(): List<FeedbackCategory> = FeedbackCategory.entries
+fun feedbackCategoryLabel(category: FeedbackCategory): String = category.label
+fun feedbackCategoriesEqual(a: FeedbackCategory, b: FeedbackCategory): Boolean = a == b
 
 fun settingsChildIsList(child: SettingsComponent.SettingsChild): Boolean =
     child is SettingsComponent.SettingsChild.List

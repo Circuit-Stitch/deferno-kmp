@@ -33,6 +33,7 @@
 		DE000200000000000000048 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000048 /* SettingsView.swift */; };
 		DE000200000000000000049 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000049 /* SearchView.swift */; };
 		DE000200000000000000050 /* NewItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000050 /* NewItemView.swift */; };
+		DE000200000000000000051 /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000051 /* FeedbackView.swift */; };
 		E11CDB876C6BB7C290AD7BBF /* libPods-iosApp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A284BEEB3E5CB9DC5DAA6943 /* libPods-iosApp.a */; };
 /* End PBXBuildFile section */
 
@@ -79,6 +80,7 @@
 		DE000100000000000000048 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		DE000100000000000000049 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		DE000100000000000000050 /* NewItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewItemView.swift; sourceTree = "<group>"; };
+		DE000100000000000000051 /* FeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -269,6 +271,7 @@
 			isa = PBXGroup;
 			children = (
 				DE000100000000000000050 /* NewItemView.swift */,
+				DE000100000000000000051 /* FeedbackView.swift */,
 			);
 			path = New;
 			sourceTree = "<group>";
@@ -449,6 +452,7 @@
 				DE000200000000000000048 /* SettingsView.swift in Sources */,
 				DE000200000000000000049 /* SearchView.swift in Sources */,
 				DE000200000000000000050 /* NewItemView.swift in Sources */,
+				DE000200000000000000051 /* FeedbackView.swift in Sources */,
 				DE0002000000000000000002 /* ContentView.swift in Sources */,
 				DE0002000000000000000010 /* ObservableState.swift in Sources */,
 				DE0002000000000000000011 /* DesignSystem.swift in Sources */,

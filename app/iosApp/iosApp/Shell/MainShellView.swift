@@ -216,7 +216,7 @@ struct MainShellView: View {
             )
     }
 
-    // MARK: Overlay (Search / New / Plan-tapped Task detail) as a sheet
+    // MARK: Overlay (Search / New / Plan-tapped Task detail / Help→Feedback) as a sheet
 
     private var overlaySearchComponent: SearchComponent? {
         overlay.current.flatMap { ShellBridgeKt.overlaySearch(child: $0) }
@@ -230,9 +230,13 @@ struct MainShellView: View {
         overlay.current.flatMap { ShellBridgeKt.overlayTaskDetail(child: $0) }
     }
 
+    private var overlayFeedbackComponent: FeedbackComponent? {
+        overlay.current.flatMap { ShellBridgeKt.overlayFeedback(child: $0) }
+    }
+
     private var overlayPresented: Binding<Bool> {
         Binding(
-            get: { overlaySearchComponent != nil || overlayNewComponent != nil || overlayTaskDetailComponent != nil },
+            get: { overlaySearchComponent != nil || overlayNewComponent != nil || overlayTaskDetailComponent != nil || overlayFeedbackComponent != nil },
             set: { presented in if !presented { component.dismissOverlay() } }
         )
     }
@@ -246,6 +250,9 @@ struct MainShellView: View {
         } else if let task = overlayTaskDetailComponent {
             // A Plan tap shows the Task here, over the dashboard, instead of switching to the Tasks tab.
             TaskDetailView(component: task)
+        } else if let feedback = overlayFeedbackComponent {
+            // Settings → Help & Feedback opens the in-app feedback form here (#375).
+            FeedbackView(component: feedback)
         }
     }
 
