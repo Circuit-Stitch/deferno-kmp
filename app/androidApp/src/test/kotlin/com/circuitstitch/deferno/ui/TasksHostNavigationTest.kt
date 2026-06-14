@@ -19,11 +19,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Regression test for the single-pane drill-in bug (#27, review findings #1+#2). The detail and tree
- * slots are **co-resident** (both can be open at once, ready for a 2-pane View), so the single-pane
- * host must foreground the *most-recently-opened* pane rather than use a static tree>detail order.
- * Drilling from the tree into a child opens the child's detail while the tree slot stays open; a naive
- * tree-wins precedence would keep the tree on top and the child tap would look like it did nothing.
+ * Regression test for the single-pane drill-in bug (#27, review findings #1+#2). The detail slot is
+ * re-keyed when the user drills into a child (now via the inline subtask tree's row tap — web's
+ * chevron), so the single-pane host must foreground the freshly-opened child detail. A naive
+ * precedence could keep the parent on top and the child tap would look like it did nothing.
  *
  * Pinned to a **compact** width (`@Config`) so the adaptive `TasksScreen` (#29) folds to a single Pane
  * — the regression this guards lives in that fold; the two-pane behaviour is covered by
@@ -50,13 +49,11 @@ class TasksHostNavigationTest {
 
         composeRule.setContent { DefernoTheme { TasksScreen(root) } }
 
-        // List → open the parent's detail → open its breakdown (tree) → drill into the child.
+        // List → open the parent's detail → tap the child subtask row to drill into its detail.
         composeRule.onNodeWithText("Parent task").performClick()
-        composeRule.onNodeWithText("Show its 1 step").performClick()
         composeRule.onNodeWithText("Child step").performClick()
 
-        // The child's *detail* is now foregrounded (not the still-open tree): its title header and the
-        // detail-only action are shown. Pre-fix, the tree stayed on top and neither appeared.
+        // The child's *detail* is now foregrounded: its title header and the detail-only action show.
         composeRule.onNodeWithText("Child step").assertIsDisplayed()
         composeRule.onNodeWithText("Add to today's plan").assertIsDisplayed()
     }

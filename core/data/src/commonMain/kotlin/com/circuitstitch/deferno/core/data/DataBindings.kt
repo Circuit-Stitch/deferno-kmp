@@ -34,7 +34,9 @@ import com.circuitstitch.deferno.core.data.plan.KtorPlanRemoteSource
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.KtorSettingsRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
+import com.circuitstitch.deferno.core.data.task.KtorTaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.KtorTaskRemoteSource
+import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.network.BearerTokenProvider
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
@@ -161,6 +163,11 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun taskRemoteSource(client: HttpClient): TaskRemoteSource = KtorTaskRemoteSource(client)
+
+    /** The Task detail's online-only comments + attachments source over the shared client (read-on-open). */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun taskDetailRepository(client: HttpClient): TaskDetailRepository = KtorTaskDetailRepository(client)
 
     @Provides
     @SingleIn(AppScope::class)

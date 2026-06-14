@@ -9,6 +9,7 @@ import com.arkivanov.decompose.router.slot.childSlot
 import com.arkivanov.decompose.router.slot.dismiss
 import com.arkivanov.decompose.value.MutableValue
 import com.arkivanov.decompose.value.Value
+import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +57,10 @@ class DefaultTasksComponent(
     // The working-state write seam (#73), threaded down into the detail slot so the detail can issue
     // lifecycle Commands. Defaults to a no-op so existing shell/component tests build without it.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    // The detail's online-only comments + attachments source + its "add subtask" create seam, threaded
+    // down into the detail slot. Both default to no-ops so existing tests build without supplying them.
+    private val taskDetailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
+    private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
     private val coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : TasksComponent, ComponentContext by componentContext {
 
@@ -91,6 +96,8 @@ class DefaultTasksComponent(
                 taskRepository = taskRepository,
                 output = ::onDetailOutput,
                 workingStateEditor = workingStateEditor,
+                detailRepository = taskDetailRepository,
+                createSubtask = createSubtask,
                 coroutineContext = coroutineContext,
             )
         }
@@ -130,6 +137,12 @@ class DefaultTasksComponent(
             is TaskDetailComponent.Output.TreeRequested -> {
                 treeNavigation.activate(TreeConfig(output.id))
                 _activePane.value = TaskPane.Tree
+            }
+            // Tapping a subtask re-keys the detail slot to that child (inline drill-in), co-resident
+            // with the list — same as the tree's ChildSelected.
+            is TaskDetailComponent.Output.SubtaskSelected -> {
+                detailNavigation.activate(DetailConfig(output.id))
+                _activePane.value = TaskPane.Detail
             }
             is TaskDetailComponent.Output.AddToPlanRequested ->
                 this.output(TasksComponent.Output.AddToPlanRequested(output.id))

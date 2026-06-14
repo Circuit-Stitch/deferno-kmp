@@ -230,6 +230,7 @@ class DefaultRootComponent(
                         calendarRepository = session.calendarRepository,
                         occurrenceEditor = session.occurrenceEditor,
                         workingStateEditor = session.workingStateEditor,
+                        taskDetailRepository = session.taskDetailRepository,
                         searchTasks = SearchTasks.of(session.taskRepository),
                         accounts = accountManager.accounts,
                         activeAccount = accountManager.activeAccount,

@@ -487,6 +487,8 @@ private class FakeAccountManager(active: Account? = null) : AccountManager {
 /** In-memory [AccountSession] over the in-memory demo repositories; records add-to-plan + create + flush calls. */
 internal class FakeAccountSession(
     override val taskRepository: TaskRepository = DemoTaskRepository(SampleData.tasks),
+    override val taskDetailRepository: com.circuitstitch.deferno.core.data.task.TaskDetailRepository =
+        com.circuitstitch.deferno.core.data.task.TaskDetailRepository.NONE,
     override val planRepository: PlanRepository = DemoPlanRepository(emptyList()),
     override val settingsRepository: SettingsRepository = FakeSettingsRepository(),
     override val settingsEditor: com.circuitstitch.deferno.feature.settings.SettingsEditor = FakeSettingsEditor(),

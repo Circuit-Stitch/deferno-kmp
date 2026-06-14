@@ -117,10 +117,24 @@ internal class FakeTaskDetailComponent(
     /** The working-state edits the detail forwarded, in order (#73). */
     val workingStateSets = mutableListOf<WorkingState>()
 
+    /** The web-parity detail intents the View forwarded, in order. */
+    val subtaskToggles = mutableListOf<TaskId>()
+    val subtasksOpened = mutableListOf<TaskId>()
+    val subtasksAdded = mutableListOf<String>()
+    val commentsPosted = mutableListOf<String>()
+    val commentsEdited = mutableListOf<Pair<String, String>>()
+    val commentsDeleted = mutableListOf<String>()
+
     override fun onCloseClicked() { closeCount++ }
     override fun onShowTreeClicked() { showTreeCount++ }
     override fun onAddToPlanClicked() { addToPlanCount++ }
     override fun onSetWorkingState(target: WorkingState) { workingStateSets += target }
+    override fun onToggleSubtaskDone(subtask: Task) { subtaskToggles += subtask.id }
+    override fun onSubtaskClicked(id: TaskId) { subtasksOpened += id }
+    override fun onAddSubtask(title: String) { subtasksAdded += title }
+    override fun onPostComment(body: String) { commentsPosted += body }
+    override fun onEditComment(commentId: String, body: String) { commentsEdited += (commentId to body) }
+    override fun onDeleteComment(commentId: String) { commentsDeleted += commentId }
 }
 
 /** Records the global-search overlay's intents for the SearchScreen interaction test (#73). */

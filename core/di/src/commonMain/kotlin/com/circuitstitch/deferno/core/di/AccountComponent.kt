@@ -8,6 +8,7 @@ import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.model.Account
@@ -52,6 +53,8 @@ abstract class AccountComponent(
      * (DB → driver → key/Context/databasesDir, repositories → AppScope remote sources).
      */
     abstract val taskRepository: TaskRepository
+    // Online-only Task detail extras (comments + attachments); an AppScope binding resolved through here.
+    abstract val taskDetailRepository: TaskDetailRepository
     abstract val planRepository: PlanRepository
 
     /**
