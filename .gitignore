@@ -23,6 +23,9 @@ build/
 # Local configuration file (SDK path, etc.) — machine-specific, never commit
 local.properties
 
+# iOS machine-local dev secrets (e.g. DEV_STAGING_TOKEN) — never commit
+app/iosApp/Secrets.xcconfig
+
 # Log/OS files
 *.log
 .DS_Store

@@ -1,0 +1,22 @@
+// Debug base configuration for the iosApp target.
+//
+// It wraps CocoaPods' generated Debug xcconfig (so all pod build settings still apply — keeping this
+// as the base config is what stops `pod install` from complaining) and then pulls in an optional,
+// git-ignored `Secrets.xcconfig` for machine-local dev values that must never be committed.
+//
+// The only such value today is DEV_STAGING_TOKEN: the dev Personal Access Token that
+// `DefernoRoot.seedDevAccounts()` reads from Info.plist (`DevStagingToken = $(DEV_STAGING_TOKEN)`) to
+// auto-seed a "Dev (staging)" account, so the app opens straight to the shell instead of the sign-in
+// screen — and, because it lives in the source tree (not the simulator), it survives a sim erase.
+//
+// To enable it: create `app/iosApp/Secrets.xcconfig` (git-ignored) containing
+//     DEV_STAGING_TOKEN = <your staging PAT>
+// then rebuild. Absent the file (CI, fresh clone, release), the default below leaves the token empty,
+// so nothing is seeded.
+
+#include "Pods/Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"
+
+// Empty default — overridden by Secrets.xcconfig when present (later assignment wins).
+DEV_STAGING_TOKEN =
+
+#include? "Secrets.xcconfig"

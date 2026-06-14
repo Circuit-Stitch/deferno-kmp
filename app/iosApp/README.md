@@ -49,10 +49,28 @@ hydrates the persisted account roster + seeds any optional dev-PAT Accounts (fro
 constructs **`DefaultRootComponent`** over an Essenty `LifecycleRegistry` with the iOS host
 deep-links (`UIApplication`). SwiftUI's `RootView` renders that shared `RootComponent`
 (Auth ↔ Main → the Destination graph, ADR-0013/0017): paste a PAT to sign in, then the
-adaptive nav suite (`MainShellView`) over the five Destinations + the Search/New overlays.
+reveal-drawer chrome (`MainShellView`, the SwiftUI twin of the shared `ShellChrome`) over the
+five Destinations + the Search/New overlays.
 
 The in-memory **`DefernoDemo`** harness (`ios/DefernoDemo.kt`) is **retained for the unit
 tests only** (`StateBridgeTests` drives it without a DB); it is no longer the app entry.
+
+#### Skip the sign-in screen in dev (seed a staging account)
+
+`DefernoRoot.seedDevAccounts()` reads `DevStagingToken` from `Info.plist`; a non-empty value
+auto-seeds a "Dev (staging)" account so a **Debug** build opens straight to the shell. The
+value comes from the `DEV_STAGING_TOKEN` build setting, wired so the secret lives **on disk in
+the source tree, never in git, and survives a simulator erase** (the Keychain doesn't):
+
+- `Local.xcconfig` (committed) is the Debug base config — it `#include`s the CocoaPods config
+  and then `#include?`s an optional, git-ignored `Secrets.xcconfig`.
+- **Put your token in `app/iosApp/Secrets.xcconfig`** (git-ignored; create it from the comment
+  block if missing): `DEV_STAGING_TOKEN = <your staging PAT>`, then rebuild.
+- `Info.plist` carries `DevStagingToken = $(DEV_STAGING_TOKEN)`; empty (no `Secrets.xcconfig`,
+  CI, or Release — which pins it empty) → nothing seeded, so the normal sign-in screen shows.
+
+`pod install` keeps quiet because `Local.xcconfig` includes the pod config; if it ever resets
+the Debug base config back to the pod xcconfig, re-point it at `Local.xcconfig`.
 
 ### Data layer: SQLCipher — encrypted at rest (ADR-0009)
 
