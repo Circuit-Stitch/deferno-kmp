@@ -40,8 +40,10 @@ import com.circuitstitch.deferno.feature.settings.DefaultSettingsComponent
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
 import com.circuitstitch.deferno.feature.tasks.DefaultSearchComponent
+import com.circuitstitch.deferno.feature.tasks.DefaultTaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
+import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import com.circuitstitch.deferno.feature.tasks.TaskPane
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
@@ -73,8 +75,8 @@ import kotlin.coroutines.CoroutineContext
  * land with #71 (New) and #73 (Search).
  *
  * The shell also routes the cross-feature intents the Destinations emit (a Plan tap opens that Task in
- * the Tasks Destination; a Tasks "add to plan" and a Profile "sign out" bubble up via [Output] for the
- * host to apply against the Active Account — the same Output-up routing the demo host owned).
+ * an overlay above the dashboard; a Tasks "add to plan" and a Profile "sign out" bubble up via [Output]
+ * for the host to apply against the Active Account — the same Output-up routing the demo host owned).
  */
 interface MainShellComponent {
     /** The ordered Destination registry the nav suite renders — not a fixed count. */
@@ -170,6 +172,13 @@ interface MainShellComponent {
         class Feedback(val component: FeedbackComponent) : OverlayChild
 
         /**
+         * A single Task's detail, opened as an overlay above the foreground Destination — a Plan tap
+         * shows the Task here (a sheet on the desktop) instead of yanking the whole shell to the Tasks
+         * Destination. Reuses the Tasks slice's [TaskDetailComponent], so it hydrates + edits identically.
+         */
+        class TaskDetail(val component: TaskDetailComponent) : OverlayChild
+
+        /**
          * The **Brain dump** surface (ADR-0027): the home for the dictation-driven Extractor. A
          * stateless placeholder for now — the [InferenceEngine] ships with no credential and returns
          * `Failure.NotConfigured` until #150 wires the relay, so there is nothing to capture/extract
@@ -215,6 +224,9 @@ sealed interface OverlayRoute {
 
     /** The in-app Help → Feedback surface (#375), opened from Settings → Help & Feedback. */
     data object Feedback : OverlayRoute
+
+    /** One Task's detail above the foreground Destination (a Plan tap, #51) — the desktop opens it as a sheet. */
+    data class TaskDetail(val id: TaskId) : OverlayRoute
 
     /** The **Brain dump** surface (ADR-0027), opened from the shell top bar's voice_chat action. */
     data object BrainDump : OverlayRoute
@@ -456,6 +468,17 @@ class DefaultMainShellComponent(
                 ),
             )
 
+            is OverlayRoute.TaskDetail -> MainShellComponent.OverlayChild.TaskDetail(
+                DefaultTaskDetailComponent(
+                    componentContext = childContext,
+                    taskId = route.id,
+                    taskRepository = taskRepository,
+                    output = ::onTaskDetailOverlayOutput,
+                    workingStateEditor = workingStateEditor,
+                    coroutineContext = coroutineContext,
+                ),
+            )
+
             // Brain dump (ADR-0027): a stateless placeholder route until #150 wires the Extractor's
             // inference credential — nothing to construct yet.
             OverlayRoute.BrainDump -> MainShellComponent.OverlayChild.BrainDump
@@ -478,13 +501,24 @@ class DefaultMainShellComponent(
 
     private fun onPlanOutput(output: PlanComponent.Output) {
         when (output) {
-            // A Plan tap opens that Task in the Tasks Destination — switch laterally, then route the
-            // selection through the list's public intent (the same path a real list tap takes).
-            is PlanComponent.Output.OpenTask -> {
+            // A Plan tap opens that Task in an overlay above the dashboard (a sheet on the desktop) —
+            // the Plan stays foreground, so the calm home isn't yanked into the Tasks workspace (#51).
+            is PlanComponent.Output.OpenTask -> openOverlay(OverlayRoute.TaskDetail(output.id))
+        }
+    }
+
+    /** The Task-detail overlay's intents (a Plan tap, above): close dismisses; add-to-plan bubbles to the
+     *  host; "show steps" hands off to the full Tasks workspace, where the breakdown tree lives. */
+    private fun onTaskDetailOverlayOutput(output: TaskDetailComponent.Output) {
+        when (output) {
+            TaskDetailComponent.Output.Closed -> dismissOverlay()
+            is TaskDetailComponent.Output.AddToPlanRequested ->
+                this.output(MainShellComponent.Output.AddToPlanRequested(output.id))
+            // The breakdown has no place in a single-task sheet: dismiss it and open the Task in the
+            // Tasks Destination (its detail), one tap from "show steps" there.
+            is TaskDetailComponent.Output.TreeRequested -> {
+                dismissOverlay()
                 navigation.bringToFront(Config.Tasks)
-                // After bringToFront the Tasks Destination is synchronously the active child (Decompose
-                // navigation is synchronous), so this cast holds — and is non-null on purpose: a silent
-                // no-op would hide a broken invariant. Route the open through the list's public intent.
                 val tasks = stack.value.active.instance as MainShellComponent.DestinationChild.Tasks
                 tasks.component.list.onTaskClicked(output.id)
             }

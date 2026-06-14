@@ -131,11 +131,43 @@ class MainShellComponentTest {
     }
 
     @Test
-    fun planTap_opensThatTaskInTheTasksDestination() {
+    fun planTap_opensThatTaskInAnOverlay_withoutLeavingThePlan() {
         val shell = shell()
         val plan = (stackPlan(shell)).component
         plan.onTaskClicked(TaskId("t-1"))
 
+        // The Plan stays foreground — the tap doesn't yank the shell to the Tasks Destination.
+        assertEquals(Destination.Plan, shell.activeDestination())
+        val child = shell.overlay.value.child?.instance
+        assertTrue(child is MainShellComponent.OverlayChild.TaskDetail, "a TaskDetail overlay is pushed above the Plan")
+        assertEquals(TaskId("t-1"), child.component.taskId)
+    }
+
+    @Test
+    fun planTaskDetailOverlay_addToPlan_bubblesToOutput() {
+        val outputs = mutableListOf<MainShellComponent.Output>()
+        val shell = shell(output = outputs::add)
+        (stackPlan(shell)).component.onTaskClicked(TaskId("t-1"))
+
+        val detail = (shell.overlay.value.child!!.instance as MainShellComponent.OverlayChild.TaskDetail).component
+        detail.onAddToPlanClicked()
+
+        assertEquals(
+            listOf<MainShellComponent.Output>(MainShellComponent.Output.AddToPlanRequested(TaskId("t-1"))),
+            outputs,
+        )
+    }
+
+    @Test
+    fun planTaskDetailOverlay_showSteps_handsOffToTheTasksWorkspace() {
+        val shell = shell()
+        (stackPlan(shell)).component.onTaskClicked(TaskId("t-1")) // t-1 has children in the fake
+
+        val detail = (shell.overlay.value.child!!.instance as MainShellComponent.OverlayChild.TaskDetail).component
+        detail.onShowTreeClicked()
+
+        // The sheet is dismissed and the Task opens in the full Tasks Destination.
+        assertNull(shell.overlay.value.child)
         assertEquals(Destination.Tasks, shell.activeDestination())
         assertEquals(TaskId("t-1"), shell.tasks().detail.value.child?.instance?.taskId)
     }
