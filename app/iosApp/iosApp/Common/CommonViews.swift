@@ -109,6 +109,61 @@ extension PaneHeader where Trailing == EmptyView {
     }
 }
 
+// MARK: - Native shell nav bar
+
+/// The shell actions a Destination surfaces in its native nav bar: the hamburger (always) and, where it
+/// makes sense, the New action. `MainShellView` sets this once via the environment so each Destination
+/// renders one native `NavigationStack` bar — the hamburger folded in as a leading item — instead of the
+/// old always-on custom top bar stacked above a `PaneHeader` (two bars → one).
+struct ShellActions {
+    var openMenu: () -> Void = {}
+    /// nil where "New" is meaningless (Profile, Settings) — which hides the + button.
+    var newItem: (() -> Void)? = nil
+}
+
+private struct ShellActionsKey: EnvironmentKey {
+    static let defaultValue = ShellActions()
+}
+
+extension EnvironmentValues {
+    var shellActions: ShellActions {
+        get { self[ShellActionsKey.self] }
+        set { self[ShellActionsKey.self] = newValue }
+    }
+}
+
+private struct ShellNavBar: ViewModifier {
+    let title: String
+    let displayMode: NavigationBarItem.TitleDisplayMode
+    @Environment(\.shellActions) private var shell
+
+    func body(content: Content) -> some View {
+        content
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(displayMode)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { shell.openMenu() } label: { Image(systemName: "line.3.horizontal") }
+                        .accessibilityLabel("Menu")
+                }
+                if let newItem = shell.newItem {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { newItem() } label: { Image(systemName: "plus") }
+                            .accessibilityLabel("New")
+                    }
+                }
+            }
+    }
+}
+
+extension View {
+    /// Standard Destination nav bar: native title + the shell hamburger as the leading item (and the New
+    /// action where the shell offers one). Apply to a Destination's root content inside a `NavigationStack`.
+    func shellNavBar(_ title: String, displayMode: NavigationBarItem.TitleDisplayMode = .large) -> some View {
+        modifier(ShellNavBar(title: title, displayMode: displayMode))
+    }
+}
+
 /// The Deferno brand mark: the flame logo — the shared `core/designsystem/brand/flame.svg` rasterized
 /// into the `Flame` image asset by `scripts/generate-brand-assets.sh`, the same flame as the app icon
 /// and launch screen. Sized to sit beside a `PaneHeader` title; spoken as "Deferno" for VoiceOver. The

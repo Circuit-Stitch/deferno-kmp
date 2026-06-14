@@ -36,15 +36,28 @@ struct TasksScreen: View {
             hasTree: tree.current != nil
         )
         if horizontalSizeClass == .regular {
-            HStack(spacing: 0) {
-                TaskListView(component: root.list)
-                    .frame(width: 340)
-                Divider()
-                secondaryPane(slot)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            NavigationStack {
+                HStack(spacing: 0) {
+                    TaskListView(component: root.list)
+                        .frame(width: 340)
+                    Divider()
+                    secondaryPane(slot)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .shellNavBar("Tasks")
             }
         } else {
-            compactPane(slot)
+            // Compact: the list carries the Destination nav bar; a foregrounded detail/tree takes over
+            // full-screen with its own PaneHeader Back (the co-resident slot model, not a stack push —
+            // ADR-0007). Converting that drill to a native push is a follow-up tied to the split layout.
+            switch slot {
+            case .none:
+                NavigationStack {
+                    TaskListView(component: root.list).shellNavBar("Tasks")
+                }
+            default:
+                compactPane(slot)
+            }
         }
     }
 
