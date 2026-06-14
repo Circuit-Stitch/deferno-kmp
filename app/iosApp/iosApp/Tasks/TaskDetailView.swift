@@ -26,7 +26,11 @@ struct TaskDetailView: View {
                 // In single-pane the leading control returns to the list, so it reads as "Back".
                 PaneHeader(title: title, onBack: { component.onCloseClicked() })
             }
-            if value.isHydrating {
+            // Only while there's genuinely nothing on screen yet. Once the summary row is observed we
+            // render it and let the background enrichment (description, #22) fill in silently — a
+            // full-width strip flashing over an already-rendered task just shoves the body down and back
+            // (the "loading blip" on content update).
+            if value.isHydrating && value.task == nil {
                 LoadingStrip(label: "Loading details…")
             }
             if value.task == nil && !value.isHydrating {
