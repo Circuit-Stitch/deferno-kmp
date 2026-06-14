@@ -6,6 +6,10 @@
      OAuth redirect re-enters the app on (ADR-0026) — IosBrowserAuthenticator's fixed
      `com.circuitstitch.deferno://auth` redirect URI, forwarded by DefernoApp.onOpenURL. -->
 <dict>
+	<!-- Dev-only: substituted from the DEV_STAGING_TOKEN build setting (Local.xcconfig ← Secrets.xcconfig,
+	     both Debug-only). Empty in Release / CI / a fresh clone, so DefernoRoot seeds no dev account there. -->
+	<key>DevStagingToken</key>
+	<string>$(DEV_STAGING_TOKEN)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

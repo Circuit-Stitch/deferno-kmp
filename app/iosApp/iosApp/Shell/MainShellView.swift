@@ -1,24 +1,28 @@
 import Deferno
 import SwiftUI
 
-/// The Main shell — the SwiftUI twin of Android's `MainShell` (ADR-0013/0015). It renders the shared
-/// `MainShellComponent`'s Destination graph as an **adaptive nav suite** driven purely by the
-/// horizontal size class (never a device check, ADR-0008):
-///   • compact (iPhone): a bottom bar of the three Primary Destinations + a **More** overflow onto the
-///     Secondary ones, over a single active-Destination body;
-///   • regular (iPad): a `NavigationSplitView` whose sidebar lists all five Destinations.
-/// Above the body sit the shell chrome (account switcher when >1 account, global Search ⌕) and the New
-/// FAB; the shell-level overlay (Search / New) presents as a sheet. The active Destination, its
-/// retained per-Destination state, and the overlay all live in the shared component — this View holds
-/// only the local "More" sheet flag.
+/// The Main shell — the SwiftUI twin of Android/desktop's shared `ShellChrome` (ADR-0013/0017). It is a
+/// **reveal drawer**: a slim top bar carries a hamburger menu toggle (start) and the New action (end),
+/// and toggling the menu slides the whole content card aside to expose a navigation menu sitting
+/// *underneath* it. The menu lists an Account header (a switcher when >1 Account, else a label), a
+/// Search row, then one row per Destination — the same layout as Android's `ShellDrawer`, so there is no
+/// bottom tab bar and no Primary/Secondary split. One chrome for every size class (never a device check,
+/// ADR-0008); on a wide window the drawer just caps its width and leaves more content peeking.
+///
+/// The active Destination, its retained per-Destination state, and the shell overlay all live in the
+/// shared `MainShellComponent` — this View holds only the local drawer open/drag state. The hamburger
+/// opens the drawer; tapping the dimmed content or dragging it back toward the edge closes it (the
+/// finger is tracked 1:1, then settles to the nearer end on release).
 struct MainShellView: View {
     let component: MainShellComponent
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.defernoColors) private var colors
     @StateObject private var destinations: DestinationStackObserver
     @StateObject private var overlay: OverlaySlotObserver
     @StateObject private var accounts: AccountsObserver
-    @State private var showMore = false
+    @State private var drawerOpen = false
+    /// Non-nil only while a finger is dragging the open content back toward the edge — makes the drawer
+    /// track the finger 1:1. The effective open fraction is `dragX != nil ? base + dragX/width : base`.
+    @State private var dragX: CGFloat? = nil
 
     init(component: MainShellComponent) {
         self.component = component
@@ -31,48 +35,66 @@ struct MainShellView: View {
     private var activeName: String { ShellBridgeKt.destinationName(destination: ShellBridgeKt.destinationOf(child: active)) }
 
     var body: some View {
-        Group {
-            if sizeClass == .regular {
-                regularLayout
-            } else {
-                compactLayout
+        GeometryReader { geo in
+            // Wide enough to read as a drawer but always leaving a peek of content; capped so a big iPad
+            // window doesn't get an absurdly wide menu (mirrors ShellChrome's 0.82f / 320dp).
+            let drawerWidth = min(geo.size.width * 0.82, 320)
+            let fraction = openFraction(drawerWidth)
+            ZStack(alignment: .leading) {
+                drawer
+                    .frame(width: drawerWidth)
+                    .frame(maxHeight: .infinity)
+                content
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .shadow(color: .black.opacity(0.18 * fraction), radius: 8, x: -2)
+                    .offset(x: fraction * drawerWidth)
+                    .overlay { if drawerOpen { scrim(drawerWidth, fraction: fraction) } }
             }
         }
         .background(colors.background.ignoresSafeArea())
         .sheet(isPresented: overlayPresented) { overlayContent }
     }
 
-    // MARK: Layouts
+    // MARK: Open fraction (0 closed … 1 open)
 
-    private var compactLayout: some View {
+    private func openFraction(_ drawerWidth: CGFloat) -> CGFloat {
+        let base: CGFloat = drawerOpen ? 1 : 0
+        guard let dragX else { return base }
+        return min(max(base + dragX / drawerWidth, 0), 1)
+    }
+
+    // MARK: Content card (top bar + active Destination), drawn on top of the drawer
+
+    private var content: some View {
         VStack(spacing: 0) {
             topBar
-            bodyWithFab
-            bottomBar
+            destinationBody.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .background(colors.background)
     }
 
-    private var regularLayout: some View {
-        NavigationSplitView {
-            sidebar
-        } detail: {
-            VStack(spacing: 0) {
-                topBar
-                bodyWithFab
+    private var topBar: some View {
+        HStack(spacing: 4) {
+            Button { withAnimation(.easeOut(duration: 0.25)) { drawerOpen.toggle() } } label: {
+                Image(systemName: "line.3.horizontal")
+                    .font(.title3)
+                    .foregroundStyle(colors.onSurface)
             }
+            .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
+            .accessibilityLabel("Menu")
+            Spacer()
+            Button { onNewTapped() } label: {
+                Image(systemName: "plus")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(colors.onSurface)
+            }
+            .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
+            .accessibilityLabel("New")
         }
+        .padding(.horizontal, 4)
+        .frame(minHeight: 48)
+        .background(colors.surface)
     }
-
-    private var bodyWithFab: some View {
-        ZStack(alignment: .bottomTrailing) {
-            destinationBody
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            newFab
-                .padding(Layout.gutter)
-        }
-    }
-
-    // MARK: Active Destination body
 
     @ViewBuilder
     private var destinationBody: some View {
@@ -92,57 +114,8 @@ struct MainShellView: View {
         }
     }
 
-    // MARK: Shell chrome
-
-    private var topBar: some View {
-        HStack(spacing: 8) {
-            if accounts.accounts.count > 1 {
-                accountSwitcher
-            }
-            Spacer()
-            Button { ShellBridgeKt.openSearchOverlay(component: component) } label: {
-                Image(systemName: "magnifyingglass")
-                    .font(.title3)
-                    .foregroundStyle(colors.onSurface)
-            }
-            .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
-            .accessibilityLabel("Search")
-        }
-        .padding(.horizontal, 12)
-        .frame(minHeight: 48)
-        .background(colors.surface)
-    }
-
-    private var accountSwitcher: some View {
-        Menu {
-            ForEach(accounts.accounts) { account in
-                Button(account.label) { ShellBridgeKt.switchToAccount(component: component, account: account) }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Text(accounts.active?.label ?? "Select account")
-                    .font(.subheadline.weight(.medium))
-                Image(systemName: "chevron.down").font(.caption2)
-            }
-            .foregroundStyle(colors.onSurface)
-        }
-        .accessibilityLabel("Switch account")
-    }
-
-    private var newFab: some View {
-        Button { onNewTapped() } label: {
-            Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(colors.onPrimary)
-                .frame(width: 56, height: 56)
-                .background(colors.primary, in: Circle())
-                .shadow(radius: 4, y: 2)
-        }
-        .accessibilityLabel("New")
-    }
-
     private func onNewTapped() {
-        // On Calendar the FAB pre-dates New to the selected day (#74); elsewhere it opens an undated form.
+        // On Calendar the New action pre-dates to the selected day (#74); elsewhere it opens an undated form.
         if let calendar = ShellBridgeKt.destCalendar(child: active) {
             calendar.onNewForSelectedDay()
         } else {
@@ -150,76 +123,100 @@ struct MainShellView: View {
         }
     }
 
-    // MARK: Bottom bar (compact) — 3 Primary + More overflow
+    // MARK: Reveal drawer (Account header → Search → Destinations), drawn underneath the content
 
-    private var bottomBar: some View {
-        HStack(spacing: 0) {
-            ForEach(primaryDestinations) { dest in
-                barItem(dest)
+    private var drawer: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                accountHeader
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                drawerRow(label: "Search", system: "magnifyingglass", selected: false) {
+                    closeDrawer()
+                    ShellBridgeKt.openSearchOverlay(component: component)
+                }
+                ForEach(component.destinations) { dest in
+                    let name = ShellBridgeKt.destinationName(destination: dest)
+                    drawerRow(label: name, system: icon(name), selected: name == activeName) {
+                        closeDrawer()
+                        component.selectDestination(destination: dest)
+                    }
+                }
             }
-            moreItem
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(height: 52)
-        .background(colors.surface)
-        .overlay(Rectangle().frame(height: 0.5).foregroundStyle(colors.outlineVariant), alignment: .top)
+        .frame(maxHeight: .infinity)
+        .background(colors.surfaceVariant.ignoresSafeArea())
     }
 
     @ViewBuilder
-    private func barItem(_ dest: Destination) -> some View {
-        let name = ShellBridgeKt.destinationName(destination: dest)
-        let selected = name == activeName
-        Button { component.selectDestination(destination: dest) } label: {
-            navItemLabel(name: name, system: icon(name), selected: selected)
+    private var accountHeader: some View {
+        if accounts.accounts.count > 1 {
+            Menu {
+                ForEach(accounts.accounts) { account in
+                    Button(account.label) { ShellBridgeKt.switchToAccount(component: component, account: account) }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(accounts.active?.label ?? "Select account").font(.headline)
+                    Image(systemName: "chevron.down").font(.caption2)
+                }
+                .foregroundStyle(colors.onSurface)
+            }
+            .accessibilityLabel("Switch account")
+        } else {
+            Text(accounts.active?.label ?? "Deferno")
+                .font(.headline)
+                .foregroundStyle(colors.onSurface)
+                .accessibilityAddTraits(.isHeader)
         }
-        .accessibilityLabel(name)
+    }
+
+    private func drawerRow(label: String, system: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                Image(systemName: system).font(.system(size: 20)).frame(width: 24)
+                Text(label).font(.body)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: Layout.minTouchTarget)
+            .foregroundStyle(selected ? colors.primary : colors.onSurface)
+            .background(selected ? colors.primaryContainer : Color.clear, in: RoundedRectangle(cornerRadius: 24))
+            .contentShape(Rectangle())
+        }
+        .padding(.horizontal, 12)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private var moreItem: some View {
-        let selected = !ShellBridgeKt.destinationIsPrimary(destination: ShellBridgeKt.destinationOf(child: active))
-        return Button { showMore = true } label: {
-            navItemLabel(name: "More", system: "ellipsis", selected: selected)
-        }
-        .accessibilityLabel("More")
-        .confirmationDialog("More", isPresented: $showMore, titleVisibility: .visible) {
-            ForEach(secondaryDestinations) { dest in
-                Button(ShellBridgeKt.destinationName(destination: dest)) {
-                    component.selectDestination(destination: dest)
-                }
-            }
-        }
+    // MARK: Drawer open/close
+
+    private func closeDrawer() {
+        withAnimation(.easeOut(duration: 0.25)) { drawerOpen = false }
     }
 
-    private func navItemLabel(name: String, system: String, selected: Bool) -> some View {
-        VStack(spacing: 3) {
-            Image(systemName: system).font(.system(size: 20))
-            Text(name).font(.caption2)
-        }
-        .foregroundStyle(selected ? colors.primary : colors.inkMuted)
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: Layout.minTouchTarget)
-        .contentShape(Rectangle())
+    /// The dimmed slid-aside content: tap to close, or drag it back toward the edge (finger-tracking,
+    /// settling to the nearer end on release).
+    private func scrim(_ drawerWidth: CGFloat, fraction: CGFloat) -> some View {
+        Color.black.opacity(0.32 * fraction)
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture { closeDrawer() }
+            .gesture(
+                DragGesture(minimumDistance: 5)
+                    .onChanged { dragX = min($0.translation.width, 0) }
+                    .onEnded { value in
+                        let predicted = 1 + value.predictedEndTranslation.width / drawerWidth
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            drawerOpen = predicted >= 0.5
+                            dragX = nil
+                        }
+                    }
+            )
     }
 
-    // MARK: Sidebar (regular)
-
-    private var sidebar: some View {
-        List {
-            ForEach(allDestinations) { dest in
-                let name = ShellBridgeKt.destinationName(destination: dest)
-                let selected = name == activeName
-                Button { component.selectDestination(destination: dest) } label: {
-                    Label(name, systemImage: icon(name))
-                        .foregroundStyle(selected ? colors.primary : colors.onSurface)
-                }
-                .listRowBackground(selected ? colors.primaryContainer : Color.clear)
-            }
-        }
-        .listStyle(.sidebar)
-        .navigationTitle("Deferno")
-    }
-
-    // MARK: Overlay (Search / New) as a sheet
+    // MARK: Overlay (Search / New / Plan-tapped Task detail) as a sheet
 
     private var overlaySearchComponent: SearchComponent? {
         overlay.current.flatMap { ShellBridgeKt.overlaySearch(child: $0) }
@@ -252,15 +249,7 @@ struct MainShellView: View {
         }
     }
 
-    // MARK: Destination registry helpers
-
-    private var allDestinations: [Destination] { component.destinations }
-    private var primaryDestinations: [Destination] {
-        component.destinations.filter { ShellBridgeKt.destinationIsPrimary(destination: $0) }
-    }
-    private var secondaryDestinations: [Destination] {
-        component.destinations.filter { !ShellBridgeKt.destinationIsPrimary(destination: $0) }
-    }
+    // MARK: Destination glyphs (a View concern, mirrors ShellChrome's Destination.icon)
 
     private func icon(_ name: String) -> String {
         switch name {

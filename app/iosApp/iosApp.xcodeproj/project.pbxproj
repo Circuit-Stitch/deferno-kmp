@@ -50,6 +50,7 @@
 		85FCC65B3A9A22AD7A207747 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
 		A284BEEB3E5CB9DC5DAA6943 /* libPods-iosApp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-iosApp.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC7FD732D8796105D096EC7A /* Pods-iosApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.release.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.release.xcconfig"; sourceTree = "<group>"; };
+		DE0009000000000000000001 /* Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig; sourceTree = SOURCE_ROOT; };
 		DE0001000000000000000001 /* DefernoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoApp.swift; sourceTree = "<group>"; };
 		DE0001000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		DE0001000000000000000003 /* Deferno.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Deferno.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -531,7 +532,7 @@
 		};
 		DE0008000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 85FCC65B3A9A22AD7A207747 /* Pods-iosApp.debug.xcconfig */;
+			baseConfigurationReference = DE0009000000000000000001 /* Local.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
@@ -573,6 +574,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				// Never seed a dev account in Release — keep DevStagingToken empty regardless of any local Secrets.xcconfig.
+				DEV_STAGING_TOKEN = "";
 				DEVELOPMENT_TEAM = GDV76FJJZ5;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
