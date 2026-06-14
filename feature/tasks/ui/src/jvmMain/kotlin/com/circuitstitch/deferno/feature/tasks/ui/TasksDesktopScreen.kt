@@ -79,7 +79,7 @@ fun TasksDesktopScreen(component: TasksComponent, modifier: Modifier = Modifier)
             // home state when nothing is open.
             when (slot) {
                 SecondarySlot.Tree -> tree?.let { TaskTreePane(it) }
-                SecondarySlot.Detail -> detail?.let { TaskDetailPane(it) }
+                SecondarySlot.Detail -> detail?.let { TaskDetailScreen(it) }
                 SecondarySlot.None -> TaskListPane(component.list)
             }
         }
@@ -102,7 +102,7 @@ private fun SecondaryPane(
     when (slot) {
         // The helper only returns Tree/Detail when that slot is open, so the instance is non-null here.
         SecondarySlot.Tree -> tree?.let { TaskTreePane(it) }
-        SecondarySlot.Detail -> detail?.let { TaskDetailPane(it) }
+        SecondarySlot.Detail -> detail?.let { TaskDetailScreen(it) }
         SecondarySlot.None -> EmptyState(
             title = "Nothing open",
             body = "Pick a task on the left to see its details here.",
@@ -140,9 +140,10 @@ private fun TaskListPane(component: TaskListComponent, modifier: Modifier = Modi
     }
 }
 
-/** The detail pane — a thin renderer of [TaskDetailComponent]; the component hydrates on creation (#22). */
+/** The detail pane — a thin renderer of [TaskDetailComponent]; the component hydrates on creation (#22).
+ *  Public so the shell can also render it as a Plan-tap overlay (#51), not just inside the Tasks pane. */
 @Composable
-private fun TaskDetailPane(component: TaskDetailComponent, modifier: Modifier = Modifier) {
+fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifier) {
     val state by component.state.collectAsState()
     val task = state.task
     Column(modifier = modifier.fillMaxSize()) {

@@ -27,6 +27,7 @@ import com.circuitstitch.deferno.feature.plan.ui.PlanDesktopScreen
 import com.circuitstitch.deferno.feature.profile.ui.ProfileDesktopScreen
 import com.circuitstitch.deferno.feature.settings.ui.SettingsDesktopScreen
 import com.circuitstitch.deferno.feature.tasks.ui.SearchDesktopScreen
+import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksDesktopScreen
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.MainShellComponent
@@ -135,6 +136,10 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         // The in-app Help → Feedback surface (#375): comment + file attachments (AWT file dialog).
         is MainShellComponent.OverlayChild.Feedback ->
             FeedbackDesktopScreen(child.component, Modifier.fillMaxSize())
+
+        // A Plan tap (#51): the Task's detail over the dashboard, instead of switching to the Tasks Destination.
+        is MainShellComponent.OverlayChild.TaskDetail ->
+            TaskDetailScreen(child.component, Modifier.fillMaxSize())
 
         // Brain dump (ADR-0027): the shared placeholder until #150 wires the Extractor.
         MainShellComponent.OverlayChild.BrainDump ->

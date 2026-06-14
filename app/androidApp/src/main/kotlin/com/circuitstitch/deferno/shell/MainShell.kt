@@ -30,6 +30,7 @@ import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.profile.ui.ProfileScreen
 import com.circuitstitch.deferno.feature.settings.ui.SettingsScreen
 import com.circuitstitch.deferno.feature.tasks.ui.SearchScreen
+import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksScreen
 import com.circuitstitch.deferno.shell.ui.BrainDumpPlaceholder
 import com.circuitstitch.deferno.shell.ui.ShellChrome
@@ -174,6 +175,10 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         // The in-app Help → Feedback surface (#375): comment + file attachments, online-only submit.
         is MainShellComponent.OverlayChild.Feedback ->
             FeedbackScreen(child.component, Modifier.fillMaxSize())
+
+        // A Plan tap (#51): the Task's detail over the dashboard, instead of switching to the Tasks tab.
+        is MainShellComponent.OverlayChild.TaskDetail ->
+            TaskDetailScreen(child.component, Modifier.fillMaxSize())
 
         // Brain dump (ADR-0027): the shared placeholder until #150 wires the Extractor.
         MainShellComponent.OverlayChild.BrainDump ->

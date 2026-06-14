@@ -20,7 +20,7 @@ struct MainShellView: View {
     @StateObject private var overlay: OverlaySlotObserver
     @StateObject private var accounts: AccountsObserver
     @State private var showMore = false
-    @State private var sidebarWidth: CGFloat = 220
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     init(component: MainShellComponent, onBrainDump: @escaping () -> Void) {
         self.component = component
@@ -56,7 +56,7 @@ struct MainShellView: View {
     }
 
     private var regularLayout: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
         } detail: {
             destinationBody
@@ -75,6 +75,14 @@ struct MainShellView: View {
     /// on-device Extractor (the same sheet as the ⌘⇧E menu), New mirrors the FAB's pre-dating behaviour.
     @ToolbarContentBuilder
     private var windowToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button {
+                withAnimation { columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly }
+            } label: {
+                Image(systemName: "sidebar.leading")
+            }
+            .help("Toggle Sidebar")
+        }
         if accounts.accounts.count > 1 {
             ToolbarItem(placement: .navigation) { accountSwitcher }
         }
@@ -235,34 +243,25 @@ struct MainShellView: View {
     // MARK: Sidebar (regular)
 
     private var sidebar: some View {
-        // Below ~130pt the rows collapse to an icon rail (SF Symbol only) — NavigationSplitView has no
-        // native rail, so we read the live column width (GeometryReader → preference) and swap to
-        // `.labelStyle(.iconOnly)` rather than render truncated "Calen…" stubs (#194). The Label keeps
-        // its full title for VoiceOver even when hidden, and `.help(name)` gives a hover tooltip.
+        // Always-labelled rows. The min column width fits a full label so they never truncate; collapse
+        // the whole sidebar (the toolbar toggle) when you want it out of the way, rather than an icon rail.
         List {
             ForEach(allDestinations) { dest in
                 let name = ShellBridgeKt.destinationName(destination: dest)
                 let selected = name == activeName
                 Button { component.selectDestination(destination: dest) } label: {
-                    Group {
-                        if sidebarWidth < 130 {
-                            Label(name, systemImage: icon(name)).labelStyle(.iconOnly)
-                        } else {
-                            Label(name, systemImage: icon(name))
-                        }
-                    }
-                    .foregroundStyle(selected ? colors.primary : colors.onSurface)
+                    Label(name, systemImage: icon(name))
+                        .foregroundStyle(selected ? colors.primary : colors.onSurface)
                 }
                 .help(name)
                 .listRowBackground(selected ? colors.primaryContainer : Color.clear)
             }
         }
         .listStyle(.sidebar)
-        .navigationSplitViewColumnWidth(min: 64, ideal: 220, max: 320)
-        .background(GeometryReader { geo in
-            Color.clear.preference(key: SidebarWidthKey.self, value: geo.size.width)
-        })
-        .onPreferenceChange(SidebarWidthKey.self) { sidebarWidth = $0 }
+        .navigationSplitViewColumnWidth(min: 160, ideal: 220, max: 320)
+        // Drop the auto sidebar toggle (generated for the sidebar column) — it jumped to the toolbar's
+        // trailing `»` overflow when collapsed. windowToolbar supplies our own, pinned leading instead.
+        .toolbar(removing: .sidebarToggle)
     }
 
     // MARK: Overlay (Search / New) as a sheet
@@ -275,9 +274,13 @@ struct MainShellView: View {
         overlay.current.flatMap { ShellBridgeKt.overlayNew(child: $0) }
     }
 
+    private var overlayTaskDetailComponent: TaskDetailComponent? {
+        overlay.current.flatMap { ShellBridgeKt.overlayTaskDetail(child: $0) }
+    }
+
     private var overlayPresented: Binding<Bool> {
         Binding(
-            get: { overlaySearchComponent != nil || overlayNewComponent != nil },
+            get: { overlaySearchComponent != nil || overlayNewComponent != nil || overlayTaskDetailComponent != nil },
             set: { presented in if !presented { component.dismissOverlay() } }
         )
     }
@@ -288,6 +291,10 @@ struct MainShellView: View {
             SearchView(component: search)
         } else if let new = overlayNewComponent {
             NewItemView(component: new)
+        } else if let task = overlayTaskDetailComponent {
+            // A Plan tap shows the Task here, over the dashboard — sized like the New/Search sheets.
+            TaskDetailView(component: task)
+                .frame(minWidth: 420, minHeight: 480)
         }
     }
 
@@ -311,10 +318,4 @@ struct MainShellView: View {
         default: return "circle"
         }
     }
-}
-
-/// Carries the sidebar's live rendered width up so `sidebar` can swap to the icon rail below ~130pt (#194).
-private struct SidebarWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

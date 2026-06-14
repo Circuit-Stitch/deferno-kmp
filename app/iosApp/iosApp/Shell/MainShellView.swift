@@ -229,9 +229,13 @@ struct MainShellView: View {
         overlay.current.flatMap { ShellBridgeKt.overlayNew(child: $0) }
     }
 
+    private var overlayTaskDetailComponent: TaskDetailComponent? {
+        overlay.current.flatMap { ShellBridgeKt.overlayTaskDetail(child: $0) }
+    }
+
     private var overlayPresented: Binding<Bool> {
         Binding(
-            get: { overlaySearchComponent != nil || overlayNewComponent != nil },
+            get: { overlaySearchComponent != nil || overlayNewComponent != nil || overlayTaskDetailComponent != nil },
             set: { presented in if !presented { component.dismissOverlay() } }
         )
     }
@@ -242,6 +246,9 @@ struct MainShellView: View {
             SearchView(component: search)
         } else if let new = overlayNewComponent {
             NewItemView(component: new)
+        } else if let task = overlayTaskDetailComponent {
+            // A Plan tap shows the Task here, over the dashboard, instead of switching to the Tasks tab.
+            TaskDetailView(component: task)
         }
     }
 
