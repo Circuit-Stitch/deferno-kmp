@@ -145,6 +145,24 @@ class OutboxDriverTest {
     }
 
     @Test
+    fun aFlushFailure_doesNotCrashTheDriver_andItKeepsFlushing() = runTest {
+        // A flush throw (e.g. a DB open failure, like the iOS schema-downgrade ISE that surfaced this)
+        // must NOT escape the driver coroutine — on Kotlin/Native an uncaught exception on the Main
+        // dispatcher aborts the app. The periodic loop has to survive it and keep retrying.
+        var failFirstFlush = true
+        val session = FakeAccountSession(onFlush = {
+            if (failFirstFlush) { failFirstFlush = false; throw IllegalStateException("boom (e.g. DB downgrade)") }
+        })
+
+        driver().drive(session)
+        runCurrent()
+        assertEquals(1, session.flushes.size, "the activation flush was attempted (and failed)")
+
+        advanceTimeBy(31.seconds)
+        assertEquals(2, session.flushes.size, "the driver survived the failure and re-flushed")
+    }
+
+    @Test
     fun driveWhileOffline_skipsTheActivationFlush_untilTheReconnectEdge() = runTest {
         val events = mutableListOf<String>()
         val session = FakeAccountSession(
