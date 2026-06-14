@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.shell
 
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -42,19 +43,19 @@ class OutboxDriver(
         job?.cancel()
         job = scope.launch {
             val online = connectivity.online
-            if (online.value) session.flushOutbox(now())
-            session.settingsRepository.refresh()
+            if (online.value) guarded { session.flushOutbox(now()) }
+            guarded { session.settingsRepository.refresh() }
             launch {
                 // The reconnect edge: `online` is distinct-until-changed, so after dropping the current
                 // value every `true` is an offline→online transition.
                 online.drop(1).filter { it }.collect {
-                    session.flushOutbox(now())
-                    session.settingsRepository.refresh()
+                    guarded { session.flushOutbox(now()) }
+                    guarded { session.settingsRepository.refresh() }
                 }
             }
             while (true) {
                 delay(flushPeriod)
-                if (online.value) session.flushOutbox(now())
+                if (online.value) guarded { session.flushOutbox(now()) }
             }
         }
     }
@@ -63,5 +64,23 @@ class OutboxDriver(
     fun stop() {
         job?.cancel()
         job = null
+    }
+
+    /**
+     * Run one driver step, swallowing any failure so a flush/reconcile throw can never crash the app —
+     * the periodic loop just retries on the next tick (and the reconnect edge on the next transition).
+     * On Kotlin/Native an uncaught exception in a [scope] coroutine (Main dispatcher in production) aborts
+     * the process, so this guard is what keeps a bad DB open, a network blip, or a schema downgrade from
+     * taking the whole UI down. [CancellationException] is rethrown so [stop] / re-[drive] / scene-destroy
+     * still tears the driver down cleanly.
+     */
+    private suspend fun guarded(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            // ponytail: swallow — no structured logging yet; the loop retries next tick. Log here once it lands.
+        }
     }
 }
