@@ -6,18 +6,26 @@ import SwiftUI
 /// hydrates on creation (summary → full, #22); this View just reflects its state.
 struct TaskDetailView: View {
     let component: TaskDetailComponent
+    /// false when the View is **pushed** onto the compact `NavigationStack`: the native bar supplies the
+    /// title + back chevron, so the in-pane `PaneHeader` is dropped (it would be a second title bar). The
+    /// regular-width split keeps the default (the `PaneHeader` is the column's only header).
+    var showsHeader: Bool = true
     @StateObject private var state: StateFlowObserver<TaskDetailState>
 
-    init(component: TaskDetailComponent) {
+    init(component: TaskDetailComponent, showsHeader: Bool = true) {
         self.component = component
+        self.showsHeader = showsHeader
         _state = StateObject(wrappedValue: StateFlowObserver(BridgeKt.taskDetailStateBridge(component: component)))
     }
 
     var body: some View {
         let value = state.value
+        let title = value.task?.title ?? "Task"
         VStack(spacing: 0) {
-            // In single-pane the leading control returns to the list, so it reads as "Back".
-            PaneHeader(title: value.task?.title ?? "Task", onBack: { component.onCloseClicked() })
+            if showsHeader {
+                // In single-pane the leading control returns to the list, so it reads as "Back".
+                PaneHeader(title: title, onBack: { component.onCloseClicked() })
+            }
             if value.isHydrating {
                 LoadingStrip(label: "Loading details…")
             }
@@ -33,6 +41,7 @@ struct TaskDetailView: View {
             }
         }
         .background(Color(.systemBackground))
+        .paneNavigationTitle(showsHeader ? nil : title)
     }
 
     @ViewBuilder

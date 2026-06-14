@@ -72,4 +72,40 @@ final class SecondarySlotTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - tasksNavPath (compact NavigationStack projection)
+
+    /// The compact-width stack path mirrors `resolveSecondarySlot`: present slots only, foreground on top.
+    func testNavPathProjectsPresentSlots() {
+        XCTAssertEqual(tasksNavPath(activePane: .list,   hasDetail: false, hasTree: false), [])
+        XCTAssertEqual(tasksNavPath(activePane: .detail, hasDetail: true,  hasTree: false), [.detail])
+        XCTAssertEqual(tasksNavPath(activePane: .tree,   hasDetail: false, hasTree: true),  [.tree])
+        // foreground recency wins the top slot when both are open
+        XCTAssertEqual(tasksNavPath(activePane: .tree,   hasDetail: true,  hasTree: true),  [.detail, .tree])
+        XCTAssertEqual(tasksNavPath(activePane: .detail, hasDetail: true,  hasTree: true),  [.tree, .detail])
+    }
+
+    /// activePane = list with both slots open falls through to the tree-preferred order (matches
+    /// `resolveSecondarySlot`), so the projection never diverges from the resolved foreground slot.
+    func testNavPathBothOpenWithoutRecencyPrefersTreeTop() {
+        XCTAssertEqual(tasksNavPath(activePane: .list, hasDetail: true, hasTree: true), [.detail, .tree])
+    }
+
+    /// The path top always equals the resolved secondary slot — the two stay consistent across every
+    /// combination, so native back/swipe pops exactly the foregrounded slot.
+    func testNavPathTopMatchesResolvedSlot() {
+        for pane in [TaskPane.list, .detail, .tree] {
+            for hasDetail in [false, true] {
+                for hasTree in [false, true] {
+                    let path = tasksNavPath(activePane: pane, hasDetail: hasDetail, hasTree: hasTree)
+                    let resolved = resolveSecondarySlot(activePane: pane, hasDetail: hasDetail, hasTree: hasTree)
+                    switch resolved {
+                    case .none:   XCTAssertTrue(path.isEmpty, "pane=\(pane) d=\(hasDetail) t=\(hasTree)")
+                    case .detail: XCTAssertEqual(path.last, .detail, "pane=\(pane) d=\(hasDetail) t=\(hasTree)")
+                    case .tree:   XCTAssertEqual(path.last, .tree, "pane=\(pane) d=\(hasDetail) t=\(hasTree)")
+                    }
+                }
+            }
+        }
+    }
 }

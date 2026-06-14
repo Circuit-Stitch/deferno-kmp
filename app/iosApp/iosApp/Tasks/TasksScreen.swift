@@ -13,8 +13,10 @@ import SwiftUI
 /// predictable. All navigation state lives in the retained shared component — `detail`/`tree` are
 /// co-resident slots and `activePane` is their foreground recency — so resizing (Split View / Stage
 /// Manager) flips pane count without dropping what's open: this View holds no foreground state of its
-/// own. In a single pane it collapses to the most-recently-foregrounded slot via the shared
-/// `resolveSecondarySlot` precedence, falling back to the list.
+/// own. In a single pane the drill is a native `NavigationStack` push (native back chevron + swipe-back):
+/// the stack path is **derived** from the slot state via `tasksNavPath` (the present slots ordered by
+/// `activePane` recency) and two-way synced — a native pop calls the foreground slot's `onCloseClicked()`,
+/// which runs the component's own fallback so get/set stay consistent.
 struct TasksScreen: View {
     let root: TasksRoot
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -47,35 +49,58 @@ struct TasksScreen: View {
                 .shellNavBar("Tasks")
             }
         } else {
-            // Compact: the list carries the Destination nav bar; a foregrounded detail/tree takes over
-            // full-screen with its own PaneHeader Back (the co-resident slot model, not a stack push —
-            // ADR-0007). Converting that drill to a native push is a follow-up tied to the split layout.
-            switch slot {
-            case .none:
-                NavigationStack {
-                    TaskListView(component: root.list).shellNavBar("Tasks")
-                }
-            default:
-                compactPane(slot)
+            // Compact: the list is the stack root (carrying the Destination nav bar); a foregrounded
+            // detail/tree is a native push. The path is derived from the slot state and synced back on pop.
+            NavigationStack(path: navPath) {
+                TaskListView(component: root.list)
+                    .shellNavBar("Tasks")
+                    .navigationDestination(for: TaskRoute.self, destination: pushedPane)
             }
         }
     }
 
-    /// The single visible pane on compact width: the foregrounded slot, else the list. Each carries
-    /// its own Back affordance (in its `PaneHeader`), so the swap reads predictably.
+    /// The compact `NavigationStack` path as a two-way binding over the Decompose slot state. The getter
+    /// projects the slots to a route stack (`tasksNavPath`); the setter fires only on a native pop and
+    /// closes the removed slot(s) top-first via `onCloseClicked()`, whose own fallback then re-derives the
+    /// same shorter path — so get/set agree and there's no update loop. Pushes/reorders come from component
+    /// intents (row/child taps) and flow through the getter, never the setter.
+    private var navPath: Binding<[TaskRoute]> {
+        Binding(
+            get: { self.currentPath },
+            set: { newValue in
+                let old = self.currentPath
+                guard newValue.count < old.count else { return }
+                for route in old.suffix(from: newValue.count).reversed() {
+                    switch route {
+                    case .detail: self.detail.current?.onCloseClicked()
+                    case .tree: self.tree.current?.onCloseClicked()
+                    }
+                }
+            }
+        )
+    }
+
+    private var currentPath: [TaskRoute] {
+        tasksNavPath(
+            activePane: activePane.value,
+            hasDetail: detail.current != nil,
+            hasTree: tree.current != nil
+        )
+    }
+
+    /// A pushed secondary pane on compact width: the slot's View with its in-pane `PaneHeader` suppressed,
+    /// so the native bar owns the title + back chevron.
     @ViewBuilder
-    private func compactPane(_ slot: SecondarySlot) -> some View {
-        switch slot {
+    private func pushedPane(_ route: TaskRoute) -> some View {
+        switch route {
         case .detail:
             if let detail = detail.current {
-                TaskDetailView(component: detail).id(BridgeKt.detailKey(component: detail))
+                TaskDetailView(component: detail, showsHeader: false).id(BridgeKt.detailKey(component: detail))
             }
         case .tree:
             if let tree = tree.current {
-                TaskTreeView(component: tree).id(BridgeKt.treeKey(component: tree))
+                TaskTreeView(component: tree, showsHeader: false).id(BridgeKt.treeKey(component: tree))
             }
-        case .none:
-            TaskListView(component: root.list)
         }
     }
 

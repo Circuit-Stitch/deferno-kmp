@@ -231,6 +231,40 @@ func resolveSecondarySlot(activePane: TaskPane, hasDetail: Bool, hasTree: Bool) 
     return .none
 }
 
+/// A pushed secondary screen in the compact-width Tasks `NavigationStack` (ADR-0007). Two cases because
+/// detail/tree are co-resident slots — both can be in the stack at once.
+enum TaskRoute: Hashable { case detail, tree }
+
+/// The compact-width Tasks `NavigationStack` path derived from the co-resident slot state: the present
+/// secondary slots ordered so the **foregrounded** one is on top (last). Mirrors `resolveSecondarySlot`
+/// recency so native back/swipe pops the foreground slot first, falling back to the other. Empty = list
+/// only. The Decompose slot model stays the source of truth; this path is a derived View projection.
+func tasksNavPath(activePane: TaskPane, hasDetail: Bool, hasTree: Bool) -> [TaskRoute] {
+    switch (hasDetail, hasTree) {
+    case (false, false): return []
+    case (true, false): return [.detail]
+    case (false, true): return [.tree]
+    case (true, true):
+        return resolveSecondarySlot(activePane: activePane, hasDetail: true, hasTree: true) == .tree
+            ? [.detail, .tree] : [.tree, .detail]
+    }
+}
+
+extension View {
+    /// When `title` is non-nil, sets an inline navigation title — used when a Task pane is **pushed** onto
+    /// the compact `NavigationStack`, so the native bar (title + back chevron) owns the chrome and the
+    /// pane's own `PaneHeader` is suppressed. nil leaves the view untouched (the regular-width split, where
+    /// the `PaneHeader` stays).
+    @ViewBuilder
+    func paneNavigationTitle(_ title: String?) -> some View {
+        if let title {
+            navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+        } else {
+            self
+        }
+    }
+}
+
 extension Task {
     /// Stable String identity for SwiftUI list diffing. `Task.id` is an erased value class (opaque
     /// `Any` in Swift), so the Kotlin bridge unwraps it to the underlying UUID String.
