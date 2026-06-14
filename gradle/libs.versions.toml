@@ -45,6 +45,10 @@ androidxSqlite = "2.4.0"
 # Keychain / Windows Credential Store / Linux Secret Service, via JNA. Desktop-only — the
 # Android (Keystore) and iOS (Keychain) actuals use their in-platform APIs, no dependency.
 javaKeyring = "1.0.4"
+# Foreign-function access for the shacl-aio native floor (the repo's first Rust native lib):
+# :shacl-floor calls the crate's C ABI (libshacl_aio.so) over JNA. The `@aar` artifact bundles
+# JNA's own dispatcher .so for the Android ABIs; 5.17 ships 16 KB-page-aligned natives (API 35+).
+jna = "5.17.0"
 # Networking (issue #17): the shared Ktor HTTP client (bearer auth + Envelope mapping) and
 # kotlinx.serialization for the wire DTOs. Ktor's engines are per-target (OkHttp on
 # Android/JVM, Darwin on iOS) over one commonMain client config; MockEngine drives the tests.
