@@ -23,6 +23,10 @@ struct TasksScreen: View {
     @StateObject private var detail: DetailSlotObserver
     @StateObject private var tree: TreeSlotObserver
     @StateObject private var activePane: ValueObserver<TaskPane>
+    /// The compact `NavigationStack` path, **owned by SwiftUI** so a native back/swipe pops cleanly. It's
+    /// kept in sync with the Decompose slot state (`currentPath`) in both directions via `.onChange` — see
+    /// the compact branch in `body`.
+    @State private var compactPath: [TaskRoute] = []
 
     init(root: TasksRoot) {
         self.root = root
@@ -50,34 +54,34 @@ struct TasksScreen: View {
             }
         } else {
             // Compact: the list is the stack root (carrying the Destination nav bar); a foregrounded
-            // detail/tree is a native push. The path is derived from the slot state and synced back on pop.
-            NavigationStack(path: navPath) {
+            // detail/tree is a native push. SwiftUI owns `compactPath` so a native back/swipe pops cleanly;
+            // we mirror the Decompose slot state into it (push/recency) and, on a user pop, close the slot(s)
+            // it removed. (Driving the path from a computed Binding instead let the slot's not-yet-updated
+            // state re-assert the old path through the getter and bounce straight back to the detail on pop.)
+            NavigationStack(path: $compactPath) {
                 TaskListView(component: root.list)
                     .shellNavBar("Tasks")
                     .navigationDestination(for: TaskRoute.self, destination: pushedPane)
             }
-        }
-    }
-
-    /// The compact `NavigationStack` path as a two-way binding over the Decompose slot state. The getter
-    /// projects the slots to a route stack (`tasksNavPath`); the setter fires only on a native pop and
-    /// closes the removed slot(s) top-first via `onCloseClicked()`, whose own fallback then re-derives the
-    /// same shorter path — so get/set agree and there's no update loop. Pushes/reorders come from component
-    /// intents (row/child taps) and flow through the getter, never the setter.
-    private var navPath: Binding<[TaskRoute]> {
-        Binding(
-            get: { self.currentPath },
-            set: { newValue in
-                let old = self.currentPath
-                guard newValue.count < old.count else { return }
-                for route in old.suffix(from: newValue.count).reversed() {
+            .onAppear { compactPath = currentPath }
+            .onChange(of: currentPath) { derived in
+                // Slot state changed (a row/child tap pushed, recency reordered, or something closed it
+                // elsewhere) → mirror it into the SwiftUI-owned path.
+                if compactPath != derived { compactPath = derived }
+            }
+            .onChange(of: compactPath) { popped in
+                // A native back/swipe shortened the path → close the slot(s) it removed (top-first). The
+                // close re-derives the same shorter `currentPath`, so the mirror above is then a no-op.
+                let derived = currentPath
+                guard popped.count < derived.count else { return }
+                for route in derived.suffix(from: popped.count).reversed() {
                     switch route {
-                    case .detail: self.detail.current?.onCloseClicked()
-                    case .tree: self.tree.current?.onCloseClicked()
+                    case .detail: detail.current?.onCloseClicked()
+                    case .tree: tree.current?.onCloseClicked()
                     }
                 }
             }
-        )
+        }
     }
 
     private var currentPath: [TaskRoute] {
