@@ -106,6 +106,13 @@ include(":speech-whisper-jni")
 // base-APK budget. A `com.android.asset-pack` module declared by app/androidApp's `assetPacks`.
 include(":speech-model-pack")
 
+// The shacl-aio deterministic-floor native library (the repo's first Rust native code): a classic
+// `com.android.library` module (deferno.android.nativelib) that cross-compiles the vendored
+// shacl-aio crate (third_party/shacl-aio) into libshacl_aio.so via cargo-ndk and exposes a thin JNA
+// API (ShaclFloor). Same outside-`:core:`/`:feature:` placement as :speech-whisper-jni so the merged
+// coverage gate never measures native-only code.
+include(":shacl-floor")
+
 // Per-platform application entry points.
 include(":app:androidApp")
 include(":app:desktopApp")
