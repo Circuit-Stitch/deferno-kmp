@@ -33,6 +33,16 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 # machinery rather than dereferenced in listfiles. Setting it in-scope avoids that warning.)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
+# whisper.cpp/ggml are numeric kernels: an unoptimized build is ~30–60× slower and unusable on device
+# (a 1-second transcription burned >60 s of pegged CPU on a Pixel 4 XL). AGP compiles the *debug* app
+# variant's native code at -O0 with assertions live, and that -O0 `.so` is exactly what ships in the
+# debug APK — there is no value in stepping through ggml. Force release-grade optimization for THIS
+# library regardless of the app build type: add_compile_options sets a directory property inherited by
+# the add_subdirectory() below (whisper/ggml) and by whisper_jni.cpp, appended after AGP's per-variant
+# flags — and the last -O on the clang line wins, so -O3 overrides the debug -O0. -DNDEBUG drops ggml's
+# hot-path asserts. (Release variants already build -O2 -DNDEBUG; this only lifts the debug build.)
+add_compile_options(-O3 -DNDEBUG)
+
 add_subdirectory(${WHISPER_DIR} ${CMAKE_CURRENT_BINARY_DIR}/whisper-build)
 
 add_library(whisper_jni SHARED whisper_jni.cpp)

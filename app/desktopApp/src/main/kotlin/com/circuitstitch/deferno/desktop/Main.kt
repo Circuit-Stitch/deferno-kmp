@@ -235,6 +235,9 @@ fun main() {
             // graph so the gate exists app-wide; the desktop Settings hides the Agent row until a desktop
             // engine lands.
             inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
+            // Brain dump's inferenceEngine (#150) is left at the NotConfigured default on desktop: the
+            // on-device shacl floor is Android-only, and desktop renders the BrainDumpPlaceholder (never
+            // extracts), so there is no engine to thread until a JVM one lands.
             // The New surface's foreclosed-dictation-permission deep-link (#120): introspect the Sidecar
             // permission port live at click time and open the blocked capability's macOS Privacy pane
             // (mic or Speech Recognition). Off-macOS deepLink() is null and the click no-ops.
@@ -628,8 +631,10 @@ private fun MainShellComponent.refreshActiveDestination() {
     when (val active = stack.value.active.instance) {
         is MainShellComponent.DestinationChild.Plan -> active.component.onRefresh()
         is MainShellComponent.DestinationChild.Tasks -> active.component.list.onRefresh()
-        // Calendar (auto-refreshes its window on open/nav), Profile, Settings, placeholder: no manual refresh.
+        // Calendar (auto-refreshes its window on open/nav), Inbox (re-queries on resume), Profile,
+        // Settings, placeholder: no manual refresh.
         is MainShellComponent.DestinationChild.Calendar,
+        is MainShellComponent.DestinationChild.Inbox,
         is MainShellComponent.DestinationChild.Profile,
         is MainShellComponent.DestinationChild.Settings,
         is MainShellComponent.DestinationChild.Placeholder,

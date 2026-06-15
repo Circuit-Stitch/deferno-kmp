@@ -621,7 +621,9 @@ private fun speechEngineNote(option: SpeechEngineOption): String? = when (option
 private fun inferenceEngineLabel(id: InferenceEngineId): String = when (id) {
     InferenceEngineId.Off -> "Off"
     InferenceEngineId.DefernoCloud -> "Deferno cloud AI"
-    // On-device runtimes + a future BYO engine get explicit labels as they land; fall back to a humanised id.
+    // The zero-ML deterministic floor — distinct from the planned on-device-LLM hybrid (ADR-0027).
+    InferenceEngineId.OnDeviceFloor -> "On-device basics"
+    // Further on-device runtimes + a future BYO engine get explicit labels as they land; fall back to a humanised id.
     else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
 }
 

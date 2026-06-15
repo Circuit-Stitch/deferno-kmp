@@ -121,7 +121,7 @@ _Avoid_: using "view" for a navigable place (that is a [[Destination]]) or for t
 
 **Destination**:
 A **top-level navigable place** in the [[Main shell]], switched laterally via the nav suite. The
-**v1 set is Plan, Calendar, Tasks, Profile, Settings** (Plan is the home Destination). **Workspaces,
+**v1 set is Plan, Calendar, Tasks, [[Inbox]], Profile, Settings** (Plan is the home Destination). **Workspaces,
 [[Group]]s, Permissions, Agenda, and [[Dashboard]] are reserved for later** — kept in this glossary
 but not built in v1: Workspaces/Groups/Permissions are blocked on the backend's future **Groups
 subsystem ("Spec 2")** — there is no Workspace, org-listing, or permissions API today, and a user has
@@ -164,6 +164,19 @@ Destination's app bar): Profile is the full identity-and-management hub reached 
 is the fast [[Account switch]].
 _Avoid_: account (the switching unit, a different thing), settings (app preferences, a separate
 [[Destination]]), the avatar switcher.
+
+**Inbox** *(client)*:
+The [[Destination]] that holds **draft [[Task]]s awaiting the person's accept-or-dismiss**, decoupled
+from their capture. A [[Brain dump]] is transcribed and its drafts extracted in the **background**, so
+they land here for review **later** rather than inline at capture time — a triage queue the person
+**clears out**: *accept* commits a draft as a real [[Task]] through the ordinary online create path
+(ADR-0016) and removes it; *dismiss* removes it unaccepted. **State-preserving** (leave mid-triage and
+return to the same place, ADR-0013) and individually dismissable, so pending drafts never block other
+work and the surface is never in the way. v1 holds **only** the [[Extractor]]'s brain-dump drafts; the
+name anticipates a general triage surface, but nothing else routes here yet.
+_Avoid_: [[Brain dump]] (the *capture* act — the Inbox reviews its output, it does not capture), drafts
+(the content, not the place), [[Dashboard]] (a global summary, not a triage queue), [[Plan]] (today's
+curated list, not untriaged captures).
 
 **Workspace** *(deferred — client rendering of a future backend concept)*:
 A per-user saved view scoping a curated set of [[Org]]s and their items — *intended* to be rendered

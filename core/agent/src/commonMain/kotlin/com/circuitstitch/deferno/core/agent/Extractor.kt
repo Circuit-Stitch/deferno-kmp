@@ -43,18 +43,48 @@ class Extractor(
 
     private fun buildContent(input: ExtractorInput, anchors: List<ItemAnchor>): String = buildString {
         appendLine("dateContext():")
-        appendLine("- today=${input.today}")
+        appendLine("$TODAY_PREFIX${input.today}")
         appendLine("- timezone=${input.timeZone}")
-        appendLine("transcript:")
+        appendLine(TRANSCRIPT_MARKER)
         appendLine(input.transcript.text.trim())
         appendLine()
-        appendLine("searchItems(query) local anchors:")
+        appendLine(ANCHORS_MARKER)
         if (anchors.isEmpty()) {
             appendLine("- none")
         } else {
             anchors.forEach { appendLine("- ${it.promptLine()}") }
         }
     }
+}
+
+// The content layout [Extractor.buildContent] emits, named so the deterministic floor engine can recover
+// the structured input the seam flattened into prompt text (see [parseFloorExtractorInput]).
+private const val TODAY_PREFIX = "- today="
+private const val TRANSCRIPT_MARKER = "transcript:"
+private const val ANCHORS_MARKER = "searchItems(query) local anchors:"
+
+/** The structured input an on-device extractor needs, recovered from a built [Extractor] prompt. */
+internal data class FloorExtractorInput(val transcript: String, val today: LocalDate)
+
+/**
+ * Recover ([transcript][FloorExtractorInput.transcript], [today][FloorExtractorInput.today]) from the
+ * prompt [Extractor.buildContent] produced — the bridge an on-device engine needs because the
+ * [InferenceRequest] seam is LLM-shaped (instructions + free-text content), but the floor wants the bare
+ * transcript and a clock. Returns `null` when the content isn't a recognisable extractor prompt. The
+ * round-trip is pinned by a test so a `buildContent` format change can't silently desync the parser.
+ */
+internal fun parseFloorExtractorInput(content: String): FloorExtractorInput? {
+    val lines = content.lines()
+    val today = lines.firstOrNull { it.startsWith(TODAY_PREFIX) }
+        ?.removePrefix(TODAY_PREFIX)?.trim()
+        ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        ?: return null
+    val start = lines.indexOfFirst { it.trim() == TRANSCRIPT_MARKER }
+    if (start < 0) return null
+    val transcript = lines.drop(start + 1)
+        .takeWhile { it.isNotBlank() && !it.startsWith(ANCHORS_MARKER) }
+        .joinToString("\n").trim()
+    return if (transcript.isEmpty()) null else FloorExtractorInput(transcript, today)
 }
 
 data class ExtractorInput(

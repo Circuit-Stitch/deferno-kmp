@@ -61,3 +61,39 @@ requires, so its marginal cost is the month/day UI + occurrence queries, not new
   per-Destination state preservation ADR-0013 guarantees.
 - **A daily mood check-in built client-local/unsynced** — invents unsynced semantics; lost across
   devices.
+
+**Amendment (Inbox Destination — brain-dump async redesign, Stage 3).** The frozen v1 set gains a
+sixth Destination: **Inbox** (`NavSlot.Secondary`, ordered first among the secondaries —
+`Plan · Calendar · Tasks · Inbox · Profile · Settings`). It is the triage queue for the **persisted
+draft Tasks** the [[Extractor]] produces from a [[Brain dump]] (CONTEXT.md → **Inbox**).
+
+*Why it earns a place in a deliberately frozen set.* The brain-dump async redesign decoupled capture
+from extraction — a recording is transcribed and its drafts extracted in the **background**
+(WorkManager), so the drafts now **outlive their capture session** and are reviewed minutes or days
+later. ADR-0027's Amendment (#150) put the accept/dismiss review *inline* in the `OverlayRoute.BrainDump`
+overlay; that overlay is gone by the time background extraction finishes, so the review needs a
+**durable, re-findable home**. A Destination is state-preserving with its own back stack (ADR-0013 /
+ADR-0007) — the person can leave mid-triage and return — and its drafts are individually dismissable,
+so pending work never blocks anything else. A transient overlay is the wrong shape for durable,
+accumulating state; bolting a persistent re-entry affordance onto an overlay would just be a
+Destination in disguise.
+
+*Decision details.*
+
+- **`NavSlot.Secondary`, first among the secondaries.** Not a daily navigation peer like Plan/Calendar/
+  Tasks, and empty much of the time, so it does not earn permanent compact bottom-bar real estate; it
+  surfaces via the Stage-2 completion notification (deep-link) and is listed directly on rail/drawer.
+- **Always present, never hidden-when-empty,** with a nav badge that reads **"empty"** or **[n]** — the
+  surface always declares whether there is anything to triage. A functional empty inbox is **not** an
+  ADR-0015 "dead end" (an inbox with no mail, not a coming-soon stub).
+- **Accept** commits a draft as a real [[Task]] through the ordinary **online** create path (ADR-0016),
+  inheriting v1's create-online-only asymmetry: offline accept **preserves** the draft and shows
+  "reconnect to save" rather than enqueuing or dropping it. **Dismiss** drops the draft unaccepted.
+  Accept stays **propose-only** (ADR-0027) — the person's acceptance is what commits.
+- **Retaining the recording** as a Task attachment is **out of scope here** (tracked: #211, depending on
+  pluggable offline-first attachment storage #210); Stage 3's accept seam reserves the hook.
+
+*Consequences.* The Destination registry (`app/shell/.../Destination.kt`), `MainShellComponent`, the
+shared `ShellChrome`, and the Main shell View each gain the Inbox entry — the four touch points #176
+anticipates collapsing. ADR-0027's Amendment (#150) is hereby updated: the brain-dump review is no
+longer an inline overlay list but the persistent **Inbox** Destination.

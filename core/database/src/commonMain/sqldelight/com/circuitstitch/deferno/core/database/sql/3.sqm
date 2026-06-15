@@ -1,0 +1,14 @@
+-- Migration 3 -> 4: add the Brain dump drafts table (ADR-0027 async redesign).
+--
+-- The on-device Brain dump worker persists its proposed draft Tasks here so they survive process death
+-- and the user reviews them later (propose-only). Local-only, never synced. Plain CREATE — the v1
+-- ambiguity is behind us (ADR-0022 runbook); existing DBs gain an empty table, which is correct.
+CREATE TABLE brainDumpDraftEntity (
+    id                   TEXT NOT NULL PRIMARY KEY,
+    title                TEXT NOT NULL,
+    notes                TEXT,
+    complete_by          TEXT,
+    deadline_time_of_day TEXT,
+    status               TEXT NOT NULL,
+    created_at           TEXT NOT NULL
+);

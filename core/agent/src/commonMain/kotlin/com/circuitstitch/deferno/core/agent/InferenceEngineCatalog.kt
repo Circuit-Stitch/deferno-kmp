@@ -17,6 +17,14 @@ value class InferenceEngineId(val value: String) {
 
         /** The Deferno-operated, Anthropic-format **cloud relay** (PAT-auth, per-Account entitlement). */
         val DefernoCloud: InferenceEngineId = InferenceEngineId("deferno-cloud")
+
+        /**
+         * The on-device, zero-ML **deterministic floor** (the vendored shacl-aio crate over JNA, Android-only
+         * for now): transcript → draft Tasks with no model and no network. [InferenceEngineOrigin.OnDevice]
+         * → ungated, available to everyone. A planned hybrid (floor + an on-device LLM) registers as its own
+         * id alongside this one — origin stays OnDevice, so neither needs entitlement.
+         */
+        val OnDeviceFloor: InferenceEngineId = InferenceEngineId("on-device-floor")
     }
 }
 

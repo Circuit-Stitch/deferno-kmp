@@ -22,6 +22,7 @@ import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.ic_add_task
 import com.circuitstitch.deferno.core.designsystem.resources.ic_voice_chat
+import com.circuitstitch.deferno.feature.braindumps.ui.InboxDesktopScreen
 import com.circuitstitch.deferno.feature.calendar.ui.CalendarDesktopScreen
 import com.circuitstitch.deferno.feature.plan.ui.PlanDesktopScreen
 import com.circuitstitch.deferno.feature.profile.ui.ProfileDesktopScreen
@@ -103,6 +104,10 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
         is MainShellComponent.DestinationChild.Tasks ->
             TasksDesktopScreen(active.component, Modifier.fillMaxSize())
 
+        // The Inbox Destination's desktop View (ADR-0015 Inbox amendment): the Brain dump draft review queue.
+        is MainShellComponent.DestinationChild.Inbox ->
+            InboxDesktopScreen(active.component, Modifier.fillMaxSize())
+
         // The Calendar Destination's desktop View (#74): the desktop counterpart of the Android screen.
         is MainShellComponent.DestinationChild.Calendar ->
             CalendarDesktopScreen(active.component, Modifier.fillMaxSize())
@@ -141,8 +146,9 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         is MainShellComponent.OverlayChild.TaskDetail ->
             TaskDetailScreen(child.component, Modifier.fillMaxSize())
 
-        // Brain dump (ADR-0027): the shared placeholder until #150 wires the Extractor.
-        MainShellComponent.OverlayChild.BrainDump ->
+        // Brain dump (ADR-0027): the dictation-driven Extractor ships on Android first (the on-device
+        // shacl floor is Android-only); desktop keeps the placeholder until a JVM engine lands.
+        is MainShellComponent.OverlayChild.BrainDump ->
             BrainDumpPlaceholder(onDismiss = onDismiss)
 
         MainShellComponent.OverlayChild.Placeholder ->

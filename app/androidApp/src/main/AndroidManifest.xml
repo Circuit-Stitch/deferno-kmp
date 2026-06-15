@@ -10,6 +10,11 @@
          outbox flush + the online-only create gate (normal permission, granted at install). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Brain dump async drafts (#150, ADR-0027): the BrainDumpWorker posts a "drafts ready" notification
+         when on-device transcription + extraction finish (recording is foreground in the overlay, so no
+         FOREGROUND_SERVICE_MICROPHONE is needed). Runtime-requested on Android 13+. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Koog AARs over-declare minSdk 35 (ADR-0027, #147): their convention plugin sets a blanket
          `minSdk = 35` on every Android artifact, but the modules core/agent consumes hold NO
          android.*/androidx.* API at all (verified against the 1.0.0 tag — their androidMain sets are

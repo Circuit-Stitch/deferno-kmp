@@ -115,6 +115,9 @@ class MainActivity : ComponentActivity() {
                 // selection + per-Account relay entitlement from the same AppScope graph — the Settings
                 // "Agent" row reads + writes it.
                 inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
+                // Brain dump (ADR-0027/#150): the AppScope inference engine the Extractor runs through —
+                // the on-device shacl floor when selected, else NotConfigured. The voice_chat overlay drives it.
+                inferenceEngine = appComponent.inferenceEngine,
                 // The AppScope connectivity monitor (#158): the outbox driver flushes on the
                 // offline→online edge and skips passes while known-offline.
                 connectivity = appComponent.connectivity,

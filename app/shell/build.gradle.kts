@@ -25,6 +25,9 @@ kotlin {
             implementation(project(":feature:signin"))
             implementation(project(":feature:tasks"))
             implementation(project(":feature:plan"))
+            // The Inbox Destination's logic (ADR-0015 Inbox amendment) — its Compose View lives in
+            // :feature:braindumps:ui, consumed by the app entry points.
+            implementation(project(":feature:braindumps"))
             implementation(project(":feature:calendar"))
             implementation(project(":feature:profile"))
             implementation(project(":feature:settings"))

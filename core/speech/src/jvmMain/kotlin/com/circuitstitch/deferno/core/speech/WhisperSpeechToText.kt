@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.core.speech
 
+import com.circuitstitch.deferno.core.common.log.Logger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -31,6 +33,10 @@ internal class WhisperSpeechToText(
     private val threads: Int = DEFAULT_THREADS,
 ) : SpeechToText {
 
+    // Trace logger for the on-device path (#150). Privacy (ADR-0009/0018): logs only structure —
+    // event types, sample/char counts, lifecycle — never the audio or the transcribed text.
+    private val log = Logger("Whisper")
+
     override val id: SpeechEngineId = SpeechEngineId.Whisper
 
     /** The floor: a higher-ranked native fast path outranks it only when genuinely available (ADR-0018). */
@@ -46,54 +52,102 @@ internal class WhisperSpeechToText(
     }
 
     override fun listen(locale: String, continuityHint: ContinuityHint): Flow<TranscriptEvent> = flow {
+        log.d { "listen: locale=$locale hint=$continuityHint" }
         if (!locale.isEnglishLocale()) {
+            log.w { "listen: locale '$locale' is not English → Unavailable" }
             emit(TranscriptEvent.Error(SpeechError.Unavailable))
             return@flow
         }
         val modelPath = modelLocator.modelPath()
         if (modelPath == null) {
+            log.w { "listen: no whisper model on device → Unavailable" }
             emit(TranscriptEvent.Error(SpeechError.Unavailable))
             return@flow
         }
-        val context = WhisperBridge.initContext(modelPath)
-        if (context == null) {
+        log.d { "listen: model resolved at $modelPath; initializing whisper context" }
+        // The native load (whisper-jni) + model init can throw — e.g. the native lib is missing for this
+        // platform, or the file isn't a valid model. Catch it here so a native failure surfaces as a
+        // logged, typed Error instead of a silent coroutine death (#150).
+        val context = try {
+            WhisperBridge.initContext(modelPath)
+        } catch (t: Throwable) {
+            log.e(t) { "listen: whisper native init threw (missing native lib / bad model?)" }
             emit(TranscriptEvent.Error(SpeechError.Engine))
             return@flow
         }
+        if (context == null) {
+            log.e { "listen: initContext returned null (could not load the model)" }
+            emit(TranscriptEvent.Error(SpeechError.Engine))
+            return@flow
+        }
+        log.d { "listen: whisper context ready; opening microphone" }
 
         val chunks = ArrayList<FloatArray>()
         var accumulatedSamples = 0
         var lastPartialAtSamples = 0
+        var sawAudio = false
         val vad = EnergyVad(SAMPLE_RATE)
 
         try {
             audioSource.stream().collect { chunk ->
                 currentCoroutineContext().ensureActive()
+                if (!sawAudio) {
+                    sawAudio = true
+                    log.d { "listen: first audio chunk (${chunk.size} samples) — mic is live" }
+                }
                 chunks += chunk
                 accumulatedSamples += chunk.size
                 vad.accept(chunk)
 
                 if (vad.isEndOfUtterance) {
-                    emit(TranscriptEvent.Final(WhisperBridge.transcribe(context, chunks.flatten(), threads)))
-                    throw EndOfUtterance()
+                    val text = WhisperBridge.transcribe(context, chunks.flatten(), threads)
+                    log.d { "listen: end-of-utterance at $accumulatedSamples samples → Final (len=${text.length})" }
+                    emit(TranscriptEvent.Final(text))
+                    // Utterance (the New form): settle this one and stop. Continuous (the Brain dump):
+                    // settle it and keep capturing the next utterance across the pause — reset the buffer
+                    // + VAD so the next Final is that utterance alone, not the whole session re-transcribed.
+                    // The session runs until the caller cancels the collecting coroutine (stop / teardown).
+                    if (continuityHint == ContinuityHint.Utterance) throw EndOfUtterance()
+                    chunks.clear()
+                    accumulatedSamples = 0
+                    lastPartialAtSamples = 0
+                    vad.reset()
+                    return@collect
                 }
                 if (accumulatedSamples - lastPartialAtSamples >= SAMPLE_RATE) { // ~1s of new audio
-                    emit(TranscriptEvent.Partial(WhisperBridge.transcribe(context, chunks.flatten(), threads)))
+                    val text = WhisperBridge.transcribe(context, chunks.flatten(), threads)
+                    log.v { "listen: partial at $accumulatedSamples samples (len=${text.length})" }
+                    emit(TranscriptEvent.Partial(text))
                     lastPartialAtSamples = accumulatedSamples
                 }
             }
+            log.d { "listen: audio stream ended (sawAudio=$sawAudio)" }
         } catch (_: EndOfUtterance) {
             // Normal completion: the speaker stopped, the Final was already emitted.
-        } catch (_: MicPermissionDeniedException) {
+            log.v { "listen: utterance settled (Utterance mode), stopping" }
+        } catch (c: CancellationException) {
+            // Normal stop / teardown — the caller cancelled the collecting coroutine. Must precede both the
+            // MicPermissionDeniedException and IllegalStateException catches (Kotlin's CancellationException
+            // IS-A IllegalStateException) and be rethrown so structured concurrency stays intact.
+            log.d { "listen: cancelled (stop / teardown) at $accumulatedSamples samples this utterance" }
+            throw c
+        } catch (e: MicPermissionDeniedException) {
             // macOS TCC refused the app's own mic (#116) — inferred from the failure's shape, since the
             // Helper can't introspect the JVM app's TCC row. Typed so the New surface offers the System
             // Settings deep-link, not a retry. Must precede the IllegalStateException catch: it is a
             // subtype (catchers that don't know denials degrade to Capture).
+            log.w(e) { "listen: mic permission denied (macOS TCC)" }
             emit(TranscriptEvent.Error(SpeechError.PermissionDenied))
-        } catch (_: IllegalStateException) {
+        } catch (e: IllegalStateException) {
             // The mic line could not capture (no device, line busy, seized mid-session).
+            log.w(e) { "listen: capture failed (no device / line busy)" }
             emit(TranscriptEvent.Error(SpeechError.Capture))
+        } catch (t: Throwable) {
+            // A native transcription failure mid-session — surface it instead of dying silently.
+            log.e(t) { "listen: transcription failed mid-session" }
+            emit(TranscriptEvent.Error(SpeechError.Engine))
         } finally {
+            log.v { "listen: freeing whisper context" }
             WhisperBridge.freeContext(context)
         }
     }.flowOn(ioDispatcher)

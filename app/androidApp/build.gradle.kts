@@ -140,6 +140,8 @@ dependencies {
     implementation(project(":feature:tasks:ui"))
     implementation(project(":feature:plan"))
     implementation(project(":feature:plan:ui"))
+    implementation(project(":feature:braindumps"))
+    implementation(project(":feature:braindumps:ui"))
     implementation(project(":feature:calendar"))
     implementation(project(":feature:calendar:ui"))
     implementation(project(":feature:auth"))
@@ -161,6 +163,16 @@ dependencies {
     // AccountComponent per Active Account (createAppComponent / createAccountComponent).
     implementation(project(":core:di"))
     implementation(project(":core:designsystem"))
+    // The Brain dump async worker (#150, ADR-0027) names these directly: the Extractor + Transcript
+    // (core:agent) it runs over the on-device transcription, and the AudioFileRecorder +
+    // BrainDumpTranscriber platform glue (core:speech). Both reach the app transitively via core:di's
+    // `api`, but the worker references the types itself, so declare them (the kmp-logger convention).
+    implementation(project(":core:agent"))
+    implementation(project(":core:speech"))
+    // WorkManager: the brain-dump transcription runs in a CoroutineWorker so it survives the overlay
+    // closing (#150, ADR-0027). The default androidx.startup initializer + reflective WorkerFactory are
+    // fine — the worker reads the held AppComponent off (applicationContext as DefernoApplication).
+    implementation(libs.androidx.work.runtime.ktx)
     // Decompose: `retainedComponent { }` builds the demo root so it survives configuration changes
     // (rotation) + back-press routing; `subscribeAsState()` observes the tab/slots from Compose.
     implementation(libs.decompose)

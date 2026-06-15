@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.core.model.BrainDumpDraftId
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
@@ -23,6 +24,8 @@ import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import com.circuitstitch.deferno.core.speech.UnavailableReason
 import com.circuitstitch.deferno.feature.auth.AuthComponent
 import com.circuitstitch.deferno.feature.auth.AuthState
+import com.circuitstitch.deferno.feature.braindumps.InboxComponent
+import com.circuitstitch.deferno.feature.braindumps.InboxState
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
@@ -215,6 +218,18 @@ internal class FakePlanComponent(initial: PlanState) : PlanComponent {
 
     override fun onTaskClicked(id: TaskId) { clicked += id }
     override fun onRefresh() { refreshCount++ }
+}
+
+internal class FakeInboxComponent(initial: InboxState) : InboxComponent {
+    private val _state = MutableStateFlow(initial)
+    override val state: StateFlow<InboxState> = _state
+    val accepted = mutableListOf<BrainDumpDraftId>()
+    val dismissed = mutableListOf<BrainDumpDraftId>()
+
+    override fun onAccept(id: BrainDumpDraftId) { accepted += id }
+    override fun onDismiss(id: BrainDumpDraftId) { dismissed += id }
+    override fun onUndoDismiss() {}
+    override fun onClearNote(id: BrainDumpDraftId) {}
 }
 
 /** A sample signed-in identity for the #20 auth screen fixtures (mirrors contracts/fixtures/auth-me.json). */

@@ -13,6 +13,7 @@ import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
+import com.circuitstitch.deferno.core.agent.InferenceEngine
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.database.AccountDatabaseFactory
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
@@ -116,6 +117,16 @@ abstract class AppComponent(
      * binding on every target (macOS included, where the inference floor is NotConfigured).
      */
     abstract val inferenceEngineCatalog: InferenceEngineCatalog
+
+    /**
+     * The app-facing **inference engine** the propose-only Agent runs through (ADR-0027): the AppScope
+     * `RoutingInferenceEngine` that, per call, dispatches to whichever engine the [inferenceEngineCatalog]
+     * selection names (the on-device shacl floor on Android, the cloud relay when entitled) — or answers
+     * `NotConfigured` when the Agent is Off. The Brain dump surface wraps it in an `Extractor`; surfaced
+     * here so the shell can drive extraction without reaching into the graph, and to compile-validate the
+     * binding on every target (macOS binds `NotConfigured`, where there is no on-device floor).
+     */
+    abstract val inferenceEngine: InferenceEngine
 
     /**
      * Where the OS lets the person flip a foreclosed [[Dictation]] permission (#120): the desktop New

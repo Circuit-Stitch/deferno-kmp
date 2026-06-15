@@ -122,6 +122,9 @@ class DefernoRoot {
             // Agent inference-engine choice + entitlement gate (#150): threaded from the AppScope graph; iOS
             // has no Agent Settings surface yet, but the gate exists app-wide (the selection defaults to Off).
             inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
+            // Brain dump's inferenceEngine (#150) is left at the NotConfigured default on iOS: there is no
+            // on-device engine (the shacl floor is Android-only) and the Brain dump overlay is unwired on
+            // iOS (no overlayBrainDump bridge), so there is nothing to thread until an iOS engine ships.
             // The AppScope connectivity monitor (#158): the outbox driver flushes on the
             // offline→online edge and skips passes while known-offline.
             connectivity = appComponent.connectivity,

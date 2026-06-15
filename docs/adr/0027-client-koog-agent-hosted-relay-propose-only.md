@@ -50,6 +50,23 @@ binary; and the backend owns the domain language and already auto-seeds the dail
   draft-review list); the plan proposal is an affordance on the **Plan** Destination opening a
   review-the-delta sheet. The frozen v1 Destination set (ADR-0015) is unchanged.
 
+  > **Amendment (#150).** Brain dump shipped as a **dedicated shell top-bar overlay**
+  > (`OverlayRoute.BrainDump`, launched from the shared `ShellChrome` `voice_chat` action) rather than a
+  > mode on the New surface — the reveal-drawer chrome gained its own brain-dump affordance, so a separate
+  > overlay reads cleaner than overloading New. It is a **continuous** dictation session (the whisper floor
+  > honours `ContinuityHint.Continuous`, accumulating utterances across pauses) feeding the `Extractor`,
+  > then a per-draft accept/dismiss review list that commits each accepted draft through the ordinary
+  > `CreateItem` path. v1 is **Android-only** (the on-device shacl floor is Android-only) and **flat-create**
+  > (inter-draft `parentId`/`children`/`nextTaskId` relations are dropped with a user-visible note; a
+  > `parentId` referencing an existing Item is kept). The plan-proposal surface is still as described.
+  >
+  > **Follow-on (async redesign / Inbox).** The brain-dump review surface moved from the inline overlay
+  > list above to a persistent **Inbox** Destination (ADR-0015 Inbox amendment): the redesign transcribes
+  > and extracts in the **background**, so drafts outlive the capture overlay and need a durable,
+  > state-preserving home. The accept/dismiss flow and the propose-only `CreateItem` commit are
+  > unchanged — only the surface relocated. Optionally retaining the recording as a Task attachment is
+  > #211 (on pluggable offline-first attachment storage #210).
+
 **Considered and rejected.** *BYO user API key* (not in v1 — remains additive later as another
 engine-catalog entry). *Backend agent endpoints* (duplicates agent
 logic in two languages the moment a local tier exists). *Server-fetched prompts* (a versioned

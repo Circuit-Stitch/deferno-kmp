@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.di
 
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
@@ -89,6 +90,13 @@ abstract class AccountComponent(
      * (store + series-kind index → DB, repo → AppScope feed source) and gives the shell its accessor.
      */
     abstract val calendarRepository: CalendarRepository
+
+    /**
+     * The on-device Brain dump draft store (ADR-0027): local-only persisted draft Tasks the worker
+     * writes and the Brain dumps Destination observes + accepts/dismisses. Exposing it anchors anvil's
+     * compile-time validation of its AccountScope chain (repository → DB).
+     */
+    abstract val brainDumpDraftRepository: BrainDumpDraftRepository
 
     /** The command-registry dispatch site (ADR-0007) over this Account's write seams. */
     abstract val commandExecutor: CommandExecutor

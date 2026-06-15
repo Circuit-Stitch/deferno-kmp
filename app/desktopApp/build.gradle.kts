@@ -286,6 +286,8 @@ dependencies {
     // (#74), Tasks, Profile (#84), and Settings (#85) all have desktop Views now.
     implementation(project(":feature:plan"))
     implementation(project(":feature:plan:ui"))
+    implementation(project(":feature:braindumps"))
+    implementation(project(":feature:braindumps:ui"))
     implementation(project(":feature:calendar"))
     // The Calendar Destination's desktop View (#74): the shared Main shell renders it in the content
     // area (its jvmMain CalendarDesktopScreen — the month grid + day agenda, two-pane on a wide window).

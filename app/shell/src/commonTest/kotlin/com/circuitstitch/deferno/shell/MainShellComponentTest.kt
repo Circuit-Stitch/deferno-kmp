@@ -4,6 +4,9 @@ import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.model.BrainDumpDraft
+import com.circuitstitch.deferno.core.model.BrainDumpDraftId
+import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
@@ -16,6 +19,8 @@ import com.circuitstitch.deferno.ui.FakeSettingsEditor
 import com.circuitstitch.deferno.ui.FakeSettingsRepository
 import com.circuitstitch.deferno.ui.sampleAccount
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,6 +29,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /**
  * The Main shell's Destination graph (ADR-0013 / ADR-0007 tier 1): a registry the nav suite renders,
@@ -45,6 +51,8 @@ class MainShellComponentTest {
         output: (MainShellComponent.Output) -> Unit = {},
         create: suspend (com.circuitstitch.deferno.core.domain.command.CreateItem.Payload) -> com.circuitstitch.deferno.core.domain.command.CommandResult =
             { com.circuitstitch.deferno.core.domain.command.CommandResult.Offline(com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem) },
+        observeBrainDumpDrafts: () -> Flow<List<BrainDumpDraft>> = { flowOf(emptyList()) },
+        upsertBrainDumpDraft: suspend (BrainDumpDraft) -> Unit = {},
     ) = DefaultMainShellComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         taskRepository = taskRepo,
@@ -58,6 +66,8 @@ class MainShellComponentTest {
         output = output,
         coroutineContext = Dispatchers.Unconfined,
         create = create,
+        observeBrainDumpDrafts = observeBrainDumpDrafts,
+        upsertBrainDumpDraft = upsertBrainDumpDraft,
     )
 
     private fun MainShellComponent.settings(): SettingsComponent =
@@ -235,11 +245,48 @@ class MainShellComponentTest {
                 Destination.Plan,
                 Destination.Calendar,
                 Destination.Tasks,
+                Destination.Inbox,
                 Destination.Profile,
                 Destination.Settings,
             ),
             shell().destinations,
         )
+    }
+
+    @Test
+    fun inboxAccept_createsTheTaskOnline_thenMarksTheDraftAccepted() {
+        val createdPayloads = mutableListOf<com.circuitstitch.deferno.core.domain.command.CreateItem.Payload>()
+        val upserts = mutableListOf<BrainDumpDraft>()
+        val draft = BrainDumpDraft(
+            id = BrainDumpDraftId("d1"),
+            title = "  Buy milk  ",
+            notes = "2% if they have it",
+            completeBy = LocalDate(2026, 6, 20),
+            createdAt = Instant.parse("2026-06-14T09:00:00Z"),
+        )
+        val shell = shell(
+            create = { payload ->
+                createdPayloads += payload
+                com.circuitstitch.deferno.core.domain.command.CommandResult.Accepted(
+                    com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem,
+                )
+            },
+            observeBrainDumpDrafts = { flowOf(listOf(draft)) },
+            upsertBrainDumpDraft = { upserts += it },
+        )
+
+        shell.selectDestination(Destination.Inbox)
+        val inbox = (shell.stack.value.active.instance as MainShellComponent.DestinationChild.Inbox).component
+        inbox.onAccept(BrainDumpDraftId("d1"))
+
+        // Accept commits through the online create seam, with the draft mapped to a Task payload.
+        assertEquals(1, createdPayloads.size)
+        val task = (createdPayloads.single() as com.circuitstitch.deferno.core.domain.command.CreateItem.Payload.Task).payload
+        assertEquals("Buy milk", task.title)
+        assertEquals("2% if they have it", task.description)
+        // On success the draft is marked Accepted, so it leaves the Ready queue and is never re-created.
+        assertEquals(BrainDumpDraftStatus.Accepted, upserts.single().status)
+        assertEquals(BrainDumpDraftId("d1"), upserts.single().id)
     }
 
     @Test
@@ -494,6 +541,7 @@ class MainShellComponentTest {
         shell.openOverlay(OverlayRoute.BrainDump)
         val child = shell.overlay.value.child?.instance
         assertTrue(child is MainShellComponent.OverlayChild.BrainDump, "the Brain dump overlay is pushed above the foreground")
+        assertEquals(Phase.Idle, child.component.state.value.phase, "the Brain dump component is constructed and idle")
         assertEquals(Destination.Plan, shell.activeDestination(), "the foreground Destination is untouched")
 
         shell.dismissOverlay()
