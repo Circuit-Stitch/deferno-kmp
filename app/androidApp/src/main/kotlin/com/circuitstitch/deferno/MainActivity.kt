@@ -26,8 +26,10 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.di.createAccountComponent
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
+import com.circuitstitch.deferno.braindump.recordBrainDumpAudio
 import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
+import com.circuitstitch.deferno.shell.RootComponent
 import com.circuitstitch.deferno.shell.RootShell
 import java.util.Locale
 import kotlin.time.Clock
@@ -42,6 +44,10 @@ import kotlinx.datetime.todayIn
  * [com.circuitstitch.deferno.core.di.AccountComponent] (ADR-0014).
  */
 class MainActivity : ComponentActivity() {
+    // The per-scene navigation root, held so a notification deep-link arriving via onNewIntent can route
+    // it (the Brain dump "drafts ready" notification opens the Inbox, ADR-0027/#150 Stage 4).
+    private lateinit var root: RootComponent
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Android 12+ system splash (Theme.Deferno.Starting): the flame in a dark paper-2 circle over a
         // light/dark-aware background. installSplashScreen() applies it (with back-compat) and hands the
@@ -60,7 +66,7 @@ class MainActivity : ComponentActivity() {
         // valid across the configuration changes the retained root survives.
         val appContext = applicationContext
 
-        val root = retainedComponent { componentContext ->
+        root = retainedComponent { componentContext ->
             val timeZone = TimeZone.currentSystemDefault()
             DefaultRootComponent(
                 componentContext = componentContext,
@@ -115,9 +121,10 @@ class MainActivity : ComponentActivity() {
                 // selection + per-Account relay entitlement from the same AppScope graph — the Settings
                 // "Agent" row reads + writes it.
                 inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
-                // Brain dump (ADR-0027/#150): the AppScope inference engine the Extractor runs through —
-                // the on-device shacl floor when selected, else NotConfigured. The voice_chat overlay drives it.
-                inferenceEngine = appComponent.inferenceEngine,
+                // Brain dump (ADR-0027/#150, Stage 4): the voice_chat overlay records the mic to a WAV and
+                // hands it to the background worker on Stop. The shell passes its injected today/timeZone
+                // (no Clock.System); the application Context backs the recording + the WorkManager enqueue.
+                recordBrainDump = { day, tz -> recordBrainDumpAudio(appContext, day, tz) },
                 // The AppScope connectivity monitor (#158): the outbox driver flushes on the
                 // offline→online edge and skips passes while known-offline.
                 connectivity = appComponent.connectivity,
@@ -174,6 +181,8 @@ class MainActivity : ComponentActivity() {
 
         // A cold start via the OAuth redirect (rare — sign-in starts from a running app) still hands off.
         forwardAuthRedirect(intent)
+        // A cold start from tapping the Brain dump "drafts ready" notification opens the Inbox (#150 Stage 4).
+        openInboxIfRequested(intent)
     }
 
     // The OAuth redirect (#15, ADR-0026) re-enters this singleTop activity as a new VIEW intent on the
@@ -183,6 +192,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         forwardAuthRedirect(intent)
+        openInboxIfRequested(intent)
     }
 
     private fun forwardAuthRedirect(intent: Intent?) {
@@ -192,8 +202,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private companion object {
-        const val AUTH_REDIRECT_SCHEME = "com.circuitstitch.deferno"
+    // The Brain dump worker's "drafts ready" notification carries [EXTRA_OPEN_INBOX] (#150 Stage 4): route
+    // it to the Inbox Destination. The root applies it now if a Main shell is up, or once one becomes active.
+    private fun openInboxIfRequested(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_INBOX, false) == true) root.openInbox()
+    }
+
+    companion object {
+        private const val AUTH_REDIRECT_SCHEME = "com.circuitstitch.deferno"
+
+        /** Intent extra set by the Brain dump notification's PendingIntent to open the Inbox (#150 Stage 4). */
+        const val EXTRA_OPEN_INBOX = "com.circuitstitch.deferno.OPEN_INBOX"
     }
 }
 

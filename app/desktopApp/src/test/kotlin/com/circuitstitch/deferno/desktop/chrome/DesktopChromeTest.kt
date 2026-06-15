@@ -77,6 +77,7 @@ private class FakeRoot(child: RootComponent.Child) : RootComponent {
         MutableValue(ChildStack(configuration = "single", instance = child))
     override val themeSettings: StateFlow<UserSettings> = MutableStateFlow(UserSettings.Default)
     override fun onBackClicked(): Boolean = false
+    override fun openInbox() = Unit
 }
 
 /** Only [selectDestination] is exercised by the chrome routing; the rest is inert or unused. */
@@ -94,6 +95,7 @@ private class FakeMainShell : MainShellComponent {
         get() = error("unused by the chrome routing")
     override val accounts: StateFlow<List<Account>> = MutableStateFlow(emptyList())
     override val activeAccount: StateFlow<Account?> = MutableStateFlow(null)
+    override val inboxReadyCount: StateFlow<Int> = MutableStateFlow(0)
 
     override fun openOverlay(route: OverlayRoute) = Unit
     override fun dismissOverlay() = Unit

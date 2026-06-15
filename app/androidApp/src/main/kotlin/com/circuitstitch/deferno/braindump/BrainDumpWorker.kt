@@ -1,10 +1,16 @@
 package com.circuitstitch.deferno.braindump
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import com.circuitstitch.deferno.MainActivity
 import androidx.work.CoroutineWorker
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -143,12 +149,28 @@ private fun notifyDraftsReady(context: Context, count: Int) {
         1 -> "1 draft ready to review"
         else -> "$count drafts ready to review"
     }
+    // Tapping the notification opens the app on the Inbox, where the drafts are reviewed (#150 Stage 4).
+    // MainActivity is singleTop, so a running instance is reused (onNewIntent) rather than stacked.
+    val openInbox = PendingIntent.getActivity(
+        context,
+        NOTIFICATION_ID,
+        Intent(context, MainActivity::class.java)
+            .putExtra(MainActivity.EXTRA_OPEN_INBOX, true)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
     val notification = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_btn_speak_now)
         .setContentTitle("Brain dump")
         .setContentText(text)
+        .setContentIntent(openInbox)
         .setAutoCancel(true)
         .build()
-    // notify() silently no-ops if POST_NOTIFICATIONS is denied (Android 13+); guard anyway.
-    runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
+    // POST_NOTIFICATIONS is a runtime permission on Android 13+ (auto-granted below it); post only when
+    // it's granted — the worker's result never depends on the notification landing.
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+        PackageManager.PERMISSION_GRANTED
+    ) {
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+    }
 }

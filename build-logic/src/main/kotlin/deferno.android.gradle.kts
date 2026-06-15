@@ -16,7 +16,12 @@ kotlin {
         compileSdk = ProjectConfig.COMPILE_SDK
         minSdk = ProjectConfig.MIN_SDK
 
-        // Android unit tests run on the JVM host (no device) — the JVM-fast path.
-        withHostTest {}
+        // Android unit tests run on the JVM host (no device) — the JVM-fast path. Return defaults for
+        // unmocked android.jar calls (e.g. android.util.Log, which kmp-logger uses) instead of throwing
+        // "not mocked", so pure-logic commonTest that merely logs runs on the host-test target without
+        // pulling in Robolectric.
+        withHostTest {
+            isReturnDefaultValues = true
+        }
     }
 }
