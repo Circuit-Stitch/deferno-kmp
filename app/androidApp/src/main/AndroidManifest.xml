@@ -6,6 +6,15 @@
          Runtime-requested on first mic tap; audio is recognized on-device and never leaves the device. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Android platform on-device speech engine (#93, ADR-0018): package visibility for the system
+         RecognitionService, required on Android 11+ for SpeechRecognizer / isOnDeviceRecognitionAvailable
+         to resolve it. On-device recognizer only — audio never leaves the device. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <!-- Connectivity monitoring (#158): the default-network callback behind the reconnect-triggered
          outbox flush + the online-only create gate (normal permission, granted at install). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.ic_mic
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.shell.DictationField
 import com.circuitstitch.deferno.shell.DictationStatus
@@ -32,6 +34,7 @@ import com.circuitstitch.deferno.shell.ui.NewNotesField
 import com.circuitstitch.deferno.shell.ui.NewStatusMessage
 import com.circuitstitch.deferno.shell.ui.NewSubmitButton
 import com.circuitstitch.deferno.shell.ui.NewTitleField
+import org.jetbrains.compose.resources.painterResource
 
 /**
  * The **New** create surface, desktop edition (#87, ADR-0015/0016/0017) — the desktop counterpart of
@@ -85,9 +88,11 @@ fun NewDesktopScreen(component: NewComponent, modifier: Modifier = Modifier) {
 
                 NewKindPicker(selectedKind = state.selectedKind, onSelectKind = component::selectKind)
 
-                NewTitleField(state = state, onTitleChange = component::setTitle, onMic = ::onMic)
+                // Desktop packages composeResources, so the design-system glyph loads directly here.
+                val micIcon = painterResource(Res.drawable.ic_mic)
+                NewTitleField(state = state, onTitleChange = component::setTitle, onMic = ::onMic, micIcon = micIcon)
 
-                NewNotesField(state = state, onNotesChange = component::setNotes, onMic = ::onMic)
+                NewNotesField(state = state, onNotesChange = component::setNotes, onMic = ::onMic, micIcon = micIcon)
 
                 // The gentle Dictation feedback (#94): a recognition/capture error, never a silent
                 // failure — the desktop voice of the shared atom, with the System Settings deep-link

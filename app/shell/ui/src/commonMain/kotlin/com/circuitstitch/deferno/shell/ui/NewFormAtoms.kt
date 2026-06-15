@@ -18,12 +18,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.circuitstitch.deferno.core.designsystem.resources.Res
-import com.circuitstitch.deferno.core.designsystem.resources.ic_mic
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.shell.DictationField
@@ -33,7 +32,6 @@ import com.circuitstitch.deferno.shell.NewStatus
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
-import org.jetbrains.compose.resources.painterResource
 
 // The shared, stateless **New**-form atoms (#175): the platform-neutral pieces of the New create
 // surface (#71/#87, ADR-0015/0016) extracted to this module's commonMain so the binding to
@@ -79,6 +77,7 @@ fun NewTitleField(
     state: NewState,
     onTitleChange: (String) -> Unit,
     onMic: (DictationField) -> Unit,
+    micIcon: Painter,
     modifier: Modifier = Modifier,
 ) {
     DictationTextField(
@@ -89,6 +88,7 @@ fun NewTitleField(
         field = DictationField.Title,
         state = state,
         onMic = onMic,
+        micIcon = micIcon,
         modifier = modifier,
     )
 }
@@ -99,6 +99,7 @@ fun NewNotesField(
     state: NewState,
     onNotesChange: (String) -> Unit,
     onMic: (DictationField) -> Unit,
+    micIcon: Painter,
     modifier: Modifier = Modifier,
 ) {
     DictationTextField(
@@ -109,6 +110,7 @@ fun NewNotesField(
         field = DictationField.Notes,
         state = state,
         onMic = onMic,
+        micIcon = micIcon,
         modifier = modifier,
     )
 }
@@ -127,6 +129,7 @@ private fun DictationTextField(
     field: DictationField,
     state: NewState,
     onMic: (DictationField) -> Unit,
+    micIcon: Painter,
     modifier: Modifier = Modifier,
 ) {
     OutlinedTextField(
@@ -140,6 +143,7 @@ private fun DictationTextField(
                     field = field,
                     listening = state.dictation == DictationStatus.Listening && state.dictationField == field,
                     onClick = onMic,
+                    icon = micIcon,
                 )
             }
         },
@@ -149,18 +153,20 @@ private fun DictationTextField(
 
 /**
  * The per-field [[Dictation]] mic (#92/#94). Tinted primary while [listening] (and labelled
- * "Stop dictation" so a tap toggles it off), muted otherwise. The glyph is the shared design-system
- * [Res.drawable.ic_mic] (material-icons-core has no Mic), recoloured by [Icon]'s tint.
+ * "Stop dictation" so a tap toggles it off), muted otherwise. The glyph [icon] is injected by the
+ * platform (Android packages no dependency-module composeResources, so it passes a native-res painter;
+ * desktop passes the design-system `Res.drawable.ic_mic`), recoloured by [Icon]'s tint.
  */
 @Composable
 private fun MicButton(
     field: DictationField,
     listening: Boolean,
     onClick: (DictationField) -> Unit,
+    icon: Painter,
 ) {
     IconButton(onClick = { onClick(field) }) {
         Icon(
-            painter = painterResource(Res.drawable.ic_mic),
+            painter = icon,
             contentDescription = if (listening) "Stop dictation" else "Dictate",
             tint = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         )

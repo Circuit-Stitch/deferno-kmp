@@ -27,6 +27,18 @@ interface AndroidSpeechBindings {
         WhisperSpeechToText(modelLocator = androidWhisperModelLocator(context))
 
     /**
+     * The Android platform on-device recognizer (#93, ADR-0018) — a native single-utterance fast path for
+     * dictation, contributed alongside whisper into the same `Set<SpeechToText>`. On-device only
+     * ([AndroidNativeSpeechToText] uses `createOnDeviceSpeechRecognizer`); reports unavailable below API 33
+     * or with no on-device pack, so the selector falls back to the whisper floor.
+     */
+    @Provides
+    @IntoSet
+    @SingleIn(AppScope::class)
+    fun androidNativeSpeechEngine(context: Context): SpeechToText =
+        AndroidNativeSpeechToText(context)
+
+    /**
      * The device-local speech-engine choice ([[App setting]], ADR-0018), SharedPreferences-backed. The
      * file is app-private; it holds only the engine id, never audio or Transcript text.
      */
