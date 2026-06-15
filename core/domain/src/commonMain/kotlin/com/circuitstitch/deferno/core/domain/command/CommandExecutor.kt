@@ -101,7 +101,8 @@ private suspend fun CreateWriter.create(payload: CreateItem.Payload): CreateResu
  * enqueued, "reconnect to save"); [CreateResult.Failed] is [CommandResult.Failed] (a server verdict).
  */
 private fun CreateResult.toCommandResult(kind: CommandKind): CommandResult = when (this) {
-    is CreateResult.Created -> CommandResult.Accepted(kind)
+    // Surface the created id (#211): the Inbox accept attaches the retained recording to this new Task.
+    is CreateResult.Created -> CommandResult.Accepted(kind, itemId = id)
     is CreateResult.Offline -> CommandResult.Offline(kind)
     is CreateResult.Failed -> CommandResult.Failed(kind, message)
 }

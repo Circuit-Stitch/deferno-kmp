@@ -4,6 +4,9 @@ import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.SignInService
+import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
+import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
@@ -117,6 +120,32 @@ abstract class AppComponent(
      * binding on every target (macOS included, where the inference floor is NotConfigured).
      */
     abstract val inferenceEngineCatalog: InferenceEngineCatalog
+
+    /**
+     * The device-local **storage-provider choice** the Settings Destination renders (#210): the providers a
+     * *user/task* attachment can be stored in (on-device default, Deferno backend, user-owned cloud
+     * coming-later) over the device-local preference. An AppScope [[App setting]] — device-local, never
+     * synced, never per-Account. Surfaced here for the Settings surface and to compile-validate the binding
+     * on every target. Feedback attachments are unaffected — they always use the backend (a fixed provider).
+     */
+    abstract val storageProviderCatalog: StorageProviderCatalog
+
+    /**
+     * The device-local **"keep brain-dump recordings"** choice the Settings Destination renders (#211):
+     * whether a brain-dump's source recording is retained as an on-device Task attachment (#210) on accept.
+     * An AppScope [[App setting]] — device-local, never synced. Read by the Android brain-dump worker (which
+     * gates retention on it) and the Settings surface; surfaced here to compile-validate the binding on
+     * every target. Defaults to on.
+     */
+    abstract val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference
+
+    /**
+     * The on-device attachment **byte store** (#210): the AppScope filesystem store the per-Account
+     * [com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository] writes/reads attachment bytes
+     * through. Re-exposed here so the child AccountScope can consume it (kotlin-inject-anvil does not
+     * auto-propagate a parent's contributed @Provides — see the re-exposed bindings below).
+     */
+    abstract val attachmentBytesStore: AttachmentBytesStore
 
     /**
      * The app-facing **inference engine** the propose-only Agent runs through (ADR-0027): the AppScope

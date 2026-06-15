@@ -1,0 +1,37 @@
+-- The on-device attachment store (#210, pluggable offline-first attachment storage). The bytes live in
+-- app-local storage (AttachmentBytesStore); this table records which storage provider holds each
+-- attachment + its provider-relative locator, plus the attachment metadata, so an on-device attachment
+-- is listable/openable/deletable offline. Local-only, never synced: a row has no reconcile key, tombstone,
+-- or org column (unlike taskEntity) — the offline-first counterpart to the backend presign/commit
+-- attachments, which the selectable storage provider chooses between (the backend stays a fixed provider
+-- for feedback). `task_id` is nullable: a recording may be retained before it is attached to a Task (#211).
+-- Everything is a primitive SQL type (TEXT, or INTEGER for `size` -> Long) so there are no column adapters.
+CREATE TABLE localAttachmentEntity (
+    id         TEXT NOT NULL PRIMARY KEY,
+    task_id    TEXT,
+    provider   TEXT NOT NULL,
+    locator    TEXT NOT NULL,
+    filename   TEXT NOT NULL,
+    mime       TEXT NOT NULL,
+    size       INTEGER NOT NULL,
+    caption    TEXT,
+    created_at TEXT NOT NULL
+);
+
+-- Newest first — the listing order.
+selectAll:
+SELECT * FROM localAttachmentEntity ORDER BY created_at DESC;
+
+selectById:
+SELECT * FROM localAttachmentEntity WHERE id = ?;
+
+selectByTask:
+SELECT * FROM localAttachmentEntity WHERE task_id = ? ORDER BY created_at DESC;
+
+insertOrReplace:
+INSERT OR REPLACE INTO localAttachmentEntity(
+    id, task_id, provider, locator, filename, mime, size, caption, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM localAttachmentEntity WHERE id = ?;

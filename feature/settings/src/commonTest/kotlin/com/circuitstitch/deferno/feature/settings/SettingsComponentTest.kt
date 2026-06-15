@@ -7,6 +7,12 @@ import com.circuitstitch.deferno.core.agent.InMemoryInferenceEnginePreference
 import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
+import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
+import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderAvailability
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
@@ -39,6 +45,9 @@ class SettingsComponentTest {
         output: (SettingsComponent.Output) -> Unit = {},
         speechEngineCatalog: SpeechEngineCatalog = FakeSpeechEngineCatalog(),
         inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
+        storageProviderCatalog: StorageProviderCatalog = StorageProviderCatalog.Inert,
+        keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
+            InMemoryKeepBrainDumpRecordingsPreference(),
     ): Triple<DefaultSettingsComponent, FakeSettingsRepository, FakeSettingsEditor> {
         val repo = FakeSettingsRepository(initial)
         val editor = FakeSettingsEditor(repo)
@@ -49,6 +58,8 @@ class SettingsComponentTest {
             output = output,
             speechEngineCatalog = speechEngineCatalog,
             inferenceEngineCatalog = inferenceEngineCatalog,
+            storageProviderCatalog = storageProviderCatalog,
+            keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
             coroutineContext = Dispatchers.Unconfined,
         )
         return Triple(component, repo, editor)
@@ -72,6 +83,64 @@ class SettingsComponentTest {
         ),
         initial = SpeechEngineId.Whisper,
     )
+
+    /** A storage-provider catalog over an in-memory preference seeded with [selected]. */
+    private fun storageCatalog(selected: StorageProviderId = StorageProviderId.OnDevice) =
+        StorageProviderCatalog(InMemoryStorageProviderPreference(selected))
+
+    @Test
+    fun keepBrainDumpRecordings_defaultsOn_andTogglePersistsThroughThePreference() {
+        val preference = InMemoryKeepBrainDumpRecordingsPreference()
+        val (component, _, _) = component(keepBrainDumpRecordingsPreference = preference)
+
+        // Default on (#211): a new account keeps recordings unless the person opts out.
+        assertEquals(true, component.keepBrainDumpRecordings.value)
+
+        component.onKeepBrainDumpRecordingsChanged(false)
+        assertEquals(false, component.keepBrainDumpRecordings.value)
+        assertEquals(false, preference.enabled(), "device-local — persisted through the preference")
+
+        component.onKeepBrainDumpRecordingsChanged(true)
+        assertEquals(true, component.keepBrainDumpRecordings.value)
+        assertEquals(true, preference.enabled())
+    }
+
+    @Test
+    fun keepBrainDumpRecordings_seedsFromThePersistedChoice() {
+        val (component, _, _) = component(
+            keepBrainDumpRecordingsPreference = InMemoryKeepBrainDumpRecordingsPreference(initial = false),
+        )
+        assertEquals(false, component.keepBrainDumpRecordings.value)
+    }
+
+    @Test
+    fun storageProviderSeedsOnDeviceDefaultWithCloudComingLater() {
+        val (component, _, _) = component(storageProviderCatalog = storageCatalog())
+
+        val state = component.storageProvider.value
+        assertEquals(StorageProviderId.OnDevice, state.selected)
+        // On-device + the Deferno backend are selectable; the user-owned cloud providers are coming-later.
+        assertEquals(
+            StorageProviderAvailability.Available,
+            state.options.first { it.id == StorageProviderId.OnDevice }.availability,
+        )
+        assertEquals(
+            StorageProviderAvailability.ComingLater,
+            state.options.first { it.id == StorageProviderId.Dropbox }.availability,
+        )
+    }
+
+    @Test
+    fun onStorageProviderSelectedPersistsAndReflectsTheChoice() {
+        val preference = InMemoryStorageProviderPreference()
+        val (component, _, _) = component(storageProviderCatalog = StorageProviderCatalog(preference))
+
+        component.onStorageProviderSelected(StorageProviderId.DefernoBackend)
+
+        // Reflected in the read model AND persisted device-locally (never the synced SettingsEditor).
+        assertEquals(StorageProviderId.DefernoBackend, component.storageProvider.value.selected)
+        assertEquals(StorageProviderId.DefernoBackend, preference.selectedProvider())
+    }
 
     @Test
     fun opensAtTheCategoryList() {
@@ -196,9 +265,9 @@ class SettingsComponentTest {
 
     @Test
     fun everyWireframeCategoryIsListed_backedAndUnbacked() {
-        // The catalog must render ALL categories (#72): nine backed (incl. the device-local Speech
-        // engine #93 + the Agent opt-in #150) + two coming-soon stubs.
-        assertEquals(9, SettingsCategory.entries.count { it.backed })
+        // The catalog must render ALL categories (#72): ten backed (incl. the device-local Speech engine
+        // #93 + the Agent opt-in #150 + the Storage provider #210) + two coming-soon stubs.
+        assertEquals(10, SettingsCategory.entries.count { it.backed })
         assertEquals(
             listOf(SettingsCategory.Security2FA, SettingsCategory.Integrations),
             SettingsCategory.entries.filterNot { it.backed },

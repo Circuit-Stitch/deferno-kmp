@@ -39,6 +39,9 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
 import com.circuitstitch.deferno.core.agent.InferenceEngineOption
 import com.circuitstitch.deferno.core.agent.InferenceEngineOrigin
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderAvailability
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderOption
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -51,6 +54,7 @@ import com.circuitstitch.deferno.feature.settings.InferenceEngineSettings
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
+import com.circuitstitch.deferno.feature.settings.StorageProviderSettings
 
 /** Minimum height for a tappable row/control — design-principles.md "≥44–48dp" touch targets. */
 private val MinTouchTarget = 48.dp
@@ -70,6 +74,7 @@ fun SettingsScreen(component: SettingsComponent, modifier: Modifier = Modifier) 
     val settings by component.settings.collectAsState()
     val speechEngine by component.speechEngine.collectAsState()
     val inferenceEngine by component.inferenceEngine.collectAsState()
+    val storageProvider by component.storageProvider.collectAsState()
 
     when (val child = stack.active.instance) {
         SettingsComponent.SettingsChild.List ->
@@ -77,6 +82,7 @@ fun SettingsScreen(component: SettingsComponent, modifier: Modifier = Modifier) 
                 onOpenCategory = component::openCategory,
                 speechEngine = speechEngine,
                 inferenceEngine = inferenceEngine,
+                storageProvider = storageProvider,
                 modifier = modifier,
             )
 
@@ -86,6 +92,7 @@ fun SettingsScreen(component: SettingsComponent, modifier: Modifier = Modifier) 
                 settings = settings,
                 speechEngine = speechEngine,
                 inferenceEngine = inferenceEngine,
+                storageProvider = storageProvider,
                 component = component,
                 modifier = modifier,
             )
@@ -99,6 +106,7 @@ internal fun SettingsListContent(
     onOpenCategory: (SettingsCategory) -> Unit,
     speechEngine: SpeechEngineSettings,
     inferenceEngine: InferenceEngineSettings,
+    storageProvider: StorageProviderSettings,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -115,7 +123,7 @@ internal fun SettingsListContent(
                 if (category == SettingsCategory.Agent && !inferenceEngine.available) return@forEach
                 CategoryRow(
                     label = category.title,
-                    summary = category.rowSummary(speechEngine, inferenceEngine),
+                    summary = category.rowSummary(speechEngine, inferenceEngine, storageProvider),
                     onClick = { onOpenCategory(category) },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -156,6 +164,7 @@ private fun CategoryDetail(
     settings: UserSettings,
     speechEngine: SpeechEngineSettings,
     inferenceEngine: InferenceEngineSettings,
+    storageProvider: StorageProviderSettings,
     component: SettingsComponent,
     modifier: Modifier = Modifier,
 ) {
@@ -173,6 +182,17 @@ private fun CategoryDetail(
                 SettingsCategory.TaskBehavior -> TaskBehaviorDetail(settings, component)
                 SettingsCategory.SpeechEngine -> SpeechEngineDetail(speechEngine, component::onSpeechEngineSelected)
                 SettingsCategory.Agent -> AgentDetail(inferenceEngine, component::onInferenceEngineSelected)
+                SettingsCategory.Storage -> {
+                    // The brain-dump retention toggle (#211) lives under Storage — recordings are on-device
+                    // attachments. Collected here so only the Storage detail subscribes.
+                    val keepRecordings by component.keepBrainDumpRecordings.collectAsState()
+                    StorageProviderDetail(
+                        storageProvider,
+                        component::onStorageProviderSelected,
+                        keepRecordings,
+                        component::onKeepBrainDumpRecordingsChanged,
+                    )
+                }
                 SettingsCategory.DataPrivacy -> DataPrivacyDetail(settings, component)
                 SettingsCategory.HelpFeedback -> HelpFeedbackDetail(component)
                 SettingsCategory.AppPermissions -> AppPermissionsDetail(component)
@@ -265,6 +285,45 @@ private fun AgentDetail(state: InferenceEngineSettings, onSelect: (InferenceEngi
             enabled = !locked,
         )
     }
+}
+
+@Composable
+private fun StorageProviderDetail(
+    state: StorageProviderSettings,
+    onSelect: (StorageProviderId) -> Unit,
+    keepRecordings: Boolean,
+    onKeepRecordingsChange: (Boolean) -> Unit,
+) {
+    // The App-setting nature, stated plainly (#210): device-local, never synced. On-device keeps attachment
+    // bytes on this device; the user-owned cloud providers are coming later. Feedback attachments are
+    // separate — they always go to Deferno so the team can see what you send.
+    Text(
+        text = "Choose where your attachments are stored. On-device keeps the files on this device and " +
+            "works offline. This choice stays on this device and isn’t synced to your account. (Feedback " +
+            "you send the team is always uploaded to Deferno so we can see it.)",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.defernoColors.inkMuted,
+    )
+    state.options.forEach { option ->
+        val locked = option.availability is StorageProviderAvailability.ComingLater
+        EngineChoiceRow(
+            label = storageProviderLabel(option.id),
+            note = storageProviderNote(option),
+            selected = state.selected == option.id,
+            onSelect = { onSelect(option.id) },
+            enabled = !locked,
+        )
+    }
+    // Brain-dump recording retention (#211): keep the source voice recording as an on-device attachment when
+    // a draft is accepted, so the person can revisit what they said. Device-local, default on; recognition
+    // still never leaves the device.
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    ToggleRow(
+        label = "Keep brain dump recordings",
+        description = "Save the original voice recording on this device when you accept a brain dump, so you can listen back later.",
+        checked = keepRecordings,
+        onCheckedChange = onKeepRecordingsChange,
+    )
 }
 
 @Composable
@@ -558,6 +617,7 @@ private val SettingsCategory.title: String
         SettingsCategory.TaskBehavior -> "Task behavior"
         SettingsCategory.SpeechEngine -> "Speech engine"
         SettingsCategory.Agent -> "Agent"
+        SettingsCategory.Storage -> "Storage"
         SettingsCategory.DataPrivacy -> "Data & Privacy"
         SettingsCategory.HelpFeedback -> "Help & Feedback"
         SettingsCategory.AppPermissions -> "App Permissions"
@@ -574,6 +634,7 @@ private val SettingsCategory.title: String
 private fun SettingsCategory.rowSummary(
     speechEngine: SpeechEngineSettings,
     inferenceEngine: InferenceEngineSettings,
+    storageProvider: StorageProviderSettings,
 ): String? = when {
     this == SettingsCategory.SpeechEngine -> {
         val selectedOption = speechEngine.options.firstOrNull { it.id == speechEngine.selected }
@@ -588,6 +649,8 @@ private fun SettingsCategory.rowSummary(
         InferenceEngineId.Off -> "Off"
         else -> inferenceEngineLabel(inferenceEngine.selected)
     }
+    // The Storage row reflects the selected provider — "On-device" by default (#210).
+    this == SettingsCategory.Storage -> storageProviderLabel(storageProvider.selected)
     !backed -> "Coming soon"
     else -> null
 }
@@ -633,6 +696,26 @@ private fun inferenceEngineNote(option: InferenceEngineOption): String? = when (
     InferenceEngineAvailability.Available -> when (option.origin) {
         InferenceEngineOrigin.OnDevice -> "Runs on this device"
         InferenceEngineOrigin.DefernoCloud -> "Sends your text off-device to Deferno’s hosted AI"
+    }
+}
+
+/** The human label for a storage-provider id (View concern, like the engine labels). */
+private fun storageProviderLabel(id: StorageProviderId): String = when (id) {
+    StorageProviderId.OnDevice -> "On-device"
+    StorageProviderId.DefernoBackend -> "Deferno backend"
+    StorageProviderId.Dropbox -> "Dropbox"
+    StorageProviderId.GoogleDrive -> "Google Drive"
+    // Future user-owned providers get explicit labels as they land; fall back to a humanised id.
+    else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+}
+
+/** The per-provider subtitle: where the bytes live, or that the provider is coming later (#210). */
+private fun storageProviderNote(option: StorageProviderOption): String? = when (option.availability) {
+    StorageProviderAvailability.ComingLater -> "Coming later"
+    StorageProviderAvailability.Available -> when (option.id) {
+        StorageProviderId.OnDevice -> "Keeps files on this device; works offline"
+        StorageProviderId.DefernoBackend -> "Stores files on Deferno’s servers"
+        else -> null
     }
 }
 

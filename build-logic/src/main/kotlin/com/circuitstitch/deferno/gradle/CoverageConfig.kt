@@ -97,6 +97,20 @@ object CoverageConfig {
         // the speech preference above). The InferenceEngineCatalog, InMemoryInferenceEnginePreference, and
         // FakeRelayEntitlement ARE measured (commonMain/commonTest).
         "com.circuitstitch.deferno.core.agent.SettingsInferenceEnginePreference*",
+        // The on-device attachment storage actuals (#210): the filesystem byte store (Android `filesDir` /
+        // desktop `<databasesDir>` file IO, duplicated across androidMain + jvmMain — one glob covers both)
+        // and the multiplatform-settings-backed storage-provider [[App setting]] adapter. Platform file/store
+        // IO exercised on a real device/desktop, not the headless gate (same rationale as the DB drivers +
+        // the speech/agent preferences above). The AttachmentBytesStore seam + InMemoryAttachmentBytesStore,
+        // the StorageProviderCatalog/Option/Id, InMemoryStorageProviderPreference, and the LocalAttachmentRepository
+        // ARE measured (commonMain/commonTest, incl. a jvmTest round-trip over the real File store).
+        "com.circuitstitch.deferno.core.data.attachment.FileAttachmentBytesStore*",
+        "com.circuitstitch.deferno.core.data.attachment.SettingsStorageProviderPreference*",
+        // The device-local "keep brain-dump recordings" [[App setting]] adapter (#211): multiplatform-settings-backed,
+        // exercised through the platform store on a real device (Android-only capture), not the headless gate
+        // (same rationale as SettingsStorageProviderPreference). The interface, InMemory impl, and the
+        // brainDumpRecordingPlaceholderId helper ARE measured (commonMain/commonTest).
+        "com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference*",
         // The on-device deterministic-floor engine (ADR-0027): the vendored shacl-aio crate
         // (libshacl_aio.so over JNA) wrapped at the inference seam — native code that loads only on a
         // real device, exercised on-device, not the headless gate (same rationale as WhisperSpeechToText).

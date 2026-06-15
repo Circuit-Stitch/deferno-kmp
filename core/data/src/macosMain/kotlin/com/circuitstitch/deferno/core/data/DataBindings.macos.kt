@@ -4,6 +4,12 @@ import com.circuitstitch.deferno.core.data.account.AccountDataStore
 import com.circuitstitch.deferno.core.data.account.AccountRegistry
 import com.circuitstitch.deferno.core.data.account.FileAccountRegistry
 import com.circuitstitch.deferno.core.data.account.NoOpAccountDataStore
+import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
+import com.circuitstitch.deferno.core.data.attachment.InMemoryAttachmentBytesStore
+import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
+import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
 import com.circuitstitch.deferno.core.data.auth.DeviceName
 import com.circuitstitch.deferno.core.data.auth.MacBrowserAuthenticator
@@ -51,4 +57,23 @@ interface MacosDataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun connectivity(): Connectivity = PathMonitorConnectivity()
+
+    /**
+     * Storage-provider [[App setting]] + on-device byte store (#210). macOS placeholders for now (the twin
+     * of [IosDataBindings]) — the real NSUserDefaults preference + NSFileManager byte store are an Apple
+     * follow-up; these keep the graph complete and the macOS klib compiling.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun storageProviderPreference(): StorageProviderPreference = InMemoryStorageProviderPreference()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun attachmentBytesStore(): AttachmentBytesStore = InMemoryAttachmentBytesStore()
+
+    /** "Keep brain-dump recordings" [[App setting]] (#211). macOS doesn't capture brain dumps — in-memory placeholder. */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
+        InMemoryKeepBrainDumpRecordingsPreference()
 }

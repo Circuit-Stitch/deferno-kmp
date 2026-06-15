@@ -31,6 +31,9 @@ import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
+import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
@@ -320,6 +323,15 @@ class DefaultMainShellComponent(
     // Agent row hides) so the many shell tests build without it; production threads the real catalog from
     // the AppComponent (like speechEngineCatalog).
     private val inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
+    // The device-local storage-provider choice (#210): the AppScope catalog the Settings Destination reads.
+    // Defaulted to the inert [StorageProviderCatalog.Inert] (in-memory selection) so the many shell tests
+    // build without it; production threads the real catalog from the AppComponent (like inferenceEngineCatalog).
+    private val storageProviderCatalog: StorageProviderCatalog = StorageProviderCatalog.Inert,
+    // The device-local "keep brain-dump recordings" App setting (#211) the Settings Destination renders.
+    // Defaulted to an in-memory (on) preference so the many shell tests build without it; production threads
+    // the real preference from the AppComponent (like storageProviderCatalog).
+    private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
+        InMemoryKeepBrainDumpRecordingsPreference(),
     // The Brain dump's record-to-file seam (ADR-0027/#150, Stage 4): records the mic to a WAV and, on Stop
     // (job cancellation), hands it to the background worker — transcription/extraction run there and the
     // drafts land in the Inbox, so the overlay no longer needs the inference engine. Android-only (it needs
@@ -335,6 +347,10 @@ class DefaultMainShellComponent(
     // without supplying them — the Inbox is simply empty.
     private val observeBrainDumpDrafts: () -> Flow<List<BrainDumpDraft>> = { flowOf(emptyList()) },
     private val upsertBrainDumpDraft: suspend (BrainDumpDraft) -> Unit = {},
+    // #211: attach the retained brain-dump recording to the just-created Task on Inbox accept. Wired from
+    // this Account's session (reads the on-device recording + writes a per-Task attachment copy). No-op
+    // default for the many shell tests / non-brain-dump platforms.
+    private val attachBrainDumpRecording: suspend (taskId: String, BrainDumpDraft) -> Unit = { _, _ -> },
 ) : MainShellComponent, ComponentContext by componentContext {
 
     // "Add subtask" on the Task detail: an online-only create of a child Task, derived from the same
@@ -354,12 +370,18 @@ class DefaultMainShellComponent(
     private val acceptBrainDumpDraft: suspend (BrainDumpDraft) -> AcceptResult = { draft ->
         when (val result = create(draft.toCreatePayload(timeZone))) {
             is CommandResult.Accepted -> {
-                // The Task is created. Mark the draft Accepted so it leaves the Ready queue and isn't
-                // re-created. The local mark is best-effort (runCatching): a failed mark leaves the draft
-                // Ready — it reappears, and re-accepting then risks a duplicate, the residual
-                // non-idempotent-create gap that client-supplied item ids close (ADR-0016 → #307). We
-                // still report Accepted because the Task *was* created — never surface a scary error for
-                // a success, and never re-create on this attempt.
+                // The Task is created. First, if a recording was retained for this brain dump, attach it to
+                // the new Task (#211) — BEFORE the mark-Accepted below, whose reap may delete the retained
+                // WAV once this is the recording's last Ready draft. Best-effort (runCatching): a failed
+                // attach must never turn a created Task into an error. The created id is the create result's
+                // itemId (the online create surfaces it, ADR-0016).
+                result.itemId?.let { taskId -> runCatching { attachBrainDumpRecording(taskId, draft) } }
+                // Mark the draft Accepted so it leaves the Ready queue and isn't re-created. The local mark
+                // is best-effort (runCatching): a failed mark leaves the draft Ready — it reappears, and
+                // re-accepting then risks a duplicate, the residual non-idempotent-create gap that
+                // client-supplied item ids close (ADR-0016 → #307). We still report Accepted because the
+                // Task *was* created — never surface a scary error for a success, and never re-create on
+                // this attempt.
                 runCatching { upsertBrainDumpDraft(draft.copy(status = BrainDumpDraftStatus.Accepted)) }
                 AcceptResult.Accepted
             }
@@ -518,6 +540,10 @@ class DefaultMainShellComponent(
                         // The Agent inference-engine choice + entitlement gate (#150) — sourced from
                         // AppScope, device-local selection + per-Account entitlement, not synced settings.
                         inferenceEngineCatalog = inferenceEngineCatalog,
+                        // The device-local storage-provider choice (#210) — sourced from AppScope, never synced.
+                        storageProviderCatalog = storageProviderCatalog,
+                        // The device-local "keep brain-dump recordings" choice (#211) — AppScope, never synced.
+                        keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
                         coroutineContext = coroutineContext,
                     ),
                 )

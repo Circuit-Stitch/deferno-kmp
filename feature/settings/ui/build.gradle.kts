@@ -25,6 +25,10 @@ kotlin {
             // The Agent row renders core:agent's AgentSettings (opt-in + entitlement) — the device-local
             // App setting (#150, ADR-0027).
             implementation(project(":core:agent"))
+            // The Storage row renders core:data's StorageProviderId/Option/Availability directly — the
+            // device-local storage-provider App setting (#210). Android-only for now (the desktop screen
+            // hides the row), like the Agent row above.
+            implementation(project(":core:data"))
 
             implementation(libs.decompose)
             implementation(libs.decompose.extensions.compose)

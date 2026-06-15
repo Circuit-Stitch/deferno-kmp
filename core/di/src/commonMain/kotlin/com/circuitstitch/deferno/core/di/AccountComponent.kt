@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.di
 
+import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
@@ -97,6 +98,14 @@ abstract class AccountComponent(
      * compile-time validation of its AccountScope chain (repository → DB).
      */
     abstract val brainDumpDraftRepository: BrainDumpDraftRepository
+
+    /**
+     * The on-device attachment store (#210): per-Account attachment records + their bytes (via the AppScope
+     * [com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore]). Exposing it anchors anvil's
+     * compile-time validation of its AccountScope chain (repository → DB + the re-exposed AppScope byte store)
+     * and readies the consumer (#211 audio retention); feedback attachments never use it (always backend).
+     */
+    abstract val localAttachmentRepository: LocalAttachmentRepository
 
     /** The command-registry dispatch site (ADR-0007) over this Account's write seams. */
     abstract val commandExecutor: CommandExecutor

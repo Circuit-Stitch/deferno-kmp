@@ -44,6 +44,11 @@ kotlin {
             // Only the kotlinx.serialization runtime is needed (no @Serializable classes here, so no
             // compiler plugin); core:network keeps its serialization dep `implementation`-scoped.
             implementation(libs.kotlinx.serialization.json)
+
+            // The device-local storage-provider [[App setting]] (#210): the multiplatform-settings
+            // commonMain `Settings` over SharedPreferences (Android) / java.util.prefs (JVM) / NSUserDefaults
+            // (Apple), each supplied by a platform binding — the same store the speech/agent engine choices use.
+            implementation(libs.multiplatform.settings)
         }
 
         commonTest.dependencies {

@@ -53,6 +53,7 @@ class MainShellComponentTest {
             { com.circuitstitch.deferno.core.domain.command.CommandResult.Offline(com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem) },
         observeBrainDumpDrafts: () -> Flow<List<BrainDumpDraft>> = { flowOf(emptyList()) },
         upsertBrainDumpDraft: suspend (BrainDumpDraft) -> Unit = {},
+        attachBrainDumpRecording: suspend (String, BrainDumpDraft) -> Unit = { _, _ -> },
     ) = DefaultMainShellComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         taskRepository = taskRepo,
@@ -68,6 +69,7 @@ class MainShellComponentTest {
         create = create,
         observeBrainDumpDrafts = observeBrainDumpDrafts,
         upsertBrainDumpDraft = upsertBrainDumpDraft,
+        attachBrainDumpRecording = attachBrainDumpRecording,
     )
 
     private fun MainShellComponent.settings(): SettingsComponent =
@@ -287,6 +289,62 @@ class MainShellComponentTest {
         // On success the draft is marked Accepted, so it leaves the Ready queue and is never re-created.
         assertEquals(BrainDumpDraftStatus.Accepted, upserts.single().status)
         assertEquals(BrainDumpDraftId("d1"), upserts.single().id)
+    }
+
+    @Test
+    fun inboxAccept_attachesTheRetainedRecording_toTheCreatedTask_thenMarksAccepted() {
+        val attaches = mutableListOf<Pair<String, BrainDumpDraftId>>()
+        val order = mutableListOf<String>()
+        val draft = BrainDumpDraft(
+            id = BrainDumpDraftId("d1"),
+            title = "Buy milk",
+            createdAt = Instant.parse("2026-06-14T09:00:00Z"),
+        )
+        val shell = shell(
+            // The online create surfaces the new Task id (#211) — the accept attaches the recording to it.
+            create = {
+                com.circuitstitch.deferno.core.domain.command.CommandResult.Accepted(
+                    com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem,
+                    itemId = "srv-task-7",
+                )
+            },
+            observeBrainDumpDrafts = { flowOf(listOf(draft)) },
+            upsertBrainDumpDraft = { order += "mark:${it.status}" },
+            attachBrainDumpRecording = { taskId, d ->
+                order += "attach"
+                attaches += taskId to d.id
+            },
+        )
+
+        shell.selectDestination(Destination.Inbox)
+        val inbox = (shell.stack.value.active.instance as MainShellComponent.DestinationChild.Inbox).component
+        inbox.onAccept(BrainDumpDraftId("d1"))
+
+        assertEquals(listOf("srv-task-7" to BrainDumpDraftId("d1")), attaches)
+        // Attach runs BEFORE the mark-Accepted whose reap may delete the retained recording.
+        assertEquals(listOf("attach", "mark:Accepted"), order)
+    }
+
+    @Test
+    fun inboxAccept_offline_doesNotAttachAnyRecording() {
+        val attaches = mutableListOf<String>()
+        val draft = BrainDumpDraft(id = BrainDumpDraftId("d1"), title = "x", createdAt = Instant.parse("2026-06-14T09:00:00Z"))
+        val shell = shell(
+            create = {
+                com.circuitstitch.deferno.core.domain.command.CommandResult.Offline(
+                    com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem,
+                )
+            },
+            observeBrainDumpDrafts = { flowOf(listOf(draft)) },
+            attachBrainDumpRecording = { taskId, _ -> attaches += taskId },
+        )
+
+        shell.selectDestination(Destination.Inbox)
+        val inbox = (shell.stack.value.active.instance as MainShellComponent.DestinationChild.Inbox).component
+        inbox.onAccept(BrainDumpDraftId("d1"))
+
+        // No Task was created (offline) → nothing to attach to; the draft stays Ready for a retry.
+        assertEquals(emptyList(), attaches)
     }
 
     @Test

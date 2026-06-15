@@ -9,6 +9,8 @@ import com.circuitstitch.deferno.core.data.calendar.OutboxOccurrenceWriter
 import com.circuitstitch.deferno.core.data.calendar.LocalStoreSeriesKindSource
 import com.circuitstitch.deferno.core.data.calendar.SeriesKindSource
 import com.circuitstitch.deferno.core.data.calendar.SqlDelightCalendarLocalStore
+import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
+import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
@@ -89,6 +91,17 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun brainDumpDraftRepository(db: DefernoDatabase): BrainDumpDraftRepository =
         BrainDumpDraftRepository(db)
+
+    // The on-device attachment store (#210): per-Account records over the Account DB + bytes via the
+    // AppScope AttachmentBytesStore (re-exposed by AppComponent). Local-only, no remote/reconcile — the
+    // offline-first counterpart to the backend presign/commit path. Foundation: the consumer (#211 audio
+    // retention / a Task-detail attach route) wires it; feedback attachments never use it (always backend).
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun localAttachmentRepository(
+        db: DefernoDatabase,
+        bytesStore: AttachmentBytesStore,
+    ): LocalAttachmentRepository = LocalAttachmentRepository(db, bytesStore)
 
     // The recurring-kind local stores (#71): the per-Account SQLDelight caches a created Habit/Chore/
     // Event seeds into, so the row joins the observe Flow exactly as a Task does (ADR-0001).

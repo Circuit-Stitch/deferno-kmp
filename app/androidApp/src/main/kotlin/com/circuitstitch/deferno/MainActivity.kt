@@ -121,6 +121,13 @@ class MainActivity : ComponentActivity() {
                 // selection + per-Account relay entitlement from the same AppScope graph — the Settings
                 // "Agent" row reads + writes it.
                 inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
+                // Storage-provider App setting (#210): the device-local provider catalog from the same
+                // AppScope graph — the Settings Destination's "Storage" row reads + writes it (on-device default).
+                storageProviderCatalog = appComponent.storageProviderCatalog,
+                // "Keep brain-dump recordings" App setting (#211): the device-local preference from the same
+                // AppScope graph — the Settings "Storage" row toggles it, and the brain-dump worker gates
+                // recording retention on it.
+                keepBrainDumpRecordingsPreference = appComponent.keepBrainDumpRecordingsPreference,
                 // Brain dump (ADR-0027/#150, Stage 4): the voice_chat overlay records the mic to a WAV and
                 // hands it to the background worker on Stop. The shell passes its injected today/timeZone
                 // (no Clock.System); the application Context backs the recording + the WorkManager enqueue.
