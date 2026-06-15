@@ -18,8 +18,8 @@ import kotlin.time.Instant
 /**
  * Local-only persistence for on-device Brain dump draft Tasks (ADR-0027 async redesign). Unlike the
  * synced caches (Task/Habit/…), a draft has no remote source and no reconcile: the worker writes drafts,
- * the Brain dumps Destination observes + accepts/dismisses them, and a draft leaves the table only on
- * accept (committed through the ordinary online create) or dismiss. So this is one flat SQLDelight
+ * the Inbox Destination (ADR-0015 amendment) observes + accepts/dismisses them, and a draft leaves the
+ * Ready queue on accept (committed through the ordinary online create) or dismiss. So this is one flat SQLDelight
  * class — no LocalStore/Repository split and no fake; its SQL<->domain round-trip is proved directly
  * against in-memory SQLite (ADR-0006 JVM-fast path). Reads are observe-via-Flow only (ADR-0001).
  */

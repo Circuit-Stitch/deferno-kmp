@@ -12,6 +12,7 @@ import com.arkivanov.decompose.router.stack.bringToFront
 import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.value.Value
 import com.arkivanov.essenty.lifecycle.doOnDestroy
+import com.arkivanov.essenty.lifecycle.doOnResume
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
@@ -21,8 +22,13 @@ import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchResult
+import com.circuitstitch.deferno.core.domain.command.CommandResult
+import com.circuitstitch.deferno.core.domain.command.CreateItem
+import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.core.model.BrainDumpDraft
+import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.agent.Extractor
 import com.circuitstitch.deferno.core.agent.InferenceEngine
@@ -34,6 +40,9 @@ import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
+import com.circuitstitch.deferno.feature.braindumps.AcceptResult
+import com.circuitstitch.deferno.feature.braindumps.DefaultInboxComponent
+import com.circuitstitch.deferno.feature.braindumps.InboxComponent
 import com.circuitstitch.deferno.feature.calendar.CalendarComponent
 import com.circuitstitch.deferno.feature.calendar.DefaultCalendarComponent
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
@@ -54,10 +63,19 @@ import com.circuitstitch.deferno.feature.tasks.TaskPane
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -117,6 +135,13 @@ interface MainShellComponent {
     val accounts: StateFlow<List<Account>>
     val activeAccount: StateFlow<Account?>
 
+    /**
+     * The count of **Ready** Brain dump drafts awaiting triage — the nav badge on the [Destination.Inbox]
+     * row ("empty"/[n], ADR-0015 Inbox amendment). Observed at shell level so the badge shows even before
+     * the (lazily-built) Inbox Destination is first visited.
+     */
+    val inboxReadyCount: StateFlow<Int>
+
     /** Switch the Active Account — re-keys the shell for the new Account, no re-auth (ADR-0002/0012). */
     fun switchAccount(id: AccountId)
 
@@ -143,6 +168,11 @@ interface MainShellComponent {
 
         class Tasks(val component: TasksComponent) : DestinationChild {
             override val destination: Destination = Destination.Tasks
+        }
+
+        /** The Inbox Destination (ADR-0015 amendment): the triage queue for persisted Brain dump drafts. */
+        class Inbox(val component: InboxComponent) : DestinationChild {
+            override val destination: Destination = Destination.Inbox
         }
 
         class Profile(val component: ProfileComponent) : DestinationChild {
@@ -297,6 +327,12 @@ class DefaultMainShellComponent(
     // The New surface's PermissionPermanentlyDenied affordance (#120), host-routed to the OS settings
     // surface for the foreclosed dictation permission. Defaulted to a no-op like the other host actions.
     private val onOpenDictationPermissionSettings: () -> Unit = {},
+    // The Inbox Destination's draft store (ADR-0015 Inbox amendment): the live draft query (all statuses)
+    // and a status-write (dismiss/undo + accept's mark-Accepted). The shell wires these from this
+    // Account's `brainDumpDraftRepository`. Defaulted to "no drafts" / no-op so the many shell tests build
+    // without supplying them — the Inbox is simply empty.
+    private val observeBrainDumpDrafts: () -> Flow<List<BrainDumpDraft>> = { flowOf(emptyList()) },
+    private val upsertBrainDumpDraft: suspend (BrainDumpDraft) -> Unit = {},
 ) : MainShellComponent, ComponentContext by componentContext {
 
     // "Add subtask" on the Task detail: an online-only create of a child Task, derived from the same
@@ -307,6 +343,29 @@ class DefaultMainShellComponent(
                 com.circuitstitch.deferno.core.network.dto.CreateTaskPayload(title = title, parentId = parent.value),
             ),
         )
+    }
+
+    // The Inbox "accept" seam (ADR-0015 Inbox amendment): commit a draft as a real Task through the same
+    // online-only create path the New surface uses (ADR-0016), then mark it Accepted so it leaves the
+    // Ready queue and is never re-created (create isn't idempotent in v1, ADR-0016). Offline/Failed keep
+    // the draft Ready for a retry — never a silent loss.
+    private val acceptBrainDumpDraft: suspend (BrainDumpDraft) -> AcceptResult = { draft ->
+        when (val result = create(draft.toCreatePayload(timeZone))) {
+            is CommandResult.Accepted -> {
+                // The Task is created. Mark the draft Accepted so it leaves the Ready queue and isn't
+                // re-created. The local mark is best-effort (runCatching): a failed mark leaves the draft
+                // Ready — it reappears, and re-accepting then risks a duplicate, the residual
+                // non-idempotent-create gap that client-supplied item ids close (ADR-0016 → #307). We
+                // still report Accepted because the Task *was* created — never surface a scary error for
+                // a success, and never re-create on this attempt.
+                runCatching { upsertBrainDumpDraft(draft.copy(status = BrainDumpDraftStatus.Accepted)) }
+                AcceptResult.Accepted
+            }
+            is CommandResult.Offline -> AcceptResult.Offline
+            is CommandResult.Failed -> AcceptResult.Failed(result.message)
+            // A pre-flight Rejected never happens for CreateItem, but be total — a gentle soft failure.
+            is CommandResult.Rejected -> AcceptResult.Failed("Couldn't save this task.")
+        }
     }
 
     override val destinations: List<Destination> = Destination.entries
@@ -321,6 +380,7 @@ class DefaultMainShellComponent(
         data object Plan : Config
         data object Calendar : Config
         data object Tasks : Config
+        data object Inbox : Config
         data object Profile : Config
         data object Settings : Config
     }
@@ -418,6 +478,17 @@ class DefaultMainShellComponent(
                     ),
                 )
 
+            Config.Inbox ->
+                MainShellComponent.DestinationChild.Inbox(
+                    DefaultInboxComponent(
+                        componentContext = childContext,
+                        observeDrafts = observeBrainDumpDrafts,
+                        accept = acceptBrainDumpDraft,
+                        upsert = upsertBrainDumpDraft,
+                        coroutineContext = coroutineContext,
+                    ),
+                )
+
             Config.Profile ->
                 MainShellComponent.DestinationChild.Profile(
                     DefaultProfileComponent(
@@ -451,6 +522,25 @@ class DefaultMainShellComponent(
     // Scope for the shell-owned overlay work (the New create dispatch, #71). Tied to the injected
     // coroutineContext so a test drives it on its own scheduler.
     private val overlayScope = kotlinx.coroutines.CoroutineScope(coroutineContext + kotlinx.coroutines.SupervisorJob())
+
+    // Bumped on each shell resume to re-read the drafts (cross-driver: the brain-dump worker writes Ready
+    // drafts via its OWN SQLDelight driver, so the UI driver's live query doesn't see them — a fresh
+    // selectAll on resume does). Same-driver writes here (accept/dismiss) still update the badge live.
+    private val badgeResume = MutableStateFlow(0)
+
+    // The Inbox nav badge count (ADR-0015 Inbox amendment): the number of Ready drafts, observed at shell
+    // level so the badge is live even before the Inbox Destination is first visited. WhileSubscribed — the
+    // chrome's drawer is the only collector.
+    @OptIn(ExperimentalCoroutinesApi::class) // flatMapLatest — re-subscribe the count query on each resume.
+    override val inboxReadyCount: StateFlow<Int> =
+        badgeResume
+            .flatMapLatest { observeBrainDumpDrafts() }
+            .map { drafts -> drafts.count { it.status == BrainDumpDraftStatus.Ready } }
+            .stateIn(overlayScope, SharingStarted.WhileSubscribed(5_000L), 0)
+
+    init {
+        lifecycle.doOnResume { badgeResume.value++ }
+    }
 
     private fun createOverlay(
         route: OverlayRoute,
@@ -628,6 +718,7 @@ class DefaultMainShellComponent(
             Destination.Plan -> Config.Plan
             Destination.Calendar -> Config.Calendar
             Destination.Tasks -> Config.Tasks
+            Destination.Inbox -> Config.Inbox
             Destination.Profile -> Config.Profile
             Destination.Settings -> Config.Settings
         }
@@ -642,6 +733,8 @@ class DefaultMainShellComponent(
             // Calendar is single-pane (no tier-2/tier-3): nothing to dismiss inside it.
             is MainShellComponent.DestinationChild.Calendar -> false
             is MainShellComponent.DestinationChild.Tasks -> component.dismissForegroundPane()
+            // The Inbox is a single-pane list (no tier-2/tier-3): nothing to dismiss inside it.
+            is MainShellComponent.DestinationChild.Inbox -> false
             is MainShellComponent.DestinationChild.Profile -> false
             // Settings is a tier-3 drill-down: back pops an open category detail to the list first (#72).
             is MainShellComponent.DestinationChild.Settings -> component.onBack()
@@ -663,6 +756,25 @@ private fun TasksComponent.dismissForegroundPane(): Boolean {
     tree.value.child?.instance?.let { it.onCloseClicked(); return true }
     detail.value.child?.instance?.let { it.onCloseClicked(); return true }
     return false
+}
+
+/**
+ * Map a persisted [BrainDumpDraft] to the online-only create payload (ADR-0015 Inbox amendment) — the
+ * Inbox accept path. The persisted draft is **flat** (no inter-draft parent/child/sequence relations —
+ * dropped at extraction, ADR-0027 flat-create), so this is the simple field copy: notes → description,
+ * and `completeBy` becomes a start-of-day instant in [timeZone] (mirroring the Brain dump overlay's
+ * `DraftTask.toCreatePayload`).
+ */
+private fun BrainDumpDraft.toCreatePayload(timeZone: String): CreateItem.Payload {
+    val zone = runCatching { TimeZone.of(timeZone) }.getOrDefault(TimeZone.UTC)
+    return CreateItem.Payload.Task(
+        CreateTaskPayload(
+            title = title.trim(),
+            description = notes?.ifBlank { null },
+            completeBy = completeBy?.atStartOfDayIn(zone)?.toString(),
+            deadlineTimeOfDay = deadlineTimeOfDay?.toString(),
+        ),
+    )
 }
 
 /** No-op Calendar read source — the shell's test default when no Account session supplies one (#74). */

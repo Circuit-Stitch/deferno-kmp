@@ -19,6 +19,7 @@ import com.circuitstitch.deferno.core.domain.command.SetTheme
 import com.circuitstitch.deferno.core.domain.command.SetTracking
 import com.circuitstitch.deferno.core.domain.command.taskCommandFor
 import com.circuitstitch.deferno.core.di.AccountComponent
+import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -28,6 +29,7 @@ import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
+import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.LocalDate
 import kotlin.time.Instant
 
@@ -77,6 +79,16 @@ interface AccountSession {
     val calendarRepository: CalendarRepository
 
     /**
+     * The Inbox Destination's local Brain dump drafts (ADR-0015 Inbox amendment): the on-device worker
+     * writes Ready drafts, and the Inbox observes them (list + nav badge). A function seam (not the
+     * concrete repository) so the shell stays testable on fakes. Local-only, never synced.
+     */
+    fun observeBrainDumpDrafts(): Flow<List<BrainDumpDraft>>
+
+    /** Persist a draft's status change (the Inbox accept's mark-Accepted, and dismiss / undo). */
+    suspend fun upsertBrainDumpDraft(draft: BrainDumpDraft)
+
+    /**
      * The occurrence-act seam the Calendar drives (#74): mark / clear / reschedule a firing through the
      * command executor (optimistic apply + outbox enqueue), so the feature layer never touches the
      * registry directly — the firing-level mirror of [workingStateEditor].
@@ -111,6 +123,11 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val planRepository: PlanRepository get() = component.planRepository
     override val settingsRepository: SettingsRepository get() = component.settingsRepository
     override val calendarRepository: CalendarRepository get() = component.calendarRepository
+
+    override fun observeBrainDumpDrafts() = component.brainDumpDraftRepository.observeDrafts()
+
+    override suspend fun upsertBrainDumpDraft(draft: BrainDumpDraft) =
+        component.brainDumpDraftRepository.upsert(draft)
 
     override suspend fun addToPlan(taskId: TaskId, date: LocalDate, tz: String) {
         component.commandExecutor.execute(AddToPlan(taskId, date, tz))

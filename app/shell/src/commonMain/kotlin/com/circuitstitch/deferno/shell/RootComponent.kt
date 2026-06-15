@@ -260,6 +260,11 @@ class DefaultRootComponent(
                         inferenceEngine = inferenceEngine,
                         // The foreclosed-permission deep-link (#120), threaded to the New overlay.
                         onOpenDictationPermissionSettings = onOpenDictationPermissionSettings,
+                        // The Inbox Destination's draft seam (ADR-0015 Inbox amendment): this Account's
+                        // local Brain dump drafts — observed for the list + nav badge, written on accept
+                        // (mark Accepted) / dismiss / undo.
+                        observeBrainDumpDrafts = session::observeBrainDumpDrafts,
+                        upsertBrainDumpDraft = session::upsertBrainDumpDraft,
                     ),
                 )
             }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -294,6 +295,8 @@ private fun ShellDrawer(
 ) {
     val accounts by component.accounts.collectAsState()
     val activeAccount by component.activeAccount.collectAsState()
+    // The Inbox nav badge (ADR-0015 Inbox amendment): always declares state — "empty" or the Ready count.
+    val inboxCount by component.inboxReadyCount.collectAsState()
     Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column(
             modifier = Modifier
@@ -331,6 +334,12 @@ private fun ShellDrawer(
                     label = { Text(destination.label) },
                     selected = destination == activeDestination,
                     icon = { Icon(destination.icon, contentDescription = null) },
+                    // The Inbox always declares whether there's anything to triage (ADR-0015 amendment).
+                    badge = if (destination == Destination.Inbox) {
+                        { Text(if (inboxCount == 0) "empty" else inboxCount.toString()) }
+                    } else {
+                        null
+                    },
                     onClick = { onSelectDestination(destination) },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
@@ -414,6 +423,7 @@ val Destination.label: String
         Destination.Plan -> "Plan"
         Destination.Calendar -> "Calendar"
         Destination.Tasks -> "Tasks"
+        Destination.Inbox -> "Inbox"
         Destination.Profile -> "Profile"
         Destination.Settings -> "Settings"
     }
@@ -424,6 +434,7 @@ private val Destination.icon: ImageVector
         Destination.Plan -> Icons.Filled.Home
         Destination.Calendar -> Icons.Filled.DateRange
         Destination.Tasks -> Icons.AutoMirrored.Filled.List
+        Destination.Inbox -> Icons.Filled.MailOutline
         Destination.Profile -> Icons.Filled.Person
         Destination.Settings -> Icons.Filled.Settings
     }

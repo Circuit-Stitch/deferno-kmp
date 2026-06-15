@@ -540,4 +540,9 @@ internal class FakeAccountSession(
             com.circuitstitch.deferno.core.domain.command.CommandKind.CreateItem,
         )
     }
+
+    override fun observeBrainDumpDrafts() =
+        kotlinx.coroutines.flow.flowOf<List<com.circuitstitch.deferno.core.model.BrainDumpDraft>>(emptyList())
+
+    override suspend fun upsertBrainDumpDraft(draft: com.circuitstitch.deferno.core.model.BrainDumpDraft) {}
 }

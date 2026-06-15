@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.R
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import com.circuitstitch.deferno.feature.braindumps.ui.InboxScreen
 import com.circuitstitch.deferno.feature.calendar.ui.CalendarScreen
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.profile.ui.ProfileScreen
@@ -95,6 +96,9 @@ private fun DestinationBody(active: MainShellComponent.DestinationChild, modifie
 
         is MainShellComponent.DestinationChild.Tasks ->
             TasksScreen(active.component, modifier)
+
+        is MainShellComponent.DestinationChild.Inbox ->
+            InboxScreen(active.component, modifier)
 
         is MainShellComponent.DestinationChild.Profile ->
             ProfileScreen(active.component, modifier)

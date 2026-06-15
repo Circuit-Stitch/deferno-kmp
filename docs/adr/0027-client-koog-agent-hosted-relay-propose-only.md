@@ -59,6 +59,13 @@ binary; and the backend owns the domain language and already auto-seeds the dail
   > `CreateItem` path. v1 is **Android-only** (the on-device shacl floor is Android-only) and **flat-create**
   > (inter-draft `parentId`/`children`/`nextTaskId` relations are dropped with a user-visible note; a
   > `parentId` referencing an existing Item is kept). The plan-proposal surface is still as described.
+  >
+  > **Follow-on (async redesign / Inbox).** The brain-dump review surface moved from the inline overlay
+  > list above to a persistent **Inbox** Destination (ADR-0015 Inbox amendment): the redesign transcribes
+  > and extracts in the **background**, so drafts outlive the capture overlay and need a durable,
+  > state-preserving home. The accept/dismiss flow and the propose-only `CreateItem` commit are
+  > unchanged — only the surface relocated. Optionally retaining the recording as a Task attachment is
+  > #211 (on pluggable offline-first attachment storage #210).
 
 **Considered and rejected.** *BYO user API key* (not in v1 — remains additive later as another
 engine-catalog entry). *Backend agent endpoints* (duplicates agent

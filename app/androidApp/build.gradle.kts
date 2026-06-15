@@ -140,6 +140,8 @@ dependencies {
     implementation(project(":feature:tasks:ui"))
     implementation(project(":feature:plan"))
     implementation(project(":feature:plan:ui"))
+    implementation(project(":feature:braindumps"))
+    implementation(project(":feature:braindumps:ui"))
     implementation(project(":feature:calendar"))
     implementation(project(":feature:calendar:ui"))
     implementation(project(":feature:auth"))
