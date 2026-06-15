@@ -152,6 +152,9 @@ koog = "1.0.0"
 # iosX64 variant — which is why `deferno.kmp` drops the iosX64 target (a commonMain dep must
 # resolve a variant for every target, and none exists for iosX64). Pre-1.0: expect API churn.
 kmpLogger = "0.0.1"
+# WorkManager (#150 Brain dump async redesign, ADR-0027): the on-device brain-dump transcription runs in
+# a CoroutineWorker so it survives the overlay closing. Android-only — declared in app/androidApp.
+androidxWork = "2.10.0"
 # iOS Swift bridging (ADR-0003): SKIE. NOT WIRED YET — no released SKIE supports Kotlin
 # 2.4.0 as of 2026-06 (latest 0.10.12, 2026-05-18, tops out at Kotlin 2.3.21), and SKIE asserts the
 # Kotlin version at *configuration* time, so applying it would fail Gradle sync on every
@@ -165,6 +168,7 @@ androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = 
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "androidxWork" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
