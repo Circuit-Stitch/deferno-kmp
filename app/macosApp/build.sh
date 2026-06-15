@@ -19,6 +19,14 @@ WORKSPACE=macosApp.xcworkspace
 SCHEME=macosApp
 DESTINATION='platform=macOS,arch=arm64'
 
+# Optional machine-local signing override (gitignored Local.xcconfig). When present it swaps project.yml's
+# ad-hoc signing for a stable Apple Development identity, so the Keychain ACL survives rebuilds and the
+# app stops re-prompting for keychain access (see Local.xcconfig). Absent (CI / fresh clone) the build
+# stays ad-hoc. `-xcconfig` only overrides the signing keys it defines, so the Pods/SQLCipher base config
+# is untouched.
+XCCONFIG_ARG=""
+[ -f Local.xcconfig ] && XCCONFIG_ARG="-xcconfig Local.xcconfig"
+
 echo "==> xcodegen generate"
 xcodegen generate
 
@@ -27,7 +35,7 @@ pod install
 
 echo "==> xcodebuild ($SCHEME, Debug)"
 xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" \
-  -configuration Debug -destination "$DESTINATION" build
+  -configuration Debug -destination "$DESTINATION" $XCCONFIG_ARG build
 
 if [ "${1:-}" = "--open" ]; then
   echo "==> open"
