@@ -38,6 +38,22 @@ final class DestinationStackObserver: ObservableObject {
     deinit { subscription?.cancel() }
 }
 
+/// Observes the Plan Destination's tier-3 stack (#51): the active `MainShellComponent.PlanChild`
+/// (the daily Dashboard at the base, or a drilled-in single-Task Detail above it).
+final class PlanStackObserver: ObservableObject {
+    @Published private(set) var active: MainShellComponentPlanChild
+    private var subscription: Deferno.Subscription?
+
+    init(_ bridge: PlanStackBridge) {
+        active = bridge.active
+        subscription = bridge.subscribe(onEach: { [weak self] child in
+            self?.active = child
+        })
+    }
+
+    deinit { subscription?.cancel() }
+}
+
 /// Observes the shell overlay slot: the open `MainShellComponent.OverlayChild`, or `nil`.
 final class OverlaySlotObserver: ObservableObject {
     @Published private(set) var current: MainShellComponentOverlayChild?
