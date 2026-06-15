@@ -13,14 +13,20 @@ import SwiftUI
 /// predictable. All navigation state lives in the retained shared component — `detail`/`tree` are
 /// co-resident slots and `activePane` is their foreground recency — so resizing (Split View / Stage
 /// Manager) flips pane count without dropping what's open: this View holds no foreground state of its
-/// own. In a single pane it collapses to the most-recently-foregrounded slot via the shared
-/// `resolveSecondarySlot` precedence, falling back to the list.
+/// own. In a single pane the drill is a native `NavigationStack` push (native back chevron + swipe-back):
+/// the stack path is **derived** from the slot state via `tasksNavPath` (the present slots ordered by
+/// `activePane` recency) and two-way synced — a native pop calls the foreground slot's `onCloseClicked()`,
+/// which runs the component's own fallback so get/set stay consistent.
 struct TasksScreen: View {
     let root: TasksRoot
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var detail: DetailSlotObserver
     @StateObject private var tree: TreeSlotObserver
     @StateObject private var activePane: ValueObserver<TaskPane>
+    /// The compact `NavigationStack` path, **owned by SwiftUI** so a native back/swipe pops cleanly. It's
+    /// kept in sync with the Decompose slot state (`currentPath`) in both directions via `.onChange` — see
+    /// the compact branch in `body`.
+    @State private var compactPath: [TaskRoute] = []
 
     init(root: TasksRoot) {
         self.root = root
@@ -36,33 +42,69 @@ struct TasksScreen: View {
             hasTree: tree.current != nil
         )
         if horizontalSizeClass == .regular {
-            HStack(spacing: 0) {
-                TaskListView(component: root.list)
-                    .frame(width: 340)
-                Divider()
-                secondaryPane(slot)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            NavigationStack {
+                HStack(spacing: 0) {
+                    TaskListView(component: root.list)
+                        .frame(width: 340)
+                    Divider()
+                    secondaryPane(slot)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .shellNavBar("Tasks")
             }
         } else {
-            compactPane(slot)
+            // Compact: the list is the stack root (carrying the Destination nav bar); a foregrounded
+            // detail/tree is a native push. SwiftUI owns `compactPath` so a native back/swipe pops cleanly;
+            // we mirror the Decompose slot state into it (push/recency) and, on a user pop, close the slot(s)
+            // it removed. (Driving the path from a computed Binding instead let the slot's not-yet-updated
+            // state re-assert the old path through the getter and bounce straight back to the detail on pop.)
+            NavigationStack(path: $compactPath) {
+                TaskListView(component: root.list)
+                    .shellNavBar("Tasks")
+                    .navigationDestination(for: TaskRoute.self, destination: pushedPane)
+            }
+            .onAppear { compactPath = currentPath }
+            .onChange(of: currentPath) { derived in
+                // Slot state changed (a row/child tap pushed, recency reordered, or something closed it
+                // elsewhere) → mirror it into the SwiftUI-owned path.
+                if compactPath != derived { compactPath = derived }
+            }
+            .onChange(of: compactPath) { popped in
+                // A native back/swipe shortened the path → close the slot(s) it removed (top-first). The
+                // close re-derives the same shorter `currentPath`, so the mirror above is then a no-op.
+                let derived = currentPath
+                guard popped.count < derived.count else { return }
+                for route in derived.suffix(from: popped.count).reversed() {
+                    switch route {
+                    case .detail: detail.current?.onCloseClicked()
+                    case .tree: tree.current?.onCloseClicked()
+                    }
+                }
+            }
         }
     }
 
-    /// The single visible pane on compact width: the foregrounded slot, else the list. Each carries
-    /// its own Back affordance (in its `PaneHeader`), so the swap reads predictably.
+    private var currentPath: [TaskRoute] {
+        tasksNavPath(
+            activePane: activePane.value,
+            hasDetail: detail.current != nil,
+            hasTree: tree.current != nil
+        )
+    }
+
+    /// A pushed secondary pane on compact width: the slot's View with its in-pane `PaneHeader` suppressed,
+    /// so the native bar owns the title + back chevron.
     @ViewBuilder
-    private func compactPane(_ slot: SecondarySlot) -> some View {
-        switch slot {
+    private func pushedPane(_ route: TaskRoute) -> some View {
+        switch route {
         case .detail:
             if let detail = detail.current {
-                TaskDetailView(component: detail).id(BridgeKt.detailKey(component: detail))
+                TaskDetailView(component: detail, showsHeader: false).id(BridgeKt.detailKey(component: detail))
             }
         case .tree:
             if let tree = tree.current {
-                TaskTreeView(component: tree).id(BridgeKt.treeKey(component: tree))
+                TaskTreeView(component: tree, showsHeader: false).id(BridgeKt.treeKey(component: tree))
             }
-        case .none:
-            TaskListView(component: root.list)
         }
     }
 

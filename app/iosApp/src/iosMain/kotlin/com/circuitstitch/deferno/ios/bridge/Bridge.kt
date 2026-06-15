@@ -2,6 +2,8 @@ package com.circuitstitch.deferno.ios.bridge
 
 import com.arkivanov.decompose.router.slot.ChildSlot
 import com.arkivanov.decompose.value.Value
+import com.circuitstitch.deferno.core.data.task.AttachmentUpload
+import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanState
@@ -11,11 +13,19 @@ import com.circuitstitch.deferno.feature.tasks.TaskListComponent
 import com.circuitstitch.deferno.feature.tasks.TaskListState
 import com.circuitstitch.deferno.feature.tasks.TaskTreeComponent
 import com.circuitstitch.deferno.feature.tasks.TaskTreeState
+import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.readBytes
+import kotlinx.cinterop.reinterpret
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import platform.Foundation.NSData
+import kotlin.time.Instant
 
 /**
  * The **SKIE-free bridge** the SwiftUI Views observe (#51). ADR-0003 calls for SKIE to turn
@@ -114,3 +124,50 @@ fun detailKey(component: TaskDetailComponent): String = component.taskId.value
 
 /** The String identity of the Task a tree pane is rooted at — for SwiftUI view identity (see [taskKey]). */
 fun treeKey(component: TaskTreeComponent): String = component.rootId.value
+
+// ---------------------------------------------------------------------------------------------------
+// Task detail sections (#207 iOS parity) — the value-class unwraps + NSData/Instant codecs the SwiftUI
+// TaskDetailView can't do itself: TaskId/UserId/OrgId are header-erased, ByteArray/Instant are opaque.
+// ---------------------------------------------------------------------------------------------------
+
+/** Open a subtask's own detail (the row chevron) — Swift holds the erased [Task.id], so Kotlin reads it. */
+fun openSubtask(component: TaskDetailComponent, subtask: Task) = component.onSubtaskClicked(subtask.id)
+
+/** The current deadline as Unix epoch seconds for a SwiftUI `DatePicker`, or -1.0 when the Task has none. */
+fun taskDeadlineEpochSeconds(task: Task): Double =
+    task.completeBy?.let { it.toEpochMilliseconds() / 1000.0 } ?: -1.0
+
+/** Set the deadline DUE date from a `DatePicker` selection (epoch seconds → the device-zone calendar day). */
+fun setTaskDeadline(component: TaskDetailComponent, epochSeconds: Double) {
+    val day = Instant.fromEpochMilliseconds((epochSeconds * 1000).toLong())
+        .toLocalDateTime(TimeZone.currentSystemDefault()).date
+    component.onSetDeadline(day)
+}
+
+/** Clear the deadline DUE date (the explicit clear path). */
+fun clearTaskDeadline(component: TaskDetailComponent) = component.onSetDeadline(null)
+
+/** Read-only PROPERTIES labels for the Swift view — the opaque-typed fields it can't format itself. */
+fun taskTimeLabel(task: Task): String = task.deadlineTimeOfDay?.toString() ?: "—"
+fun taskOwnerLabel(task: Task): String = task.ownerOrgId?.value ?: "—"
+
+/** Whether [comment] is the current user's (gates inline Edit/Delete) — both ids are erased [UserId]s. */
+fun commentIsMine(state: TaskDetailState, comment: Comment): Boolean {
+    val me = state.currentUserId ?: return false
+    return comment.createdBy == me
+}
+
+/** A comment's display date (e.g. "2026-04-17 (edited)") — Instant formatting Swift can't do directly. */
+fun commentDateLabel(comment: Comment): String =
+    comment.createdAt.toString().substringBefore('T') + if (comment.editedAt != null) " (edited)" else ""
+
+/**
+ * Upload a file the iOS picker resolved to this Task (#207). Swift can't build an [AttachmentUpload]
+ * (its `bytes` is a Kotlin `ByteArray`), so it passes the picked file's [data] as `NSData` and this
+ * copies it across — the same `NSData`→`ByteArray` idiom as `feedbackAddAttachment`.
+ */
+@OptIn(ExperimentalForeignApi::class)
+fun addTaskAttachment(component: TaskDetailComponent, filename: String, contentType: String, data: NSData) {
+    val bytes = data.bytes?.reinterpret<ByteVar>()?.readBytes(data.length.toInt()) ?: ByteArray(0)
+    component.onAddAttachments(listOf(AttachmentUpload(filename = filename, contentType = contentType, bytes = bytes)))
+}

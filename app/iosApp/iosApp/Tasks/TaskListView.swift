@@ -15,11 +15,6 @@ struct TaskListView: View {
     var body: some View {
         let value = state.value
         VStack(spacing: 0) {
-            PaneHeader(title: "Tasks") {
-                Button("Refresh") { component.onRefresh() }
-                    .frame(minHeight: Layout.minTouchTarget)
-                    .disabled(value.isRefreshing)
-            }
             if value.isRefreshing {
                 LoadingStrip(label: "Refreshing…")
             }
@@ -36,6 +31,7 @@ struct TaskListView: View {
                     }
                 }
                 .listStyle(.plain)
+                .refreshable { component.onRefresh() }
             }
         }
         .background(Color(.systemBackground))

@@ -137,6 +137,11 @@ class DefaultTaskDetailComponent(
     // The working-state write seam (#73). Defaults to a no-op so the many existing tests that exercise
     // only the read/navigation paths construct the component without supplying it (ADR-0001/0007).
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    // The in-memory summary the opener (list row / tree child) already had on screen. It seeds the
+    // first state so the title + body render the instant the pane appears, instead of flashing a "Task"
+    // placeholder until `observeTask` first emits a cycle later (the title "pop-in"). Null when the
+    // opener has no row to hand over (e.g. a Plan-overlay tap) — then it falls back to the empty start.
+    initialTask: Task? = null,
     // The online-only comments + attachments source. Defaults to an empty no-op so tests that don't
     // care about the detail sections (and offline construction) build without supplying it.
     private val detailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
@@ -180,7 +185,9 @@ class DefaultTaskDetailComponent(
                 isUploadingAttachment = ex.isUploadingAttachment,
                 currentUserId = ex.currentUserId,
             )
-        }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), TaskDetailState(isHydrating = true))
+            // initialTask seeds the title/body on the very first frame so the pane doesn't flash a "Task"
+            // placeholder before observeTask first emits (the title "pop-in").
+        }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), TaskDetailState(task = initialTask, isHydrating = true))
 
     init {
         scope.launch {

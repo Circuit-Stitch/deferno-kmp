@@ -95,6 +95,16 @@ jobs:
           yes | "$SDKMANAGER" --licenses > /dev/null
           "$SDKMANAGER" "ndk;30.0.14904198" "cmake;3.22.1"
 
+      # The shacl-floor module (#206) cross-compiles third_party/shacl-aio into libshacl_aio.so via
+      # :shacl-floor:buildRustFloor (a preBuild dependency, so `check` triggers it). ubuntu-latest ships
+      # Rust + cargo but NOT the cargo-ndk subcommand or the Android rustc targets, so add both; cargo-ndk
+      # finds the pinned NDK installed above via ANDROID_NDK_HOME. ABIs match buildRustFloor (arm64-v8a +
+      # x86_64). Without this the JVM gate fails at `cargo ndk` with "no such command: ndk".
+      - name: Install cargo-ndk + Rust Android targets for the shacl-floor lib (#206)
+        run: |
+          cargo install cargo-ndk --locked
+          rustup target add aarch64-linux-android x86_64-linux-android
+
       # The Android SDK (ANDROID_HOME / ANDROID_SDK_ROOT) is preinstalled on ubuntu-latest,
       # so AGP's host unit-test compilation needs no setup-android step and no
       # local.properties. `check` runs commonTest on JVM + the Android host tests + lint

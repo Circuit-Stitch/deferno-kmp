@@ -92,46 +92,21 @@ struct MainShellView: View {
     // MARK: Content card (top bar + active Destination), drawn on top of the drawer
 
     private var content: some View {
-        VStack(spacing: 0) {
-            topBar
-            destinationBody.frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .background(colors.background)
+        destinationBody
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(colors.background)
+            .environment(\.shellActions, shellActions)
     }
 
-    private var topBar: some View {
-        HStack(spacing: 4) {
-            Button { setDrawer(!drawerOpen) } label: {
-                Image(systemName: "line.3.horizontal")
-                    .font(.title3)
-                    .foregroundStyle(colors.onSurface)
-            }
-            .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
-            .accessibilityLabel("Menu")
-            Spacer()
-            // Brain dump (ADR-0027) — present for chrome parity with Android's two trailing actions, but
-            // inactive on iOS: there is no on-device inference engine here yet (the shacl floor is
-            // Android-only, #150), so OverlayRoute.BrainDump would only ever answer NotConfigured, and the
-            // iOS overlay slot has no BrainDump bridge. Enable it once an iOS engine ships.
-            Button {} label: {
-                Image(systemName: "waveform")
-                    .font(.title3)
-                    .foregroundStyle(colors.onSurface)
-            }
-            .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
-            .accessibilityLabel("Brain dump")
-            .disabled(true)
-            Button { onNewTapped() } label: {
-                Image(systemName: "plus")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(colors.onSurface)
-            }
-            .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
-            .accessibilityLabel("New")
-        }
-        .padding(.horizontal, 4)
-        .frame(minHeight: 48)
-        .background(colors.surface)
+    /// The hamburger (opens the drawer) and the New action, surfaced to the active Destination's native
+    /// nav bar. New is offered only where it means something — not on Profile/Settings (#72). The brain-dump
+    /// waveform is gone until it's actually wired (ADR-0027/#150): a permanently-disabled button is clutter.
+    private var shellActions: ShellActions {
+        let hasNew = ["Plan", "Tasks", "Calendar"].contains(activeName)
+        return ShellActions(
+            openMenu: { setDrawer(true) },
+            newItem: hasNew ? { onNewTapped() } : nil
+        )
     }
 
     @ViewBuilder

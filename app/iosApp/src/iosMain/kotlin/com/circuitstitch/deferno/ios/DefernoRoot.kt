@@ -161,13 +161,13 @@ class DefernoRoot {
      * Idempotent dev-PAT seeding (the iOS analogue of `DefernoApplication.seedDevAccounts`): the two
      * optional Info.plist strings (`DevAccounts` / `DevStagingToken`) feed [DevAccounts.from] so a
      * developer can open on real staging data without typing. Both absent in a normal build → nothing
-     * is seeded (no PAT ships). Only Accounts not already in the roster are added.
+     * is seeded (no PAT ships). Re-seeds on every launch so rotating a dev PAT in `Secrets.xcconfig`
+     * takes effect without a clean reinstall: [addAccount] upserts the token (`vault.putBearerToken`)
+     * and leaves the active account untouched once one is set, so the refresh is idempotent.
      */
     private suspend fun seedDevAccounts() {
         val manager = appComponent.accountManager
-        val existing = manager.accounts.value.map { it.id }.toSet()
         DevAccounts.from(infoPlistString("DevAccounts"), infoPlistString("DevStagingToken"))
-            .filter { it.account.id !in existing }
             .forEach { devAccount -> manager.addAccount(devAccount.account, devAccount.token) }
     }
 }

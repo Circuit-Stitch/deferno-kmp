@@ -3,8 +3,11 @@ package com.circuitstitch.deferno.feature.tasks
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.model.TaskId
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,6 +26,7 @@ private fun TestScope.tasksComponent(
 
 /** The co-resident slot model (ADR-0007): list is always present; detail and tree are slots that can
  *  hold a child alongside it (and each other), driven by intents — never a push/pop stack. */
+@OptIn(ExperimentalCoroutinesApi::class) // advanceUntilIdle() — let the detail build its subtask tree
 class TasksComponentTest {
 
     private fun repo() = FakeTaskRepository(
@@ -78,6 +82,25 @@ class TasksComponentTest {
         component.tree.value.child?.instance?.onChildClicked(TaskId("c1"))
 
         assertEquals(TaskId("c1"), component.detail.value.child?.instance?.taskId)
+    }
+
+    @Test
+    fun drillingIntoAnInlineSubtaskSeedsTheReKeyedDetail() = runTest {
+        val component = tasksComponent(repo())
+        component.list.onTaskClicked(TaskId("root"))
+        val parent = assertNotNull(component.detail.value.child?.instance)
+        // The parent detail is on screen (subscribed) when its subtask is tapped, so its subtask tree is
+        // built — mirror that here so the seed has a row to hand over (WhileSubscribed needs a collector).
+        backgroundScope.launch { parent.state.collect {} }
+        advanceUntilIdle()
+
+        parent.onSubtaskClicked(TaskId("c1"))
+
+        val child = assertNotNull(component.detail.value.child?.instance)
+        assertEquals(TaskId("c1"), child.taskId)
+        // Seeded from the parent detail's in-memory subtask tree → the row (and its title) is on the
+        // first frame, before any collection of the re-keyed detail's flow.
+        assertEquals(TaskId("c1"), child.state.value.task?.id)
     }
 
     @Test
