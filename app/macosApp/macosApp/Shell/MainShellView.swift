@@ -117,7 +117,7 @@ struct MainShellView: View {
     private var destinationBody: some View {
         let child = active
         if let plan = ShellBridgeKt.destPlan(child: child) {
-            PlanView(component: plan)
+            PlanHostView(plan: plan)
         } else if let calendar = ShellBridgeKt.destCalendar(child: child) {
             CalendarView(component: calendar)
         } else if let tasks = ShellBridgeKt.destTasks(child: child) {
@@ -274,13 +274,9 @@ struct MainShellView: View {
         overlay.current.flatMap { ShellBridgeKt.overlayNew(child: $0) }
     }
 
-    private var overlayTaskDetailComponent: TaskDetailComponent? {
-        overlay.current.flatMap { ShellBridgeKt.overlayTaskDetail(child: $0) }
-    }
-
     private var overlayPresented: Binding<Bool> {
         Binding(
-            get: { overlaySearchComponent != nil || overlayNewComponent != nil || overlayTaskDetailComponent != nil },
+            get: { overlaySearchComponent != nil || overlayNewComponent != nil },
             set: { presented in if !presented { component.dismissOverlay() } }
         )
     }
@@ -291,10 +287,6 @@ struct MainShellView: View {
             SearchView(component: search)
         } else if let new = overlayNewComponent {
             NewItemView(component: new)
-        } else if let task = overlayTaskDetailComponent {
-            // A Plan tap shows the Task here, over the dashboard — sized like the New/Search sheets.
-            TaskDetailView(component: task)
-                .frame(minWidth: 420, minHeight: 480)
         }
     }
 

@@ -1,6 +1,29 @@
 import Deferno
 import SwiftUI
 
+/// The Plan Destination host (#51) — a **tier-3 drill-down** (`PlanChild`: Dashboard ↔ Detail(task)).
+/// A Plan tap pushes the Task's detail onto the Plan stack; a subtask drill pushes deeper; the detail's
+/// own Back (its `PaneHeader`) pops via the component's `Closed` output. Renders the active child inline,
+/// mirroring `SettingsView`'s tier-3 stack — no shell overlay any more (the detail used to be a sheet).
+struct PlanHostView: View {
+    let plan: MainShellComponentDestinationChildPlan
+    @StateObject private var stack: PlanStackObserver
+
+    init(plan: MainShellComponentDestinationChildPlan) {
+        self.plan = plan
+        _stack = StateObject(wrappedValue: PlanStackObserver(ShellBridgeKt.planStackBridge(plan: plan)))
+    }
+
+    var body: some View {
+        let child = stack.active
+        if let dashboard = ShellBridgeKt.planChildDashboard(child: child) {
+            PlanView(component: dashboard)
+        } else if let detail = ShellBridgeKt.planChildDetail(child: child) {
+            TaskDetailView(component: detail).id(BridgeKt.detailKey(component: detail))
+        }
+    }
+}
+
 /// The daily Plan pane (#51) — the app's calm home (design-principles.md: "open into today's Plan,
 /// not the whole backlog"). A thin renderer of `PlanComponent`: observes today's ordered Tasks and
 /// forwards taps (open the Task) / refresh, holding no logic of its own.

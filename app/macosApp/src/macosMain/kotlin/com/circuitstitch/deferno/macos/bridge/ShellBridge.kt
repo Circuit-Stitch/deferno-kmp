@@ -125,6 +125,23 @@ class PlanStackBridge internal constructor(
     }
 }
 
+/**
+ * Flattens a detached detail window's stack (#196) to its foreground [TaskDetailComponent]. [canGoBack]
+ * is true once a subtask has been drilled (the window's Back control shows only then). Mirrors
+ * [PlanStackBridge] — the window is the Plan tier-3 stack minus the Dashboard base (ADR-0030).
+ */
+class DetailStackBridge internal constructor(
+    private val delegate: Value<ChildStack<*, com.circuitstitch.deferno.feature.tasks.TaskDetailComponent>>,
+) {
+    val active: com.circuitstitch.deferno.feature.tasks.TaskDetailComponent get() = delegate.value.active.instance
+    val canGoBack: Boolean get() = delegate.value.backStack.isNotEmpty()
+
+    fun subscribe(onEach: (com.circuitstitch.deferno.feature.tasks.TaskDetailComponent) -> Unit): Subscription {
+        val cancellation = delegate.subscribe { onEach(it.active.instance) }
+        return Subscription { cancellation.cancel() }
+    }
+}
+
 /** Observes the [ProfileComponent]'s sealed [ProfileState] (concrete — a sealed type, not a data class). */
 class ProfileStateBridge internal constructor(private val flow: StateFlow<ProfileState>) {
     val value: ProfileState get() = flow.value

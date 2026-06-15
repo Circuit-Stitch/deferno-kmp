@@ -59,6 +59,15 @@ interface RootComponent {
     val stack: Value<ChildStack<*, Child>>
 
     /**
+     * The **live** per-Account session backing the active Main shell, or `null` on the Auth shell
+     * (signed out). Detached macOS detail windows (#196, ADR-0030) build their detail stack over THIS
+     * session's repositories/editors — reusing the shell's one SQLite driver so a window edit and the
+     * main shell observe the same query Flow (cross-window live sync). `null` drives "detail windows
+     * unavailable when signed out". Not a navigation child — just the seam the window opener reads.
+     */
+    val activeAccountSession: AccountSession?
+
+    /**
      * The Active Account's settings, surfaced **app-wide** so the View's `DefernoTheme` re-themes
      * live when Appearance changes (#72). It is derived at the root (above the per-Account boundary):
      * it mirrors the active Main session's settings `Flow`, and falls back to [UserSettings.Default]
@@ -172,6 +181,10 @@ class DefaultRootComponent(
 
     /** The foreground Main child's session, used to apply per-Account writes (add-to-plan). */
     private var activeSession: AccountSession? = null
+
+    // The live session, exposed read-only for detached detail windows (#196) — same instance the Main
+    // child is built over, so a window's edits ride the shell's one driver (ADR-0030).
+    override val activeAccountSession: AccountSession? get() = activeSession
 
     /** A Brain dump "open the Inbox" deep-link that arrived before a Main shell existed (#150 Stage 4). */
     private var pendingInbox = false

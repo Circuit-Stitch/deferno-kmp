@@ -42,6 +42,20 @@ struct DefernoApp: App {
         }
         // Honour the content's min frame as the window's minimum size (the window still resizes up).
         .windowResizability(.contentMinSize)
+
+        // Detached, navigable per-task detail windows (#196, ADR-0030): a SECOND scene, opened by a task
+        // row's double-click / "Open in New Window" via `openWindow(id:value:)` carrying the raw task id.
+        // It coexists with the main window's inline pane and NEVER handles auth — the `main` Window stays
+        // the sole owner of `onOpenURL` + sign-in (#189). Value-based, so opening an already-open task
+        // brings its existing window to the front (native dedupe) rather than duplicating it.
+        WindowGroup(id: "task-detail", for: String.self) { $rawId in
+            if let rawId {
+                TaskDetailWindowView(host: host, rawId: rawId)
+            }
+        }
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 480, height: 620)
+
         .commands {
             // ⌘N opens the New-task overlay on the foreground Destination (pre-dated on Calendar, #74) —
             // the standard File → New slot, routed through the root since commands fire outside the View.

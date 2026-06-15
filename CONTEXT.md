@@ -335,7 +335,8 @@ _Avoid_: [[Dictation]] (fills one field, no inference), voice commands (a non-go
 
 How the **desktop** client reaches OS-native capabilities the JVM can't (on-device dictation, OS
 permission prompts, notifications, a menu-bar item) — a separate native process over a local socket,
-not JVM→native FFI (ADR-0024/0025).
+not JVM→native FFI (ADR-0024/0025). The one exception is the [[Native macOS app]], which calls these
+same Swift capabilities in-process (no Helper, no socket).
 
 **Sidecar** *(client, desktop)*:
 A separate **OS-native helper process** the desktop client reaches over a local socket to use
@@ -367,6 +368,16 @@ A **canned, non-native** [[Sidecar helper]] that binds a real socket and serves 
 *reference implementation of the server half*, used to exercise the whole [[Sidecar client]] path on the
 Linux fast path with no Mac (ADR-0024 tracer bullet). Not a real capability provider.
 _Avoid_: mock (it binds a real socket and speaks the real protocol), fake.
+
+**Native macOS app** *(client, macOS)*:
+The **genuinely-native SwiftUI/AppKit macOS app** (`app/macosApp`, ADR-0029) — a real Kotlin/Native
+`macosArm64` `Deferno.framework` (twin of the iOS framework) linked by a SwiftUI Xcode app. **Distinct
+from the Compose Desktop JVM app** (`app/desktopApp`), which stays as the cross-platform desktop target.
+Because Swift can call SFSpeech/EventKit/Foundation Models directly, it runs native capabilities and
+on-device inference **in-process** — reusing the macOS [[Sidecar helper]]'s Swift sources, but with no
+[[Sidecar]] process or socket. The JVM-can't-FFI premise behind the Sidecar evaporates here.
+_Avoid_: "the desktop app" (that is the Compose Desktop JVM app), Mac Catalyst (Kotlin/Native emits no
+`macabi` slice, so a Catalyst app can't link the iOS framework — this is a real macOS target).
 
 ### Settings (app vs user)
 

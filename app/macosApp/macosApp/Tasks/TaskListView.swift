@@ -6,6 +6,8 @@ import SwiftUI
 struct TaskListView: View {
     let component: TaskListComponent
     @StateObject private var state: StateFlowObserver<TaskListState>
+    // Opens a task into its own detached window (#196). Only the list wires this trigger.
+    @Environment(\.openWindow) private var openWindow
 
     init(component: TaskListComponent) {
         self.component = component
@@ -29,6 +31,18 @@ struct TaskListView: View {
                     ForEach(value.tasks, id: \.stableKey) { task in
                         TaskRow(task: task) { component.onTaskClicked(id: task.id) }
                             .listRowInsets(EdgeInsets())
+                            // Double-click or "Open in New Window" → a detached detail window (#196),
+                            // keyed by the raw task id (the WindowGroup scene value).
+                            .simultaneousGesture(
+                                TapGesture(count: 2).onEnded {
+                                    openWindow(id: "task-detail", value: task.stableKey)
+                                }
+                            )
+                            .contextMenu {
+                                Button("Open in New Window") {
+                                    openWindow(id: "task-detail", value: task.stableKey)
+                                }
+                            }
                     }
                 }
                 .listStyle(.plain)

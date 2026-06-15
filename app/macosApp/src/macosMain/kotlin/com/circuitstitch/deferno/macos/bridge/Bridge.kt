@@ -3,6 +3,9 @@ package com.circuitstitch.deferno.macos.bridge
 import com.arkivanov.decompose.router.slot.ChildSlot
 import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.model.Task
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
@@ -114,3 +117,32 @@ fun detailKey(component: TaskDetailComponent): String = component.taskId.value
 
 /** The String identity of the Task a tree pane is rooted at — for SwiftUI view identity (see [taskKey]). */
 fun treeKey(component: TaskTreeComponent): String = component.rootId.value
+
+// ---------------------------------------------------------------------------------------------------
+// Task detail PROPERTIES + subtask drill (#195) — value-class unwraps + the Instant↔epoch codec the
+// SwiftUI TaskDetailView can't do itself (TaskId/OrgId are header-erased, Instant is opaque). Ported
+// from the iOS bridge; this target trims it to the Properties + subtask-open seams #195 needs (the
+// attachment/comment helpers are #197). The Due/Labels writes land through the real outbox seams the
+// shared MainShellComponent wires (AccountSession), so editing here persists offline-first (ADR-0001).
+// ---------------------------------------------------------------------------------------------------
+
+/** Open a subtask's own detail (the row's title/chevron) — Swift holds the erased [Task.id], so Kotlin reads it. */
+fun openSubtask(component: TaskDetailComponent, subtask: Task) = component.onSubtaskClicked(subtask.id)
+
+/** The current deadline as Unix epoch seconds for a SwiftUI `DatePicker`, or -1.0 when the Task has none. */
+fun taskDeadlineEpochSeconds(task: Task): Double =
+    task.completeBy?.let { it.toEpochMilliseconds() / 1000.0 } ?: -1.0
+
+/** Set the deadline DUE date from a `DatePicker` selection (epoch seconds → the device-zone calendar day). */
+fun setTaskDeadline(component: TaskDetailComponent, epochSeconds: Double) {
+    val day = Instant.fromEpochMilliseconds((epochSeconds * 1000).toLong())
+        .toLocalDateTime(TimeZone.currentSystemDefault()).date
+    component.onSetDeadline(day)
+}
+
+/** Clear the deadline DUE date (the explicit clear path). */
+fun clearTaskDeadline(component: TaskDetailComponent) = component.onSetDeadline(null)
+
+/** Read-only PROPERTIES labels for the Swift view — the opaque-typed fields it can't format itself. */
+fun taskTimeLabel(task: Task): String = task.deadlineTimeOfDay?.toString() ?: "—"
+fun taskOwnerLabel(task: Task): String = task.ownerOrgId?.value ?: "—"
