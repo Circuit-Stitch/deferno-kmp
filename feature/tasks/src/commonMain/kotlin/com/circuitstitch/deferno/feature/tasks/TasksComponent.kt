@@ -151,9 +151,11 @@ class DefaultTasksComponent(
                 _activePane.value = TaskPane.Tree
             }
             // Tapping a subtask re-keys the detail slot to that child (inline drill-in), co-resident
-            // with the list — same as the tree's ChildSelected.
+            // with the list — same as the tree's ChildSelected. Seed from the detail's in-memory subtask
+            // tree (the row it just rendered) so the re-keyed detail's title shows immediately.
             is TaskDetailComponent.Output.SubtaskSelected -> {
-                detailNavigation.activate(DetailConfig(output.id))
+                val seed = detail.value.child?.instance?.state?.value?.subtasks?.findTask(output.id)
+                detailNavigation.activate(DetailConfig(output.id, seed))
                 _activePane.value = TaskPane.Detail
             }
             is TaskDetailComponent.Output.AddToPlanRequested ->
@@ -176,3 +178,7 @@ class DefaultTasksComponent(
         }
     }
 }
+
+/** Depth-first lookup of a Task by id in a [SubtaskNode] forest — seeds the subtask-drill detail. */
+private fun List<SubtaskNode>.findTask(id: TaskId): Task? =
+    firstNotNullOfOrNull { node -> if (node.task.id == id) node.task else node.children.findTask(id) }
