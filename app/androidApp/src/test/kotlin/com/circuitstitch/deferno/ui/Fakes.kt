@@ -150,6 +150,10 @@ internal class FakeTaskDetailComponent(
     val attachmentsAdded = mutableListOf<List<AttachmentUpload>>()
     val attachmentsDeleted = mutableListOf<String>()
     val attachmentCaptions = mutableListOf<Pair<String, String>>()
+    val onDeviceAttachmentsDeleted = mutableListOf<String>()
+
+    /** Bytes the View can read back for an on-device attachment (#211) — keyed by attachment id. */
+    var onDeviceBytes: Map<String, ByteArray> = emptyMap()
 
     override fun onCloseClicked() { closeCount++ }
     override fun onShowTreeClicked() { showTreeCount++ }
@@ -166,6 +170,8 @@ internal class FakeTaskDetailComponent(
     override fun onAddAttachments(files: List<AttachmentUpload>) { attachmentsAdded += files }
     override fun onDeleteAttachment(attachmentId: String) { attachmentsDeleted += attachmentId }
     override fun onSetAttachmentCaption(attachmentId: String, caption: String) { attachmentCaptions += attachmentId to caption }
+    override fun onDeleteOnDeviceAttachment(attachmentId: String) { onDeviceAttachmentsDeleted += attachmentId }
+    override suspend fun onDeviceAttachmentBytes(attachmentId: String): ByteArray? = onDeviceBytes[attachmentId]
 }
 
 /** Records the global-search overlay's intents for the SearchScreen interaction test (#73). */

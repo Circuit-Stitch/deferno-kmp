@@ -26,12 +26,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.circuitstitch.deferno.R
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.shell.ui.NewDateField
 import com.circuitstitch.deferno.shell.ui.NewDeadlineTimeField
@@ -119,11 +121,15 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
 
             Spacer(Modifier.padding(top = 16.dp))
 
-            NewTitleField(state = state, onTitleChange = component::setTitle, onMic = ::onMic)
+            // The dictation mic glyph: a native res/drawable on Android (the app packages no
+            // dependency-module composeResources, so the shared atom takes an injected painter — the
+            // same approach as the shell-chrome icons).
+            val micIcon = painterResource(R.drawable.ic_mic)
+            NewTitleField(state = state, onTitleChange = component::setTitle, onMic = ::onMic, micIcon = micIcon)
 
             Spacer(Modifier.padding(top = 8.dp))
 
-            NewNotesField(state = state, onNotesChange = component::setNotes, onMic = ::onMic)
+            NewNotesField(state = state, onNotesChange = component::setNotes, onMic = ::onMic, micIcon = micIcon)
 
             // The gentle Dictation feedback (#92): permission states + recognition errors, never silent.
             // The Android voice of the shared atom, deep-linking to this app's OS settings page.

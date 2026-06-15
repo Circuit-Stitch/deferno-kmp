@@ -58,6 +58,7 @@ import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
 import com.circuitstitch.deferno.feature.tasks.DefaultSearchComponent
 import com.circuitstitch.deferno.feature.tasks.DefaultTaskDetailComponent
+import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachments
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
@@ -315,6 +316,10 @@ class DefaultMainShellComponent(
     // (overlay + Tasks Destination). Defaulted to no-ops so the many shell tests build without them.
     private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
+    // The Task detail's on-device attachment seam (#211), threaded into the Tasks destination + the
+    // TaskDetail overlay. Defaults to the empty NONE so the many shell tests build without it; production
+    // threads this Account's seam from the session.
+    private val onDeviceAttachments: OnDeviceAttachments = OnDeviceAttachments.NONE,
     // The global-search seam (#73): a one-shot, online-only pull the Search overlay drives. Defaults
     // to "no results" so tests that don't exercise Search build without supplying it.
     private val searchTasks: SearchTasks = SearchTasks { _ -> TaskSearchResult.Success(emptyList()) },
@@ -536,6 +541,7 @@ class DefaultMainShellComponent(
                                     createSubtask = createSubtask,
                                     setDeadline = setDeadline,
                                     setLabels = setLabels,
+                                    onDeviceAttachments = onDeviceAttachments,
                                     coroutineContext = coroutineContext,
                                 ),
                             )
@@ -580,6 +586,7 @@ class DefaultMainShellComponent(
                         createSubtask = createSubtask,
                         setDeadline = setDeadline,
                         setLabels = setLabels,
+                        onDeviceAttachments = onDeviceAttachments,
                         coroutineContext = coroutineContext,
                     ),
                 )

@@ -284,6 +284,8 @@ class DefaultRootComponent(
                         // routed through this Account's command executor (Set/ClearTaskDeadline, SetTaskLabels).
                         setDeadline = session.setDeadline,
                         setLabels = session.setLabels,
+                        // On-device attachments (#211): the detail shows + plays this Account's retained recordings.
+                        onDeviceAttachments = session.onDeviceAttachments,
                         searchTasks = SearchTasks.of(session.taskRepository),
                         accounts = accountManager.accounts,
                         activeAccount = accountManager.activeAccount,

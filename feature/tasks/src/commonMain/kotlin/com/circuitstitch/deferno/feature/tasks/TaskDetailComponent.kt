@@ -51,8 +51,50 @@ data class TaskDetailState(
     val isPostingComment: Boolean = false,
     val attachments: List<Attachment> = emptyList(),
     val isUploadingAttachment: Boolean = false,
+    // On-device attachments held locally (e.g. a retained brain-dump recording, #210/#211) — distinct
+    // from the synced [attachments] above: they live on this device, so they're played/deleted locally,
+    // not opened from a signed URL. Empty on platforms without on-device capture (desktop/iOS).
+    val onDeviceAttachments: List<OnDeviceAttachment> = emptyList(),
     val currentUserId: UserId? = null,
 )
+
+/**
+ * A locally-stored attachment on a Task (#210/#211) as the detail View renders it — a thin, transport-free
+ * projection of `core/data`'s `LocalAttachment` (the shell maps it across so this module needn't depend on
+ * the storage layer's type). Unlike the synced [Attachment] there is no URL: the bytes are on-device, so an
+ * audio recording is **played locally** rather than opened in a browser.
+ */
+data class OnDeviceAttachment(
+    val id: String,
+    val filename: String,
+    val mime: String,
+    val size: Long,
+    val caption: String? = null,
+) {
+    /** Whether this is audio (a brain-dump recording) — drives the View's play affordance. */
+    val isAudio: Boolean get() = mime.startsWith("audio/")
+}
+
+/**
+ * The Task detail's **on-device attachment** seam (#210/#211): lists a Task's locally-stored attachments
+ * (e.g. a retained brain-dump recording), deletes one, and reads one's bytes for local playback. The shell
+ * backs it with this Account's `LocalAttachmentRepository` (mapping its `LocalAttachment` → [OnDeviceAttachment]
+ * so this module stays free of the storage layer's type). [NONE] is the empty default for tests and the
+ * platforms without on-device capture (desktop/iOS) — then the detail simply shows no on-device rows.
+ */
+interface OnDeviceAttachments {
+    suspend fun forTask(taskId: TaskId): List<OnDeviceAttachment>
+    suspend fun delete(id: String)
+    suspend fun bytes(id: String): ByteArray?
+
+    companion object {
+        val NONE: OnDeviceAttachments = object : OnDeviceAttachments {
+            override suspend fun forTask(taskId: TaskId): List<OnDeviceAttachment> = emptyList()
+            override suspend fun delete(id: String) {}
+            override suspend fun bytes(id: String): ByteArray? = null
+        }
+    }
+}
 
 /**
  * The Task detail component (ADR-0007: the co-resident detail pane). Observes one Task from the
@@ -121,6 +163,15 @@ interface TaskDetailComponent {
     /** Set or change an attachment's caption, then re-fetch the list. No-op on a blank caption. */
     fun onSetAttachmentCaption(attachmentId: String, caption: String)
 
+    /** Delete an on-device attachment by [attachmentId] (#211), then re-fetch the on-device list. */
+    fun onDeleteOnDeviceAttachment(attachmentId: String)
+
+    /**
+     * The on-device bytes for [attachmentId] (#211), read entirely on-device — the View uses them to play
+     * an audio recording locally. `null` if absent. Suspends; the View calls it from its own scope.
+     */
+    suspend fun onDeviceAttachmentBytes(attachmentId: String): ByteArray?
+
     sealed interface Output {
         data object Closed : Output
         data class TreeRequested(val id: TaskId) : Output
@@ -155,6 +206,10 @@ class DefaultTaskDetailComponent(
     // The LABELS write seam (taskId, labels) — replaces the Task's label set (empty clears). Wired from
     // the shell's command executor (SetTaskLabels); defaults to a no-op for the same reason.
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
+    // On-device attachments (#210/#211): the read/delete/read-bytes seam wired from this Account's
+    // LocalAttachmentRepository. Defaulted to the empty NONE so the many tests and the platforms without
+    // on-device capture build without it (the detail then shows no on-device rows).
+    private val onDeviceAttachments: OnDeviceAttachments = OnDeviceAttachments.NONE,
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : TaskDetailComponent, ComponentContext by componentContext {
 
@@ -183,6 +238,7 @@ class DefaultTaskDetailComponent(
                 isPostingComment = ex.isPostingComment,
                 attachments = ex.attachments,
                 isUploadingAttachment = ex.isUploadingAttachment,
+                onDeviceAttachments = ex.onDeviceAttachments,
                 currentUserId = ex.currentUserId,
             )
             // initialTask seeds the title/body on the very first frame so the pane doesn't flash a "Task"
@@ -199,6 +255,7 @@ class DefaultTaskDetailComponent(
         }
         scope.launch { extras.update { it.copy(currentUserId = detailRepository.currentUserId()) } }
         loadAttachments()
+        refreshOnDeviceAttachments()
         loadComments()
     }
 
@@ -207,6 +264,13 @@ class DefaultTaskDetailComponent(
             val attachments = detailRepository.attachments(taskId)
             // null = couldn't load; keep whatever we already have rather than blanking the list.
             extras.update { it.copy(attachments = attachments ?: it.attachments) }
+        }
+    }
+
+    private fun refreshOnDeviceAttachments() {
+        scope.launch {
+            val local = onDeviceAttachments.forTask(taskId)
+            extras.update { it.copy(onDeviceAttachments = local) }
         }
     }
 
@@ -315,6 +379,16 @@ class DefaultTaskDetailComponent(
         scope.launch { if (detailRepository.updateAttachmentCaption(taskId, attachmentId, trimmed)) loadAttachments() }
     }
 
+    override fun onDeleteOnDeviceAttachment(attachmentId: String) {
+        scope.launch {
+            onDeviceAttachments.delete(attachmentId)
+            refreshOnDeviceAttachments()
+        }
+    }
+
+    override suspend fun onDeviceAttachmentBytes(attachmentId: String): ByteArray? =
+        onDeviceAttachments.bytes(attachmentId)
+
     /** The mutable extras the [state] combine folds in — the online-only sections + identity. */
     private data class Extras(
         val comments: List<Comment> = emptyList(),
@@ -323,6 +397,7 @@ class DefaultTaskDetailComponent(
         val isPostingComment: Boolean = false,
         val attachments: List<Attachment> = emptyList(),
         val isUploadingAttachment: Boolean = false,
+        val onDeviceAttachments: List<OnDeviceAttachment> = emptyList(),
         val currentUserId: UserId? = null,
     )
 }

@@ -76,6 +76,13 @@ value class SpeechEngineId(val value: String) {
          */
         val Sidecar: SpeechEngineId = SpeechEngineId("sidecar")
 
+        /**
+         * The Android **platform** on-device recognizer (#93, ADR-0018): `createOnDeviceSpeechRecognizer`,
+         * a native single-utterance fast path for dictation. Registered on Android only; outranks [Whisper]
+         * when the device has an on-device recognition pack (API 33+), else reports unavailable.
+         */
+        val AndroidNative: SpeechEngineId = SpeechEngineId("android-native")
+
         /** The composite [SpeechToTextSelector] itself (the app-facing engine over all registered engines). */
         val Selector: SpeechEngineId = SpeechEngineId("selector")
 

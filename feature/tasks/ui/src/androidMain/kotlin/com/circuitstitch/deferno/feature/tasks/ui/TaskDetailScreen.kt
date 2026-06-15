@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
 import android.content.Context
+import android.media.MediaPlayer
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -37,9 +39,14 @@ import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.designsystem.theme.plexMono
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
+import java.io.File
 
 /**
  * The Task detail pane (#27). Thin renderer of [TaskDetailComponent]: observes the hydrating row and
@@ -51,6 +58,7 @@ import kotlinx.datetime.LocalDate
 fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifier) {
     val state by component.state.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     // The Storage Access Framework picker owns the file → bytes glue (cf. the feedback FeedbackScreen);
     // it reads each picked file through the ContentResolver and hands them to the component.
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
@@ -75,8 +83,37 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
         onAddAttachment = { pickFiles.launch("*/*") },
         onDeleteAttachment = component::onDeleteAttachment,
         onSetAttachmentCaption = component::onSetAttachmentCaption,
+        onDeleteOnDeviceAttachment = component::onDeleteOnDeviceAttachment,
+        // Play a retained recording (#211): read its on-device bytes, then hand them to MediaPlayer.
+        onPlayOnDeviceAttachment = { att ->
+            scope.launch {
+                val bytes = component.onDeviceAttachmentBytes(att.id) ?: return@launch
+                playAudioBytes(context, bytes)
+            }
+        },
         modifier = modifier,
     )
+}
+
+/**
+ * One-shot local playback of [bytes] (a retained brain-dump WAV, #211): write to a private cache file and
+ * play it through [MediaPlayer], releasing on completion/error. Off the main thread (file IO + prepare); a
+ * single reused temp file is fine since only one recording plays at a time. Best-effort — a playback
+ * failure must never crash the detail.
+ */
+private suspend fun playAudioBytes(context: Context, bytes: ByteArray) = withContext(Dispatchers.IO) {
+    runCatching {
+        val file = File(context.cacheDir, "braindump-play.wav")
+        file.writeBytes(bytes)
+        MediaPlayer().apply {
+            setOnCompletionListener { it.release() }
+            setOnErrorListener { mp, _, _ -> mp.release(); true }
+            setDataSource(file.absolutePath)
+            prepare()
+            start()
+        }
+    }
+    Unit
 }
 
 // The web's attachment limits: at most 5 files per add, 25 MB each.
@@ -112,6 +149,8 @@ internal fun TaskDetailContent(
     onAddAttachment: () -> Unit,
     onDeleteAttachment: (String) -> Unit,
     onSetAttachmentCaption: (String, String) -> Unit,
+    onDeleteOnDeviceAttachment: (String) -> Unit = {},
+    onPlayOnDeviceAttachment: (OnDeviceAttachment) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val task = state.task
@@ -148,6 +187,8 @@ internal fun TaskDetailContent(
                     onAddAttachment = onAddAttachment,
                     onDeleteAttachment = onDeleteAttachment,
                     onSetAttachmentCaption = onSetAttachmentCaption,
+                    onDeleteOnDeviceAttachment = onDeleteOnDeviceAttachment,
+                    onPlayOnDeviceAttachment = onPlayOnDeviceAttachment,
                 )
             }
         }
@@ -171,6 +212,8 @@ private fun TaskBody(
     onAddAttachment: () -> Unit,
     onDeleteAttachment: (String) -> Unit,
     onSetAttachmentCaption: (String, String) -> Unit,
+    onDeleteOnDeviceAttachment: (String) -> Unit,
+    onPlayOnDeviceAttachment: (OnDeviceAttachment) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -228,6 +271,9 @@ private fun TaskBody(
             onAddClick = onAddAttachment,
             onDelete = onDeleteAttachment,
             onSetCaption = onSetAttachmentCaption,
+            onDeviceAttachments = state.onDeviceAttachments,
+            onDeleteOnDevice = onDeleteOnDeviceAttachment,
+            onPlayOnDevice = onPlayOnDeviceAttachment,
         )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

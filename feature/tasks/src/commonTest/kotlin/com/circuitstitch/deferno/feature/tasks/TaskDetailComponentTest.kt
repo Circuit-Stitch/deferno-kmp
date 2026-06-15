@@ -38,6 +38,7 @@ private fun TestScope.taskDetailComponent(
     createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
     setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
     setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
+    onDeviceAttachments: OnDeviceAttachments = OnDeviceAttachments.NONE,
 ) = DefaultTaskDetailComponent(
     componentContext = DefaultComponentContext(LifecycleRegistry()),
     taskId = id,
@@ -49,8 +50,23 @@ private fun TestScope.taskDetailComponent(
     createSubtask = createSubtask,
     setDeadline = setDeadline,
     setLabels = setLabels,
+    onDeviceAttachments = onDeviceAttachments,
     coroutineContext = StandardTestDispatcher(testScheduler),
 )
+
+/** In-memory [OnDeviceAttachments] for the #211 detail tests: serves a task's local rows, records deletes. */
+private class FakeOnDeviceAttachments(
+    private var rows: List<OnDeviceAttachment> = emptyList(),
+    private val bytesById: Map<String, ByteArray> = emptyMap(),
+) : OnDeviceAttachments {
+    val deleted = mutableListOf<String>()
+    override suspend fun forTask(taskId: TaskId): List<OnDeviceAttachment> = rows
+    override suspend fun delete(id: String) {
+        deleted += id
+        rows = rows.filterNot { it.id == id }
+    }
+    override suspend fun bytes(id: String): ByteArray? = bytesById[id]
+}
 
 /** In-memory [TaskDetailRepository] for the detail-section tests; records writes, re-serves reads. */
 private class FakeTaskDetailRepository(
@@ -437,5 +453,52 @@ class TaskDetailComponentTest {
 
         assertEquals(listOf("att1" to "Receipt"), detail.captioned)
         assertEquals(2, detail.attachmentsCalls) // initial load + reload after the caption set
+    }
+
+    @Test
+    fun loadsOnDeviceAttachmentsOnCreation() = runTest {
+        val onDevice = FakeOnDeviceAttachments(
+            rows = listOf(OnDeviceAttachment("braindump:t", "brain-dump.wav", "audio/wav", 9L)),
+        )
+        val component = taskDetailComponent(
+            TaskId("a"), FakeTaskRepository(listOf(task("a"))), onDeviceAttachments = onDevice,
+        )
+
+        component.state.test {
+            var item = awaitItem()
+            while (item.onDeviceAttachments.isEmpty()) item = awaitItem()
+            val row = item.onDeviceAttachments.single()
+            assertEquals("brain-dump.wav", row.filename)
+            assertEquals(true, row.isAudio)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun deleteOnDeviceAttachmentForwardsAndReloads() = runTest {
+        val onDevice = FakeOnDeviceAttachments(
+            rows = listOf(OnDeviceAttachment("braindump:t", "brain-dump.wav", "audio/wav", 9L)),
+        )
+        val component = taskDetailComponent(
+            TaskId("a"), FakeTaskRepository(listOf(task("a"))), onDeviceAttachments = onDevice,
+        )
+        advanceUntilIdle()
+
+        component.onDeleteOnDeviceAttachment("braindump:t")
+        advanceUntilIdle()
+
+        assertEquals(listOf("braindump:t"), onDevice.deleted)
+        assertEquals(emptyList(), component.state.value.onDeviceAttachments) // reloaded → now empty
+    }
+
+    @Test
+    fun onDeviceAttachmentBytesReadsThroughTheSeam() = runTest {
+        val onDevice = FakeOnDeviceAttachments(bytesById = mapOf("braindump:t" to byteArrayOf(1, 2, 3)))
+        val component = taskDetailComponent(
+            TaskId("a"), FakeTaskRepository(listOf(task("a"))), onDeviceAttachments = onDevice,
+        )
+
+        assertEquals(listOf<Byte>(1, 2, 3), component.onDeviceAttachmentBytes("braindump:t")?.toList())
+        assertEquals(null, component.onDeviceAttachmentBytes("missing"))
     }
 }
