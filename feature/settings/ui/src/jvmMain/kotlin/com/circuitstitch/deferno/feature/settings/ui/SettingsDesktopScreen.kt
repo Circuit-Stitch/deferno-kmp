@@ -115,22 +115,20 @@ internal fun SettingsListContent(
     speechEngine: SpeechEngineSettings,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        DetailHeader(title = "Settings", onBack = null)
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        ) {
-            DesktopCategories.forEach { category ->
-                // The device-local Speech engine row shows only when this device has a real engine (#93) —
-                // hidden on desktop until a desktop engine lands (#94); shown automatically once it does.
-                if (category == SettingsCategory.SpeechEngine && !speechEngine.available) return@forEach
-                CategoryRow(
-                    label = category.title,
-                    summary = category.rowSummary(speechEngine),
-                    onClick = { onOpenCategory(category) },
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
+    // The "Settings" title now lives in the shell's single top bar (Cand 1); this pane is just the list.
+    Column(
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+    ) {
+        DesktopCategories.forEach { category ->
+            // The device-local Speech engine row shows only when this device has a real engine (#93) —
+            // hidden on desktop until a desktop engine lands (#94); shown automatically once it does.
+            if (category == SettingsCategory.SpeechEngine && !speechEngine.available) return@forEach
+            CategoryRow(
+                label = category.title,
+                summary = category.rowSummary(speechEngine),
+                onClick = { onOpenCategory(category) },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }
@@ -169,44 +167,42 @@ private fun CategoryDetail(
     component: SettingsComponent,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        DetailHeader(title = category.title, onBack = component::onBack)
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            when (category) {
-                SettingsCategory.Appearance -> AppearanceDetail(settings, component)
-                SettingsCategory.TaskBehavior -> TaskBehaviorDetail(settings, component)
-                SettingsCategory.SpeechEngine -> SpeechEngineDetail(speechEngine, component::onSpeechEngineSelected)
-                SettingsCategory.DataPrivacy -> DataPrivacyDetail(settings, component)
-                SettingsCategory.HelpFeedback -> HelpFeedbackDetail(component)
-                SettingsCategory.Legal -> LegalDetail()
-                SettingsCategory.Account -> AccountDetail(settings, component)
-                SettingsCategory.Security2FA -> ComingSoonDetail(
-                    body = "Two-factor authentication and security are managed by your identity provider. " +
-                        "We’ll bring these controls into the app soon.",
-                    action = "Open security console",
-                    onAction = component::onOpenConsole,
-                )
+    // The category title + Back now live in the shell's single top bar (Cand 1); this pane is the body.
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        when (category) {
+            SettingsCategory.Appearance -> AppearanceDetail(settings, component)
+            SettingsCategory.TaskBehavior -> TaskBehaviorDetail(settings, component)
+            SettingsCategory.SpeechEngine -> SpeechEngineDetail(speechEngine, component::onSpeechEngineSelected)
+            SettingsCategory.DataPrivacy -> DataPrivacyDetail(settings, component)
+            SettingsCategory.HelpFeedback -> HelpFeedbackDetail(component)
+            SettingsCategory.Legal -> LegalDetail()
+            SettingsCategory.Account -> AccountDetail(settings, component)
+            SettingsCategory.Security2FA -> ComingSoonDetail(
+                body = "Two-factor authentication and security are managed by your identity provider. " +
+                    "We’ll bring these controls into the app soon.",
+                action = "Open security console",
+                onAction = component::onOpenConsole,
+            )
 
-                SettingsCategory.Integrations -> ComingSoonDetail(
-                    body = "Connect Deferno with the other tools you use. Integrations are on the way.",
-                )
+            SettingsCategory.Integrations -> ComingSoonDetail(
+                body = "Connect Deferno with the other tools you use. Integrations are on the way.",
+            )
 
-                // App Permissions is omitted from the desktop list (no per-app OS settings screen,
-                // ADR-0017), so this branch is unreachable on desktop — kept only to stay exhaustive.
-                SettingsCategory.AppPermissions -> Unit
+            // App Permissions is omitted from the desktop list (no per-app OS settings screen,
+            // ADR-0017), so this branch is unreachable on desktop — kept only to stay exhaustive.
+            SettingsCategory.AppPermissions -> Unit
 
-                // Agent (#150) is Android-only for now; filtered from DesktopCategories, never opened here.
-                SettingsCategory.Agent -> Unit
+            // Agent (#150) is Android-only for now; filtered from DesktopCategories, never opened here.
+            SettingsCategory.Agent -> Unit
 
-                // Storage (#210) is Android-first; filtered from DesktopCategories, never opened here.
-                SettingsCategory.Storage -> Unit
-            }
+            // Storage (#210) is Android-first; filtered from DesktopCategories, never opened here.
+            SettingsCategory.Storage -> Unit
         }
     }
 }
@@ -370,28 +366,6 @@ private fun ComingSoonDetail(body: String, action: String? = null, onAction: (()
 // --- shared atoms (mirrors the Android SettingsScreen atoms; this module's androidMain copies are
 // private, and jvmMain is a separate Compose-Desktop source set, so they are re-declared here) ---
 
-@Composable
-private fun DetailHeader(title: String, onBack: (() -> Unit)?) {
-    Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.heightIn(min = 56.dp).padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (onBack != null) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-            } else {
-                Spacer(Modifier.width(16.dp))
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.semantics { heading() },
-            )
-        }
-    }
-}
 
 @Composable
 private fun SectionLabel(text: String) {
