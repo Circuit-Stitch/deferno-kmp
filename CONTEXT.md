@@ -148,6 +148,19 @@ shell only for **add-account or re-authentication**; a plain [[Account switch]] 
 `switchTo`, no Auth shell, no re-auth).
 _Avoid_: screen, root view.
 
+**Chrome** *(client)*:
+The **single adaptive top bar** the [[Shell]] renders around the foreground in-chrome surface, computed
+once as a Compose-free **`ChromeSpec`**(title, drilled, actions) and rendered natively per platform
+(Compose on Android/desktop, SwiftUI on iOS — ADR-0031). `drilled` picks the leading affordance (☰ menu
+at a [[Destination]] root vs ← back when drilled into a tier-3 detail, ADR-0007); `actions` are the
+trailing create affordances (New, Brain dump, per-screen Refresh). Its **title is shell presentation
+state**, not a domain label and not the nav-suite label — a Destination's nav row reads "Plan" while its
+chrome title reads "Today". Multi-pane Destinations (Tasks) are the carve-out: their co-resident
+[[Pane]]s keep their own headers, so the chrome shows only the global actions. The shell's modal
+overlay slot (Search/New/Feedback/Brain dump, ADR-0015) sits *above* the chrome and is not driven by it.
+_Avoid_: header, app bar, toolbar (those are the per-platform [[View]] renderers of the one Chrome);
+"screen chrome" (the chrome is shell-wide, not per-screen).
+
 **Dashboard** *(client)*:
 An **always-global at-a-glance overview** [[Destination]] (e.g. progress, counts, mood, upcoming).
 It summarizes across **all** Orgs and **ignores** the active [[Workspace]] scope — the one place that

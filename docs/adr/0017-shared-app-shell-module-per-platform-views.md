@@ -15,7 +15,9 @@ duplication guarantees that drift recurs on every shell change.
 **Decision.** Extract the Compose-free shell components into a new shared module **`app/shell`**
 (`deferno.kmp.library`, Android + JVM + iOS), consumed by every app entry point. The shell **Views**
 stay **per-platform**: Compose in `app/androidApp` (the adaptive `NavigationSuiteScaffold`) and
-`app/desktopApp` (a rail/drawer + in-app menu bar), and SwiftUI on iOS when it lands. Desktop moves
+`app/desktopApp` (a rail/drawer + in-app menu bar), and **SwiftUI on iOS** — now live production code
+(`app/iosApp/iosApp/`: `RootView.swift`, `MainShellView.swift`, and the Kotlin bridges), with the
+native macOS SwiftUI surface following the same shared shell (ADR-0029). Desktop moves
 **onto the real JVM DI graph** — `createAppComponent(PlatformContext(dir), Staging)` →
 `AccountComponentSession(createAccountComponent(appComponent, account))` — exactly as `DefernoApplication`
 + `MainActivity` do, **retiring** `StubAuthGate`, the demo repositories, and `SampleData` from the
