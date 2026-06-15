@@ -633,6 +633,7 @@ private fun SettingsCategory.rowSummary(
 private fun speechEngineLabel(id: SpeechEngineId): String = when (id) {
     SpeechEngineId.Automatic -> "Automatic"
     SpeechEngineId.Whisper -> "Whisper"
+    SpeechEngineId.AndroidNative -> "Android (on-device)"
     // Future native fast paths get explicit labels as they land (#96/#97); fall back to a humanised id.
     else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
 }

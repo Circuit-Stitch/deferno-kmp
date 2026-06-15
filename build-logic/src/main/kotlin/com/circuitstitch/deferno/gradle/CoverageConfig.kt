@@ -89,6 +89,10 @@ object CoverageConfig {
         // does not match the measured `UnavailableSpeechToText`.
         "com.circuitstitch.deferno.core.speech.WhisperSpeechToText*",
         "com.circuitstitch.deferno.core.speech.WhisperBridge*",
+        // The Android platform on-device recognizer (#93): android.speech glue over a real device's STT
+        // service, exercised on-device, not the headless gate (same rationale as WhisperSpeechToText). The
+        // SpeechToTextSelector + catalog that rank it ARE measured (commonMain/commonTest).
+        "com.circuitstitch.deferno.core.speech.AndroidNativeSpeechToText*",
         "com.circuitstitch.deferno.core.speech.MicAudioSource*",
         "com.circuitstitch.deferno.core.speech.*ModelLocator*",
         "com.circuitstitch.deferno.core.speech.SettingsSpeechEnginePreference*",
