@@ -16,13 +16,13 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 
 /**
- * A self-contained **stack of Task detail pages** rooted at one [TaskId] (#196, ADR-0030) — the
+ * A self-contained **stack of Task detail pages** rooted at one [TaskId] (#196, ADR-0033) — the
  * navigation model for a detached macOS detail window. It is the Plan tier-3 detail stack
  * ([com.circuitstitch.deferno.shell] `MainShellComponent`) minus the Dashboard base: the root is a
  * [TaskDetailComponent] for the seeded Task, drilling a subtask **pushes** that child's detail, and
  * [onBack] **pops** back up. Each leaf reuses the enriched [DefaultTaskDetailComponent] (#195) built
  * over the same per-Account seams the shell uses, so a window edit and the main shell observe the one
- * driver's Flow and stay in sync (ADR-0030 — the live-session reuse).
+ * driver's Flow and stay in sync (ADR-0033 — the live-session reuse).
  */
 interface TaskDetailStackComponent {
     val stack: Value<ChildStack<*, TaskDetailComponent>>

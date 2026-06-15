@@ -11,7 +11,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** The detached-window detail stack (#196, ADR-0030): seeded at a root, subtasks push, back pops. */
+/** The detached-window detail stack (#196, ADR-0033): seeded at a root, subtasks push, back pops. */
 class TaskDetailStackComponentTest {
 
     private fun TestScope.stackComponent(rootId: TaskId) =

@@ -11,7 +11,7 @@ import com.circuitstitch.deferno.macos.bridge.DetailStackBridge
 import com.circuitstitch.deferno.shell.RootComponent
 
 /**
- * The Swift-facing handle for one **detached Task detail window** (#196, ADR-0030). It owns the window's
+ * The Swift-facing handle for one **detached Task detail window** (#196, ADR-0033). It owns the window's
  * own Essenty [LifecycleRegistry] (resumed at open, [destroy]ed when SwiftUI tears the scene down — the
  * per-window lifecycle, mirroring [DefernoRoot]) and exposes the [TaskDetailStackComponent]'s push/pop
  * stack flattened through the SKIE-free [DetailStackBridge] so SwiftUI never touches Decompose generics.
@@ -19,7 +19,7 @@ import com.circuitstitch.deferno.shell.RootComponent
  * It is built from the **live** [com.circuitstitch.deferno.shell.AccountSession] the main shell already
  * holds (via [openTaskDetailWindow]), not a fresh `AccountComponent` — so the window and the main shell
  * share one SQLite driver and a write in either re-emits into the other's query Flow (the cross-window
- * live-sync AC; ADR-0030 deviation from the issue's per-call `createAccountComponent`).
+ * live-sync AC; ADR-0033 deviation from the issue's per-call `createAccountComponent`).
  */
 class TaskDetailWindowRoot internal constructor(
     private val lifecycle: LifecycleRegistry,
