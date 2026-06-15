@@ -235,6 +235,9 @@ fun main() {
             // graph so the gate exists app-wide; the desktop Settings hides the Agent row until a desktop
             // engine lands.
             inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
+            // Storage-provider App setting (#210): threaded from the AppScope graph so on-device storage works
+            // app-wide; the desktop Settings hides the Storage row until the desktop attach UI lands.
+            storageProviderCatalog = appComponent.storageProviderCatalog,
             // Brain dump's recordBrainDump seam (#150 Stage 4) is left at the no-op default on desktop: the
             // mic-record → on-device-transcribe flow is Android-only, and desktop renders the
             // BrainDumpPlaceholder, so there is no recorder to thread until a JVM one lands.

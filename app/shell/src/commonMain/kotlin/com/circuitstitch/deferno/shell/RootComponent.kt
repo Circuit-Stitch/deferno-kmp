@@ -18,6 +18,9 @@ import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
+import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
@@ -113,6 +116,15 @@ class DefaultRootComponent(
     // [InferenceEngineCatalog.Inert] (no engine → the Agent row hides) so tests build without it;
     // production passes the AppComponent's.
     private val inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
+    // The device-local storage-provider choice (#210): the AppScope catalog the Settings Destination reads.
+    // Threaded down to the Main shell. Defaulted to the inert [StorageProviderCatalog.Inert] (in-memory
+    // selection) so tests build without it; production passes the AppComponent's.
+    private val storageProviderCatalog: StorageProviderCatalog = StorageProviderCatalog.Inert,
+    // The device-local "keep brain-dump recordings" choice (#211): the AppScope preference the Settings
+    // Destination reads. Threaded down to the Main shell. Defaulted to an in-memory (on) preference so tests
+    // build without it; production passes the AppComponent's.
+    private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
+        InMemoryKeepBrainDumpRecordingsPreference(),
     // The Brain dump's record-to-file seam (ADR-0027/#150, Stage 4): records the mic to a WAV and hands it
     // to the background worker on Stop. Threaded down to the Main shell. Android-only (Context + WorkManager);
     // desktop/tests leave it the no-op default — the recorder is inert. The worker (not the shell) now owns
@@ -278,6 +290,10 @@ class DefaultRootComponent(
                         speechEngineCatalog = speechEngineCatalog,
                         // The Agent inference-engine choice + entitlement gate (#150) the Settings reads.
                         inferenceEngineCatalog = inferenceEngineCatalog,
+                        // The device-local storage-provider choice (#210) the Settings Destination reads.
+                        storageProviderCatalog = storageProviderCatalog,
+                        // The device-local "keep brain-dump recordings" choice (#211) the Settings reads.
+                        keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
                         // The Brain dump's record-to-file seam (ADR-0027/#150, Stage 4) the voice_chat overlay drives.
                         recordBrainDump = recordBrainDump,
                         // The foreclosed-permission deep-link (#120), threaded to the New overlay.
@@ -287,6 +303,8 @@ class DefaultRootComponent(
                         // (mark Accepted) / dismiss / undo.
                         observeBrainDumpDrafts = session::observeBrainDumpDrafts,
                         upsertBrainDumpDraft = session::upsertBrainDumpDraft,
+                        // The Inbox accept's recording-attach (#211): attach the retained WAV to the new Task.
+                        attachBrainDumpRecording = session::attachBrainDumpRecording,
                     )
                 // A pending Inbox deep-link (the Brain dump notification tapped on a cold start into the
                 // Auth shell, ADR-0027 Stage 4): now that the Main shell exists, apply it, then consume it.

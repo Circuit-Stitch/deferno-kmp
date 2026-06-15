@@ -22,6 +22,8 @@ import com.circuitstitch.deferno.core.data.auth.KtorNativeAuthRemoteSource
 import com.circuitstitch.deferno.core.data.auth.NativeAuthRemoteSource
 import com.circuitstitch.deferno.core.data.auth.OAuthClientStore
 import com.circuitstitch.deferno.core.data.auth.SignInService
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.calendar.KtorCalendarRemoteSource
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
@@ -214,4 +216,15 @@ interface DataBindings {
         client: HttpClient,
         uploadClient: UploadHttpClient,
     ): FeedbackRepository = KtorFeedbackRepository(client, uploadClient)
+
+    /**
+     * The device-local storage-provider choice the Settings Destination renders (#210) — the providers a
+     * *user/task* attachment can be stored in (on-device default, backend, cloud coming-later) over the
+     * platform-backed [StorageProviderPreference]. An [[App setting]]: device-local, never synced, never
+     * per-Account (AppScope, ADR-0014) — the direct analogue of the speech/inference engine catalogs.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun storageProviderCatalog(preference: StorageProviderPreference): StorageProviderCatalog =
+        StorageProviderCatalog(preference)
 }

@@ -4,6 +4,12 @@ import com.circuitstitch.deferno.core.data.account.AccountDataStore
 import com.circuitstitch.deferno.core.data.account.AccountRegistry
 import com.circuitstitch.deferno.core.data.account.InMemoryAccountRegistry
 import com.circuitstitch.deferno.core.data.account.NoOpAccountDataStore
+import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
+import com.circuitstitch.deferno.core.data.attachment.FileAttachmentBytesStore
+import com.circuitstitch.deferno.core.data.attachment.SettingsStorageProviderPreference
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
+import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
 import com.circuitstitch.deferno.core.data.auth.DeviceName
 import com.circuitstitch.deferno.core.data.auth.LoopbackBrowserAuthenticator
@@ -11,12 +17,15 @@ import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.connectivity.PollingConnectivity
 import com.circuitstitch.deferno.core.data.connectivity.anyNetworkInterfaceUp
 import com.circuitstitch.deferno.core.scopes.AppScope
+import com.russhwolf.settings.PreferencesSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
+import java.io.File
+import java.util.prefs.Preferences
 
 /**
  * Desktop (JVM) AppScope actuals (ADR-0014): an in-memory roster (a persistent desktop registry is a
@@ -55,4 +64,37 @@ interface JvmDataBindings {
         probe = { anyNetworkInterfaceUp() },
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     )
+
+    /**
+     * The device-local storage-provider choice (#210, [[App setting]]), `java.util.prefs`-backed (the
+     * cross-desktop store the speech engine choice uses). Holds only the provider id, never bytes.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun storageProviderPreference(): StorageProviderPreference =
+        SettingsStorageProviderPreference(
+            PreferencesSettings(Preferences.userRoot().node("com/circuitstitch/deferno/storage")),
+        )
+
+    /**
+     * The on-device attachment byte store (#210): attachment bytes live as files under
+     * `<databasesDir>/attachments` (the same app dir the desktop SQLite files live in), so they survive
+     * offline and never leave the device. [databasesDir] is the AppScope binding the DB driver also reads.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun attachmentBytesStore(databasesDir: String): AttachmentBytesStore =
+        FileAttachmentBytesStore(File(databasesDir, "attachments"))
+
+    /**
+     * The device-local "keep brain-dump recordings" choice (#211, [[App setting]]), `java.util.prefs`-backed
+     * like the storage-provider choice. Desktop doesn't capture brain dumps yet, so the toggle is inert here
+     * (no worker reads it); the binding keeps the graph complete.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
+        SettingsKeepBrainDumpRecordingsPreference(
+            PreferencesSettings(Preferences.userRoot().node("com/circuitstitch/deferno/storage")),
+        )
 }
