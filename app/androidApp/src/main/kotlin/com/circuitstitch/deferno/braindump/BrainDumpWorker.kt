@@ -21,6 +21,7 @@ import com.circuitstitch.deferno.core.agent.DraftTask
 import com.circuitstitch.deferno.core.agent.Extractor
 import com.circuitstitch.deferno.core.agent.InferenceResult
 import com.circuitstitch.deferno.core.agent.Transcript
+import com.circuitstitch.deferno.core.data.braindump.brainDumpRecordingPlaceholderId
 import com.circuitstitch.deferno.core.di.createAccountComponent
 import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.core.model.BrainDumpDraftId
@@ -41,8 +42,11 @@ import kotlin.time.Instant
  * DI: WorkManager's default reflective factory builds this; it reaches the held DI graph off
  * `(applicationContext as DefernoApplication).appComponent` — the AppScope `inferenceEngine`, and the
  * active Account's `brainDumpDraftRepository` via `createAccountComponent` (the same recipe the shell's
- * AccountSession uses). Privacy (ADR-0009/0018): the WAV is deleted right after transcription and no
- * audio or transcript text is logged.
+ * AccountSession uses). Privacy (ADR-0009/0018): the temp WAV is deleted right after transcription and no
+ * audio or transcript text is logged. When the "keep brain-dump recordings" App setting is on (#211), a
+ * COPY of the recording is retained as an on-device attachment placeholder (recognition still never leaves
+ * the device — this is storage of the user's own content, not transcription) for the Inbox accept to attach
+ * to the created Task; an empty extraction retains nothing.
  *
  * **Draft visibility (Stage 3 note):** this builds its OWN AccountComponent, so its SQLDelight driver is
  * distinct from the UI's — its `upsert`s don't fire the UI driver's live `asFlow()` listeners. That's
@@ -81,9 +85,27 @@ class BrainDumpWorker(
                     return Result.success()
                 }
             }
-            val repo = createAccountComponent(appComponent, account).brainDumpDraftRepository
+            val accountComponent = createAccountComponent(appComponent, account)
+            val repo = accountComponent.brainDumpDraftRepository
             proposal.drafts.forEach { repo.upsert(it.toDraft(createdAt)) }
             logger.i { "BrainDumpWorker: persisted ${proposal.drafts.size} draft(s)" }
+            // #211: retain the source recording as an on-device attachment placeholder (keyed by [createdAt],
+            // the shared per-recording key) so the Inbox accept can attach it to the created Task — gated on
+            // the device-local "keep recordings" App setting (default on) and only when there are drafts to
+            // triage (an empty extraction has nothing to accept, so retaining would orphan). Best-effort: a
+            // failed save must never lose the drafts. Recognition still never leaves the device.
+            if (proposal.drafts.isNotEmpty() && appComponent.keepBrainDumpRecordingsPreference.enabled()) {
+                runCatching {
+                    accountComponent.localAttachmentRepository.save(
+                        id = brainDumpRecordingPlaceholderId(createdAt),
+                        taskId = null,
+                        filename = "brain-dump-${createdAt.toEpochMilliseconds()}.wav",
+                        mime = "audio/wav",
+                        bytes = wav.readBytes(),
+                        createdAt = createdAt,
+                    )
+                }
+            }
             notifyDraftsReady(applicationContext, proposal.drafts.size)
             Result.success()
         } catch (e: Exception) {

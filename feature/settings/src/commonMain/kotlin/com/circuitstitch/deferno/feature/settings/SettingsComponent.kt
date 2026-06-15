@@ -12,6 +12,11 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
 import com.circuitstitch.deferno.core.agent.InferenceEngineOption
 import com.circuitstitch.deferno.core.common.componentScope
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderOption
+import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -51,6 +56,11 @@ enum class SettingsCategory(val backed: Boolean) {
     // the [SettingsComponent.inferenceEngine] read model, not `UserSettings`. Row shown only when this
     // device has an inference engine; the cloud option is gated on the Account's relay entitlement.
     Agent(backed = true),
+    // The on-device storage-provider choice (#210) — like [SpeechEngine]/[Agent] a device-local
+    // [[App setting]] over the [SettingsComponent.storageProvider] read model, not `UserSettings`. Governs
+    // where *user/task* attachments are stored (feedback always uses the backend); always shown (on-device
+    // is always available).
+    Storage(backed = true),
     DataPrivacy(backed = true),
     HelpFeedback(backed = true),
     AppPermissions(backed = true),
@@ -102,6 +112,19 @@ data class InferenceEngineSettings(
 }
 
 /**
+ * The Settings Destination's view of the device-local **storage-provider choice** (#210) — the
+ * [SettingsCategory.Storage] category's state. [options] is on-device (the offline-first default) + the
+ * Deferno backend (both selectable) + the user-owned cloud providers (shown coming-later), [selected] is the
+ * current device-local choice (default [StorageProviderId.OnDevice]). On-device storage is always available,
+ * so the Storage row is always shown (unlike Speech/Agent). It governs *user/task* attachments only —
+ * feedback attachments always use the backend.
+ */
+data class StorageProviderSettings(
+    val options: List<StorageProviderOption>,
+    val selected: StorageProviderId,
+)
+
+/**
  * The **Settings** Destination component (#72, ADR-0013 / ADR-0007 tier 3): a **drill-down** modelled
  * as a Decompose [ChildStack] — the category [SettingsChild.List] at the root, and a per-category
  * detail pushed above it ([openCategory]) and popped cleanly back ([onBack]). It is Compose-free and
@@ -137,6 +160,23 @@ interface SettingsComponent {
      * the row only when [InferenceEngineSettings.available], with the cloud option disabled until entitled.
      */
     val inferenceEngine: StateFlow<InferenceEngineSettings>
+
+    /**
+     * The device-local storage-provider choice ([SettingsCategory.Storage], #210) — where new *user/task*
+     * attachments are stored (on-device default / Deferno backend / user-owned cloud coming-later), sourced
+     * from the AppScope [StorageProviderCatalog], **not** the synced [settings]. It never syncs and never
+     * changes on an Account switch. Feedback attachments are unaffected (always backend).
+     */
+    val storageProvider: StateFlow<StorageProviderSettings>
+
+    /**
+     * The device-local **"keep brain-dump recordings"** choice (#211) — whether a brain-dump's source
+     * recording is retained as an on-device Task attachment (#210) when a draft is accepted in the Inbox.
+     * An **[[App setting]]**, sourced from the AppScope preference, **not** the synced [settings]; it never
+     * syncs and never changes on an Account switch. Defaults to on. Surfaced under [SettingsCategory.Storage]
+     * (recordings are on-device attachments); the Android View renders the toggle (desktop/iOS don't capture).
+     */
+    val keepBrainDumpRecordings: StateFlow<Boolean>
 
     /** Drill into [category]'s detail (push). */
     fun openCategory(category: SettingsCategory)
@@ -176,6 +216,19 @@ interface SettingsComponent {
      * on-device engine is ungated; [InferenceEngineId.Off] stands the Agent fully down.
      */
     fun onInferenceEngineSelected(id: InferenceEngineId)
+
+    /**
+     * Storage provider: set the device-local choice (#210) — persists device-locally via the
+     * [StorageProviderCatalog], **never** synced. Governs only *user/task* attachments (on-device keeps bytes
+     * on the device; the user-owned cloud providers are coming-later); feedback attachments always use the backend.
+     */
+    fun onStorageProviderSelected(id: StorageProviderId)
+
+    /**
+     * Storage: toggle whether new brain-dump recordings are kept on-device (#211) — persists device-locally
+     * via the preference, **never** synced. When off, a brain dump's recording is not retained on accept.
+     */
+    fun onKeepBrainDumpRecordingsChanged(enabled: Boolean)
 
     // --- host-routed intents (Output up to the shell) ---
 
@@ -246,6 +299,14 @@ class DefaultSettingsComponent(
     // [InferenceEngineCatalog.Inert] (no engine → row hidden) so existing Settings tests build without
     // supplying it (like the speech default).
     private val inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
+    // The device-local storage-provider choice (#210): the AppScope catalog over the device-local
+    // preference. Defaulted to the inert [StorageProviderCatalog.Inert] (in-memory selection) so existing
+    // Settings tests build without supplying it; on-device is always available, so the Storage row always shows.
+    private val storageProviderCatalog: StorageProviderCatalog = StorageProviderCatalog.Inert,
+    // The device-local "keep brain-dump recordings" preference (#211). Defaulted to an in-memory (on)
+    // preference so existing Settings tests build without supplying it (like the storage-catalog default).
+    private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
+        InMemoryKeepBrainDumpRecordingsPreference(),
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : SettingsComponent, ComponentContext by componentContext {
 
@@ -285,6 +346,19 @@ class DefaultSettingsComponent(
     // resolves. Device-local — sourced from the AppScope catalog, never the synced settings.
     private val _inferenceEngine = MutableStateFlow(InferenceEngineSettings.seed(inferenceEngineCatalog.selected()))
     override val inferenceEngine: StateFlow<InferenceEngineSettings> = _inferenceEngine.asStateFlow()
+
+    // The device-local storage-provider choice (#210). Seeded synchronously with the full static option list
+    // + the persisted selection — on-device is always available, so no suspend availability query and the
+    // Storage row always shows. Device-local — sourced from the AppScope catalog, never the synced settings.
+    private val _storageProvider = MutableStateFlow(
+        StorageProviderSettings(storageProviderCatalog.options(), storageProviderCatalog.selected()),
+    )
+    override val storageProvider: StateFlow<StorageProviderSettings> = _storageProvider.asStateFlow()
+
+    // The device-local "keep brain-dump recordings" choice (#211). Seeded synchronously from the preference;
+    // device-local — sourced from the AppScope preference, never the synced settings.
+    private val _keepBrainDumpRecordings = MutableStateFlow(keepBrainDumpRecordingsPreference.enabled())
+    override val keepBrainDumpRecordings: StateFlow<Boolean> = _keepBrainDumpRecordings.asStateFlow()
 
     init {
         scope.launch {
@@ -349,6 +423,19 @@ class DefaultSettingsComponent(
         // change availability/entitlement, so reflect the new choice in place rather than re-querying.
         inferenceEngineCatalog.select(id)
         _inferenceEngine.value = _inferenceEngine.value.copy(selected = id)
+    }
+
+    override fun onStorageProviderSelected(id: StorageProviderId) {
+        // Device-local persist (App setting, #210) — not the synced SettingsEditor. The static options don't
+        // change on selection, so reflect the new choice in place.
+        storageProviderCatalog.select(id)
+        _storageProvider.value = _storageProvider.value.copy(selected = id)
+    }
+
+    override fun onKeepBrainDumpRecordingsChanged(enabled: Boolean) {
+        // Device-local persist (App setting, #211) — not the synced SettingsEditor.
+        keepBrainDumpRecordingsPreference.setEnabled(enabled)
+        _keepBrainDumpRecordings.value = enabled
     }
 
     override fun onOpenDataExportImport() = output(SettingsComponent.Output.OpenDataExportImport)

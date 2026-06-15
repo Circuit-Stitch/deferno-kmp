@@ -99,7 +99,13 @@ fun SettingsDesktopScreen(component: SettingsComponent, modifier: Modifier = Mod
  * Agent row (#150 ships the Agent surface on Android only; desktop gets it when a desktop engine lands).
  */
 private val DesktopCategories: List<SettingsCategory> =
-    SettingsCategory.entries.filter { it != SettingsCategory.AppPermissions && it != SettingsCategory.Agent }
+    SettingsCategory.entries.filter {
+        it != SettingsCategory.AppPermissions &&
+            it != SettingsCategory.Agent &&
+            // Storage (#210) ships its Settings surface on Android first; the desktop row lands with the
+            // desktop attach UI (on-device storage already works on desktop — only the selector is deferred).
+            it != SettingsCategory.Storage
+    }
 
 // --- category list (root) ---
 
@@ -194,6 +200,9 @@ private fun CategoryDetail(
 
             // Agent (#150) is Android-only for now; filtered from DesktopCategories, never opened here.
             SettingsCategory.Agent -> Unit
+
+            // Storage (#210) is Android-first; filtered from DesktopCategories, never opened here.
+            SettingsCategory.Storage -> Unit
         }
     }
 }
@@ -486,6 +495,7 @@ private val SettingsCategory.title: String
         SettingsCategory.TaskBehavior -> "Task behavior"
         SettingsCategory.SpeechEngine -> "Speech engine"
         SettingsCategory.Agent -> "Agent"
+        SettingsCategory.Storage -> "Storage"
         SettingsCategory.DataPrivacy -> "Data & Privacy"
         SettingsCategory.HelpFeedback -> "Help & Feedback"
         SettingsCategory.AppPermissions -> "App Permissions"

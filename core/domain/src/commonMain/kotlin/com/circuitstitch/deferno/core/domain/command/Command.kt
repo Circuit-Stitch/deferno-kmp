@@ -303,8 +303,15 @@ data class SetDoneVisibility(val globalSeconds: Long?, val dashboardSeconds: Lon
 sealed interface CommandResult {
     val kind: CommandKind
 
-    /** Optimistically applied to the local cache + enqueued to the outbox. **Not** server-confirmed. */
-    data class Accepted(override val kind: CommandKind) : CommandResult
+    /**
+     * Optimistically applied to the local cache + enqueued to the outbox. **Not** server-confirmed.
+     *
+     * [itemId] is the created item's server id for the online-only [CreateItem]/[ConvertItem] path (where
+     * the create response carries it) and `null` for every offline-first edit (which targets an existing
+     * id, so there's nothing new to surface). The Inbox accept reads it to attach the retained brain-dump
+     * recording to the freshly-created Task (#211).
+     */
+    data class Accepted(override val kind: CommandKind, val itemId: String? = null) : CommandResult
 
     /**
      * Refused by the pure pre-flight gate ([CommandKind.enabledFor]) **before any write** — the gentle,

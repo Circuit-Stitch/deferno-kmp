@@ -217,7 +217,9 @@ class CommandExecutorTest {
 
             val result = executor(tw, pw, cw, ow, sw).execute(sampleCommand(kind)) // null current → gate skipped
 
-            assertEquals(CommandResult.Accepted(kind), result, "kind $kind should be Accepted")
+            // Create/convert surface the created id (#211); every other kind has no new id (itemId = null).
+            val expectedId = if (kind in CommandKind.createKinds) "server-${kind.name}" else null
+            assertEquals(CommandResult.Accepted(kind, expectedId), result, "kind $kind should be Accepted")
             val isPlan = kind in CommandKind.planKinds
             val isCreate = kind in CommandKind.createKinds
             val isOccurrence = kind in CommandKind.occurrenceKinds
@@ -242,7 +244,7 @@ class CommandExecutorTest {
         val result = executor(FakeTaskWriter(), FakePlanWriter(), cw)
             .execute(CreateItem(CreateItem.Payload.Task(com.circuitstitch.deferno.core.network.dto.CreateTaskPayload(title = "x"))))
 
-        assertEquals(CommandResult.Accepted(CommandKind.CreateItem), result)
+        assertEquals(CommandResult.Accepted(CommandKind.CreateItem, itemId = "server-1"), result)
         assertEquals(listOf("createTask"), cw.calls)
     }
 
@@ -274,7 +276,7 @@ class CommandExecutorTest {
             .execute(ConvertItem("item-1", com.circuitstitch.deferno.core.model.ItemKind.Task,
                 com.circuitstitch.deferno.core.network.dto.ConvertItemPayload(type = "habit")))
 
-        assertEquals(CommandResult.Accepted(CommandKind.ConvertItem), result)
+        assertEquals(CommandResult.Accepted(CommandKind.ConvertItem, itemId = "item-1"), result)
         assertEquals(listOf("convert:item-1:Task"), cw.calls)
     }
 

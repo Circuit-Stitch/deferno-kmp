@@ -21,8 +21,11 @@ import com.circuitstitch.deferno.core.domain.command.SetTaskLabels
 import com.circuitstitch.deferno.core.domain.command.SetTheme
 import com.circuitstitch.deferno.core.domain.command.SetTracking
 import com.circuitstitch.deferno.core.domain.command.taskCommandFor
+import com.circuitstitch.deferno.core.data.braindump.brainDumpRecordingPlaceholderId
 import com.circuitstitch.deferno.core.di.AccountComponent
 import com.circuitstitch.deferno.core.model.BrainDumpDraft
+import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
+import kotlinx.coroutines.flow.first
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -102,6 +105,14 @@ interface AccountSession {
     suspend fun upsertBrainDumpDraft(draft: BrainDumpDraft)
 
     /**
+     * Attach this Account's retained brain-dump recording for [draft] to the just-created Task [taskId]
+     * (#211, ADR-0015 Inbox accept). A no-op when no recording was retained (the setting was off at
+     * capture, or this isn't a brain-dump platform). The Inbox accept calls it with the created Task id
+     * surfaced by the online create (`CommandResult.Accepted.itemId`).
+     */
+    suspend fun attachBrainDumpRecording(taskId: String, draft: BrainDumpDraft)
+
+    /**
      * The occurrence-act seam the Calendar drives (#74): mark / clear / reschedule a firing through the
      * command executor (optimistic apply + outbox enqueue), so the feature layer never touches the
      * registry directly — the firing-level mirror of [workingStateEditor].
@@ -139,8 +150,38 @@ class AccountComponentSession(private val component: AccountComponent) : Account
 
     override fun observeBrainDumpDrafts() = component.brainDumpDraftRepository.observeDrafts()
 
-    override suspend fun upsertBrainDumpDraft(draft: BrainDumpDraft) =
+    override suspend fun upsertBrainDumpDraft(draft: BrainDumpDraft) {
         component.brainDumpDraftRepository.upsert(draft)
+        // #211: a draft leaving the Ready queue (accept marks it Accepted, dismiss marks it Dismissed) is a
+        // triage. Once a recording's LAST Ready draft is triaged, reap its retained WAV so dismiss-all leaves
+        // no orphan and on-device storage stays bounded. Undo (→ Ready) and the worker's Ready inserts skip it.
+        if (draft.status != BrainDumpDraftStatus.Ready) reapBrainDumpRecordingIfTriaged(draft)
+    }
+
+    // Delete the retained recording for [draft]'s recording when no Ready draft from it remains. The mark
+    // above is already committed, so the same-driver re-query sees the just-triaged draft as non-Ready.
+    private suspend fun reapBrainDumpRecordingIfTriaged(draft: BrainDumpDraft) {
+        val stillReady = component.brainDumpDraftRepository.observeDrafts().first()
+            .any { it.status == BrainDumpDraftStatus.Ready && it.createdAt == draft.createdAt }
+        if (!stillReady) {
+            component.localAttachmentRepository.delete(brainDumpRecordingPlaceholderId(draft.createdAt))
+        }
+    }
+
+    override suspend fun attachBrainDumpRecording(taskId: String, draft: BrainDumpDraft) {
+        val attachments = component.localAttachmentRepository
+        val bytes = attachments.bytes(brainDumpRecordingPlaceholderId(draft.createdAt)) ?: return
+        // Attach to EACH accepted Task (the chosen one→N model): a per-Task copy keyed by the Task id, so
+        // deleting one Task's attachment never affects a sibling's. The placeholder is reaped on full triage.
+        attachments.save(
+            id = "braindump:$taskId",
+            taskId = taskId,
+            filename = "brain-dump-${draft.createdAt.toEpochMilliseconds()}.wav",
+            mime = "audio/wav",
+            bytes = bytes,
+            createdAt = draft.createdAt,
+        )
+    }
 
     override suspend fun addToPlan(taskId: TaskId, date: LocalDate, tz: String) {
         component.commandExecutor.execute(AddToPlan(taskId, date, tz))

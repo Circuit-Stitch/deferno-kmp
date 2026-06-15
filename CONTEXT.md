@@ -288,8 +288,10 @@ The editable text a [[Dictation]] produces — partial words stream in, a final 
 that point it is ordinary editable text the person owns. The single hand-off artifact between the
 on-device speech layer and whatever consumes it (in v1, a text field; later, the [[Brain dump]]
 extractor). Always **on-device**: the audio never leaves the device and is never sent to a server for
-recognition.
-_Avoid_: recording (the transient audio, not kept), recognition result, dictation (that is the *act*).
+recognition. (A [[Brain dump]]'s *source recording* may be **retained on-device** as a Task attachment when
+the person opts in — see that entry — but recognition itself, and the audio leaving the device, stay absolute.)
+_Avoid_: recording (a [[Dictation]]'s audio is transient, not kept — distinct from a [[Brain dump]]'s
+optionally-retained recording), recognition result, dictation (that is the *act*).
 
 **Preflight** *(client, desktop)*:
 The **prompting resolution of [[Dictation]]'s two OS permission gates** — speech recognition first,
@@ -308,7 +310,12 @@ Free-form spoken capture whose [[Transcript]] the [[Extractor]] turns into **sev
 relax ADR-0015's "kind is explicit, never inferred." The drafts are exactly that: *drafts*, never
 auto-committed. The extractor **never runs silently**: an off-device model only by the person's
 **explicit opt-in**, and when a local engine is available it is preferred by default (the audio
-itself never leaves the device — that boundary is [[Transcript]]'s and stays absolute).
+itself never leaves the device — that boundary is [[Transcript]]'s and stays absolute). The source
+**recording** is transient by default, but the person can opt to **keep it on-device** (a device-local
+"keep brain-dump recordings" [[App setting]], default on, #211): on accept it is retained as a Task
+attachment via the on-device storage provider (#210), discarded once every draft from a recording is
+triaged. Keeping it never weakens the boundary above — it is storage of the person's own content, not
+recognition, so the audio still never leaves the device unless the person later chooses a cloud provider.
 _Avoid_: [[Dictation]] (fills one field, no inference), voice commands (a non-goal).
 
 ### Native sidecar (desktop)

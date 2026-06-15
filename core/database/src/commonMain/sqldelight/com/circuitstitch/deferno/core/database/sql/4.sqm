@@ -1,0 +1,17 @@
+-- Migration 4 -> 5: add the on-device attachment store (#210, pluggable offline-first attachment storage).
+--
+-- Records which storage provider holds each attachment + its provider-relative locator + the attachment
+-- metadata, so an on-device attachment is listable/openable/deletable offline (the bytes live in app-local
+-- storage via AttachmentBytesStore). Local-only, never synced. Plain CREATE — existing DBs gain an empty
+-- table, which is correct (ADR-0022 runbook).
+CREATE TABLE localAttachmentEntity (
+    id         TEXT NOT NULL PRIMARY KEY,
+    task_id    TEXT,
+    provider   TEXT NOT NULL,
+    locator    TEXT NOT NULL,
+    filename   TEXT NOT NULL,
+    mime       TEXT NOT NULL,
+    size       INTEGER NOT NULL,
+    caption    TEXT,
+    created_at TEXT NOT NULL
+);
