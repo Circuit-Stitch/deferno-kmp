@@ -12,6 +12,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -62,14 +63,6 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
             activeDestination = active.destination,
             drawerOpen = drawerOpen,
             onDrawerOpenChange = { drawerOpen = it },
-            // The Calendar pre-dates New to its selected day (#74); elsewhere New is undated. Reads the
-            // live active child at click time so the date stays the Calendar's concern, not the chrome's.
-            onNew = {
-                when (val a = component.stack.value.active.instance) {
-                    is MainShellComponent.DestinationChild.Calendar -> a.component.onNewForSelectedDay()
-                    else -> component.openOverlay(OverlayRoute.New())
-                }
-            },
             // Native res/drawable on Android (Robolectric doesn't serve a dependency module's
             // composeResources; the real app loads these fine either way) — see ShellChrome's KDoc.
             brainDumpIcon = painterResource(R.drawable.ic_voice_chat),
@@ -89,7 +82,7 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
 private fun DestinationBody(active: MainShellComponent.DestinationChild, modifier: Modifier = Modifier) {
     when (active) {
         is MainShellComponent.DestinationChild.Plan ->
-            PlanScreen(active.component, modifier)
+            PlanBody(active, modifier)
 
         is MainShellComponent.DestinationChild.Calendar ->
             CalendarScreen(active.component, modifier)
@@ -108,6 +101,24 @@ private fun DestinationBody(active: MainShellComponent.DestinationChild, modifie
 
         is MainShellComponent.DestinationChild.Placeholder ->
             ComingSoon(active.destination, modifier)
+    }
+}
+
+/**
+ * The Plan Destination's tier-3 stack (#51, ADR-0007 t3): the daily dashboard at the base, a drilled Task
+ * detail above it — rendered INSIDE the chrome body (the drawer/top bar stay live), not as a shell overlay.
+ * Each drill is a distinct child, so keying the detail on its component gives a fresh composition per Task
+ * (no inherited scroll/focus from the parent — the bug the old overlay's `key` guarded against).
+ */
+@Composable
+private fun PlanBody(plan: MainShellComponent.DestinationChild.Plan, modifier: Modifier = Modifier) {
+    val stack by plan.stack.subscribeAsState()
+    when (val child = stack.active.instance) {
+        is MainShellComponent.PlanChild.Dashboard ->
+            PlanScreen(child.component, modifier)
+
+        is MainShellComponent.PlanChild.Detail ->
+            key(child.component) { TaskDetailScreen(child.component, modifier) }
     }
 }
 
@@ -179,10 +190,6 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         // The in-app Help → Feedback surface (#375): comment + file attachments, online-only submit.
         is MainShellComponent.OverlayChild.Feedback ->
             FeedbackScreen(child.component, Modifier.fillMaxSize())
-
-        // A Plan tap (#51): the Task's detail over the dashboard, instead of switching to the Tasks tab.
-        is MainShellComponent.OverlayChild.TaskDetail ->
-            TaskDetailScreen(child.component, Modifier.fillMaxSize())
 
         // Brain dump (ADR-0027/#150): continuous dictation → on-device Extractor → reviewable draft Tasks.
         is MainShellComponent.OverlayChild.BrainDump ->

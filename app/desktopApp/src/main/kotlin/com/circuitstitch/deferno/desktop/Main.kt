@@ -632,7 +632,11 @@ private fun MainShellComponent.openNew() {
 /** Refresh the data of whichever Destination is foreground (the View → Refresh / Ctrl+R action). */
 private fun MainShellComponent.refreshActiveDestination() {
     when (val active = stack.value.active.instance) {
-        is MainShellComponent.DestinationChild.Plan -> active.component.onRefresh()
+        // Plan is a tier-3 stack now (#51): refresh only when the dashboard is foregrounded (a drilled
+        // Task detail has nothing to refresh).
+        is MainShellComponent.DestinationChild.Plan ->
+            (active.stack.value.active.instance as? MainShellComponent.PlanChild.Dashboard)
+                ?.component?.onRefresh() ?: Unit
         is MainShellComponent.DestinationChild.Tasks -> active.component.list.onRefresh()
         // Calendar (auto-refreshes its window on open/nav), Inbox (re-queries on resume), Profile,
         // Settings, placeholder: no manual refresh.

@@ -88,13 +88,16 @@ class SettingsScreenInteractionTest {
 
     @Test
     fun tappingACategoryRow_drillsIntoTheDetail_andBackReturnsToTheList() {
-        setContent { SettingsScreen(component()) }
+        val component = component()
+        setContent { SettingsScreen(component) }
 
         composeRule.onNodeWithText("Task behavior").performClick()
         // The detail screen shows the drag-and-drop toggle.
         composeRule.onNodeWithText("Drag and drop (experimental)").assertIsDisplayed()
 
-        composeRule.onNodeWithContentDescription("Back").performClick()
+        // Back now lives in the shell's single top bar (Cand 1) — outside this isolated screen — so drive
+        // the same SettingsComponent.onBack() its ← invokes; the drill-down + pop is the component's own.
+        composeRule.runOnIdle { component.onBack() }
         // Back at the list — another category row is visible again.
         composeRule.onNodeWithText("Appearance").assertIsDisplayed()
     }

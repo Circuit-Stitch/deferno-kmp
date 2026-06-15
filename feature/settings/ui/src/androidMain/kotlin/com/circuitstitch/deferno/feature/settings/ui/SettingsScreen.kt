@@ -109,25 +109,23 @@ internal fun SettingsListContent(
     storageProvider: StorageProviderSettings,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        DetailHeader(title = "Settings", onBack = null)
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        ) {
-            SettingsCategory.entries.forEach { category ->
-                // The device-local Speech engine row shows only when this device has a real engine (#93,
-                // ADR-0018) — hidden on platforms whose engine hasn't landed yet (desktop/iOS, #94/#95).
-                if (category == SettingsCategory.SpeechEngine && !speechEngine.available) return@forEach
-                // The Agent row shows only when this device has an inference engine to offer (#150); the
-                // cloud option itself reflects not-entitled, so it stays visible when entitlement is absent (AC2).
-                if (category == SettingsCategory.Agent && !inferenceEngine.available) return@forEach
-                CategoryRow(
-                    label = category.title,
-                    summary = category.rowSummary(speechEngine, inferenceEngine, storageProvider),
-                    onClick = { onOpenCategory(category) },
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
+    // The "Settings" title now lives in the shell's single top bar (Cand 1); this pane is just the list.
+    Column(
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+    ) {
+        SettingsCategory.entries.forEach { category ->
+            // The device-local Speech engine row shows only when this device has a real engine (#93,
+            // ADR-0018) — hidden on platforms whose engine hasn't landed yet (desktop/iOS, #94/#95).
+            if (category == SettingsCategory.SpeechEngine && !speechEngine.available) return@forEach
+            // The Agent row shows only when this device has an inference engine to offer (#150); the
+            // cloud option itself reflects not-entitled, so it stays visible when entitlement is absent (AC2).
+            if (category == SettingsCategory.Agent && !inferenceEngine.available) return@forEach
+            CategoryRow(
+                label = category.title,
+                summary = category.rowSummary(speechEngine, inferenceEngine, storageProvider),
+                onClick = { onOpenCategory(category) },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }
@@ -168,47 +166,45 @@ private fun CategoryDetail(
     component: SettingsComponent,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        DetailHeader(title = category.title, onBack = component::onBack)
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            when (category) {
-                SettingsCategory.Appearance -> AppearanceDetail(settings, component)
-                SettingsCategory.TaskBehavior -> TaskBehaviorDetail(settings, component)
-                SettingsCategory.SpeechEngine -> SpeechEngineDetail(speechEngine, component::onSpeechEngineSelected)
-                SettingsCategory.Agent -> AgentDetail(inferenceEngine, component::onInferenceEngineSelected)
-                SettingsCategory.Storage -> {
-                    // The brain-dump retention toggle (#211) lives under Storage — recordings are on-device
-                    // attachments. Collected here so only the Storage detail subscribes.
-                    val keepRecordings by component.keepBrainDumpRecordings.collectAsState()
-                    StorageProviderDetail(
-                        storageProvider,
-                        component::onStorageProviderSelected,
-                        keepRecordings,
-                        component::onKeepBrainDumpRecordingsChanged,
-                    )
-                }
-                SettingsCategory.DataPrivacy -> DataPrivacyDetail(settings, component)
-                SettingsCategory.HelpFeedback -> HelpFeedbackDetail(component)
-                SettingsCategory.AppPermissions -> AppPermissionsDetail(component)
-                SettingsCategory.Legal -> LegalDetail()
-                SettingsCategory.Account -> AccountDetail(settings, component)
-                SettingsCategory.Security2FA -> ComingSoonDetail(
-                    body = "Two-factor authentication and security are managed by your identity provider. " +
-                        "We’ll bring these controls into the app soon.",
-                    action = "Open security console",
-                    onAction = component::onOpenConsole,
-                )
-
-                SettingsCategory.Integrations -> ComingSoonDetail(
-                    body = "Connect Deferno with the other tools you use. Integrations are on the way.",
+    // The category title + Back now live in the shell's single top bar (Cand 1); this pane is the body.
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        when (category) {
+            SettingsCategory.Appearance -> AppearanceDetail(settings, component)
+            SettingsCategory.TaskBehavior -> TaskBehaviorDetail(settings, component)
+            SettingsCategory.SpeechEngine -> SpeechEngineDetail(speechEngine, component::onSpeechEngineSelected)
+            SettingsCategory.Agent -> AgentDetail(inferenceEngine, component::onInferenceEngineSelected)
+            SettingsCategory.Storage -> {
+                // The brain-dump retention toggle (#211) lives under Storage — recordings are on-device
+                // attachments. Collected here so only the Storage detail subscribes.
+                val keepRecordings by component.keepBrainDumpRecordings.collectAsState()
+                StorageProviderDetail(
+                    storageProvider,
+                    component::onStorageProviderSelected,
+                    keepRecordings,
+                    component::onKeepBrainDumpRecordingsChanged,
                 )
             }
+            SettingsCategory.DataPrivacy -> DataPrivacyDetail(settings, component)
+            SettingsCategory.HelpFeedback -> HelpFeedbackDetail(component)
+            SettingsCategory.AppPermissions -> AppPermissionsDetail(component)
+            SettingsCategory.Legal -> LegalDetail()
+            SettingsCategory.Account -> AccountDetail(settings, component)
+            SettingsCategory.Security2FA -> ComingSoonDetail(
+                body = "Two-factor authentication and security are managed by your identity provider. " +
+                    "We’ll bring these controls into the app soon.",
+                action = "Open security console",
+                onAction = component::onOpenConsole,
+            )
+
+            SettingsCategory.Integrations -> ComingSoonDetail(
+                body = "Connect Deferno with the other tools you use. Integrations are on the way.",
+            )
         }
     }
 }
@@ -457,28 +453,6 @@ private fun ComingSoonDetail(body: String, action: String? = null, onAction: (()
 
 // --- shared atoms ---
 
-@Composable
-private fun DetailHeader(title: String, onBack: (() -> Unit)?) {
-    Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.heightIn(min = 56.dp).padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (onBack != null) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-            } else {
-                Spacer(Modifier.width(16.dp))
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.semantics { heading() },
-            )
-        }
-    }
-}
 
 @Composable
 private fun SectionLabel(text: String) {

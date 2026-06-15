@@ -143,26 +143,28 @@ class MainShellComponentTest {
     }
 
     @Test
-    fun planTap_opensThatTaskInAnOverlay_withoutLeavingThePlan() {
+    fun planTap_drillsIntoThePlansOwnTaskDetail_withoutLeavingThePlan() {
         val shell = shell()
-        val plan = (stackPlan(shell)).component
-        plan.onTaskClicked(TaskId("t-1"))
+        val plan = stackPlan(shell)
+        plan.dashboard().onTaskClicked(TaskId("t-1"))
 
-        // The Plan stays foreground — the tap doesn't yank the shell to the Tasks Destination.
+        // The Plan stays foreground and the Task opens in the Plan's OWN tier-3 detail (ADR-0007 t3) — not
+        // the Tasks tab, and not a shell overlay above the chrome, so the drawer/nav stay reachable (#51).
         assertEquals(Destination.Plan, shell.activeDestination())
-        val child = shell.overlay.value.child?.instance
-        assertTrue(child is MainShellComponent.OverlayChild.TaskDetail, "a TaskDetail overlay is pushed above the Plan")
+        assertNull(shell.overlay.value.child, "no shell overlay is opened — the detail lives inside the Plan")
+        val child = plan.stack.value.active.instance
+        assertTrue(child is MainShellComponent.PlanChild.Detail, "the Task detail is the foreground Plan child")
         assertEquals(TaskId("t-1"), child.component.taskId)
     }
 
     @Test
-    fun planTaskDetailOverlay_addToPlan_bubblesToOutput() {
+    fun planTaskDetail_addToPlan_bubblesToOutput() {
         val outputs = mutableListOf<MainShellComponent.Output>()
         val shell = shell(output = outputs::add)
-        (stackPlan(shell)).component.onTaskClicked(TaskId("t-1"))
+        val plan = stackPlan(shell)
+        plan.dashboard().onTaskClicked(TaskId("t-1"))
 
-        val detail = (shell.overlay.value.child!!.instance as MainShellComponent.OverlayChild.TaskDetail).component
-        detail.onAddToPlanClicked()
+        plan.detail().onAddToPlanClicked()
 
         assertEquals(
             listOf<MainShellComponent.Output>(MainShellComponent.Output.AddToPlanRequested(TaskId("t-1"))),
@@ -171,15 +173,35 @@ class MainShellComponentTest {
     }
 
     @Test
-    fun planTaskDetailOverlay_showSteps_handsOffToTheTasksWorkspace() {
+    fun planTaskDetail_subtaskDrillsDeeper_andBackPopsParentThenDashboard() {
         val shell = shell()
-        (stackPlan(shell)).component.onTaskClicked(TaskId("t-1")) // t-1 has children in the fake
+        val plan = stackPlan(shell)
+        plan.dashboard().onTaskClicked(TaskId("t-1"))
+        assertEquals(TaskId("t-1"), plan.detail().taskId)
 
-        val detail = (shell.overlay.value.child!!.instance as MainShellComponent.OverlayChild.TaskDetail).component
-        detail.onShowTreeClicked()
-
-        // The sheet is dismissed and the Task opens in the full Tasks Destination.
+        // Drilling a subtask pushes one level deeper on the Plan detail stack (a real back stack) — never a
+        // shell overlay, so the drawer stayed reachable through the whole drill (the reported #51 friction).
+        plan.detail().onSubtaskClicked(TaskId("t-1a"))
         assertNull(shell.overlay.value.child)
+        assertEquals(TaskId("t-1a"), plan.detail().taskId)
+
+        // System back pops subtask → parent → dashboard, consuming each step until the dashboard base.
+        assertTrue(shell.onBack(), "back pops the subtask to its parent")
+        assertEquals(TaskId("t-1"), plan.detail().taskId)
+        assertTrue(shell.onBack(), "back pops the parent detail to the dashboard")
+        assertTrue(plan.stack.value.active.instance is MainShellComponent.PlanChild.Dashboard)
+    }
+
+    @Test
+    fun planTaskDetail_showSteps_handsOffToTheTasksWorkspace() {
+        val shell = shell()
+        val plan = stackPlan(shell)
+        plan.dashboard().onTaskClicked(TaskId("t-1")) // t-1 has children in the fake
+
+        plan.detail().onShowTreeClicked()
+
+        // Plan resets to its dashboard and the Task opens in the full Tasks Destination (its breakdown).
+        assertTrue(plan.stack.value.active.instance is MainShellComponent.PlanChild.Dashboard)
         assertEquals(Destination.Tasks, shell.activeDestination())
         assertEquals(TaskId("t-1"), shell.tasks().detail.value.child?.instance?.taskId)
     }
@@ -690,4 +712,12 @@ class MainShellComponentTest {
 
     private fun stackPlan(shell: MainShellComponent): MainShellComponent.DestinationChild.Plan =
         shell.stack.value.active.instance as MainShellComponent.DestinationChild.Plan
+
+    /** The Plan dashboard at the base of the Plan tier-3 stack. */
+    private fun MainShellComponent.DestinationChild.Plan.dashboard() =
+        (stack.value.active.instance as MainShellComponent.PlanChild.Dashboard).component
+
+    /** The drilled-in Task detail at the top of the Plan tier-3 stack. */
+    private fun MainShellComponent.DestinationChild.Plan.detail() =
+        (stack.value.active.instance as MainShellComponent.PlanChild.Detail).component
 }
