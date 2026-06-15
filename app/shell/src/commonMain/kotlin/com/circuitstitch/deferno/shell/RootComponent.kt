@@ -17,9 +17,7 @@ import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserSettings
-import com.circuitstitch.deferno.core.agent.InferenceEngine
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
-import com.circuitstitch.deferno.core.agent.NotConfiguredInferenceEngine
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
@@ -68,6 +66,13 @@ interface RootComponent {
     /** Route Android system-back to the active shell. `false` → the host lets the platform exit. */
     fun onBackClicked(): Boolean
 
+    /**
+     * Open the [Destination.Inbox] in the Main shell — the target of the Brain dump worker's "drafts
+     * ready" notification (ADR-0027/#150, Stage 4). When no Account is active yet (a cold start into the
+     * Auth shell), it is remembered and applied to the Main shell once one becomes active.
+     */
+    fun openInbox()
+
     sealed interface Child {
         class Auth(val component: AuthShellComponent) : Child
         class Main(val component: MainShellComponent) : Child
@@ -108,10 +113,11 @@ class DefaultRootComponent(
     // [InferenceEngineCatalog.Inert] (no engine → the Agent row hides) so tests build without it;
     // production passes the AppComponent's.
     private val inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
-    // The Brain dump's on-device inference engine (ADR-0027/#150): the AppScope RoutingInferenceEngine the
-    // Extractor runs through. Threaded down to the Main shell. Defaulted to the inert NotConfigured floor so
-    // tests build without it; production passes the AppComponent's (the shacl floor on Android).
-    private val inferenceEngine: InferenceEngine = NotConfiguredInferenceEngine,
+    // The Brain dump's record-to-file seam (ADR-0027/#150, Stage 4): records the mic to a WAV and hands it
+    // to the background worker on Stop. Threaded down to the Main shell. Android-only (Context + WorkManager);
+    // desktop/tests leave it the no-op default — the recorder is inert. The worker (not the shell) now owns
+    // the inference engine, so it's no longer threaded through here.
+    private val recordBrainDump: suspend (LocalDate, String) -> Unit = { _, _ -> },
     /** The New surface's foreclosed-dictation-permission deep-link (#120). Host-handled, like the rest. */
     private val onOpenDictationPermissionSettings: () -> Unit = {},
     /** The outbox driver's clock (#143) — injected so the flush timing is deterministic under test. */
@@ -155,6 +161,9 @@ class DefaultRootComponent(
     /** The foreground Main child's session, used to apply per-Account writes (add-to-plan). */
     private var activeSession: AccountSession? = null
 
+    /** A Brain dump "open the Inbox" deep-link that arrived before a Main shell existed (#150 Stage 4). */
+    private var pendingInbox = false
+
     override val stack: Value<ChildStack<*, RootComponent.Child>> =
         childStack(
             source = navigation,
@@ -184,6 +193,15 @@ class DefaultRootComponent(
             is RootComponent.Child.Auth -> false // can't go back out of the Auth shell — exit the scene
             is RootComponent.Child.Main -> child.component.onBack()
         }
+
+    override fun openInbox() {
+        when (val child = stack.value.active.instance) {
+            // A Main shell is up: switch it to the Inbox now (state-preserving, like a nav tap).
+            is RootComponent.Child.Main -> child.component.selectDestination(Destination.Inbox)
+            // Signed out (cold start into Auth): remember it and apply when the Main shell is built.
+            is RootComponent.Child.Auth -> pendingInbox = true
+        }
+    }
 
     private fun createChild(config: Config, childContext: ComponentContext): RootComponent.Child =
         when (config) {
@@ -221,7 +239,7 @@ class DefaultRootComponent(
                 // Re-point the app-wide theme `Flow` at THIS Account's settings (#72) — cancels the
                 // previous account's collector, so a switch never bleeds the prior account's theme.
                 pointThemeAt(session)
-                RootComponent.Child.Main(
+                val shell =
                     DefaultMainShellComponent(
                         componentContext = childContext,
                         taskRepository = session.taskRepository,
@@ -260,8 +278,8 @@ class DefaultRootComponent(
                         speechEngineCatalog = speechEngineCatalog,
                         // The Agent inference-engine choice + entitlement gate (#150) the Settings reads.
                         inferenceEngineCatalog = inferenceEngineCatalog,
-                        // The Brain dump's on-device inference engine (ADR-0027/#150) the Extractor runs through.
-                        inferenceEngine = inferenceEngine,
+                        // The Brain dump's record-to-file seam (ADR-0027/#150, Stage 4) the voice_chat overlay drives.
+                        recordBrainDump = recordBrainDump,
                         // The foreclosed-permission deep-link (#120), threaded to the New overlay.
                         onOpenDictationPermissionSettings = onOpenDictationPermissionSettings,
                         // The Inbox Destination's draft seam (ADR-0015 Inbox amendment): this Account's
@@ -269,8 +287,14 @@ class DefaultRootComponent(
                         // (mark Accepted) / dismiss / undo.
                         observeBrainDumpDrafts = session::observeBrainDumpDrafts,
                         upsertBrainDumpDraft = session::upsertBrainDumpDraft,
-                    ),
-                )
+                    )
+                // A pending Inbox deep-link (the Brain dump notification tapped on a cold start into the
+                // Auth shell, ADR-0027 Stage 4): now that the Main shell exists, apply it, then consume it.
+                if (pendingInbox) {
+                    pendingInbox = false
+                    shell.selectDestination(Destination.Inbox)
+                }
+                RootComponent.Child.Main(shell)
             }
         }
 

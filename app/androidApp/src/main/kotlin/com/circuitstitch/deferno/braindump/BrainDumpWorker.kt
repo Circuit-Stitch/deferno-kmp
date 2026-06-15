@@ -2,8 +2,11 @@ package com.circuitstitch.deferno.braindump
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import androidx.core.app.NotificationCompat
+import com.circuitstitch.deferno.MainActivity
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
 import androidx.work.OneTimeWorkRequestBuilder
@@ -143,10 +146,21 @@ private fun notifyDraftsReady(context: Context, count: Int) {
         1 -> "1 draft ready to review"
         else -> "$count drafts ready to review"
     }
+    // Tapping the notification opens the app on the Inbox, where the drafts are reviewed (#150 Stage 4).
+    // MainActivity is singleTop, so a running instance is reused (onNewIntent) rather than stacked.
+    val openInbox = PendingIntent.getActivity(
+        context,
+        NOTIFICATION_ID,
+        Intent(context, MainActivity::class.java)
+            .putExtra(MainActivity.EXTRA_OPEN_INBOX, true)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
     val notification = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_btn_speak_now)
         .setContentTitle("Brain dump")
         .setContentText(text)
+        .setContentIntent(openInbox)
         .setAutoCancel(true)
         .build()
     // notify() silently no-ops if POST_NOTIFICATIONS is denied (Android 13+); guard anyway.

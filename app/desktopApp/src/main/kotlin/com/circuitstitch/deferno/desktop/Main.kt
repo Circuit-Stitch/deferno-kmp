@@ -235,9 +235,9 @@ fun main() {
             // graph so the gate exists app-wide; the desktop Settings hides the Agent row until a desktop
             // engine lands.
             inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
-            // Brain dump's inferenceEngine (#150) is left at the NotConfigured default on desktop: the
-            // on-device shacl floor is Android-only, and desktop renders the BrainDumpPlaceholder (never
-            // extracts), so there is no engine to thread until a JVM one lands.
+            // Brain dump's recordBrainDump seam (#150 Stage 4) is left at the no-op default on desktop: the
+            // mic-record → on-device-transcribe flow is Android-only, and desktop renders the
+            // BrainDumpPlaceholder, so there is no recorder to thread until a JVM one lands.
             // The New surface's foreclosed-dictation-permission deep-link (#120): introspect the Sidecar
             // permission port live at click time and open the blocked capability's macOS Privacy pane
             // (mic or Speech Recognition). Off-macOS deepLink() is null and the click no-ops.

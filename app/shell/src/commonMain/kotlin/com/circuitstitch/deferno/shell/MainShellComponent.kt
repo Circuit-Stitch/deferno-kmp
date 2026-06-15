@@ -30,10 +30,7 @@ import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
 import com.circuitstitch.deferno.core.model.CalendarItem
-import com.circuitstitch.deferno.core.agent.Extractor
-import com.circuitstitch.deferno.core.agent.InferenceEngine
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
-import com.circuitstitch.deferno.core.agent.NotConfiguredInferenceEngine
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
@@ -215,10 +212,9 @@ interface MainShellComponent {
         class TaskDetail(val component: TaskDetailComponent) : OverlayChild
 
         /**
-         * The **Brain dump** surface (ADR-0027, #150): the dictation-driven, propose-only Extractor.
-         * Continuous on-device speech (the whisper floor) streams a transcript the [Extractor] turns
-         * into reviewable draft Tasks; accepting one commits it through the ordinary create Command
-         * path — nothing is written until the person accepts (propose-only).
+         * The **Brain dump** surface (ADR-0027, #150; Stage 4): a voice recorder. It records the mic to a
+         * WAV and hands it to the background worker on Stop; transcription + extraction run there and the
+         * proposed drafts land in the [Destination.Inbox] for review (no inline review in the overlay).
          */
         class BrainDump(val component: BrainDumpComponent) : OverlayChild
     }
@@ -324,11 +320,12 @@ class DefaultMainShellComponent(
     // Agent row hides) so the many shell tests build without it; production threads the real catalog from
     // the AppComponent (like speechEngineCatalog).
     private val inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
-    // The Brain dump's on-device inference engine (ADR-0027/#150): the AppScope RoutingInferenceEngine
-    // that dispatches to the device-local-selected engine (the shacl floor on Android), or NotConfigured
-    // when the Agent is Off. The Extractor runs through it. Defaulted to the inert NotConfigured floor so
-    // the many shell tests build without it — Brain dump simply produces no drafts (a gentle "set up" note).
-    private val inferenceEngine: InferenceEngine = NotConfiguredInferenceEngine,
+    // The Brain dump's record-to-file seam (ADR-0027/#150, Stage 4): records the mic to a WAV and, on Stop
+    // (job cancellation), hands it to the background worker — transcription/extraction run there and the
+    // drafts land in the Inbox, so the overlay no longer needs the inference engine. Android-only (it needs
+    // a Context + WorkManager); desktop/tests leave it the no-op default — the recorder is simply inert.
+    // The shell closes the injected today/timeZone over it (no Clock.System) for the worker's date context.
+    private val recordBrainDump: suspend (LocalDate, String) -> Unit = { _, _ -> },
     // The New surface's PermissionPermanentlyDenied affordance (#120), host-routed to the OS settings
     // surface for the foreclosed dictation permission. Defaulted to a no-op like the other host actions.
     private val onOpenDictationPermissionSettings: () -> Unit = {},
@@ -605,27 +602,20 @@ class DefaultMainShellComponent(
                 ),
             )
 
-            // Brain dump (ADR-0027/#150): continuous dictation → the on-device Extractor → reviewable
-            // draft Tasks, committed through the same online-only create seam the New surface uses. A
-            // fresh Extractor over the AppScope inference engine; the injected today/timeZone give it the
-            // date context for relative deadlines ("tomorrow", etc.).
+            // Brain dump (ADR-0027/#150, Stage 4): record the mic to a WAV and hand it to the background
+            // worker on Stop — transcription + extraction happen there and the proposed drafts land in the
+            // Inbox (no inline review). The recorder seam is Android-only; desktop leaves it inert. The
+            // injected today/timeZone give the worker the date context for relative deadlines ("tomorrow").
             OverlayRoute.BrainDump -> {
-                val extractor = Extractor(inferenceEngine)
                 val brainDump = DefaultBrainDumpComponent(
-                    extract = { transcript -> extractor.extract(transcript, today, timeZone) },
-                    create = create,
+                    record = { recordBrainDump(today, timeZone) },
                     onDone = ::dismissOverlay,
                     scope = overlayScope,
-                    timeZone = timeZone,
-                    // Dictation (#92): the mic drives the AppScope SpeechToText on the overlay scope,
-                    // in continuous mode (the brain dump keeps capturing across utterances).
-                    speech = speechToText,
-                    locale = locale,
                     onOpenDictationPermissionSettings = onOpenDictationPermissionSettings,
                 )
-                // A continuous capture runs until cancelled (it does not self-terminate like the New form's
-                // single-utterance dictation), so stop the mic when the overlay is torn down by ANY path —
-                // Close, system-back, or an account switch — since overlayScope outlives this child.
+                // The recorder runs until cancelled (it does not self-terminate), so stop the mic when the
+                // overlay is torn down by ANY path — Close, system-back, or an account switch — since
+                // overlayScope outlives this child. A real take is still handed off; an empty one is dropped.
                 childContext.lifecycle.doOnDestroy(brainDump::cancelCapture)
                 MainShellComponent.OverlayChild.BrainDump(brainDump)
             }
