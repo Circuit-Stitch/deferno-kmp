@@ -128,7 +128,7 @@ class PlanStackBridge internal constructor(
 /**
  * Flattens a detached detail window's stack (#196) to its foreground [TaskDetailComponent]. [canGoBack]
  * is true once a subtask has been drilled (the window's Back control shows only then). Mirrors
- * [PlanStackBridge] — the window is the Plan tier-3 stack minus the Dashboard base (ADR-0030).
+ * [PlanStackBridge] — the window is the Plan tier-3 stack minus the Dashboard base (ADR-0033).
  */
 class DetailStackBridge internal constructor(
     private val delegate: Value<ChildStack<*, com.circuitstitch.deferno.feature.tasks.TaskDetailComponent>>,

@@ -43,7 +43,7 @@ struct DefernoApp: App {
         // Honour the content's min frame as the window's minimum size (the window still resizes up).
         .windowResizability(.contentMinSize)
 
-        // Detached, navigable per-task detail windows (#196, ADR-0030): a SECOND scene, opened by a task
+        // Detached, navigable per-task detail windows (#196, ADR-0033): a SECOND scene, opened by a task
         // row's double-click / "Open in New Window" via `openWindow(id:value:)` carrying the raw task id.
         // It coexists with the main window's inline pane and NEVER handles auth — the `main` Window stays
         // the sole owner of `onOpenURL` + sign-in (#189). Value-based, so opening an already-open task

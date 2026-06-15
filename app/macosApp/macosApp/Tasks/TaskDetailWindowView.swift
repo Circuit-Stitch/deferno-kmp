@@ -2,7 +2,7 @@ import Combine
 import Deferno
 import SwiftUI
 
-/// A **detached, navigable per-task detail window** (#196, ADR-0030). Owns a `TaskDetailWindowRoot`
+/// A **detached, navigable per-task detail window** (#196, ADR-0033). Owns a `TaskDetailWindowRoot`
 /// (the per-window Decompose stack over the **live** account session — same SQLite driver as the main
 /// shell, so edits sync across windows for free) and renders its foreground `TaskDetailComponent` as a
 /// `TaskDetailView`. Drilling a subtask pushes the child's detail; the detail's own header Back pops;
@@ -38,7 +38,7 @@ struct TaskDetailWindowView: View {
         // distinguishable in the title bar / Window menu / Mission Control (#196).
         .navigationTitle(model.title)
         .onReceive(rootStack.$active) { child in
-            // Account isolation (ADR-0030): the root swaps its active child on sign-out (→ Auth) and on
+            // Account isolation (ADR-0033): the root swaps its active child on sign-out (→ Auth) and on
             // account switch (→ a re-keyed Main for the new account). Either way this window's captured
             // session is no longer active, so close it. The first value binds; only a *change* dismisses.
             if let bound = boundChild {
