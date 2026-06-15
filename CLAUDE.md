@@ -40,7 +40,8 @@ app/
       shell/                          ← navigation shell: RootComponent (Auth↔Main) + Main Destination graph + AccountSession (#55/#68)
     src/test/kotlin/…/{ui,demo,shell}/ ← Compose UI + Roborazzi screenshot tests + shell tests; demo/ holds the in-memory repository test fakes
     src/main/res/                     ← resources (strings, themes, adaptive launcher icons: flame foreground + monochrome)
-  desktopApp/                         ← Compose Desktop (JVM) entry point — stub for now (native desktop UI is a follow-up)
+  desktopApp/                         ← Compose Desktop (JVM) app — the cross-platform desktop target (Compose UI + the core/sidecar JVM client). Stub for now; stays (ADR-0003)
+  macosApp/                           ← native macOS SwiftUI app (ADR-0029) — DISTINCT from desktopApp: a bespoke Kotlin/Native `macosArm64` Deferno.framework (twin of iosApp) linked by a SwiftUI/AppKit Xcode app, with in-process SidecarKit capabilities + Apple Intelligence inference. Built via `app/macosApp/build.sh` (XcodeGen + CocoaPods + xcodebuild), not `:app:desktopApp`
   iosApp/                             ← iOS umbrella framework (Kotlin) + Xcode project (added on macOS)
 helpers/                              ← native per-OS Sidecar Helper processes (NOT Gradle modules — built/signed on their OS)
   macos/                              ← Swift launchd-activated Helper: SFSpeech + mic/Speech TCC + Notification Center + menu-bar status item/global hotkeys over the IPC contract (SwiftPM · ADR-0024 · #121/#123/#125)
@@ -93,7 +94,9 @@ iOS-only framework and stays a hand-written build file.
 ./gradlew :app:androidApp:installDebug     # build + install on a connected device/emulator
 ./gradlew :app:androidApp:connectedAndroidTest  # instrumented tests (needs a device/emulator)
 ./gradlew :app:androidApp:lint             # Android Lint
-./gradlew :app:desktopApp:run              # run the desktop (JVM) app
+./gradlew :app:desktopApp:run              # run the desktop (JVM) Compose app
+(cd app/macosApp && ./build.sh --open)     # build + run the native macOS SwiftUI app (macOS only; XcodeGen+CocoaPods+xcodebuild)
+./gradlew :app:macosApp:linkDebugFrameworkMacosArm64  # just relink the Kotlin/Native framework for app/macosApp
 ```
 
 iOS klibs cross-compile on any host, but **running iOS tests and linking the iOS framework require macOS**
