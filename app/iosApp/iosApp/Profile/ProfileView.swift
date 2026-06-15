@@ -17,8 +17,7 @@ struct ProfileView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            PaneHeader(title: "Profile")
+        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     identityCard
@@ -28,13 +27,14 @@ struct ProfileView: View {
                 .padding(.horizontal, Layout.gutter)
                 .padding(.vertical, 12)
             }
-        }
-        .background(colors.background)
-        .alert("Sign out of \(component.account.label)?", isPresented: $confirmSignOut) {
-            Button("Sign out", role: .destructive) { component.onSignOut() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Your tasks stay safe in Deferno. You can sign back in with your token anytime.")
+            .background(colors.background)
+            .shellNavBar("Profile")
+            .alert("Sign out of \(component.account.label)?", isPresented: $confirmSignOut) {
+                Button("Sign out", role: .destructive) { component.onSignOut() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Your tasks stay safe in Deferno. You can sign back in with your token anytime.")
+            }
         }
     }
 

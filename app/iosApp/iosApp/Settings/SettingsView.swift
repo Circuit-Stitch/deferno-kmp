@@ -1,15 +1,16 @@
 import Deferno
 import SwiftUI
 
-/// The Settings Destination (#72) — a tier-3 drill-down (`SettingsChild`: List ↔ Detail(category)). A
-/// thin renderer of `SettingsComponent`: the backed categories read/write the Active Account's
-/// `UserSettings` (Appearance applies the theme live), the two unbacked ones (Security & 2FA,
-/// Integrations) are gentle coming-soon stubs, and host concerns (export/import, feedback, app
-/// permissions, console) are forwarded for the shell to deep-link. The SpeechEngine row is hidden
-/// until a real iOS engine ships (#95).
+/// The Settings Destination (#72) — a native `NavigationStack` over an inset-grouped category list that
+/// pushes one screen per category (native `‹ Settings` back + swipe-back come free, no custom "Back").
+/// A thin renderer of `SettingsComponent`: backed categories read/write the Active Account's
+/// `UserSettings` (Appearance applies the theme live), the unbacked ones (Security & 2FA, Integrations)
+/// are gentle coming-soon stubs, and host concerns (export/import, feedback, app permissions, console)
+/// are forwarded for the shell to deep-link. The SpeechEngine + Agent rows stay hidden until a real
+/// device engine is registered (#95/#150). Navigation is SwiftUI-native here — the component's
+/// List↔Detail stack isn't used; the drill resets to the root list when you leave Settings, the iOS norm.
 struct SettingsView: View {
     let component: SettingsComponent
-    @StateObject private var stack: SettingsStackObserver
     @StateObject private var settings: StateFlowObserver<UserSettings>
     @StateObject private var speech: StateFlowObserver<SpeechEngineSettings>
     @StateObject private var inference: StateFlowObserver<InferenceEngineSettings>
@@ -17,58 +18,59 @@ struct SettingsView: View {
 
     init(component: SettingsComponent) {
         self.component = component
-        _stack = StateObject(wrappedValue: SettingsStackObserver(ShellBridgeKt.settingsStackBridge(component: component)))
         _settings = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.settingsStateBridge(component: component)))
         _speech = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.speechEngineBridge(component: component)))
         _inference = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.inferenceEngineBridge(component: component)))
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if let category = ShellBridgeKt.settingsChildCategory(child: stack.active) {
-                PaneHeader(title: title(category), onBack: { _ = component.onBack() })
-                ScrollView { detail(category).padding(Layout.gutter) }
-            } else {
-                PaneHeader(title: "Settings")
-                categoryList
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(categories) { category in
+                        NavigationLink {
+                            detailScreen(category)
+                        } label: {
+                            HStack {
+                                Text(title(category)).foregroundStyle(colors.onSurface)
+                                if !ShellBridgeKt.settingsCategoryBacked(category: category) {
+                                    Spacer()
+                                    Text("Coming soon").font(.subheadline).foregroundStyle(colors.inkMuted)
+                                }
+                            }
+                        }
+                        .listRowBackground(colors.surfaceCard)
+                    }
+                }
             }
+            .scrollContentBackground(.hidden)
+            .background(colors.background)
+            .shellNavBar("Settings")
         }
-        .background(colors.background)
     }
 
-    // MARK: List
-
-    private var categoryList: some View {
-        let categories = ShellBridgeKt.settingsCategories().filter { category in
-            // Hide the device-local engine rows until one is actually registered (matches Android, which
-            // hides them too): SpeechEngine until an iOS speech engine ships (#95), Agent until an
-            // inference engine is available (#150) — otherwise the row would open an empty "coming soon".
+    /// Hide the device-local engine rows until one is registered (matches Android): SpeechEngine until an
+    /// iOS speech engine ships (#95), Agent until an inference engine is available (#150) — else the row
+    /// would open an empty "coming soon".
+    private var categories: [SettingsCategory] {
+        ShellBridgeKt.settingsCategories().filter { category in
             switch ShellBridgeKt.settingsCategoryName(category: category) {
             case "SpeechEngine": return speech.value.available
             case "Agent": return inference.value.available
             default: return true
             }
         }
-        return List {
-            ForEach(categories) { category in
-                Button { component.openCategory(category: category) } label: {
-                    HStack {
-                        Text(title(category)).foregroundStyle(colors.onSurface)
-                        Spacer()
-                        if !ShellBridgeKt.settingsCategoryBacked(category: category) {
-                            Text("Coming soon").font(.caption).foregroundStyle(colors.inkMuted)
-                        }
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(colors.inkMuted)
-                    }
-                    .frame(minHeight: Layout.minTouchTarget)
-                }
-                .listRowBackground(colors.surface)
-            }
-        }
-        .listStyle(.plain)
     }
 
-    // MARK: Detail per category
+    // MARK: Pushed detail screen (native back + swipe-back)
+
+    private func detailScreen(_ category: SettingsCategory) -> some View {
+        detail(category)
+            .scrollContentBackground(.hidden)
+            .background(colors.background)
+            .navigationTitle(title(category))
+            .navigationBarTitleDisplayMode(.inline)
+    }
 
     @ViewBuilder
     private func detail(_ category: SettingsCategory) -> some View {
@@ -89,32 +91,37 @@ struct SettingsView: View {
 
     private var appearanceDetail: some View {
         let value = settings.value
-        return VStack(alignment: .leading, spacing: 16) {
-            section("Theme") {
-                radioRow("Deferno", selected: value.themeFamily === ThemeFamily.deferno) { component.onThemeFamilyChanged(family: ThemeFamily.deferno) }
-                radioRow("Mono", selected: value.themeFamily === ThemeFamily.mono) { component.onThemeFamilyChanged(family: ThemeFamily.mono) }
+        return List {
+            Section("Theme") {
+                checkRow("Deferno", selected: value.themeFamily === ThemeFamily.deferno) { component.onThemeFamilyChanged(family: ThemeFamily.deferno) }
+                checkRow("Mono", selected: value.themeFamily === ThemeFamily.mono) { component.onThemeFamilyChanged(family: ThemeFamily.mono) }
             }
-            section("Mode") {
-                radioRow("Light", selected: value.themeMode === ThemeMode.light) { component.onThemeModeChanged(mode: ThemeMode.light) }
-                radioRow("Dark", selected: value.themeMode === ThemeMode.dark) { component.onThemeModeChanged(mode: ThemeMode.dark) }
-                radioRow("Follow system", selected: value.themeMode === ThemeMode.auto_) { component.onThemeModeChanged(mode: ThemeMode.auto_) }
+            Section("Mode") {
+                checkRow("Light", selected: value.themeMode === ThemeMode.light) { component.onThemeModeChanged(mode: ThemeMode.light) }
+                checkRow("Dark", selected: value.themeMode === ThemeMode.dark) { component.onThemeModeChanged(mode: ThemeMode.dark) }
+                checkRow("Follow system", selected: value.themeMode === ThemeMode.auto_) { component.onThemeModeChanged(mode: ThemeMode.auto_) }
             }
         }
     }
 
     private var taskBehaviorDetail: some View {
         let value = settings.value
-        return VStack(alignment: .leading, spacing: 16) {
-            Toggle(isOn: Binding(get: { value.dragAndDropEnabled }, set: { component.onDragAndDropChanged(enabled: $0) })) {
-                Text("Drag and drop (experimental)").foregroundStyle(colors.onSurface)
+        return List {
+            Section {
+                Toggle(isOn: Binding(get: { value.dragAndDropEnabled }, set: { component.onDragAndDropChanged(enabled: $0) })) {
+                    Text("Drag and drop").foregroundStyle(colors.onSurface)
+                }
+                .listRowBackground(colors.surfaceCard)
+            } footer: {
+                Text("Experimental — reorder tasks by dragging.")
             }
-            section("Keep done items visible — everywhere") {
-                doneVisibilityRow(current: Int(ShellBridgeKt.doneVisibilityGlobalSeconds(settings: value))) { seconds in
+            Section("Keep done items visible — everywhere") {
+                doneVisibilityPicker(current: Int(ShellBridgeKt.doneVisibilityGlobalSeconds(settings: value))) { seconds in
                     ShellBridgeKt.setGlobalDoneVisibility(component: component, settings: value, seconds: Int64(seconds))
                 }
             }
-            section("Keep done items visible — on the dashboard") {
-                doneVisibilityRow(current: Int(ShellBridgeKt.doneVisibilityDashboardSeconds(settings: value))) { seconds in
+            Section("Keep done items visible — on the dashboard") {
+                doneVisibilityPicker(current: Int(ShellBridgeKt.doneVisibilityDashboardSeconds(settings: value))) { seconds in
                     ShellBridgeKt.setDashboardDoneVisibility(component: component, settings: value, seconds: Int64(seconds))
                 }
             }
@@ -122,20 +129,21 @@ struct SettingsView: View {
     }
 
     private var speechDetail: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Dictation uses an on-device speech engine. There isn't one available on this device yet.")
-                .font(.subheadline).foregroundStyle(colors.inkMuted)
+        List {
+            Section {
+                Text("Dictation uses an on-device speech engine. There isn't one available on this device yet.")
+                    .foregroundStyle(colors.inkMuted)
+                    .listRowBackground(colors.surfaceCard)
+            }
         }
     }
 
     private var agentDetail: some View {
         let value = inference.value
-        return VStack(alignment: .leading, spacing: 16) {
-            Text("The agent can turn a brain dump into draft tasks and suggest changes to your plan. Choose where it runs — or keep it off.")
-                .font(.subheadline).foregroundStyle(colors.inkMuted)
-            section("Engine") {
+        return List {
+            Section {
                 // "Off" is always offered first (the default); then each engine registered on this device.
-                // A cloud engine the Account isn't entitled to is shown disabled, never selectable.
+                // A cloud engine the Account isn't entitled to shows disabled, never selectable.
                 agentRow(label: "Off", note: "The agent stays off. Nothing is sent anywhere.",
                          selected: ShellBridgeKt.inferenceOffSelected(state: value), locked: false) {
                     ShellBridgeKt.inferenceSelectOff(component: component)
@@ -149,129 +157,135 @@ struct SettingsView: View {
                         ShellBridgeKt.inferenceSelectOption(component: component, state: value, index: index)
                     }
                 }
+            } header: {
+                Text("Engine")
+            } footer: {
+                Text("The agent can turn a brain dump into draft tasks and suggest changes to your plan. Choose where it runs — or keep it off.")
             }
         }
-    }
-
-    private func agentRow(label: String, note: String, selected: Bool, locked: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(selected ? colors.primary : colors.inkMuted)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(label).foregroundStyle(colors.onSurface)
-                    Text(note).font(.caption).foregroundStyle(colors.inkMuted)
-                }
-                Spacer()
-            }
-            .frame(minHeight: Layout.minTouchTarget)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(locked)
-        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     private var dataPrivacyDetail: some View {
         let value = settings.value
-        return VStack(alignment: .leading, spacing: 16) {
-            Toggle(isOn: Binding(get: { value.trackingEnabled }, set: { component.onTrackingChanged(enabled: $0) })) {
-                Text("Analytics & tracking").foregroundStyle(colors.onSurface)
+        return List {
+            Section {
+                Toggle(isOn: Binding(get: { value.trackingEnabled }, set: { component.onTrackingChanged(enabled: $0) })) {
+                    Text("Analytics & tracking").foregroundStyle(colors.onSurface)
+                }
+                .listRowBackground(colors.surfaceCard)
             }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Your data is yours. Export or import it anytime on the web.")
-                    .font(.subheadline).foregroundStyle(colors.inkMuted)
+            Section {
                 Button("Export or import your data") { component.onOpenDataExportImport() }
-                    .buttonStyle(.bordered)
+                    .listRowBackground(colors.surfaceCard)
+            } footer: {
+                Text("Your data is yours. Export or import it anytime on the web.")
             }
         }
     }
 
     private var legalDetail: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Terms of Service").font(.headline).foregroundStyle(colors.onSurface)
-            Text("Privacy Policy").font(.headline).foregroundStyle(colors.onSurface)
-            Text("Deferno is open source under the Apache 2.0 license.")
-                .font(.subheadline).foregroundStyle(colors.inkMuted)
+        List {
+            Section {
+                Text("Terms of Service").foregroundStyle(colors.onSurface).listRowBackground(colors.surfaceCard)
+                Text("Privacy Policy").foregroundStyle(colors.onSurface).listRowBackground(colors.surfaceCard)
+            } footer: {
+                Text("Deferno is open source under the Apache 2.0 license.")
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var accountDetail: some View {
         let value = settings.value
-        return VStack(alignment: .leading, spacing: 12) {
-            labeledRow("Username", value.username ?? "—")
-            labeledRow("Time zone", value.timeZone ?? "Device default")
-            Button("View profile") { component.onOpenProfile() }
-                .buttonStyle(.bordered)
+        return List {
+            Section {
+                labeledRow("Username", value.username ?? "—")
+                labeledRow("Time zone", value.timeZone ?? "Device default")
+            }
+            Section {
+                Button("View profile") { component.onOpenProfile() }
+                    .listRowBackground(colors.surfaceCard)
+            }
         }
     }
 
     private func linkDetail(text: String, action: String, perform: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(text).font(.subheadline).foregroundStyle(colors.inkMuted)
-            Button(action, action: perform).buttonStyle(.bordered)
+        List {
+            Section {
+                Button(action, action: perform).listRowBackground(colors.surfaceCard)
+            } footer: {
+                Text(text)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func comingSoon(action: String?, perform: (() -> Void)?) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("This is on the way. Thanks for your patience.")
-                .font(.subheadline).foregroundStyle(colors.inkMuted)
-            if let action, let perform {
-                Button(action, action: perform).buttonStyle(.bordered)
+        List {
+            Section {
+                Text("This is on the way. Thanks for your patience.")
+                    .foregroundStyle(colors.inkMuted)
+                    .listRowBackground(colors.surfaceCard)
+                if let action, let perform {
+                    Button(action, action: perform).listRowBackground(colors.surfaceCard)
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: Atoms
 
-    private func section<Content: View>(_ heading: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(heading).font(.subheadline.weight(.semibold)).foregroundStyle(colors.inkMuted)
-                .accessibilityAddTraits(.isHeader)
-            content()
-        }
-    }
-
-    private func radioRow(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    /// A native single-select row: tap to choose, a checkmark marks the current value (the iOS idiom,
+    /// replacing the old custom radio circle). Colour is reinforcement, never the sole signal (WCAG).
+    private func checkRow(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
-                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(selected ? colors.primary : colors.inkMuted)
                 Text(label).foregroundStyle(colors.onSurface)
                 Spacer()
+                if selected {
+                    Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(colors.primary)
+                }
             }
-            .frame(minHeight: Layout.minTouchTarget)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .listRowBackground(colors.surfaceCard)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
-    private func doneVisibilityRow(current: Int, onSelect: @escaping (Int) -> Void) -> some View {
-        let options: [(String, Int)] = [("1 day", 86400), ("3 days", 259200), ("1 week", 604800), ("Always", -1)]
-        return HStack(spacing: 8) {
-            ForEach(options, id: \.1) { option in
-                let selected = option.1 == current
-                Button(option.0) { onSelect(option.1) }
-                    .font(.footnote)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(selected ? colors.primaryContainer : colors.surfaceVariant, in: Capsule())
-                    .foregroundStyle(colors.onSurface)
+    private func agentRow(label: String, note: String, selected: Bool, locked: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label).foregroundStyle(locked ? colors.inkMuted : colors.onSurface)
+                    Text(note).font(.caption).foregroundStyle(colors.inkMuted)
+                }
+                Spacer()
+                if selected {
+                    Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(colors.primary)
+                } else if locked {
+                    Image(systemName: "lock.fill").font(.caption).foregroundStyle(colors.inkMuted)
+                }
             }
+            .contentShape(Rectangle())
         }
+        .disabled(locked)
+        .listRowBackground(colors.surfaceCard)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+
+    private func doneVisibilityPicker(current: Int, onSelect: @escaping (Int) -> Void) -> some View {
+        let options: [(String, Int)] = [("1 day", 86400), ("3 days", 259200), ("1 week", 604800), ("Always", -1)]
+        return Picker("Show for", selection: Binding(get: { current }, set: { onSelect($0) })) {
+            ForEach(options, id: \.1) { Text($0.0).tag($0.1) }
+        }
+        .listRowBackground(colors.surfaceCard)
     }
 
     private func labeledRow(_ label: String, _ value: String) -> some View {
         HStack {
-            Text(label).foregroundStyle(colors.inkMuted)
+            Text(label).foregroundStyle(colors.onSurface)
             Spacer()
-            Text(value).foregroundStyle(colors.onSurface)
+            Text(value).foregroundStyle(colors.inkMuted)
         }
-        .font(.subheadline)
+        .listRowBackground(colors.surfaceCard)
     }
 
     private func title(_ category: SettingsCategory) -> String {

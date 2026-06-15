@@ -15,30 +15,29 @@ struct PlanView: View {
 
     var body: some View {
         let value = state.value
-        VStack(spacing: 0) {
-            PaneHeader(title: "Today", showsBrand: true) {
-                Button("Refresh") { component.onRefresh() }
-                    .frame(minHeight: Layout.minTouchTarget)
-                    .disabled(value.isRefreshing)
-            }
-            if value.isRefreshing {
-                LoadingStrip(label: "Refreshing your plan…")
-            }
-            if value.tasks.isEmpty && !value.isRefreshing {
-                EmptyStateView(
-                    title: "Your plan is clear",
-                    message: "Nothing scheduled for today. Add something when you're ready — no pressure."
-                )
-            } else {
-                List {
-                    ForEach(value.tasks, id: \.stableKey) { task in
-                        TaskRow(task: task, showsPin: false) { component.onTaskClicked(id: task.id) }
-                            .listRowInsets(EdgeInsets())
-                    }
+        NavigationStack {
+            VStack(spacing: 0) {
+                if value.isRefreshing {
+                    LoadingStrip(label: "Refreshing your plan…")
                 }
-                .listStyle(.plain)
+                if value.tasks.isEmpty && !value.isRefreshing {
+                    EmptyStateView(
+                        title: "Your plan is clear",
+                        message: "Nothing scheduled for today. Add something when you're ready — no pressure."
+                    )
+                } else {
+                    List {
+                        ForEach(value.tasks, id: \.stableKey) { task in
+                            TaskRow(task: task, showsPin: false) { component.onTaskClicked(id: task.id) }
+                                .listRowInsets(EdgeInsets())
+                        }
+                    }
+                    .listStyle(.plain)
+                    .refreshable { component.onRefresh() }
+                }
             }
+            .background(Color(.systemBackground))
+            .shellNavBar("Today")
         }
-        .background(Color(.systemBackground))
     }
 }
