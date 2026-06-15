@@ -44,6 +44,7 @@ import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.SubtaskNode
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -369,9 +370,15 @@ internal fun AttachmentsSection(
     onDelete: (String) -> Unit,
     onSetCaption: (String, String) -> Unit,
     modifier: Modifier = Modifier,
+    // On-device attachments (#211, e.g. a retained brain-dump recording). Rendered below the synced
+    // attachments: they have no signed URL, so audio is played locally rather than opened in a browser.
+    // Empty on platforms without on-device capture (desktop/iOS) — then this section is unchanged.
+    onDeviceAttachments: List<OnDeviceAttachment> = emptyList(),
+    onDeleteOnDevice: (String) -> Unit = {},
+    onPlayOnDevice: (OnDeviceAttachment) -> Unit = {},
 ) {
     Column(modifier.fillMaxWidth()) {
-        SectionHeader("Attachments", trailing = attachments.size.toString())
+        SectionHeader("Attachments", trailing = (attachments.size + onDeviceAttachments.size).toString())
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -380,7 +387,7 @@ internal fun AttachmentsSection(
                 Text(if (isUploading) "Uploading…" else "Add file")
             }
         }
-        if (attachments.isEmpty()) {
+        if (attachments.isEmpty() && onDeviceAttachments.isEmpty()) {
             Text(
                 "No attachments.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -388,7 +395,48 @@ internal fun AttachmentsSection(
             )
         } else {
             attachments.forEach { a -> AttachmentRow(a, onDelete, onSetCaption) }
+            onDeviceAttachments.forEach { a -> OnDeviceAttachmentRow(a, onDeleteOnDevice, onPlayOnDevice) }
         }
+    }
+}
+
+/**
+ * One on-device attachment (#211): filename + size/type + an "On device" marker, with Play (audio only)
+ * and Delete. No URL-open or caption editor — the bytes live on this device and (for a recording) are
+ * played locally by the host's androidMain glue via [onPlay].
+ */
+@Composable
+private fun OnDeviceAttachmentRow(
+    attachment: OnDeviceAttachment,
+    onDelete: (String) -> Unit,
+    onPlay: (OnDeviceAttachment) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(attachment.filename, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+            Text(
+                text = "${formatBytes(attachment.size)} · ${attachment.mime} · On device",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.defernoColors.inkMuted,
+                maxLines = 1,
+            )
+            attachment.caption?.takeIf { it.isNotBlank() }?.let { caption ->
+                Text(caption, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        if (attachment.isAudio) {
+            TextButton(
+                onClick = { onPlay(attachment) },
+                modifier = Modifier.semantics { contentDescription = "Play ${attachment.filename}" },
+            ) { Text("Play") }
+        }
+        TextButton(
+            onClick = { onDelete(attachment.id) },
+            modifier = Modifier.semantics { contentDescription = "Delete ${attachment.filename}" },
+        ) { Text("Delete") }
     }
 }
 

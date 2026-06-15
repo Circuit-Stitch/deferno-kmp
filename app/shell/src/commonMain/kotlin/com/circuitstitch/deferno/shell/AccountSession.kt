@@ -34,6 +34,8 @@ import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
+import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
+import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachments
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.LocalDate
@@ -53,6 +55,13 @@ interface AccountSession {
 
     /** The Task detail's online-only comments + attachments source (the web-parity detail sections). */
     val taskDetailRepository: TaskDetailRepository
+
+    /**
+     * The Task detail's **on-device** attachment seam (#210/#211) — this Account's locally-stored
+     * attachments (e.g. a retained brain-dump recording), read/deleted/played locally, distinct from the
+     * synced [taskDetailRepository] attachments. Backed by the Account's `LocalAttachmentRepository`.
+     */
+    val onDeviceAttachments: OnDeviceAttachments
     val planRepository: PlanRepository
 
     /**
@@ -145,6 +154,18 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val taskRepository: TaskRepository get() = component.taskRepository
     override val taskDetailRepository: TaskDetailRepository get() = component.taskDetailRepository
     override val planRepository: PlanRepository get() = component.planRepository
+
+    // #211: map this Account's LocalAttachment rows → the detail's OnDeviceAttachment projection.
+    override val onDeviceAttachments: OnDeviceAttachments = object : OnDeviceAttachments {
+        override suspend fun forTask(taskId: TaskId): List<OnDeviceAttachment> =
+            component.localAttachmentRepository.forTask(taskId.value).map {
+                OnDeviceAttachment(it.id, it.filename, it.mime, it.size, it.caption)
+            }
+
+        override suspend fun delete(id: String) = component.localAttachmentRepository.delete(id)
+
+        override suspend fun bytes(id: String): ByteArray? = component.localAttachmentRepository.bytes(id)
+    }
     override val settingsRepository: SettingsRepository get() = component.settingsRepository
     override val calendarRepository: CalendarRepository get() = component.calendarRepository
 
