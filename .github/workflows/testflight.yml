@@ -40,6 +40,10 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: recursive
+          # third_party/shacl-aio is a PRIVATE repo; the default GITHUB_TOKEN can't reach it, so recursive
+          # submodule checkout 403s. SUBMODULES_TOKEN: fine-grained PAT, Contents:read on deferno-kmp +
+          # shacl-aio. checkout rewrites the SSH submodule URL to HTTPS and auths with it.
+          token: ${{ secrets.SUBMODULES_TOKEN }}
 
       # Temurin 17 is the toolchain the build pins (ProjectConfig.JVM_TOOLCHAIN /
       # gradle-daemon-jvm.properties). The Gradle run inside the Xcode Run Script phase uses it as the

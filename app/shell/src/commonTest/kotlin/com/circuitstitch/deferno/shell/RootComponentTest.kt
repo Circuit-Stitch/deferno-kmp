@@ -515,6 +515,17 @@ internal class FakeAccountSession(
             workingStateSets += id to target
         }
 
+    val deadlinesSet = mutableListOf<Pair<TaskId, Instant?>>()
+    val labelsSet = mutableListOf<Pair<TaskId, List<String>>>()
+
+    override val setDeadline: suspend (TaskId, Instant?) -> Unit = { id, completeBy ->
+        deadlinesSet += id to completeBy
+    }
+
+    override val setLabels: suspend (TaskId, List<String>) -> Unit = { id, labels ->
+        labelsSet += id to labels
+    }
+
     override val calendarRepository: com.circuitstitch.deferno.core.data.calendar.CalendarRepository =
         object : com.circuitstitch.deferno.core.data.calendar.CalendarRepository {
             override fun observeMarkers(from: LocalDate, to: LocalDate) =

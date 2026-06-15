@@ -8,6 +8,7 @@ import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.AddToPlan
 import com.circuitstitch.deferno.core.domain.command.ClearOccurrence
+import com.circuitstitch.deferno.core.domain.command.ClearTaskDeadline
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.domain.command.CommandResult
 import com.circuitstitch.deferno.core.domain.command.CreateItem
@@ -15,6 +16,8 @@ import com.circuitstitch.deferno.core.domain.command.MarkOccurrence
 import com.circuitstitch.deferno.core.domain.command.RescheduleOccurrence
 import com.circuitstitch.deferno.core.domain.command.SetDoneVisibility
 import com.circuitstitch.deferno.core.domain.command.SetDragAndDrop
+import com.circuitstitch.deferno.core.domain.command.SetTaskDeadline
+import com.circuitstitch.deferno.core.domain.command.SetTaskLabels
 import com.circuitstitch.deferno.core.domain.command.SetTheme
 import com.circuitstitch.deferno.core.domain.command.SetTracking
 import com.circuitstitch.deferno.core.domain.command.taskCommandFor
@@ -74,6 +77,16 @@ interface AccountSession {
      * feature layer touching the command registry directly (mirrors the [addToPlan] wrapper).
      */
     val workingStateEditor: WorkingStateEditor
+
+    /**
+     * The Task detail's editable-PROPERTIES write seams (DUE date + LABELS), each routed through the
+     * command executor (optimistic apply + outbox enqueue, ADR-0001/0007) so the feature layer never
+     * touches the command registry directly (mirrors [workingStateEditor]). [setDeadline] maps a non-null
+     * `completeBy` to `SetTaskDeadline` and a `null` to the explicit `ClearTaskDeadline`; [setLabels]
+     * replaces the Task's label set via `SetTaskLabels`.
+     */
+    val setDeadline: suspend (TaskId, Instant?) -> Unit
+    val setLabels: suspend (TaskId, List<String>) -> Unit
 
     /** The Calendar Destination's windowed feed read source (#74) — the month grid + day agenda observe it. */
     val calendarRepository: CalendarRepository
@@ -136,6 +149,12 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val workingStateEditor: WorkingStateEditor =
         commandWorkingStateEditor(component.commandExecutor)
 
+    override val setDeadline: suspend (TaskId, Instant?) -> Unit =
+        commandSetDeadline(component.commandExecutor)
+
+    override val setLabels: suspend (TaskId, List<String>) -> Unit =
+        commandSetLabels(component.commandExecutor)
+
     override val occurrenceEditor: OccurrenceEditor =
         commandOccurrenceEditor(component.commandExecutor)
 
@@ -158,6 +177,28 @@ internal fun commandWorkingStateEditor(executor: CommandExecutor): WorkingStateE
     WorkingStateEditor { id: TaskId, target: WorkingState, current: Task? ->
         executor.execute(taskCommandFor(id, target), current = current)
     }
+
+/**
+ * The deadline DUE-date write seam backed by a [CommandExecutor]: a non-null `completeBy` dispatches
+ * [SetTaskDeadline], a `null` the explicit [ClearTaskDeadline] (the writer emits an explicit clear, not
+ * an empty set). No `current` row is passed — neither command has a stale-transition gate, matching the
+ * other property edits. Shared by production and tests so the mapping isn't duplicated.
+ */
+internal fun commandSetDeadline(executor: CommandExecutor): suspend (TaskId, Instant?) -> Unit =
+    { id, completeBy ->
+        if (completeBy == null) {
+            executor.execute(ClearTaskDeadline(id))
+        } else {
+            executor.execute(SetTaskDeadline(id, completeBy))
+        }
+    }
+
+/**
+ * The LABELS write seam backed by a [CommandExecutor]: replaces the Task's label set via [SetTaskLabels]
+ * (an empty list clears them — the field is always present). Shared by production and tests.
+ */
+internal fun commandSetLabels(executor: CommandExecutor): suspend (TaskId, List<String>) -> Unit =
+    { id, labels -> executor.execute(SetTaskLabels(id, labels)) }
 
 /**
  * An [OccurrenceEditor] backed by a [CommandExecutor] (#74): each act maps to its occurrence Command

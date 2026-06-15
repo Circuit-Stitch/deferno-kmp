@@ -35,6 +35,11 @@ jobs:
           # Full history so the append-only migration guard can diff against the PR base / prior push.
           fetch-depth: 0
           submodules: recursive
+          # third_party/shacl-aio is a PRIVATE repo (Circuit-Stitch/shacl-aio). The default GITHUB_TOKEN
+          # is scoped to this repo only, so recursive submodule checkout 403s on it. SUBMODULES_TOKEN is a
+          # fine-grained PAT with Contents:read on deferno-kmp + shacl-aio; checkout rewrites the SSH
+          # submodule URL to HTTPS and auths with it (no .gitmodules change).
+          token: ${{ secrets.SUBMODULES_TOKEN }}
 
       # Released SQLDelight schema versions are frozen (ADR-0022): a schema change adds a NEW numbered
       # `<N>.sqm` + `databases/<N>.db`, never edits a committed one. Editing a released `.sqm` silently

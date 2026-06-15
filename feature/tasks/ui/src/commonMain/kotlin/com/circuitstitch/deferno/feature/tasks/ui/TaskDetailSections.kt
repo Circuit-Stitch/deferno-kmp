@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.feature.tasks.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,11 +14,16 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +45,10 @@ import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.SubtaskNode
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 
 // The web-parity Task detail sections (Subtasks tree · Attachments · Activity/Comments). Platform-
 // neutral Compose (Android + desktop) — thin, stateless renderers driven by [TaskDetailComponent]
@@ -68,6 +78,183 @@ internal fun SectionHeader(title: String, modifier: Modifier = Modifier, trailin
             )
         }
     }
+}
+
+// --- Properties (DUE · TIME · LABELS · OWNER) ---
+
+/**
+ * The calm PROPERTIES block on the Task detail: a flat list of rows for the deadline DUE date, its
+ * TIME-of-day, the LABELS, and the OWNER org. DUE and LABELS are editable through the [TaskDetailComponent]
+ * write seams ([onSetDeadline] / [onSetLabels], optimistic + offline-first); TIME and OWNER are read-only
+ * this slice. Renders straight off the hydrated [task] fields — no new component state (#195).
+ *
+ * Design-principles.md: plain labels, large touch targets, a muted "—" for absent values, and
+ * self-describing TalkBack semantics on the interactive controls.
+ */
+@Composable
+internal fun PropertiesSection(
+    task: Task,
+    onSetDeadline: (LocalDate?) -> Unit,
+    onSetLabels: (List<String>) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth()) {
+        SectionHeader("Properties")
+        DueRow(completeBy = task.completeBy, onSetDeadline = onSetDeadline)
+        // ponytail: editable TIME is deferred — it needs the deadline_time_of_day mutation seam.
+        PropertyRow(label = "Time", value = task.deadlineTimeOfDay?.toDisplayTime() ?: "—")
+        LabelsRow(labels = task.labels, onSetLabels = onSetLabels)
+        PropertyRow(label = "Owner", value = task.ownerOrgId?.value ?: "—")
+    }
+}
+
+/** A read-only property: a fixed label and its value (or a muted "—" when absent). */
+@Composable
+private fun PropertyRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.defernoColors.inkMuted,
+            modifier = Modifier.width(80.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (value == "—") MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * The editable DUE row: shows the deadline day (or a muted "—"), tapping opens a Material3
+ * [DatePickerDialog] seeded from [completeBy]; confirming forwards the picked day, and a Clear
+ * affordance forwards `null` to drop the deadline.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DueRow(completeBy: Instant?, onSetDeadline: (LocalDate?) -> Unit) {
+    var showPicker by remember { mutableStateOf(false) }
+    val display = completeBy?.toDisplayDate() ?: "—"
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Due",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.defernoColors.inkMuted,
+            modifier = Modifier.width(80.dp),
+        )
+        Text(
+            text = display,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (completeBy == null) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = MinTouchTarget)
+                .clickable(onClickLabel = "Set due date") { showPicker = true }
+                .semantics { contentDescription = "Due date: $display. Tap to change." },
+        )
+        if (completeBy != null) {
+            TextButton(
+                onClick = { onSetDeadline(null) },
+                modifier = Modifier.semantics { contentDescription = "Clear due date" },
+            ) { Text("Clear") }
+        }
+    }
+    if (showPicker) {
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = completeBy?.toEpochMilliseconds())
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pickerState.selectedDateMillis?.let { onSetDeadline(it.toPickedLocalDate()) }
+                        showPicker = false
+                    },
+                ) { Text("Set") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("Cancel") }
+            },
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+}
+
+/**
+ * Epoch millis from the Material3 DatePicker → the calendar day the user tapped. Spec (#195): read it
+ * back at the device zone; the picker stores the selection as a midnight instant, so projecting it onto
+ * [TimeZone.currentSystemDefault] yields that day for the seam to combine with the Task's time-of-day.
+ */
+private fun Long.toPickedLocalDate(): LocalDate =
+    Instant.fromEpochMilliseconds(this)
+        .toLocalDateTime(TimeZone.currentSystemDefault())
+        .date
+
+/**
+ * The editable LABELS row: each label as a removable [InputChip], plus an inline "add label" field. On
+ * any add or remove the whole updated list (trimmed, blanks + duplicates dropped) is forwarded through
+ * [onSetLabels] — the component replaces the Task's labels wholesale.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LabelsRow(labels: List<String>, onSetLabels: (List<String>) -> Unit) {
+    fun normalize(list: List<String>): List<String> =
+        list.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(
+            text = "Labels",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.defernoColors.inkMuted,
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            labels.forEach { label ->
+                InputChip(
+                    selected = false,
+                    onClick = { onSetLabels(normalize(labels - label)) },
+                    label = { Text(label) },
+                    trailingIcon = {
+                        Text(
+                            text = "×",
+                            modifier = Modifier.semantics { contentDescription = "Remove label $label" },
+                        )
+                    },
+                )
+            }
+        }
+        AddLabelField(onAdd = { entry -> onSetLabels(normalize(labels + entry)) })
+    }
+}
+
+@Composable
+private fun AddLabelField(onAdd: (String) -> Unit) {
+    var text by remember { mutableStateOf("") }
+    fun submit() {
+        if (text.isNotBlank()) {
+            onAdd(text)
+            text = ""
+        }
+    }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { text = it },
+        placeholder = { Text("Add a label…") },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { submit() }),
+        trailingIcon = {
+            TextButton(onClick = ::submit, enabled = text.isNotBlank()) { Text("Add") }
+        },
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+    )
 }
 
 // --- Subtasks ---
