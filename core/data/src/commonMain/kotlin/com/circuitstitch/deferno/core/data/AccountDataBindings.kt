@@ -9,6 +9,7 @@ import com.circuitstitch.deferno.core.data.calendar.OutboxOccurrenceWriter
 import com.circuitstitch.deferno.core.data.calendar.LocalStoreSeriesKindSource
 import com.circuitstitch.deferno.core.data.calendar.SeriesKindSource
 import com.circuitstitch.deferno.core.data.calendar.SqlDelightCalendarLocalStore
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
@@ -81,6 +82,13 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun outboxStore(db: DefernoDatabase): OutboxStore = SqlDelightOutboxStore(db)
+
+    // The on-device Brain dump draft store (ADR-0027): local-only, no remote/reconcile — a flat
+    // SQLDelight class the worker writes and the Brain dumps Destination observes + accepts/dismisses.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun brainDumpDraftRepository(db: DefernoDatabase): BrainDumpDraftRepository =
+        BrainDumpDraftRepository(db)
 
     // The recurring-kind local stores (#71): the per-Account SQLDelight caches a created Habit/Chore/
     // Event seeds into, so the row joins the observe Flow exactly as a Task does (ADR-0001).

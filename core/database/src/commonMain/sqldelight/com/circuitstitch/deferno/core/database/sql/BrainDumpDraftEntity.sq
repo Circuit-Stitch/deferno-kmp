@@ -1,0 +1,30 @@
+-- The on-device Brain dump draft store (ADR-0027 async redesign). The worker (record -> whisper ->
+-- Extractor) persists its proposed draft Tasks here so they survive process death and the user reviews
+-- them later in the Brain dumps Destination. Local-only, never synced: a draft leaves the table on
+-- accept (committed through the ordinary online Task create) or dismiss — so there is no reconcile key,
+-- tombstone, or org column, unlike taskEntity. Everything is a primitive SQL type (TEXT) so the
+-- generated database needs no column adapters; the enum/date conversion is done in Kotlin (core:data).
+CREATE TABLE brainDumpDraftEntity (
+    id                   TEXT NOT NULL PRIMARY KEY,
+    title                TEXT NOT NULL,
+    notes                TEXT,
+    complete_by          TEXT,
+    deadline_time_of_day TEXT,
+    status               TEXT NOT NULL,
+    created_at           TEXT NOT NULL
+);
+
+-- Newest first — the review list order.
+selectAll:
+SELECT * FROM brainDumpDraftEntity ORDER BY created_at DESC;
+
+insertOrReplace:
+INSERT OR REPLACE INTO brainDumpDraftEntity(
+    id, title, notes, complete_by, deadline_time_of_day, status, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM brainDumpDraftEntity WHERE id = ?;
+
+deleteAll:
+DELETE FROM brainDumpDraftEntity;
