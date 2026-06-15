@@ -50,6 +50,7 @@ import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.profile.DefaultProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.settings.DefaultSettingsComponent
+import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
 import com.circuitstitch.deferno.feature.tasks.DefaultSearchComponent
@@ -63,10 +64,12 @@ import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -141,6 +144,13 @@ interface MainShellComponent {
      * the (lazily-built) Inbox Destination is first visited.
      */
     val inboxReadyCount: StateFlow<Int>
+
+    /**
+     * The adaptive top-bar [ChromeSpec] for the foreground **in-chrome** surface (Cand 1) — one bar,
+     * computed in the shell from the active Destination + its tier-3 drill-down. The View renders it, so
+     * the per-screen headers are gone and the header buttons no longer "come and go" arbitrarily.
+     */
+    val chrome: StateFlow<ChromeSpec>
 
     /** Switch the Active Account — re-keys the shell for the new Account, no re-auth (ADR-0002/0012). */
     fun switchAccount(id: AccountId)
@@ -614,6 +624,92 @@ class DefaultMainShellComponent(
 
     init {
         lifecycle.doOnResume { badgeResume.value++ }
+    }
+
+    // ----- Adaptive top-bar chrome (Cand 1): one bar for every in-chrome surface, computed here so the
+    // per-screen headers go away and the buttons stop coming and going arbitrarily. -----
+
+    /** Bridge a Decompose [Value] to a [Flow] so chrome reacts to nav (and nested-nav / detail) changes. */
+    private fun <T : Any> Value<T>.asFlow(): Flow<T> = callbackFlow {
+        val cancellation = subscribe { trySend(it) }
+        awaitClose { cancellation.cancel() }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override val chrome: StateFlow<ChromeSpec> =
+        stack.asFlow()
+            .flatMapLatest { st -> chromeFor(st.active.instance) }
+            .stateIn(overlayScope, SharingStarted.WhileSubscribed(5_000L), rootChrome("Today"))
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun chromeFor(active: MainShellComponent.DestinationChild): Flow<ChromeSpec> =
+        when (active) {
+            // Plan is a tier-3 stack: the dashboard root ("Today") or a drilled Task detail (its title).
+            is MainShellComponent.DestinationChild.Plan ->
+                active.stack.asFlow().flatMapLatest { ps ->
+                    when (val child = ps.active.instance) {
+                        is MainShellComponent.PlanChild.Dashboard ->
+                            flowOf(rootChrome("Today", onRefresh = child.component::onRefresh))
+                        is MainShellComponent.PlanChild.Detail ->
+                            child.component.state.map { drilledChrome(it.task?.title ?: "Task") }
+                    }
+                }
+
+            // Tasks is the multi-pane workspace (ADR-0007 t2): its co-resident panes carry their own
+            // headers (title · back · refresh), so the shell bar shows only the global actions here — no
+            // title — and Tasks needs no View change. The single-pane Destinations title the bar instead.
+            is MainShellComponent.DestinationChild.Tasks -> flowOf(rootChrome(""))
+
+            // Settings is a tier-3 stack: the category list ("Settings") or a drilled category (its title).
+            is MainShellComponent.DestinationChild.Settings ->
+                active.component.stack.asFlow().map { ss ->
+                    when (val child = ss.active.instance) {
+                        is SettingsComponent.SettingsChild.List -> rootChrome("Settings")
+                        is SettingsComponent.SettingsChild.Detail -> drilledChrome(child.category.chromeTitle())
+                    }
+                }
+
+            // The Calendar New pre-dates to its selected day (#74) — wire that as this root's New handler.
+            is MainShellComponent.DestinationChild.Calendar ->
+                flowOf(rootChrome("Calendar", onNew = active.component::onNewForSelectedDay))
+
+            is MainShellComponent.DestinationChild.Inbox -> flowOf(rootChrome("Inbox"))
+            is MainShellComponent.DestinationChild.Profile -> flowOf(rootChrome("Profile"))
+            is MainShellComponent.DestinationChild.Placeholder -> flowOf(rootChrome(active.destination.name))
+        }
+
+    /** A Destination-root chrome: ☰ menu + title + a per-screen Refresh (if any) and the global create
+     *  actions (Brain dump, New). New defaults to the undated overlay; the Calendar root pre-dates it. */
+    private fun rootChrome(
+        title: String,
+        onRefresh: (() -> Unit)? = null,
+        onNew: () -> Unit = { openOverlay(OverlayRoute.New()) },
+    ): ChromeSpec = ChromeSpec(
+        title = title,
+        drilled = false,
+        actions = buildList {
+            if (onRefresh != null) add(ChromeAction(ChromeActionKind.Refresh, onRefresh))
+            add(ChromeAction(ChromeActionKind.BrainDump) { openOverlay(OverlayRoute.BrainDump) })
+            add(ChromeAction(ChromeActionKind.New, onNew))
+        },
+    )
+
+    /** A drilled-detail chrome: ← back + the detail's own title, no create actions (those belong to roots). */
+    private fun drilledChrome(title: String): ChromeSpec = ChromeSpec(title = title, drilled = true)
+
+    /** The shell-chrome title for a drilled Settings category (shell presentation, like the root titles). */
+    private fun SettingsCategory.chromeTitle(): String = when (this) {
+        SettingsCategory.Appearance -> "Appearance"
+        SettingsCategory.TaskBehavior -> "Task behavior"
+        SettingsCategory.SpeechEngine -> "Speech engine"
+        SettingsCategory.Agent -> "Agent"
+        SettingsCategory.DataPrivacy -> "Data & Privacy"
+        SettingsCategory.HelpFeedback -> "Help & Feedback"
+        SettingsCategory.AppPermissions -> "App Permissions"
+        SettingsCategory.Legal -> "Legal"
+        SettingsCategory.Account -> "Account"
+        SettingsCategory.Security2FA -> "Security & 2FA"
+        SettingsCategory.Integrations -> "Integrations"
     }
 
     private fun createOverlay(

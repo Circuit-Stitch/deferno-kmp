@@ -65,18 +65,7 @@ internal fun ProfileDesktopContent(
 ) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(modifier = Modifier.fillMaxSize().widthIn(max = ProfileReadingWidth)) {
-            Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Profile",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                }
-            }
+            // The "Profile" title now lives in the shell's single top bar (Cand 1); this is just the body.
             Column(
                 modifier = Modifier
                     .fillMaxSize()

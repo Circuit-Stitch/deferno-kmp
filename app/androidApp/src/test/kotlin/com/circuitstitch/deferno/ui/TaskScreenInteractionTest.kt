@@ -148,15 +148,14 @@ class TaskScreenInteractionTest {
     }
 
     @Test
-    fun plan_rowTap_opensTask_andRefreshPulls() {
+    fun plan_rowTap_opensTask() {
         val component = FakePlanComponent(PlanState(tasks = SampleTasks.list))
         setContent { PlanScreen(component) }
 
+        // Refresh moved to the shell's single top bar (Cand 1); the isolated Plan pane is just the list.
         composeRule.onNodeWithText("Reply to Sam").performClick()
-        composeRule.onNodeWithText("Refresh").performClick()
 
         assertEquals(listOf(TaskId("3")), component.clicked)
-        assertEquals(1, component.refreshCount)
     }
 
     @Test

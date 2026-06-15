@@ -63,14 +63,6 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
             activeDestination = active.destination,
             drawerOpen = drawerOpen,
             onDrawerOpenChange = { drawerOpen = it },
-            // The Calendar pre-dates New to its selected day (#74); elsewhere New is undated. Reads the
-            // live active child at click time so the date stays the Calendar's concern, not the chrome's.
-            onNew = {
-                when (val a = component.stack.value.active.instance) {
-                    is MainShellComponent.DestinationChild.Calendar -> a.component.onNewForSelectedDay()
-                    else -> component.openOverlay(OverlayRoute.New())
-                }
-            },
             // Native res/drawable on Android (Robolectric doesn't serve a dependency module's
             // composeResources; the real app loads these fine either way) — see ShellChrome's KDoc.
             brainDumpIcon = painterResource(R.drawable.ic_voice_chat),

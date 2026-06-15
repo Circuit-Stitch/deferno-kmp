@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -63,9 +65,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.shell.ChromeActionKind
+import com.circuitstitch.deferno.shell.ChromeSpec
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.MainShellComponent
 import com.circuitstitch.deferno.shell.OverlayRoute
@@ -75,14 +80,17 @@ import kotlinx.coroutines.launch
  * The shared **Main shell chrome** (ADR-0013 / ADR-0017): one implementation of the navigation surface
  * rendered by both the Android and desktop shells (the #27 "Compose Views in a sibling Android+JVM
  * module" pattern applied to the shell). It is a **reveal drawer** — the whole content screen slides
- * aside to expose a navigation menu sitting *underneath* it — plus a slim top bar carrying a menu
- * toggle and two trailing actions (voice_chat → Brain dump, add_task → New).
+ * aside to expose a navigation menu sitting *underneath* it — plus a slim, **adaptive** top bar driven
+ * by the shell-computed [ChromeSpec] (Cand 1): a ☰ menu + title + create actions at a Destination root,
+ * and a ← back + the detail's title when drilled into a tier-3 detail. One bar, so the per-screen headers
+ * are gone and the buttons no longer come and go arbitrarily.
  *
  * The chrome is a pure renderer of the shared [MainShellComponent]: it reads [activeDestination] to
- * highlight the drawer row and renders the foreground Destination via the platform-supplied [body]
- * (which references the per-platform `:feature:*:ui` screens this module can't depend on). [onNew] is
- * likewise platform-supplied so the **Calendar pre-date** special case (#74) stays in the platform and
- * this module needs no `:feature:calendar` dependency. Drawer open/close is **hoisted state**
+ * highlight the drawer row, [MainShellComponent.chrome] for the top-bar spec, and renders the foreground
+ * Destination via the platform-supplied [body] (which references the per-platform `:feature:*:ui` screens
+ * this module can't depend on). The top bar's New/Brain dump handlers — including the **Calendar pre-date**
+ * special case (#74) — are wired in the shell's chrome computation, so this module needs no
+ * `:feature:calendar` dependency. Drawer open/close is **hoisted state**
  * ([drawerOpen] / [onDrawerOpenChange]) so each platform can route its own back affordance (Android
  * `BackHandler`) to close the drawer before anything else. Beyond the hamburger toggle, a freeform
  * **left-edge swipe** opens the drawer and a drag on the open content closes it — both track the finger
@@ -102,12 +110,12 @@ fun ShellChrome(
     activeDestination: Destination,
     drawerOpen: Boolean,
     onDrawerOpenChange: (Boolean) -> Unit,
-    onNew: () -> Unit,
     brainDumpIcon: Painter,
     newIcon: Painter,
     modifier: Modifier = Modifier,
     body: @Composable () -> Unit,
 ) {
+    val chrome by component.chrome.collectAsState()
     BoxWithConstraints(modifier.fillMaxSize()) {
         // Wide enough to read as a drawer, but always leaving a peek of content on the largest phones;
         // capped so a desktop window doesn't get an absurdly wide menu.
@@ -198,11 +206,11 @@ fun ShellChrome(
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize()) {
                     ShellTopBar(
+                        chrome = chrome,
                         brainDumpIcon = brainDumpIcon,
                         newIcon = newIcon,
                         onMenu = { onDrawerOpenChange(!drawerOpen) },
-                        onBrainDump = { component.openOverlay(OverlayRoute.BrainDump) },
-                        onNew = onNew,
+                        onBack = { component.onBack() },
                     )
                     Box(Modifier.weight(1f).fillMaxWidth()) { body() }
                 }
@@ -249,33 +257,54 @@ fun ShellChrome(
  */
 expect fun Modifier.systemGestureExclusionCompat(): Modifier
 
-/** The slim top bar: a menu toggle (start) and the two trailing actions, clear of the status bar. */
+/**
+ * The slim top bar, driven by the shell-computed [ChromeSpec] (Cand 1): the adaptive leading affordance
+ * (☰ menu at a Destination root → opens the drawer; ← back when drilled → pops the drill-down), the
+ * surface title, and the surface's trailing [ChromeAction]s — all clear of the status bar. The two
+ * injected glyphs ([brainDumpIcon], [newIcon]) are mapped from the action [kind][ChromeActionKind];
+ * Refresh uses a material glyph.
+ */
 @Composable
 private fun ShellTopBar(
+    chrome: ChromeSpec,
     brainDumpIcon: Painter,
     newIcon: Painter,
     onMenu: () -> Unit,
-    onBrainDump: () -> Unit,
-    onNew: () -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.statusBars)
-            .heightIn(min = 48.dp)
+            .heightIn(min = 56.dp)
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onMenu) {
-            Icon(Icons.Filled.Menu, contentDescription = "Menu")
+        if (chrome.drilled) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        } else {
+            IconButton(onClick = onMenu) {
+                Icon(Icons.Filled.Menu, contentDescription = "Menu")
+            }
         }
-        Spacer(Modifier.weight(1f))
-        IconButton(onClick = onBrainDump) {
-            Icon(brainDumpIcon, contentDescription = "Brain dump")
-        }
-        IconButton(onClick = onNew) {
-            Icon(newIcon, contentDescription = "New")
+        Text(
+            text = chrome.title,
+            style = MaterialTheme.typography.titleLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() },
+        )
+        chrome.actions.forEach { action ->
+            IconButton(onClick = action.onInvoke) {
+                when (action.kind) {
+                    ChromeActionKind.Refresh -> Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                    ChromeActionKind.BrainDump -> Icon(brainDumpIcon, contentDescription = "Brain dump")
+                    ChromeActionKind.New -> Icon(newIcon, contentDescription = "New")
+                }
+            }
         }
     }
 }

@@ -58,54 +58,37 @@ internal fun ProfileContent(
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        ProfileHeader()
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            // The identity card depends on the live /auth/me fetch.
-            when (state) {
-                ProfileState.Loading -> LoadingIdentity()
-                is ProfileState.SignedIn -> IdentityCard(state.user)
-                ProfileState.ReauthRequired -> InlineNotice(
-                    title = "Session expired",
-                    body = "Your sign-in for this account has ended. Sign in again to refresh your details.",
-                    action = "Sign in again",
-                    onAction = onRetry,
-                )
+    // The "Profile" title now lives in the shell's single top bar (Cand 1); this pane is just the body.
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        // The identity card depends on the live /auth/me fetch.
+        when (state) {
+            ProfileState.Loading -> LoadingIdentity()
+            is ProfileState.SignedIn -> IdentityCard(state.user)
+            ProfileState.ReauthRequired -> InlineNotice(
+                title = "Session expired",
+                body = "Your sign-in for this account has ended. Sign in again to refresh your details.",
+                action = "Sign in again",
+                onAction = onRetry,
+            )
 
-                ProfileState.Unavailable -> InlineNotice(
-                    title = "Can’t reach Deferno",
-                    body = "Your profile details couldn’t load. Check your connection and try again.",
-                    action = "Retry",
-                    onAction = onRetry,
-                )
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-            // The Account controls are always available — sign-out works offline (ADR-0009).
-            AccountSection(account = account, onSignOut = onSignOut)
-        }
-    }
-}
-
-@Composable
-private fun ProfileHeader() {
-    Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Profile",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.semantics { heading() },
+            ProfileState.Unavailable -> InlineNotice(
+                title = "Can’t reach Deferno",
+                body = "Your profile details couldn’t load. Check your connection and try again.",
+                action = "Retry",
+                onAction = onRetry,
             )
         }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        // The Account controls are always available — sign-out works offline (ADR-0009).
+        AccountSection(account = account, onSignOut = onSignOut)
     }
 }
+

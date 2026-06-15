@@ -68,14 +68,6 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
             activeDestination = active.destination,
             drawerOpen = drawerOpen,
             onDrawerOpenChange = { drawerOpen = it },
-            // The Calendar pre-dates New to its selected day (#74); elsewhere New is undated — the desktop
-            // counterpart of the Android calendar FAB. Reads the live active child at click time.
-            onNew = {
-                when (val a = component.stack.value.active.instance) {
-                    is MainShellComponent.DestinationChild.Calendar -> a.component.onNewForSelectedDay()
-                    else -> component.openOverlay(OverlayRoute.New())
-                }
-            },
             // Desktop loads the shared composeResources glyphs off the JVM classpath (see ShellChrome KDoc).
             brainDumpIcon = painterResource(Res.drawable.ic_voice_chat),
             newIcon = painterResource(Res.drawable.ic_add_task),
