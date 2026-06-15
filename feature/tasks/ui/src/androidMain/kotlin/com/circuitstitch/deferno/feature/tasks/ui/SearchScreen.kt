@@ -4,10 +4,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -80,8 +83,10 @@ internal fun SearchContent(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Edge-to-edge overlay (#73): the Surface paints under the system bars; the content insets past
+    // them so the header clears the status-bar clock and the results clear the nav bar.
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
             Row(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,

@@ -12,6 +12,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -181,8 +182,11 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
             FeedbackScreen(child.component, Modifier.fillMaxSize())
 
         // A Plan tap (#51): the Task's detail over the dashboard, instead of switching to the Tasks tab.
+        // Drilling parent→subtask re-activates this same slot, so key on the component to force a fresh
+        // composition — otherwise the new Task inherits the parent's scroll offset + field focus (which
+        // pops the keyboard and shoves the header under the status bar).
         is MainShellComponent.OverlayChild.TaskDetail ->
-            TaskDetailScreen(child.component, Modifier.fillMaxSize())
+            key(child.component) { TaskDetailScreen(child.component, Modifier.fillMaxSize()) }
 
         // Brain dump (ADR-0027/#150): continuous dictation → on-device Extractor → reviewable draft Tasks.
         is MainShellComponent.OverlayChild.BrainDump ->

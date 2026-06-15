@@ -8,16 +8,20 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -111,35 +115,41 @@ internal fun TaskDetailContent(
     modifier: Modifier = Modifier,
 ) {
     val task = state.task
-    Column(modifier = modifier.fillMaxSize()) {
-        // In single-pane the leading control returns to the list, so it reads as "Back".
-        PaneHeader(title = task?.title ?: "Task", onBack = onClose)
-        if (state.isHydrating) {
-            LoadingStrip(label = "Loading details…")
-        }
-        when {
-            task == null && !state.isHydrating -> EmptyState(
-                title = "Task not found",
-                body = "This task may have been removed. Head back to your list.",
-            )
-            task == null -> Unit // brief hydrating gap before the row is observed; the bar above shows it
-            else -> TaskBody(
-                task = task,
-                state = state,
-                onAddToPlan = onAddToPlan,
-                onSetWorkingState = onSetWorkingState,
-                onSetDeadline = onSetDeadline,
-                onSetLabels = onSetLabels,
-                onToggleSubtask = onToggleSubtask,
-                onOpenSubtask = onOpenSubtask,
-                onAddSubtask = onAddSubtask,
-                onPostComment = onPostComment,
-                onEditComment = onEditComment,
-                onDeleteComment = onDeleteComment,
-                onAddAttachment = onAddAttachment,
-                onDeleteAttachment = onDeleteAttachment,
-                onSetAttachmentCaption = onSetAttachmentCaption,
-            )
+    // Opaque background: this screen renders as an overlay above the Plan (#51), so it must paint a
+    // full surface and consume taps — otherwise the Plan behind bleeds through (Surface does both).
+    // The Surface fills edge-to-edge (cream under the translucent bars); the content insets past the
+    // system bars so the header clears the status-bar clock and the body clears the nav bar.
+    Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+        Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
+            // In single-pane the leading control returns to the list, so it reads as "Back".
+            PaneHeader(title = task?.title ?: "Task", onBack = onClose)
+            if (state.isHydrating) {
+                LoadingStrip(label = "Loading details…")
+            }
+            when {
+                task == null && !state.isHydrating -> EmptyState(
+                    title = "Task not found",
+                    body = "This task may have been removed. Head back to your list.",
+                )
+                task == null -> Unit // brief hydrating gap before the row is observed; the bar above shows it
+                else -> TaskBody(
+                    task = task,
+                    state = state,
+                    onAddToPlan = onAddToPlan,
+                    onSetWorkingState = onSetWorkingState,
+                    onSetDeadline = onSetDeadline,
+                    onSetLabels = onSetLabels,
+                    onToggleSubtask = onToggleSubtask,
+                    onOpenSubtask = onOpenSubtask,
+                    onAddSubtask = onAddSubtask,
+                    onPostComment = onPostComment,
+                    onEditComment = onEditComment,
+                    onDeleteComment = onDeleteComment,
+                    onAddAttachment = onAddAttachment,
+                    onDeleteAttachment = onDeleteAttachment,
+                    onSetAttachmentCaption = onSetAttachmentCaption,
+                )
+            }
         }
     }
 }
