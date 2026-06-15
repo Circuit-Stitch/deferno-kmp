@@ -11,6 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -99,7 +100,7 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
 private fun DestinationContent(active: MainShellComponent.DestinationChild) {
     when (active) {
         is MainShellComponent.DestinationChild.Plan ->
-            PlanDesktopScreen(active.component, Modifier.fillMaxSize())
+            PlanDesktopBody(active)
 
         is MainShellComponent.DestinationChild.Tasks ->
             TasksDesktopScreen(active.component, Modifier.fillMaxSize())
@@ -124,6 +125,22 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
 }
 
 /**
+ * The Plan Destination's tier-3 stack (#51, ADR-0007 t3): the daily dashboard at the base, a drilled Task
+ * detail above it — rendered INSIDE the chrome body (the drawer stays live), not as a shell overlay/sheet.
+ */
+@Composable
+private fun PlanDesktopBody(plan: MainShellComponent.DestinationChild.Plan) {
+    val stack by plan.stack.subscribeAsState()
+    when (val child = stack.active.instance) {
+        is MainShellComponent.PlanChild.Dashboard ->
+            PlanDesktopScreen(child.component, Modifier.fillMaxSize())
+
+        is MainShellComponent.PlanChild.Detail ->
+            key(child.component) { TaskDetailScreen(child.component, Modifier.fillMaxSize()) }
+    }
+}
+
+/**
  * The shell-level overlay above the foreground Destination (ADR-0015): Search (#86) and New (#87) render
  * their real desktop Views, Feedback (#375) the comment + AWT file-attach surface, Brain dump (ADR-0027)
  * the shared placeholder, and the v1 [OverlayChild.Placeholder] a dismissible stand-in. Each is dismissed
@@ -141,10 +158,6 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         // The in-app Help → Feedback surface (#375): comment + file attachments (AWT file dialog).
         is MainShellComponent.OverlayChild.Feedback ->
             FeedbackDesktopScreen(child.component, Modifier.fillMaxSize())
-
-        // A Plan tap (#51): the Task's detail over the dashboard, instead of switching to the Tasks Destination.
-        is MainShellComponent.OverlayChild.TaskDetail ->
-            TaskDetailScreen(child.component, Modifier.fillMaxSize())
 
         // Brain dump (ADR-0027): the dictation-driven Extractor ships on Android first (the on-device
         // shacl floor is Android-only); desktop keeps the placeholder until a JVM engine lands.

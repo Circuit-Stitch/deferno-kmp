@@ -10,6 +10,8 @@ import com.arkivanov.decompose.router.stack.ChildStack
 import com.arkivanov.decompose.router.stack.StackNavigation
 import com.arkivanov.decompose.router.stack.bringToFront
 import com.arkivanov.decompose.router.stack.childStack
+import com.arkivanov.decompose.router.stack.navigate
+import com.arkivanov.decompose.router.stack.pop
 import com.arkivanov.decompose.value.Value
 import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.arkivanov.essenty.lifecycle.doOnResume
@@ -155,7 +157,16 @@ interface MainShellComponent {
     sealed interface DestinationChild {
         val destination: Destination
 
-        class Plan(val component: PlanComponent) : DestinationChild {
+        /**
+         * The Plan Destination — now a tier-3 drill-down (ADR-0007 t3, #51): [stack] is the dashboard at
+         * the base and any drilled-in single-Task [detail][PlanChild.Detail] above it, rendered INSIDE the
+         * shell chrome (the drawer stays live), not as a shell overlay above it. [onBack] pops an open
+         * detail toward the dashboard, returning whether it consumed the back.
+         */
+        class Plan(
+            val stack: Value<ChildStack<*, PlanChild>>,
+            val onBack: () -> Boolean,
+        ) : DestinationChild {
             override val destination: Destination = Destination.Plan
         }
 
@@ -190,6 +201,17 @@ interface MainShellComponent {
         class Placeholder(override val destination: Destination) : DestinationChild
     }
 
+    /**
+     * The Plan Destination's tier-3 children (ADR-0007 t3): the dashboard at the base of
+     * [DestinationChild.Plan.stack], and a drilled-in single-Task [Detail] above it. Detail reuses the
+     * Tasks slice's [TaskDetailComponent] — the shell composes both slices (ADR-0004), so Plan needs no
+     * feature→feature dependency — so it hydrates + edits identically to the Tasks Destination's detail.
+     */
+    sealed interface PlanChild {
+        class Dashboard(val component: PlanComponent) : PlanChild
+        class Detail(val component: TaskDetailComponent) : PlanChild
+    }
+
     /** A shell-level overlay instance the View renders above the foreground Destination (ADR-0015). */
     sealed interface OverlayChild {
         /** The v1 stand-in (both Search #73 and New #71 are real routes over the same primitive). */
@@ -203,13 +225,6 @@ interface MainShellComponent {
 
         /** The in-app Help → Feedback surface (#375): comment + attachments, online-only submit. */
         class Feedback(val component: FeedbackComponent) : OverlayChild
-
-        /**
-         * A single Task's detail, opened as an overlay above the foreground Destination — a Plan tap
-         * shows the Task here (a sheet on the desktop) instead of yanking the whole shell to the Tasks
-         * Destination. Reuses the Tasks slice's [TaskDetailComponent], so it hydrates + edits identically.
-         */
-        class TaskDetail(val component: TaskDetailComponent) : OverlayChild
 
         /**
          * The **Brain dump** surface (ADR-0027, #150; Stage 4): a voice recorder. It records the mic to a
@@ -256,9 +271,6 @@ sealed interface OverlayRoute {
 
     /** The in-app Help → Feedback surface (#375), opened from Settings → Help & Feedback. */
     data object Feedback : OverlayRoute
-
-    /** One Task's detail above the foreground Destination (a Plan tap, #51) — the desktop opens it as a sheet. */
-    data class TaskDetail(val id: TaskId) : OverlayRoute
 
     /** The **Brain dump** surface (ADR-0027), opened from the shell top bar's voice_chat action. */
     data object BrainDump : OverlayRoute
@@ -389,6 +401,17 @@ class DefaultMainShellComponent(
 
     private val navigation = StackNavigation<Config>()
 
+    // The Plan Destination's tier-3 detail drill-down (ADR-0007 t3, #51): a Dashboard base + any drilled
+    // Task Detail above it, rendered INSIDE the chrome (so the drawer stays live) — not the shell overlay
+    // that used to yank the nav away. Owned here, not in feature/plan, so there's no feature→feature
+    // dependency (ADR-0004 NiA: the shell is the composition layer that may see both slices).
+    private sealed interface PlanConfig {
+        data object Dashboard : PlanConfig
+        data class Detail(val id: TaskId) : PlanConfig
+    }
+
+    private val planDetailNav = StackNavigation<PlanConfig>()
+
     override val stack: Value<ChildStack<*, MainShellComponent.DestinationChild>> =
         childStack(
             source = navigation,
@@ -442,17 +465,64 @@ class DefaultMainShellComponent(
         childContext: ComponentContext,
     ): MainShellComponent.DestinationChild =
         when (config) {
-            Config.Plan ->
-                MainShellComponent.DestinationChild.Plan(
-                    DefaultPlanComponent(
-                        componentContext = childContext,
-                        planRepository = planRepository,
-                        date = today,
-                        tz = timeZone,
-                        output = ::onPlanOutput,
-                        coroutineContext = coroutineContext,
-                    ),
+            Config.Plan -> {
+                // The Plan tier-3 stack: Dashboard at the base, a drilled Task Detail above it (ADR-0007
+                // t3). A Plan tap pushes Detail; subtask/add-to-plan/show-steps are routed by
+                // onPlanDetailOutput. The whole stack renders inside the chrome body, so the drawer stays.
+                val planStack = childContext.childStack(
+                    source = planDetailNav,
+                    serializer = null,
+                    initialConfiguration = PlanConfig.Dashboard,
+                    key = "PlanStack",
+                    handleBackButton = false, // Plan inner-back is routed via onBack(), like the other tiers
+                    childFactory = { planConfig, ctx ->
+                        when (planConfig) {
+                            PlanConfig.Dashboard -> MainShellComponent.PlanChild.Dashboard(
+                                DefaultPlanComponent(
+                                    componentContext = ctx,
+                                    planRepository = planRepository,
+                                    date = today,
+                                    tz = timeZone,
+                                    output = { out ->
+                                        when (out) {
+                                            is PlanComponent.Output.OpenTask ->
+                                                planDetailNav.navigate { it + PlanConfig.Detail(out.id) }
+                                        }
+                                    },
+                                    coroutineContext = coroutineContext,
+                                ),
+                            )
+
+                            is PlanConfig.Detail -> MainShellComponent.PlanChild.Detail(
+                                DefaultTaskDetailComponent(
+                                    componentContext = ctx,
+                                    taskId = planConfig.id,
+                                    taskRepository = taskRepository,
+                                    output = ::onPlanDetailOutput,
+                                    workingStateEditor = workingStateEditor,
+                                    detailRepository = taskDetailRepository,
+                                    createSubtask = createSubtask,
+                                    setDeadline = setDeadline,
+                                    setLabels = setLabels,
+                                    coroutineContext = coroutineContext,
+                                ),
+                            )
+                        }
+                    },
                 )
+                MainShellComponent.DestinationChild.Plan(
+                    stack = planStack,
+                    // Pop a drilled detail back toward the dashboard; not consumed at the dashboard base.
+                    onBack = {
+                        if (planStack.value.backStack.isNotEmpty()) {
+                            planDetailNav.pop()
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                )
+            }
 
             Config.Calendar ->
                 MainShellComponent.DestinationChild.Calendar(
@@ -587,21 +657,6 @@ class DefaultMainShellComponent(
                 ),
             )
 
-            is OverlayRoute.TaskDetail -> MainShellComponent.OverlayChild.TaskDetail(
-                DefaultTaskDetailComponent(
-                    componentContext = childContext,
-                    taskId = route.id,
-                    taskRepository = taskRepository,
-                    output = ::onTaskDetailOverlayOutput,
-                    workingStateEditor = workingStateEditor,
-                    detailRepository = taskDetailRepository,
-                    createSubtask = createSubtask,
-                    setDeadline = setDeadline,
-                    setLabels = setLabels,
-                    coroutineContext = coroutineContext,
-                ),
-            )
-
             // Brain dump (ADR-0027/#150, Stage 4): record the mic to a WAV and hand it to the background
             // worker on Stop — transcription + extraction happen there and the proposed drafts land in the
             // Inbox (no inline review). The recorder seam is Android-only; desktop leaves it inert. The
@@ -636,31 +691,27 @@ class DefaultMainShellComponent(
         }
     }
 
-    private fun onPlanOutput(output: PlanComponent.Output) {
+    /**
+     * The Plan Destination's Task-detail intents (#51), routed through Plan's own tier-3 stack instead of a
+     * shell overlay: close pops a level; a subtask drills one deeper (a real back stack); add-to-plan
+     * bubbles to the host; "show steps" leaves Plan's detail and opens the Task in the full Tasks workspace.
+     */
+    private fun onPlanDetailOutput(output: TaskDetailComponent.Output) {
         when (output) {
-            // A Plan tap opens that Task in an overlay above the dashboard (a sheet on the desktop) —
-            // the Plan stays foreground, so the calm home isn't yanked into the Tasks workspace (#51).
-            is PlanComponent.Output.OpenTask -> openOverlay(OverlayRoute.TaskDetail(output.id))
-        }
-    }
-
-    /** The Task-detail overlay's intents (a Plan tap, above): close dismisses; add-to-plan bubbles to the
-     *  host; "show steps" hands off to the full Tasks workspace, where the breakdown tree lives. */
-    private fun onTaskDetailOverlayOutput(output: TaskDetailComponent.Output) {
-        when (output) {
-            TaskDetailComponent.Output.Closed -> dismissOverlay()
+            TaskDetailComponent.Output.Closed -> planDetailNav.pop()
             is TaskDetailComponent.Output.AddToPlanRequested ->
                 this.output(MainShellComponent.Output.AddToPlanRequested(output.id))
-            // The breakdown has no place in a single-task sheet: dismiss it and open the Task in the
-            // Tasks Destination (its detail), one tap from "show steps" there.
+            // The breakdown lives in the Tasks workspace: reset Plan to its dashboard and open the Task in
+            // the Tasks Destination's own detail, one tap from "show steps" there.
             is TaskDetailComponent.Output.TreeRequested -> {
-                dismissOverlay()
+                planDetailNav.navigate { listOf(PlanConfig.Dashboard) }
                 navigation.bringToFront(Config.Tasks)
                 val tasks = stack.value.active.instance as MainShellComponent.DestinationChild.Tasks
                 tasks.component.list.onTaskClicked(output.id)
             }
-            // Drilling into a subtask from the single-task sheet re-opens the sheet on that child.
-            is TaskDetailComponent.Output.SubtaskSelected -> openOverlay(OverlayRoute.TaskDetail(output.id))
+            // Drilling into a subtask pushes one level deeper on Plan's detail stack (back pops it).
+            is TaskDetailComponent.Output.SubtaskSelected ->
+                planDetailNav.navigate { it + PlanConfig.Detail(output.id) }
         }
     }
 
@@ -728,7 +779,7 @@ class DefaultMainShellComponent(
      */
     private fun MainShellComponent.DestinationChild.handleInnerBack(): Boolean =
         when (this) {
-            is MainShellComponent.DestinationChild.Plan -> false
+            is MainShellComponent.DestinationChild.Plan -> this.onBack()
             // Calendar is single-pane (no tier-2/tier-3): nothing to dismiss inside it.
             is MainShellComponent.DestinationChild.Calendar -> false
             is MainShellComponent.DestinationChild.Tasks -> component.dismissForegroundPane()

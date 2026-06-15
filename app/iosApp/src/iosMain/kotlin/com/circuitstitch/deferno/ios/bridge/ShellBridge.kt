@@ -125,6 +125,18 @@ class SettingsStackBridge internal constructor(
     }
 }
 
+/** Flattens the Plan Destination's tier-3 stack (#51) to the active [MainShellComponent.PlanChild]. */
+class PlanStackBridge internal constructor(
+    private val delegate: Value<ChildStack<*, MainShellComponent.PlanChild>>,
+) {
+    val active: MainShellComponent.PlanChild get() = delegate.value.active.instance
+
+    fun subscribe(onEach: (MainShellComponent.PlanChild) -> Unit): Subscription {
+        val cancellation = delegate.subscribe { onEach(it.active.instance) }
+        return Subscription { cancellation.cancel() }
+    }
+}
+
 /** Observes the [ProfileComponent]'s sealed [ProfileState] (concrete — a sealed type, not a data class). */
 class ProfileStateBridge internal constructor(private val flow: StateFlow<ProfileState>) {
     val value: ProfileState get() = flow.value
@@ -197,8 +209,27 @@ fun destinationOf(child: MainShellComponent.DestinationChild): Destination = chi
  */
 fun tasksRoot(component: TasksComponent): TasksRoot = TasksRoot(component)
 
+/**
+ * The Plan Destination child — now a tier-3 host (#51): Swift reads its [stack][planStackBridge]
+ * (Dashboard base + drilled Task detail) and routes inner back through [planBack]. Returns the child
+ * itself (not a single component), so the View can reach both.
+ */
 fun destPlan(child: MainShellComponent.DestinationChild) =
-    (child as? MainShellComponent.DestinationChild.Plan)?.component
+    child as? MainShellComponent.DestinationChild.Plan
+
+/** The Plan Destination's tier-3 stack (Dashboard → drilled Task detail), for the SwiftUI NavigationStack. */
+fun planStackBridge(plan: MainShellComponent.DestinationChild.Plan): PlanStackBridge = PlanStackBridge(plan.stack)
+
+/** Pop an open Plan detail toward the dashboard (system back / nav-bar back); false at the dashboard base. */
+fun planBack(plan: MainShellComponent.DestinationChild.Plan): Boolean = plan.onBack()
+
+/** The Plan dashboard at the base of the stack (the daily Plan list). */
+fun planChildDashboard(child: MainShellComponent.PlanChild) =
+    (child as? MainShellComponent.PlanChild.Dashboard)?.component
+
+/** A drilled-in single-Task detail on the Plan stack (a Plan tap / subtask drill, #51). */
+fun planChildDetail(child: MainShellComponent.PlanChild) =
+    (child as? MainShellComponent.PlanChild.Detail)?.component
 
 fun destCalendar(child: MainShellComponent.DestinationChild) =
     (child as? MainShellComponent.DestinationChild.Calendar)?.component
@@ -217,10 +248,6 @@ fun overlaySearch(child: MainShellComponent.OverlayChild) =
 
 fun overlayNew(child: MainShellComponent.OverlayChild) =
     (child as? MainShellComponent.OverlayChild.New)?.component
-
-/** The single-Task detail overlay a Plan tap opens (#51) — rendered as a sheet over the dashboard. */
-fun overlayTaskDetail(child: MainShellComponent.OverlayChild) =
-    (child as? MainShellComponent.OverlayChild.TaskDetail)?.component
 
 // The in-app Help → Feedback overlay (#375), opened from Settings → Help & Feedback. The SwiftUI
 // FeedbackView renders this the same way it renders New, including file attachments — the Swift side
