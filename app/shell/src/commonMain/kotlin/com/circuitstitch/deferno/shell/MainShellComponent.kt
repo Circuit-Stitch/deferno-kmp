@@ -17,6 +17,7 @@ import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.feedback.FeedbackResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.Account
@@ -53,6 +54,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
+import kotlin.time.Instant
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -251,6 +253,13 @@ class DefaultMainShellComponent(
     // The Tasks working-state write seam (#73), threaded into the Tasks Destination's component so its
     // detail can issue lifecycle Commands. Defaults to a no-op so the many shell tests build without it.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    // The Task detail's online-only comments + attachments source, threaded into the detail (overlay +
+    // Tasks Destination). Defaulted to the no-op so the many shell tests build without supplying it.
+    private val taskDetailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
+    // The Task detail's editable-PROPERTIES write seams (DUE date + LABELS), threaded into the detail
+    // (overlay + Tasks Destination). Defaulted to no-ops so the many shell tests build without them.
+    private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     // The global-search seam (#73): a one-shot, online-only pull the Search overlay drives. Defaults
     // to "no results" so tests that don't exercise Search build without supplying it.
     private val searchTasks: SearchTasks = SearchTasks { _ -> TaskSearchResult.Success(emptyList()) },
@@ -285,6 +294,16 @@ class DefaultMainShellComponent(
     // surface for the foreclosed dictation permission. Defaulted to a no-op like the other host actions.
     private val onOpenDictationPermissionSettings: () -> Unit = {},
 ) : MainShellComponent, ComponentContext by componentContext {
+
+    // "Add subtask" on the Task detail: an online-only create of a child Task, derived from the same
+    // [create] command seam the New surface uses (ADR-0016) so there's one create path, not two.
+    private val createSubtask: suspend (TaskId, String) -> Unit = { parent, title ->
+        create(
+            com.circuitstitch.deferno.core.domain.command.CreateItem.Payload.Task(
+                com.circuitstitch.deferno.core.network.dto.CreateTaskPayload(title = title, parentId = parent.value),
+            ),
+        )
+    }
 
     override val destinations: List<Destination> = Destination.entries
 
@@ -389,6 +408,10 @@ class DefaultMainShellComponent(
                         taskRepository = taskRepository,
                         output = ::onTasksOutput,
                         workingStateEditor = workingStateEditor,
+                        taskDetailRepository = taskDetailRepository,
+                        createSubtask = createSubtask,
+                        setDeadline = setDeadline,
+                        setLabels = setLabels,
                         coroutineContext = coroutineContext,
                     ),
                 )
@@ -475,6 +498,10 @@ class DefaultMainShellComponent(
                     taskRepository = taskRepository,
                     output = ::onTaskDetailOverlayOutput,
                     workingStateEditor = workingStateEditor,
+                    detailRepository = taskDetailRepository,
+                    createSubtask = createSubtask,
+                    setDeadline = setDeadline,
+                    setLabels = setLabels,
                     coroutineContext = coroutineContext,
                 ),
             )
@@ -522,6 +549,8 @@ class DefaultMainShellComponent(
                 val tasks = stack.value.active.instance as MainShellComponent.DestinationChild.Tasks
                 tasks.component.list.onTaskClicked(output.id)
             }
+            // Drilling into a subtask from the single-task sheet re-opens the sheet on that child.
+            is TaskDetailComponent.Output.SubtaskSelected -> openOverlay(OverlayRoute.TaskDetail(output.id))
         }
     }
 

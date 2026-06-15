@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.ui
 
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.MeResult
+import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
@@ -60,25 +61,40 @@ internal fun sampleTask(
     pinned: Boolean = false,
     description: String? = null,
     hydration: HydrationState = HydrationState.Summary,
+    labels: List<String> = emptyList(),
+    completeBy: Instant? = null,
+    deadlineTimeOfDay: kotlinx.datetime.LocalTime? = null,
+    ownerOrgId: OrgId? = null,
 ): Task = Task(
     id = TaskId(id),
     orgSlug = "u-deferno",
     title = title,
     workingState = workingState,
+    labels = labels,
     ref = ref,
     parentId = parentId?.let(::TaskId),
     children = children.map(::TaskId),
+    completeBy = completeBy,
+    deadlineTimeOfDay = deadlineTimeOfDay,
     sequence = sequence,
     pinned = pinned,
     description = description,
     dateCreated = FIXED_CREATED,
     hydration = hydration,
+    ownerOrgId = ownerOrgId,
 )
 
 /** A small, varied task set for list/screenshot fixtures. */
 internal object SampleTasks {
     val list: List<Task> = listOf(
-        sampleTask("1", "Plan the spring launch", WorkingState.InProgress, pinned = true, children = listOf("1a", "1b")),
+        sampleTask(
+            "1", "Plan the spring launch", WorkingState.InProgress, pinned = true, children = listOf("1a", "1b"),
+            // Fixed literals (repo rule: no real-clock dates) so the PROPERTIES rows render deterministically.
+            labels = listOf("launch", "q2"),
+            completeBy = Instant.parse("2026-06-20T17:00:00Z"),
+            deadlineTimeOfDay = kotlinx.datetime.LocalTime(10, 0),
+            ownerOrgId = OrgId("ebca93e5-d663-4624-9fe9-c5361b5b4390"),
+        ),
         sampleTask("2", "Water the plants"),
         sampleTask("3", "Reply to Sam", WorkingState.InReview),
         sampleTask("4", "Old idea worth revisiting", WorkingState.Dropped),
@@ -117,10 +133,36 @@ internal class FakeTaskDetailComponent(
     /** The working-state edits the detail forwarded, in order (#73). */
     val workingStateSets = mutableListOf<WorkingState>()
 
+    /** The PROPERTIES edits the detail forwarded (#195): deadline (null = clear) + label replacements. */
+    val deadlineSets = mutableListOf<LocalDate?>()
+    val labelSets = mutableListOf<List<String>>()
+
+    /** The web-parity detail intents the View forwarded, in order. */
+    val subtaskToggles = mutableListOf<TaskId>()
+    val subtasksOpened = mutableListOf<TaskId>()
+    val subtasksAdded = mutableListOf<String>()
+    val commentsPosted = mutableListOf<String>()
+    val commentsEdited = mutableListOf<Pair<String, String>>()
+    val commentsDeleted = mutableListOf<String>()
+    val attachmentsAdded = mutableListOf<List<AttachmentUpload>>()
+    val attachmentsDeleted = mutableListOf<String>()
+    val attachmentCaptions = mutableListOf<Pair<String, String>>()
+
     override fun onCloseClicked() { closeCount++ }
     override fun onShowTreeClicked() { showTreeCount++ }
     override fun onAddToPlanClicked() { addToPlanCount++ }
     override fun onSetWorkingState(target: WorkingState) { workingStateSets += target }
+    override fun onSetDeadline(date: LocalDate?) { deadlineSets += date }
+    override fun onSetLabels(labels: List<String>) { labelSets += labels }
+    override fun onToggleSubtaskDone(subtask: Task) { subtaskToggles += subtask.id }
+    override fun onSubtaskClicked(id: TaskId) { subtasksOpened += id }
+    override fun onAddSubtask(title: String) { subtasksAdded += title }
+    override fun onPostComment(body: String) { commentsPosted += body }
+    override fun onEditComment(commentId: String, body: String) { commentsEdited += (commentId to body) }
+    override fun onDeleteComment(commentId: String) { commentsDeleted += commentId }
+    override fun onAddAttachments(files: List<AttachmentUpload>) { attachmentsAdded += files }
+    override fun onDeleteAttachment(attachmentId: String) { attachmentsDeleted += attachmentId }
+    override fun onSetAttachmentCaption(attachmentId: String, caption: String) { attachmentCaptions += attachmentId to caption }
 }
 
 /** Records the global-search overlay's intents for the SearchScreen interaction test (#73). */

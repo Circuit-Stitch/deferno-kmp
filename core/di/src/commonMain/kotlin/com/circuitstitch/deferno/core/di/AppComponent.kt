@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
+import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.database.AccountDatabaseFactory
@@ -142,6 +143,8 @@ abstract class AppComponent(
     // closes over the host Context / databases dir / key provider inside AppScope). They are plumbing,
     // not part of the app-facing surface — the app uses AccountComponent.taskRepository et al.
     abstract val taskRemoteSource: TaskRemoteSource
+    // Online-only Task detail extras (comments + attachments); the child AccountComponent re-exposes it.
+    abstract val taskDetailRepository: TaskDetailRepository
     abstract val planRemoteSource: PlanRemoteSource
     // The windowed Calendar feed source (#74): the OfflineCalendarRepository (AccountScope) refreshes through it.
     abstract val calendarRemoteSource: CalendarRemoteSource

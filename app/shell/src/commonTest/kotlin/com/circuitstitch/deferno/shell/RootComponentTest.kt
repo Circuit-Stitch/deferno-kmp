@@ -487,6 +487,8 @@ private class FakeAccountManager(active: Account? = null) : AccountManager {
 /** In-memory [AccountSession] over the in-memory demo repositories; records add-to-plan + create + flush calls. */
 internal class FakeAccountSession(
     override val taskRepository: TaskRepository = DemoTaskRepository(SampleData.tasks),
+    override val taskDetailRepository: com.circuitstitch.deferno.core.data.task.TaskDetailRepository =
+        com.circuitstitch.deferno.core.data.task.TaskDetailRepository.NONE,
     override val planRepository: PlanRepository = DemoPlanRepository(emptyList()),
     override val settingsRepository: SettingsRepository = FakeSettingsRepository(),
     override val settingsEditor: com.circuitstitch.deferno.feature.settings.SettingsEditor = FakeSettingsEditor(),
@@ -512,6 +514,17 @@ internal class FakeAccountSession(
         com.circuitstitch.deferno.feature.tasks.WorkingStateEditor { id, target, _ ->
             workingStateSets += id to target
         }
+
+    val deadlinesSet = mutableListOf<Pair<TaskId, Instant?>>()
+    val labelsSet = mutableListOf<Pair<TaskId, List<String>>>()
+
+    override val setDeadline: suspend (TaskId, Instant?) -> Unit = { id, completeBy ->
+        deadlinesSet += id to completeBy
+    }
+
+    override val setLabels: suspend (TaskId, List<String>) -> Unit = { id, labels ->
+        labelsSet += id to labels
+    }
 
     override val calendarRepository: com.circuitstitch.deferno.core.data.calendar.CalendarRepository =
         object : com.circuitstitch.deferno.core.data.calendar.CalendarRepository {

@@ -7,11 +7,14 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
+import com.circuitstitch.deferno.feature.tasks.SubtaskNode
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import com.circuitstitch.deferno.feature.tasks.TaskListState
 import com.circuitstitch.deferno.feature.tasks.TaskTreeState
@@ -70,17 +73,39 @@ class TaskScreenInteractionTest {
 
     @Test
     fun taskDetail_actions_emitIntents() {
-        val task = sampleTask("1", "Plan the spring launch", children = listOf("1a", "1b"), description = "Do the thing")
+        val task = sampleTask("1", "Plan the spring launch", description = "Do the thing")
         val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
         setContent { TaskDetailScreen(component) }
 
         composeRule.onNodeWithText("Add to today's plan").performClick()
-        composeRule.onNodeWithText("Show its 2 steps").performClick()
         composeRule.onNodeWithText("Back").performClick()
 
         assertEquals(1, component.addToPlanCount)
-        assertEquals(1, component.showTreeCount)
         assertEquals(1, component.closeCount)
+    }
+
+    @Test
+    fun taskDetail_subtaskToggleAndComment_forwardIntents() {
+        val parent = sampleTask("1", "Plan the spring launch")
+        val child = sampleTask("1a", "Draft the announcement", parentId = "1")
+        val state = TaskDetailState(
+            task = parent,
+            isHydrating = false,
+            subtasks = listOf(SubtaskNode(child, emptyList())),
+            subtaskTotal = 1,
+        )
+        val component = FakeTaskDetailComponent(state)
+        setContent { TaskDetailScreen(component) }
+
+        // The inline subtask checkbox forwards a done-toggle for that child.
+        composeRule.onNodeWithContentDescription("Mark “Draft the announcement” done").performClick()
+        // The Activity composer forwards the posted comment text. With the PROPERTIES section added
+        // (#195) the detail is taller, so scroll the composer into view before interacting.
+        composeRule.onNodeWithText("Add a comment…").performScrollTo().performTextInput("Looks good")
+        composeRule.onNodeWithText("Post").performScrollTo().performClick()
+
+        assertEquals(listOf(TaskId("1a")), component.subtaskToggles)
+        assertEquals(listOf("Looks good"), component.commentsPosted)
     }
 
     @Test

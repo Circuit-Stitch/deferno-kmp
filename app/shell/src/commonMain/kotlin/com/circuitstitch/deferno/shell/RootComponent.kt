@@ -230,6 +230,11 @@ class DefaultRootComponent(
                         calendarRepository = session.calendarRepository,
                         occurrenceEditor = session.occurrenceEditor,
                         workingStateEditor = session.workingStateEditor,
+                        taskDetailRepository = session.taskDetailRepository,
+                        // The Task detail's editable-PROPERTIES write seams (DUE date + LABELS), each
+                        // routed through this Account's command executor (Set/ClearTaskDeadline, SetTaskLabels).
+                        setDeadline = session.setDeadline,
+                        setLabels = session.setLabels,
                         searchTasks = SearchTasks.of(session.taskRepository),
                         accounts = accountManager.accounts,
                         activeAccount = accountManager.activeAccount,
