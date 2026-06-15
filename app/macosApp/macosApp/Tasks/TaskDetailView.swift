@@ -9,19 +9,28 @@ import SwiftUI
 /// upgrades both surfaces at once. Attachments + Activity + Add-subtask are #197 (not built here).
 struct TaskDetailView: View {
     let component: TaskDetailComponent
+    /// Hide the header's Back control. Set at a detached window's root entry (#196, depth 1) — it has
+    /// nothing to pop and the window's own chrome closes it. Default false: the inline / Plan callers
+    /// keep their Back (which routes through the detail's `Closed` output to close the pane / pop).
+    var hidesBackControl: Bool = false
     @StateObject private var state: StateFlowObserver<TaskDetailState>
     @State private var newLabel = ""
 
-    init(component: TaskDetailComponent) {
+    init(component: TaskDetailComponent, hidesBackControl: Bool = false) {
         self.component = component
+        self.hidesBackControl = hidesBackControl
         _state = StateObject(wrappedValue: StateFlowObserver(BridgeKt.taskDetailStateBridge(component: component)))
     }
 
     var body: some View {
         let value = state.value
         VStack(spacing: 0) {
-            // In single-pane the leading control returns to the list, so it reads as "Back".
-            PaneHeader(title: value.task?.title ?? "Task", onBack: { component.onCloseClicked() })
+            // In single-pane the leading control returns to the list, so it reads as "Back". Hidden at a
+            // detached window's root entry (#196), where there's nothing to pop to.
+            PaneHeader(
+                title: value.task?.title ?? "Task",
+                onBack: hidesBackControl ? nil : { component.onCloseClicked() }
+            )
             if value.isHydrating && value.task == nil {
                 LoadingStrip(label: "Loading details…")
             }
