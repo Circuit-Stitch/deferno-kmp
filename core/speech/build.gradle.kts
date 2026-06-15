@@ -35,6 +35,11 @@ kotlin {
         }
 
         androidMain.dependencies {
+            // The uniform logging facade (amzn/kmp-logger via core/common) for the whisper engine's
+            // capture→transcribe trace logs — that native path is otherwise invisible on device.
+            // Privacy (ADR-0009/0018): the traces log only structure (event types, sample/char counts),
+            // never the audio or the transcript text.
+            implementation(project(":core:common"))
             // The native whisper.cpp JNI library (#92, ADR-0018): supplies libwhisper_jni.so (the
             // symbols WhisperBridge binds to) and packages it into Android consumers. Android-only — the
             // KMP android-library target can't host externalNativeBuild, so the native build is a sibling
@@ -46,6 +51,9 @@ kotlin {
         }
 
         jvmMain.dependencies {
+            // The uniform logging facade (amzn/kmp-logger via core/common) for the whisper engine's
+            // capture→transcribe trace logs (privacy: structure only, never audio/transcript — ADR-0009/0018).
+            implementation(project(":core:common"))
             // The maintained desktop whisper engine (#94, ADR-0018): the `whisper-jni` Maven artifact the
             // jvmMain WhisperSpeechToText drives (TargetDataLine capture → EnergyVad → whisper-jni). Its jar
             // embeds the prebuilt native libs for the desktop OSes (loaded via WhisperJNI.loadLibrary()), so

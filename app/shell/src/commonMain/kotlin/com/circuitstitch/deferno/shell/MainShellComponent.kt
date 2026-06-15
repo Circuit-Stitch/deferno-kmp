@@ -11,6 +11,7 @@ import com.arkivanov.decompose.router.stack.StackNavigation
 import com.arkivanov.decompose.router.stack.bringToFront
 import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.value.Value
+import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
@@ -23,7 +24,10 @@ import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.CalendarItem
+import com.circuitstitch.deferno.core.agent.Extractor
+import com.circuitstitch.deferno.core.agent.InferenceEngine
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
+import com.circuitstitch.deferno.core.agent.NotConfiguredInferenceEngine
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
@@ -180,12 +184,12 @@ interface MainShellComponent {
         class TaskDetail(val component: TaskDetailComponent) : OverlayChild
 
         /**
-         * The **Brain dump** surface (ADR-0027): the home for the dictation-driven Extractor. A
-         * stateless placeholder for now — the [InferenceEngine] ships with no credential and returns
-         * `Failure.NotConfigured` until #150 wires the relay, so there is nothing to capture/extract
-         * yet. When #150 lands this grows a real component (`class BrainDump(val component: …)`).
+         * The **Brain dump** surface (ADR-0027, #150): the dictation-driven, propose-only Extractor.
+         * Continuous on-device speech (the whisper floor) streams a transcript the [Extractor] turns
+         * into reviewable draft Tasks; accepting one commits it through the ordinary create Command
+         * path — nothing is written until the person accepts (propose-only).
          */
-        data object BrainDump : OverlayChild
+        class BrainDump(val component: BrainDumpComponent) : OverlayChild
     }
 
     sealed interface Output {
@@ -285,6 +289,11 @@ class DefaultMainShellComponent(
     // Agent row hides) so the many shell tests build without it; production threads the real catalog from
     // the AppComponent (like speechEngineCatalog).
     private val inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
+    // The Brain dump's on-device inference engine (ADR-0027/#150): the AppScope RoutingInferenceEngine
+    // that dispatches to the device-local-selected engine (the shacl floor on Android), or NotConfigured
+    // when the Agent is Off. The Extractor runs through it. Defaulted to the inert NotConfigured floor so
+    // the many shell tests build without it — Brain dump simply produces no drafts (a gentle "set up" note).
+    private val inferenceEngine: InferenceEngine = NotConfiguredInferenceEngine,
     // The New surface's PermissionPermanentlyDenied affordance (#120), host-routed to the OS settings
     // surface for the foreclosed dictation permission. Defaulted to a no-op like the other host actions.
     private val onOpenDictationPermissionSettings: () -> Unit = {},
@@ -497,9 +506,30 @@ class DefaultMainShellComponent(
                 ),
             )
 
-            // Brain dump (ADR-0027): a stateless placeholder route until #150 wires the Extractor's
-            // inference credential — nothing to construct yet.
-            OverlayRoute.BrainDump -> MainShellComponent.OverlayChild.BrainDump
+            // Brain dump (ADR-0027/#150): continuous dictation → the on-device Extractor → reviewable
+            // draft Tasks, committed through the same online-only create seam the New surface uses. A
+            // fresh Extractor over the AppScope inference engine; the injected today/timeZone give it the
+            // date context for relative deadlines ("tomorrow", etc.).
+            OverlayRoute.BrainDump -> {
+                val extractor = Extractor(inferenceEngine)
+                val brainDump = DefaultBrainDumpComponent(
+                    extract = { transcript -> extractor.extract(transcript, today, timeZone) },
+                    create = create,
+                    onDone = ::dismissOverlay,
+                    scope = overlayScope,
+                    timeZone = timeZone,
+                    // Dictation (#92): the mic drives the AppScope SpeechToText on the overlay scope,
+                    // in continuous mode (the brain dump keeps capturing across utterances).
+                    speech = speechToText,
+                    locale = locale,
+                    onOpenDictationPermissionSettings = onOpenDictationPermissionSettings,
+                )
+                // A continuous capture runs until cancelled (it does not self-terminate like the New form's
+                // single-utterance dictation), so stop the mic when the overlay is torn down by ANY path —
+                // Close, system-back, or an account switch — since overlayScope outlives this child.
+                childContext.lifecycle.doOnDestroy(brainDump::cancelCapture)
+                MainShellComponent.OverlayChild.BrainDump(brainDump)
+            }
         }
 
     private fun onSearchOutput(output: SearchComponent.Output) {

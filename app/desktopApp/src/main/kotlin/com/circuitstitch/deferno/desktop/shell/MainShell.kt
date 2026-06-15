@@ -141,8 +141,9 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         is MainShellComponent.OverlayChild.TaskDetail ->
             TaskDetailScreen(child.component, Modifier.fillMaxSize())
 
-        // Brain dump (ADR-0027): the shared placeholder until #150 wires the Extractor.
-        MainShellComponent.OverlayChild.BrainDump ->
+        // Brain dump (ADR-0027): the dictation-driven Extractor ships on Android first (the on-device
+        // shacl floor is Android-only); desktop keeps the placeholder until a JVM engine lands.
+        is MainShellComponent.OverlayChild.BrainDump ->
             BrainDumpPlaceholder(onDismiss = onDismiss)
 
         MainShellComponent.OverlayChild.Placeholder ->

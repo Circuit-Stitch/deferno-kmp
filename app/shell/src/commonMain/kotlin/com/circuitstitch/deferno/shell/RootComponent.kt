@@ -17,7 +17,9 @@ import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserSettings
+import com.circuitstitch.deferno.core.agent.InferenceEngine
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
+import com.circuitstitch.deferno.core.agent.NotConfiguredInferenceEngine
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
@@ -106,6 +108,10 @@ class DefaultRootComponent(
     // [InferenceEngineCatalog.Inert] (no engine → the Agent row hides) so tests build without it;
     // production passes the AppComponent's.
     private val inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
+    // The Brain dump's on-device inference engine (ADR-0027/#150): the AppScope RoutingInferenceEngine the
+    // Extractor runs through. Threaded down to the Main shell. Defaulted to the inert NotConfigured floor so
+    // tests build without it; production passes the AppComponent's (the shacl floor on Android).
+    private val inferenceEngine: InferenceEngine = NotConfiguredInferenceEngine,
     /** The New surface's foreclosed-dictation-permission deep-link (#120). Host-handled, like the rest. */
     private val onOpenDictationPermissionSettings: () -> Unit = {},
     /** The outbox driver's clock (#143) — injected so the flush timing is deterministic under test. */
@@ -250,6 +256,8 @@ class DefaultRootComponent(
                         speechEngineCatalog = speechEngineCatalog,
                         // The Agent inference-engine choice + entitlement gate (#150) the Settings reads.
                         inferenceEngineCatalog = inferenceEngineCatalog,
+                        // The Brain dump's on-device inference engine (ADR-0027/#150) the Extractor runs through.
+                        inferenceEngine = inferenceEngine,
                         // The foreclosed-permission deep-link (#120), threaded to the New overlay.
                         onOpenDictationPermissionSettings = onOpenDictationPermissionSettings,
                     ),

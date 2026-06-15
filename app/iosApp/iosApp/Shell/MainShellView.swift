@@ -110,8 +110,9 @@ struct MainShellView: View {
             .accessibilityLabel("Menu")
             Spacer()
             // Brain dump (ADR-0027) — present for chrome parity with Android's two trailing actions, but
-            // inactive: the dictation-driven extractor isn't wired on iOS (no overlay, no inference until
-            // #150). Enable it (open OverlayRoute.BrainDump) once that lands.
+            // inactive on iOS: there is no on-device inference engine here yet (the shacl floor is
+            // Android-only, #150), so OverlayRoute.BrainDump would only ever answer NotConfigured, and the
+            // iOS overlay slot has no BrainDump bridge. Enable it once an iOS engine ships.
             Button {} label: {
                 Image(systemName: "waveform")
                     .font(.title3)

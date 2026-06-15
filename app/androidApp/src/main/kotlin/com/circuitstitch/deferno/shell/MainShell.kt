@@ -32,7 +32,6 @@ import com.circuitstitch.deferno.feature.settings.ui.SettingsScreen
 import com.circuitstitch.deferno.feature.tasks.ui.SearchScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksScreen
-import com.circuitstitch.deferno.shell.ui.BrainDumpPlaceholder
 import com.circuitstitch.deferno.shell.ui.ShellChrome
 import com.circuitstitch.deferno.shell.ui.label
 
@@ -134,7 +133,8 @@ private fun ComingSoon(destination: Destination, modifier: Modifier = Modifier) 
 
 /**
  * Renders the shell overlay route above the foreground Destination (ADR-0015): Search (#73), New (#71),
- * Feedback (#375), Brain dump (ADR-0027 placeholder), and the v1 [OverlayChild.Placeholder] stand-in.
+ * Feedback (#375), Brain dump (ADR-0027/#150 — the real dictation→Extractor surface on Android), and the
+ * v1 [OverlayChild.Placeholder] stand-in.
  */
 @Composable
 private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () -> Unit) {
@@ -180,8 +180,8 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         is MainShellComponent.OverlayChild.TaskDetail ->
             TaskDetailScreen(child.component, Modifier.fillMaxSize())
 
-        // Brain dump (ADR-0027): the shared placeholder until #150 wires the Extractor.
-        MainShellComponent.OverlayChild.BrainDump ->
-            BrainDumpPlaceholder(onDismiss = onDismiss)
+        // Brain dump (ADR-0027/#150): continuous dictation → on-device Extractor → reviewable draft Tasks.
+        is MainShellComponent.OverlayChild.BrainDump ->
+            BrainDumpScreen(child.component, Modifier.fillMaxSize())
     }
 }

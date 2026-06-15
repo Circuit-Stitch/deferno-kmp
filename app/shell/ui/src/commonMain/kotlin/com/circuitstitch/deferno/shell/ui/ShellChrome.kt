@@ -372,9 +372,10 @@ private fun AccountSwitcher(
 }
 
 /**
- * The **Brain dump** overlay surface (ADR-0027), shared by both platforms. A placeholder for now: the
- * Extractor's inference ships with no credential (`Failure.NotConfigured`) until #150, so this only
- * names where the dictation-driven assistant will live and offers a Close. [onDismiss] pops the overlay.
+ * The **desktop Brain dump stand-in** (ADR-0027). The dictation-driven Extractor shipped on Android
+ * first (#150) — the on-device shacl floor is Android-only — so the real surface lives in the Android
+ * app's `BrainDumpScreen`; desktop shows this until a JVM inference engine lands. [onDismiss] pops the
+ * overlay.
  */
 @Composable
 fun BrainDumpPlaceholder(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
@@ -393,7 +394,7 @@ fun BrainDumpPlaceholder(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                 modifier = Modifier.semantics { heading() },
             )
             Text(
-                text = "Speak freely and Deferno will turn it into draft tasks. The assistant arrives in an upcoming release.",
+                text = "Speak freely and Deferno will turn it into draft tasks. Brain dump is available on Android; desktop support is on the way.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

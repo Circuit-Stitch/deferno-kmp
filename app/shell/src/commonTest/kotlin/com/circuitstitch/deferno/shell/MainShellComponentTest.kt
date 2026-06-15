@@ -494,6 +494,7 @@ class MainShellComponentTest {
         shell.openOverlay(OverlayRoute.BrainDump)
         val child = shell.overlay.value.child?.instance
         assertTrue(child is MainShellComponent.OverlayChild.BrainDump, "the Brain dump overlay is pushed above the foreground")
+        assertEquals(Phase.Idle, child.component.state.value.phase, "the Brain dump component is constructed and idle")
         assertEquals(Destination.Plan, shell.activeDestination(), "the foreground Destination is untouched")
 
         shell.dismissOverlay()
