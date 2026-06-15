@@ -1,13 +1,16 @@
 package com.circuitstitch.deferno.braindump
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.core.app.NotificationCompat
-import com.circuitstitch.deferno.MainActivity
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import com.circuitstitch.deferno.MainActivity
 import androidx.work.CoroutineWorker
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -163,6 +166,11 @@ private fun notifyDraftsReady(context: Context, count: Int) {
         .setContentIntent(openInbox)
         .setAutoCancel(true)
         .build()
-    // notify() silently no-ops if POST_NOTIFICATIONS is denied (Android 13+); guard anyway.
-    runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
+    // POST_NOTIFICATIONS is a runtime permission on Android 13+ (auto-granted below it); post only when
+    // it's granted — the worker's result never depends on the notification landing.
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+        PackageManager.PERMISSION_GRANTED
+    ) {
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+    }
 }
