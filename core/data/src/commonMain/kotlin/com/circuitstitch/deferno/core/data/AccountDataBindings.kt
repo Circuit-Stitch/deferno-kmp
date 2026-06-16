@@ -27,7 +27,9 @@ import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
 import com.circuitstitch.deferno.core.data.item.ItemSync
+import com.circuitstitch.deferno.core.data.item.ItemWriter
 import com.circuitstitch.deferno.core.data.item.OfflineItemRepository
+import com.circuitstitch.deferno.core.data.item.OutboxItemWriter
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
@@ -275,6 +277,18 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun taskWriter(localStore: TaskLocalStore, outbox: OutboxStore): TaskWriter =
         OutboxTaskWriter(localStore, outbox)
+
+    // The cross-kind Item move write seam (ADR-0034 decision 5, #228): optimistic reorder across the four
+    // per-kind stores + outbox enqueue of `POST items/{id}/move`. Offline-first like the Task writer.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun itemWriter(
+        taskStore: TaskLocalStore,
+        habitStore: HabitLocalStore,
+        choreStore: ChoreLocalStore,
+        eventStore: EventLocalStore,
+        outbox: OutboxStore,
+    ): ItemWriter = OutboxItemWriter(taskStore, habitStore, choreStore, eventStore, outbox)
 
     @Provides
     @SingleIn(AccountScope::class)

@@ -49,6 +49,7 @@ class CommandKindTest {
                 CommandKind.SetTracking to "settings.set-tracking",
                 CommandKind.SetDragAndDrop to "settings.set-drag-and-drop",
                 CommandKind.SetDoneVisibility to "settings.set-done-visibility",
+                CommandKind.MoveItem to "item.move",
             ),
             CommandKind.entries.associateWith { it.id.value },
         )
@@ -161,6 +162,7 @@ class CommandKindTest {
             CommandKind.createKinds,
             CommandKind.occurrenceKinds,
             CommandKind.settingsKinds,
+            CommandKind.moveKinds,
         )
         assertEquals(CommandKind.entries.toSet(), partitions.flatten().toSet())
         for (i in partitions.indices) {
@@ -172,12 +174,15 @@ class CommandKindTest {
         assertTrue(CommandKind.createKinds.all { it.category == CommandCategory.Create })
         assertTrue(CommandKind.occurrenceKinds.all { it.category == CommandCategory.Occurrence })
         assertTrue(CommandKind.settingsKinds.all { it.category == CommandCategory.Settings })
+        assertTrue(CommandKind.moveKinds.all { it.category == CommandCategory.Move })
+        assertEquals(listOf(CommandKind.MoveItem), CommandKind.moveKinds, "the move catalog is the single cross-kind move verb")
         assertTrue(
             CommandKind.taskKinds.none {
                 it.category == CommandCategory.Plan ||
                     it.category == CommandCategory.Create ||
                     it.category == CommandCategory.Occurrence ||
-                    it.category == CommandCategory.Settings
+                    it.category == CommandCategory.Settings ||
+                    it.category == CommandCategory.Move
             },
         )
     }

@@ -533,6 +533,13 @@ internal class FakeAccountSession(
         labelsSet += id to labels
     }
 
+    val movesIssued = mutableListOf<Triple<String, String?, Int>>()
+
+    override val moveEditor: com.circuitstitch.deferno.feature.tasks.MoveEditor =
+        com.circuitstitch.deferno.feature.tasks.MoveEditor { id, newParentId, position ->
+            movesIssued += Triple(id, newParentId, position)
+        }
+
     override val calendarRepository: com.circuitstitch.deferno.core.data.calendar.CalendarRepository =
         object : com.circuitstitch.deferno.core.data.calendar.CalendarRepository {
             override fun observeMarkers(from: LocalDate, to: LocalDate) =

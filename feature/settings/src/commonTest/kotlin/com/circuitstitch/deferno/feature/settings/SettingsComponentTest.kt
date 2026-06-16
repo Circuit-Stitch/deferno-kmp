@@ -10,6 +10,8 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineId
 import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
+import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderAvailability
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
@@ -48,6 +50,7 @@ class SettingsComponentTest {
         storageProviderCatalog: StorageProviderCatalog = StorageProviderCatalog.Inert,
         keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
             InMemoryKeepBrainDumpRecordingsPreference(),
+        shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
     ): Triple<DefaultSettingsComponent, FakeSettingsRepository, FakeSettingsEditor> {
         val repo = FakeSettingsRepository(initial)
         val editor = FakeSettingsEditor(repo)
@@ -60,6 +63,7 @@ class SettingsComponentTest {
             inferenceEngineCatalog = inferenceEngineCatalog,
             storageProviderCatalog = storageProviderCatalog,
             keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
+            shakeToUndoPreference = shakeToUndoPreference,
             coroutineContext = Dispatchers.Unconfined,
         )
         return Triple(component, repo, editor)
@@ -111,6 +115,31 @@ class SettingsComponentTest {
             keepBrainDumpRecordingsPreference = InMemoryKeepBrainDumpRecordingsPreference(initial = false),
         )
         assertEquals(false, component.keepBrainDumpRecordings.value)
+    }
+
+    @Test
+    fun shakeToUndo_defaultsOn_andTogglePersistsThroughThePreference() {
+        val preference = InMemoryShakeToUndoPreference()
+        val (component, _, _) = component(shakeToUndoPreference = preference)
+
+        // Default on (#230): shake-to-undo is enabled unless the person opts out.
+        assertEquals(true, component.shakeToUndo.value)
+
+        component.onShakeToUndoChanged(false)
+        assertEquals(false, component.shakeToUndo.value)
+        assertEquals(false, preference.enabled(), "device-local — persisted through the preference, never synced")
+
+        component.onShakeToUndoChanged(true)
+        assertEquals(true, component.shakeToUndo.value)
+        assertEquals(true, preference.enabled())
+    }
+
+    @Test
+    fun shakeToUndo_seedsFromThePersistedChoice() {
+        val (component, _, _) = component(
+            shakeToUndoPreference = InMemoryShakeToUndoPreference(initial = false),
+        )
+        assertEquals(false, component.shakeToUndo.value)
     }
 
     @Test

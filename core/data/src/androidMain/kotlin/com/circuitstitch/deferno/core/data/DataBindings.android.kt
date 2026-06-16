@@ -11,6 +11,8 @@ import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPref
 import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.SettingsItemFoldStore
+import com.circuitstitch.deferno.core.data.item.SettingsShakeToUndoPreference
+import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.account.AccountRegistry
 import com.circuitstitch.deferno.core.data.account.AndroidAccountDataStore
 import com.circuitstitch.deferno.core.data.account.SharedPreferencesAccountRegistry
@@ -96,6 +98,18 @@ interface AndroidDataBindings {
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(context: Context): KeepBrainDumpRecordingsPreference =
         SettingsKeepBrainDumpRecordingsPreference(
+            SharedPreferencesSettings(context.getSharedPreferences(STORAGE_PREFS_NAME, Context.MODE_PRIVATE)),
+        )
+
+    /**
+     * The device-local "shake to undo" choice (ADR-0034 decision 8, #230, [[App setting]]) — whether a
+     * phone shake on the Tasks tree raises the "Undo [operation]?" confirm. SharedPreferences-backed,
+     * sharing the device-local app-settings bag with the other App settings (a distinct, namespaced key).
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun shakeToUndoPreference(context: Context): ShakeToUndoPreference =
+        SettingsShakeToUndoPreference(
             SharedPreferencesSettings(context.getSharedPreferences(STORAGE_PREFS_NAME, Context.MODE_PRIVATE)),
         )
 

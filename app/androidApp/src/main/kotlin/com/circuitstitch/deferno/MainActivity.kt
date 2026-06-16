@@ -128,6 +128,9 @@ class MainActivity : ComponentActivity() {
                 // AppScope graph — the Settings "Storage" row toggles it, and the brain-dump worker gates
                 // recording retention on it.
                 keepBrainDumpRecordingsPreference = appComponent.keepBrainDumpRecordingsPreference,
+                // "Shake to undo" App setting (#230): the device-local preference from the same AppScope graph
+                // — the Tasks tree gates a shake on it, the Settings "Task behavior" row toggles it.
+                shakeToUndoPreference = appComponent.shakeToUndoPreference,
                 // Brain dump (ADR-0027/#150, Stage 4): the voice_chat overlay records the mic to a WAV and
                 // hands it to the background worker on Stop. The shell passes its injected today/timeZone
                 // (no Clock.System); the application Context backs the recording + the WorkManager enqueue.

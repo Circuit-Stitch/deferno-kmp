@@ -25,7 +25,8 @@ class CommandExecutorTest {
         create: FakeCreateWriter = FakeCreateWriter(),
         occurrence: FakeOccurrenceWriter = FakeOccurrenceWriter(),
         settings: FakeSettingsWriter = FakeSettingsWriter(),
-    ) = CommandExecutor(task, plan, create, occurrence, settings)
+        item: FakeItemWriter = FakeItemWriter(),
+    ) = CommandExecutor(task, plan, create, occurrence, settings, item)
 
     @Test
     fun bindsEveryTaskCommandToTheRightWriterCallAndArgs() = runTest {
@@ -214,8 +215,9 @@ class CommandExecutorTest {
             val cw = FakeCreateWriter(result = CreateResultFixtures.createdFor(kind))
             val ow = FakeOccurrenceWriter()
             val sw = FakeSettingsWriter()
+            val iw = FakeItemWriter()
 
-            val result = executor(tw, pw, cw, ow, sw).execute(sampleCommand(kind)) // null current → gate skipped
+            val result = executor(tw, pw, cw, ow, sw, iw).execute(sampleCommand(kind)) // null current → gate skipped
 
             // Create/convert surface the created id (#211); every other kind has no new id (itemId = null).
             val expectedId = if (kind in CommandKind.createKinds) "server-${kind.name}" else null
@@ -224,16 +226,37 @@ class CommandExecutorTest {
             val isCreate = kind in CommandKind.createKinds
             val isOccurrence = kind in CommandKind.occurrenceKinds
             val isSettings = kind in CommandKind.settingsKinds
+            val isMove = kind in CommandKind.moveKinds
             assertEquals(if (isPlan) 1 else 0, pw.calls.size, "kind $kind plan-writer calls")
             assertEquals(
-                if (isPlan || isCreate || isOccurrence || isSettings) 0 else 1,
+                if (isPlan || isCreate || isOccurrence || isSettings || isMove) 0 else 1,
                 tw.calls.size,
                 "kind $kind task-writer calls",
             )
             assertEquals(if (isCreate) 1 else 0, cw.calls.size, "kind $kind create-writer calls")
             assertEquals(if (isOccurrence) 1 else 0, ow.calls.size, "kind $kind occurrence-writer calls")
             assertEquals(if (isSettings) 1 else 0, sw.calls.size, "kind $kind settings-writer calls")
+            assertEquals(if (isMove) 1 else 0, iw.calls.size, "kind $kind item-writer calls")
         }
+    }
+
+    @Test
+    fun moveItemRoutesToTheItemWriterWithItsDestinationAndIndex() = runTest {
+        // ADR-0034 #228: the cross-kind move is offline-first (optimistic apply + enqueue), so it is
+        // Accepted, routes to the ItemWriter alone, and forwards the raw id / new parent / insertion index.
+        val tw = FakeTaskWriter()
+        val iw = FakeItemWriter()
+        val ex = executor(tw, FakePlanWriter(), item = iw)
+
+        assertEquals(CommandResult.Accepted(CommandKind.MoveItem), ex.execute(MoveItem("h1", newParentId = "t1", position = 3)))
+        // A move to root carries an explicit null parent.
+        assertEquals(CommandResult.Accepted(CommandKind.MoveItem), ex.execute(MoveItem("h1", newParentId = null, position = 0)))
+
+        assertEquals(
+            listOf(FakeItemWriter.Call("h1", "t1", 3), FakeItemWriter.Call("h1", null, 0)),
+            iw.calls,
+        )
+        assertTrue(tw.calls.isEmpty(), "a move must not touch the task writer")
     }
 
     @Test

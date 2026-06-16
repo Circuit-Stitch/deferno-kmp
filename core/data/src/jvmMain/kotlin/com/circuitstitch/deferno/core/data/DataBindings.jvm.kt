@@ -12,6 +12,8 @@ import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPref
 import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.SettingsItemFoldStore
+import com.circuitstitch.deferno.core.data.item.SettingsShakeToUndoPreference
+import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
 import com.circuitstitch.deferno.core.data.auth.DeviceName
 import com.circuitstitch.deferno.core.data.auth.LoopbackBrowserAuthenticator
@@ -97,6 +99,18 @@ interface JvmDataBindings {
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
         SettingsKeepBrainDumpRecordingsPreference(
+            PreferencesSettings(Preferences.userRoot().node("com/circuitstitch/deferno/storage")),
+        )
+
+    /**
+     * The device-local "shake to undo" choice (ADR-0034 decision 8, #230, [[App setting]]),
+     * `java.util.prefs`-backed. Desktop has no accelerometer path yet, so the toggle is inert here; the
+     * binding keeps the graph complete.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun shakeToUndoPreference(): ShakeToUndoPreference =
+        SettingsShakeToUndoPreference(
             PreferencesSettings(Preferences.userRoot().node("com/circuitstitch/deferno/storage")),
         )
 

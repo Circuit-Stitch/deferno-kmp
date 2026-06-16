@@ -9,8 +9,10 @@ import com.arkivanov.decompose.router.slot.childSlot
 import com.arkivanov.decompose.router.slot.dismiss
 import com.arkivanov.decompose.value.MutableValue
 import com.arkivanov.decompose.value.Value
+import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
+import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Task
@@ -56,6 +58,12 @@ class DefaultTasksComponent(
     // The working-state write seam (#73), threaded down into the detail slot so the detail can issue
     // lifecycle Commands. Defaults to a no-op so existing shell/component tests build without it.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    // The cross-kind move write seam (#228), threaded into the tree pane so its modal move mode can issue
+    // Move Commands. Defaults to a no-op so existing shell/component tests build without it.
+    private val moveEditor: MoveEditor = MoveEditor.NONE,
+    // The device-local shake-to-undo App setting (#230), threaded into the tree pane so a shake gates on
+    // it. Defaulted to an in-memory (on) preference so existing tests build without supplying it.
+    private val shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
     // The detail's online-only comments + attachments source + its "add subtask" create seam, threaded
     // down into the detail slot. Both default to no-ops so existing tests build without supplying them.
     private val taskDetailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
@@ -86,6 +94,8 @@ class DefaultTasksComponent(
             itemRepository = itemRepository,
             foldStore = foldStore,
             output = ::onTreeOutput,
+            moveEditor = moveEditor,
+            shakeToUndoPreference = shakeToUndoPreference,
             coroutineContext = coroutineContext,
         )
 

@@ -23,8 +23,10 @@ import com.circuitstitch.deferno.core.data.feedback.FeedbackResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
+import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
+import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.domain.command.CommandResult
@@ -68,6 +70,7 @@ import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
+import com.circuitstitch.deferno.feature.tasks.MoveEditor
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -315,6 +318,9 @@ class DefaultMainShellComponent(
     // The Tasks working-state write seam (#73), threaded into the Tasks Destination's component so its
     // detail can issue lifecycle Commands. Defaults to a no-op so the many shell tests build without it.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    // The Tasks Item-tree move seam (#228), threaded into the Tasks Destination so its modal move mode can
+    // issue Move Commands. Defaults to a no-op so the many shell tests build without it.
+    private val moveEditor: MoveEditor = MoveEditor.NONE,
     // The Task detail's online-only comments + attachments source, threaded into the detail (overlay +
     // Tasks Destination). Defaulted to the no-op so the many shell tests build without supplying it.
     private val taskDetailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
@@ -365,6 +371,10 @@ class DefaultMainShellComponent(
     // the real preference from the AppComponent (like storageProviderCatalog).
     private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
         InMemoryKeepBrainDumpRecordingsPreference(),
+    // The device-local shake-to-undo App setting (#230) the Tasks tree + Settings render. Defaulted to an
+    // in-memory (on) preference so the many shell tests build without it; production threads the real
+    // preference from the AppComponent (like keepBrainDumpRecordingsPreference).
+    private val shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
     // The Brain dump's record-to-file seam (ADR-0027/#150, Stage 4): records the mic to a WAV and, on Stop
     // (job cancellation), hands it to the background worker — transcription/extraction run there and the
     // drafts land in the Inbox, so the overlay no longer needs the inference engine. Android-only (it needs
@@ -599,6 +609,8 @@ class DefaultMainShellComponent(
                         taskRepository = taskRepository,
                         output = ::onTasksOutput,
                         workingStateEditor = workingStateEditor,
+                        moveEditor = moveEditor,
+                        shakeToUndoPreference = shakeToUndoPreference,
                         taskDetailRepository = taskDetailRepository,
                         createSubtask = createSubtask,
                         setDeadline = setDeadline,
@@ -648,6 +660,8 @@ class DefaultMainShellComponent(
                         storageProviderCatalog = storageProviderCatalog,
                         // The device-local "keep brain-dump recordings" choice (#211) — AppScope, never synced.
                         keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
+                        // The device-local shake-to-undo choice (#230) — AppScope, never synced.
+                        shakeToUndoPreference = shakeToUndoPreference,
                         coroutineContext = coroutineContext,
                     ),
                 )

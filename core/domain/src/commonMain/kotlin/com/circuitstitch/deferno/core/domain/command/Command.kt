@@ -41,10 +41,12 @@ import kotlin.time.Instant
  * flag is the signal the agent / OS-intent layer reads, and the executor returns [CommandResult.Offline]
  * (not a false [CommandResult.Accepted]) when offline.
  *
- * **Reparent / move is likewise absent.** ADR-0007 pairs "drag-to-reorder / reparent" as a v1 input
- * goal; the reorder half is bound ([ReorderPlan]), but moving a Task under a new parent has no write
- * seam yet (`TaskWriter` / `Mutation` carry no reparent intent), and the catalog stays 1:1 with the
- * seam — so it joins when the seam does, not as an unbacked command.
+ * **Reparent / move has landed ([MoveItem], ADR-0034 #228).** ADR-0007 paired "drag-to-reorder /
+ * reparent" as a v1 input goal; the reorder half was bound ([ReorderPlan]), and ADR-0034 supplied the
+ * cross-kind move write seam ([com.circuitstitch.deferno.core.data.item.ItemWriter] →
+ * `POST items/{id}/move`) the "no write seam yet" note here once deferred. So [MoveItem] now joins the
+ * catalog — one command behind the modal move mode's ↑↓ reorder + ‹› indent/outdent and the keyboard,
+ * the binding layer computing its `newParentId` + `position`.
  */
 sealed interface Command {
     /** The stable, platform-neutral catalog entry a palette / menu / agent / OS intent binds to. */
@@ -228,6 +230,22 @@ data class ConvertItem(
     val payload: ConvertItemPayload,
 ) : Command {
     override val kind: CommandKind get() = CommandKind.ConvertItem
+}
+
+// --- Move (OFFLINE-FIRST, cross-kind tree reorder/reparent, ADR-0034 #228) ---
+
+/**
+ * Move the Item [id] under [newParentId] (`null` = detach to root) to insertion index [position] among
+ * the destination parent's children (`POST items/{id}/move`, ADR-0034 decision 5). The **single**
+ * capability behind all three modal-move skins — ↑↓ reorder among siblings and ‹› indent/outdent — and
+ * the keyboard; each input modality computes [newParentId] + [position] and issues this same command
+ * ("Move is one capability, three input skins"). Cross-kind, so it addresses the **raw Item id string**
+ * (a Habit may move under a Task), not a kind-typed id — like [ConvertItem]. Offline-first: the
+ * [com.circuitstitch.deferno.core.data.item.ItemWriter] applies it optimistically + enqueues, so NOT
+ * online-only; a server 400 (cycle) reverts via the next cold-snapshot reconcile.
+ */
+data class MoveItem(val id: String, val newParentId: String?, val position: Int) : Command {
+    override val kind: CommandKind get() = CommandKind.MoveItem
 }
 
 // --- Occurrence: acting on one dated firing from the Calendar (#74) — OFFLINE-FIRST ---

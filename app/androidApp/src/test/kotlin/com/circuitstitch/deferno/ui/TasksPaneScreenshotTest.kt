@@ -57,6 +57,9 @@ class TasksPaneScreenshotTest {
     /** Open item "1"'s detail via the tree's trailing `›` (the slot activates synchronously, Unconfined). */
     private fun TasksComponent.openDetail() = tree.onOpenDetail("1", ItemKind.Task)
 
+    /** Lift child "1a" into modal move mode (#228): highlighted row, calmed rest, the ↑↓‹› + Done bar. */
+    private fun TasksComponent.enterMoveMode() = tree.onEnterMoveMode("1a")
+
     private fun capture(name: String, darkTheme: Boolean = false, content: @Composable () -> Unit) {
         composeRule.setContent {
             DefernoTheme(palette = DefernoPalette.Deferno, darkTheme = darkTheme) {
@@ -76,6 +79,14 @@ class TasksPaneScreenshotTest {
     @Config(qualifiers = "w400dp-h800dp")
     fun compact_detail_light() = capture("tasks_compact_detail_light") {
         TasksScreen(tasksComponent().also { it.openDetail() })
+    }
+
+    @Test
+    @Config(qualifiers = "w400dp-h800dp")
+    fun compact_moveMode_light() = capture("tasks_compact_move_mode_light") {
+        // The lifted child "1a" is highlighted, the rest calmed, and the ↑↓‹› + Done bar shows with the
+        // illegal directions (up / indent — it is the first child) greyed (ADR-0034 decision 6, #228).
+        TasksScreen(tasksComponent().also { it.enterMoveMode() })
     }
 
     @Test

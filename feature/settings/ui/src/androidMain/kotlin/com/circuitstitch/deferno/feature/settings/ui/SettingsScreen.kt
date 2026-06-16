@@ -331,6 +331,16 @@ private fun TaskBehaviorDetail(settings: UserSettings, component: SettingsCompon
         onCheckedChange = component::onDragAndDropChanged,
     )
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    // Shake-to-undo (#230): device-local, default on; the confirm prompt is the accidental-fire safety, and
+    // the snackbar + menu undo paths stay available whether this is on or off.
+    val shakeToUndo by component.shakeToUndo.collectAsState()
+    ToggleRow(
+        label = "Shake to undo",
+        description = "Shake your phone to undo the last task move. You’ll be asked to confirm first.",
+        checked = shakeToUndo,
+        onCheckedChange = component::onShakeToUndoChanged,
+    )
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     SectionLabel("Done visibility")
     Text(
         text = "How long completed items stay visible.",

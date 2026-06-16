@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.domain.command
 import com.circuitstitch.deferno.core.data.calendar.OccurrenceWriter
 import com.circuitstitch.deferno.core.data.create.CreateResult
 import com.circuitstitch.deferno.core.data.create.CreateWriter
+import com.circuitstitch.deferno.core.data.item.ItemWriter
 import com.circuitstitch.deferno.core.data.plan.PlanWriter
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.task.TaskWriter
@@ -35,6 +36,7 @@ class CommandExecutor(
     private val createWriter: CreateWriter,
     private val occurrenceWriter: OccurrenceWriter,
     private val settingsWriter: SettingsWriter,
+    private val itemWriter: ItemWriter,
 ) {
     /**
      * Run [command], first gating on [CommandKind.enabledFor].
@@ -82,6 +84,8 @@ class CommandExecutor(
             is SetTracking -> settingsWriter.setTracking(command.enabled)
             is SetDragAndDrop -> settingsWriter.setDragAndDrop(command.enabled)
             is SetDoneVisibility -> settingsWriter.setDoneVisibility(command.globalSeconds, command.dashboardSeconds)
+            // Cross-kind tree move (ADR-0034 #228): optimistic reorder + outbox enqueue, offline-first.
+            is MoveItem -> itemWriter.move(command.id, command.newParentId, command.position)
         }
         return CommandResult.Accepted(command.kind)
     }

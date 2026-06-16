@@ -123,10 +123,25 @@ class MutationTest {
     }
 
     @Test
+    fun moveEmitsNewParentAndPosition() {
+        val request = Move(id = "x", newParentId = "p", position = 2).toRequest()
+        assertEquals(OutboxMethod.Post, request.method)
+        assertEquals(listOf("items", "x", "move"), request.path)
+        assertEquals("""{"new_parent_id":"p","position":2}""", request.body)
+    }
+
+    @Test
+    fun moveToRootEmitsExplicitNullParent() {
+        // null parent = "detach to root" (ADR-0034), an explicit wire null distinct from omit (ADR-0011).
+        assertEquals("""{"new_parent_id":null,"position":0}""", Move(id = "x", newParentId = null, position = 0).toRequest().body)
+    }
+
+    @Test
     fun targetsPartitionByEntity() {
         assertEquals("task:a", SetWorkingState(TaskId("a"), WorkingState.Done).target)
         assertEquals("task:a", DeleteTask(TaskId("a"), created).target)
         assertEquals("plan:2026-06-07:America/Los_Angeles", PlanAdd(TaskId("t1"), date, tz).target)
+        assertEquals("item:x", Move(id = "x", newParentId = null, position = 0).target)
     }
 
     // --- optimistic apply: correctness + idempotence (replay-safety) ---
