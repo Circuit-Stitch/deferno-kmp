@@ -106,4 +106,38 @@ class RecurringLocalStoreTest {
         store.upsert(event)
         assertEquals(event, store.get(EventId("e-1")))
     }
+
+    /**
+     * The `/items` reconcile seam (#226): `allIds()` (the purge diff) and `transaction { }` (the atomic
+     * batch) round-trip through real SQLite for every recurring kind, sharing the extracted
+     * `reconcileTransaction` helper proved on the Task store.
+     */
+    @Test
+    fun allIdsAndTransactionRoundTripThroughRealSqliteForEveryRecurringKind() = runTest {
+        val database = db()
+        val habits = SqlDelightHabitLocalStore(database, Dispatchers.Default)
+        val chores = SqlDelightChoreLocalStore(database, Dispatchers.Default)
+        val events = SqlDelightEventLocalStore(database, Dispatchers.Default)
+
+        habits.transaction { it.upsert(habitOf("h-1")); it.upsert(habitOf("h-2")) }
+        chores.transaction { it.upsert(choreOf("c-1")) }
+        events.transaction { it.upsert(eventOf("e-1")) }
+
+        assertEquals(setOf(HabitId("h-1"), HabitId("h-2")), habits.allIds())
+        assertEquals(setOf(ChoreId("c-1")), chores.allIds())
+        assertEquals(setOf(EventId("e-1")), events.allIds())
+
+        // A transaction that deletes commits atomically; allIds reflects the purge.
+        habits.transaction { it.delete(HabitId("h-1")) }
+        assertEquals(setOf(HabitId("h-2")), habits.allIds())
+    }
+
+    private fun habitOf(id: String) =
+        Habit(HabitId(id), "u-e4h2qk", "habit-$id", DefinitionState.Active, dateCreated = created)
+
+    private fun choreOf(id: String) =
+        Chore(ChoreId(id), "u-e4h2qk", "chore-$id", DefinitionState.Active, dateCreated = created)
+
+    private fun eventOf(id: String) =
+        Event(EventId(id), "u-e4h2qk", "event-$id", DefinitionState.Active, dateCreated = created)
 }

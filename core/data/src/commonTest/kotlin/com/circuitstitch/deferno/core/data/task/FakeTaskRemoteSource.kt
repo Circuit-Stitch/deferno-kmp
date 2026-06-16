@@ -1,17 +1,16 @@
 package com.circuitstitch.deferno.core.data.task
 
-import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 
 /**
- * Scriptable [TaskRemoteSource] for the repository tests (#22). A test sets [snapshot] to the
- * summaries the next [refresh] sees, and [details] to the full payloads a [hydrate] fetches, then
- * asserts how the repository reconciles them into the local store. [failNext] simulates the
- * offline-first failure path (a refresh/hydrate that can't reach the server returns nothing).
+ * Scriptable [TaskRemoteSource] for the repository tests (#22). A test sets [details] to the full
+ * payloads a [hydrate] fetches and [searchResults] to the rows a [search] returns, then asserts how the
+ * repository handles them. [failNext] simulates the offline-first failure path. (The cold list snapshot
+ * moved to [com.circuitstitch.deferno.core.data.item.ItemSnapshotSource] — #226 — so it is no longer
+ * scripted here; see [com.circuitstitch.deferno.core.data.item.FakeItemSnapshotSource].)
  */
 class FakeTaskRemoteSource(
-    var snapshot: List<Task> = emptyList(),
     var details: Map<TaskId, Task> = emptyMap(),
     var failNext: Boolean = false,
     /** Rows the next [search] returns (in server order); the repo applies the client sort over these. */
@@ -21,11 +20,6 @@ class FakeTaskRemoteSource(
     /** The [TaskSearchQuery] the last [search] received, for asserting the filters reached the wire. */
     var lastSearchQuery: TaskSearchQuery? = null
         private set
-
-    override suspend fun fetchAll(): RemoteSnapshot<List<Task>> {
-        if (failNext) return RemoteSnapshot.Unavailable
-        return RemoteSnapshot.Available(snapshot)
-    }
 
     override suspend fun fetch(id: TaskId): Task? {
         if (failNext) return null

@@ -107,6 +107,8 @@ fun ItemView.asTaskOrNull(): Task? = when (this) {
         ownerOrgId = ownerOrgId?.let(::OrgId),
         description = description,
         nextTaskId = nextTaskId?.let(::TaskId),
+        descendantDone = descendantDone,
+        descendantTotal = descendantTotal,
     )
     is ItemView.Habit, is ItemView.Chore, is ItemView.Event -> null
 }

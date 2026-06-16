@@ -2,7 +2,13 @@ package com.circuitstitch.deferno.core.data.task
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import app.cash.turbine.test
+import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
+import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
+import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
 import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
+import com.circuitstitch.deferno.core.data.item.FakeItemSnapshotSource
+import com.circuitstitch.deferno.core.data.item.ItemSnapshot
+import com.circuitstitch.deferno.core.data.item.ItemSync
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
@@ -20,10 +26,10 @@ import kotlin.test.assertTrue
 
 /**
  * The real-SQLite integration test (#22, ADR-0006 JVM-fast path). The commonTest fakes prove the
- * reconcile/hydration *algorithm*; this proves the *SQL path* — that [SqlDelightTaskLocalStore]'s
- * row<->domain mapping, observe-via-Flow, and `db.transaction { }` atomicity round-trip through a
- * genuine `DefernoDatabase` over an in-memory `JdbcSqliteDriver`, and that a full
- * [OfflineTaskRepository.refresh] reconcile commits through real SQLite end to end.
+ * reconcile *algorithm*; this proves the *SQL path* — that [SqlDelightTaskLocalStore]'s row<->domain
+ * mapping (including the #226 descendant counts), observe-via-Flow, and `db.transaction { }` atomicity
+ * round-trip through a genuine `DefernoDatabase` over an in-memory `JdbcSqliteDriver`, and that an
+ * [ItemSync] `/items` reconcile commits the Task store through real SQLite end to end.
  */
 class SqlDelightTaskLocalStoreTest {
 
@@ -57,6 +63,8 @@ class SqlDelightTaskLocalStoreTest {
         nextTaskId = TaskId("next-$id"),
         finishedAt = Instant.parse("2026-06-02T10:00:00Z"),
         pinned = true,
+        descendantDone = 1,
+        descendantTotal = 2,
     )
 
     @Test
@@ -114,41 +122,44 @@ class SqlDelightTaskLocalStoreTest {
     }
 
     @Test
-    fun fullRefreshReconcilesThroughRealSqlite() = runTest {
+    fun itemSyncReconcilesTheTaskStoreThroughRealSqlite() = runTest {
         val store = newStore()
-        // Seed: a row that will survive, a row that will vanish, and a hydrated row.
+        // Seed: a row that will survive (updated), and a row that will vanish (purged).
         store.upsert(summary("keep", title = "old"))
         store.upsert(summary("vanished"))
-        store.upsert(full("hydrated"))
 
-        val remote = FakeTaskRemoteSource(
-            snapshot = listOf(
-                summary("keep", title = "new"),
-                summary("fresh"),
-                // a summary refresh of the hydrated row (must NOT downgrade it)
-                summary("hydrated", title = "hydrated-renamed"),
-                summary("tomb", deletedAt = Instant.parse("2026-06-01T00:00:00Z")),
+        // A Full /items snapshot: keep updated wholesale (descendant counts and all), fresh inserted,
+        // a tombstone kept, and the locally-held "vanished" dropped entirely.
+        val source = FakeItemSnapshotSource(
+            ItemSnapshot(
+                tasks = listOf(
+                    full("keep").copy(title = "new"),
+                    full("fresh"),
+                    summary("tomb", deletedAt = Instant.parse("2026-06-01T00:00:00Z")),
+                ),
             ),
         )
-        val repo = OfflineTaskRepository(store, remote, FakePendingCreateStore())
+        val sync = ItemSync(
+            store, FakeHabitLocalStore(), FakeChoreLocalStore(), FakeEventLocalStore(), source, FakePendingCreateStore(),
+        )
 
-        repo.refresh()
+        sync.refresh()
 
-        // keep updated, fresh inserted, vanished purged.
-        assertEquals("new", store.get(TaskId("keep"))?.title)
+        // keep updated wholesale, fresh inserted, vanished purged.
+        val keep = store.get(TaskId("keep"))
+        assertEquals("new", keep?.title)
+        assertEquals(HydrationState.Full, keep?.hydration)
+        // the Full row's server-computed subtree counts round-trip through real SQLite (#226).
+        assertEquals(1L, keep?.descendantDone)
+        assertEquals(2L, keep?.descendantTotal)
         assertEquals(WorkingState.Open, store.get(TaskId("fresh"))?.workingState)
         assertNull(store.get(TaskId("vanished")))
         // tombstone present + isDeleted, excluded from active.
         assertTrue(store.get(TaskId("tomb"))?.isDeleted == true)
-        // hydration preserved across a summary refresh.
-        val hydrated = store.get(TaskId("hydrated"))
-        assertEquals(HydrationState.Full, hydrated?.hydration)
-        assertEquals("body-hydrated", hydrated?.description)
-        assertEquals("hydrated-renamed", hydrated?.title)
 
         store.observeActive().test {
             val activeIds = awaitItem().map { it.id }.toSet()
-            assertEquals(setOf(TaskId("keep"), TaskId("fresh"), TaskId("hydrated")), activeIds)
+            assertEquals(setOf(TaskId("keep"), TaskId("fresh")), activeIds)
             assertFalse(activeIds.contains(TaskId("tomb")))
             cancelAndIgnoreRemainingEvents()
         }

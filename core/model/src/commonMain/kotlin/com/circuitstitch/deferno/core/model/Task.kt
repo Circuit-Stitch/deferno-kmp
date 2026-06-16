@@ -46,6 +46,11 @@ data class Task(
     val ownerOrgId: OrgId? = null,
     val description: String? = null,
     val nextTaskId: TaskId? = null,
+    // Server-computed subtree progress carried by the `/items` snapshot (ADR-0034): done / total
+    // descendants, for a collapsed tree node's progress badge. `null` when the source omits them
+    // (e.g. a `/tasks/{id}` detail). Not re-derived client-side — the server windows the snapshot.
+    val descendantDone: Long? = null,
+    val descendantTotal: Long? = null,
 ) {
     /** Whether this row is a soft-delete tombstone (`deleted_at` present). */
     val isDeleted: Boolean get() = deletedAt != null

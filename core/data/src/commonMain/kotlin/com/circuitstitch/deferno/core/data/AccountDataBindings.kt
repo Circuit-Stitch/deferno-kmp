@@ -24,6 +24,8 @@ import com.circuitstitch.deferno.core.data.create.PendingCreateStore
 import com.circuitstitch.deferno.core.data.create.SqlDelightPendingCreateStore
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
+import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
+import com.circuitstitch.deferno.core.data.item.ItemSync
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
@@ -135,13 +137,28 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun occurrenceLocalStore(db: DefernoDatabase): OccurrenceLocalStore = SqlDelightOccurrenceLocalStore(db)
 
+    // The offline-first `GET /items` cold sync (ADR-0034, #226): one snapshot pull reconciled into all
+    // four per-kind stores, honoring the server-windowed done-visibility window. The snapshot source is
+    // AppScope (the shared client follows the Active Account, ADR-0014); the stores + pending-create
+    // table are this scope. `TaskRepository.refresh` triggers it (the trigger seam stays unchanged).
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun itemSync(
+        taskStore: TaskLocalStore,
+        habitStore: HabitLocalStore,
+        choreStore: ChoreLocalStore,
+        eventStore: EventLocalStore,
+        source: ItemSnapshotSource,
+        pendingCreateStore: PendingCreateStore,
+    ): ItemSync = ItemSync(taskStore, habitStore, choreStore, eventStore, source, pendingCreateStore)
+
     @Provides
     @SingleIn(AccountScope::class)
     fun taskRepository(
         localStore: TaskLocalStore,
         remoteSource: TaskRemoteSource,
-        pendingCreateStore: PendingCreateStore,
-    ): TaskRepository = OfflineTaskRepository(localStore, remoteSource, pendingCreateStore)
+        itemSync: ItemSync,
+    ): TaskRepository = OfflineTaskRepository(localStore, remoteSource, itemSync)
 
     @Provides
     @SingleIn(AccountScope::class)

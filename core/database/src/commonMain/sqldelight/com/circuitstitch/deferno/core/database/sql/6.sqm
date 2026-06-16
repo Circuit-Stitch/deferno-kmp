@@ -1,0 +1,9 @@
+-- Migration 6 -> 7: add the server-computed subtree-progress columns to taskEntity (issue #226).
+--
+-- Task sync migrates the cold snapshot from the legacy `GET /tasks` to `GET /items` (ADR-0034). The
+-- `/items` payload carries `descendant_done`/`descendant_total` — the server-computed count of done /
+-- total descendants — for a collapsed tree node's progress badge (rendered in the follow-up #227).
+-- Plain ADD COLUMN appends nullable columns; existing rows get NULL, which is correct (they are
+-- re-populated on the next refresh). Never edit a released migration or snapshot — ADR-0022 runbook.
+ALTER TABLE taskEntity ADD COLUMN descendant_done INTEGER;
+ALTER TABLE taskEntity ADD COLUMN descendant_total INTEGER;

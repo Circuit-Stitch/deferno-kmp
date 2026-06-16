@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
+import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
@@ -183,6 +184,9 @@ abstract class AppComponent(
     // closes over the host Context / databases dir / key provider inside AppScope). They are plumbing,
     // not part of the app-facing surface — the app uses AccountComponent.taskRepository et al.
     abstract val taskRemoteSource: TaskRemoteSource
+    // The item-wide cold-snapshot source (`GET /items`, ADR-0034 #226): the AccountScope ItemSync pulls
+    // the windowed snapshot through it, reconciling every kind into its store on refresh.
+    abstract val itemSnapshotSource: ItemSnapshotSource
     // Online-only Task detail extras (comments + attachments); the child AccountComponent re-exposes it.
     abstract val taskDetailRepository: TaskDetailRepository
     abstract val planRemoteSource: PlanRemoteSource

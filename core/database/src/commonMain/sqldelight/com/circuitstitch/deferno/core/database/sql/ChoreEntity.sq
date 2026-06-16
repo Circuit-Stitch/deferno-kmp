@@ -34,6 +34,10 @@ SELECT * FROM choreEntity WHERE deleted_at IS NULL ORDER BY sequence;
 selectById:
 SELECT * FROM choreEntity WHERE id = ?;
 
+-- Just the ids — the /items reconcile diffs these against a fresh snapshot to purge absent rows (#226).
+selectAllIds:
+SELECT id FROM choreEntity;
+
 insertOrReplace:
 INSERT OR REPLACE INTO choreEntity(
     id, org_slug, owner_org_id, ref, sequence, title, definition_state, recurrence_type,

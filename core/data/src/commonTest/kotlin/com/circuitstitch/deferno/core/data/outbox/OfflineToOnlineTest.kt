@@ -1,7 +1,13 @@
 package com.circuitstitch.deferno.core.data.outbox
 
 import app.cash.turbine.test
+import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
+import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
+import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
 import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
+import com.circuitstitch.deferno.core.data.item.FakeItemSnapshotSource
+import com.circuitstitch.deferno.core.data.item.ItemSnapshot
+import com.circuitstitch.deferno.core.data.item.ItemSync
 import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
 import com.circuitstitch.deferno.core.data.task.FakeTaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.OfflineTaskRepository
@@ -42,10 +48,13 @@ class OfflineToOnlineTest {
 
     @Test
     fun writesApplyOptimisticallyOfflineThenReplayAndReconcileOnline() = runTest {
-        // Local source of truth (the UI reads this); the "server" is the remote snapshot.
+        // Local source of truth (the UI reads this); the "server" is the /items snapshot source.
         val local = FakeTaskLocalStore(mapOf(a to task(a), b to task(b)))
-        val remote = FakeTaskRemoteSource(snapshot = listOf(task(a), task(b)))
-        val repository = OfflineTaskRepository(local, remote, FakePendingCreateStore())
+        val source = FakeItemSnapshotSource(ItemSnapshot(tasks = listOf(task(a), task(b))))
+        val itemSync = ItemSync(
+            local, FakeHabitLocalStore(), FakeChoreLocalStore(), FakeEventLocalStore(), source, FakePendingCreateStore(),
+        )
+        val repository = OfflineTaskRepository(local, FakeTaskRemoteSource(), itemSync)
         val outbox = FakeOutboxStore()
         val writer = OutboxTaskWriter(local, outbox, now = { t0 })
 
@@ -74,9 +83,11 @@ class OfflineToOnlineTest {
 
         // --- ONLINE: connectivity returns; the server has since applied both intents. ---
         online = true
-        remote.snapshot = listOf(
-            task(a, WorkingState.Done), // server accepted the completion
-            task(b, deletedAt = Instant.parse("2026-06-07T12:00:05Z")), // server tombstoned B
+        source.snapshot = ItemSnapshot(
+            tasks = listOf(
+                task(a, WorkingState.Done), // server accepted the completion
+                task(b, deletedAt = Instant.parse("2026-06-07T12:00:05Z")), // server tombstoned B
+            ),
         )
 
         // Flush past the backoff window: FIFO replay drains the queue, then reconcile pulls server truth.

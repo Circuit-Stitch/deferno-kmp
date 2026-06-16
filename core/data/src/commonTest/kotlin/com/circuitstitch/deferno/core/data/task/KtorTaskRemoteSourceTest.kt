@@ -1,6 +1,5 @@
 package com.circuitstitch.deferno.core.data.task
 
-import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
@@ -28,11 +27,11 @@ import kotlin.test.assertTrue
 
 /**
  * Behaviour of [KtorTaskRemoteSource] (#22), driven by Ktor's MockEngine on the JVM-fast path
- * (ADR-0006) — no real network. Proves the two reads hit the right `/tasks` + `/tasks/{id}` paths,
- * map the wire envelope through the #18 DTO->domain mappers (summary -> Summary, detail -> Full),
- * and honour the offline-first contract: an error response yields [RemoteSnapshot.Unavailable]
- * (fetchAll) / `null` (fetch) so a failed refresh/hydrate leaves the cache intact, while a genuine
- * empty list is [RemoteSnapshot.Available] and reconciles (ADR-0001).
+ * (ADR-0006) — no real network. Proves the detail + search reads hit the right `/tasks/{id}` +
+ * `/tasks/search` paths and map the wire envelope through the #18 DTO->domain mappers, and honour the
+ * offline-first contract: an error response yields `null` (fetch) so a failed hydrate leaves the cache
+ * intact, while a failed search stays [TaskSearchResult.Unavailable]. (The cold list snapshot moved to
+ * `GET /items` — `KtorItemSnapshotSourceTest` — #226.)
  */
 class KtorTaskRemoteSourceTest {
 
@@ -54,21 +53,6 @@ class KtorTaskRemoteSourceTest {
     """.trimIndent()
 
     @Test
-    fun fetchAllMapsSummariesToDomainTasks() = runTest {
-        var captured: HttpRequestData? = null
-        val source = KtorTaskRemoteSource(client { req -> captured = req; respondJson(listEnvelope) })
-
-        val tasks = (source.fetchAll() as RemoteSnapshot.Available).value
-
-        assertTrue(captured?.url?.encodedPath?.endsWith("/tasks") == true)
-        assertEquals(listOf(TaskId("a"), TaskId("b")), tasks.map { it.id })
-        assertEquals(WorkingState.Open, tasks[0].workingState)
-        assertEquals(HydrationState.Summary, tasks[0].hydration)
-        // The tombstone is faithfully carried (the reconcile decides what to do with it).
-        assertTrue(tasks[1].isDeleted)
-    }
-
-    @Test
     fun fetchMapsDetailToAFullDomainTask() = runTest {
         var captured: HttpRequestData? = null
         val source = KtorTaskRemoteSource(client { req -> captured = req; respondJson(detailEnvelope) })
@@ -80,24 +64,6 @@ class KtorTaskRemoteSourceTest {
         assertEquals("the body", task?.description)
         assertEquals(OrgId("org-1"), task?.ownerOrgId)
         assertEquals(TaskId("n-1"), task?.nextTaskId)
-    }
-
-    @Test
-    fun fetchAllReportsUnavailableOnFailureSoTheCacheStaysIntact() = runTest {
-        val source = KtorTaskRemoteSource(client { respond("", HttpStatusCode.Unauthorized) })
-
-        assertEquals(RemoteSnapshot.Unavailable, source.fetchAll())
-    }
-
-    @Test
-    fun fetchAllMapsAGenuineEmptyListToAvailableEmpty_notUnavailable() = runTest {
-        // The safety property behind the empty-snapshot purge: a real 200 with data:[] must be
-        // Available(empty) — which reconciles and purges the cache — NOT Unavailable (which would skip).
-        val source = KtorTaskRemoteSource(client { respondJson("""{"version":"0.1","data":[]}""") })
-
-        val result = source.fetchAll()
-
-        assertTrue(result is RemoteSnapshot.Available && result.value.isEmpty())
     }
 
     @Test
