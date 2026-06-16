@@ -26,5 +26,11 @@ INSERT OR REPLACE INTO dailyPlanEntry(plan_date, tz, position, task_id) VALUES (
 deletePlan:
 DELETE FROM dailyPlanEntry WHERE plan_date = ? AND tz = ?;
 
+-- Re-point every plan slot referencing a Task id (issue #185, id-heal): when an offline-created Task's
+-- client id is replaced by a different server canonical id, plan rows that already pointed at it follow.
+-- task_id is not unique (a Task can be planned on many days), so this updates all matching slots.
+rekeyTask:
+UPDATE dailyPlanEntry SET task_id = ? WHERE task_id = ?;
+
 deleteAll:
 DELETE FROM dailyPlanEntry;

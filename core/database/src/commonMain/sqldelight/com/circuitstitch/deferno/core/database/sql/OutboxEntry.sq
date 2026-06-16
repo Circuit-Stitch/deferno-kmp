@@ -45,6 +45,13 @@ DELETE FROM outboxEntry WHERE seq = ?;
 markRetry:
 UPDATE outboxEntry SET attempts = ?, next_attempt_at = ? WHERE seq = ?;
 
+-- Rewrite a queued entry's target + request in place (issue #185, id-heal): when an offline-created
+-- Item's client id is replaced by a different server canonical id, any already-queued mutation against
+-- the client id (target/path/body) is re-pointed at the canonical id — WITHOUT changing `seq`, so the
+-- strict FIFO replay order is preserved.
+updateEntry:
+UPDATE outboxEntry SET target = ?, path = ?, body = ? WHERE seq = ?;
+
 -- The pending count — the size of the unsynced-writes queue (diagnostics / a future UI badge).
 count:
 SELECT count(*) FROM outboxEntry;

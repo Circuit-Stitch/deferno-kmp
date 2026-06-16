@@ -35,4 +35,11 @@ interface PlanLocalStore {
      * so the day never reads as half-reconciled.
      */
     suspend fun replacePlan(date: LocalDate, tz: String, taskIds: List<TaskId>)
+
+    /**
+     * Re-points every plan slot referencing [from] to [to] across all days (#185, id-heal): when an
+     * offline-created Task's client id is replaced by a different server canonical id, plan rows that
+     * already pointed at it follow. A no-op when [from] is planned nowhere.
+     */
+    suspend fun rekeyTask(from: TaskId, to: TaskId)
 }

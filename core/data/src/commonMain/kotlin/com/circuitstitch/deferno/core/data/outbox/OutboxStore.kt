@@ -46,6 +46,13 @@ interface OutboxStore {
     /** Records a retryable failure on [seq]: the new [attempts] count and the backed-off [nextAttemptAt]. */
     suspend fun markRetry(seq: Long, attempts: Int, nextAttemptAt: Instant)
 
+    /**
+     * Rewrites the [target] + [request] of the queued entry [seq] **in place** (#185, id-heal),
+     * preserving its FIFO [OutboxEntry.seq]. Used to re-point a queued mutation from an offline-created
+     * Item's client id to the server's canonical id when the two diverge.
+     */
+    suspend fun update(seq: Long, target: String, request: OutboxRequest)
+
     /** The number of pending entries — the size of the unsynced-writes queue. */
     suspend fun count(): Long
 }

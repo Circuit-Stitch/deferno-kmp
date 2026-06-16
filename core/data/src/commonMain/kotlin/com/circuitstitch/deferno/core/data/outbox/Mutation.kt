@@ -54,13 +54,13 @@ import kotlin.time.Instant
  * | [PlanRemove] | `POST tasks/plan/remove` | `{"task_id":"…","date":"…","tz":"…"}` |
  * | [PlanReorder] | `POST tasks/plan/reorder` | `{"task_ids":[…],"date":"…","tz":"…"}` |
  *
- * **Deliberately out of scope at envelope v0.1.** *Create* intents (`POST /tasks`) — offline-create
- * has no server idempotency key / client-id echo to reconcile a client-temp id against the server's
- * assigned UUID, so a replay would duplicate (ADR-0001's reconcile keys on `id`). *Occurrence* writes
- * (`SetOccurrence`) — there is no Habit/Chore/Event domain entity or cache to apply optimistically
- * against yet (the #18 mapper returns `null` for those `ItemView` variants). Both are deferred until
- * the API / domain model supports them; every intent here mutates an **existing** entity (stable
- * server UUID), which is what makes replay-safe + reconcile-clean.
+ * **Create now rides the outbox too (#185).** With the backend accepting client-supplied ids
+ * (Kyle-Falconer/Deferno#402), an offline create mints the Item UUID up front and enqueues a
+ * [CreateMutation] (`POST /{kind}` with that id) — the id is the idempotency key, so a replay can't
+ * duplicate. A create *inserts* rather than transforms an existing row, so [CreateMutation] carries no
+ * `applyTo` (the writer does the optimistic insert directly) and is routed specially on replay (it
+ * needs the server's returned id to confirm / heal). Every intent in *this* file still mutates an
+ * **existing** entity (stable UUID), which is what makes its replay reconcile-clean.
  */
 sealed interface Mutation {
 

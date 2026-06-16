@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.core.data.task
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import app.cash.turbine.test
+import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
@@ -129,7 +130,7 @@ class SqlDelightTaskLocalStoreTest {
                 summary("tomb", deletedAt = Instant.parse("2026-06-01T00:00:00Z")),
             ),
         )
-        val repo = OfflineTaskRepository(store, remote)
+        val repo = OfflineTaskRepository(store, remote, FakePendingCreateStore())
 
         repo.refresh()
 

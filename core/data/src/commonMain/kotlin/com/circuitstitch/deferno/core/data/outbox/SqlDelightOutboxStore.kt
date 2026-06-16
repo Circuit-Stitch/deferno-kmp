@@ -45,6 +45,16 @@ class SqlDelightOutboxStore(
         queries.markRetry(attempts.toLong(), nextAttemptAt.toString(), seq)
     }
 
+    override suspend fun update(seq: Long, target: String, request: OutboxRequest) {
+        // A heal only re-points id references in target/path/body; the verb never changes.
+        queries.updateEntry(
+            target = target,
+            path = request.path.joinToString("\n"),
+            body = request.body,
+            seq = seq,
+        )
+    }
+
     override suspend fun count(): Long = queries.count().executeAsOne()
 }
 

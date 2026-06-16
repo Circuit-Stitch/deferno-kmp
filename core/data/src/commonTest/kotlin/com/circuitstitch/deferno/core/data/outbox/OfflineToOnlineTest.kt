@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.data.outbox
 
 import app.cash.turbine.test
+import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
 import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
 import com.circuitstitch.deferno.core.data.task.FakeTaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.OfflineTaskRepository
@@ -44,7 +45,7 @@ class OfflineToOnlineTest {
         // Local source of truth (the UI reads this); the "server" is the remote snapshot.
         val local = FakeTaskLocalStore(mapOf(a to task(a), b to task(b)))
         val remote = FakeTaskRemoteSource(snapshot = listOf(task(a), task(b)))
-        val repository = OfflineTaskRepository(local, remote)
+        val repository = OfflineTaskRepository(local, remote, FakePendingCreateStore())
         val outbox = FakeOutboxStore()
         val writer = OutboxTaskWriter(local, outbox, now = { t0 })
 
@@ -52,6 +53,9 @@ class OfflineToOnlineTest {
         val sender = object : OutboxRequestSender {
             override suspend fun send(request: OutboxRequest): SendOutcome =
                 if (online) SendOutcome.Success else SendOutcome.Retryable
+
+            override suspend fun sendCreate(request: OutboxRequest): CreateSendOutcome =
+                CreateSendOutcome.Terminal // no creates in this test
         }
         val processor = OutboxProcessor(outbox, sender, reconcile = { repository.refresh() })
 

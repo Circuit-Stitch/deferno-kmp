@@ -44,4 +44,9 @@ class SqlDelightPlanLocalStore(
             }
         }
     }
+
+    override suspend fun rekeyTask(from: TaskId, to: TaskId) {
+        // rekeyTask: SET task_id = ? WHERE task_id = ?  → (new, old)
+        queries.rekeyTask(to.value, from.value)
+    }
 }

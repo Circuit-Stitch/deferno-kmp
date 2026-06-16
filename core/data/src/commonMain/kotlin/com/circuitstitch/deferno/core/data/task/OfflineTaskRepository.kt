@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.data.RemoteSnapshot
+import com.circuitstitch.deferno.core.data.create.PendingCreateStore
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -34,10 +35,18 @@ import kotlinx.coroutines.flow.Flow
  *
  * **Hydration ([hydrate]).** Opening a Task pulls its full detail and upserts it, upgrading the
  * cached row summary -> full; a missing/failed detail is a no-op (the summary stays).
+ *
+ * **Offline-created rows are protected from the purge (#185).** A Task created offline has a
+ * client-generated id and rides the outbox; until its create replays it is absent from the server
+ * snapshot, so the "remove locally-absent" diff would wrongly purge it. The [pendingCreateStore]'s
+ * still-pending ids are excluded from the orphan set (the create-side mirror of the settings reconcile
+ * reading the outbox so a refresh can't clobber an un-synced change, #143). Confirmation of a replayed
+ * create is owned by the outbox replay listener (tied to replay), not this refresh.
  */
 class OfflineTaskRepository(
     private val localStore: TaskLocalStore,
     private val remoteSource: TaskRemoteSource,
+    private val pendingCreateStore: PendingCreateStore,
 ) : TaskRepository {
 
     override fun observeTasks(): Flow<List<Task>> = localStore.observeActive()
@@ -53,13 +62,17 @@ class OfflineTaskRepository(
         }
 
         val snapshotIds = snapshot.mapTo(mutableSetOf()) { it.id }
+        // Offline-created Tasks still awaiting replay are absent from the snapshot by design — protect
+        // them from the orphan-purge (#185) until their create lands (the listener confirms them then).
+        val pendingCreated = pendingCreateStore.pendingIds().mapTo(mutableSetOf(), ::TaskId)
 
         localStore.transaction { store ->
             for (incoming in snapshot) {
                 store.upsert(reconciled(store.get(incoming.id), incoming))
             }
-            // Hard-delete the rows the snapshot dropped entirely (not even returned as tombstones).
-            for (orphan in store.allIds() - snapshotIds) {
+            // Hard-delete the rows the snapshot dropped entirely (not even returned as tombstones),
+            // except offline creates that haven't replayed yet.
+            for (orphan in store.allIds() - snapshotIds - pendingCreated) {
                 store.delete(orphan)
             }
         }

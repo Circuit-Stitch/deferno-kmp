@@ -27,15 +27,16 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
 /**
- * The **New** create-surface logic (#71, ADR-0015/0016): the explicit kind picker + per-kind form
- * state + the online-only create dispatch. It is deliberately Compose-free so the [NewScreen] View
+ * The **New** create-surface logic (#71, ADR-0015; #185 offline-first): the explicit kind picker +
+ * per-kind form state + the create dispatch. It is deliberately Compose-free so the [NewScreen] View
  * stays a thin render of this state, and so the create flow is unit-testable without a UI.
  *
  * The picker is an **explicit** Task/Habit/Chore/Event segmented choice (ADR-0015 — never inferred
  * from field content); the form adapts to [selectedKind]. Submitting routes through the shell's
- * online-only [create] seam (the command executor's `CreateItem`), and the resulting [status] tells
- * the View whether to dismiss (created), show "reconnect to save" ([NewStatus.Offline]), or show a
- * gentle error ([NewStatus.Failed]) — nothing is enqueued offline (ADR-0016).
+ * [create] seam (the command executor's `CreateItem`). Create is now **offline-first** (#185): it
+ * optimistically inserts + enqueues, so [status] settles on dismissal (created — queued, regardless of
+ * connectivity); [NewStatus.Offline] is retained only as a defensive arm (the seam no longer returns it
+ * for a create).
  */
 interface NewComponent {
     val state: StateFlow<NewState>
@@ -172,7 +173,10 @@ sealed interface NewStatus {
     data object Editing : NewStatus
     data object Submitting : NewStatus
 
-    /** Offline (ADR-0016): the gentle "reconnect to save"; nothing was enqueued. */
+    /**
+     * The gentle "reconnect to save"; nothing was enqueued. Since create became offline-first (#185)
+     * the create seam no longer returns this — retained as a defensive arm in [submit]'s `when`.
+     */
     data object Offline : NewStatus
 
     /** A server rejection — a gentle error [message]. */

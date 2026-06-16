@@ -41,6 +41,9 @@ class SettingsOfflineToOnlineTest {
                 remote.next = chosen // the server applied the PATCH — its snapshot now carries it
                 return SendOutcome.Success
             }
+
+            override suspend fun sendCreate(request: OutboxRequest): CreateSendOutcome =
+                CreateSendOutcome.Terminal // no creates in this test
         }
         val processor = OutboxProcessor(outbox, sender, reconcile = { repository.refresh() })
 

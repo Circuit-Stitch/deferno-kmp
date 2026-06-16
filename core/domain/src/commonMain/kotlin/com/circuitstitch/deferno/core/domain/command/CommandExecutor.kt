@@ -66,8 +66,9 @@ class CommandExecutor(
             is AddToPlan -> planWriter.add(command.taskId, command.date, command.tz)
             is RemoveFromPlan -> planWriter.remove(command.taskId, command.date, command.tz)
             is ReorderPlan -> planWriter.reorder(command.taskIds, command.date, command.tz)
-            // Online-only (ADR-0016): these return the writer's own outcome (Created/Offline/Failed),
-            // NOT a blanket Accepted — connectivity refusal must be structured, not silent.
+            // Create (#185) is offline-first — it always returns Created → Accepted(itemId); convert
+            // (ADR-0016) is online-only and may return Offline/Failed. Both return the writer's own
+            // outcome (NOT a blanket Accepted) so a convert's connectivity refusal stays structured.
             is CreateItem -> return createWriter.create(command.payload).toCommandResult(command.kind)
             is ConvertItem ->
                 return createWriter.convert(command.itemId, command.fromKind, command.payload).toCommandResult(command.kind)

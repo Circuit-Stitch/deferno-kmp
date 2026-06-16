@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.outbox
 
+import com.circuitstitch.deferno.core.model.ItemKind
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.coroutines.cancellation.CancellationException
@@ -38,6 +39,13 @@ data class FlushResult(
  * the next flush re-triggers it). A flush that only drops/retries does not reconcile — there is no new
  * server state to pull (a terminally-rejected optimistic value is corrected on the next real refresh).
  *
+ * **Create entries replay specially (#185).** An entry whose target is `create:<kind>:<id>` is an
+ * offline create: it replays through the response-bearing [OutboxRequestSender.sendCreate] (the server
+ * id is needed to confirm the pending-create row and to heal a divergent canonical id), and resolves
+ * through the [CreateReplayListener] — confirm on success, undo the optimistic insert on terminal
+ * rejection. If a heal re-points queued entries, the pass stops (its `pending()` snapshot is stale) and
+ * the next flush re-reads. Every other entry is a fire-and-forget edit via [OutboxRequestSender.send].
+ *
  * [flush] is guarded by a [Mutex] so two concurrent triggers can't double-dispatch the same entry.
  */
 class OutboxProcessor(
@@ -46,6 +54,8 @@ class OutboxProcessor(
     private val reconcile: suspend () -> Unit,
     private val maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,
     private val backoff: (Int) -> Duration = ::exponentialBackoff,
+    // The offline-create replay seam (#185); default no-op so the engine's own tests need no wiring.
+    private val createListener: CreateReplayListener = CreateReplayListener.NoOp,
 ) {
     private val mutex = Mutex()
 
@@ -59,6 +69,41 @@ class OutboxProcessor(
             // Entries are in seq order; the first not-yet-ready entry (a backed-off head) stops the
             // pass, preserving strict FIFO — nothing behind it may overtake it.
             if (entry.nextAttemptAt > now) break
+
+            // A create entry (#185) replays through the response-bearing path: we need the server id to
+            // confirm the pending-create row and to heal a divergent canonical id. Every other entry is
+            // a fire-and-forget edit against an existing id.
+            val create = CreateTarget.parse(entry.target)
+            if (create != null) {
+                when (val outcome = sender.sendCreate(entry.request)) {
+                    is CreateSendOutcome.Created -> {
+                        val healed = createListener.onReplayed(create.clientId, create.kind, outcome.serverId)
+                        store.delete(entry.seq)
+                        succeeded++
+                        // A heal re-pointed queued entries in the store; the in-flight `pending()`
+                        // snapshot this loop walks is now stale, so stop and let the next flush re-read.
+                        if (healed) break
+                    }
+                    CreateSendOutcome.Terminal -> {
+                        createListener.onRejected(create.clientId, create.kind)
+                        store.delete(entry.seq)
+                        dropped++
+                    }
+                    CreateSendOutcome.Retryable -> {
+                        val attempts = entry.attempts + 1
+                        if (attempts >= maxAttempts) {
+                            createListener.onRejected(create.clientId, create.kind)
+                            store.delete(entry.seq)
+                            dropped++
+                        } else {
+                            store.markRetry(entry.seq, attempts, now + backoff(attempts))
+                            retried++
+                            break
+                        }
+                    }
+                }
+                continue
+            }
 
             when (sender.send(entry.request)) {
                 SendOutcome.Success -> {
@@ -107,6 +152,27 @@ class OutboxProcessor(
          * reconcile to correct (LWW).
          */
         const val DEFAULT_MAX_ATTEMPTS: Int = 12
+    }
+}
+
+/**
+ * The (kind, client id) decoded from a create entry's `create:<kind>:<id>` [OutboxEntry.target] (#185).
+ * [parse] returns `null` for any non-create entry (every edit), so the processor only routes genuine
+ * creates through the response-bearing path. Item ids are UUIDs (no `:`), so the kind is the segment
+ * before the first `:` and the id is the remainder.
+ */
+private data class CreateTarget(val kind: ItemKind, val clientId: String) {
+    companion object {
+        fun parse(target: String): CreateTarget? {
+            if (!target.startsWith(PREFIX)) return null
+            val rest = target.removePrefix(PREFIX)
+            val kindName = rest.substringBefore(':')
+            val id = rest.substringAfter(':', "")
+            val kind = ItemKind.entries.firstOrNull { it.name == kindName } ?: return null
+            return if (id.isBlank()) null else CreateTarget(kind, id)
+        }
+
+        private const val PREFIX = "create:"
     }
 }
 

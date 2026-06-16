@@ -8,14 +8,17 @@ import com.circuitstitch.deferno.core.network.dto.CreateHabitPayload
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 
 /**
- * The **online-only** create + convert write seam (ADR-0016, #71). It is deliberately **not** the
- * offline-first outbox path: a create has no server idempotency key in v0.1, so it is never enqueued —
- * the writer gates on connectivity, POSTs directly, and on success seeds the server-assigned id into
- * the matching local store so the row joins the normal offline-first observe/edit flow. Offline, it
- * refuses with [CreateResult.Offline] (the gentle "reconnect to save"), **enqueuing nothing**.
+ * The create + convert write seam (#185, ADR-0001 forward path from ADR-0016).
  *
- * Convert (the post-creation counterpart) is online-only for the same reason and reconciles the cache:
- * the converted item changes kind, so the old-kind row is removed and the new-kind row seeded.
+ * **Create is offline-first.** Each `create*` mints a client-side Item UUID, inserts the optimistic
+ * local row, records a pending create, and enqueues a `POST /{kind}` carrying that id on the outbox —
+ * the backend dedupes the create on the client id (Kyle-Falconer/Deferno#402). So a create always
+ * succeeds locally and returns [CreateResult.Created] with the client id; replay/confirm/heal happen on
+ * the outbox. See [OfflineCreateWriter].
+ *
+ * **Convert is still online-only.** Converting an existing item's kind has no client-id idempotency
+ * story, so [convert] keeps the ADR-0016 gate: online → POST + reconcile the cache; offline →
+ * [CreateResult.Offline]; a 4xx → [CreateResult.Failed].
  */
 interface CreateWriter {
     suspend fun createTask(payload: CreateTaskPayload): CreateResult
@@ -28,15 +31,16 @@ interface CreateWriter {
 }
 
 /**
- * The honest outcome of an online-only create/convert (ADR-0016). Three disjoint cases the binding
- * surface (UI, agent, OS intent) must distinguish so the connectivity requirement is *structured*,
- * not a swallowed exception:
+ * The outcome of a create/convert. The disjoint cases the binding surface (UI, agent, OS intent) must
+ * distinguish so an outcome is *structured*, not a swallowed exception:
  *
- * - [Created] — the server confirmed the create/convert and the local row is seeded (kind + id).
- * - [Offline] — refused before/at the POST because there is no connectivity; **nothing was enqueued**.
- *   The create surface shows "reconnect to save".
- * - [Failed] — the server reached but rejected (4xx) or another error occurred; the create surface
- *   shows a gentle error. Distinct from [Offline] because retrying offline won't help.
+ * - [Created] — the local row exists (kind + id). For an offline-first create this is **always** the
+ *   result (optimistically applied + enqueued — *not* server-confirmed, ADR-0001); for a convert it
+ *   means the server confirmed and the cache was reconciled.
+ * - [Offline] — a **convert** refused before/at the POST because there is no connectivity; nothing was
+ *   enqueued ("reconnect to save"). Create never returns this any more.
+ * - [Failed] — a **convert** reached the server but it rejected (4xx) or another error occurred; a
+ *   gentle error. Distinct from [Offline] because retrying offline won't help.
  */
 sealed interface CreateResult {
     data class Created(val kind: ItemKind, val id: String) : CreateResult

@@ -19,10 +19,21 @@ class FakeOutboxRequestSender(
     /** Highest-priority override: decides the outcome from the request itself (e.g. fail one path). */
     var decide: ((OutboxRequest) -> SendOutcome)? = null
 
+    /** The steady outcome for a create replay (#185); default a confirmed create with an echoed id. */
+    var createOutcome: CreateSendOutcome = CreateSendOutcome.Created(serverId = "")
+
+    /** Highest-priority override for [sendCreate] — e.g. return a diverging server id to drive a heal. */
+    var createDecide: ((OutboxRequest) -> CreateSendOutcome)? = null
+
     override suspend fun send(request: OutboxRequest): SendOutcome {
         sent += request
         decide?.let { return it(request) }
         script?.let { if (it.isNotEmpty()) return it.removeFirst() }
         return outcome
+    }
+
+    override suspend fun sendCreate(request: OutboxRequest): CreateSendOutcome {
+        sent += request
+        return createDecide?.invoke(request) ?: createOutcome
     }
 }

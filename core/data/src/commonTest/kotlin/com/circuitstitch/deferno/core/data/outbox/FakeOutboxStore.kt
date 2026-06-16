@@ -38,5 +38,10 @@ class FakeOutboxStore(initial: List<OutboxEntry> = emptyList()) : OutboxStore {
         if (index >= 0) entries[index] = entries[index].copy(attempts = attempts, nextAttemptAt = nextAttemptAt)
     }
 
+    override suspend fun update(seq: Long, target: String, request: OutboxRequest) {
+        val index = entries.indexOfFirst { it.seq == seq }
+        if (index >= 0) entries[index] = entries[index].copy(target = target, request = request)
+    }
+
     override suspend fun count(): Long = entries.size.toLong()
 }

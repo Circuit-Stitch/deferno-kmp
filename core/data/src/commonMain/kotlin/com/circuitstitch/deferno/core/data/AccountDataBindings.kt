@@ -16,14 +16,19 @@ import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.CreateWriter
+import com.circuitstitch.deferno.core.data.create.DefaultCreateReplayListener
+import com.circuitstitch.deferno.core.data.create.ItemIdHealer
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
-import com.circuitstitch.deferno.core.data.create.OnlineCreateWriter
+import com.circuitstitch.deferno.core.data.create.OfflineCreateWriter
+import com.circuitstitch.deferno.core.data.create.PendingCreateStore
+import com.circuitstitch.deferno.core.data.create.SqlDelightPendingCreateStore
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceLocalStore
+import com.circuitstitch.deferno.core.data.outbox.CreateReplayListener
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
@@ -85,6 +90,13 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun outboxStore(db: DefernoDatabase): OutboxStore = SqlDelightOutboxStore(db)
 
+    // The offline-create side table (#185): tracks each client-created Item's replay lifecycle
+    // (pending → confirmed) without a transient flag on the domain Item models. Read by the Task
+    // reconcile to protect not-yet-replayed creates from the orphan-purge.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun pendingCreateStore(db: DefernoDatabase): PendingCreateStore = SqlDelightPendingCreateStore(db)
+
     // The on-device Brain dump draft store (ADR-0027): local-only, no remote/reconcile — a flat
     // SQLDelight class the worker writes and the Brain dumps Destination observes + accepts/dismisses.
     @Provides
@@ -128,7 +140,8 @@ interface AccountDataBindings {
     fun taskRepository(
         localStore: TaskLocalStore,
         remoteSource: TaskRemoteSource,
-    ): TaskRepository = OfflineTaskRepository(localStore, remoteSource)
+        pendingCreateStore: PendingCreateStore,
+    ): TaskRepository = OfflineTaskRepository(localStore, remoteSource, pendingCreateStore)
 
     @Provides
     @SingleIn(AccountScope::class)
@@ -170,10 +183,11 @@ interface AccountDataBindings {
         OutboxOccurrenceWriter(calendarStore, outbox)
 
     /**
-     * The online-only create + convert writer (#71, ADR-0016). It bypasses the outbox entirely (a
-     * create is never enqueued — no server idempotency key in v0.1) and seeds the server-assigned-id
-     * row into the matching local store. The remote source + connectivity it reads are AppScope (the
-     * shared client follows the Active Account per request — ADR-0014); the local stores are this scope.
+     * The offline-first create + (online-only) convert writer (#185, ADR-0001 forward path from
+     * ADR-0016). A create mints a client id, inserts the optimistic row, records it pending, and
+     * enqueues a replayable `POST /{kind}` on the outbox; convert keeps the connectivity gate. The
+     * remote source + connectivity are AppScope (the shared client follows the Active Account per
+     * request — ADR-0014); the local stores, outbox, and pending-create table are this scope.
      */
     @Provides
     @SingleIn(AccountScope::class)
@@ -184,7 +198,44 @@ interface AccountDataBindings {
         habitStore: HabitLocalStore,
         choreStore: ChoreLocalStore,
         eventStore: EventLocalStore,
-    ): CreateWriter = OnlineCreateWriter(connectivity, remoteSource, taskStore, habitStore, choreStore, eventStore)
+        outbox: OutboxStore,
+        pendingCreateStore: PendingCreateStore,
+    ): CreateWriter = OfflineCreateWriter(
+        connectivity = connectivity,
+        remoteSource = remoteSource,
+        taskStore = taskStore,
+        habitStore = habitStore,
+        choreStore = choreStore,
+        eventStore = eventStore,
+        outbox = outbox,
+        pendingCreateStore = pendingCreateStore,
+    )
+
+    // The id-healer + replay listener (#185): when a create replays, the listener confirms its
+    // pending-create row, and — only if the server returned a different canonical id — the healer
+    // re-points every local reference (Item row, parent/child, plan, queued outbox entries).
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun itemIdHealer(
+        taskStore: TaskLocalStore,
+        habitStore: HabitLocalStore,
+        choreStore: ChoreLocalStore,
+        eventStore: EventLocalStore,
+        planStore: PlanLocalStore,
+        outbox: OutboxStore,
+    ): ItemIdHealer = ItemIdHealer(taskStore, habitStore, choreStore, eventStore, planStore, outbox)
+
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun createReplayListener(
+        healer: ItemIdHealer,
+        pendingCreateStore: PendingCreateStore,
+        taskStore: TaskLocalStore,
+        habitStore: HabitLocalStore,
+        choreStore: ChoreLocalStore,
+        eventStore: EventLocalStore,
+    ): CreateReplayListener =
+        DefaultCreateReplayListener(healer, pendingCreateStore, taskStore, habitStore, choreStore, eventStore)
 
     @Provides
     @SingleIn(AccountScope::class)
@@ -223,12 +274,14 @@ interface AccountDataBindings {
     fun outboxProcessor(
         store: OutboxStore,
         sender: OutboxRequestSender,
+        createListener: CreateReplayListener,
         taskRepository: TaskRepository,
         calendarRepository: CalendarRepository,
         settingsRepository: SettingsRepository,
     ): OutboxProcessor = OutboxProcessor(
         store = store,
         sender = sender,
+        createListener = createListener,
         // After a successful flush, LWW-reconcile the Task snapshot, re-pull the last Calendar window
         // (so an occurrence mark/reschedule converges on server truth, #74), and re-pull the settings
         // bag (so a flushed settings PATCH converges, #143 — its refresh skips the upsert if more
