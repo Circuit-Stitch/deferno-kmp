@@ -102,10 +102,12 @@ enum class CommandKind(
     // Appended at the end (CommandIds are a public contract — never reorder/rename existing entries).
     OpenTask(CommandId("task.open"), CommandCategory.Status),
 
-    // Create + convert are ONLINE-ONLY (ADR-0016): the server has no idempotency key in v0.1, so they
-    // call the endpoint directly rather than enqueuing — the [onlineOnly] flag is exactly the signal the
-    // agent / OS-intent layer reads to surface the connectivity requirement rather than failing silently.
-    CreateItem(CommandId("item.create"), CommandCategory.Create, onlineOnly = true),
+    // Create is OFFLINE-FIRST (#185, ADR-0001 forward path from ADR-0016): the backend now dedupes a
+    // create on the client-supplied id (Kyle-Falconer/Deferno#402), so it rides the outbox like every
+    // edit — optimistic local insert + enqueue — and is NOT onlineOnly. Convert stays ONLINE-ONLY: it
+    // mutates an existing item's kind with no client-id idempotency story, so its [onlineOnly] flag is
+    // still the signal the agent / OS-intent layer reads to surface the connectivity requirement.
+    CreateItem(CommandId("item.create"), CommandCategory.Create),
     ConvertItem(CommandId("item.convert"), CommandCategory.Create, onlineOnly = true),
 
     // Acting on a Calendar firing (#74): mark / clear / reschedule one Occurrence. Offline-first (these

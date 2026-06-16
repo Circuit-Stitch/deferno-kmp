@@ -1,0 +1,13 @@
+-- Migration 5 -> 6: add the offline-create pending-state side table (issue #185).
+--
+-- Item create moved onto the offline-first outbox (ADR-0001 forward path from ADR-0016): the client
+-- generates the Item UUID, inserts locally, and enqueues a create the backend dedupes on that id
+-- (Kyle-Falconer/Deferno#402). This sparse side table tracks each create's replay lifecycle without
+-- adding a transient pending flag to the domain Item models. Plain CREATE — existing DBs gain an empty
+-- table, which is correct (ADR-0022 runbook).
+CREATE TABLE pendingItemCreate (
+    item_id      TEXT NOT NULL PRIMARY KEY,
+    item_kind    TEXT NOT NULL,
+    state        TEXT NOT NULL,
+    canonical_id TEXT
+);

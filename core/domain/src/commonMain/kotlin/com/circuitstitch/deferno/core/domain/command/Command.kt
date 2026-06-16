@@ -33,13 +33,13 @@ import kotlin.time.Instant
  * Each command's binding to its action lives in [CommandExecutor]'s exhaustive `when`; the enumerable
  * catalog + per-state applicability live on [CommandKind].
  *
- * **Create is online-only ([CreateItem] / [ConvertItem], ADR-0016).** At envelope v0.1 there is no
- * server idempotency key, so a queued+replayed create would duplicate (ADR-0001 reconciles on `id`).
- * So — unlike every *edit* command, which targets an existing id and is offline-first — create/convert
- * call the endpoint **directly**, gated on connectivity: their [CommandKind.onlineOnly] flag is the
- * signal the agent / OS-intent layer reads, and the executor returns [CommandResult.Offline] (not a
- * false [CommandResult.Accepted]) when offline. They promote to normal offline-first outbox operations
- * the day the backend gains an idempotency key (Kyle-Falconer/Deferno#307).
+ * **Create is offline-first ([CreateItem], #185); convert is still online-only ([ConvertItem]).** The
+ * backend now dedupes a create on the client-supplied id (Kyle-Falconer/Deferno#402), so [CreateItem]
+ * rides the outbox like every edit — optimistic local insert + enqueue, [CommandResult.Accepted]
+ * carrying the client id — realizing ADR-0016's forward path. [ConvertItem] mutates an existing item's
+ * kind with no client-id idempotency story, so it keeps the ADR-0016 gate: its [CommandKind.onlineOnly]
+ * flag is the signal the agent / OS-intent layer reads, and the executor returns [CommandResult.Offline]
+ * (not a false [CommandResult.Accepted]) when offline.
  *
  * **Reparent / move is likewise absent.** ADR-0007 pairs "drag-to-reorder / reparent" as a v1 input
  * goal; the reorder half is bound ([ReorderPlan]), but moving a Task under a new parent has no write
@@ -185,14 +185,15 @@ data class ReorderPlan(val taskIds: List<TaskId>, override val date: LocalDate, 
     override val kind: CommandKind get() = CommandKind.ReorderPlan
 }
 
-// --- Create + convert: ONLINE-ONLY (ADR-0016, #71) ---
+// --- Create (OFFLINE-FIRST, #185) + convert (ONLINE-ONLY, ADR-0016) ---
 //
-// Unlike every other command (which targets an existing server id and is offline-first), create has
-// no server idempotency key in v0.1, so it is NOT enqueued — it calls the endpoint directly and
-// requires connectivity. Its [CommandKind.onlineOnly] flag is the signal the agent / OS-intent layer
-// reads, and the executor returns [CommandResult.Offline] (not a false Accepted) when refused. The
-// payload is the kind-specific create DTO the [com.circuitstitch.deferno.core.data.create.CreateWriter]
-// consumes; a sealed [CreateItem.Payload] keeps the operands typed per kind and the dispatch exhaustive.
+// Create now rides the outbox like every edit: the backend dedupes it on the client-supplied id
+// (Kyle-Falconer/Deferno#402), so the writer mints a UUID, inserts optimistically, and enqueues — the
+// executor reports Accepted (queued) carrying that id. Convert still requires connectivity (it mutates
+// an existing item's kind with no client-id idempotency story), so it keeps the [CommandKind.onlineOnly]
+// flag the executor maps to [CommandResult.Offline] when refused. The payload is the kind-specific
+// create DTO the [com.circuitstitch.deferno.core.data.create.CreateWriter] consumes; a sealed
+// [CreateItem.Payload] keeps the operands typed per kind and the dispatch exhaustive.
 
 /** Create a new item of the explicitly-chosen [Payload] kind (ADR-0015 — no field-inference). */
 data class CreateItem(val payload: Payload) : Command {
@@ -306,10 +307,10 @@ sealed interface CommandResult {
     /**
      * Optimistically applied to the local cache + enqueued to the outbox. **Not** server-confirmed.
      *
-     * [itemId] is the created item's server id for the online-only [CreateItem]/[ConvertItem] path (where
-     * the create response carries it) and `null` for every offline-first edit (which targets an existing
-     * id, so there's nothing new to surface). The Inbox accept reads it to attach the retained brain-dump
-     * recording to the freshly-created Task (#211).
+     * [itemId] is the created item's id for [CreateItem] (the client-generated UUID, #185) / [ConvertItem]
+     * (the converted item's id), and `null` for every edit (which targets an existing id, so there's
+     * nothing new to surface). The Inbox accept reads it to attach the retained brain-dump recording to
+     * the freshly-created Task (#211).
      */
     data class Accepted(override val kind: CommandKind, val itemId: String? = null) : CommandResult
 

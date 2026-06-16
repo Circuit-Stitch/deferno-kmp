@@ -129,10 +129,11 @@ interface AccountSession {
     val occurrenceEditor: OccurrenceEditor
 
     /**
-     * Create a new item online (ADR-0016): routes [payload] through the command executor's online-only
-     * [CreateItem] command. Returns the [CommandResult] so the New surface can show the created item
-     * (Accepted), a gentle "reconnect to save" (Offline), or a server error (Failed) — never a silent
-     * failure. **Nothing is enqueued offline** (ADR-0016).
+     * Create a new item (offline-first, #185): routes [payload] through the command executor's
+     * [CreateItem] command, which optimistically inserts the local row under a client-generated id and
+     * enqueues a replayable create on the outbox. Returns the [CommandResult] — always Accepted (queued,
+     * carrying the new id) regardless of connectivity. The New surface dismisses on Accepted; the row is
+     * already observable via the repository `Flow`.
      */
     suspend fun create(payload: CreateItem.Payload): CommandResult
 

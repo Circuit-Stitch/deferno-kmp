@@ -32,4 +32,8 @@ class FakePlanLocalStore(
     override suspend fun replacePlan(date: LocalDate, tz: String, taskIds: List<TaskId>) {
         plans.value = plans.value + (PlanKey(date, tz) to taskIds)
     }
+
+    override suspend fun rekeyTask(from: TaskId, to: TaskId) {
+        plans.value = plans.value.mapValues { (_, ids) -> ids.map { if (it == from) to else it } }
+    }
 }

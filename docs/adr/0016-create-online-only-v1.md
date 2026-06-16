@@ -1,5 +1,10 @@
 # v1 create is online-only; edits stay offline-first
 
+> **Status: the create decision is SUPERSEDED by [ADR-0034](0034-offline-first-create-client-supplied-uuids.md)** (#185).
+> The backend now accepts client-supplied Item UUIDs (Kyle-Falconer/Deferno#402), so the forward path
+> below is realized: create is offline-first like every edit. **Convert remains online-only** under this
+> ADR. The rest of this record is kept for history.
+
 **Context.** ADR-0001's offline-first write model is an outbox of **intent-based, idempotent
 mutations targeting an existing `id`** (`SetStatus(id, …)`, not patch-from-X-to-Y), and the command
 layer accordingly has **no create command** — every Command targets an existing entity.

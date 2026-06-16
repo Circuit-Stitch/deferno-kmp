@@ -55,13 +55,15 @@ class CommandKindTest {
     }
 
     @Test
-    fun createAndConvertAreTheOnlyOnlineOnlyKinds() {
-        // ADR-0016: the create + convert kinds are flagged online-only (the signal the agent / OS-intent
-        // layer reads); every offline-first edit/status/plan kind is not.
+    fun convertIsTheOnlyOnlineOnlyKind() {
+        // #185: create became offline-first (the backend dedupes on the client-supplied id), so only
+        // convert keeps the ADR-0016 online-only flag (the signal the agent / OS-intent layer reads);
+        // every offline-first create/edit/status/plan kind is not.
         assertEquals(
-            setOf(CommandKind.CreateItem, CommandKind.ConvertItem),
+            setOf(CommandKind.ConvertItem),
             CommandKind.entries.filter { it.onlineOnly }.toSet(),
         )
+        // Both still group under the Create category / createKinds catalog.
         assertEquals(setOf(CommandKind.CreateItem, CommandKind.ConvertItem), CommandKind.createKinds.toSet())
     }
 

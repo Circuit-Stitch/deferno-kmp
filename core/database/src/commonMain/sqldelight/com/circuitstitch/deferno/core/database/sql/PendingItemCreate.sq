@@ -1,0 +1,49 @@
+-- The offline-create pending-state side table (issue #185, ADR-0001 forward path from ADR-0016).
+--
+-- An Item create now rides the offline-first outbox: the client generates the Item's UUID, inserts
+-- the row locally, and enqueues a `POST /{kind}` carrying that id (the backend honors client-supplied
+-- ids — Kyle-Falconer/Deferno#402). This sparse side table tracks the create's replay lifecycle WITHOUT
+-- polluting the domain Item models (Task/Habit/Chore/Event) with a transient pending flag.
+--
+-- `item_id` is the client-generated Item id (the same id the local row uses from the start) and the
+-- key. `item_kind` is the converged Item kind (`Task`/`Habit`/`Chore`/`Event`) so a confirm/reject can
+-- find the right local store. `state` is `pending` until the create replays, then `confirmed`;
+-- `canonical_id` records the server's id on confirm (equal to `item_id` on the normal path, different
+-- only on the rare id-heal path). Rows are kept after confirm (an audit trail of client-created ids);
+-- only `pending` rows protect their Item from the reconcile orphan-purge (OfflineTaskRepository).
+CREATE TABLE pendingItemCreate (
+    item_id      TEXT NOT NULL PRIMARY KEY,
+    item_kind    TEXT NOT NULL,
+    state        TEXT NOT NULL,
+    canonical_id TEXT
+);
+
+-- Record a fresh offline create (state = pending). INSERT OR REPLACE so a re-create under the same
+-- (client-generated) id is idempotent.
+add:
+INSERT OR REPLACE INTO pendingItemCreate(item_id, item_kind, state, canonical_id)
+VALUES (?, ?, 'pending', NULL);
+
+-- Mark a create confirmed by its successful replay, recording the server's canonical id.
+confirm:
+UPDATE pendingItemCreate SET state = 'confirmed', canonical_id = ? WHERE item_id = ?;
+
+-- Re-key a row when the server assigned a different canonical id (the id-heal path).
+rekey:
+UPDATE pendingItemCreate SET item_id = ? WHERE item_id = ?;
+
+-- Drop a row whose create the server terminally rejected (the optimism is being undone).
+deleteById:
+DELETE FROM pendingItemCreate WHERE item_id = ?;
+
+-- The ids of creates still awaiting replay — the reconcile reads these to protect offline-created rows
+-- from the orphan-purge (a pending create is absent from the server snapshot until it replays).
+selectPendingIds:
+SELECT item_id FROM pendingItemCreate WHERE state = 'pending';
+
+-- The whole table (diagnostics / read model).
+selectAll:
+SELECT * FROM pendingItemCreate;
+
+deleteAll:
+DELETE FROM pendingItemCreate;

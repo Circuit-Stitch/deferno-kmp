@@ -1,6 +1,9 @@
 package com.circuitstitch.deferno.core.data.task
 
 import app.cash.turbine.test
+import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
+import com.circuitstitch.deferno.core.data.create.PendingCreate
+import com.circuitstitch.deferno.core.data.create.PendingCreateState
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
@@ -62,7 +65,8 @@ class OfflineTaskRepositoryTest {
     private fun repo(
         local: FakeTaskLocalStore = FakeTaskLocalStore(),
         remote: FakeTaskRemoteSource = FakeTaskRemoteSource(),
-    ) = OfflineTaskRepository(local, remote)
+        pendingCreates: FakePendingCreateStore = FakePendingCreateStore(),
+    ) = OfflineTaskRepository(local, remote, pendingCreates)
 
     // --- reconcile: upsert by id ---
 
@@ -140,6 +144,35 @@ class OfflineTaskRepositoryTest {
 
         assertEquals(setOf(TaskId("keep")), local.allIds())
         assertFalse(local.all.containsKey(TaskId("vanished")))
+    }
+
+    @Test
+    fun refreshDoesNotPurgeAnOfflineCreatedRowStillAwaitingReplay() = runTest {
+        // An offline-created Task: present locally, absent from the server snapshot (it hasn't replayed
+        // yet), and recorded as a *pending* create — so it must survive the orphan-purge (#185).
+        val local = FakeTaskLocalStore(mapOf(TaskId("offline-new") to summary("offline-new")))
+        val remote = FakeTaskRemoteSource(snapshot = emptyList())
+        val pending = FakePendingCreateStore()
+        pending.add("offline-new", com.circuitstitch.deferno.core.model.ItemKind.Task)
+
+        repo(local, remote, pending).refresh()
+
+        assertEquals(setOf(TaskId("offline-new")), local.allIds())
+    }
+
+    @Test
+    fun refreshStillPurgesARowThatIsNeitherInTheSnapshotNorAPendingCreate() = runTest {
+        // A confirmed create that the server later genuinely deleted is no longer pending, so it is NOT
+        // protected — the purge still works (a confirmed pending row never protects forever).
+        val local = FakeTaskLocalStore(mapOf(TaskId("gone") to summary("gone")))
+        val remote = FakeTaskRemoteSource(snapshot = emptyList())
+        val pending = FakePendingCreateStore(
+            listOf(PendingCreate("gone", com.circuitstitch.deferno.core.model.ItemKind.Task, PendingCreateState.Confirmed, "gone")),
+        )
+
+        repo(local, remote, pending).refresh()
+
+        assertTrue(local.allIds().isEmpty())
     }
 
     // --- reconcile: hydration preservation ---

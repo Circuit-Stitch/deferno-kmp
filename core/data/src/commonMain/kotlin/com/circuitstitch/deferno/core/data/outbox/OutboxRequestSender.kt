@@ -26,4 +26,24 @@ interface OutboxRequestSender {
 
     /** Replays [request] and classifies the result into a [SendOutcome]. Never throws on HTTP status. */
     suspend fun send(request: OutboxRequest): SendOutcome
+
+    /**
+     * Replays a **create** [request] (#185), surfacing the server's assigned id on success — unlike the
+     * fire-and-forget [send], a create's response *is* interesting: the [OutboxProcessor] needs the id
+     * to confirm the pending-create row and to heal a divergent canonical id. Same status→outcome
+     * policy as [send]; on a `2xx` it parses the id from the create envelope (`{data:{id}}`). A `2xx`
+     * whose id can't be parsed still succeeds with a blank id (treated as "server honored the client
+     * id" — no heal). Never throws on HTTP status.
+     */
+    suspend fun sendCreate(request: OutboxRequest): CreateSendOutcome
+}
+
+/**
+ * How a create replay resolved (#185). [Created] carries the server's assigned id (blank when the `2xx`
+ * body had no parseable id); [Retryable]/[Terminal] mirror [SendOutcome]'s transient-vs-rejected split.
+ */
+sealed interface CreateSendOutcome {
+    data class Created(val serverId: String) : CreateSendOutcome
+    data object Retryable : CreateSendOutcome
+    data object Terminal : CreateSendOutcome
 }

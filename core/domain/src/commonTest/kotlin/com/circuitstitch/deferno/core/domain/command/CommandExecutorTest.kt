@@ -237,33 +237,34 @@ class CommandExecutorTest {
     }
 
     @Test
-    fun createItemWhenOnlineDispatchesToTheCreateWriterAndIsAccepted() = runTest {
+    fun createItemDispatchesToTheCreateWriterAndIsAcceptedWithTheCreatedId() = runTest {
+        // #185: create is offline-first — the writer optimistically inserts + enqueues and reports the
+        // client id; the executor surfaces it as Accepted(itemId) (the id #211 attaches a recording to).
         val cw = FakeCreateWriter(result = com.circuitstitch.deferno.core.data.create.CreateResult.Created(
-            com.circuitstitch.deferno.core.model.ItemKind.Task, "server-1",
+            com.circuitstitch.deferno.core.model.ItemKind.Task, "client-1",
         ))
         val result = executor(FakeTaskWriter(), FakePlanWriter(), cw)
             .execute(CreateItem(CreateItem.Payload.Task(com.circuitstitch.deferno.core.network.dto.CreateTaskPayload(title = "x"))))
 
-        assertEquals(CommandResult.Accepted(CommandKind.CreateItem, itemId = "server-1"), result)
+        assertEquals(CommandResult.Accepted(CommandKind.CreateItem, itemId = "client-1"), result)
         assertEquals(listOf("createTask"), cw.calls)
     }
 
     @Test
-    fun createItemWhenOfflineReturnsOfflineAndTheTaskWriterIsUntouched() = runTest {
-        // ADR-0016: the writer owns the connectivity gate; the executor faithfully surfaces Offline (not
-        // a false Accepted), and the offline-first task/plan writers are never touched (nothing enqueued).
+    fun convertItemWhenOfflineReturnsOfflineAndTheTaskWriterIsUntouched() = runTest {
+        // ADR-0016: convert stays online-only — the writer owns the connectivity gate; the executor
+        // faithfully surfaces Offline (not a false Accepted), and the offline-first task/plan writers
+        // are never touched (nothing enqueued).
         val tw = FakeTaskWriter()
         val pw = FakePlanWriter()
         val cw = FakeCreateWriter(result = com.circuitstitch.deferno.core.data.create.CreateResult.Offline)
 
         val result = executor(tw, pw, cw)
-            .execute(CreateItem(CreateItem.Payload.Habit(com.circuitstitch.deferno.core.network.dto.CreateHabitPayload(
-                title = "stretch",
-                recurrence = com.circuitstitch.deferno.core.network.dto.RecurrenceDto("daily"),
-            ))))
+            .execute(ConvertItem("item-1", com.circuitstitch.deferno.core.model.ItemKind.Task,
+                com.circuitstitch.deferno.core.network.dto.ConvertItemPayload(type = "habit")))
 
-        assertEquals(CommandResult.Offline(CommandKind.CreateItem), result)
-        assertTrue(tw.calls.isEmpty(), "offline create must not enqueue via the task writer")
+        assertEquals(CommandResult.Offline(CommandKind.ConvertItem), result)
+        assertTrue(tw.calls.isEmpty(), "offline convert must not enqueue via the task writer")
         assertTrue(pw.calls.isEmpty())
     }
 

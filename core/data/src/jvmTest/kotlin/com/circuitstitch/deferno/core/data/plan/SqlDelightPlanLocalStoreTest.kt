@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.core.data.plan
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import app.cash.turbine.test
+import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
 import com.circuitstitch.deferno.core.data.task.FakeTaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.OfflineTaskRepository
 import com.circuitstitch.deferno.core.data.task.SqlDelightTaskLocalStore
@@ -103,6 +104,7 @@ class SqlDelightPlanLocalStoreTest {
         OfflineTaskRepository(
             taskStore,
             FakeTaskRemoteSource(snapshot = listOf(task("a", 1), task("b", 2), task("c", 3))),
+            FakePendingCreateStore(),
         ).refresh()
         // Then the plan ordering, plus one entry whose Task isn't cached (must be skipped).
         val plan = OfflinePlanRepository(
