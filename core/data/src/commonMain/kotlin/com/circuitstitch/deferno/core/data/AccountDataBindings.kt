@@ -24,8 +24,10 @@ import com.circuitstitch.deferno.core.data.create.PendingCreateStore
 import com.circuitstitch.deferno.core.data.create.SqlDelightPendingCreateStore
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
+import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
 import com.circuitstitch.deferno.core.data.item.ItemSync
+import com.circuitstitch.deferno.core.data.item.OfflineItemRepository
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
@@ -159,6 +161,19 @@ interface AccountDataBindings {
         remoteSource: TaskRemoteSource,
         itemSync: ItemSync,
     ): TaskRepository = OfflineTaskRepository(localStore, remoteSource, itemSync)
+
+    // The unified cross-kind read of the Item store (ADR-0034, #226): merges the four per-kind caches
+    // into one Item list so the Tasks Item tree (#227) renders the whole catalog as one parent_id
+    // forest. `refresh` shares the same `ItemSync` the Task path triggers — one cold sync, all kinds.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun itemRepository(
+        taskStore: TaskLocalStore,
+        habitStore: HabitLocalStore,
+        choreStore: ChoreLocalStore,
+        eventStore: EventLocalStore,
+        itemSync: ItemSync,
+    ): ItemRepository = OfflineItemRepository(taskStore, habitStore, choreStore, eventStore, itemSync)
 
     @Provides
     @SingleIn(AccountScope::class)
