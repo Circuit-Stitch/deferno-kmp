@@ -10,11 +10,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.DropdownMenu
@@ -90,6 +96,10 @@ internal fun ItemTreeContent(
     onIndent: () -> Unit = {},
     onOutdent: () -> Unit = {},
     onExitMoveMode: () -> Unit = {},
+    // Undo (ADR-0034 decision 8, #230): a persistent "Undo move" entry in the long-press menu, the non-shake,
+    // non-transient path. [canUndo] gates it; defaulted off so read-only callers (desktop/tests) omit it.
+    canUndo: Boolean = false,
+    onUndoMove: () -> Unit = {},
 ) {
     // Route the move keystrokes (Alt+↑/↓, Tab/Shift-Tab) to the column while an item is lifted: focus it on
     // entry so its onPreviewKeyEvent sees them before focus traversal would consume Tab (#228). The column is
@@ -137,7 +147,17 @@ internal fun ItemTreeContent(
                 body = "When you add a task, it shows up here. One small step at a time.",
             )
         } else {
-            LazyColumn(modifier = Modifier.weight(1f)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                // Edge-to-edge (ADR-0035 #2): the list draws under the nav bar but pads its last row clear of
+                // it — only when no move bar is shown (in move mode the bar owns that inset, so the list above
+                // it must not double-pad). Empty inset on desktop.
+                contentPadding = if (moveMode == null) {
+                    WindowInsets.systemBars.only(WindowInsetsSides.Bottom).asPaddingValues()
+                } else {
+                    PaddingValues()
+                },
+            ) {
                 items(rows, key = { it.item.id }) { row ->
                     ItemTreeRow(
                         row = row,
@@ -146,6 +166,8 @@ internal fun ItemTreeContent(
                         onToggleExpand = onToggleExpand,
                         onOpenDetail = onOpenDetail,
                         onEnterMoveMode = onEnterMoveMode,
+                        canUndo = canUndo,
+                        onUndoMove = onUndoMove,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
@@ -180,6 +202,8 @@ private fun ItemTreeRow(
     onToggleExpand: (String, Boolean) -> Unit,
     onOpenDetail: (String, ItemKind) -> Unit,
     onEnterMoveMode: (String) -> Unit,
+    canUndo: Boolean,
+    onUndoMove: () -> Unit,
 ) {
     val item = row.item
     val titleColor =
@@ -273,8 +297,9 @@ private fun ItemTreeRow(
                 }
             }
 
-            // The minimal long-press menu (#228): just "Move" for now — the full kind-aware menu (Open ·
-            // Pin · Move to… · Add to plan) is a deferred ADR-0034 fast-follow.
+            // The minimal long-press menu (#228): "Move", plus "Undo move" when a Move is undoable (#230) —
+            // the persistent, non-shake undo path (snackbar is transient, shake is optional/off-able). The
+            // full kind-aware menu (Open · Pin · Move to… · Add to plan) is a deferred ADR-0034 fast-follow.
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
                     text = { Text("Move") },
@@ -283,6 +308,15 @@ private fun ItemTreeRow(
                         onEnterMoveMode(item.id)
                     },
                 )
+                if (canUndo) {
+                    DropdownMenuItem(
+                        text = { Text("Undo move") },
+                        onClick = {
+                            menuOpen = false
+                            onUndoMove()
+                        },
+                    )
+                }
             }
         }
     }
@@ -303,8 +337,14 @@ private fun MoveModeBar(
     onDone: () -> Unit,
 ) {
     Surface(tonalElevation = 3.dp) {
+        // Edge-to-edge (ADR-0035 #3): a pinned bar consumes the bottom + horizontal system-bar inset itself,
+        // mirroring Material 3's BottomAppBar — so Done + ↑↓‹› clear the nav bar (and a landscape cutout). The
+        // Surface tonal background still fills behind the bar; only its content is inset. Empty inset on desktop.
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+                .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MoveControl(glyph = "↑", description = "Move up", enabled = move.canMoveUp, onClick = onMoveUp)

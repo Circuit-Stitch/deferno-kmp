@@ -13,6 +13,7 @@ import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
+import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
@@ -140,6 +141,14 @@ abstract class AppComponent(
      * every target. Defaults to on.
      */
     abstract val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference
+
+    /**
+     * The device-local **"shake to undo"** choice the Tasks tree + Settings render (ADR-0034 decision 8,
+     * #230): whether a phone shake raises the "Undo [operation]?" confirm that reverts the last Move. An
+     * AppScope [[App setting]] — device-local, never synced. Defaults to on; shake is never the only undo
+     * path (the snackbar + menu remain). Surfaced here to compile-validate the binding on every target.
+     */
+    abstract val shakeToUndoPreference: ShakeToUndoPreference
 
     /**
      * The device-local **Item-tree fold-override store** (ADR-0034, #227): the per-device expand/collapse

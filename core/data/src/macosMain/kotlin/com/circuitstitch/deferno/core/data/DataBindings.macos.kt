@@ -10,7 +10,9 @@ import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPre
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
+import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
+import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
 import com.circuitstitch.deferno.core.data.auth.DeviceName
@@ -78,6 +80,11 @@ interface MacosDataBindings {
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
         InMemoryKeepBrainDumpRecordingsPreference()
+
+    /** "Shake to undo" [[App setting]] (ADR-0034 decision 8, #230). macOS has no accelerometer path — in-memory placeholder. */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun shakeToUndoPreference(): ShakeToUndoPreference = InMemoryShakeToUndoPreference()
 
     /**
      * Item-tree fold-override store (ADR-0034, #227, [[App setting]]). In-memory placeholder (the twin of

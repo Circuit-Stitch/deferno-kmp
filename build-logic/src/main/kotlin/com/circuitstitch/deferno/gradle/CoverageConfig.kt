@@ -120,6 +120,11 @@ object CoverageConfig {
         // SettingsKeepBrainDumpRecordingsPreference). The ItemFoldStore interface and InMemoryItemFoldStore ARE
         // measured (commonMain/commonTest).
         "com.circuitstitch.deferno.core.data.item.SettingsItemFoldStore*",
+        // The device-local "shake to undo" [[App setting]] adapter (ADR-0034 decision 8, #230): multiplatform-
+        // settings-backed, exercised through the platform store on a real device, not the headless gate (same
+        // rationale as SettingsItemFoldStore). The ShakeToUndoPreference interface + InMemoryShakeToUndoPreference
+        // ARE measured (commonMain/commonTest).
+        "com.circuitstitch.deferno.core.data.item.SettingsShakeToUndoPreference*",
         // The on-device deterministic-floor engine (ADR-0027): the vendored shacl-aio crate
         // (libshacl_aio.so over JNA) wrapped at the inference seam — native code that loads only on a
         // real device, exercised on-device, not the headless gate (same rationale as WhisperSpeechToText).

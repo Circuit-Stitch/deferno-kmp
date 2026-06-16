@@ -21,6 +21,8 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
+import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
@@ -134,6 +136,10 @@ class DefaultRootComponent(
     // build without it; production passes the AppComponent's.
     private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
         InMemoryKeepBrainDumpRecordingsPreference(),
+    // The device-local "shake to undo" choice (#230): the AppScope preference the Tasks tree + Settings read.
+    // Threaded down to the Main shell. Defaulted to an in-memory (on) preference so tests build without it;
+    // production passes the AppComponent's.
+    private val shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
     // The Brain dump's record-to-file seam (ADR-0027/#150, Stage 4): records the mic to a WAV and hands it
     // to the background worker on Stop. Threaded down to the Main shell. Android-only (Context + WorkManager);
     // desktop/tests leave it the no-op default — the recorder is inert. The worker (not the shell) now owns
@@ -313,6 +319,7 @@ class DefaultRootComponent(
                         storageProviderCatalog = storageProviderCatalog,
                         // The device-local "keep brain-dump recordings" choice (#211) the Settings reads.
                         keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
+                        shakeToUndoPreference = shakeToUndoPreference,
                         // The Brain dump's record-to-file seam (ADR-0027/#150, Stage 4) the voice_chat overlay drives.
                         recordBrainDump = recordBrainDump,
                         // The foreclosed-permission deep-link (#120), threaded to the New overlay.

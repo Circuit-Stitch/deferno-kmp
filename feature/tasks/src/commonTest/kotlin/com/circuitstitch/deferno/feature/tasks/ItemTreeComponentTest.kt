@@ -3,6 +3,8 @@ package com.circuitstitch.deferno.feature.tasks
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
+import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
+import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
@@ -30,12 +32,16 @@ class ItemTreeComponentTest {
         foldStore: InMemoryItemFoldStore = InMemoryItemFoldStore(),
         output: (ItemTreeComponent.Output) -> Unit = {},
         moveEditor: MoveEditor = MoveEditor.NONE,
+        shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
+        trackEvent: (String) -> Unit = {},
     ) = DefaultItemTreeComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         itemRepository = items,
         foldStore = foldStore,
         output = output,
         moveEditor = moveEditor,
+        shakeToUndoPreference = shakeToUndoPreference,
+        trackEvent = trackEvent,
         coroutineContext = StandardTestDispatcher(testScheduler),
     )
 
@@ -188,5 +194,87 @@ class ItemTreeComponentTest {
         c.onEnterMoveMode("a")
         c.onMoveDown()
         advanceUntilIdle() // no exception, nothing to assert beyond "did not throw"
+    }
+
+    // --- undo: lastUndoable + snackbar + shake (ADR-0034 decision 8, #230) ---
+
+    @Test
+    fun aStructuralMoveRecordsAnUndoableAndUndoRevertsViaTheSameEditor() = runTest {
+        val moves = mutableListOf<Triple<String, String?, Int>>()
+        val c = component(siblings(), moveEditor = { id, parent, pos -> moves += Triple(id, parent, pos) })
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onEnterMoveMode("b")
+        c.onIndent() // b nests under a → a parent change → structural
+        advanceUntilIdle()
+
+        assertEquals(Triple<String, String?, Int>("b", "a", 0), moves.single(), "the forward indent")
+        val undo = c.state.value.lastMove!!
+        assertTrue(undo.structural, "indent is structural → the 'Moved · Undo' snackbar")
+        assertEquals("indent", undo.operation)
+
+        c.undoLastMove()
+        advanceUntilIdle()
+        assertEquals(
+            Triple<String, String?, Int>("b", "root", 1),
+            moves.last(),
+            "the inverse moves b back to its pre-move slot, via the same editor",
+        )
+        assertEquals(null, c.state.value.lastMove, "single-level: the entry is consumed after one undo")
+    }
+
+    @Test
+    fun aPlainReorderIsUndoableButNotStructural() = runTest {
+        val c = component(siblings(), moveEditor = { _, _, _ -> })
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onEnterMoveMode("a")
+        c.onMoveDown() // same parent → a plain reorder
+        advanceUntilIdle()
+
+        val undo = c.state.value.lastMove!!
+        assertFalse(undo.structural, "a same-level reorder records an undoable but shows no snackbar")
+        assertEquals("reorder", undo.operation)
+    }
+
+    @Test
+    fun shakeWithAnUndoableMoveAsksToConfirm() = runTest {
+        val c = component(siblings(), moveEditor = { _, _, _ -> })
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+        c.onEnterMoveMode("b"); c.onIndent(); advanceUntilIdle()
+
+        assertEquals(ShakeOutcome.Confirm("indent"), c.onShake())
+    }
+
+    @Test
+    fun shakeWithNothingToUndoEmitsATrackingEvent() = runTest {
+        val events = mutableListOf<String>()
+        val c = component(siblings(), trackEvent = events::add)
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(ShakeOutcome.Nothing, c.onShake(), "no Move to undo → nothing to confirm")
+        assertEquals(listOf("shake_undo_no_target"), events, "an unsupported-context shake emits a tracking event")
+    }
+
+    @Test
+    fun shakeIsASilentNoOpWhenTheToggleIsOff() = runTest {
+        val events = mutableListOf<String>()
+        val c = component(
+            siblings(),
+            moveEditor = { _, _, _ -> },
+            shakeToUndoPreference = InMemoryShakeToUndoPreference(initial = false),
+            trackEvent = events::add,
+        )
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+        c.onEnterMoveMode("b"); c.onIndent(); advanceUntilIdle()
+
+        assertEquals(ShakeOutcome.Nothing, c.onShake(), "toggle off → a shake does nothing")
+        assertTrue(events.isEmpty(), "off is not an 'unsupported context' — it emits no tracking event")
+        assertTrue(c.state.value.lastMove != null, "the snackbar + menu undo paths remain when shake is off")
     }
 }

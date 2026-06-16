@@ -39,6 +39,7 @@ import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
 import com.circuitstitch.deferno.feature.tasks.ItemTreeState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
+import com.circuitstitch.deferno.feature.tasks.ShakeOutcome
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -135,6 +136,9 @@ internal class FakeItemTreeComponent(initial: ItemTreeState = ItemTreeState()) :
 
     val moveModeEntered = mutableListOf<String>()
     val movesApplied = mutableListOf<String>()
+    var undoCount = 0
+        private set
+    var shakeOutcome: ShakeOutcome = ShakeOutcome.Nothing
 
     override fun onToggleExpand(id: String, currentlyExpanded: Boolean) { toggled += id to currentlyExpanded }
     override fun onOpenDetail(id: String, kind: ItemKind) { opened += id to kind }
@@ -145,6 +149,8 @@ internal class FakeItemTreeComponent(initial: ItemTreeState = ItemTreeState()) :
     override fun onMoveDown() { movesApplied += "down" }
     override fun onIndent() { movesApplied += "indent" }
     override fun onOutdent() { movesApplied += "outdent" }
+    override fun undoLastMove() { undoCount++ }
+    override fun onShake(): ShakeOutcome = shakeOutcome
 }
 
 /** Builds an [ItemRow] for the tree screenshot fixtures (the View renders rows verbatim, no re-flatten). */

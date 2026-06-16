@@ -17,6 +17,8 @@ import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderOption
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
+import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -178,6 +180,15 @@ interface SettingsComponent {
      */
     val keepBrainDumpRecordings: StateFlow<Boolean>
 
+    /**
+     * The device-local **"shake to undo"** choice ([SettingsCategory.TaskBehavior], ADR-0034 decision 8,
+     * #230) — whether a phone shake on the Tasks tree raises the "Undo [operation]?" confirm that reverts the
+     * last Move. An **[[App setting]]**, sourced from the AppScope preference, **not** the synced [settings];
+     * it never syncs and never changes on an Account switch. Defaults to on; shake is never the only undo
+     * path (the snackbar + menu remain), and the confirm prompt is the accidental-fire safety.
+     */
+    val shakeToUndo: StateFlow<Boolean>
+
     /** Drill into [category]'s detail (push). */
     fun openCategory(category: SettingsCategory)
 
@@ -194,6 +205,12 @@ interface SettingsComponent {
 
     /** Task behavior: toggle the experimental drag-and-drop affordance. */
     fun onDragAndDropChanged(enabled: Boolean)
+
+    /**
+     * Task behavior: toggle device-local shake-to-undo (#230) — persists device-locally via the preference,
+     * **never** synced. When off, a shake does nothing; the snackbar + menu undo paths still revert a Move.
+     */
+    fun onShakeToUndoChanged(enabled: Boolean)
 
     /** Task behavior: set the done-visibility windows in seconds (`null` clears a window). */
     fun onDoneVisibilityChanged(globalSeconds: Long?, dashboardSeconds: Long?)
@@ -307,6 +324,9 @@ class DefaultSettingsComponent(
     // preference so existing Settings tests build without supplying it (like the storage-catalog default).
     private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
         InMemoryKeepBrainDumpRecordingsPreference(),
+    // The device-local shake-to-undo preference (#230). Defaulted to an in-memory (on) preference so existing
+    // Settings tests build without supplying it (like the keep-recordings default).
+    private val shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : SettingsComponent, ComponentContext by componentContext {
 
@@ -360,6 +380,11 @@ class DefaultSettingsComponent(
     private val _keepBrainDumpRecordings = MutableStateFlow(keepBrainDumpRecordingsPreference.enabled())
     override val keepBrainDumpRecordings: StateFlow<Boolean> = _keepBrainDumpRecordings.asStateFlow()
 
+    // The device-local shake-to-undo choice (#230). Seeded synchronously from the preference; device-local —
+    // sourced from the AppScope preference, never the synced settings.
+    private val _shakeToUndo = MutableStateFlow(shakeToUndoPreference.enabled())
+    override val shakeToUndo: StateFlow<Boolean> = _shakeToUndo.asStateFlow()
+
     init {
         scope.launch {
             _speechEngine.value = SpeechEngineSettings(
@@ -401,6 +426,12 @@ class DefaultSettingsComponent(
 
     override fun onDragAndDropChanged(enabled: Boolean) {
         scope.launch { settingsEditor.setDragAndDrop(enabled) }
+    }
+
+    override fun onShakeToUndoChanged(enabled: Boolean) {
+        // Device-local persist (App setting, #230) — not the synced SettingsEditor.
+        shakeToUndoPreference.setEnabled(enabled)
+        _shakeToUndo.value = enabled
     }
 
     override fun onDoneVisibilityChanged(globalSeconds: Long?, dashboardSeconds: Long?) {
