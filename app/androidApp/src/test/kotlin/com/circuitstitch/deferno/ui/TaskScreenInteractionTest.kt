@@ -1,8 +1,19 @@
 package com.circuitstitch.deferno.ui
 
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.test.assertAll
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.isNotFocused
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -133,6 +144,32 @@ class TaskScreenInteractionTest {
 
         // The current state reads as the selected affordance (not a "Set to" action).
         composeRule.onNodeWithContentDescription("In review, current working state").assertIsDisplayed()
+    }
+
+    @Test
+    fun taskDetail_onOpen_doesNotFocusATextField() {
+        // #239: the M3 ListDetailPaneScaffold programmatically focuses the detail pane on open. In touch
+        // mode the only Always-focusable targets are the "Add…" text fields (clickables/chips are
+        // SystemDefined → unfocusable when touched), so that focus would land on the first text field and
+        // pop the soft keyboard untouched. The fix puts a non-text Always-focusable anchor first in the
+        // pane's focus order. Reproduce the scaffold's programmatic pane focus in touch mode and assert it
+        // lands on no text field. Without the anchor the first "Add…" field is focused (red).
+        val task = sampleTask("1", "Plan the spring launch", description = "Do the thing")
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        val pane = FocusRequester()
+        setContent {
+            val inputMode = LocalInputModeManager.current
+            Box(Modifier.focusRequester(pane).focusGroup()) {
+                TaskDetailScreen(component)
+            }
+            LaunchedEffect(Unit) {
+                inputMode.requestInputMode(InputMode.Touch)
+                pane.requestFocus()
+            }
+        }
+
+        // Every text field on the detail must be unfocused — the anchor absorbed the pane's auto-focus.
+        composeRule.onAllNodes(hasSetTextAction()).assertAll(isNotFocused())
     }
 
     @Test
