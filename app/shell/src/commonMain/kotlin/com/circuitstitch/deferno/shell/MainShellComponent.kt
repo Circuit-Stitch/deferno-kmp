@@ -15,6 +15,7 @@ import com.arkivanov.decompose.router.stack.pop
 import com.arkivanov.decompose.value.Value
 import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.arkivanov.essenty.lifecycle.doOnResume
+import com.circuitstitch.deferno.core.common.log.Logger
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
@@ -402,7 +403,13 @@ class DefaultMainShellComponent(
                 // WAV once this is the recording's last Ready draft. Best-effort (runCatching): a failed
                 // attach must never turn a created Task into an error. The created id is the create result's
                 // itemId (the online create surfaces it, ADR-0016).
-                result.itemId?.let { taskId -> runCatching { attachBrainDumpRecording(taskId, draft) } }
+                result.itemId?.let { taskId ->
+                    runCatching { attachBrainDumpRecording(taskId, draft) }
+                        // Best-effort, but never silent: a swallowed attach is exactly why gh#223 shipped
+                        // invisibly. Log on failure (the Task still reports Accepted — a failed attach is not
+                        // a failed create).
+                        .onFailure { Logger("InboxAccept").e(it) { "Brain-dump attach failed for task $taskId" } }
+                }
                 // Mark the draft Accepted so it leaves the Ready queue and isn't re-created. The local mark
                 // is best-effort (runCatching): a failed mark leaves the draft Ready — it reappears, and
                 // re-accepting then risks a duplicate, the residual non-idempotent-create gap that

@@ -223,7 +223,9 @@ interface AccountDataBindings {
         eventStore: EventLocalStore,
         planStore: PlanLocalStore,
         outbox: OutboxStore,
-    ): ItemIdHealer = ItemIdHealer(taskStore, habitStore, choreStore, eventStore, planStore, outbox)
+        localAttachments: LocalAttachmentRepository,
+    ): ItemIdHealer =
+        ItemIdHealer(taskStore, habitStore, choreStore, eventStore, planStore, outbox, localAttachments::rekeyTask)
 
     @Provides
     @SingleIn(AccountScope::class)

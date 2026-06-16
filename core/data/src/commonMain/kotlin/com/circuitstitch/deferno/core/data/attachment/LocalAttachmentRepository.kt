@@ -79,6 +79,14 @@ class LocalAttachmentRepository(
         return bytesStore.read(locator)
     }
 
+    /**
+     * Re-point every attachment on Task [from] to Task [to] (#185 id-heal / gh#223). When an offline
+     * create's client id is healed to a different server canonical id, the attachment saved under the
+     * client id would otherwise be orphaned — `forTask(canonicalId)` wouldn't find it. Only `task_id`
+     * follows; the row id + bytes stay put (delete/play key on the unchanged row id).
+     */
+    suspend fun rekeyTask(from: String, to: String) = queries.updateTaskId(newTaskId = to, taskId = from)
+
     /** Delete the record and its bytes. */
     suspend fun delete(id: String) {
         val locator = queries.selectById(id).executeAsOneOrNull()?.locator

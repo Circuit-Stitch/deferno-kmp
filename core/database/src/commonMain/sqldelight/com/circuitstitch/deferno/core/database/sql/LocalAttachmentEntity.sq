@@ -35,3 +35,9 @@ INSERT OR REPLACE INTO localAttachmentEntity(
 
 deleteById:
 DELETE FROM localAttachmentEntity WHERE id = ?;
+
+-- Re-point a Task's attachments when an offline create's client id is healed to a different server
+-- canonical id (#185 id-heal / gh#223): the row's own `id` (e.g. "braindump:<clientId>") is left alone —
+-- only `task_id`, the column selectByTask matches on, follows the Task.
+updateTaskId:
+UPDATE localAttachmentEntity SET task_id = :newTaskId WHERE task_id = :taskId;

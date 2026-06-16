@@ -85,4 +85,20 @@ class LocalAttachmentRepositoryTest {
     fun bytesForUnknownAttachmentIsNull() = runTest {
         assertNull(newRepo().bytes("nope"))
     }
+
+    @Test
+    fun rekeyTaskMovesAttachmentsToTheCanonicalIdAndLeavesOthers() = runTest {
+        // gh#223 / #185 id-heal: a brain-dump attachment saved under the client id must follow the Task to
+        // its server canonical id, or forTask(canonical) finds nothing. Re-keys task_id only — the row id stays.
+        val repo = newRepo()
+        repo.save("braindump:client", "client", "dump.wav", "audio/wav", byteArrayOf(1), created)
+        repo.save("other", "task-2", "x.txt", "text/plain", byteArrayOf(2), created)
+
+        repo.rekeyTask(from = "client", to = "server")
+
+        assertEquals(emptyList(), repo.forTask("client").map { it.id })
+        assertEquals(listOf("braindump:client"), repo.forTask("server").map { it.id }) // row id unchanged
+        assertEquals("server", repo.get("braindump:client")?.taskId)
+        assertEquals(listOf("other"), repo.forTask("task-2").map { it.id }) // unrelated row untouched
+    }
 }
