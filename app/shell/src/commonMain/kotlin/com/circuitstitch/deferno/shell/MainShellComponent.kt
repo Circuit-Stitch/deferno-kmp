@@ -554,6 +554,9 @@ class DefaultMainShellComponent(
                                     setDeadline = setDeadline,
                                     setLabels = setLabels,
                                     onDeviceAttachments = onDeviceAttachments,
+                                    // The Account-scoped fold store: a subtask folded in the Plan-tap
+                                    // detail matches the Tasks tree and survives restart (ADR-0034 dec. 4).
+                                    foldStore = foldStore,
                                     coroutineContext = coroutineContext,
                                 ),
                             )

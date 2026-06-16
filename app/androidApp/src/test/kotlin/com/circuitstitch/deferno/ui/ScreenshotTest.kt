@@ -17,7 +17,7 @@ import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.tasks.ItemTreeState
-import com.circuitstitch.deferno.feature.tasks.SubtaskNode
+import com.circuitstitch.deferno.feature.tasks.SubtaskRow
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import com.circuitstitch.deferno.feature.tasks.buildItemTree
 import kotlin.time.Instant
@@ -66,12 +66,21 @@ class ScreenshotTest {
     private val populatedDetail = TaskDetailState(
         task = hydratedTask,
         isHydrating = false,
-        subtasks = listOf(
-            SubtaskNode(
+        // The subtree flattened with the shared fold mechanism (ADR-0034): "1a" parents "1ai", both shallow
+        // so they auto-expand; "1a" shows a fold chevron.
+        subtaskRows = listOf(
+            SubtaskRow(
                 sampleTask("1a", "Draft the announcement", workingState = WorkingState.Done, parentId = "1"),
-                listOf(SubtaskNode(sampleTask("1ai", "Outline the key points", parentId = "1a"), emptyList())),
+                depth = 0, hasChildren = true, isExpanded = true,
             ),
-            SubtaskNode(sampleTask("1b", "Schedule the post", parentId = "1"), emptyList()),
+            SubtaskRow(
+                sampleTask("1ai", "Outline the key points", parentId = "1a"),
+                depth = 1, hasChildren = false, isExpanded = false,
+            ),
+            SubtaskRow(
+                sampleTask("1b", "Schedule the post", parentId = "1"),
+                depth = 0, hasChildren = false, isExpanded = false,
+            ),
         ),
         subtaskDone = 1,
         subtaskTotal = 3,

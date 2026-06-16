@@ -198,41 +198,48 @@ struct TaskDetailView: View {
                 ProgressView(value: Double(value.subtaskDone), total: Double(value.subtaskTotal))
                     .accessibilityLabel("\(value.subtaskDone) of \(value.subtaskTotal) subtasks done")
             }
-            ForEach(flatten(value.subtasks)) { item in
-                subtaskRow(item)
+            ForEach(value.subtaskRows, id: \.task.stableKey) { row in
+                subtaskRow(row)
             }
             addField(placeholder: "Add a subtask…", text: $newSubtask) { component.onAddSubtask(title: $0) }
         }
     }
 
-    /// One row per flattened tree node, indented by depth. `node.children` is a Kotlin list of nodes; the
-    /// recursion lives in plain Swift (a self-calling `@ViewBuilder` can't return an opaque recursive type).
-    private func flatten(_ nodes: [SubtaskNode], depth: Int = 0) -> [FlatSubtask] {
-        nodes.flatMap { node in
-            [FlatSubtask(task: node.task, depth: depth)] + flatten(node.children, depth: depth + 1)
-        }
-    }
-
-    private func subtaskRow(_ item: FlatSubtask) -> some View {
-        let done = item.task.workingState === WorkingState.done
+    /// One depth-indented outline row. The subtree is pre-flattened by the component using the **same fold
+    /// mechanism as the Tasks tree** (ADR-0034): the leading chevron toggles the shared device-local fold —
+    /// a fold here re-flattens the Tasks tree too and survives restart — while a leaf keeps a fixed gutter
+    /// so checkboxes align.
+    private func subtaskRow(_ row: SubtaskRow) -> some View {
+        let task = row.task
+        let done = task.workingState === WorkingState.done
         return HStack(spacing: 8) {
-            Button { component.onToggleSubtaskDone(subtask: item.task) } label: {
+            if row.hasChildren {
+                Button { component.onToggleSubtaskExpand(id: task.stableKey, currentlyExpanded: row.isExpanded) } label: {
+                    Image(systemName: row.isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption).foregroundStyle(.secondary).frame(width: 16)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(row.isExpanded ? "Collapse \(task.title)" : "Expand \(task.title)")
+            } else {
+                Spacer().frame(width: 16)
+            }
+            Button { component.onToggleSubtaskDone(subtask: task) } label: {
                 Image(systemName: done ? "checkmark.square.fill" : "square")
                     .font(.title3)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(done ? "Mark \(item.task.title) not done" : "Mark \(item.task.title) done")
-            Button { BridgeKt.openSubtask(component: component, subtask: item.task) } label: {
-                Text(item.task.title)
+            .accessibilityLabel(done ? "Mark \(task.title) not done" : "Mark \(task.title) done")
+            Button { BridgeKt.openSubtask(component: component, subtask: task) } label: {
+                Text(task.title)
                     .strikethrough(done)
                     .foregroundStyle(done ? .secondary : .primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open \(item.task.title)")
+            .accessibilityLabel("Open \(task.title)")
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
         }
-        .padding(.leading, CGFloat(item.depth) * 20)
+        .padding(.leading, CGFloat(row.depth) * 20)
         .frame(minHeight: Layout.minTouchTarget)
     }
 
@@ -340,13 +347,6 @@ struct TaskDetailView: View {
         let trimmed = text.wrappedValue.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty { onAdd(trimmed); text.wrappedValue = "" }
     }
-}
-
-/// One flattened node of the subtask tree — the child `Task` and its indentation depth.
-private struct FlatSubtask: Identifiable {
-    let task: Task
-    let depth: Int
-    var id: String { task.stableKey }
 }
 
 /// A calm section header: a heading title with an optional trailing count (e.g. "0/3", "2").

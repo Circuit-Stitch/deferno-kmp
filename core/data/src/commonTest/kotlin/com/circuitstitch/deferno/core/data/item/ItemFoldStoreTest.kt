@@ -6,14 +6,14 @@ import kotlin.test.assertNull
 
 /**
  * The device-local fold overrides of [InMemoryItemFoldStore] (ADR-0034, #227) — the measured contract
- * the production `Settings`-backed store mirrors. Round-trips overrides and exposes the whole map so a
- * tree surface can seed its fold state.
+ * the production `Settings`-backed store mirrors. Round-trips overrides and exposes the whole map as the
+ * live [ItemFoldStore.overrides] flow every tree surface observes.
  */
 class ItemFoldStoreTest {
 
     @Test
     fun startsWithNoOverrides() {
-        assertEquals(emptyMap(), InMemoryItemFoldStore().allOverrides())
+        assertEquals(emptyMap(), InMemoryItemFoldStore().overrides.value)
     }
 
     @Test
@@ -22,7 +22,7 @@ class ItemFoldStoreTest {
         store.setOverride("a", expanded = true)
         store.setOverride("b", expanded = false)
 
-        assertEquals(mapOf("a" to true, "b" to false), store.allOverrides())
+        assertEquals(mapOf("a" to true, "b" to false), store.overrides.value)
     }
 
     @Test
@@ -30,11 +30,11 @@ class ItemFoldStoreTest {
         val store = InMemoryItemFoldStore(initial = mapOf("a" to true))
         store.setOverride("a", expanded = false)
 
-        assertEquals(false, store.allOverrides()["a"])
+        assertEquals(false, store.overrides.value["a"])
     }
 
     @Test
     fun hasNoEntryForAnItemThatWasNeverToggled() {
-        assertNull(InMemoryItemFoldStore(initial = mapOf("a" to true)).allOverrides()["never-set"])
+        assertNull(InMemoryItemFoldStore(initial = mapOf("a" to true)).overrides.value["never-set"])
     }
 }

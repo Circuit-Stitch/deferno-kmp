@@ -179,6 +179,7 @@ internal class FakeTaskDetailComponent(
 
     /** The web-parity detail intents the View forwarded, in order. */
     val subtaskToggles = mutableListOf<TaskId>()
+    val subtaskExpandToggles = mutableListOf<Pair<String, Boolean>>()
     val subtasksOpened = mutableListOf<TaskId>()
     val subtasksAdded = mutableListOf<String>()
     val commentsPosted = mutableListOf<String>()
@@ -198,6 +199,7 @@ internal class FakeTaskDetailComponent(
     override fun onSetDeadline(date: LocalDate?) { deadlineSets += date }
     override fun onSetLabels(labels: List<String>) { labelSets += labels }
     override fun onToggleSubtaskDone(subtask: Task) { subtaskToggles += subtask.id }
+    override fun onToggleSubtaskExpand(id: String, currentlyExpanded: Boolean) { subtaskExpandToggles += id to currentlyExpanded }
     override fun onSubtaskClicked(id: TaskId) { subtasksOpened += id }
     override fun onAddSubtask(title: String) { subtasksAdded += title }
     override fun onPostComment(body: String) { commentsPosted += body }

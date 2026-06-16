@@ -66,7 +66,7 @@ class ItemTreeComponentTest {
 
         assertEquals(listOf("root"), c.state.value.rows.map { it.item.id }, "child hidden under the collapsed root")
         assertFalse(c.state.value.rows.single().isExpanded)
-        assertEquals(false, foldStore.allOverrides()["root"], "the collapse is persisted device-locally")
+        assertEquals(false, foldStore.overrides.value["root"], "the collapse is persisted device-locally")
     }
 
     @Test

@@ -210,9 +210,10 @@ struct TaskDetailView: View {
             if value.subtaskTotal > 0 {
                 ProgressView(value: Double(value.subtaskDone), total: Double(value.subtaskTotal))
                     .accessibilityLabel("\(value.subtaskDone) of \(value.subtaskTotal) subtasks done")
-                ForEach(value.subtasks, id: \.task.stableKey) { node in
+                ForEach(value.subtaskRows, id: \.task.stableKey) { row in
                     SubtaskOutlineRow(
-                        node: node,
+                        row: row,
+                        onToggleExpand: { component.onToggleSubtaskExpand(id: $0, currentlyExpanded: $1) },
                         onToggleDone: { component.onToggleSubtaskDone(subtask: $0) },
                         onOpen: { BridgeKt.openSubtask(component: component, subtask: $0) }
                     )
@@ -224,55 +225,48 @@ struct TaskDetailView: View {
     }
 }
 
-/// One node of the nested subtask outline: a completion checkbox, a tappable title (opens the child's
-/// own detail — re-keys the pane), the state badge, and a disclosure triangle when it has children. The
-/// recursion lives in the view itself (a node renders its expanded children indented). Whole-tree
-/// progress is shown by the section; this row covers a single level. Defaults to expanded.
+/// One depth-indented row of the subtask outline: a completion checkbox, a tappable title (opens the
+/// child's own detail — re-keys the pane), the state badge, and a fold chevron when it has children. The
+/// outline is pre-flattened by the component with the **same fold mechanism as the Tasks tree** (ADR-0034),
+/// so a fold toggle here persists to the shared device-local store — it re-flattens the Tasks tree too and
+/// survives restart — and this row draws a single level indented by `row.depth`.
 private struct SubtaskOutlineRow: View {
-    let node: SubtaskNode
+    let row: SubtaskRow
+    let onToggleExpand: (String, Bool) -> Void
     let onToggleDone: (Task) -> Void
     let onOpen: (Task) -> Void
-    @State private var expanded = true
 
     var body: some View {
-        let task = node.task
+        let task = row.task
         let done = task.workingState === WorkingState.done
-        let children = node.children
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                if !children.isEmpty {
-                    Button { expanded.toggle() } label: {
-                        Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                            .font(.caption2).foregroundStyle(.secondary).frame(width: 14)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(expanded ? "Collapse \(task.title)" : "Expand \(task.title)")
-                } else {
-                    Spacer().frame(width: 14)
-                }
-                Button { onToggleDone(task) } label: {
-                    Image(systemName: done ? "checkmark.square.fill" : "square").font(.title3)
+        HStack(spacing: 6) {
+            if row.hasChildren {
+                Button { onToggleExpand(task.stableKey, row.isExpanded) } label: {
+                    Image(systemName: row.isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2).foregroundStyle(.secondary).frame(width: 14)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(done ? "Mark \(task.title) not done" : "Mark \(task.title) done")
-                Button { onOpen(task) } label: {
-                    Text(task.title)
-                        .strikethrough(done)
-                        .foregroundStyle(done ? .secondary : .primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Open \(task.title)")
-                WorkingStateBadge(state: task.workingState)
+                .accessibilityLabel(row.isExpanded ? "Collapse \(task.title)" : "Expand \(task.title)")
+            } else {
+                Spacer().frame(width: 14)
             }
-            .frame(minHeight: Layout.minTouchTarget)
-            if expanded && !children.isEmpty {
-                ForEach(children, id: \.task.stableKey) { child in
-                    SubtaskOutlineRow(node: child, onToggleDone: onToggleDone, onOpen: onOpen)
-                        .padding(.leading, 18)
-                }
+            Button { onToggleDone(task) } label: {
+                Image(systemName: done ? "checkmark.square.fill" : "square").font(.title3)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(done ? "Mark \(task.title) not done" : "Mark \(task.title) done")
+            Button { onOpen(task) } label: {
+                Text(task.title)
+                    .strikethrough(done)
+                    .foregroundStyle(done ? .secondary : .primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open \(task.title)")
+            WorkingStateBadge(state: task.workingState)
         }
+        .frame(minHeight: Layout.minTouchTarget)
+        .padding(.leading, CGFloat(row.depth) * 18)
     }
 }
 

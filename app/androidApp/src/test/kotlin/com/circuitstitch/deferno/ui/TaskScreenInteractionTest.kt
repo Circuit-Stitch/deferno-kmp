@@ -27,7 +27,7 @@ import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.tasks.ItemTreeState
-import com.circuitstitch.deferno.feature.tasks.SubtaskNode
+import com.circuitstitch.deferno.feature.tasks.SubtaskRow
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import com.circuitstitch.deferno.feature.tasks.buildItemTree
 import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailScreen
@@ -115,7 +115,7 @@ class TaskScreenInteractionTest {
         val state = TaskDetailState(
             task = parent,
             isHydrating = false,
-            subtasks = listOf(SubtaskNode(child, emptyList())),
+            subtaskRows = listOf(SubtaskRow(child, depth = 0, hasChildren = false, isExpanded = false)),
             subtaskTotal = 1,
         )
         val component = FakeTaskDetailComponent(state)

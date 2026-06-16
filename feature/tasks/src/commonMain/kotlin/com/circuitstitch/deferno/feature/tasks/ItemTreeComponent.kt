@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 
@@ -67,19 +66,16 @@ class DefaultItemTreeComponent(
 
     private val scope = componentScope(coroutineContext)
     private val refreshing = MutableStateFlow(false)
-    // The live fold overrides: seeded once from the persisted store, then updated on each toggle (and
-    // written through to the store). Recombining into [state] re-flattens the forest with the new fold.
-    private val overrides = MutableStateFlow(foldStore.allOverrides())
 
     override val state: StateFlow<ItemTreeState> =
-        combine(itemRepository.observeItems(), overrides, refreshing) { items, ov, isRefreshing ->
+        combine(itemRepository.observeItems(), foldStore.overrides, refreshing) { items, ov, isRefreshing ->
             ItemTreeState(rows = buildItemTree(items, ov), isRefreshing = isRefreshing)
         }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ItemTreeState())
 
+    // Persisting through the shared store re-flattens this tree AND the detail subtask outline live —
+    // both combine the one [ItemFoldStore.overrides] flow (ADR-0034 decision 4).
     override fun onToggleExpand(id: String, currentlyExpanded: Boolean) {
-        val expanded = !currentlyExpanded
-        foldStore.setOverride(id, expanded)
-        overrides.update { it + (id to expanded) }
+        foldStore.setOverride(id, !currentlyExpanded)
     }
 
     override fun onOpenDetail(id: String, kind: ItemKind) {

@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.feature.tasks
 import app.cash.turbine.test
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.model.Attachment
@@ -26,6 +27,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 private fun TestScope.taskDetailComponent(
@@ -39,6 +41,7 @@ private fun TestScope.taskDetailComponent(
     setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
     setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     onDeviceAttachments: OnDeviceAttachments = OnDeviceAttachments.NONE,
+    foldStore: InMemoryItemFoldStore = InMemoryItemFoldStore(),
 ) = DefaultTaskDetailComponent(
     componentContext = DefaultComponentContext(LifecycleRegistry()),
     taskId = id,
@@ -51,6 +54,7 @@ private fun TestScope.taskDetailComponent(
     setDeadline = setDeadline,
     setLabels = setLabels,
     onDeviceAttachments = onDeviceAttachments,
+    foldStore = foldStore,
     coroutineContext = StandardTestDispatcher(testScheduler),
 )
 
@@ -220,7 +224,7 @@ class TaskDetailComponentTest {
     }
 
     @Test
-    fun buildsTheRecursiveSubtreeWithDoneProgress() = runTest {
+    fun flattensTheSubtreeWithDepthAndDoneProgress() = runTest {
         val repo = FakeTaskRepository(
             listOf(
                 task("a"),
@@ -233,9 +237,40 @@ class TaskDetailComponentTest {
         component.state.test {
             var item = awaitItem()
             while (item.subtaskTotal != 2) item = awaitItem()
-            assertEquals(TaskId("b"), item.subtasks.single().task.id)
-            assertEquals(TaskId("c"), item.subtasks.single().children.single().task.id)
+            // Shallow tree (depths 0 and 1) auto-expands, so both rows are visible, depth-indented.
+            assertEquals(listOf(TaskId("b"), TaskId("c")), item.subtaskRows.map { it.task.id })
+            assertEquals(listOf(0, 1), item.subtaskRows.map { it.depth })
+            assertTrue(item.subtaskRows.first { it.task.id == TaskId("b") }.hasChildren)
             assertEquals(1, item.subtaskDone)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun collapsingASubtaskHidesItsChildrenAndPersistsToTheSharedStore() = runTest {
+        val repo = FakeTaskRepository(
+            listOf(
+                task("a"),
+                task("b", parentId = "a", sequence = 1),
+                task("c", parentId = "b", sequence = 1),
+            ),
+        )
+        // The shared store the Tasks tree also observes — folding here must persist there too.
+        val foldStore = InMemoryItemFoldStore()
+        val component = taskDetailComponent(TaskId("a"), repo, foldStore = foldStore)
+
+        component.state.test {
+            var item = awaitItem()
+            while (item.subtaskTotal != 2) item = awaitItem()
+
+            component.onToggleSubtaskExpand("b", currentlyExpanded = true) // collapse "b"
+            var collapsed = awaitItem()
+            while (collapsed.subtaskRows.size != 1) collapsed = awaitItem()
+
+            assertEquals(listOf(TaskId("b")), collapsed.subtaskRows.map { it.task.id }, "c hidden under collapsed b")
+            assertFalse(collapsed.subtaskRows.single().isExpanded)
+            assertEquals(2, collapsed.subtaskTotal, "progress still counts the whole subtree")
+            assertEquals(false, foldStore.overrides.value["b"], "the fold is persisted to the shared store")
             cancelAndIgnoreRemainingEvents()
         }
     }
