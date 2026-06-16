@@ -9,6 +9,8 @@ import com.circuitstitch.deferno.core.data.attachment.InMemoryAttachmentBytesSto
 import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
+import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
 import com.circuitstitch.deferno.core.data.auth.DeviceName
@@ -76,4 +78,13 @@ interface MacosDataBindings {
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
         InMemoryKeepBrainDumpRecordingsPreference()
+
+    /**
+     * Item-tree fold-override store (ADR-0034, #227, [[App setting]]). In-memory placeholder (the twin of
+     * [IosDataBindings]) — the native macOS SwiftUI tree + its NSUserDefaults fold store are an Apple
+     * follow-up; this keeps the graph complete and the macOS klib compiling.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun itemFoldStore(): ItemFoldStore = InMemoryItemFoldStore()
 }
