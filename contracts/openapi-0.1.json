@@ -605,6 +605,16 @@
                             }
                         }
                     },
+                    "409": {
+                        "description": "Supplied id already exists: `item_exists` (caller owns it; the existing item is embedded under `error.existing`) or `id_conflict` (different owner).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
                     "502": {
                         "description": "Recurrence series creation failed upstream",
                         "content": {
@@ -1362,6 +1372,16 @@
                     },
                     "401": {
                         "description": "Not authenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Supplied id already exists: `item_exists` (caller owns it; the existing item is embedded under `error.existing`) or `id_conflict` (different owner).",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2914,6 +2934,16 @@
                             }
                         }
                     },
+                    "409": {
+                        "description": "Supplied id already exists: `item_exists` (caller owns it; the existing item is embedded under `error.existing`) or `id_conflict` (different owner).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
                     "502": {
                         "description": "Recurrence series creation failed upstream",
                         "content": {
@@ -3930,6 +3960,88 @@
                 ]
             }
         },
+        "/items/{id}/move": {
+            "post": {
+                "tags": [
+                    "items"
+                ],
+                "summary": "Move an item in the tree",
+                "description": "Reparent and/or reorder a polymorphic item within the caller's item tree. `new_parent_id = null` detaches the item to a root; `position` is the insertion index in the new parent's children (append when omitted). Returns the moved item.",
+                "operationId": "move_item",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Item UUID to move",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MoveTaskDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "The moved item",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Envelope_StoredItem"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Illegal move (e.g. moving an item under itself or one of its descendants)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Item or new parent not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer_token": []
+                    },
+                    {
+                        "session_cookie": []
+                    }
+                ]
+            }
+        },
         "/items/{id}/pin": {
             "post": {
                 "tags": [
@@ -3976,6 +4088,78 @@
                     },
                     "404": {
                         "description": "Item not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer_token": []
+                    },
+                    {
+                        "session_cookie": []
+                    }
+                ]
+            }
+        },
+        "/items/{id}/split": {
+            "post": {
+                "tags": [
+                    "items"
+                ],
+                "summary": "Split an item into two children",
+                "description": "Decompose an item into two new child Tasks. The parent \u2014 a Task, Habit, Chore, or Event \u2014 is retained; the response carries the polymorphic parent plus both newly created Task children.",
+                "operationId": "split_item",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Parent item UUID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SplitTaskDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Parent and the two new child items",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Envelope_SplitItemResult"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Parent item not found",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -4370,6 +4554,16 @@
                     },
                     "404": {
                         "description": "Parent task not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Supplied id already exists: `item_exists` (caller owns it; the existing item is embedded under `error.existing`) or `id_conflict` (different owner).",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -5720,6 +5914,232 @@
                 ]
             }
         },
+        "/tasks/{id}/fold": {
+            "post": {
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Fold a next-step task after a task",
+                "description": "Insert a new follow-up task immediately after the given task in a sequence (a predecessor/successor chain). Returns the original task and the newly created next task.",
+                "operationId": "fold_task",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Task UUID to fold after",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FoldTaskDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "The original task and the new next task",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Envelope_FoldTaskResult"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer_token": []
+                    },
+                    {
+                        "session_cookie": []
+                    }
+                ]
+            }
+        },
+        "/tasks/{id}/move": {
+            "post": {
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Move a task in the tree",
+                "description": "Reparent and/or reorder a task within the caller's task tree. `new_parent_id = null` detaches the task to a root; `position` is the insertion index in the new parent's children (append when omitted). Returns the moved task.",
+                "operationId": "move_task",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Task UUID to move",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MoveTaskDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "The moved task",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Envelope_Task"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Illegal move (e.g. moving a task under itself or one of its descendants)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Task or new parent not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer_token": []
+                    },
+                    {
+                        "session_cookie": []
+                    }
+                ]
+            }
+        },
+        "/tasks/{id}/split": {
+            "post": {
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Split a task into two children",
+                "description": "Decompose a task into two new child tasks. The parent is retained and the two children inherit its labels; the response carries the updated parent plus both children.",
+                "operationId": "split_task",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Parent task UUID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SplitTaskDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Parent and the two new child tasks",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Envelope_SplitTaskResult"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Parent task not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer_token": []
+                    },
+                    {
+                        "session_cookie": []
+                    }
+                ]
+            }
+        },
         "/tasks/{task_id}/comments": {
             "get": {
                 "tags": [
@@ -6911,6 +7331,14 @@
                         ],
                         "format": "double"
                     },
+                    "id": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "uuid",
+                        "description": "Optional client-supplied UUID id (#402). Omit / nil \u2192 server mints."
+                    },
                     "labels": {
                         "type": "array",
                         "items": {
@@ -7004,6 +7432,14 @@
                         ],
                         "description": "Optional end as a local time of day, `\"HH:MM\"`. Omit for an\nall-day end. Independently optional from `start_time_of_day`."
                     },
+                    "id": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "uuid",
+                        "description": "Optional client-supplied UUID id (#402). Omit / nil \u2192 server mints."
+                    },
                     "labels": {
                         "type": "array",
                         "items": {
@@ -7088,6 +7524,14 @@
                             "null"
                         ],
                         "format": "double"
+                    },
+                    "id": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "uuid",
+                        "description": "Optional client-supplied UUID id (#402). Omit / nil \u2192 server mints."
                     },
                     "labels": {
                         "type": "array",
@@ -7176,6 +7620,14 @@
                             "null"
                         ],
                         "format": "double"
+                    },
+                    "id": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "uuid",
+                        "description": "Optional client-supplied UUID. When present, the server uses this id\nfor the new task (create-only: a collision \u2192 409). Omit or set to\n`null` to let the server mint a fresh UUID. #402."
                     },
                     "labels": {
                         "type": [
@@ -8389,6 +8841,50 @@
                                 "items": {
                                     "$ref": "#/components/schemas/PresignResponse"
                                 }
+                            }
+                        }
+                    },
+                    "error": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/EnvelopeError"
+                            }
+                        ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
+                    "version": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Envelope_FoldTaskResult": {
+                "type": "object",
+                "description": "Serializable envelope. Use `Versioned::ok(data)` for success paths;\n`Versioned::error(code, message)` for failures (or compose via the\n`IntoResponse` impl on `ApiError`).",
+                "required": [
+                    "version"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "required": [
+                            "original",
+                            "next_task"
+                        ],
+                        "properties": {
+                            "next_task": {
+                                "$ref": "#/components/schemas/Task"
+                            },
+                            "original": {
+                                "$ref": "#/components/schemas/Task"
                             }
                         }
                     },
@@ -10422,6 +10918,219 @@
                     }
                 }
             },
+            "Envelope_SplitItemResult": {
+                "type": "object",
+                "description": "Serializable envelope. Use `Versioned::ok(data)` for success paths;\n`Versioned::error(code, message)` for failures (or compose via the\n`IntoResponse` impl on `ApiError`).",
+                "required": [
+                    "version"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "required": [
+                            "parent",
+                            "first_child",
+                            "second_child"
+                        ],
+                        "properties": {
+                            "first_child": {
+                                "$ref": "#/components/schemas/StoredItem"
+                            },
+                            "parent": {
+                                "$ref": "#/components/schemas/StoredItem"
+                            },
+                            "second_child": {
+                                "$ref": "#/components/schemas/StoredItem"
+                            }
+                        }
+                    },
+                    "error": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/EnvelopeError"
+                            }
+                        ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
+                    "version": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Envelope_SplitTaskResult": {
+                "type": "object",
+                "description": "Serializable envelope. Use `Versioned::ok(data)` for success paths;\n`Versioned::error(code, message)` for failures (or compose via the\n`IntoResponse` impl on `ApiError`).",
+                "required": [
+                    "version"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "required": [
+                            "parent",
+                            "first_child",
+                            "second_child"
+                        ],
+                        "properties": {
+                            "first_child": {
+                                "$ref": "#/components/schemas/Task"
+                            },
+                            "parent": {
+                                "$ref": "#/components/schemas/Task"
+                            },
+                            "second_child": {
+                                "$ref": "#/components/schemas/Task"
+                            }
+                        }
+                    },
+                    "error": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/EnvelopeError"
+                            }
+                        ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
+                    "version": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Envelope_StoredItem": {
+                "type": "object",
+                "description": "Serializable envelope. Use `Versioned::ok(data)` for success paths;\n`Versioned::error(code, message)` for failures (or compose via the\n`IntoResponse` impl on `ApiError`).",
+                "required": [
+                    "version"
+                ],
+                "properties": {
+                    "data": {
+                        "oneOf": [
+                            {
+                                "allOf": [
+                                    {
+                                        "$ref": "#/components/schemas/Task"
+                                    },
+                                    {
+                                        "type": "object",
+                                        "required": [
+                                            "kind"
+                                        ],
+                                        "properties": {
+                                            "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "task"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "allOf": [
+                                    {
+                                        "$ref": "#/components/schemas/Habit"
+                                    },
+                                    {
+                                        "type": "object",
+                                        "required": [
+                                            "kind"
+                                        ],
+                                        "properties": {
+                                            "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "habit"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "allOf": [
+                                    {
+                                        "$ref": "#/components/schemas/Chore"
+                                    },
+                                    {
+                                        "type": "object",
+                                        "required": [
+                                            "kind"
+                                        ],
+                                        "properties": {
+                                            "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "chore"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "allOf": [
+                                    {
+                                        "$ref": "#/components/schemas/Event"
+                                    },
+                                    {
+                                        "type": "object",
+                                        "required": [
+                                            "kind"
+                                        ],
+                                        "properties": {
+                                            "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "event"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "error": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/EnvelopeError"
+                            }
+                        ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
+                    "version": {
+                        "type": "string"
+                    }
+                }
+            },
             "Envelope_Task": {
                 "type": "object",
                 "description": "Serializable envelope. Use `Versioned::ok(data)` for success paths;\n`Versioned::error(code, message)` for failures (or compose via the\n`IntoResponse` impl on `ApiError`).",
@@ -12297,6 +13006,67 @@
                     "closed"
                 ]
             },
+            "FoldTaskDto": {
+                "type": "object",
+                "description": "Both the request body for `POST /tasks/{id}/fold` and the storage args \u2014\none shape, so no `*Payload` twin exists (see the `payloads` module doc).",
+                "required": [
+                    "title",
+                    "description"
+                ],
+                "properties": {
+                    "complete_by": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "desire": {
+                        "type": [
+                            "number",
+                            "null"
+                        ],
+                        "format": "double"
+                    },
+                    "labels": {
+                        "type": [
+                            "array",
+                            "null"
+                        ],
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "productive": {
+                        "type": [
+                            "number",
+                            "null"
+                        ],
+                        "format": "double"
+                    },
+                    "title": {
+                        "type": "string"
+                    }
+                }
+            },
+            "FoldTaskResult": {
+                "type": "object",
+                "required": [
+                    "original",
+                    "next_task"
+                ],
+                "properties": {
+                    "next_task": {
+                        "$ref": "#/components/schemas/Task"
+                    },
+                    "original": {
+                        "$ref": "#/components/schemas/Task"
+                    }
+                }
+            },
             "Habit": {
                 "type": "object",
                 "required": [
@@ -12785,6 +13555,26 @@
                     "theta": {
                         "type": "number",
                         "format": "double"
+                    }
+                }
+            },
+            "MoveTaskDto": {
+                "type": "object",
+                "description": "Request to reparent and/or reorder a task in the tree hierarchy. Both\nthe request body for `POST /tasks/{id}/move` (and item move) and the\nstorage args \u2014 one shape, so no `*Payload` twin exists.\n- `new_parent_id = None` detaches the task (makes it a root task).\n- `position` is the insertion index in the new parent's `children`\n  array. `None` appends to the end. Ignored when reparenting to root\n  since root ordering is not tracked server-side.",
+                "properties": {
+                    "new_parent_id": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "uuid"
+                    },
+                    "position": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 0
                     }
                 }
             },
@@ -13359,6 +14149,156 @@
                                 "type": "string"
                             }
                         }
+                    }
+                ]
+            },
+            "SplitItemResult": {
+                "type": "object",
+                "required": [
+                    "parent",
+                    "first_child",
+                    "second_child"
+                ],
+                "properties": {
+                    "first_child": {
+                        "$ref": "#/components/schemas/StoredItem"
+                    },
+                    "parent": {
+                        "$ref": "#/components/schemas/StoredItem"
+                    },
+                    "second_child": {
+                        "$ref": "#/components/schemas/StoredItem"
+                    }
+                }
+            },
+            "SplitTaskDto": {
+                "type": "object",
+                "description": "Both the request body for `POST /tasks/{id}/split` (and item split) and\nthe storage args \u2014 one shape, so no `*Payload` twin exists (see the\n`payloads` module doc).",
+                "required": [
+                    "first_title",
+                    "first_description",
+                    "second_title",
+                    "second_description"
+                ],
+                "properties": {
+                    "first_description": {
+                        "type": "string"
+                    },
+                    "first_title": {
+                        "type": "string"
+                    },
+                    "second_description": {
+                        "type": "string"
+                    },
+                    "second_title": {
+                        "type": "string"
+                    }
+                }
+            },
+            "SplitTaskResult": {
+                "type": "object",
+                "required": [
+                    "parent",
+                    "first_child",
+                    "second_child"
+                ],
+                "properties": {
+                    "first_child": {
+                        "$ref": "#/components/schemas/Task"
+                    },
+                    "parent": {
+                        "$ref": "#/components/schemas/Task"
+                    },
+                    "second_child": {
+                        "$ref": "#/components/schemas/Task"
+                    }
+                }
+            },
+            "StoredItem": {
+                "oneOf": [
+                    {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Task"
+                            },
+                            {
+                                "type": "object",
+                                "required": [
+                                    "kind"
+                                ],
+                                "properties": {
+                                    "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                            "task"
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Habit"
+                            },
+                            {
+                                "type": "object",
+                                "required": [
+                                    "kind"
+                                ],
+                                "properties": {
+                                    "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                            "habit"
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Chore"
+                            },
+                            {
+                                "type": "object",
+                                "required": [
+                                    "kind"
+                                ],
+                                "properties": {
+                                    "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                            "chore"
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Event"
+                            },
+                            {
+                                "type": "object",
+                                "required": [
+                                    "kind"
+                                ],
+                                "properties": {
+                                    "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                            "event"
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
                     }
                 ]
             },
