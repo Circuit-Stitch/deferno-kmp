@@ -49,6 +49,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -71,12 +72,15 @@ import com.circuitstitch.deferno.feature.tasks.MoveMode
 private val IndentPerDepth = 16.dp
 private val chevronGutter = MinTouchTarget
 
+/** Test tag on the tree Column — the move-mode focus + key-event target (see ItemTreeKeyboardTest). */
+internal const val ItemTreeTag = "itemTree"
+
 /**
  * The Tasks Item tree: a header (with Refresh) over a `LazyColumn` of [rows]. Each parent row toggles its
  * fold on a chevron/body tap; a childless leaf's body is inert; the trailing `›` opens detail (ADR-0034
  * decision 7). A **long-press** lifts the row into [moveMode] (decision 6, #228): the lifted row is
  * highlighted, the rest calmed, and a bottom bar offers **↑ ↓ ‹ ›** (illegal directions greyed) + Done —
- * mirrored on the keyboard (Alt+↑/↓ reorder, Tab / Shift-Tab indent / outdent). Empty/refreshing states
+ * mirrored on the keyboard (Alt+↑/↓ reorder, Tab / Shift-Tab indent / outdent, Esc = Done). Empty/refreshing states
  * mirror the calm copy of the other Tasks panes.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -113,6 +117,7 @@ internal fun ItemTreeContent(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .testTag(ItemTreeTag)
             .then(moveFocus)
             .onPreviewKeyEvent { event ->
                 if (moveMode == null || event.type != KeyEventType.KeyDown) {
@@ -123,6 +128,9 @@ internal fun ItemTreeContent(
                         event.key == Key.DirectionDown && event.isAltPressed -> { onMoveDown(); true }
                         event.key == Key.Tab && event.isShiftPressed -> { onOutdent(); true }
                         event.key == Key.Tab -> { onIndent(); true }
+                        // Escape exits — the keyboard's "Done". Without it a keyboard-only user is trapped:
+                        // Tab is consumed for indent here, so focus can never traverse to the Done button.
+                        event.key == Key.Escape -> { onExitMoveMode(); true }
                         else -> false
                     }
                 }
