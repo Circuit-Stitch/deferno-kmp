@@ -1,11 +1,10 @@
 package com.circuitstitch.deferno.macos
 
 import com.circuitstitch.deferno.feature.plan.PlanComponent
-import com.circuitstitch.deferno.feature.tasks.TaskListComponent
+import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
 import com.circuitstitch.deferno.feature.tasks.TaskPane
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.macos.bridge.DetailSlot
-import com.circuitstitch.deferno.macos.bridge.TreeSlot
 import com.circuitstitch.deferno.macos.bridge.ValueBridge
 
 // The Swift-facing Destination roots for the Tasks + Plan tabs. They flatten the Decompose
@@ -14,14 +13,15 @@ import com.circuitstitch.deferno.macos.bridge.ValueBridge
 // retired Phase-1 demo harness, ADR-0029 Phase 1b / #188 — these are live, the demo wiring was not.)
 
 /**
- * The Swift-facing handle for the Tasks Destination. Exposes the always-present [list] component and
- * the co-resident [detail] / [tree] slots + [activePane] recency (ADR-0007), each flattened through
- * the SKIE-free bridge so SwiftUI never touches the Decompose `Value`/`ChildSlot` generics.
+ * The Swift-facing handle for the Tasks Destination. Exposes the always-present Item [tree] component
+ * (the primary pane since #227/ADR-0034), the co-resident [detail] slot, and [activePane] recency
+ * (ADR-0007). The detail slot is flattened through the SKIE-free bridge so SwiftUI never touches the
+ * Decompose `Value`/`ChildSlot` generics; the tree is a plain component, its `state` observed via
+ * `itemTreeStateBridge`.
  */
 class TasksRoot internal constructor(private val component: TasksComponent) {
-    val list: TaskListComponent get() = component.list
+    val tree: ItemTreeComponent get() = component.tree
     val detail: DetailSlot = DetailSlot(component.detail)
-    val tree: TreeSlot = TreeSlot(component.tree)
     val activePane: ValueBridge<TaskPane> = ValueBridge(component.activePane)
 }
 

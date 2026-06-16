@@ -463,7 +463,7 @@ fun refreshActiveDestination(root: RootComponent) {
         is MainShellComponent.DestinationChild.Plan ->
             (active.stack.value.active.instance as? MainShellComponent.PlanChild.Dashboard)
                 ?.component?.onRefresh() ?: Unit
-        is MainShellComponent.DestinationChild.Tasks -> active.component.list.onRefresh()
+        is MainShellComponent.DestinationChild.Tasks -> active.component.tree.onRefresh()
         else -> Unit
     }
 }
