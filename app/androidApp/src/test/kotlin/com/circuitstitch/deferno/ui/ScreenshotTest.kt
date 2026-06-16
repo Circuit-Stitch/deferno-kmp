@@ -16,14 +16,13 @@ import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
+import com.circuitstitch.deferno.feature.tasks.ItemTreeState
 import com.circuitstitch.deferno.feature.tasks.SubtaskNode
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
-import com.circuitstitch.deferno.feature.tasks.TaskListState
-import com.circuitstitch.deferno.feature.tasks.TaskTreeState
+import com.circuitstitch.deferno.feature.tasks.buildItemTree
 import kotlin.time.Instant
 import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TaskListScreen
-import com.circuitstitch.deferno.feature.tasks.ui.TaskTreeScreen
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
 import org.junit.Test
@@ -96,19 +95,39 @@ class ScreenshotTest {
         ),
     )
 
+    // The Item tree (#227): a few nested expanded rows, a collapsed parent with a done/total badge, and a
+    // terminal (dimmed) row — the row states ADR-0034 decision 7 calls out. Rows are rendered verbatim
+    // (the View doesn't re-flatten), so they're built explicitly to pin each state.
+    private val treeStatesRows = listOf(
+        itemRow("p1", "Plan the spring launch", hasChildren = true, isExpanded = true),
+        itemRow("c1", "Draft the announcement", depth = 1),
+        itemRow(
+            "c2", "Review copy with the team", depth = 1, hasChildren = true, isExpanded = false,
+            descendantDone = 0, descendantTotal = 3,
+        ),
+        itemRow("c3", "Schedule the post", depth = 1, isTerminal = true),
+        itemRow("p2", "Water the plants"),
+        itemRow("p3", "Old idea worth revisiting", isTerminal = true),
+    )
+
     @Test
-    fun taskList_populated_light() = capture("task_list_populated_light") {
-        TaskListScreen(FakeTaskListComponent(TaskListState(tasks = SampleTasks.list)))
+    fun itemTree_populated_light() = capture("task_list_populated_light") {
+        TaskListScreen(FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(SampleTasks.items))))
     }
 
     @Test
-    fun taskList_populated_dark() = capture("task_list_populated_dark", darkTheme = true) {
-        TaskListScreen(FakeTaskListComponent(TaskListState(tasks = SampleTasks.list)))
+    fun itemTree_states_light() = capture("item_tree_states_light") {
+        TaskListScreen(FakeItemTreeComponent(ItemTreeState(rows = treeStatesRows)))
     }
 
     @Test
-    fun taskList_empty_light() = capture("task_list_empty_light") {
-        TaskListScreen(FakeTaskListComponent(TaskListState(tasks = emptyList())))
+    fun itemTree_states_dark() = capture("item_tree_states_dark", darkTheme = true) {
+        TaskListScreen(FakeItemTreeComponent(ItemTreeState(rows = treeStatesRows)))
+    }
+
+    @Test
+    fun itemTree_empty_light() = capture("task_list_empty_light") {
+        TaskListScreen(FakeItemTreeComponent(ItemTreeState(rows = emptyList())))
     }
 
     @Test
@@ -125,15 +144,6 @@ class ScreenshotTest {
     fun taskDetail_hydrating_light() = capture("task_detail_hydrating_light") {
         val summary = sampleTask("2", "Water the plants")
         TaskDetailScreen(FakeTaskDetailComponent(TaskDetailState(task = summary, isHydrating = true)))
-    }
-
-    @Test
-    fun taskTree_light() = capture("task_tree_light") {
-        TaskTreeScreen(
-            FakeTaskTreeComponent(
-                TaskTreeState(root = sampleTask("1", "Plan the spring launch"), children = SampleTasks.children),
-            ),
-        )
     }
 
     @Test

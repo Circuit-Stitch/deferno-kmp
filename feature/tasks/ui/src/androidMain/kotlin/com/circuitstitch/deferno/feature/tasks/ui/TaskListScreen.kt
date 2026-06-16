@@ -1,74 +1,25 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import com.circuitstitch.deferno.core.model.Task
-import com.circuitstitch.deferno.core.model.TaskId
-import com.circuitstitch.deferno.feature.tasks.TaskListComponent
+import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
 
 /**
- * The Task list pane (#27). A thin renderer of [TaskListComponent]: it observes the component's
- * [TaskListComponent.state] and forwards taps/refresh to it, holding no logic of its own (ADR-0007:
- * Views are thin renderers of shared state).
+ * The Tasks primary pane (ADR-0034, #227): the nested, collapsible **Item tree** across all kinds. A thin
+ * renderer of [ItemTreeComponent] — it observes [ItemTreeComponent.state] and forwards toggle/open/refresh
+ * to it, holding no logic (the row-state logic lives in `buildItemTree`, the rendering in [ItemTreeContent]).
  */
 @Composable
-fun TaskListScreen(component: TaskListComponent, modifier: Modifier = Modifier) {
+fun TaskListScreen(component: ItemTreeComponent, modifier: Modifier = Modifier) {
     val state by component.state.collectAsState()
-    TaskListContent(
-        tasks = state.tasks,
+    ItemTreeContent(
+        rows = state.rows,
         isRefreshing = state.isRefreshing,
-        onTaskClick = component::onTaskClicked,
+        onToggleExpand = component::onToggleExpand,
+        onOpenDetail = component::onOpenDetail,
         onRefresh = component::onRefresh,
         modifier = modifier,
     )
-}
-
-/** Stateless body — rendered directly by screenshot/UI tests with fixed inputs. */
-@Composable
-internal fun TaskListContent(
-    tasks: List<Task>,
-    isRefreshing: Boolean,
-    onTaskClick: (TaskId) -> Unit,
-    onRefresh: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier.fillMaxSize()) {
-        PaneHeader(
-            title = "Tasks",
-            actions = {
-                TextButton(
-                    onClick = onRefresh,
-                    enabled = !isRefreshing,
-                    modifier = Modifier.heightIn(min = MinTouchTarget),
-                ) { Text("Refresh") }
-            },
-        )
-        if (isRefreshing) {
-            LoadingStrip(label = "Refreshing…")
-        }
-        if (tasks.isEmpty() && !isRefreshing) {
-            EmptyState(
-                title = "No tasks yet",
-                body = "When you add a task, it shows up here. One small step at a time.",
-            )
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(tasks, key = { it.id.value }) { task ->
-                    TaskRow(task = task, onClick = { onTaskClick(task.id) })
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                }
-            }
-        }
-    }
 }

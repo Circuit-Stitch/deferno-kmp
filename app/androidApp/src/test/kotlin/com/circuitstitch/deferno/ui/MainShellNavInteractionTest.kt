@@ -7,7 +7,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.demo.DemoItemRepository
 import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
@@ -42,6 +44,8 @@ class MainShellNavInteractionTest {
 
     private fun shell() = DefaultMainShellComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
+        itemRepository = DemoItemRepository(),
+        foldStore = InMemoryItemFoldStore(),
         taskRepository = DemoTaskRepository(SampleData.tasks),
         planRepository = DemoPlanRepository(emptyList()),
         authRepository = FakeAuthRepository(),

@@ -3,11 +3,14 @@ package com.circuitstitch.deferno.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.demo.DemoItemRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.ui.TasksScreen
@@ -41,16 +44,18 @@ class TasksAdaptivePaneTest {
     private fun tasksComponent() =
         DefaultTasksComponent(
             componentContext = DefaultComponentContext(LifecycleRegistry()),
+            itemRepository = DemoItemRepository(SampleTasks.items),
+            foldStore = InMemoryItemFoldStore(),
             taskRepository = DemoTaskRepository(SampleTasks.list + SampleTasks.children),
             coroutineContext = Dispatchers.Unconfined,
         )
 
-    /** Open the first task, then assert which panes are present. Clicked while only the list row exists. */
+    /** Open the first task via the tree's trailing `›`, then assert which panes are present. */
     private fun openTaskAndAssertPanes(listRefreshVisible: Boolean) {
         val component = tasksComponent()
         composeRule.setContent { DefernoTheme { TasksScreen(component) } }
 
-        composeRule.onNodeWithText("Plan the spring launch").performClick()
+        composeRule.onNodeWithContentDescription("Open Plan the spring launch").performClick()
 
         // The detail pane is always present once a task is open.
         composeRule.onNodeWithText("Add to today's plan").assertIsDisplayed()

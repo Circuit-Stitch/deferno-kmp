@@ -9,9 +9,11 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
-import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.demo.DemoItemRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
@@ -46,18 +48,14 @@ class TasksPaneScreenshotTest {
     private fun tasksComponent(): TasksComponent =
         DefaultTasksComponent(
             componentContext = DefaultComponentContext(LifecycleRegistry()),
+            itemRepository = DemoItemRepository(SampleTasks.items),
+            foldStore = InMemoryItemFoldStore(),
             taskRepository = DemoTaskRepository(SampleTasks.list + SampleTasks.children),
             coroutineContext = Dispatchers.Unconfined,
         )
 
-    /** Open task "1"'s detail (the slot activates synchronously on the unconfined dispatcher). */
-    private fun TasksComponent.openDetail() = list.onTaskClicked(TaskId("1"))
-
-    /** Open task "1"'s breakdown (its detail's "show steps"), leaving the tree foregrounded. */
-    private fun TasksComponent.openTree() {
-        openDetail()
-        detail.value.child!!.instance.onShowTreeClicked()
-    }
+    /** Open item "1"'s detail via the tree's trailing `›` (the slot activates synchronously, Unconfined). */
+    private fun TasksComponent.openDetail() = tree.onOpenDetail("1", ItemKind.Task)
 
     private fun capture(name: String, darkTheme: Boolean = false, content: @Composable () -> Unit) {
         composeRule.setContent {
@@ -109,12 +107,6 @@ class TasksPaneScreenshotTest {
     @Config(qualifiers = "w1280dp-h800dp")
     fun expanded_listDetail_dark() = capture("tasks_expanded_list_detail_dark", darkTheme = true) {
         TasksScreen(tasksComponent().also { it.openDetail() })
-    }
-
-    @Test
-    @Config(qualifiers = "w1280dp-h800dp")
-    fun expanded_listTree_light() = capture("tasks_expanded_list_tree_light") {
-        TasksScreen(tasksComponent().also { it.openTree() })
     }
 
     @Test

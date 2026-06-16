@@ -10,17 +10,17 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
+import com.circuitstitch.deferno.feature.tasks.ItemTreeState
 import com.circuitstitch.deferno.feature.tasks.SubtaskNode
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
-import com.circuitstitch.deferno.feature.tasks.TaskListState
-import com.circuitstitch.deferno.feature.tasks.TaskTreeState
+import com.circuitstitch.deferno.feature.tasks.buildItemTree
 import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TaskListScreen
-import com.circuitstitch.deferno.feature.tasks.ui.TaskTreeScreen
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -44,18 +44,31 @@ class TaskScreenInteractionTest {
     }
 
     @Test
-    fun taskList_rowTap_emitsSelection() {
-        val component = FakeTaskListComponent(TaskListState(tasks = SampleTasks.list))
+    fun itemTree_openAffordance_emitsOpenDetail() {
+        val component = FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(SampleTasks.items)))
         setContent { TaskListScreen(component) }
 
-        composeRule.onNodeWithText("Water the plants").performClick()
+        // The trailing `›` is the only open-detail affordance (ADR-0034 decision 7).
+        composeRule.onNodeWithContentDescription("Open Water the plants").performClick()
 
-        assertEquals(listOf(TaskId("2")), component.clicked)
+        assertEquals(listOf("2" to ItemKind.Task), component.opened)
     }
 
     @Test
-    fun taskList_refreshTap_pullsThrough() {
-        val component = FakeTaskListComponent(TaskListState(tasks = SampleTasks.list))
+    fun itemTree_parentBodyTap_togglesExpand() {
+        val component = FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(SampleTasks.items)))
+        setContent { TaskListScreen(component) }
+
+        // "Plan the spring launch" is an expanded parent (depth 0); a body tap collapses it (toggle from
+        // the row's own fold, not from the WhileSubscribed state).
+        composeRule.onNodeWithText("Plan the spring launch").performClick()
+
+        assertEquals(listOf("1" to true), component.toggled)
+    }
+
+    @Test
+    fun itemTree_refreshTap_pullsThrough() {
+        val component = FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(SampleTasks.items)))
         setContent { TaskListScreen(component) }
 
         composeRule.onNodeWithText("Refresh").performClick()
@@ -64,8 +77,8 @@ class TaskScreenInteractionTest {
     }
 
     @Test
-    fun taskList_empty_showsGentleCopy() {
-        val component = FakeTaskListComponent(TaskListState(tasks = emptyList()))
+    fun itemTree_empty_showsGentleCopy() {
+        val component = FakeItemTreeComponent(ItemTreeState(rows = emptyList()))
         setContent { TaskListScreen(component) }
 
         composeRule.onNodeWithText("No tasks yet").assertIsDisplayed()
@@ -133,18 +146,6 @@ class TaskScreenInteractionTest {
 
         // The current state reads as the selected affordance (not a "Set to" action).
         composeRule.onNodeWithContentDescription("In review, current working state").assertIsDisplayed()
-    }
-
-    @Test
-    fun taskTree_childTap_drillsIn() {
-        val component = FakeTaskTreeComponent(
-            TaskTreeState(root = sampleTask("1", "Plan the spring launch"), children = SampleTasks.children),
-        )
-        setContent { TaskTreeScreen(component) }
-
-        composeRule.onNodeWithText("Draft the announcement").performClick()
-
-        assertEquals(listOf(TaskId("1a")), component.childClicked)
     }
 
     @Test
