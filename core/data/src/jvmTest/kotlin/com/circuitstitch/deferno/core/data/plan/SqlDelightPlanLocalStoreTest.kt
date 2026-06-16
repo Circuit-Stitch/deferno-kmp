@@ -2,9 +2,6 @@ package com.circuitstitch.deferno.core.data.plan
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import app.cash.turbine.test
-import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
-import com.circuitstitch.deferno.core.data.task.FakeTaskRemoteSource
-import com.circuitstitch.deferno.core.data.task.OfflineTaskRepository
 import com.circuitstitch.deferno.core.data.task.SqlDelightTaskLocalStore
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.HydrationState
@@ -21,8 +18,8 @@ import kotlin.test.assertEquals
 /**
  * The real-SQLite integration test for the plan path (#22, ADR-0006 JVM-fast path). Proves
  * [SqlDelightPlanLocalStore]'s ordered observe + atomic per-day replace round-trip through a genuine
- * `DefernoDatabase`, and that the full plan flow — reconcile the Tasks via the Task repository, then
- * the plan ordering — resolves to domain Tasks in plan order end to end through real SQLite.
+ * `DefernoDatabase`, and that the full plan flow — cache the Tasks, then the plan ordering — resolves
+ * to domain Tasks in plan order end to end through real SQLite.
  */
 class SqlDelightPlanLocalStoreTest {
 
@@ -100,12 +97,8 @@ class SqlDelightPlanLocalStoreTest {
         val taskStore = SqlDelightTaskLocalStore(db, Dispatchers.Default)
         val planStore = SqlDelightPlanLocalStore(db, Dispatchers.Default)
 
-        // Reconcile the Tasks first (sequence order differs from plan order).
-        OfflineTaskRepository(
-            taskStore,
-            FakeTaskRemoteSource(snapshot = listOf(task("a", 1), task("b", 2), task("c", 3))),
-            FakePendingCreateStore(),
-        ).refresh()
+        // Cache the Tasks first (sequence order differs from plan order).
+        listOf(task("a", 1), task("b", 2), task("c", 3)).forEach { taskStore.upsert(it) }
         // Then the plan ordering, plus one entry whose Task isn't cached (must be skipped).
         val plan = OfflinePlanRepository(
             planStore,

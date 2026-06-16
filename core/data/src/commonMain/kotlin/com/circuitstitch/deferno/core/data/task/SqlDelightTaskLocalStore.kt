@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.data.task
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
+import com.circuitstitch.deferno.core.data.reconcileTransaction
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -10,9 +11,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.EmptyCoroutineContext
-import kotlin.coroutines.startCoroutine
 
 /**
  * The production [TaskLocalStore] over the SQLDelight [DefernoDatabase] (ADR-0001, #22). It is the
@@ -69,6 +67,8 @@ class SqlDelightTaskLocalStore(
             hydration_state = e.hydration_state,
             description = e.description,
             next_task_id = e.next_task_id,
+            descendant_done = e.descendant_done,
+            descendant_total = e.descendant_total,
         )
     }
 
@@ -76,26 +76,6 @@ class SqlDelightTaskLocalStore(
         queries.deleteById(id.value)
     }
 
-    override suspend fun transaction(block: suspend (TaskLocalStore) -> Unit) {
-        // SQLDelight's `transaction { }` body is non-suspending, so we can't simply `await` the
-        // suspend [block] inside it. But every mutation the reconcile issues through this store is a
-        // synchronous SQLDelight query under the hood — the `suspend` is on the interface only to let
-        // an alternative store (or the fake) be genuinely async. So the block runs to completion
-        // synchronously: we drive it with [startCoroutine] and surface any failure (or a — never
-        // expected — real suspension) by inspecting the completion result. Running it inside
-        // `db.transaction { }` makes the whole reconcile atomic and fires query listeners once, at
-        // commit (so `observeActive()` re-emits the reconciled list exactly once).
-        var outcome: Result<Unit>? = null
-        db.transaction {
-            block.startCoroutine(
-                this@SqlDelightTaskLocalStore,
-                Continuation(EmptyCoroutineContext) { result -> outcome = result },
-            )
-        }
-        val result = checkNotNull(outcome) {
-            "the reconcile block suspended on something other than the synchronous local store; " +
-                "TaskLocalStore.transaction requires a non-suspending body"
-        }
-        result.getOrThrow()
-    }
+    override suspend fun transaction(block: suspend (TaskLocalStore) -> Unit) =
+        db.reconcileTransaction(this, block)
 }

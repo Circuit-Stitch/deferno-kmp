@@ -8,7 +8,11 @@ import kotlinx.coroutines.flow.Flow
 interface EventLocalStore {
     fun observeActive(): Flow<List<Event>>
     fun observe(id: EventId): Flow<Event?>
+    /** Every cached id, including tombstones — the `/items` reconcile diffs this against a snapshot (#226). */
+    suspend fun allIds(): Set<EventId>
     suspend fun get(id: EventId): Event?
     suspend fun upsert(event: Event)
     suspend fun delete(id: EventId)
+    /** Runs [block] atomically (the `/items` reconcile commits + re-emits once at commit, #226). */
+    suspend fun transaction(block: suspend (EventLocalStore) -> Unit)
 }

@@ -37,6 +37,10 @@ SELECT * FROM habitEntity WHERE deleted_at IS NULL ORDER BY sequence;
 selectById:
 SELECT * FROM habitEntity WHERE id = ?;
 
+-- Just the ids — the /items reconcile diffs these against a fresh snapshot to purge absent rows (#226).
+selectAllIds:
+SELECT id FROM habitEntity;
+
 insertOrReplace:
 INSERT OR REPLACE INTO habitEntity(
     id, org_slug, owner_org_id, ref, sequence, title, definition_state, recurrence_type,

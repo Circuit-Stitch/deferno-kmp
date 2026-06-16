@@ -8,7 +8,11 @@ import kotlinx.coroutines.flow.Flow
 interface ChoreLocalStore {
     fun observeActive(): Flow<List<Chore>>
     fun observe(id: ChoreId): Flow<Chore?>
+    /** Every cached id, including tombstones — the `/items` reconcile diffs this against a snapshot (#226). */
+    suspend fun allIds(): Set<ChoreId>
     suspend fun get(id: ChoreId): Chore?
     suspend fun upsert(chore: Chore)
     suspend fun delete(id: ChoreId)
+    /** Runs [block] atomically (the `/items` reconcile commits + re-emits once at commit, #226). */
+    suspend fun transaction(block: suspend (ChoreLocalStore) -> Unit)
 }

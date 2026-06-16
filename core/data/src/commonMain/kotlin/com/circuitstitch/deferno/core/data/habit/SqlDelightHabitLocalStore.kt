@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.data.habit
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
+import com.circuitstitch.deferno.core.data.reconcileTransaction
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
@@ -29,6 +30,9 @@ class SqlDelightHabitLocalStore(
 
     override fun observe(id: HabitId): Flow<Habit?> =
         queries.selectById(id.value).asFlow().mapToOneOrNull(dispatcher).map { it?.toDomain() }
+
+    override suspend fun allIds(): Set<HabitId> =
+        queries.selectAllIds().executeAsList().mapTo(mutableSetOf(), ::HabitId)
 
     override suspend fun get(id: HabitId): Habit? =
         queries.selectById(id.value).executeAsOneOrNull()?.toDomain()
@@ -61,4 +65,7 @@ class SqlDelightHabitLocalStore(
     override suspend fun delete(id: HabitId) {
         queries.deleteById(id.value)
     }
+
+    override suspend fun transaction(block: suspend (HabitLocalStore) -> Unit) =
+        db.reconcileTransaction(this, block)
 }

@@ -52,6 +52,8 @@ fun TaskEntity.toDomain(): Task = Task(
     ownerOrgId = owner_org_id?.let(::OrgId),
     description = description,
     nextTaskId = next_task_id?.let(::TaskId),
+    descendantDone = descendant_done,
+    descendantTotal = descendant_total,
 )
 
 /** Encodes a domain [Task] into a `taskEntity` row, ready for `insertOrReplace`. */
@@ -77,6 +79,8 @@ fun Task.toEntity(): TaskEntity = TaskEntity(
     hydration_state = hydration.name,
     description = description,
     next_task_id = nextTaskId?.value,
+    descendant_done = descendantDone,
+    descendant_total = descendantTotal,
 )
 
 /** `[]` -> `""`, else the elements joined with `\n` (the list columns never contain newlines). */

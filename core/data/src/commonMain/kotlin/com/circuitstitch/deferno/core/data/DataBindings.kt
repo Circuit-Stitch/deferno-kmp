@@ -37,6 +37,8 @@ import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.KtorSettingsRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
 import com.circuitstitch.deferno.core.data.task.KtorTaskDetailRepository
+import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
+import com.circuitstitch.deferno.core.data.item.KtorItemSnapshotSource
 import com.circuitstitch.deferno.core.data.task.KtorTaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
@@ -165,6 +167,12 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun taskRemoteSource(client: HttpClient): TaskRemoteSource = KtorTaskRemoteSource(client)
+
+    // The item-wide cold-snapshot source (`GET /items`, ADR-0034 #226) — the successor to the legacy
+    // task-only `TaskRemoteSource.fetchAll`. AppScope, like the other Ktor sources.
+    @Provides
+    @SingleIn(AppScope::class)
+    fun itemSnapshotSource(client: HttpClient): ItemSnapshotSource = KtorItemSnapshotSource(client)
 
     /**
      * The Task detail's online-only comments + attachments source over the shared authed [client]

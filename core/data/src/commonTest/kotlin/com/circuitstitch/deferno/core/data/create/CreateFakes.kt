@@ -63,35 +63,75 @@ class FakeItemRemoteSource : ItemRemoteSource {
     }
 }
 
-/** In-memory [HabitLocalStore] backed by a re-emitting [MutableStateFlow] (mirrors FakeTaskLocalStore). */
+/**
+ * In-memory [HabitLocalStore] backed by a re-emitting [MutableStateFlow] (mirrors FakeTaskLocalStore).
+ * [transaction] stages mutations on a working copy and publishes once at commit, like SQLDelight — so
+ * the `/items` reconcile (#226) re-emits the observed list exactly once.
+ */
 class FakeHabitLocalStore(initial: Map<HabitId, Habit> = emptyMap()) : HabitLocalStore {
     private val rows = MutableStateFlow(initial)
+    private var inTransaction = false
+    private var staged: MutableMap<HabitId, Habit> = mutableMapOf()
     val all: Map<HabitId, Habit> get() = rows.value
     override fun observeActive(): Flow<List<Habit>> = rows.map { it.values.filterNot { h -> h.isDeleted }.sortedBy { h -> h.sequence } }
     override fun observe(id: HabitId): Flow<Habit?> = rows.map { it[id] }
-    override suspend fun get(id: HabitId): Habit? = rows.value[id]
-    override suspend fun upsert(habit: Habit) { rows.value = rows.value.toMutableMap().also { it[habit.id] = habit } }
-    override suspend fun delete(id: HabitId) { rows.value = rows.value.toMutableMap().also { it.remove(id) } }
+    override suspend fun allIds(): Set<HabitId> = current().keys
+    override suspend fun get(id: HabitId): Habit? = current()[id]
+    override suspend fun upsert(habit: Habit) = mutate { it[habit.id] = habit }
+    override suspend fun delete(id: HabitId) = mutate { it.remove(id) }
+    override suspend fun transaction(block: suspend (HabitLocalStore) -> Unit) = runStaged { block(this) }
+    private fun current(): Map<HabitId, Habit> = if (inTransaction) staged else rows.value
+    private fun mutate(edit: (MutableMap<HabitId, Habit>) -> Unit) {
+        if (inTransaction) edit(staged) else rows.value = rows.value.toMutableMap().also(edit)
+    }
+    private suspend fun runStaged(block: suspend () -> Unit) {
+        inTransaction = true; staged = rows.value.toMutableMap()
+        try { block(); rows.value = staged.toMap() } finally { inTransaction = false }
+    }
 }
 
-/** In-memory [ChoreLocalStore]. */
+/** In-memory [ChoreLocalStore] (transaction stages + commits once, like SQLDelight; #226). */
 class FakeChoreLocalStore(initial: Map<ChoreId, Chore> = emptyMap()) : ChoreLocalStore {
     private val rows = MutableStateFlow(initial)
+    private var inTransaction = false
+    private var staged: MutableMap<ChoreId, Chore> = mutableMapOf()
     val all: Map<ChoreId, Chore> get() = rows.value
     override fun observeActive(): Flow<List<Chore>> = rows.map { it.values.filterNot { c -> c.isDeleted }.sortedBy { c -> c.sequence } }
     override fun observe(id: ChoreId): Flow<Chore?> = rows.map { it[id] }
-    override suspend fun get(id: ChoreId): Chore? = rows.value[id]
-    override suspend fun upsert(chore: Chore) { rows.value = rows.value.toMutableMap().also { it[chore.id] = chore } }
-    override suspend fun delete(id: ChoreId) { rows.value = rows.value.toMutableMap().also { it.remove(id) } }
+    override suspend fun allIds(): Set<ChoreId> = current().keys
+    override suspend fun get(id: ChoreId): Chore? = current()[id]
+    override suspend fun upsert(chore: Chore) = mutate { it[chore.id] = chore }
+    override suspend fun delete(id: ChoreId) = mutate { it.remove(id) }
+    override suspend fun transaction(block: suspend (ChoreLocalStore) -> Unit) = runStaged { block(this) }
+    private fun current(): Map<ChoreId, Chore> = if (inTransaction) staged else rows.value
+    private fun mutate(edit: (MutableMap<ChoreId, Chore>) -> Unit) {
+        if (inTransaction) edit(staged) else rows.value = rows.value.toMutableMap().also(edit)
+    }
+    private suspend fun runStaged(block: suspend () -> Unit) {
+        inTransaction = true; staged = rows.value.toMutableMap()
+        try { block(); rows.value = staged.toMap() } finally { inTransaction = false }
+    }
 }
 
-/** In-memory [EventLocalStore]. */
+/** In-memory [EventLocalStore] (transaction stages + commits once, like SQLDelight; #226). */
 class FakeEventLocalStore(initial: Map<EventId, Event> = emptyMap()) : EventLocalStore {
     private val rows = MutableStateFlow(initial)
+    private var inTransaction = false
+    private var staged: MutableMap<EventId, Event> = mutableMapOf()
     val all: Map<EventId, Event> get() = rows.value
     override fun observeActive(): Flow<List<Event>> = rows.map { it.values.filterNot { e -> e.isDeleted }.sortedBy { e -> e.sequence } }
     override fun observe(id: EventId): Flow<Event?> = rows.map { it[id] }
-    override suspend fun get(id: EventId): Event? = rows.value[id]
-    override suspend fun upsert(event: Event) { rows.value = rows.value.toMutableMap().also { it[event.id] = event } }
-    override suspend fun delete(id: EventId) { rows.value = rows.value.toMutableMap().also { it.remove(id) } }
+    override suspend fun allIds(): Set<EventId> = current().keys
+    override suspend fun get(id: EventId): Event? = current()[id]
+    override suspend fun upsert(event: Event) = mutate { it[event.id] = event }
+    override suspend fun delete(id: EventId) = mutate { it.remove(id) }
+    override suspend fun transaction(block: suspend (EventLocalStore) -> Unit) = runStaged { block(this) }
+    private fun current(): Map<EventId, Event> = if (inTransaction) staged else rows.value
+    private fun mutate(edit: (MutableMap<EventId, Event>) -> Unit) {
+        if (inTransaction) edit(staged) else rows.value = rows.value.toMutableMap().also(edit)
+    }
+    private suspend fun runStaged(block: suspend () -> Unit) {
+        inTransaction = true; staged = rows.value.toMutableMap()
+        try { block(); rows.value = staged.toMap() } finally { inTransaction = false }
+    }
 }

@@ -27,6 +27,8 @@ class TaskEntityQueriesTest {
         deletedAt: String? = null,
         hydration: String = "Summary",
         ownerOrgId: String? = null,
+        descendantDone: Long? = null,
+        descendantTotal: Long? = null,
     ) = taskEntityQueries.insertOrReplace(
         id = id,
         org_slug = "u-e4h2qk",
@@ -49,12 +51,14 @@ class TaskEntityQueriesTest {
         hydration_state = hydration,
         description = null,
         next_task_id = null,
+        descendant_done = descendantDone,
+        descendant_total = descendantTotal,
     )
 
     @Test
     fun insertAndSelectByIdRoundTrips() {
         val db = inMemoryDefernoDatabase()
-        db.insert(id = "a", title = "first", ownerOrgId = "org-1", hydration = "Full")
+        db.insert(id = "a", title = "first", ownerOrgId = "org-1", hydration = "Full", descendantDone = 2, descendantTotal = 5)
 
         val row: TaskEntity? = db.taskEntityQueries.selectById("a").executeAsOneOrNull()
         assertEquals("a", row?.id)
@@ -62,6 +66,9 @@ class TaskEntityQueriesTest {
         assertEquals("org-1", row?.owner_org_id)
         assertEquals("Full", row?.hydration_state)
         assertEquals(0L, row?.pinned)
+        // Server-computed subtree progress columns round-trip (#226, schema v7).
+        assertEquals(2L, row?.descendant_done)
+        assertEquals(5L, row?.descendant_total)
     }
 
     @Test

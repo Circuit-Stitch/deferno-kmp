@@ -1,9 +1,13 @@
 package com.circuitstitch.deferno.core.data.task
 
 import app.cash.turbine.test
+import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
+import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
+import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
 import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
-import com.circuitstitch.deferno.core.data.create.PendingCreate
-import com.circuitstitch.deferno.core.data.create.PendingCreateState
+import com.circuitstitch.deferno.core.data.item.FakeItemSnapshotSource
+import com.circuitstitch.deferno.core.data.item.ItemSnapshot
+import com.circuitstitch.deferno.core.data.item.ItemSync
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
@@ -13,16 +17,13 @@ import kotlinx.coroutines.test.runTest
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The reconcile + hydration behaviour of [OfflineTaskRepository] (ADR-0001, #22), run against the
- * in-memory fakes on the ADR-0006 JVM-fast path — this is the heart of the issue. Covers the
- * full-snapshot reconcile (upsert by id, tombstone handling, remove-locally-absent), the
- * hydration-preservation merge that stops a summary refresh from downgrading a full row, on-demand
- * [hydrate], and that the UI-facing `observeTasks()` `Flow` re-emits the active list on reconcile.
+ * The [OfflineTaskRepository] read surface (ADR-0001, #22): the observe `Flow`s, on-demand [hydrate],
+ * and online-only [search] — plus that [refresh] delegates the cold sync to [ItemSync] (ADR-0034,
+ * #226). The cross-kind reconcile *algorithm* itself is proved separately by `ItemSyncTest`.
  */
 class OfflineTaskRepositoryTest {
 
@@ -65,181 +66,24 @@ class OfflineTaskRepositoryTest {
     private fun repo(
         local: FakeTaskLocalStore = FakeTaskLocalStore(),
         remote: FakeTaskRemoteSource = FakeTaskRemoteSource(),
+        source: FakeItemSnapshotSource = FakeItemSnapshotSource(),
         pendingCreates: FakePendingCreateStore = FakePendingCreateStore(),
-    ) = OfflineTaskRepository(local, remote, pendingCreates)
+    ) = OfflineTaskRepository(
+        local,
+        remote,
+        ItemSync(local, FakeHabitLocalStore(), FakeChoreLocalStore(), FakeEventLocalStore(), source, pendingCreates),
+    )
 
-    // --- reconcile: upsert by id ---
+    // --- refresh delegates the cold sync to ItemSync (the /items snapshot reconcile) ---
 
     @Test
-    fun refreshUpsertsNewRowsById() = runTest {
+    fun refreshTriggersTheItemSyncWhichPopulatesTheTaskStore() = runTest {
         val local = FakeTaskLocalStore()
-        val remote = FakeTaskRemoteSource(snapshot = listOf(summary("a"), summary("b")))
+        val source = FakeItemSnapshotSource(ItemSnapshot(tasks = listOf(full("a"), full("b"))))
 
-        repo(local, remote).refresh()
+        repo(local, source = source).refresh()
 
         assertEquals(setOf(TaskId("a"), TaskId("b")), local.allIds())
-    }
-
-    @Test
-    fun refreshUpdatesChangedRowsById() = runTest {
-        val local = FakeTaskLocalStore(mapOf(TaskId("a") to summary("a", title = "old")))
-        val remote = FakeTaskRemoteSource(snapshot = listOf(summary("a", title = "new")))
-
-        repo(local, remote).refresh()
-
-        assertEquals("new", local.all.getValue(TaskId("a")).title)
-    }
-
-    // --- reconcile: tombstones ---
-
-    @Test
-    fun refreshStoresASnapshotTombstoneAsADeletedRowExcludedFromObserve() = runTest {
-        val local = FakeTaskLocalStore()
-        val remote = FakeTaskRemoteSource(
-            snapshot = listOf(
-                summary("a"),
-                summary("gone", deletedAt = Instant.parse("2026-06-01T00:00:00Z")),
-            ),
-        )
-        val repository = repo(local, remote)
-
-        repository.refresh()
-
-        // The tombstone is kept (present, isDeleted) so the reconcile stays idempotent...
-        assertTrue(local.all.containsKey(TaskId("gone")))
-        assertTrue(local.all.getValue(TaskId("gone")).isDeleted)
-        // ...but it is filtered out of the UI-facing active list.
-        repository.observeTasks().test {
-            assertEquals(listOf(TaskId("a")), awaitItem().map { it.id })
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun refreshKeepsATombstonedRowThatIsStillInTheSnapshot() = runTest {
-        val tomb = summary("t", deletedAt = Instant.parse("2026-06-01T00:00:00Z"))
-        val local = FakeTaskLocalStore(mapOf(TaskId("t") to tomb))
-        val remote = FakeTaskRemoteSource(snapshot = listOf(tomb))
-
-        repo(local, remote).refresh()
-
-        // Present in the snapshot => kept as a tombstone, NOT purged.
-        assertTrue(local.all.containsKey(TaskId("t")))
-        assertTrue(local.all.getValue(TaskId("t")).isDeleted)
-    }
-
-    // --- reconcile: remove locally-absent ---
-
-    @Test
-    fun refreshRemovesALocalRowAbsentFromTheSnapshot() = runTest {
-        val local = FakeTaskLocalStore(
-            mapOf(
-                TaskId("keep") to summary("keep"),
-                TaskId("vanished") to summary("vanished"),
-            ),
-        )
-        val remote = FakeTaskRemoteSource(snapshot = listOf(summary("keep")))
-
-        repo(local, remote).refresh()
-
-        assertEquals(setOf(TaskId("keep")), local.allIds())
-        assertFalse(local.all.containsKey(TaskId("vanished")))
-    }
-
-    @Test
-    fun refreshDoesNotPurgeAnOfflineCreatedRowStillAwaitingReplay() = runTest {
-        // An offline-created Task: present locally, absent from the server snapshot (it hasn't replayed
-        // yet), and recorded as a *pending* create — so it must survive the orphan-purge (#185).
-        val local = FakeTaskLocalStore(mapOf(TaskId("offline-new") to summary("offline-new")))
-        val remote = FakeTaskRemoteSource(snapshot = emptyList())
-        val pending = FakePendingCreateStore()
-        pending.add("offline-new", com.circuitstitch.deferno.core.model.ItemKind.Task)
-
-        repo(local, remote, pending).refresh()
-
-        assertEquals(setOf(TaskId("offline-new")), local.allIds())
-    }
-
-    @Test
-    fun refreshStillPurgesARowThatIsNeitherInTheSnapshotNorAPendingCreate() = runTest {
-        // A confirmed create that the server later genuinely deleted is no longer pending, so it is NOT
-        // protected — the purge still works (a confirmed pending row never protects forever).
-        val local = FakeTaskLocalStore(mapOf(TaskId("gone") to summary("gone")))
-        val remote = FakeTaskRemoteSource(snapshot = emptyList())
-        val pending = FakePendingCreateStore(
-            listOf(PendingCreate("gone", com.circuitstitch.deferno.core.model.ItemKind.Task, PendingCreateState.Confirmed, "gone")),
-        )
-
-        repo(local, remote, pending).refresh()
-
-        assertTrue(local.allIds().isEmpty())
-    }
-
-    // --- reconcile: hydration preservation ---
-
-    @Test
-    fun refreshDoesNotDowngradeAFullRowAndKeepsItsEnrichmentWhileUpdatingSummaryFields() = runTest {
-        val finished = Instant.parse("2026-06-02T09:30:00Z")
-        val existingFull = full("a", title = "old title", description = "rich body", finishedAt = finished)
-            .copy(pinned = false, workingState = WorkingState.Open)
-        val local = FakeTaskLocalStore(mapOf(TaskId("a") to existingFull))
-        // Snapshot summary changes title/status/pinned but (being a summary) carries null enrichment.
-        val incoming = summary("a", title = "new title", state = WorkingState.InProgress, pinned = true)
-        val remote = FakeTaskRemoteSource(snapshot = listOf(incoming))
-
-        repo(local, remote).refresh()
-
-        val merged = local.all.getValue(TaskId("a"))
-        // Summary fields updated...
-        assertEquals("new title", merged.title)
-        assertEquals(WorkingState.InProgress, merged.workingState)
-        assertTrue(merged.pinned)
-        // ...full-only enrichment preserved, row stays Full (no downgrade).
-        assertEquals(HydrationState.Full, merged.hydration)
-        assertEquals("rich body", merged.description)
-        assertEquals(OrgId("org-a"), merged.ownerOrgId)
-        assertEquals(TaskId("next-a"), merged.nextTaskId)
-        // finishedAt is omitted by the summary endpoint, so the hydrated value must survive too.
-        assertEquals(finished, merged.finishedAt)
-    }
-
-    @Test
-    fun refreshAppliesAFullSnapshotRowAsFull() = runTest {
-        // A snapshot row that is itself Full (e.g. from /items) replaces wholesale, enrichment and all.
-        val local = FakeTaskLocalStore(mapOf(TaskId("a") to summary("a")))
-        val remote = FakeTaskRemoteSource(snapshot = listOf(full("a", description = "fresh body")))
-
-        repo(local, remote).refresh()
-
-        val row = local.all.getValue(TaskId("a"))
-        assertEquals(HydrationState.Full, row.hydration)
-        assertEquals("fresh body", row.description)
-    }
-
-    // --- offline-first: failed refresh is a no-op ---
-
-    @Test
-    fun aFailedRefreshLeavesTheCacheIntact() = runTest {
-        val local = FakeTaskLocalStore(mapOf(TaskId("a") to summary("a")))
-        val remote = FakeTaskRemoteSource(snapshot = emptyList(), failNext = true)
-
-        repo(local, remote).refresh()
-
-        // Unavailable (couldn't reach the server), NOT a real empty snapshot, so "a" is NOT purged.
-        assertEquals(setOf(TaskId("a")), local.allIds())
-    }
-
-    @Test
-    fun refreshWithAGenuinelyEmptyServerSnapshotPurgesTheCache() = runTest {
-        // The bug the explicit RemoteSnapshot fixes: a reachable server that genuinely emptied
-        // (Available, empty) must reconcile the stale local rows away — distinct from an Unavailable
-        // pull, which leaves them. The old `emptyList() == offline` conflation could never purge to empty.
-        val local = FakeTaskLocalStore(mapOf(TaskId("a") to summary("a"), TaskId("b") to summary("b")))
-        val remote = FakeTaskRemoteSource(snapshot = emptyList()) // reachable, genuinely-empty server
-
-        repo(local, remote).refresh()
-
-        assertTrue(local.allIds().isEmpty())
     }
 
     // --- hydration on open ---
@@ -258,22 +102,19 @@ class OfflineTaskRepositoryTest {
     }
 
     @Test
-    fun aSummaryRefreshAfterHydrationDoesNotDowngradeTheRow() = runTest {
-        val local = FakeTaskLocalStore(mapOf(TaskId("a") to summary("a")))
-        val remote = FakeTaskRemoteSource(
-            details = mapOf(TaskId("a") to full("a", description = "opened body")),
-        )
-        val repository = repo(local, remote)
+    fun hydratePreservesTheItemsSnapshotDescendantCountsADetailFetchOmits() = runTest {
+        // The /items snapshot set the subtree counts; the /tasks/{id} detail doesn't carry them, so
+        // opening the Task must NOT blank the collapsed-node progress badge (#226/#227).
+        val cached = summary("a").copy(descendantDone = 2, descendantTotal = 5)
+        val local = FakeTaskLocalStore(mapOf(TaskId("a") to cached))
+        val remote = FakeTaskRemoteSource(details = mapOf(TaskId("a") to full("a"))) // detail has null counts
 
-        repository.hydrate(TaskId("a"))
-        // A later summary refresh of the same id must not wipe the description.
-        remote.snapshot = listOf(summary("a", title = "renamed"))
-        repository.refresh()
+        repo(local, remote).hydrate(TaskId("a"))
 
         val row = local.all.getValue(TaskId("a"))
         assertEquals(HydrationState.Full, row.hydration)
-        assertEquals("opened body", row.description)
-        assertEquals("renamed", row.title)
+        assertEquals(2L, row.descendantDone)
+        assertEquals(5L, row.descendantTotal)
     }
 
     @Test
@@ -287,23 +128,23 @@ class OfflineTaskRepositoryTest {
         assertEquals(HydrationState.Summary, local.all.getValue(TaskId("a")).hydration)
     }
 
-    // --- observe: re-emits on reconcile ---
+    // --- observe: re-emits on refresh ---
 
     @Test
-    fun observeTasksEmitsActiveListAndReEmitsOnReconcile() = runTest {
+    fun observeTasksEmitsActiveListAndReEmitsOnRefresh() = runTest {
         val local = FakeTaskLocalStore()
-        val remote = FakeTaskRemoteSource()
-        val repository = repo(local, remote)
+        val source = FakeItemSnapshotSource()
+        val repository = repo(local, source = source)
 
         repository.observeTasks().test {
             assertTrue(awaitItem().isEmpty()) // empty cache
 
-            remote.snapshot = listOf(summary("a", sequence = 2), summary("b", sequence = 1))
+            source.snapshot = ItemSnapshot(tasks = listOf(full("a"), full("b")))
             repository.refresh()
-            assertEquals(listOf(TaskId("b"), TaskId("a")), awaitItem().map { it.id }) // sequence order
+            assertEquals(setOf(TaskId("a"), TaskId("b")), awaitItem().map { it.id }.toSet())
 
-            // A second reconcile that removes "a" re-emits.
-            remote.snapshot = listOf(summary("b", sequence = 1))
+            // A second sync that removes "a" re-emits.
+            source.snapshot = ItemSnapshot(tasks = listOf(full("b")))
             repository.refresh()
             assertEquals(listOf(TaskId("b")), awaitItem().map { it.id })
 

@@ -84,6 +84,9 @@ class TaskEntityMappingTest {
             ownerOrgId = OrgId("org-9"),
             description = "the long body",
             nextTaskId = TaskId("n-1"),
+            // Server-computed subtree progress from the /items snapshot (#226).
+            descendantDone = 3,
+            descendantTotal = 8,
         )
 
         assertEquals(task, task.toEntity().toDomain())
@@ -190,5 +193,7 @@ class TaskEntityMappingTest {
         description = null,
         next_task_id = null,
         deadline_time_of_day = null,
+        descendant_done = null,
+        descendant_total = null,
     )
 }

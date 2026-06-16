@@ -50,6 +50,10 @@ sealed interface ItemView {
         @SerialName("deleted_at") val deletedAt: String? = null,
         val description: String? = null,
         @SerialName("next_task_id") val nextTaskId: String? = null,
+        // Server-computed subtree progress for a collapsed tree node's badge (ADR-0034, #226). Absent
+        // on a freshly-created row → null; `ignoreUnknownKeys` lets older payloads omit them.
+        @SerialName("descendant_done") val descendantDone: Long? = null,
+        @SerialName("descendant_total") val descendantTotal: Long? = null,
     ) : ItemView
 
     /** The `habit` variant — a recurring definition with no extra kind-specific fields. */

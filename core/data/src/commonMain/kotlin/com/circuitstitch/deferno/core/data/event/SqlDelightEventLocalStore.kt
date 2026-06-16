@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.data.event
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
+import com.circuitstitch.deferno.core.data.reconcileTransaction
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.EventId
@@ -24,6 +25,9 @@ class SqlDelightEventLocalStore(
 
     override fun observe(id: EventId): Flow<Event?> =
         queries.selectById(id.value).asFlow().mapToOneOrNull(dispatcher).map { it?.toDomain() }
+
+    override suspend fun allIds(): Set<EventId> =
+        queries.selectAllIds().executeAsList().mapTo(mutableSetOf(), ::EventId)
 
     override suspend fun get(id: EventId): Event? =
         queries.selectById(id.value).executeAsOneOrNull()?.toDomain()
@@ -59,4 +63,7 @@ class SqlDelightEventLocalStore(
     override suspend fun delete(id: EventId) {
         queries.deleteById(id.value)
     }
+
+    override suspend fun transaction(block: suspend (EventLocalStore) -> Unit) =
+        db.reconcileTransaction(this, block)
 }

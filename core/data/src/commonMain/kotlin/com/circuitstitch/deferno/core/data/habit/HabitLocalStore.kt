@@ -17,6 +17,9 @@ interface HabitLocalStore {
     /** A single Habit by [id], or `null` when absent. */
     fun observe(id: HabitId): Flow<Habit?>
 
+    /** Every cached id, including tombstones — the `/items` reconcile diffs this against a snapshot (#226). */
+    suspend fun allIds(): Set<HabitId>
+
     /** The current row for [id] (tombstone included), or `null`. */
     suspend fun get(id: HabitId): Habit?
 
@@ -25,4 +28,10 @@ interface HabitLocalStore {
 
     /** Hard-deletes the row [id]. */
     suspend fun delete(id: HabitId)
+
+    /**
+     * Runs [block] atomically against this store, so the `/items` reconcile (a batch of upserts +
+     * deletes) commits together and re-emits the observe `Flow` once at commit (ADR-0034, #226).
+     */
+    suspend fun transaction(block: suspend (HabitLocalStore) -> Unit)
 }
