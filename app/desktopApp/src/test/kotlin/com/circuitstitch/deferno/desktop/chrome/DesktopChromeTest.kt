@@ -8,6 +8,7 @@ import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.feature.signin.SignInComponent
+import com.circuitstitch.deferno.shell.AccountSession
 import com.circuitstitch.deferno.shell.AuthShellComponent
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.ChromeSpec
@@ -77,6 +78,7 @@ private class FakeRoot(child: RootComponent.Child) : RootComponent {
     override val stack: Value<ChildStack<*, RootComponent.Child>> =
         MutableValue(ChildStack(configuration = "single", instance = child))
     override val themeSettings: StateFlow<UserSettings> = MutableStateFlow(UserSettings.Default)
+    override val activeAccountSession: AccountSession? = null
     override fun onBackClicked(): Boolean = false
     override fun openInbox() = Unit
 }
