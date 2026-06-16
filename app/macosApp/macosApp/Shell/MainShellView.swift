@@ -19,6 +19,7 @@ struct MainShellView: View {
     @StateObject private var destinations: DestinationStackObserver
     @StateObject private var overlay: OverlaySlotObserver
     @StateObject private var accounts: AccountsObserver
+    @StateObject private var chrome: StateFlowObserver<ChromeSpec>
     @State private var showMore = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
@@ -28,10 +29,21 @@ struct MainShellView: View {
         _destinations = StateObject(wrappedValue: DestinationStackObserver(ShellBridgeKt.destinationStackBridge(component: component)))
         _overlay = StateObject(wrappedValue: OverlaySlotObserver(ShellBridgeKt.overlaySlotBridge(component: component)))
         _accounts = StateObject(wrappedValue: AccountsObserver(ShellBridgeKt.accountSwitcherBridge(component: component)))
+        _chrome = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.chromeBridge(component: component)))
     }
 
     private var active: MainShellComponentDestinationChild { destinations.active }
     private var activeName: String { ShellBridgeKt.destinationName(destination: ShellBridgeKt.destinationOf(child: active)) }
+
+    // The single adaptive chrome (Cand 1), computed in the shell. `drilled` swaps the leading affordance
+    // (sidebar/account ↔ ← back) and hides the create actions; `barTitle` is the foreground surface title,
+    // falling back to the nav label for Tasks (its co-resident panes carry their own headers, so
+    // chrome.title is empty — the documented carve-out).
+    private var drilled: Bool { ShellBridgeKt.chromeDrilled(spec: chrome.value) }
+    private var barTitle: String {
+        let title = ShellBridgeKt.chromeTitle(spec: chrome.value)
+        return title.isEmpty ? activeName : title
+    }
 
     var body: some View {
         Group {
@@ -62,10 +74,11 @@ struct MainShellView: View {
             destinationBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .toolbar { windowToolbar }
-                // The title bar tracks the foreground Destination (Plan / Calendar / Tasks …) rather
-                // than shouting the brand — the macOS-idiomatic sidebar-app title. The window itself
-                // stays named "Deferno" (Window scene + Dock icon) for ⌘-tab / the Window menu.
-                .navigationTitle(activeName)
+                // The title bar tracks the foreground surface from the shell-computed ChromeSpec (Cand 1):
+                // the Destination at a root ("Today" / "Calendar" …) and the drilled detail's own title (a
+                // Task name, a Settings category) when drilled — the macOS-idiomatic sidebar-app title. The
+                // window itself stays named "Deferno" (Window scene + Dock icon) for ⌘-tab / the Window menu.
+                .navigationTitle(barTitle)
         }
     }
 
@@ -83,6 +96,15 @@ struct MainShellView: View {
             }
             .help("Toggle Sidebar")
         }
+        // Drilled into a tier-3 detail (Plan task / Settings category): a ← back that pops via the shell's
+        // onBack, mirroring the iOS/Android chrome's leading affordance.
+        if drilled {
+            ToolbarItem(placement: .navigation) {
+                Button { _ = component.onBack() } label: { Image(systemName: "chevron.backward") }
+                    .help("Back")
+                    .accessibilityLabel("Back")
+            }
+        }
         if accounts.accounts.count > 1 {
             ToolbarItem(placement: .navigation) { accountSwitcher }
         }
@@ -91,14 +113,17 @@ struct MainShellView: View {
                 Image(systemName: "magnifyingglass")
             }
             .help("Search")
-            Button(action: onBrainDump) {
-                Image(systemName: "brain.head.profile")
+            // Create actions belong to a Destination root, not a drilled detail (matches ChromeSpec.actions).
+            if !drilled {
+                Button(action: onBrainDump) {
+                    Image(systemName: "brain.head.profile")
+                }
+                .help("Brain dump")
+                Button(action: onNewTapped) {
+                    Image(systemName: "plus")
+                }
+                .help("New task")
             }
-            .help("Brain dump")
-            Button(action: onNewTapped) {
-                Image(systemName: "plus")
-            }
-            .help("New task")
         }
     }
 
@@ -106,8 +131,11 @@ struct MainShellView: View {
         ZStack(alignment: .bottomTrailing) {
             destinationBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            newFab
-                .padding(Layout.gutter)
+            // No create affordance when drilled into a detail (matches ChromeSpec.actions / the toolbar).
+            if !drilled {
+                newFab
+                    .padding(Layout.gutter)
+            }
         }
     }
 
@@ -135,9 +163,21 @@ struct MainShellView: View {
 
     private var topBar: some View {
         HStack(spacing: 8) {
-            if accounts.accounts.count > 1 {
+            if drilled {
+                Button { _ = component.onBack() } label: {
+                    Image(systemName: "chevron.backward").font(.title3).foregroundStyle(colors.onSurface)
+                }
+                .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
+                .accessibilityLabel("Back")
+            } else if accounts.accounts.count > 1 {
                 accountSwitcher
             }
+            // The foreground surface title (Cand 1) — the compact twin of the regular layout's window title.
+            Text(barTitle)
+                .font(.headline)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .foregroundStyle(colors.onSurface)
             Spacer()
             Button { ShellBridgeKt.openSearchOverlay(component: component) } label: {
                 Image(systemName: "magnifyingglass")

@@ -19,6 +19,7 @@ struct MainShellView: View {
     @StateObject private var destinations: DestinationStackObserver
     @StateObject private var overlay: OverlaySlotObserver
     @StateObject private var accounts: AccountsObserver
+    @StateObject private var chrome: StateFlowObserver<ChromeSpec>
     @State private var drawerOpen = false
     /// Non-nil only while a finger is dragging the open content back toward the edge — makes the drawer
     /// track the finger 1:1. The effective open fraction is `dragX != nil ? base + dragX/width : base`.
@@ -29,6 +30,7 @@ struct MainShellView: View {
         _destinations = StateObject(wrappedValue: DestinationStackObserver(ShellBridgeKt.destinationStackBridge(component: component)))
         _overlay = StateObject(wrappedValue: OverlaySlotObserver(ShellBridgeKt.overlaySlotBridge(component: component)))
         _accounts = StateObject(wrappedValue: AccountsObserver(ShellBridgeKt.accountSwitcherBridge(component: component)))
+        _chrome = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.chromeBridge(component: component)))
     }
 
     private var active: MainShellComponentDestinationChild { destinations.active }
@@ -92,28 +94,69 @@ struct MainShellView: View {
     // MARK: Content card (top bar + active Destination), drawn on top of the drawer
 
     private var content: some View {
-        destinationBody
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(colors.background)
-            .environment(\.shellActions, shellActions)
+        VStack(spacing: 0) {
+            shellTopBar
+            destinationBody
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(colors.background)
     }
 
-    /// The hamburger (opens the drawer) and the New action, surfaced to the active Destination's native
-    /// nav bar. New is offered only where it means something — not on Profile/Settings (#72). The brain-dump
-    /// waveform is gone until it's actually wired (ADR-0027/#150): a permanently-disabled button is clutter.
-    private var shellActions: ShellActions {
-        let hasNew = ["Plan", "Tasks", "Calendar"].contains(activeName)
-        return ShellActions(
-            openMenu: { setDrawer(true) },
-            newItem: hasNew ? { onNewTapped() } : nil
-        )
+    /// The one adaptive top bar (Cand 1), the SwiftUI twin of Android's `ShellTopBar`: a leading ☰ menu at
+    /// a Destination root (opens the drawer) or ← back when drilled into a tier-3 detail (pops via the
+    /// shell's `onBack`), the shell-computed title, and the trailing create actions by kind. Brain dump is
+    /// skipped on iOS — there's no iOS inference engine / overlay yet (DefernoRoot.kt, ADR-0027/#150).
+    private var shellTopBar: some View {
+        let spec = chrome.value
+        let drilled = ShellBridgeKt.chromeDrilled(spec: spec)
+        return HStack(spacing: 4) {
+            if drilled {
+                Button { _ = component.onBack() } label: { Image(systemName: "chevron.backward") }
+                    .accessibilityLabel("Back")
+            } else {
+                Button { setDrawer(true) } label: { Image(systemName: "line.3.horizontal") }
+                    .accessibilityLabel("Menu")
+            }
+            Text(ShellBridgeKt.chromeTitle(spec: spec))
+                .font(.title3.weight(.semibold))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
+                .accessibilityAddTraits(.isHeader)
+            ForEach(0..<Int(ShellBridgeKt.chromeActionCount(spec: spec)), id: \.self) { i in
+                let index = Int32(i)
+                let kind = ShellBridgeKt.chromeActionKind(spec: spec, index: index)
+                if kind != "BrainDump", let glyph = actionGlyph(kind) {
+                    Button { ShellBridgeKt.chromeInvoke(spec: spec, index: index) } label: {
+                        Image(systemName: glyph)
+                    }
+                    .accessibilityLabel(kind)
+                }
+            }
+        }
+        .font(.title3)
+        .foregroundStyle(colors.onSurface)
+        .padding(.horizontal, 8)
+        .frame(minHeight: 52)
+        .background(colors.background)
+    }
+
+    /// The SF Symbol for a `ChromeActionKind` (mirrors `ShellChrome`'s glyph switch). Brain dump is handled
+    /// separately (skipped on iOS), so it has no glyph here.
+    private func actionGlyph(_ kind: String) -> String? {
+        switch kind {
+        case "Refresh": return "arrow.clockwise"
+        case "New": return "plus"
+        default: return nil
+        }
     }
 
     @ViewBuilder
     private var destinationBody: some View {
         let child = active
         if let plan = ShellBridgeKt.destPlan(child: child) {
-            PlanView(component: plan)
+            PlanHostView(plan: plan)
         } else if let calendar = ShellBridgeKt.destCalendar(child: child) {
             CalendarView(component: calendar)
         } else if let tasks = ShellBridgeKt.destTasks(child: child) {
@@ -124,15 +167,6 @@ struct MainShellView: View {
             SettingsView(component: settings)
         } else {
             EmptyStateView(title: "\(activeName) is coming soon", message: "This area is on the way.")
-        }
-    }
-
-    private func onNewTapped() {
-        // On Calendar the New action pre-dates to the selected day (#74); elsewhere it opens an undated form.
-        if let calendar = ShellBridgeKt.destCalendar(child: active) {
-            calendar.onNewForSelectedDay()
-        } else {
-            ShellBridgeKt.openNewOverlay(component: component)
         }
     }
 
@@ -228,7 +262,10 @@ struct MainShellView: View {
             }
     }
 
-    // MARK: Overlay (Search / New / Plan-tapped Task detail / Help→Feedback) as a sheet
+    // MARK: Overlay (Search / New / Help→Feedback) as a sheet
+
+    // A Plan-tapped Task is no longer a shell overlay (#51): it drills into the Plan Destination's own
+    // tier-3 stack (PlanHostView), rendered inside the chrome so the drawer stays live.
 
     private var overlaySearchComponent: SearchComponent? {
         overlay.current.flatMap { ShellBridgeKt.overlaySearch(child: $0) }
@@ -238,17 +275,13 @@ struct MainShellView: View {
         overlay.current.flatMap { ShellBridgeKt.overlayNew(child: $0) }
     }
 
-    private var overlayTaskDetailComponent: TaskDetailComponent? {
-        overlay.current.flatMap { ShellBridgeKt.overlayTaskDetail(child: $0) }
-    }
-
     private var overlayFeedbackComponent: FeedbackComponent? {
         overlay.current.flatMap { ShellBridgeKt.overlayFeedback(child: $0) }
     }
 
     private var overlayPresented: Binding<Bool> {
         Binding(
-            get: { overlaySearchComponent != nil || overlayNewComponent != nil || overlayTaskDetailComponent != nil || overlayFeedbackComponent != nil },
+            get: { overlaySearchComponent != nil || overlayNewComponent != nil || overlayFeedbackComponent != nil },
             set: { presented in if !presented { component.dismissOverlay() } }
         )
     }
@@ -259,9 +292,6 @@ struct MainShellView: View {
             SearchView(component: search)
         } else if let new = overlayNewComponent {
             NewItemView(component: new)
-        } else if let task = overlayTaskDetailComponent {
-            // A Plan tap shows the Task here, over the dashboard, instead of switching to the Tasks tab.
-            TaskDetailView(component: task)
         } else if let feedback = overlayFeedbackComponent {
             // Settings → Help & Feedback opens the in-app feedback form here (#375).
             FeedbackView(component: feedback)

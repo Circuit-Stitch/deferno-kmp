@@ -17,24 +17,22 @@ struct ProfileView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    identityCard
-                    Divider().background(colors.outlineVariant)
-                    accountSection
-                }
-                .padding(.horizontal, Layout.gutter)
-                .padding(.vertical, 12)
+        // No NavigationStack/title here: the single adaptive shell bar (MainShellView) titles "Profile".
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                identityCard
+                Divider().background(colors.outlineVariant)
+                accountSection
             }
-            .background(colors.background)
-            .shellNavBar("Profile")
-            .alert("Sign out of \(component.account.label)?", isPresented: $confirmSignOut) {
-                Button("Sign out", role: .destructive) { component.onSignOut() }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Your tasks stay safe in Deferno. You can sign back in with your token anytime.")
-            }
+            .padding(.horizontal, Layout.gutter)
+            .padding(.vertical, 12)
+        }
+        .background(colors.background)
+        .alert("Sign out of \(component.account.label)?", isPresented: $confirmSignOut) {
+            Button("Sign out", role: .destructive) { component.onSignOut() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your tasks stay safe in Deferno. You can sign back in with your token anytime.")
         }
     }
 
