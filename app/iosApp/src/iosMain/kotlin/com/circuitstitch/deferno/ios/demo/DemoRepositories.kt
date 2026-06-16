@@ -1,10 +1,13 @@
 package com.circuitstitch.deferno.ios.demo
 
+import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
 import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.Item
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -22,10 +25,14 @@ import kotlinx.datetime.LocalDate
  * [setWorkingState] backs the demo's working-state editor so the detail chips flip live. The real app
  * uses the DI-provided OfflineTaskRepository (a follow-up, #68/ADR-0014); this stays a fixture.
  */
-internal class DemoTaskRepository(initial: List<Task>) : TaskRepository {
+internal class DemoTaskRepository(initial: List<Task>) : TaskRepository, ItemRepository {
     private val tasks = MutableStateFlow(initial)
 
     override fun observeTasks(): Flow<List<Task>> = tasks
+
+    // The cross-kind Item read the Tasks tree renders (ADR-0034, #227). The demo holds only Tasks, so
+    // this projects the live task flow to Items (mirrors OfflineItemRepository); refresh() is shared.
+    override fun observeItems(): Flow<List<Item>> = tasks.map { list -> list.map(Task::toItem) }
 
     override fun observeTask(id: TaskId): Flow<Task?> =
         tasks.map { list -> list.firstOrNull { it.id == id } }
@@ -73,6 +80,18 @@ internal class DemoTaskRepository(initial: List<Task>) : TaskRepository {
     /** Current snapshot of a Task (used to mirror an add-to-plan into the demo plan). */
     fun snapshot(id: TaskId): Task? = tasks.value.firstOrNull { it.id == id }
 }
+
+/** Project a demo Task into the cross-kind Item read model (mirrors `OfflineItemRepository`'s mapping). */
+private fun Task.toItem(): Item = Item(
+    id = id.value,
+    kind = ItemKind.Task,
+    title = title,
+    parentId = parentId?.value,
+    sequence = sequence,
+    isTerminal = workingState.isTerminal,
+    descendantDone = descendantDone,
+    descendantTotal = descendantTotal,
+)
 
 /**
  * In-memory [PlanRepository] fake for the iOS demo harness (#51) — mirrors the Android

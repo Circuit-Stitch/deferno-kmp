@@ -5,15 +5,15 @@ import com.arkivanov.decompose.childContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.arkivanov.essenty.lifecycle.destroy
 import com.arkivanov.essenty.lifecycle.resume
+import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.feature.plan.DefaultPlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
-import com.circuitstitch.deferno.feature.tasks.TaskListComponent
+import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
 import com.circuitstitch.deferno.feature.tasks.TaskPane
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import com.circuitstitch.deferno.ios.bridge.DetailSlot
-import com.circuitstitch.deferno.ios.bridge.TreeSlot
 import com.circuitstitch.deferno.ios.bridge.ValueBridge
 import com.circuitstitch.deferno.ios.demo.DemoPlanRepository
 import com.circuitstitch.deferno.ios.demo.DemoTaskRepository
@@ -51,6 +51,10 @@ class DefernoDemo {
     private val tasksComponent: TasksComponent =
         DefaultTasksComponent(
             componentContext = root.childContext(key = "tasks"),
+            // DemoTaskRepository also implements ItemRepository (the tree's cross-kind read); the fold
+            // store is in-memory on iOS (device-local, not persisted in the demo — ADR-0034).
+            itemRepository = taskRepository,
+            foldStore = InMemoryItemFoldStore(),
             taskRepository = taskRepository,
             output = { output ->
                 when (output) {
@@ -75,7 +79,7 @@ class DefernoDemo {
             coroutineContext = Dispatchers.Main,
         )
 
-    /** The Tasks Destination root the SwiftUI `TasksScreen` renders (list + co-resident detail/tree). */
+    /** The Tasks Destination root the SwiftUI `TasksScreen` renders (the Item tree + co-resident detail). */
     val tasks: TasksRoot = TasksRoot(tasksComponent)
 
     /** The Plan Destination root the SwiftUI `PlanView` renders (today's ordered Tasks). */
@@ -92,14 +96,14 @@ class DefernoDemo {
 }
 
 /**
- * The Swift-facing handle for the Tasks Destination. Exposes the always-present [list] component and
- * the co-resident [detail] / [tree] slots + [activePane] recency (ADR-0007), each flattened through
- * the SKIE-free bridge so SwiftUI never touches the Decompose `Value`/`ChildSlot` generics.
+ * The Swift-facing handle for the Tasks Destination. Exposes the always-present Item [tree] component
+ * (the primary pane), the co-resident [detail] slot, and [activePane] recency (ADR-0007). The detail
+ * slot is flattened through the SKIE-free bridge so SwiftUI never touches the Decompose `Value`/
+ * `ChildSlot` generics; the tree is a plain component its `state` is observed via `itemTreeStateBridge`.
  */
 class TasksRoot internal constructor(private val component: TasksComponent) {
-    val list: TaskListComponent get() = component.list
+    val tree: ItemTreeComponent get() = component.tree
     val detail: DetailSlot = DetailSlot(component.detail)
-    val tree: TreeSlot = TreeSlot(component.tree)
     val activePane: ValueBridge<TaskPane> = ValueBridge(component.activePane)
 }
 

@@ -64,6 +64,80 @@ struct TaskRow: View {
     }
 }
 
+/// One node of the Tasks **Item tree** (#227, ADR-0034). The leading ▾/▸ chevron *and* a body tap both
+/// toggle a parent's fold; a childless leaf's body is inert. The trailing › opens detail (Task kind only
+/// — the other kinds have no detail surface yet). `depth` drives the indent; a collapsed parent shows a
+/// `descendantDone/descendantTotal` progress badge (Tasks only); a terminal (Done/Dropped/Archived) row
+/// is de-emphasized. Stateless: the handlers take their params from the row, never from observed state.
+struct ItemRowView: View {
+    let row: ItemRow
+    let onToggleExpand: (String, Bool) -> Void
+    let onOpenDetail: (String, ItemKind) -> Void
+
+    private var isTask: Bool { BridgeKt.itemKindIsTask(kind: row.item.kind) }
+
+    /// "done/total" for a collapsed Task parent; nil otherwise (recurring kinds carry no subtree counts).
+    private var progressBadge: String? {
+        guard row.hasChildren, !row.isExpanded,
+              let done = row.item.descendantDone, let total = row.item.descendantTotal
+        else { return nil }
+        return "\(done.intValue)/\(total.intValue)"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if row.depth > 0 {
+                Spacer().frame(width: CGFloat(row.depth) * 16)
+            }
+            // Leading chevron — toggles fold; reserved (invisible) on a leaf so titles stay aligned.
+            Button {
+                if row.hasChildren { onToggleExpand(row.item.id, row.isExpanded) }
+            } label: {
+                Text(row.isExpanded ? "▾" : "▸")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16)
+                    .opacity(row.hasChildren ? 1 : 0)
+            }
+            .buttonStyle(.plain)
+            .disabled(!row.hasChildren)
+            .accessibilityLabel(row.isExpanded ? "Collapse" : "Expand")
+            .accessibilityHidden(!row.hasChildren)
+
+            // Title (+ collapsed progress badge). A body tap toggles a parent's fold; a leaf body is inert.
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.item.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                if let progressBadge {
+                    Text(progressBadge)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { if row.hasChildren { onToggleExpand(row.item.id, row.isExpanded) } }
+
+            // Trailing › — opens detail; Task kind only (the other kinds have no detail surface yet).
+            if isTask {
+                Button {
+                    onOpenDetail(row.item.id, row.item.kind)
+                } label: {
+                    Text("›").font(.title3).foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open details")
+            }
+        }
+        .frame(minHeight: Layout.rowMinHeight)
+        .padding(.horizontal, Layout.gutter)
+        .padding(.vertical, 12)
+        .opacity(row.item.isTerminal ? 0.5 : 1.0)
+    }
+}
+
 /// A calm, single-line pane header: a title (a VoiceOver heading) with an optional leading **Back**
 /// affordance and trailing actions. Used by every pane so placement stays predictable.
 struct PaneHeader<Trailing: View>: View {
@@ -162,37 +236,25 @@ struct LoadingStrip: View {
     }
 }
 
-/// Which co-resident slot fills the Tasks secondary pane (ADR-0007 tier-2), mirroring the shared
-/// `resolveSecondarySlot` precedence the Android/desktop Views use: the most-recently-foregrounded
-/// slot when it's actually open, else whichever remains, else nothing. Recency only wins when its own
-/// slot is present, so a tree→child drill-in keeps the tree foregrounded rather than snapping to detail.
-enum SecondarySlot { case detail, tree, none }
+/// Whether the Tasks **secondary** pane shows a Task detail or nothing (ADR-0007 tier-2). Since the Item
+/// tree became the always-present **primary** pane (#227, ADR-0034), detail is the only secondary slot —
+/// so this is just "is a detail open?", with no co-resident precedence to resolve. Mirrors the shared
+/// `resolveSecondarySlot` the Android/desktop Views use.
+enum SecondarySlot { case detail, none }
 
-func resolveSecondarySlot(activePane: TaskPane, hasDetail: Bool, hasTree: Bool) -> SecondarySlot {
-    if activePane === TaskPane.tree, hasTree { return .tree }
-    if activePane === TaskPane.detail, hasDetail { return .detail }
-    if hasTree { return .tree }
-    if hasDetail { return .detail }
-    return .none
+func resolveSecondarySlot(hasDetail: Bool) -> SecondarySlot {
+    hasDetail ? .detail : .none
 }
 
-/// A pushed secondary screen in the compact-width Tasks `NavigationStack` (ADR-0007). Two cases because
-/// detail/tree are co-resident slots — both can be in the stack at once.
-enum TaskRoute: Hashable { case detail, tree }
+/// A pushed secondary screen in the compact-width Tasks `NavigationStack` (ADR-0007). Detail is the only
+/// secondary slot now — the tree is the primary pane (the stack root) — so there is a single case.
+enum TaskRoute: Hashable { case detail }
 
-/// The compact-width Tasks `NavigationStack` path derived from the co-resident slot state: the present
-/// secondary slots ordered so the **foregrounded** one is on top (last). Mirrors `resolveSecondarySlot`
-/// recency so native back/swipe pops the foreground slot first, falling back to the other. Empty = list
-/// only. The Decompose slot model stays the source of truth; this path is a derived View projection.
-func tasksNavPath(activePane: TaskPane, hasDetail: Bool, hasTree: Bool) -> [TaskRoute] {
-    switch (hasDetail, hasTree) {
-    case (false, false): return []
-    case (true, false): return [.detail]
-    case (false, true): return [.tree]
-    case (true, true):
-        return resolveSecondarySlot(activePane: activePane, hasDetail: true, hasTree: true) == .tree
-            ? [.detail, .tree] : [.tree, .detail]
-    }
+/// The compact-width Tasks `NavigationStack` path: `[.detail]` when a detail is open, else empty (the
+/// tree, as the stack root, is never in the pushed path). The Decompose slot model stays the source of
+/// truth; this path is a derived View projection.
+func tasksNavPath(hasDetail: Bool) -> [TaskRoute] {
+    hasDetail ? [.detail] : []
 }
 
 extension View {
