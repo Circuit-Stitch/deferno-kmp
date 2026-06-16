@@ -224,6 +224,35 @@ data class PlanReorder(val taskIds: List<TaskId>, override val date: LocalDate, 
     }
 }
 
+// --- Item intents (cross-kind tree move, ADR-0034 #228) ---
+
+/**
+ * Reparent + reorder one Item (`POST items/{id}/move`, ADR-0034 decision 5, #228). Unlike a
+ * [TaskMutation] this is a **cross-kind** intent — the moved Item and its target siblings may be
+ * different kinds — so it carries no single-[Task] `applyTo`; the optimistic reorder spans the four
+ * per-kind stores and lives in [com.circuitstitch.deferno.core.data.item.OutboxItemWriter].
+ *
+ * [newParentId] is the destination parent — an explicit wire `null` **detaches to root** (distinct from
+ * omit, ADR-0011). [position] is the insertion index among the destination's children; the server
+ * reassigns `sequence`. A server **400** (cycle) is a terminal rejection the next cold-snapshot reconcile
+ * corrects (LWW) — the client greys out illegal targets, so it is only ever a rare race.
+ *
+ * | Intent | Method + endpoint | Minimal body |
+ * |---|---|---|
+ * | [Move] | `POST items/{id}/move` | `{"new_parent_id":"…"\|null,"position":<int>}` |
+ */
+data class Move(val id: String, val newParentId: String?, val position: Int) : Mutation {
+    override val target: String get() = "item:$id"
+    override fun toRequest(): OutboxRequest = OutboxRequest(
+        OutboxMethod.Post,
+        listOf("items", id, "move"),
+        buildJsonObject {
+            if (newParentId == null) put("new_parent_id", JsonNull) else put("new_parent_id", newParentId)
+            put("position", position)
+        }.toString(),
+    )
+}
+
 // --- Settings intents ---
 
 /** Set the appearance: theme family + mode (Appearance category, #72). Applied live + persisted. */

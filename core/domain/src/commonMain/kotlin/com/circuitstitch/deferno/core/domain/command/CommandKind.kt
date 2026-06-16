@@ -50,6 +50,9 @@ enum class CommandCategory {
 
     /** The Active Account's User-setting writes ([CommandKind.SetTheme] …) — the backed Settings categories (#173). */
     Settings,
+
+    /** Cross-kind tree move — reparent + reorder ([CommandKind.MoveItem], ADR-0034 #228). */
+    Move,
 }
 
 /**
@@ -129,6 +132,14 @@ enum class CommandKind(
     SetTracking(CommandId("settings.set-tracking"), CommandCategory.Settings),
     SetDragAndDrop(CommandId("settings.set-drag-and-drop"), CommandCategory.Settings),
     SetDoneVisibility(CommandId("settings.set-done-visibility"), CommandCategory.Settings),
+
+    // The cross-kind tree move (ADR-0034 #228): reparent + reorder one Item via the modal move mode /
+    // keyboard, routed through the registry to the `ItemWriter` seam. Its own category (not Organize):
+    // it is not a per-Task command (it addresses a raw cross-kind id) and routes to a distinct writer,
+    // so it stays out of [taskKinds]. Appended at the end (CommandIds are a public contract — never
+    // reorder/rename existing entries). Offline-first (optimistic apply + enqueue), so NOT onlineOnly;
+    // it targets a tree node, not a Task row, so no [enabledFor] rule applies.
+    MoveItem(CommandId("item.move"), CommandCategory.Move),
     ;
 
     /**
@@ -165,7 +176,8 @@ enum class CommandKind(
                 it.category != CommandCategory.Plan &&
                     it.category != CommandCategory.Create &&
                     it.category != CommandCategory.Occurrence &&
-                    it.category != CommandCategory.Settings
+                    it.category != CommandCategory.Settings &&
+                    it.category != CommandCategory.Move
             }
 
         /** The catalog a Plan view offers. */
@@ -179,5 +191,8 @@ enum class CommandKind(
 
         /** The User-setting catalog the Settings Destination's backed categories drive (#173). */
         val settingsKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Settings }
+
+        /** The cross-kind tree-move catalog the modal move mode / keyboard drives (ADR-0034 #228). */
+        val moveKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Move }
     }
 }

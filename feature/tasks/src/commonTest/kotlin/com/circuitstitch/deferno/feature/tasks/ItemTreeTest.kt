@@ -122,4 +122,68 @@ class ItemTreeTest {
     /** A parent→child chain (each links to the next via parentId), for depth-fold assertions. */
     private fun chain(vararg ids: String): List<Item> =
         ids.mapIndexed { i, id -> item(id, parentId = ids.getOrNull(i - 1)) }
+
+    // --- moveOptions: the modal-move target computation (ADR-0034 #228) ---
+
+    /** root → a, b, c (in sequence order); for the relative-move geometry. */
+    private fun family() = listOf(
+        item("root", sequence = 0),
+        item("a", parentId = "root", sequence = 0),
+        item("b", parentId = "root", sequence = 1),
+        item("c", parentId = "root", sequence = 2),
+    )
+
+    @Test
+    fun moveOptionsForAMiddleChildOffersAllFourDirections() {
+        val o = moveOptions(family(), "b")
+        assertEquals(MoveTarget("root", 0), o.up) // before a
+        assertEquals(MoveTarget("root", 2), o.down) // after c (index in the group excluding b)
+        assertEquals(MoveTarget("a", 0), o.indent) // nest under preceding sibling a (a has no children)
+        assertEquals(MoveTarget(null, 1), o.outdent) // root level, right after its parent `root`
+    }
+
+    @Test
+    fun moveOptionsForTheFirstChildGreysUpAndIndent() {
+        val o = moveOptions(family(), "a")
+        assertEquals(null, o.up, "first child can't move up")
+        assertEquals(null, o.indent, "first child has no preceding sibling to nest under")
+        assertEquals(MoveTarget("root", 1), o.down)
+        assertEquals(MoveTarget(null, 1), o.outdent)
+    }
+
+    @Test
+    fun moveOptionsForTheLastChildGreysDown() {
+        val o = moveOptions(family(), "c")
+        assertEquals(null, o.down, "last child can't move down")
+        assertEquals(MoveTarget("root", 1), o.up)
+        assertEquals(MoveTarget("b", 0), o.indent) // nest under preceding sibling b
+    }
+
+    @Test
+    fun indentAppendsAfterThePrecedingSiblingsExistingChildren() {
+        // a already has a child; indenting b under a lands b AFTER it (position = a's child count).
+        val items = listOf(
+            item("root", sequence = 0),
+            item("a", parentId = "root", sequence = 0),
+            item("a1", parentId = "a", sequence = 0),
+            item("b", parentId = "root", sequence = 1),
+        )
+        assertEquals(MoveTarget("a", 1), moveOptions(items, "b").indent)
+    }
+
+    @Test
+    fun moveOptionsForALoneRootOffersNothing() {
+        // A single top-level item: no sibling to reorder against, no parent to outdent from.
+        val o = moveOptions(family(), "root")
+        assertEquals(null, o.up)
+        assertEquals(null, o.down)
+        assertEquals(null, o.indent)
+        assertEquals(null, o.outdent, "a root item can't outdent")
+    }
+
+    @Test
+    fun moveOptionsForAnAbsentIdOffersNothing() {
+        val o = moveOptions(family(), "ghost")
+        assertEquals(MoveOptions(null, null, null, null), o)
+    }
 }

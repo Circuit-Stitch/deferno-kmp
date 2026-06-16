@@ -68,6 +68,7 @@ import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
+import com.circuitstitch.deferno.feature.tasks.MoveEditor
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -315,6 +316,9 @@ class DefaultMainShellComponent(
     // The Tasks working-state write seam (#73), threaded into the Tasks Destination's component so its
     // detail can issue lifecycle Commands. Defaults to a no-op so the many shell tests build without it.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    // The Tasks Item-tree move seam (#228), threaded into the Tasks Destination so its modal move mode can
+    // issue Move Commands. Defaults to a no-op so the many shell tests build without it.
+    private val moveEditor: MoveEditor = MoveEditor.NONE,
     // The Task detail's online-only comments + attachments source, threaded into the detail (overlay +
     // Tasks Destination). Defaulted to the no-op so the many shell tests build without supplying it.
     private val taskDetailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
@@ -599,6 +603,7 @@ class DefaultMainShellComponent(
                         taskRepository = taskRepository,
                         output = ::onTasksOutput,
                         workingStateEditor = workingStateEditor,
+                        moveEditor = moveEditor,
                         taskDetailRepository = taskDetailRepository,
                         createSubtask = createSubtask,
                         setDeadline = setDeadline,

@@ -45,6 +45,75 @@ private val SIBLING_ORDER: Comparator<Item> =
     compareBy<Item>({ it.sequence == null }, { it.sequence }, { it.title }, { it.id })
 
 /**
+ * Where a single modal-move press would send the lifted item — the destination parent ([newParentId],
+ * `null` = root) + the insertion [position] among that parent's children (excluding the lifted row),
+ * the exact pair the `Move` command / `ItemWriter` consume (ADR-0034 #228).
+ */
+data class MoveTarget(val newParentId: String?, val position: Int)
+
+/**
+ * The four relative moves available to the lifted item in modal move mode (ADR-0034 decisions 5/6, #228) —
+ * **↑↓** reorder among siblings and **‹›** outdent / indent. A `null` arm is an **illegal/disabled** move
+ * the UI greys out (the client-side "illegal targets prevented" guard): you can't move up past the first
+ * sibling, down past the last, indent with no preceding sibling to nest under, or outdent at the root.
+ * Each non-null arm is the [MoveTarget] that press issues — relative moves can never target the item's own
+ * self/descendant (a sibling is never below you; the parent is above), so no cycle is possible here; the
+ * arbitrary-jump "Move to…" picker that needs that guard is a deferred fast-follow.
+ */
+data class MoveOptions(
+    val up: MoveTarget?,
+    val down: MoveTarget?,
+    val indent: MoveTarget?,
+    val outdent: MoveTarget?,
+)
+
+/**
+ * Computes the [MoveOptions] for the lifted item [liftedId] over the current cross-kind [items] (ADR-0034
+ * #228). Mirrors the tree's own sibling grouping (`foldFlatten`): an absent parent collapses to root, and
+ * siblings order by [SIBLING_ORDER] — so the indices here match the order the flatten renders. Returns
+ * all-`null` (everything disabled) when the lifted id isn't in the visible set.
+ *
+ * - **up / down** keep the current parent; `position` is the neighbour's index in the group *excluding*
+ *   the lifted row (move up → land before the previous sibling; move down → after the next).
+ * - **indent** nests under the immediately-preceding sibling, appended after its current children.
+ * - **outdent** becomes a sibling of the current parent, inserted right after it among the grandparent's
+ *   children.
+ */
+fun moveOptions(items: List<Item>, liftedId: String): MoveOptions {
+    val lifted = items.firstOrNull { it.id == liftedId }
+        ?: return MoveOptions(null, null, null, null)
+    val visibleIds = items.mapTo(HashSet(items.size)) { it.id }
+    fun parentOf(item: Item): String? = item.parentId?.takeIf(visibleIds::contains)
+    fun childrenOf(parent: String?): List<Item> = items.filter { parentOf(it) == parent }.sortedWith(SIBLING_ORDER)
+
+    val parent = parentOf(lifted)
+    val siblings = childrenOf(parent)
+    val i = siblings.indexOfFirst { it.id == liftedId } // index within the full group (incl. the lifted row)
+    val lastIndex = siblings.size - 1
+
+    val up = if (i > 0) MoveTarget(parent, i - 1) else null
+    val down = if (i in 0 until lastIndex) MoveTarget(parent, i + 1) else null
+
+    // Indent: nest under the immediately-preceding sibling (never a descendant of the lifted row), at its end.
+    val indent = if (i > 0) {
+        val newParent = siblings[i - 1].id
+        MoveTarget(newParent, childrenOf(newParent).size)
+    } else {
+        null
+    }
+
+    // Outdent: hop up to be the current parent's next sibling among the grandparent's children.
+    val outdent = parent?.let { parentId ->
+        val parentItem = items.first { it.id == parentId }
+        val grandParent = parentOf(parentItem)
+        val parentIndex = childrenOf(grandParent).indexOfFirst { it.id == parentId }
+        MoveTarget(grandParent, parentIndex + 1)
+    }
+
+    return MoveOptions(up, down, indent, outdent)
+}
+
+/**
  * The shared fold-flatten every Tasks tree surface routes through (ADR-0034 decision 4, #227): the Tasks
  * Destination tree (over [Item], via [buildItemTree]) and the detail subtask outline (over `Task`, via
  * `DefaultTaskDetailComponent`) build their rows from this one algorithm, so the fold rule (and the

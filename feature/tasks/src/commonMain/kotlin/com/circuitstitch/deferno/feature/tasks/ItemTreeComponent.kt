@@ -11,14 +11,33 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 
-/** Observable state for the Tasks Item-tree pane. The View renders the flattened [rows] and holds no logic. */
+/**
+ * Observable state for the Tasks Item-tree pane. The View renders the flattened [rows] and holds no logic.
+ * [moveMode] is non-null while an item is lifted in modal move mode (ADR-0034 decision 6, #228) — the View
+ * highlights the lifted row, calms the rest, and greys out the illegal directions.
+ */
 data class ItemTreeState(
     val rows: List<ItemRow> = emptyList(),
     val isRefreshing: Boolean = false,
+    val moveMode: MoveMode? = null,
+)
+
+/**
+ * The lifted item + which of the four relative moves are legal right now (ADR-0034 #228). The booleans
+ * mirror [MoveOptions]'s non-null arms — the client-side "illegal targets greyed out" guard the View renders
+ * onto the **↑ ↓ ‹ ›** controls (and the keyboard ignores a disabled direction).
+ */
+data class MoveMode(
+    val liftedId: String,
+    val canMoveUp: Boolean,
+    val canMoveDown: Boolean,
+    val canIndent: Boolean,
+    val canOutdent: Boolean,
 )
 
 /**
@@ -51,6 +70,26 @@ interface ItemTreeComponent {
     /** Trigger an explicit network pull of the `/items` cold snapshot (offline-first: reads stay local). */
     fun onRefresh()
 
+    // --- Modal move mode (ADR-0034 decision 6, #228): a single lifted item moved live, one press at a time ---
+
+    /** Enter move mode with [id] lifted — the long-press "Move" entry (or a keyboard shortcut). */
+    fun onEnterMoveMode(id: String)
+
+    /** Leave move mode — the "Done" affordance. */
+    fun onExitMoveMode()
+
+    /** Reorder the lifted item up among its siblings (↑ / Alt+↑). A no-op when illegal ([MoveMode.canMoveUp]). */
+    fun onMoveUp()
+
+    /** Reorder the lifted item down among its siblings (↓ / Alt+↓). A no-op when illegal. */
+    fun onMoveDown()
+
+    /** Indent the lifted item — nest under its preceding sibling (› / Tab). A no-op when illegal. */
+    fun onIndent()
+
+    /** Outdent the lifted item — hop out to its parent's level (‹ / Shift-Tab). A no-op when illegal. */
+    fun onOutdent()
+
     sealed interface Output {
         data class ItemSelected(val id: TaskId) : Output
     }
@@ -61,15 +100,36 @@ class DefaultItemTreeComponent(
     private val itemRepository: ItemRepository,
     private val foldStore: ItemFoldStore,
     private val output: (ItemTreeComponent.Output) -> Unit,
+    // The cross-kind move write seam (#228), threaded from the shell over CommandExecutor. Defaults to a
+    // no-op so the read/fold/navigation-only tests construct the component without supplying it.
+    private val moveEditor: MoveEditor = MoveEditor.NONE,
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : ItemTreeComponent, ComponentContext by componentContext {
 
     private val scope = componentScope(coroutineContext)
     private val refreshing = MutableStateFlow(false)
 
+    // Which item is lifted in modal move mode, or null when not in move mode (#228).
+    private val liftedId = MutableStateFlow<String?>(null)
+
     override val state: StateFlow<ItemTreeState> =
-        combine(itemRepository.observeItems(), foldStore.overrides, refreshing) { items, ov, isRefreshing ->
-            ItemTreeState(rows = buildItemTree(items, ov), isRefreshing = isRefreshing)
+        combine(itemRepository.observeItems(), foldStore.overrides, refreshing, liftedId) { items, ov, isRefreshing, lifted ->
+            ItemTreeState(
+                rows = buildItemTree(items, ov),
+                isRefreshing = isRefreshing,
+                // Re-derive the legal directions whenever the tree changes — an applied move re-emits items,
+                // so the ↑↓‹› greying tracks the lifted item's new position live, with no extra state.
+                moveMode = lifted?.let { id ->
+                    val options = moveOptions(items, id)
+                    MoveMode(
+                        liftedId = id,
+                        canMoveUp = options.up != null,
+                        canMoveDown = options.down != null,
+                        canIndent = options.indent != null,
+                        canOutdent = options.outdent != null,
+                    )
+                },
+            )
         }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ItemTreeState())
 
     // Persisting through the shared store re-flattens this tree AND the detail subtask outline live —
@@ -90,6 +150,36 @@ class DefaultItemTreeComponent(
             } finally {
                 refreshing.value = false
             }
+        }
+    }
+
+    override fun onEnterMoveMode(id: String) {
+        liftedId.value = id
+    }
+
+    override fun onExitMoveMode() {
+        liftedId.value = null
+    }
+
+    override fun onMoveUp() = applyMove { it.up }
+
+    override fun onMoveDown() = applyMove { it.down }
+
+    override fun onIndent() = applyMove { it.indent }
+
+    override fun onOutdent() = applyMove { it.outdent }
+
+    /**
+     * Issues the [select]ed relative move for the lifted item as one independently-undoable Move (#228):
+     * recomputes [moveOptions] over the current cache so the target matches what the View greyed, then
+     * dispatches through [moveEditor]. A no-op when not in move mode or when that direction is illegal —
+     * the item stays lifted so the user can keep moving it ("live per press").
+     */
+    private fun applyMove(select: (MoveOptions) -> MoveTarget?) {
+        val id = liftedId.value ?: return
+        scope.launch {
+            val target = select(moveOptions(itemRepository.observeItems().first(), id)) ?: return@launch
+            moveEditor.move(id, target.newParentId, target.position)
         }
     }
 }

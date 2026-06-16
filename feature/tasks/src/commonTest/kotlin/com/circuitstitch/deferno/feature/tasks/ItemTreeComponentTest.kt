@@ -29,11 +29,13 @@ class ItemTreeComponentTest {
         items: FakeItemRepository,
         foldStore: InMemoryItemFoldStore = InMemoryItemFoldStore(),
         output: (ItemTreeComponent.Output) -> Unit = {},
+        moveEditor: MoveEditor = MoveEditor.NONE,
     ) = DefaultItemTreeComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         itemRepository = items,
         foldStore = foldStore,
         output = output,
+        moveEditor = moveEditor,
         coroutineContext = StandardTestDispatcher(testScheduler),
     )
 
@@ -41,6 +43,15 @@ class ItemTreeComponentTest {
         listOf(
             Item(id = "root", kind = ItemKind.Task, title = "root", sequence = 0),
             Item(id = "child", kind = ItemKind.Task, title = "child", parentId = "root", sequence = 1),
+        ),
+    )
+
+    /** root → a, b (two reorderable siblings) for the move-mode tests. */
+    private fun siblings() = FakeItemRepository(
+        listOf(
+            Item(id = "root", kind = ItemKind.Task, title = "root", sequence = 0),
+            Item(id = "a", kind = ItemKind.Task, title = "a", parentId = "root", sequence = 0),
+            Item(id = "b", kind = ItemKind.Task, title = "b", parentId = "root", sequence = 1),
         ),
     )
 
@@ -109,5 +120,73 @@ class ItemTreeComponentTest {
         advanceUntilIdle()
 
         assertEquals(1, items.refreshCount)
+    }
+
+    // --- modal move mode (ADR-0034 decision 6, #228) ---
+
+    @Test
+    fun enteringMoveModeLiftsTheItemAndGreysTheIllegalDirections() = runTest {
+        val c = component(siblings())
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onEnterMoveMode("a") // a is the first child: up + indent are illegal
+        advanceUntilIdle()
+
+        val move = c.state.value.moveMode!!
+        assertEquals("a", move.liftedId)
+        assertFalse(move.canMoveUp, "first child can't move up")
+        assertTrue(move.canMoveDown)
+        assertFalse(move.canIndent, "first child has no preceding sibling")
+        assertTrue(move.canOutdent)
+    }
+
+    @Test
+    fun aLegalDirectionDispatchesTheMoveWithItsComputedTarget() = runTest {
+        val moves = mutableListOf<Triple<String, String?, Int>>()
+        val c = component(siblings(), moveEditor = { id, parent, pos -> moves += Triple(id, parent, pos) })
+
+        c.onEnterMoveMode("a")
+        c.onMoveDown() // a → after b, in the group excluding a → position 1 under root
+        advanceUntilIdle()
+
+        assertEquals(listOf(Triple<String, String?, Int>("a", "root", 1)), moves)
+    }
+
+    @Test
+    fun anIllegalDirectionDispatchesNothing() = runTest {
+        val moves = mutableListOf<Triple<String, String?, Int>>()
+        val c = component(siblings(), moveEditor = { id, parent, pos -> moves += Triple(id, parent, pos) })
+
+        c.onEnterMoveMode("a")
+        c.onMoveUp() // a is the first child — illegal, greyed
+        advanceUntilIdle()
+
+        assertTrue(moves.isEmpty(), "a greyed direction must issue no Move")
+    }
+
+    @Test
+    fun doneExitsMoveMode() = runTest {
+        val c = component(siblings())
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onEnterMoveMode("a")
+        advanceUntilIdle()
+        assertEquals("a", c.state.value.moveMode?.liftedId)
+
+        c.onExitMoveMode()
+        advanceUntilIdle()
+        assertEquals(null, c.state.value.moveMode)
+    }
+
+    @Test
+    fun aMoveDispatchedWithNoEditorIsASafeNoOp() = runTest {
+        // The default NONE editor: the move-mode methods still run (no crash), they just don't write.
+        val c = component(siblings())
+
+        c.onEnterMoveMode("a")
+        c.onMoveDown()
+        advanceUntilIdle() // no exception, nothing to assert beyond "did not throw"
     }
 }

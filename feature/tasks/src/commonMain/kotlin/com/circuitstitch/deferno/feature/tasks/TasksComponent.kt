@@ -56,6 +56,9 @@ class DefaultTasksComponent(
     // The working-state write seam (#73), threaded down into the detail slot so the detail can issue
     // lifecycle Commands. Defaults to a no-op so existing shell/component tests build without it.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    // The cross-kind move write seam (#228), threaded into the tree pane so its modal move mode can issue
+    // Move Commands. Defaults to a no-op so existing shell/component tests build without it.
+    private val moveEditor: MoveEditor = MoveEditor.NONE,
     // The detail's online-only comments + attachments source + its "add subtask" create seam, threaded
     // down into the detail slot. Both default to no-ops so existing tests build without supplying them.
     private val taskDetailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
@@ -86,6 +89,7 @@ class DefaultTasksComponent(
             itemRepository = itemRepository,
             foldStore = foldStore,
             output = ::onTreeOutput,
+            moveEditor = moveEditor,
             coroutineContext = coroutineContext,
         )
 

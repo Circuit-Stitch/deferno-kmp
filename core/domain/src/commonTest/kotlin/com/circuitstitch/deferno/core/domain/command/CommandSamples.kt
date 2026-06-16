@@ -49,6 +49,7 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.SetTracking -> SetTracking(enabled = true)
     CommandKind.SetDragAndDrop -> SetDragAndDrop(enabled = true)
     CommandKind.SetDoneVisibility -> SetDoneVisibility(259200L, 86400L)
+    CommandKind.MoveItem -> MoveItem("item-1", newParentId = "p1", position = 2)
 }
 
 /** Concise [Task] fixture for the enablement tests. */

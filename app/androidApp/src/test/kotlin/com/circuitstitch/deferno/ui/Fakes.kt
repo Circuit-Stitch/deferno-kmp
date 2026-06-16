@@ -133,9 +133,18 @@ internal class FakeItemTreeComponent(initial: ItemTreeState = ItemTreeState()) :
     var refreshCount = 0
         private set
 
+    val moveModeEntered = mutableListOf<String>()
+    val movesApplied = mutableListOf<String>()
+
     override fun onToggleExpand(id: String, currentlyExpanded: Boolean) { toggled += id to currentlyExpanded }
     override fun onOpenDetail(id: String, kind: ItemKind) { opened += id to kind }
     override fun onRefresh() { refreshCount++ }
+    override fun onEnterMoveMode(id: String) { moveModeEntered += id }
+    override fun onExitMoveMode() { movesApplied += "done" }
+    override fun onMoveUp() { movesApplied += "up" }
+    override fun onMoveDown() { movesApplied += "down" }
+    override fun onIndent() { movesApplied += "indent" }
+    override fun onOutdent() { movesApplied += "outdent" }
 }
 
 /** Builds an [ItemRow] for the tree screenshot fixtures (the View renders rows verbatim, no re-flatten). */

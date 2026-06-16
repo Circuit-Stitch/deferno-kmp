@@ -15,6 +15,7 @@ import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.domain.command.CommandResult
 import com.circuitstitch.deferno.core.domain.command.CreateItem
 import com.circuitstitch.deferno.core.domain.command.MarkOccurrence
+import com.circuitstitch.deferno.core.domain.command.MoveItem
 import com.circuitstitch.deferno.core.domain.command.RescheduleOccurrence
 import com.circuitstitch.deferno.core.domain.command.SetDoneVisibility
 import com.circuitstitch.deferno.core.domain.command.SetDragAndDrop
@@ -36,6 +37,7 @@ import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
+import com.circuitstitch.deferno.feature.tasks.MoveEditor
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachments
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
@@ -108,6 +110,13 @@ interface AccountSession {
      */
     val setDeadline: suspend (TaskId, Instant?) -> Unit
     val setLabels: suspend (TaskId, List<String>) -> Unit
+
+    /**
+     * The Tasks Item-tree move seam the modal move mode drives (ADR-0034 #228): maps a relative move to a
+     * `MoveItem` Command and dispatches it through the command executor (optimistic cross-kind reorder +
+     * outbox enqueue), so the feature layer never touches the registry directly (mirrors [workingStateEditor]).
+     */
+    val moveEditor: MoveEditor
 
     /** The Calendar Destination's windowed feed read source (#74) — the month grid + day agenda observe it. */
     val calendarRepository: CalendarRepository
@@ -229,6 +238,9 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val setLabels: suspend (TaskId, List<String>) -> Unit =
         commandSetLabels(component.commandExecutor)
 
+    override val moveEditor: MoveEditor =
+        commandMoveEditor(component.commandExecutor)
+
     override val occurrenceEditor: OccurrenceEditor =
         commandOccurrenceEditor(component.commandExecutor)
 
@@ -273,6 +285,15 @@ internal fun commandSetDeadline(executor: CommandExecutor): suspend (TaskId, Ins
  */
 internal fun commandSetLabels(executor: CommandExecutor): suspend (TaskId, List<String>) -> Unit =
     { id, labels -> executor.execute(SetTaskLabels(id, labels)) }
+
+/**
+ * The Tasks Item-tree move seam backed by a [CommandExecutor] (ADR-0034 #228): dispatches a [MoveItem]
+ * with the destination parent + insertion index the modal move mode computed (optimistic cross-kind
+ * reorder + outbox enqueue). No `current` row — a move has no stale-transition gate. Shared by production
+ * and tests so the mapping isn't duplicated.
+ */
+internal fun commandMoveEditor(executor: CommandExecutor): MoveEditor =
+    MoveEditor { id, newParentId, position -> executor.execute(MoveItem(id, newParentId, position)) }
 
 /**
  * An [OccurrenceEditor] backed by a [CommandExecutor] (#74): each act maps to its occurrence Command

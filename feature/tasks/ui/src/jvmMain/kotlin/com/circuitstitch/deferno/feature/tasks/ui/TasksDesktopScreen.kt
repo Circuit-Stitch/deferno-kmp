@@ -96,6 +96,13 @@ private fun TreePane(component: ItemTreeComponent, modifier: Modifier = Modifier
         onOpenDetail = component::onOpenDetail,
         onRefresh = component::onRefresh,
         modifier = modifier,
+        moveMode = state.moveMode,
+        onEnterMoveMode = component::onEnterMoveMode,
+        onMoveUp = component::onMoveUp,
+        onMoveDown = component::onMoveDown,
+        onIndent = component::onIndent,
+        onOutdent = component::onOutdent,
+        onExitMoveMode = component::onExitMoveMode,
     )
 }
 
