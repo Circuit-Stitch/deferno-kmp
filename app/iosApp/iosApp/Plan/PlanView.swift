@@ -1,6 +1,31 @@
 import Deferno
 import SwiftUI
 
+/// The Plan Destination host (#51) — a **tier-3 drill-down** (`PlanChild`: Dashboard ↔ Detail(task)).
+/// A Plan tap pushes the Task's detail onto the Plan stack; a subtask drill pushes deeper. The whole
+/// stack renders inline inside the shell chrome (the drawer stays live) — no shell overlay any more (the
+/// detail used to be a `.sheet`). The single adaptive shell bar (`MainShellView`) titles each surface and
+/// drives back, so the detail is hosted header-less; mirrors macOS's `PlanHostView`.
+struct PlanHostView: View {
+    let plan: MainShellComponentDestinationChildPlan
+    @StateObject private var stack: PlanStackObserver
+
+    init(plan: MainShellComponentDestinationChildPlan) {
+        self.plan = plan
+        _stack = StateObject(wrappedValue: PlanStackObserver(ShellBridgeKt.planStackBridge(plan: plan)))
+    }
+
+    var body: some View {
+        let child = stack.active
+        if let dashboard = ShellBridgeKt.planChildDashboard(child: child) {
+            PlanView(component: dashboard)
+        } else if let detail = ShellBridgeKt.planChildDetail(child: child) {
+            // Header-less: the shell bar shows the Task title + ← back (which pops via the shell's onBack).
+            TaskDetailView(component: detail, showsHeader: false).id(BridgeKt.detailKey(component: detail))
+        }
+    }
+}
+
 /// The daily Plan pane (#51) — the app's calm home (design-principles.md: "open into today's Plan,
 /// not the whole backlog"). A thin renderer of `PlanComponent`: observes today's ordered Tasks and
 /// forwards taps (open the Task) / refresh, holding no logic of its own.
@@ -15,29 +40,26 @@ struct PlanView: View {
 
     var body: some View {
         let value = state.value
-        NavigationStack {
-            VStack(spacing: 0) {
-                if value.isRefreshing {
-                    LoadingStrip(label: "Refreshing your plan…")
-                }
-                if value.tasks.isEmpty && !value.isRefreshing {
-                    EmptyStateView(
-                        title: "Your plan is clear",
-                        message: "Nothing scheduled for today. Add something when you're ready — no pressure."
-                    )
-                } else {
-                    List {
-                        ForEach(value.tasks, id: \.stableKey) { task in
-                            TaskRow(task: task, showsPin: false) { component.onTaskClicked(id: task.id) }
-                                .listRowInsets(EdgeInsets())
-                        }
-                    }
-                    .listStyle(.plain)
-                    .refreshable { component.onRefresh() }
-                }
+        VStack(spacing: 0) {
+            if value.isRefreshing {
+                LoadingStrip(label: "Refreshing your plan…")
             }
-            .background(Color(.systemBackground))
-            .shellNavBar("Today")
+            if value.tasks.isEmpty && !value.isRefreshing {
+                EmptyStateView(
+                    title: "Your plan is clear",
+                    message: "Nothing scheduled for today. Add something when you're ready — no pressure."
+                )
+            } else {
+                List {
+                    ForEach(value.tasks, id: \.stableKey) { task in
+                        TaskRow(task: task, showsPin: false) { component.onTaskClicked(id: task.id) }
+                            .listRowInsets(EdgeInsets())
+                    }
+                }
+                .listStyle(.plain)
+                .refreshable { component.onRefresh() }
+            }
         }
+        .background(Color(.systemBackground))
     }
 }

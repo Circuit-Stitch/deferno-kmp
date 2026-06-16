@@ -68,6 +68,22 @@ final class SettingsStackObserver: ObservableObject {
     deinit { subscription?.cancel() }
 }
 
+/// Observes the Plan Destination's tier-3 drill-down stack (#51): the active `MainShellComponent.PlanChild`
+/// (the Dashboard base or a drilled-in Task detail). Mirrors `SettingsStackObserver`.
+final class PlanStackObserver: ObservableObject {
+    @Published private(set) var active: MainShellComponentPlanChild
+    private var subscription: Deferno.Subscription?
+
+    init(_ bridge: PlanStackBridge) {
+        active = bridge.active
+        subscription = bridge.subscribe(onEach: { [weak self] child in
+            self?.active = child
+        })
+    }
+
+    deinit { subscription?.cancel() }
+}
+
 /// Observes the Profile Destination's sealed `ProfileState`.
 final class ProfileStateObserver: ObservableObject {
     @Published private(set) var value: ProfileState

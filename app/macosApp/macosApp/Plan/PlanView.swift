@@ -2,9 +2,10 @@ import Deferno
 import SwiftUI
 
 /// The Plan Destination host (#51) — a **tier-3 drill-down** (`PlanChild`: Dashboard ↔ Detail(task)).
-/// A Plan tap pushes the Task's detail onto the Plan stack; a subtask drill pushes deeper; the detail's
-/// own Back (its `PaneHeader`) pops via the component's `Closed` output. Renders the active child inline,
-/// mirroring `SettingsView`'s tier-3 stack — no shell overlay any more (the detail used to be a sheet).
+/// A Plan tap pushes the Task's detail onto the Plan stack; a subtask drill pushes deeper. The single
+/// adaptive shell bar (`MainShellView`) titles each surface and drives ← back, so the detail is hosted
+/// header-less. Renders the active child inline, mirroring `SettingsView`'s tier-3 stack — no shell
+/// overlay any more (the detail used to be a sheet).
 struct PlanHostView: View {
     let plan: MainShellComponentDestinationChildPlan
     @StateObject private var stack: PlanStackObserver
@@ -19,7 +20,7 @@ struct PlanHostView: View {
         if let dashboard = ShellBridgeKt.planChildDashboard(child: child) {
             PlanView(component: dashboard)
         } else if let detail = ShellBridgeKt.planChildDetail(child: child) {
-            TaskDetailView(component: detail).id(BridgeKt.detailKey(component: detail))
+            TaskDetailView(component: detail, showsHeader: false).id(BridgeKt.detailKey(component: detail))
         }
     }
 }
@@ -38,8 +39,8 @@ struct PlanView: View {
 
     var body: some View {
         let value = state.value
+        // No PaneHeader: the single adaptive shell bar (MainShellView) titles "Today".
         VStack(spacing: 0) {
-            PaneHeader(title: "Today")
             if value.isRefreshing {
                 LoadingStrip(label: "Refreshing your plan…")
             }

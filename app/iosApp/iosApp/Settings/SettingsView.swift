@@ -1,16 +1,17 @@
 import Deferno
 import SwiftUI
 
-/// The Settings Destination (#72) — a native `NavigationStack` over an inset-grouped category list that
-/// pushes one screen per category (native `‹ Settings` back + swipe-back come free, no custom "Back").
-/// A thin renderer of `SettingsComponent`: backed categories read/write the Active Account's
-/// `UserSettings` (Appearance applies the theme live), the unbacked ones (Security & 2FA, Integrations)
-/// are gentle coming-soon stubs, and host concerns (export/import, feedback, app permissions, console)
-/// are forwarded for the shell to deep-link. The SpeechEngine + Agent rows stay hidden until a real
-/// device engine is registered (#95/#150). Navigation is SwiftUI-native here — the component's
-/// List↔Detail stack isn't used; the drill resets to the root list when you leave Settings, the iOS norm.
+/// The Settings Destination (#72) — a **tier-3 drill-down** (`SettingsChild`: List ↔ Detail(category))
+/// rendered from the shared component's stack, so the single adaptive shell bar (`MainShellView`) titles
+/// it ("Settings" / the category) and drives ← back. A thin renderer of `SettingsComponent`: backed
+/// categories read/write the Active Account's `UserSettings` (Appearance applies the theme live), the
+/// unbacked ones (Security & 2FA, Integrations) are gentle coming-soon stubs, and host concerns
+/// (export/import, feedback, app permissions, console) are forwarded for the shell to deep-link. The
+/// SpeechEngine + Agent rows stay hidden until a real device engine is registered (#95/#150). Mirrors
+/// macOS's `SettingsView`.
 struct SettingsView: View {
     let component: SettingsComponent
+    @StateObject private var stack: SettingsStackObserver
     @StateObject private var settings: StateFlowObserver<UserSettings>
     @StateObject private var speech: StateFlowObserver<SpeechEngineSettings>
     @StateObject private var inference: StateFlowObserver<InferenceEngineSettings>
@@ -18,35 +19,48 @@ struct SettingsView: View {
 
     init(component: SettingsComponent) {
         self.component = component
+        _stack = StateObject(wrappedValue: SettingsStackObserver(ShellBridgeKt.settingsStackBridge(component: component)))
         _settings = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.settingsStateBridge(component: component)))
         _speech = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.speechEngineBridge(component: component)))
         _inference = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.inferenceEngineBridge(component: component)))
     }
 
+    // Stack-driven (the component's List↔Detail stack, mirroring macOS) so the single adaptive shell bar
+    // (MainShellView) reflects the foreground surface — "Settings" at the root, the category title + ←
+    // back when drilled. Drilling is `openCategory`; back routes through the shell's `onBack`.
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    ForEach(categories) { category in
-                        NavigationLink {
-                            detailScreen(category)
-                        } label: {
-                            HStack {
-                                Text(title(category)).foregroundStyle(colors.onSurface)
-                                if !ShellBridgeKt.settingsCategoryBacked(category: category) {
-                                    Spacer()
-                                    Text("Coming soon").font(.subheadline).foregroundStyle(colors.inkMuted)
-                                }
+        Group {
+            if let category = ShellBridgeKt.settingsChildCategory(child: stack.active) {
+                detail(category)
+                    .scrollContentBackground(.hidden)
+            } else {
+                categoryList
+            }
+        }
+        .background(colors.background)
+    }
+
+    private var categoryList: some View {
+        List {
+            Section {
+                ForEach(categories) { category in
+                    Button {
+                        component.openCategory(category: category)
+                    } label: {
+                        HStack {
+                            Text(title(category)).foregroundStyle(colors.onSurface)
+                            Spacer()
+                            if !ShellBridgeKt.settingsCategoryBacked(category: category) {
+                                Text("Coming soon").font(.subheadline).foregroundStyle(colors.inkMuted)
                             }
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(colors.inkMuted)
                         }
-                        .listRowBackground(colors.surfaceCard)
                     }
+                    .listRowBackground(colors.surfaceCard)
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(colors.background)
-            .shellNavBar("Settings")
         }
+        .scrollContentBackground(.hidden)
     }
 
     /// Hide the device-local engine rows until one is registered (matches Android): SpeechEngine until an
@@ -62,15 +76,7 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: Pushed detail screen (native back + swipe-back)
-
-    private func detailScreen(_ category: SettingsCategory) -> some View {
-        detail(category)
-            .scrollContentBackground(.hidden)
-            .background(colors.background)
-            .navigationTitle(title(category))
-            .navigationBarTitleDisplayMode(.inline)
-    }
+    // MARK: Detail per category (the shell bar supplies the title + ← back)
 
     @ViewBuilder
     private func detail(_ category: SettingsCategory) -> some View {

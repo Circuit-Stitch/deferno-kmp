@@ -27,6 +27,8 @@ import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.ios.TasksRoot
 import com.circuitstitch.deferno.shell.AuthShellComponent
+import com.circuitstitch.deferno.shell.ChromeActionKind
+import com.circuitstitch.deferno.shell.ChromeSpec
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.FeedbackCategory
 import com.circuitstitch.deferno.shell.FeedbackComponent
@@ -175,6 +177,28 @@ fun signInStateBridge(component: SignInComponent): StateFlowBridge<SignInState> 
 
 fun destinationStackBridge(component: MainShellComponent): DestinationStackBridge = DestinationStackBridge(component.stack)
 fun overlaySlotBridge(component: MainShellComponent): OverlaySlotBridge = OverlaySlotBridge(component.overlay)
+
+// ---------------------------------------------------------------------------------------------------
+// Adaptive top-bar chrome (Cand 1) — Swift renders the shell-computed ChromeSpec as the one shell bar
+// (the SwiftUI twin of Android's ShellTopBar). ChromeSpec/ChromeAction are Compose-free in app/shell;
+// these mirror the index-based accessor pattern (see inference options) so Swift never names a sealed
+// type or invokes a Kotlin lambda property directly.
+// ---------------------------------------------------------------------------------------------------
+
+fun chromeBridge(component: MainShellComponent): StateFlowBridge<ChromeSpec> = StateFlowBridge(component.chrome)
+fun chromeTitle(spec: ChromeSpec): String = spec.title
+fun chromeDrilled(spec: ChromeSpec): Boolean = spec.drilled
+fun chromeActionCount(spec: ChromeSpec): Int = spec.actions.size
+
+/** The trailing action's kind at [index], as a stable String the View maps to a glyph + a11y label. */
+fun chromeActionKind(spec: ChromeSpec, index: Int): String = when (spec.actions[index].kind) {
+    ChromeActionKind.Refresh -> "Refresh"
+    ChromeActionKind.BrainDump -> "BrainDump"
+    ChromeActionKind.New -> "New"
+}
+
+/** Run the trailing action at [index] (a shell/component handler — e.g. New opens the create overlay). */
+fun chromeInvoke(spec: ChromeSpec, index: Int) = spec.actions[index].onInvoke()
 fun accountSwitcherBridge(component: MainShellComponent): AccountSwitcherBridge =
     AccountSwitcherBridge(component.accounts, component.activeAccount)
 

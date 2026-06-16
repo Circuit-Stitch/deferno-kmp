@@ -13,12 +13,17 @@ struct TaskDetailView: View {
     /// nothing to pop and the window's own chrome closes it. Default false: the inline / Plan callers
     /// keep their Back (which routes through the detail's `Closed` output to close the pane / pop).
     var hidesBackControl: Bool = false
+    /// Drop the in-pane `PaneHeader` entirely. Set by the Plan tier-3 host (#51), where the single adaptive
+    /// shell bar already shows the Task title + ← back; default true keeps the header for the inline Tasks
+    /// pane and the detached detail window.
+    var showsHeader: Bool = true
     @StateObject private var state: StateFlowObserver<TaskDetailState>
     @State private var newLabel = ""
 
-    init(component: TaskDetailComponent, hidesBackControl: Bool = false) {
+    init(component: TaskDetailComponent, hidesBackControl: Bool = false, showsHeader: Bool = true) {
         self.component = component
         self.hidesBackControl = hidesBackControl
+        self.showsHeader = showsHeader
         _state = StateObject(wrappedValue: StateFlowObserver(BridgeKt.taskDetailStateBridge(component: component)))
     }
 
@@ -26,11 +31,14 @@ struct TaskDetailView: View {
         let value = state.value
         VStack(spacing: 0) {
             // In single-pane the leading control returns to the list, so it reads as "Back". Hidden at a
-            // detached window's root entry (#196), where there's nothing to pop to.
-            PaneHeader(
-                title: value.task?.title ?? "Task",
-                onBack: hidesBackControl ? nil : { component.onCloseClicked() }
-            )
+            // detached window's root entry (#196), where there's nothing to pop to. Dropped entirely in the
+            // Plan tier-3 host (#51), where the shell bar shows the title + back.
+            if showsHeader {
+                PaneHeader(
+                    title: value.task?.title ?? "Task",
+                    onBack: hidesBackControl ? nil : { component.onCloseClicked() }
+                )
+            }
             if value.isHydrating && value.task == nil {
                 LoadingStrip(label: "Loading details…")
             }

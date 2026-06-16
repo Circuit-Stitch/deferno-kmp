@@ -50,7 +50,10 @@ struct TasksScreen: View {
                     secondaryPane(slot)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .shellNavBar("Tasks")
+                // Tasks is the documented carve-out: the shell bar's title is empty for Tasks (its panes
+                // carry their own headers), so this keeps a slim native title for the workspace column.
+                .navigationTitle("Tasks")
+                .navigationBarTitleDisplayMode(.inline)
             }
         } else {
             // Compact: the list is the stack root (carrying the Destination nav bar); a foregrounded
@@ -60,7 +63,8 @@ struct TasksScreen: View {
             // state re-assert the old path through the getter and bounce straight back to the detail on pop.)
             NavigationStack(path: $compactPath) {
                 TaskListView(component: root.list)
-                    .shellNavBar("Tasks")
+                    .navigationTitle("Tasks")
+                    .navigationBarTitleDisplayMode(.inline)
                     .navigationDestination(for: TaskRoute.self, destination: pushedPane)
             }
             .onAppear { compactPath = currentPath }

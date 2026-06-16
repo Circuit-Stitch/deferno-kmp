@@ -24,20 +24,18 @@ struct CalendarView: View {
 
     var body: some View {
         let value = state.value
-        NavigationStack {
-            VStack(spacing: 0) {
-                monthHeader(value)
-                weekdayHeader
-                monthGrid(value)
-                Divider().background(colors.outlineVariant)
-                if let item = rescheduling {
-                    rescheduleBanner(item)
-                }
-                dayAgenda(value)
+        // No NavigationStack/title here: the single adaptive shell bar (MainShellView) titles "Calendar".
+        VStack(spacing: 0) {
+            monthHeader(value)
+            weekdayHeader
+            monthGrid(value)
+            Divider().background(colors.outlineVariant)
+            if let item = rescheduling {
+                rescheduleBanner(item)
             }
-            .background(colors.background)
-            .shellNavBar("Calendar")
+            dayAgenda(value)
         }
+        .background(colors.background)
     }
 
     // MARK: Month header

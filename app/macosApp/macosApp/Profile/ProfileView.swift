@@ -17,8 +17,8 @@ struct ProfileView: View {
     }
 
     var body: some View {
+        // No PaneHeader: the single adaptive shell bar (MainShellView) titles "Profile".
         VStack(spacing: 0) {
-            PaneHeader(title: "Profile")
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     identityCard

@@ -21,13 +21,13 @@ struct SettingsView: View {
         _speech = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.speechEngineBridge(component: component)))
     }
 
+    // No PaneHeader: the single adaptive shell bar (MainShellView) titles "Settings" / the category and
+    // drives ← back (via the shell's onBack) — the chrome reflects this stack's foreground child.
     var body: some View {
         VStack(spacing: 0) {
             if let category = ShellBridgeKt.settingsChildCategory(child: stack.active) {
-                PaneHeader(title: title(category), onBack: { _ = component.onBack() })
                 ScrollView { detail(category).padding(Layout.gutter) }
             } else {
-                PaneHeader(title: "Settings")
                 categoryList
             }
         }
