@@ -95,6 +95,25 @@ of Z", the backend's [[Subtask/Child]]). Anything extracting or displaying "depe
 two; a true cross-chain blocker relation does not exist and must not be faked with labels or notes.
 _Avoid_: dependency, blocker, blocked-by, prerequisite (name the relation: sequence or decomposition).
 
+**Item tree** *(client)*:
+The Tasks [[Destination]]'s rendering of the [[Subtask/Child]] **decomposition** as one nested,
+collapsible tree spanning **all [[Item kind]]s equally** (a [[Habit]] may parent a [[Task]], an
+[[Event]] may sit under a [[Chore]], …) — the **complete catalog** of the person's work [[Item]]s,
+not a flat list. Roots are parent-less items; siblings sort by `sequence`; a child whose parent is
+absent from the visible set (e.g. aged out by the [[Done-visibility window]]) renders at the root.
+Reparenting and reordering are the single **Move** [[Command]] `(item → new parent, position)`.
+Distinct from the [[Plan]] (today's flat, curated list — never a tree) and from the deferred
+one-level drill-in it replaces.
+_Avoid_: task tree (it spans every kind, not only [[Task]]s), outline, backlog, flat list.
+
+**Done-visibility window** *(inherited, backend; client-honored)*:
+The synced [[User setting]] governing how long a **terminal, non-recurring** [[Item]] (a Done/Dropped
+[[Task]] or a past one-off [[Event]]) stays visible in lists before it is hidden — two levers: a
+longer **global** window (all lists) and a shorter **dashboard** window, each settable from
+*immediate* to *never*. Recurring kinds ([[Habit]]/[[Chore]]/recurring [[Event]]) never age out. The
+client honors it by syncing the **server-windowed** [[Item]] snapshot rather than re-deriving it.
+_Avoid_: archive, retention, auto-delete (the item is only *hidden*, never removed).
+
 ### Credentials
 
 **Personal access token (PAT)**:
@@ -128,7 +147,8 @@ subsystem ("Spec 2")** — there is no Workspace, org-listing, or permissions AP
 exactly one knowable [[Org]] (`personal_org_id`). Switching between Destinations is
 **state-preserving**: each keeps its own drill-down stack (multiple back stacks, ADR-0007 tier 1).
 There is no separate "All Tasks" destination: it is simply **Tasks scoped to the Personal
-[[Workspace]]** (the [[Personal org]]) — degenerate in v1, where that is the only Org.
+[[Workspace]]** (the [[Personal org]]) — degenerate in v1, where that is the only Org. Tasks renders
+as the [[Item tree]] (the complete catalog of work [[Item]]s, nested and collapsible), not a flat list.
 _Avoid_: view, screen, tab, page.
 
 **Pane**:
