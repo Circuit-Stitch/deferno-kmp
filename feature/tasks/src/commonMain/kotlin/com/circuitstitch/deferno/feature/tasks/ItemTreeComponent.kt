@@ -2,8 +2,11 @@ package com.circuitstitch.deferno.feature.tasks
 
 import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.common.componentScope
+import com.circuitstitch.deferno.core.common.log.Logger
+import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
+import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +28,28 @@ data class ItemTreeState(
     val rows: List<ItemRow> = emptyList(),
     val isRefreshing: Boolean = false,
     val moveMode: MoveMode? = null,
+    // The last undoable Move, or null when nothing is undoable (ADR-0034 decision 8, #230). Drives the
+    // top "Moved · Undo" snackbar (only when [MoveUndo.structural]) and gates the menu's Undo entry.
+    val lastMove: MoveUndo? = null,
 )
+
+/**
+ * The View's projection of the [LastUndoable] register (ADR-0034 decision 8, #230). [structural] gates the
+ * top **"Moved · Undo"** snackbar — shown on reparent / indent / outdent, **not** a plain same-level reorder;
+ * [operation] feeds the shake confirm ("Undo [operation]?"); [id] is a monotonic token that re-keys the
+ * single-shot snackbar effect across successive moves (two indents in a row still each raise the snackbar).
+ */
+data class MoveUndo(val id: Int, val operation: String, val structural: Boolean)
+
+/**
+ * What a device shake should do (ADR-0034 decision 8, #230): raise the [Confirm] prompt for [operation]
+ * ("Undo [operation]?"), or do [Nothing] — the toggle is off, or nothing is undoable (the latter having
+ * already emitted its tracking event). The View renders the confirm and, on accept, calls [ItemTreeComponent.undoLastMove].
+ */
+sealed interface ShakeOutcome {
+    data class Confirm(val operation: String) : ShakeOutcome
+    data object Nothing : ShakeOutcome
+}
 
 /**
  * The lifted item + which of the four relative moves are legal right now (ADR-0034 #228). The booleans
@@ -90,6 +114,24 @@ interface ItemTreeComponent {
     /** Outdent the lifted item — hop out to its parent's level (‹ / Shift-Tab). A no-op when illegal. */
     fun onOutdent()
 
+    // --- Undo (ADR-0034 decision 8, #230): single-level Move undo, three interchangeable triggers ---
+
+    /**
+     * Revert the last Move (single-level), via the **same command path** ([MoveEditor]). The top snackbar's
+     * Undo action, the long-press menu's Undo entry, and the shake confirm all route here. A no-op when
+     * nothing is undoable; the entry is consumed so it can't be replayed twice.
+     */
+    fun undoLastMove()
+
+    /**
+     * Handle a device shake (#230). When shake-to-undo is on and a Move is undoable, returns
+     * [ShakeOutcome.Confirm] so the View can raise the "Undo [operation]?" prompt (the accidental-fire
+     * safety); a shake with **nothing to undo** emits a tracking event (logger stub until the telemetry seam
+     * lands) and returns [ShakeOutcome.Nothing]. A no-op ([ShakeOutcome.Nothing], no event) when the toggle
+     * is off — shake is never the only undo path, so the snackbar + menu still work.
+     */
+    fun onShake(): ShakeOutcome
+
     sealed interface Output {
         data class ItemSelected(val id: TaskId) : Output
     }
@@ -103,6 +145,12 @@ class DefaultItemTreeComponent(
     // The cross-kind move write seam (#228), threaded from the shell over CommandExecutor. Defaults to a
     // no-op so the read/fold/navigation-only tests construct the component without supplying it.
     private val moveEditor: MoveEditor = MoveEditor.NONE,
+    // The device-local shake-to-undo App setting (#230), sourced from AppScope. Defaulted to an in-memory
+    // (on) preference so existing tests build without supplying it (like the [moveEditor] no-op).
+    private val shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
+    // The tracking-event sink (#230): stubbed to the kmp-logger until the telemetry seam lands (ADR-0034).
+    // A seam (not a direct log call) so a shake-with-nothing-to-undo is assertable in commonTest.
+    private val trackEvent: (String) -> Unit = ::logTrackingEvent,
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : ItemTreeComponent, ComponentContext by componentContext {
 
@@ -112,24 +160,32 @@ class DefaultItemTreeComponent(
     // Which item is lifted in modal move mode, or null when not in move mode (#228).
     private val liftedId = MutableStateFlow<String?>(null)
 
+    // The single-level last-undoable register (ADR-0034 decision 8, #230): each move records its inverse here.
+    private val lastUndoable = LastUndoable()
+
     override val state: StateFlow<ItemTreeState> =
-        combine(itemRepository.observeItems(), foldStore.overrides, refreshing, liftedId) { items, ov, isRefreshing, lifted ->
-            ItemTreeState(
-                rows = buildItemTree(items, ov),
-                isRefreshing = isRefreshing,
-                // Re-derive the legal directions whenever the tree changes — an applied move re-emits items,
-                // so the ↑↓‹› greying tracks the lifted item's new position live, with no extra state.
-                moveMode = lifted?.let { id ->
-                    val options = moveOptions(items, id)
-                    MoveMode(
-                        liftedId = id,
-                        canMoveUp = options.up != null,
-                        canMoveDown = options.down != null,
-                        canIndent = options.indent != null,
-                        canOutdent = options.outdent != null,
-                    )
-                },
-            )
+        combine(
+            combine(itemRepository.observeItems(), foldStore.overrides, refreshing, liftedId) { items, ov, isRefreshing, lifted ->
+                ItemTreeState(
+                    rows = buildItemTree(items, ov),
+                    isRefreshing = isRefreshing,
+                    // Re-derive the legal directions whenever the tree changes — an applied move re-emits items,
+                    // so the ↑↓‹› greying tracks the lifted item's new position live, with no extra state.
+                    moveMode = lifted?.let { id ->
+                        val options = moveOptions(items, id)
+                        MoveMode(
+                            liftedId = id,
+                            canMoveUp = options.up != null,
+                            canMoveDown = options.down != null,
+                            canIndent = options.indent != null,
+                            canOutdent = options.outdent != null,
+                        )
+                    },
+                )
+            },
+            lastUndoable.current,
+        ) { core, undoable ->
+            core.copy(lastMove = undoable?.let { MoveUndo(it.id, it.operation, it.structural) })
         }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ItemTreeState())
 
     // Persisting through the shared store re-flattens this tree AND the detail subtask outline live —
@@ -161,28 +217,56 @@ class DefaultItemTreeComponent(
         liftedId.value = null
     }
 
-    override fun onMoveUp() = applyMove { it.up }
+    override fun onMoveUp() = applyMove("reorder") { it.up }
 
-    override fun onMoveDown() = applyMove { it.down }
+    override fun onMoveDown() = applyMove("reorder") { it.down }
 
-    override fun onIndent() = applyMove { it.indent }
+    override fun onIndent() = applyMove("indent") { it.indent }
 
-    override fun onOutdent() = applyMove { it.outdent }
+    override fun onOutdent() = applyMove("outdent") { it.outdent }
 
     /**
      * Issues the [select]ed relative move for the lifted item as one independently-undoable Move (#228):
      * recomputes [moveOptions] over the current cache so the target matches what the View greyed, then
      * dispatches through [moveEditor]. A no-op when not in move mode or when that direction is illegal —
      * the item stays lifted so the user can keep moving it ("live per press").
+     *
+     * Before dispatching, records the inverse in [lastUndoable] (ADR-0034 decision 8, #230): the item's
+     * pre-move slot ([currentSlot]) is the exact `(newParentId, position)` an undo moves it back to, through
+     * the **same** [moveEditor]. [structural] (a parent change — indent / outdent / reparent) drives the
+     * snackbar; a same-level reorder records too (shake-undoable) but shows no snackbar. [operation] labels
+     * the shake confirm.
      */
-    private fun applyMove(select: (MoveOptions) -> MoveTarget?) {
+    private fun applyMove(operation: String, select: (MoveOptions) -> MoveTarget?) {
         val id = liftedId.value ?: return
         scope.launch {
-            val target = select(moveOptions(itemRepository.observeItems().first(), id)) ?: return@launch
+            val items = itemRepository.observeItems().first()
+            val target = select(moveOptions(items, id)) ?: return@launch
+            val from = currentSlot(items, id) ?: return@launch
+            lastUndoable.record(operation, structural = target.newParentId != from.newParentId) {
+                moveEditor.move(id, from.newParentId, from.position)
+            }
             moveEditor.move(id, target.newParentId, target.position)
         }
+    }
+
+    override fun undoLastMove() {
+        scope.launch { lastUndoable.undo() }
+    }
+
+    override fun onShake(): ShakeOutcome {
+        if (!shakeToUndoPreference.enabled()) return ShakeOutcome.Nothing
+        val entry = lastUndoable.current.value
+            ?: return ShakeOutcome.Nothing.also { trackEvent("shake_undo_no_target") }
+        return ShakeOutcome.Confirm(entry.operation)
     }
 }
 
 // Keep the upstream alive briefly across config changes / brief detachment, then stop to save work.
 internal const val STOP_TIMEOUT_MS = 5_000L
+
+// The default tracking-event sink (#230): a kmp-logger stub until the telemetry seam lands (ADR-0034). A
+// top-level fn so it's a valid constructor default (a member `logger` isn't in scope for default args).
+private fun logTrackingEvent(event: String) {
+    Logger("ItemTreeUndo").i { "tracking_event: $event" }
+}

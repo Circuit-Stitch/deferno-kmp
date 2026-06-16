@@ -114,6 +114,23 @@ fun moveOptions(items: List<Item>, liftedId: String): MoveOptions {
 }
 
 /**
+ * The lifted item's **current slot** (ADR-0034 decision 8, #230): its present parent ([MoveTarget.newParentId])
+ * + its index among that parent's children — the exact `(newParentId, position)` pair an inverse [MoveTarget]
+ * restores it to. Captured *before* a move so undo can move it straight back. Mirrors [moveOptions]'s grouping
+ * (an absent parent collapses to root, siblings order by [SIBLING_ORDER]); the index is taken over the group
+ * **including** the lifted row, which is the insertion index the move write-path inserts it back at (the
+ * other siblings shift around the removed row, so the original index restores the original order). Returns
+ * `null` when the id isn't in the visible set (nothing to undo).
+ */
+fun currentSlot(items: List<Item>, liftedId: String): MoveTarget? {
+    val lifted = items.firstOrNull { it.id == liftedId } ?: return null
+    val visibleIds = items.mapTo(HashSet(items.size)) { it.id }
+    val parent = lifted.parentId?.takeIf(visibleIds::contains)
+    val siblings = items.filter { (it.parentId?.takeIf(visibleIds::contains)) == parent }.sortedWith(SIBLING_ORDER)
+    return MoveTarget(parent, siblings.indexOfFirst { it.id == liftedId })
+}
+
+/**
  * The shared fold-flatten every Tasks tree surface routes through (ADR-0034 decision 4, #227): the Tasks
  * Destination tree (over [Item], via [buildItemTree]) and the detail subtask outline (over `Task`, via
  * `DefaultTaskDetailComponent`) build their rows from this one algorithm, so the fold rule (and the
