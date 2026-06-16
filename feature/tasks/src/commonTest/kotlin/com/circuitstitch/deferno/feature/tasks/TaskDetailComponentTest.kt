@@ -158,18 +158,16 @@ class TaskDetailComponentTest {
     }
 
     @Test
-    fun closeShowTreeAndAddToPlanEmitIntents() = runTest {
+    fun addToPlanAndCloseEmitIntents() = runTest {
         val outputs = mutableListOf<TaskDetailComponent.Output>()
         val component = taskDetailComponent(TaskId("a"), FakeTaskRepository(listOf(task("a"))), outputs::add)
         advanceUntilIdle() // let the init hydrate settle so it doesn't interleave
 
-        component.onShowTreeClicked()
         component.onAddToPlanClicked()
         component.onCloseClicked()
 
         assertEquals(
             listOf(
-                TaskDetailComponent.Output.TreeRequested(TaskId("a")),
                 TaskDetailComponent.Output.AddToPlanRequested(TaskId("a")),
                 TaskDetailComponent.Output.Closed,
             ),

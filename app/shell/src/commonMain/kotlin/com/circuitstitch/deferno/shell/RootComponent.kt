@@ -267,6 +267,8 @@ class DefaultRootComponent(
                 val shell =
                     DefaultMainShellComponent(
                         componentContext = childContext,
+                        itemRepository = session.itemRepository,
+                        foldStore = session.foldStore,
                         taskRepository = session.taskRepository,
                         planRepository = session.planRepository,
                         authRepository = authRepository,

@@ -108,7 +108,6 @@ interface TaskDetailComponent {
     val state: StateFlow<TaskDetailState>
 
     fun onCloseClicked()
-    fun onShowTreeClicked()
     fun onAddToPlanClicked()
 
     /**
@@ -174,7 +173,6 @@ interface TaskDetailComponent {
 
     sealed interface Output {
         data object Closed : Output
-        data class TreeRequested(val id: TaskId) : Output
         data class SubtaskSelected(val id: TaskId) : Output
         data class AddToPlanRequested(val id: TaskId) : Output
     }
@@ -290,10 +288,6 @@ class DefaultTaskDetailComponent(
 
     override fun onCloseClicked() {
         output(TaskDetailComponent.Output.Closed)
-    }
-
-    override fun onShowTreeClicked() {
-        output(TaskDetailComponent.Output.TreeRequested(taskId))
     }
 
     override fun onAddToPlanClicked() {
