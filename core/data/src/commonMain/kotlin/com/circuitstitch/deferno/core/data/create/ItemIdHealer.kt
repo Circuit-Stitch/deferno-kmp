@@ -23,6 +23,9 @@ import com.circuitstitch.deferno.core.model.TaskId
  * - the Item row itself in its kind's local store (insert under the canonical id, delete the client row);
  * - **Task only** — `parentId` / `children` references on every other Task row (the decomposition tree);
  * - **Task only** — plan slots referencing the id ([PlanLocalStore.rekeyTask]);
+ * - **Task only** — on-device attachment rows keyed by the id ([rekeyAttachments], gh#223): a brain-dump
+ *   recording attached at accept time is keyed by the create-time client id, so without this it would be
+ *   orphaned (`forTask(canonicalId)` finds nothing) the moment the Task moves to the server id;
  * - any already-queued outbox entry whose `target` / `path` / `body` mentions the client id
  *   ([OutboxStore.update], in place so FIFO order is preserved). A UUID substring replace is
  *   collision-safe (ids don't appear as substrings of unrelated content).
@@ -38,6 +41,11 @@ class ItemIdHealer(
     private val eventStore: EventLocalStore,
     private val planStore: PlanLocalStore,
     private val outbox: OutboxStore,
+    // gh#223: re-point on-device attachments (Task-only) from the client id to the canonical id. A
+    // functional seam (LocalAttachmentRepository::rekeyTask in prod) — the data layer's existing idiom —
+    // so the healer needs no new interface and tests pass a capturing lambda. No-op default keeps the
+    // many existing constructions building.
+    private val rekeyAttachments: suspend (from: String, to: String) -> Unit = { _, _ -> },
 ) {
 
     /**
@@ -77,6 +85,7 @@ class ItemIdHealer(
             }
         }
         planStore.rekeyTask(from, to)
+        rekeyAttachments(clientId, canonicalId)
     }
 
     private suspend fun healHabit(clientId: String, canonicalId: String) {

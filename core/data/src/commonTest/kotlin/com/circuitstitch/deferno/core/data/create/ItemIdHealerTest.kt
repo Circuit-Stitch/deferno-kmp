@@ -47,7 +47,10 @@ class ItemIdHealerTest {
         val eventStore = FakeEventLocalStore()
         val planStore = FakePlanLocalStore()
         val outbox = FakeOutboxStore()
-        val healer = ItemIdHealer(taskStore, habitStore, choreStore, eventStore, planStore, outbox)
+        val attachmentReKeys = mutableListOf<Pair<String, String>>()
+        val healer = ItemIdHealer(taskStore, habitStore, choreStore, eventStore, planStore, outbox) { from, to ->
+            attachmentReKeys += from to to
+        }
     }
 
     @Test
@@ -79,6 +82,27 @@ class ItemIdHealerTest {
         assertEquals("task:server", entry.target)
         assertEquals(listOf("tasks", "server"), entry.request.path)
         assertEquals("""{"title":"x"}""", entry.request.body) // unrelated body unchanged
+        // gh#223: on-device attachments (brain-dump recording) follow the heal too, or they orphan.
+        assertEquals(listOf("client" to "server"), f.attachmentReKeys)
+    }
+
+    @Test
+    fun healHabitDoesNotTouchAttachments() = runTest {
+        // Attachments are Task-only (the Task-detail on-device seam) — recurring kinds never re-key them.
+        val f = Fixture()
+        f.habitStore.upsert(
+            com.circuitstitch.deferno.core.model.Habit(
+                id = HabitId("client"),
+                orgSlug = "u-test",
+                title = "stretch",
+                definitionState = com.circuitstitch.deferno.core.model.DefinitionState.Active,
+                dateCreated = created,
+            ),
+        )
+
+        f.healer.heal("client", "server", ItemKind.Habit)
+
+        assertTrue(f.attachmentReKeys.isEmpty())
     }
 
     @Test
