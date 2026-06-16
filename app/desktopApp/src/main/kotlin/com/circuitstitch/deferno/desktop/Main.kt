@@ -637,7 +637,7 @@ private fun MainShellComponent.refreshActiveDestination() {
         is MainShellComponent.DestinationChild.Plan ->
             (active.stack.value.active.instance as? MainShellComponent.PlanChild.Dashboard)
                 ?.component?.onRefresh() ?: Unit
-        is MainShellComponent.DestinationChild.Tasks -> active.component.list.onRefresh()
+        is MainShellComponent.DestinationChild.Tasks -> active.component.tree.onRefresh()
         // Calendar (auto-refreshes its window on open/nav), Inbox (re-queries on resume), Profile,
         // Settings, placeholder: no manual refresh.
         is MainShellComponent.DestinationChild.Calendar,

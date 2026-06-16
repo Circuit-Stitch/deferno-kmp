@@ -10,6 +10,8 @@ import com.circuitstitch.deferno.core.data.attachment.SettingsStorageProviderPre
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.item.ItemFoldStore
+import com.circuitstitch.deferno.core.data.item.SettingsItemFoldStore
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
 import com.circuitstitch.deferno.core.data.auth.DeviceName
 import com.circuitstitch.deferno.core.data.auth.LoopbackBrowserAuthenticator
@@ -95,6 +97,18 @@ interface JvmDataBindings {
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
         SettingsKeepBrainDumpRecordingsPreference(
+            PreferencesSettings(Preferences.userRoot().node("com/circuitstitch/deferno/storage")),
+        )
+
+    /**
+     * The device-local Item-tree fold-override store (ADR-0034, #227, [[App setting]]) — explicit
+     * expand/collapse choices keyed by item id, shared by the Tasks tree + the detail subtask outline.
+     * `java.util.prefs`-backed like the storage-provider choice; persists across desktop restarts.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun itemFoldStore(): ItemFoldStore =
+        SettingsItemFoldStore(
             PreferencesSettings(Preferences.userRoot().node("com/circuitstitch/deferno/storage")),
         )
 }

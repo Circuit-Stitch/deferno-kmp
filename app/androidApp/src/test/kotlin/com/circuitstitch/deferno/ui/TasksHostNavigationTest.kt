@@ -3,11 +3,16 @@ package com.circuitstitch.deferno.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.core.model.Item
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.demo.DemoItemRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.ui.TasksScreen
@@ -41,16 +46,23 @@ class TasksHostNavigationTest {
     fun drillingIntoTreeChild_foregroundsThatChildsDetail() {
         val parent = sampleTask("p", "Parent task", children = listOf("c"))
         val child = sampleTask("c", "Child step", parentId = "p", sequence = 1)
+        val items = listOf(
+            Item("p", ItemKind.Task, "Parent task"),
+            Item("c", ItemKind.Task, "Child step", parentId = "p", sequence = 1),
+        )
         val root = DefaultTasksComponent(
             componentContext = DefaultComponentContext(LifecycleRegistry()),
+            itemRepository = DemoItemRepository(items),
+            foldStore = InMemoryItemFoldStore(),
             taskRepository = DemoTaskRepository(listOf(parent, child)),
             coroutineContext = Dispatchers.Unconfined,
         )
 
         composeRule.setContent { DefernoTheme { TasksScreen(root) } }
 
-        // List → open the parent's detail → tap the child subtask row to drill into its detail.
-        composeRule.onNodeWithText("Parent task").performClick()
+        // Tree → open the parent's detail (trailing `›`) → tap the child subtask row to drill into its
+        // detail. In the compact fold the tree is hidden once detail opens, so "Child step" is unambiguous.
+        composeRule.onNodeWithContentDescription("Open Parent task").performClick()
         composeRule.onNodeWithText("Child step").performClick()
 
         // The child's *detail* is now foregrounded: its title header and the detail-only action show.

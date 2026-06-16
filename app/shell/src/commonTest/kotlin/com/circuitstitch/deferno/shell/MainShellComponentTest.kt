@@ -7,10 +7,14 @@ import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.core.model.BrainDumpDraftId
 import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
+import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.demo.DemoItemRepository
 import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
+import com.circuitstitch.deferno.demo.toDemoItems
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
@@ -56,6 +60,8 @@ class MainShellComponentTest {
         attachBrainDumpRecording: suspend (String, BrainDumpDraft) -> Unit = { _, _ -> },
     ) = DefaultMainShellComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
+        itemRepository = DemoItemRepository(SampleData.tasks.toDemoItems()),
+        foldStore = InMemoryItemFoldStore(),
         taskRepository = taskRepo,
         planRepository = planRepo,
         authRepository = auth,
@@ -109,7 +115,7 @@ class MainShellComponentTest {
         // Drill into Tasks: open a Task's detail (its private tier-3 state).
         shell.selectDestination(Destination.Tasks)
         val tasks = shell.tasks()
-        tasks.list.onTaskClicked(TaskId("t-1"))
+        tasks.tree.onOpenDetail("t-1", ItemKind.Task)
         assertEquals(TaskId("t-1"), tasks.detail.value.child?.instance?.taskId)
 
         // Leave Tasks for Plan, then come back — the ADR-0007 tier-1 acceptance scenario.
@@ -128,7 +134,7 @@ class MainShellComponentTest {
         val shell = shell()
         shell.selectDestination(Destination.Tasks)
         val tasks = shell.tasks()
-        tasks.list.onTaskClicked(TaskId("t-1"))
+        tasks.tree.onOpenDetail("t-1", ItemKind.Task)
         assertEquals(TaskId("t-1"), tasks.detail.value.child?.instance?.taskId)
 
         // Not just one round-trip: the Tasks Destination must stay the same instance with its detail
@@ -193,26 +199,12 @@ class MainShellComponentTest {
     }
 
     @Test
-    fun planTaskDetail_showSteps_handsOffToTheTasksWorkspace() {
-        val shell = shell()
-        val plan = stackPlan(shell)
-        plan.dashboard().onTaskClicked(TaskId("t-1")) // t-1 has children in the fake
-
-        plan.detail().onShowTreeClicked()
-
-        // Plan resets to its dashboard and the Task opens in the full Tasks Destination (its breakdown).
-        assertTrue(plan.stack.value.active.instance is MainShellComponent.PlanChild.Dashboard)
-        assertEquals(Destination.Tasks, shell.activeDestination())
-        assertEquals(TaskId("t-1"), shell.tasks().detail.value.child?.instance?.taskId)
-    }
-
-    @Test
     fun addToPlanIntent_bubblesToOutput() {
         val outputs = mutableListOf<MainShellComponent.Output>()
         val shell = shell(output = outputs::add)
         shell.selectDestination(Destination.Tasks)
         val tasks = shell.tasks()
-        tasks.list.onTaskClicked(TaskId("t-1"))
+        tasks.tree.onOpenDetail("t-1", ItemKind.Task)
 
         tasks.detail.value.child?.instance?.onAddToPlanClicked()
 
@@ -226,7 +218,7 @@ class MainShellComponentTest {
     fun back_dismissesActivePane_thenReturnsToTheHome_thenIsNotConsumed() {
         val shell = shell()
         shell.selectDestination(Destination.Tasks)
-        shell.tasks().list.onTaskClicked(TaskId("t-1")) // detail open on the Tasks Destination
+        shell.tasks().tree.onOpenDetail("t-1", ItemKind.Task) // detail open on the Tasks Destination
 
         assertTrue(shell.onBack(), "dismisses the open detail")
         assertNull(shell.tasks().detail.value.child)
@@ -238,27 +230,6 @@ class MainShellComponentTest {
         assertFalse(shell.onBack(), "on the Plan home with nothing to dismiss → not consumed")
     }
 
-    @Test
-    fun back_dismissesForegroundedPaneAfterDrillingIntoATreeChild() {
-        val shell = shell()
-        shell.selectDestination(Destination.Tasks)
-        val tasks = shell.tasks()
-        tasks.list.onTaskClicked(TaskId("t-1"))                 // detail of t-1 (a task with children)
-        tasks.detail.value.child?.instance?.onShowTreeClicked() // open its breakdown (tree)
-        tasks.tree.value.child?.instance?.onChildClicked(TaskId("t-1a")) // drill into a child
-
-        // Foreground is the child's detail, with the tree still co-resident behind it.
-        assertEquals(TaskId("t-1a"), tasks.detail.value.child?.instance?.taskId)
-        assertNotNull(tasks.tree.value.child, "tree stays open beneath the child detail")
-
-        assertTrue(shell.onBack(), "back closes the foregrounded child detail")
-        assertNull(tasks.detail.value.child, "child detail dismissed")
-        assertNotNull(tasks.tree.value.child, "tree now revealed")
-
-        assertTrue(shell.onBack(), "back closes the tree")
-        assertNull(tasks.tree.value.child)
-        assertEquals(Destination.Tasks, shell.activeDestination())
-    }
 
     // --- v1 Destination set (#70, ADR-0015) ---
 
@@ -566,7 +537,7 @@ class MainShellComponentTest {
     fun back_dismissesTheOverlayBeforeTheActiveDestinationsInnerState() {
         val shell = shell()
         shell.selectDestination(Destination.Tasks)
-        shell.tasks().list.onTaskClicked(TaskId("t-1")) // a dismissable inner pane on Tasks
+        shell.tasks().tree.onOpenDetail("t-1", ItemKind.Task) // a dismissable inner pane on Tasks
         shell.openOverlay(OverlayRoute.Placeholder)
 
         // Back hits the overlay first — the Tasks detail stays open beneath it.
@@ -646,7 +617,7 @@ class MainShellComponentTest {
     fun back_dismissesTheSearchOverlayBeforeTheActiveDestinationsInnerState() {
         val shell = shell()
         shell.selectDestination(Destination.Tasks)
-        shell.tasks().list.onTaskClicked(TaskId("t-1"))
+        shell.tasks().tree.onOpenDetail("t-1", ItemKind.Task)
         shell.openOverlay(OverlayRoute.Search)
 
         assertTrue(shell.onBack(), "back dismisses the Search overlay")

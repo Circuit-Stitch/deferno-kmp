@@ -4,15 +4,14 @@ import com.arkivanov.decompose.router.slot.ChildSlot
 import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanState
+import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
+import com.circuitstitch.deferno.feature.tasks.ItemTreeState
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
-import com.circuitstitch.deferno.feature.tasks.TaskListComponent
-import com.circuitstitch.deferno.feature.tasks.TaskListState
-import com.circuitstitch.deferno.feature.tasks.TaskTreeComponent
-import com.circuitstitch.deferno.feature.tasks.TaskTreeState
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.readBytes
@@ -87,30 +86,20 @@ class DetailSlot internal constructor(private val slot: Value<ChildSlot<*, TaskD
     }
 }
 
-/** The Tasks **tree** co-resident slot, flattened to its (nullable) child component (see [DetailSlot]). */
-class TreeSlot internal constructor(private val slot: Value<ChildSlot<*, TaskTreeComponent>>) {
-    val current: TaskTreeComponent? get() = slot.value.child?.instance
-
-    fun subscribe(onEach: (TaskTreeComponent?) -> Unit): Subscription {
-        val cancellation = slot.subscribe { onEach(it.child?.instance) }
-        return Subscription { cancellation.cancel() }
-    }
-}
-
 // Concrete factories that pin each StateFlow's element type, so Swift gets a strongly-typed
 // StateFlowBridge<…> (the generic is resolved here) without ever naming `StateFlow`. They also keep
 // StateFlowBridge's constructor internal — Swift can only obtain a bridge through these.
-fun taskListStateBridge(component: TaskListComponent): StateFlowBridge<TaskListState> =
+fun itemTreeStateBridge(component: ItemTreeComponent): StateFlowBridge<ItemTreeState> =
     StateFlowBridge(component.state)
 
 fun taskDetailStateBridge(component: TaskDetailComponent): StateFlowBridge<TaskDetailState> =
     StateFlowBridge(component.state)
 
-fun taskTreeStateBridge(component: TaskTreeComponent): StateFlowBridge<TaskTreeState> =
-    StateFlowBridge(component.state)
-
 fun planStateBridge(component: PlanComponent): StateFlowBridge<PlanState> =
     StateFlowBridge(component.state)
+
+/** True when [kind] is the Task kind — Swift can't reliably `==` a bridged Kotlin enum in a static framework. */
+fun itemKindIsTask(kind: ItemKind): Boolean = kind == ItemKind.Task
 
 /**
  * A stable String identity for a [Task], for SwiftUI list diffing. `Task.id` is a [TaskId] value
@@ -121,9 +110,6 @@ fun taskKey(task: Task): String = task.id.value
 
 /** The String identity of the Task a detail pane shows — for SwiftUI view identity (see [taskKey]). */
 fun detailKey(component: TaskDetailComponent): String = component.taskId.value
-
-/** The String identity of the Task a tree pane is rooted at — for SwiftUI view identity (see [taskKey]). */
-fun treeKey(component: TaskTreeComponent): String = component.rootId.value
 
 // ---------------------------------------------------------------------------------------------------
 // Task detail sections (#207 iOS parity) — the value-class unwraps + NSData/Instant codecs the SwiftUI

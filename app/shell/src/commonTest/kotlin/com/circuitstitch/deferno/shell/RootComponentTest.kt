@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -22,9 +23,11 @@ import com.circuitstitch.deferno.core.speech.InMemorySpeechEnginePreference
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineId
 import com.circuitstitch.deferno.core.data.outbox.FlushResult
+import com.circuitstitch.deferno.demo.DemoItemRepository
 import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
+import com.circuitstitch.deferno.demo.toDemoItems
 import com.circuitstitch.deferno.ui.FakeAuthRepository
 import com.circuitstitch.deferno.ui.FakeSettingsEditor
 import com.circuitstitch.deferno.ui.FakeSettingsRepository
@@ -157,7 +160,7 @@ class RootComponentTest {
         // Drill into Tasks on the first Main shell.
         firstMain.selectDestination(Destination.Tasks)
         (firstMain.stack.value.active.instance as MainShellComponent.DestinationChild.Tasks)
-            .component.list.onTaskClicked(TaskId("t-1"))
+            .component.tree.onOpenDetail("t-1", ItemKind.Task)
 
         manager.signOut()
         manager.signIn(account)
@@ -211,7 +214,7 @@ class RootComponentTest {
         val main = (root.activeChild() as RootComponent.Child.Main).component
         main.selectDestination(Destination.Tasks)
         (main.stack.value.active.instance as MainShellComponent.DestinationChild.Tasks)
-            .component.list.onTaskClicked(TaskId("t-1"))
+            .component.tree.onOpenDetail("t-1", ItemKind.Task)
 
         // Back dismisses the Tasks detail (delegated to the Main shell), so it is consumed.
         assertTrue(root.onBackClicked())
@@ -224,7 +227,7 @@ class RootComponentTest {
         val main = (root.activeChild() as RootComponent.Child.Main).component
         main.selectDestination(Destination.Tasks)
         val tasks = (main.stack.value.active.instance as MainShellComponent.DestinationChild.Tasks).component
-        tasks.list.onTaskClicked(TaskId("t-1"))
+        tasks.tree.onOpenDetail("t-1", ItemKind.Task)
 
         tasks.detail.value.child?.instance?.onAddToPlanClicked()
 
@@ -487,6 +490,10 @@ private class FakeAccountManager(active: Account? = null) : AccountManager {
 /** In-memory [AccountSession] over the in-memory demo repositories; records add-to-plan + create + flush calls. */
 internal class FakeAccountSession(
     override val taskRepository: TaskRepository = DemoTaskRepository(SampleData.tasks),
+    override val itemRepository: com.circuitstitch.deferno.core.data.item.ItemRepository =
+        DemoItemRepository(SampleData.tasks.toDemoItems()),
+    override val foldStore: com.circuitstitch.deferno.core.data.item.ItemFoldStore =
+        com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore(),
     override val taskDetailRepository: com.circuitstitch.deferno.core.data.task.TaskDetailRepository =
         com.circuitstitch.deferno.core.data.task.TaskDetailRepository.NONE,
     override val planRepository: PlanRepository = DemoPlanRepository(emptyList()),

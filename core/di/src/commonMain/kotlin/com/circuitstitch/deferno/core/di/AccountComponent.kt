@@ -6,6 +6,8 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.item.ItemFoldStore
+import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
@@ -58,6 +60,14 @@ abstract class AccountComponent(
     // Online-only Task detail extras (comments + attachments); an AppScope binding resolved through here.
     abstract val taskDetailRepository: TaskDetailRepository
     abstract val planRepository: PlanRepository
+
+    /**
+     * The cross-kind Item read (ADR-0034, #226/#227): the Tasks Item tree observes the windowed `/items`
+     * set across all four kinds through this. The device-local [foldStore] is an AppScope binding resolved
+     * through this child — the per-device expand/collapse overrides the tree (and the detail outline) share.
+     */
+    abstract val itemRepository: ItemRepository
+    abstract val foldStore: ItemFoldStore
 
     /**
      * The user's settings — observed for the Settings Destination + the app-wide live theme (#72).

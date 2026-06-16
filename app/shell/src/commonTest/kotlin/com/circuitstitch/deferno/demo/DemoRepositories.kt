@@ -1,10 +1,13 @@
 package com.circuitstitch.deferno.demo
 
+import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
 import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.Item
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.flow.Flow
@@ -63,6 +66,36 @@ internal class DemoTaskRepository(initial: List<Task>) : TaskRepository {
 
     /** Current snapshot of a Task (used to mirror an add-to-plan into the demo plan). */
     fun snapshot(id: TaskId): Task? = tasks.value.firstOrNull { it.id == id }
+}
+
+/**
+ * In-memory [ItemRepository] **test fake** for the shell tests: the cross-kind Item read the Tasks tree
+ * renders (ADR-0034). [refresh] is a no-op (the sample data is the source of truth); reads are a local
+ * Flow. Mirror the Tasks the [DemoTaskRepository] holds via [toDemoItems] so a tree row's id opens a
+ * detail that resolves in the Task store.
+ */
+internal class DemoItemRepository(initial: List<Item>) : ItemRepository {
+    private val items = MutableStateFlow(initial)
+
+    override fun observeItems(): Flow<List<Item>> = items
+
+    override suspend fun refresh() {
+        // Offline demo: nothing to pull — the sample data is the source of truth.
+    }
+}
+
+/** Project demo Tasks into the cross-kind Item read model (mirrors `OfflineItemRepository`'s mapping). */
+internal fun List<Task>.toDemoItems(): List<Item> = map {
+    Item(
+        id = it.id.value,
+        kind = ItemKind.Task,
+        title = it.title,
+        parentId = it.parentId?.value,
+        sequence = it.sequence,
+        isTerminal = it.workingState.isTerminal,
+        descendantDone = it.descendantDone,
+        descendantTotal = it.descendantTotal,
+    )
 }
 
 /**

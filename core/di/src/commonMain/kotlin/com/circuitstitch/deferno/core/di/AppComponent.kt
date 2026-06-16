@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
+import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
@@ -139,6 +140,15 @@ abstract class AppComponent(
      * every target. Defaults to on.
      */
     abstract val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference
+
+    /**
+     * The device-local **Item-tree fold-override store** (ADR-0034, #227): the per-device expand/collapse
+     * overrides the Tasks Item tree and the detail subtask outline share, keyed by item id. An AppScope
+     * [[App setting]] — device-local, never synced, never per-Account. Re-exposed here so the child
+     * AccountScope can consume it (its [AccountComponent.foldStore] resolves through this parent accessor)
+     * and to compile-validate the binding on every target.
+     */
+    abstract val foldStore: ItemFoldStore
 
     /**
      * The on-device attachment **byte store** (#210): the AppScope filesystem store the per-Account

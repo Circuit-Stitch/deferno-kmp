@@ -2,6 +2,8 @@ package com.circuitstitch.deferno.feature.tasks
 
 import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.common.componentScope
+import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
+import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
@@ -27,14 +29,26 @@ import kotlinx.datetime.toInstant
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 
-/** One node of the Task's recursive subtask tree: the child [task] and its own [children] subtree. */
-data class SubtaskNode(val task: Task, val children: List<SubtaskNode>)
+/**
+ * One depth-indented row of the Task's subtask outline — the same flattened-tree shape as the Tasks
+ * Destination's [ItemRow], but carrying the full [task] (the outline needs `workingState` for its
+ * checkbox). [hasChildren]/[isExpanded] drive the fold chevron; a collapsed parent's children are not
+ * emitted. Built by the shared [foldFlatten] over the device-local [com.circuitstitch.deferno.core.data.item.ItemFoldStore]
+ * — folding a node here re-flattens the Tasks tree too, and vice versa (ADR-0034 decision 4).
+ */
+data class SubtaskRow(
+    val task: Task,
+    val depth: Int,
+    val hasChildren: Boolean,
+    val isExpanded: Boolean,
+)
 
 /**
  * Observable state for the Task detail pane. [task] is null until the local row is observed.
  *
  * Beyond the core Task, it carries the three web-parity detail sections (#27 follow-up):
- * - the recursive [subtasks] tree (built locally from the cached Task list) + its done/total progress;
+ * - the [subtaskRows] outline (the subtree flattened with the shared fold mechanism) + its done/total
+ *   progress (counted over the whole subtree, independent of fold);
  * - the online-only [comments] thread (the web "Activity" feed) with its load/post flags;
  * - the online-only read-only [attachments] list.
  * [currentUserId] gates which comments offer edit/delete affordances (the server enforces the rest).
@@ -42,7 +56,7 @@ data class SubtaskNode(val task: Task, val children: List<SubtaskNode>)
 data class TaskDetailState(
     val task: Task? = null,
     val isHydrating: Boolean = false,
-    val subtasks: List<SubtaskNode> = emptyList(),
+    val subtaskRows: List<SubtaskRow> = emptyList(),
     val subtaskDone: Int = 0,
     val subtaskTotal: Int = 0,
     val comments: List<Comment> = emptyList(),
@@ -108,7 +122,6 @@ interface TaskDetailComponent {
     val state: StateFlow<TaskDetailState>
 
     fun onCloseClicked()
-    fun onShowTreeClicked()
     fun onAddToPlanClicked()
 
     /**
@@ -142,6 +155,13 @@ interface TaskDetailComponent {
     /** Open a subtask's own detail (tapping the row, web's chevron) — re-keys the detail to that child. */
     fun onSubtaskClicked(id: TaskId)
 
+    /**
+     * Toggle a subtask row's expand/collapse — the leading chevron. Persists through the shared device-local
+     * fold store, so the choice also re-flattens the Tasks Destination tree and survives restart (ADR-0034
+     * decision 4). [currentlyExpanded] is the row's present fold (the View has it on the [SubtaskRow]).
+     */
+    fun onToggleSubtaskExpand(id: String, currentlyExpanded: Boolean)
+
     /** Create a new direct child of this Task (the tree's "add subtask" field) — online-only create. */
     fun onAddSubtask(title: String)
 
@@ -174,7 +194,6 @@ interface TaskDetailComponent {
 
     sealed interface Output {
         data object Closed : Output
-        data class TreeRequested(val id: TaskId) : Output
         data class SubtaskSelected(val id: TaskId) : Output
         data class AddToPlanRequested(val id: TaskId) : Output
     }
@@ -210,6 +229,10 @@ class DefaultTaskDetailComponent(
     // LocalAttachmentRepository. Defaulted to the empty NONE so the many tests and the platforms without
     // on-device capture build without it (the detail then shows no on-device rows).
     private val onDeviceAttachments: OnDeviceAttachments = OnDeviceAttachments.NONE,
+    // The device-local fold store the subtask outline shares with the Tasks Destination tree (ADR-0034
+    // decision 4). Production threads the Account-scoped instance (so a fold here re-flattens the tree
+    // and vice versa); tests/callers that don't exercise fold get a fresh in-memory store by default.
+    private val foldStore: ItemFoldStore = InMemoryItemFoldStore(),
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : TaskDetailComponent, ComponentContext by componentContext {
 
@@ -223,15 +246,22 @@ class DefaultTaskDetailComponent(
             taskRepository.observeTasks(),
             extras,
             hydrating,
-        ) { task, all, ex, isHydrating ->
-            val tree = subtreeOf(taskId, all)
-            val flat = tree.flatten()
+            foldStore.overrides,
+        ) { task, all, ex, isHydrating, overrides ->
+            val descendants = descendantsOf(taskId, all)
             TaskDetailState(
                 task = task,
                 isHydrating = isHydrating,
-                subtasks = tree,
-                subtaskDone = flat.count { it.workingState == WorkingState.Done },
-                subtaskTotal = flat.size,
+                subtaskRows = foldFlatten(
+                    nodes = descendants,
+                    expandedOverrides = overrides,
+                    id = { it.id.value },
+                    parentId = { it.parentId?.value },
+                    siblingOrder = SUBTASK_ORDER,
+                ) { node, depth, hasChildren, isExpanded -> SubtaskRow(node, depth, hasChildren, isExpanded) },
+                // Progress counts the whole subtree, independent of which nodes are folded away.
+                subtaskDone = descendants.count { it.workingState == WorkingState.Done },
+                subtaskTotal = descendants.size,
                 comments = ex.comments,
                 commentsLoading = ex.commentsLoading,
                 commentsError = ex.commentsError,
@@ -292,10 +322,6 @@ class DefaultTaskDetailComponent(
         output(TaskDetailComponent.Output.Closed)
     }
 
-    override fun onShowTreeClicked() {
-        output(TaskDetailComponent.Output.TreeRequested(taskId))
-    }
-
     override fun onAddToPlanClicked() {
         output(TaskDetailComponent.Output.AddToPlanRequested(taskId))
     }
@@ -330,6 +356,10 @@ class DefaultTaskDetailComponent(
 
     override fun onSubtaskClicked(id: TaskId) {
         output(TaskDetailComponent.Output.SubtaskSelected(id))
+    }
+
+    override fun onToggleSubtaskExpand(id: String, currentlyExpanded: Boolean) {
+        foldStore.setOverride(id, !currentlyExpanded)
     }
 
     override fun onAddSubtask(title: String) {
@@ -403,23 +433,23 @@ class DefaultTaskDetailComponent(
 }
 
 /**
- * Builds the recursive subtask tree rooted at [rootId] from the full cached Task list — direct
- * children are the live (non-deleted) rows whose `parentId == rootId`, ordered by `sequence`, each
- * recursively carrying its own subtree. Pure and local: the children are already cached from the Task
- * list pull, so the tree needs no extra network (ADR-0001).
+ * Every live (non-deleted) descendant of [rootId] in the cached Task list, in no particular order —
+ * the subtree the detail outline renders + counts. Pure and local: the rows are already cached from the
+ * Task list pull, so it needs no extra network (ADR-0001). [foldFlatten] orders + nests them into rows;
+ * the direct children (whose `parentId` is [rootId], absent from this descendant set) become its roots.
  */
-internal fun subtreeOf(rootId: TaskId, all: List<Task>): List<SubtaskNode> {
+internal fun descendantsOf(rootId: TaskId, all: List<Task>): List<Task> {
     val byParent = all.filterNot { it.isDeleted }.groupBy { it.parentId }
-    fun nodesUnder(parent: TaskId): List<SubtaskNode> =
-        (byParent[parent].orEmpty())
-            .sortedBy { it.sequence }
-            .map { SubtaskNode(it, nodesUnder(it.id)) }
-    return nodesUnder(rootId)
+    val out = ArrayList<Task>()
+    fun collect(parent: TaskId) {
+        byParent[parent].orEmpty().forEach { out += it; collect(it.id) }
+    }
+    collect(rootId)
+    return out
 }
 
-/** Flattens a subtask tree to the list of its Tasks (for progress counting). */
-internal fun List<SubtaskNode>.flatten(): List<Task> =
-    flatMap { listOf(it.task) + it.children.flatten() }
+/** Subtask sibling order: by `sequence` (nulls first), matching the prior outline's `sortedBy { sequence }`. */
+private val SUBTASK_ORDER: Comparator<Task> = compareBy { it.sequence }
 
 /**
  * The clock a picked deadline DUE date lands on when the Task has no `deadlineTimeOfDay` of its own —

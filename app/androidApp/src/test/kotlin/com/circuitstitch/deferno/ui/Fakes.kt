@@ -8,6 +8,8 @@ import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.BrainDumpDraftId
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.Item
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -32,14 +34,13 @@ import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileState
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
 import com.circuitstitch.deferno.core.data.task.SearchSort
+import com.circuitstitch.deferno.feature.tasks.ItemRow
+import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
+import com.circuitstitch.deferno.feature.tasks.ItemTreeState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
-import com.circuitstitch.deferno.feature.tasks.TaskListComponent
-import com.circuitstitch.deferno.feature.tasks.TaskListState
-import com.circuitstitch.deferno.feature.tasks.TaskTreeComponent
-import com.circuitstitch.deferno.feature.tasks.TaskTreeState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.LocalDate
@@ -107,18 +108,56 @@ internal object SampleTasks {
         sampleTask("1a", "Draft the announcement", parentId = "1", sequence = 1),
         sampleTask("1b", "Schedule the post", WorkingState.Done, parentId = "1", sequence = 2),
     )
+
+    /** The cross-kind Item forest (#227): a parent that decomposes, plus terminal (dimmed) leaves. */
+    val items: List<Item> = listOf(
+        Item("1", ItemKind.Task, "Plan the spring launch", sequence = 0, descendantDone = 1, descendantTotal = 2),
+        Item("1a", ItemKind.Task, "Draft the announcement", parentId = "1", sequence = 1),
+        Item("1b", ItemKind.Task, "Schedule the post", parentId = "1", sequence = 2, isTerminal = true),
+        Item("2", ItemKind.Task, "Water the plants", sequence = 3),
+        Item("3", ItemKind.Task, "Reply to Sam", sequence = 4),
+        Item("4", ItemKind.Task, "Old idea worth revisiting", sequence = 5, isTerminal = true),
+    )
 }
 
-internal class FakeTaskListComponent(initial: TaskListState) : TaskListComponent {
+/**
+ * Records the Item-tree pane's intents for the tree screenshot + interaction tests (#227). Backed by a
+ * [MutableStateFlow] of [ItemTreeState]; toggle/open/refresh are recorded (handlers take their args from
+ * the row, never from the WhileSubscribed state).
+ */
+internal class FakeItemTreeComponent(initial: ItemTreeState = ItemTreeState()) : ItemTreeComponent {
     private val _state = MutableStateFlow(initial)
-    override val state: StateFlow<TaskListState> = _state
-    val clicked = mutableListOf<TaskId>()
+    override val state: StateFlow<ItemTreeState> = _state
+    val toggled = mutableListOf<Pair<String, Boolean>>()
+    val opened = mutableListOf<Pair<String, ItemKind>>()
     var refreshCount = 0
         private set
 
-    override fun onTaskClicked(id: TaskId) { clicked += id }
+    override fun onToggleExpand(id: String, currentlyExpanded: Boolean) { toggled += id to currentlyExpanded }
+    override fun onOpenDetail(id: String, kind: ItemKind) { opened += id to kind }
     override fun onRefresh() { refreshCount++ }
 }
+
+/** Builds an [ItemRow] for the tree screenshot fixtures (the View renders rows verbatim, no re-flatten). */
+internal fun itemRow(
+    id: String,
+    title: String,
+    depth: Int = 0,
+    hasChildren: Boolean = false,
+    isExpanded: Boolean = false,
+    kind: ItemKind = ItemKind.Task,
+    isTerminal: Boolean = false,
+    descendantDone: Long? = null,
+    descendantTotal: Long? = null,
+): ItemRow = ItemRow(
+    item = Item(
+        id = id, kind = kind, title = title, isTerminal = isTerminal,
+        descendantDone = descendantDone, descendantTotal = descendantTotal,
+    ),
+    depth = depth,
+    hasChildren = hasChildren,
+    isExpanded = isExpanded,
+)
 
 internal class FakeTaskDetailComponent(
     initial: TaskDetailState,
@@ -127,8 +166,6 @@ internal class FakeTaskDetailComponent(
     private val _state = MutableStateFlow(initial)
     override val state: StateFlow<TaskDetailState> = _state
     var closeCount = 0
-        private set
-    var showTreeCount = 0
         private set
     var addToPlanCount = 0
         private set
@@ -142,6 +179,7 @@ internal class FakeTaskDetailComponent(
 
     /** The web-parity detail intents the View forwarded, in order. */
     val subtaskToggles = mutableListOf<TaskId>()
+    val subtaskExpandToggles = mutableListOf<Pair<String, Boolean>>()
     val subtasksOpened = mutableListOf<TaskId>()
     val subtasksAdded = mutableListOf<String>()
     val commentsPosted = mutableListOf<String>()
@@ -156,12 +194,12 @@ internal class FakeTaskDetailComponent(
     var onDeviceBytes: Map<String, ByteArray> = emptyMap()
 
     override fun onCloseClicked() { closeCount++ }
-    override fun onShowTreeClicked() { showTreeCount++ }
     override fun onAddToPlanClicked() { addToPlanCount++ }
     override fun onSetWorkingState(target: WorkingState) { workingStateSets += target }
     override fun onSetDeadline(date: LocalDate?) { deadlineSets += date }
     override fun onSetLabels(labels: List<String>) { labelSets += labels }
     override fun onToggleSubtaskDone(subtask: Task) { subtaskToggles += subtask.id }
+    override fun onToggleSubtaskExpand(id: String, currentlyExpanded: Boolean) { subtaskExpandToggles += id to currentlyExpanded }
     override fun onSubtaskClicked(id: TaskId) { subtasksOpened += id }
     override fun onAddSubtask(title: String) { subtasksAdded += title }
     override fun onPostComment(body: String) { commentsPosted += body }
@@ -199,20 +237,6 @@ internal class FakeSearchComponent(initial: SearchState = SearchState()) : Searc
     override fun onSubmit() { submitCount++ }
     override fun onResultClicked(id: TaskId) { resultClicks += id }
     override fun onDismiss() { dismissCount++ }
-}
-
-internal class FakeTaskTreeComponent(
-    initial: TaskTreeState,
-    override val rootId: TaskId = TaskId("1"),
-) : TaskTreeComponent {
-    private val _state = MutableStateFlow(initial)
-    override val state: StateFlow<TaskTreeState> = _state
-    val childClicked = mutableListOf<TaskId>()
-    var closeCount = 0
-        private set
-
-    override fun onChildClicked(id: TaskId) { childClicked += id }
-    override fun onCloseClicked() { closeCount++ }
 }
 
 internal class FakePlanComponent(initial: PlanState) : PlanComponent {

@@ -92,9 +92,8 @@ class DefaultTaskDetailStackComponent(
             // The detail's Close == this window's Back: pop a drilled level (a no-op at the root, where
             // the window's own chrome closes it).
             TaskDetailComponent.Output.Closed -> navigation.pop()
-            // No tree screen or add-to-plan affordance inside the window — ignored.
+            // No add-to-plan affordance inside the window — ignored.
             // ponytail: forward AddToPlanRequested through an output seam if the window ever exposes it.
-            is TaskDetailComponent.Output.TreeRequested,
             is TaskDetailComponent.Output.AddToPlanRequested -> Unit
         }
     }

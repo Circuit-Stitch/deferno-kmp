@@ -115,6 +115,11 @@ object CoverageConfig {
         // (same rationale as SettingsStorageProviderPreference). The interface, InMemory impl, and the
         // brainDumpRecordingPlaceholderId helper ARE measured (commonMain/commonTest).
         "com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference*",
+        // The device-local Item-tree fold-override store adapter (ADR-0034, #227): multiplatform-settings-backed,
+        // exercised through the platform store on a real device/desktop, not the headless gate (same rationale as
+        // SettingsKeepBrainDumpRecordingsPreference). The ItemFoldStore interface and InMemoryItemFoldStore ARE
+        // measured (commonMain/commonTest).
+        "com.circuitstitch.deferno.core.data.item.SettingsItemFoldStore*",
         // The on-device deterministic-floor engine (ADR-0027): the vendored shacl-aio crate
         // (libshacl_aio.so over JNA) wrapped at the inference seam — native code that loads only on a
         // real device, exercised on-device, not the headless gate (same rationale as WhisperSpeechToText).

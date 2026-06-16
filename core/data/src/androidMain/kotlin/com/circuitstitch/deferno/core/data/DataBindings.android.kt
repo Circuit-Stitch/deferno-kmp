@@ -9,6 +9,8 @@ import com.circuitstitch.deferno.core.data.attachment.SettingsStorageProviderPre
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.item.ItemFoldStore
+import com.circuitstitch.deferno.core.data.item.SettingsItemFoldStore
 import com.circuitstitch.deferno.core.data.account.AccountRegistry
 import com.circuitstitch.deferno.core.data.account.AndroidAccountDataStore
 import com.circuitstitch.deferno.core.data.account.SharedPreferencesAccountRegistry
@@ -94,6 +96,18 @@ interface AndroidDataBindings {
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(context: Context): KeepBrainDumpRecordingsPreference =
         SettingsKeepBrainDumpRecordingsPreference(
+            SharedPreferencesSettings(context.getSharedPreferences(STORAGE_PREFS_NAME, Context.MODE_PRIVATE)),
+        )
+
+    /**
+     * The device-local Item-tree fold-override store (ADR-0034, #227, [[App setting]]) — explicit
+     * expand/collapse choices keyed by item id, shared by the Tasks tree + the detail subtask outline.
+     * SharedPreferences-backed, sharing the device-local app-settings bag (a distinct, namespaced key).
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun itemFoldStore(context: Context): ItemFoldStore =
+        SettingsItemFoldStore(
             SharedPreferencesSettings(context.getSharedPreferences(STORAGE_PREFS_NAME, Context.MODE_PRIVATE)),
         )
 }

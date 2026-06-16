@@ -9,6 +9,8 @@ import com.arkivanov.decompose.router.slot.childSlot
 import com.arkivanov.decompose.router.slot.dismiss
 import com.arkivanov.decompose.value.MutableValue
 import com.arkivanov.decompose.value.Value
+import com.circuitstitch.deferno.core.data.item.ItemFoldStore
+import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Task
@@ -17,34 +19,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 
-/**
- * Which pane was **most recently brought to the foreground**. The slots ([TasksComponent.detail],
- * [TasksComponent.tree]) are co-resident — more than one can be open at once — so this records their
- * activation *recency* as shared navigation state. A single-pane View renders exactly this pane; a
- * two-pane View can ignore it, or use it to decide which co-resident slot fills its second pane. It
- * is owned by the component (not the View) so it survives configuration changes and so back-handling
- * and rendering read one source of truth.
- */
-enum class TaskPane { List, Detail, Tree }
+/** Which pane is foregrounded — the Item [Tree] (the primary Tasks pane) or a Task [Detail]. */
+enum class TaskPane { Tree, Detail }
 
 /**
- * The Tasks feature root (ADR-0007). It models the list, detail, and tree as **co-resident slots**,
- * not a push/pop stack: [list] is always present, while [detail] and [tree] are independent slots
- * that can each hold a child *alongside* the list (and each other). A native View reads 1 or 2 panes
- * from these by window size class; the navigation model never assumes a single visible screen.
+ * The Tasks feature root (ADR-0034). The Tasks Destination is the nested, collapsible **Item tree**
+ * ([tree]) spanning all four kinds; selecting a row's trailing `›` opens its [detail] alongside (a
+ * co-resident slot, ADR-0007). The old flat list + one-level drill pane are **subsumed** — a node's
+ * children are now seen inline by expanding the tree, so there is no separate tree slot anymore.
  *
- * Navigation is intent-driven: child components emit `Output`s, which this root turns into slot
- * activation/dismissal (selecting a list row opens the detail slot; the detail's "show tree" opens
- * the tree slot; a tree child opens that child's detail). Each activation also updates [activePane]
- * (the recency a single-pane View renders / back dismisses). Cross-feature intents (add-to-plan) are
- * re-emitted via this component's own [Output] for the app host to route.
+ * A native View reads 1 or 2 panes by window size class: the tree, plus the detail when open. Navigation
+ * is intent-driven — the tree emits an `ItemSelected`, which this root turns into detail activation, and
+ * the detail's subtask-drill re-keys the same slot. [activePane] is the recency a single-pane View renders
+ * and back dismisses. Cross-feature intents (add-to-plan) are re-emitted via this component's [Output].
  */
 interface TasksComponent {
-    val list: TaskListComponent
+    val tree: ItemTreeComponent
     val detail: Value<ChildSlot<*, TaskDetailComponent>>
-    val tree: Value<ChildSlot<*, TaskTreeComponent>>
 
-    /** The most-recently-foregrounded pane (see [TaskPane]); updated as slots activate/dismiss. */
+    /** The most-recently-foregrounded pane (see [TaskPane]); updated as the detail slot activates/dismisses. */
     val activePane: Value<TaskPane>
 
     sealed interface Output {
@@ -54,6 +47,10 @@ interface TasksComponent {
 
 class DefaultTasksComponent(
     componentContext: ComponentContext,
+    // The cross-kind Item read + device-local fold store the tree pane renders (ADR-0034, #226/#227).
+    private val itemRepository: ItemRepository,
+    private val foldStore: ItemFoldStore,
+    // The Task read seam the detail slot observes/hydrates (still Task-centric; detail is Task-only).
     private val taskRepository: TaskRepository,
     private val output: (TasksComponent.Output) -> Unit = {},
     // The working-state write seam (#73), threaded down into the detail slot so the detail can issue
@@ -73,24 +70,22 @@ class DefaultTasksComponent(
     private val coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : TasksComponent, ComponentContext by componentContext {
 
-    // Slot configs are plain data (serializer = null below → no state restoration wired in v1, so no
-    // kotlinx.serialization dependency on the feature module). They key which child each slot holds.
-    // initialTask seeds the detail's first frame from the row the opener already had in memory (no DB
-    // read), so the title/body show immediately instead of popping in. Not persisted (serializer = null).
+    // initialTask seeds the detail's first frame from a row the opener already had in memory (no DB read).
+    // The tree opens by id only (its rows are the cross-kind Item projection, not full Tasks), so a
+    // tree-opened detail has no seed and its title pops in one frame later; a subtask-drill still seeds.
     private data class DetailConfig(val taskId: TaskId, val initialTask: Task? = null)
-    private data class TreeConfig(val rootId: TaskId)
 
     private val detailNavigation = SlotNavigation<DetailConfig>()
-    private val treeNavigation = SlotNavigation<TreeConfig>()
 
-    private val _activePane = MutableValue(TaskPane.List)
+    private val _activePane = MutableValue(TaskPane.Tree)
     override val activePane: Value<TaskPane> = _activePane
 
-    override val list: TaskListComponent =
-        DefaultTaskListComponent(
-            componentContext = childContext(key = "list"),
-            taskRepository = taskRepository,
-            output = ::onListOutput,
+    override val tree: ItemTreeComponent =
+        DefaultItemTreeComponent(
+            componentContext = childContext(key = "tree"),
+            itemRepository = itemRepository,
+            foldStore = foldStore,
+            output = ::onTreeOutput,
             coroutineContext = coroutineContext,
         )
 
@@ -113,31 +108,15 @@ class DefaultTasksComponent(
                 setDeadline = setDeadline,
                 setLabels = setLabels,
                 onDeviceAttachments = onDeviceAttachments,
+                foldStore = foldStore,
                 coroutineContext = coroutineContext,
             )
         }
 
-    override val tree: Value<ChildSlot<*, TaskTreeComponent>> =
-        childSlot(
-            source = treeNavigation,
-            serializer = null,
-            key = "tree",
-            handleBackButton = false,
-        ) { config, childContext ->
-            DefaultTaskTreeComponent(
-                componentContext = childContext,
-                rootId = config.rootId,
-                taskRepository = taskRepository,
-                output = ::onTreeOutput,
-                coroutineContext = coroutineContext,
-            )
-        }
-
-    private fun onListOutput(output: TaskListComponent.Output) {
+    private fun onTreeOutput(output: ItemTreeComponent.Output) {
         when (output) {
-            is TaskListComponent.Output.TaskSelected -> {
-                val seed = list.state.value.tasks.firstOrNull { it.id == output.id }
-                detailNavigation.activate(DetailConfig(output.id, seed))
+            is ItemTreeComponent.Output.ItemSelected -> {
+                detailNavigation.activate(DetailConfig(output.id))
                 _activePane.value = TaskPane.Detail
             }
         }
@@ -147,18 +126,14 @@ class DefaultTasksComponent(
         when (output) {
             TaskDetailComponent.Output.Closed -> {
                 detailNavigation.dismiss()
-                // The foreground pane closed — fall back to whatever co-resident slot remains.
-                _activePane.value = if (tree.value.child != null) TaskPane.Tree else TaskPane.List
-            }
-            is TaskDetailComponent.Output.TreeRequested -> {
-                treeNavigation.activate(TreeConfig(output.id))
                 _activePane.value = TaskPane.Tree
             }
-            // Tapping a subtask re-keys the detail slot to that child (inline drill-in), co-resident
-            // with the list — same as the tree's ChildSelected. Seed from the detail's in-memory subtask
-            // tree (the row it just rendered) so the re-keyed detail's title shows immediately.
+            // Tapping a subtask re-keys the detail slot to that child (inline drill-in). Seed from the
+            // detail's in-memory subtask outline (the visible row it just tapped) so the re-keyed title
+            // shows now.
             is TaskDetailComponent.Output.SubtaskSelected -> {
-                val seed = detail.value.child?.instance?.state?.value?.subtasks?.findTask(output.id)
+                val seed = detail.value.child?.instance?.state?.value
+                    ?.subtaskRows?.firstOrNull { it.task.id == output.id }?.task
                 detailNavigation.activate(DetailConfig(output.id, seed))
                 _activePane.value = TaskPane.Detail
             }
@@ -166,23 +141,4 @@ class DefaultTasksComponent(
                 this.output(TasksComponent.Output.AddToPlanRequested(output.id))
         }
     }
-
-    private fun onTreeOutput(output: TaskTreeComponent.Output) {
-        when (output) {
-            TaskTreeComponent.Output.Closed -> {
-                treeNavigation.dismiss()
-                _activePane.value = if (detail.value.child != null) TaskPane.Detail else TaskPane.List
-            }
-            // Drilling into a child opens its detail alongside the list (co-resident), not a new stack.
-            is TaskTreeComponent.Output.ChildSelected -> {
-                val seed = tree.value.child?.instance?.state?.value?.children?.firstOrNull { it.id == output.id }
-                detailNavigation.activate(DetailConfig(output.id, seed))
-                _activePane.value = TaskPane.Detail
-            }
-        }
-    }
 }
-
-/** Depth-first lookup of a Task by id in a [SubtaskNode] forest — seeds the subtask-drill detail. */
-private fun List<SubtaskNode>.findTask(id: TaskId): Task? =
-    firstNotNullOfOrNull { node -> if (node.task.id == id) node.task else node.children.findTask(id) }

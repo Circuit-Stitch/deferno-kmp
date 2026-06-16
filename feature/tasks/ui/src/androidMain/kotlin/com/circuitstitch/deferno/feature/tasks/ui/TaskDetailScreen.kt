@@ -87,6 +87,7 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
             onSetDeadline = component::onSetDeadline,
             onSetLabels = component::onSetLabels,
             onToggleSubtask = component::onToggleSubtaskDone,
+            onToggleSubtaskExpand = component::onToggleSubtaskExpand,
             onOpenSubtask = { component.onSubtaskClicked(it.id) },
             onAddSubtask = component::onAddSubtask,
             onPostComment = component::onPostComment,
@@ -153,6 +154,7 @@ internal fun TaskDetailContent(
     onSetDeadline: (LocalDate?) -> Unit,
     onSetLabels: (List<String>) -> Unit,
     onToggleSubtask: (Task) -> Unit,
+    onToggleSubtaskExpand: (id: String, currentlyExpanded: Boolean) -> Unit = { _, _ -> },
     onOpenSubtask: (Task) -> Unit,
     onAddSubtask: (String) -> Unit,
     onPostComment: (String) -> Unit,
@@ -191,6 +193,7 @@ internal fun TaskDetailContent(
                     onSetDeadline = onSetDeadline,
                     onSetLabels = onSetLabels,
                     onToggleSubtask = onToggleSubtask,
+                    onToggleSubtaskExpand = onToggleSubtaskExpand,
                     onOpenSubtask = onOpenSubtask,
                     onAddSubtask = onAddSubtask,
                     onPostComment = onPostComment,
@@ -216,6 +219,7 @@ private fun TaskBody(
     onSetDeadline: (LocalDate?) -> Unit,
     onSetLabels: (List<String>) -> Unit,
     onToggleSubtask: (Task) -> Unit,
+    onToggleSubtaskExpand: (id: String, currentlyExpanded: Boolean) -> Unit,
     onOpenSubtask: (Task) -> Unit,
     onAddSubtask: (String) -> Unit,
     onPostComment: (String) -> Unit,
@@ -268,10 +272,11 @@ private fun TaskBody(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         SubtasksSection(
-            nodes = state.subtasks,
+            rows = state.subtaskRows,
             done = state.subtaskDone,
             total = state.subtaskTotal,
-            onToggle = onToggleSubtask,
+            onToggleDone = onToggleSubtask,
+            onToggleExpand = onToggleSubtaskExpand,
             onOpen = onOpenSubtask,
             onAddSubtask = onAddSubtask,
         )

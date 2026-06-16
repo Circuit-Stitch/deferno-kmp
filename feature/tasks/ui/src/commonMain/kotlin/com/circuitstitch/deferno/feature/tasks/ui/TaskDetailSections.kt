@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.feature.tasks.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -45,7 +47,7 @@ import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
-import com.circuitstitch.deferno.feature.tasks.SubtaskNode
+import com.circuitstitch.deferno.feature.tasks.SubtaskRow
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -261,16 +263,20 @@ private fun AddLabelField(onAdd: (String) -> Unit) {
 // --- Subtasks ---
 
 /**
- * The recursive subtask tree (web parity): a done/total count + progress bar, the nested checkboxes,
- * and an "add subtask" field that creates a direct child. Toggling a checkbox flips that node between
- * Done and Open through the working-state write seam (offline-first); adding creates online.
+ * The subtask outline (web parity): a done/total count + progress bar, the depth-indented checkboxes,
+ * and an "add subtask" field that creates a direct child. The [rows] are the subtree flattened with the
+ * **same fold mechanism as the Tasks Destination tree** (ADR-0034 decision 4) — a parent's chevron
+ * toggles its fold through the shared device-local store, so a node folded here stays folded on the tree
+ * and across restart. Toggling a checkbox flips that node between Done and Open through the working-state
+ * write seam (offline-first); adding creates online.
  */
 @Composable
 internal fun SubtasksSection(
-    nodes: List<SubtaskNode>,
+    rows: List<SubtaskRow>,
     done: Int,
     total: Int,
-    onToggle: (Task) -> Unit,
+    onToggleDone: (Task) -> Unit,
+    onToggleExpand: (id: String, currentlyExpanded: Boolean) -> Unit,
     onOpen: (Task) -> Unit,
     onAddSubtask: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -283,31 +289,44 @@ internal fun SubtasksSection(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             )
         }
-        nodes.forEach { node -> SubtaskNodeRows(node, depth = 0, onToggle = onToggle, onOpen = onOpen) }
+        rows.forEach { row -> SubtaskRowView(row, onToggleDone, onToggleExpand, onOpen) }
         AddSubtaskField(onAddSubtask)
     }
 }
 
-/** Renders one tree node then, indented, its children — the recursion that draws the whole subtree. */
+/** One depth-indented outline row: a fold chevron (parents only), a done checkbox, a drill-in title. */
 @Composable
-private fun SubtaskNodeRows(node: SubtaskNode, depth: Int, onToggle: (Task) -> Unit, onOpen: (Task) -> Unit) {
-    SubtaskRow(node.task, depth, onToggle, onOpen)
-    node.children.forEach { child -> SubtaskNodeRows(child, depth + 1, onToggle, onOpen) }
-}
-
-@Composable
-private fun SubtaskRow(task: Task, depth: Int, onToggle: (Task) -> Unit, onOpen: (Task) -> Unit) {
+private fun SubtaskRowView(
+    row: SubtaskRow,
+    onToggleDone: (Task) -> Unit,
+    onToggleExpand: (id: String, currentlyExpanded: Boolean) -> Unit,
+    onOpen: (Task) -> Unit,
+) {
+    val task = row.task
     val done = task.workingState == WorkingState.Done
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
-            .padding(start = (depth * 20).dp),
+            .padding(start = (row.depth * 20).dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Chevron gutter: ▾/▸ for a parent (toggles fold), blank for a leaf so checkboxes still align.
+        Box(Modifier.size(SubtaskChevronGutter), contentAlignment = Alignment.Center) {
+            if (row.hasChildren) {
+                Text(
+                    text = if (row.isExpanded) "▾" else "▸",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable(
+                        onClickLabel = if (row.isExpanded) "Collapse ${task.title}" else "Expand ${task.title}",
+                    ) { onToggleExpand(task.id.value, row.isExpanded) },
+                )
+            }
+        }
         Checkbox(
             checked = done,
-            onCheckedChange = { onToggle(task) },
+            onCheckedChange = { onToggleDone(task) },
             modifier = Modifier.semantics {
                 contentDescription = if (done) "Mark “${task.title}” not done" else "Mark “${task.title}” done"
             },
@@ -330,6 +349,9 @@ private fun SubtaskRow(task: Task, depth: Int, onToggle: (Task) -> Unit, onOpen:
         )
     }
 }
+
+/** The leading fold-chevron column of an outline row; keeps a fixed gutter so leaf checkboxes align. */
+private val SubtaskChevronGutter = 28.dp
 
 @Composable
 private fun AddSubtaskField(onAdd: (String) -> Unit) {

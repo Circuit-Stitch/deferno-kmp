@@ -23,6 +23,8 @@ import com.circuitstitch.deferno.core.data.feedback.FeedbackResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
+import com.circuitstitch.deferno.core.data.item.ItemFoldStore
+import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.domain.command.CommandResult
@@ -38,6 +40,7 @@ import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.model.OccurrenceAction
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
@@ -64,7 +67,6 @@ import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
-import com.circuitstitch.deferno.feature.tasks.TaskPane
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.coroutines.Dispatchers
@@ -293,6 +295,9 @@ sealed interface OverlayRoute {
 
 class DefaultMainShellComponent(
     componentContext: ComponentContext,
+    // The cross-kind Item read + device-local fold store the Tasks Item tree renders (ADR-0034, #226/#227).
+    private val itemRepository: ItemRepository,
+    private val foldStore: ItemFoldStore,
     private val taskRepository: TaskRepository,
     private val planRepository: PlanRepository,
     private val authRepository: AuthRepository,
@@ -549,6 +554,9 @@ class DefaultMainShellComponent(
                                     setDeadline = setDeadline,
                                     setLabels = setLabels,
                                     onDeviceAttachments = onDeviceAttachments,
+                                    // The Account-scoped fold store: a subtask folded in the Plan-tap
+                                    // detail matches the Tasks tree and survives restart (ADR-0034 dec. 4).
+                                    foldStore = foldStore,
                                     coroutineContext = coroutineContext,
                                 ),
                             )
@@ -586,6 +594,8 @@ class DefaultMainShellComponent(
                 MainShellComponent.DestinationChild.Tasks(
                     DefaultTasksComponent(
                         componentContext = childContext,
+                        itemRepository = itemRepository,
+                        foldStore = foldStore,
                         taskRepository = taskRepository,
                         output = ::onTasksOutput,
                         workingStateEditor = workingStateEditor,
@@ -822,7 +832,7 @@ class DefaultMainShellComponent(
                 dismissOverlay()
                 navigation.bringToFront(Config.Tasks)
                 val tasks = stack.value.active.instance as MainShellComponent.DestinationChild.Tasks
-                tasks.component.list.onTaskClicked(output.id)
+                tasks.component.tree.onOpenDetail(output.id.value, ItemKind.Task)
             }
             SearchComponent.Output.Dismissed -> dismissOverlay()
         }
@@ -838,14 +848,6 @@ class DefaultMainShellComponent(
             TaskDetailComponent.Output.Closed -> planDetailNav.pop()
             is TaskDetailComponent.Output.AddToPlanRequested ->
                 this.output(MainShellComponent.Output.AddToPlanRequested(output.id))
-            // The breakdown lives in the Tasks workspace: reset Plan to its dashboard and open the Task in
-            // the Tasks Destination's own detail, one tap from "show steps" there.
-            is TaskDetailComponent.Output.TreeRequested -> {
-                planDetailNav.navigate { listOf(PlanConfig.Dashboard) }
-                navigation.bringToFront(Config.Tasks)
-                val tasks = stack.value.active.instance as MainShellComponent.DestinationChild.Tasks
-                tasks.component.list.onTaskClicked(output.id)
-            }
             // Drilling into a subtask pushes one level deeper on Plan's detail stack (back pops it).
             is TaskDetailComponent.Output.SubtaskSelected ->
                 planDetailNav.navigate { it + PlanConfig.Detail(output.id) }
@@ -930,17 +932,11 @@ class DefaultMainShellComponent(
 }
 
 /**
- * Dismiss the Tasks Destination's **foregrounded** co-resident pane first ([TasksComponent.activePane])
- * so back always matches what a single-pane View shows and reveals the slot beneath it — then any other
- * open slot, else not consumed. This is the demo host's reviewed back logic (#27), now in the shell.
+ * Dismiss the Tasks Destination's open detail (ADR-0034). The Item [TasksComponent.tree] is the
+ * always-present primary pane, so the only dismissible co-resident pane is the detail: back closes it and
+ * reveals the tree beneath; at the bare tree, back is not consumed (the shell's outer back takes over).
  */
 private fun TasksComponent.dismissForegroundPane(): Boolean {
-    when (activePane.value) {
-        TaskPane.Tree -> tree.value.child?.instance?.let { it.onCloseClicked(); return true }
-        TaskPane.Detail -> detail.value.child?.instance?.let { it.onCloseClicked(); return true }
-        TaskPane.List -> Unit
-    }
-    tree.value.child?.instance?.let { it.onCloseClicked(); return true }
     detail.value.child?.instance?.let { it.onCloseClicked(); return true }
     return false
 }

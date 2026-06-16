@@ -9,6 +9,8 @@ import com.circuitstitch.deferno.core.data.attachment.InMemoryAttachmentBytesSto
 import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
+import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
 import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
@@ -79,4 +81,13 @@ interface IosDataBindings {
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
         InMemoryKeepBrainDumpRecordingsPreference()
+
+    /**
+     * Item-tree fold-override store (ADR-0034, #227, [[App setting]]). In-memory placeholder — the native
+     * iOS SwiftUI tree (and its NSUserDefaults-backed fold store) is a deferred fast-follow; this keeps the
+     * graph complete and the iOS klib compiling.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun itemFoldStore(): ItemFoldStore = InMemoryItemFoldStore()
 }

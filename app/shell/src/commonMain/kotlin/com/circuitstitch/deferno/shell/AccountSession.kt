@@ -1,6 +1,8 @@
 package com.circuitstitch.deferno.shell
 
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
+import com.circuitstitch.deferno.core.data.item.ItemFoldStore
+import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.outbox.FlushResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
@@ -52,6 +54,13 @@ import kotlin.time.Instant
  */
 interface AccountSession {
     val taskRepository: TaskRepository
+
+    /**
+     * The cross-kind Item read the Tasks Item tree renders (ADR-0034, #226/#227) + the device-local
+     * [foldStore] of expand/collapse overrides the tree and the detail subtask outline share.
+     */
+    val itemRepository: ItemRepository
+    val foldStore: ItemFoldStore
 
     /** The Task detail's online-only comments + attachments source (the web-parity detail sections). */
     val taskDetailRepository: TaskDetailRepository
@@ -153,6 +162,8 @@ interface AccountSession {
  */
 class AccountComponentSession(private val component: AccountComponent) : AccountSession {
     override val taskRepository: TaskRepository get() = component.taskRepository
+    override val itemRepository: ItemRepository get() = component.itemRepository
+    override val foldStore: ItemFoldStore get() = component.foldStore
     override val taskDetailRepository: TaskDetailRepository get() = component.taskDetailRepository
     override val planRepository: PlanRepository get() = component.planRepository
 
