@@ -7,6 +7,7 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.WindowInsets
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -29,6 +31,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -67,32 +70,41 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
             .filter { it.bytes.size <= MaxAttachmentBytes }
         if (files.isNotEmpty()) component.onAddAttachments(files)
     }
-    TaskDetailContent(
-        state = state,
-        onClose = component::onCloseClicked,
-        onAddToPlan = component::onAddToPlanClicked,
-        onSetWorkingState = component::onSetWorkingState,
-        onSetDeadline = component::onSetDeadline,
-        onSetLabels = component::onSetLabels,
-        onToggleSubtask = component::onToggleSubtaskDone,
-        onOpenSubtask = { component.onSubtaskClicked(it.id) },
-        onAddSubtask = component::onAddSubtask,
-        onPostComment = component::onPostComment,
-        onEditComment = component::onEditComment,
-        onDeleteComment = component::onDeleteComment,
-        onAddAttachment = { pickFiles.launch("*/*") },
-        onDeleteAttachment = component::onDeleteAttachment,
-        onSetAttachmentCaption = component::onSetAttachmentCaption,
-        onDeleteOnDeviceAttachment = component::onDeleteOnDeviceAttachment,
-        // Play a retained recording (#211): read its on-device bytes, then hand them to MediaPlayer.
-        onPlayOnDeviceAttachment = { att ->
-            scope.launch {
-                val bytes = component.onDeviceAttachmentBytes(att.id) ?: return@launch
-                playAudioBytes(context, bytes)
-            }
-        },
-        modifier = modifier,
-    )
+    // #239: when this detail opens, the M3 ListDetailPaneScaffold programmatically focuses the pane
+    // (ThreePaneScaffold → requestFocus). In touch mode the only Always-focusable targets are the
+    // "Add…" OutlinedTextFields — chips/buttons are Focusability.SystemDefined, i.e. not focusable when
+    // touched — so that focus has nowhere to land but the first text field, popping the soft keyboard
+    // with nothing tapped. Put a harmless non-text Always-focusable target FIRST in the pane's focus
+    // order to receive it instead; a real tap still focuses a field directly. It's 1.dp (zero-size focus
+    // targets are skipped) and overlaid in the corner, so it adds no layout and nothing renders for it.
+    Box(modifier) {
+        Box(Modifier.size(1.dp).focusTarget())
+        TaskDetailContent(
+            state = state,
+            onClose = component::onCloseClicked,
+            onAddToPlan = component::onAddToPlanClicked,
+            onSetWorkingState = component::onSetWorkingState,
+            onSetDeadline = component::onSetDeadline,
+            onSetLabels = component::onSetLabels,
+            onToggleSubtask = component::onToggleSubtaskDone,
+            onOpenSubtask = { component.onSubtaskClicked(it.id) },
+            onAddSubtask = component::onAddSubtask,
+            onPostComment = component::onPostComment,
+            onEditComment = component::onEditComment,
+            onDeleteComment = component::onDeleteComment,
+            onAddAttachment = { pickFiles.launch("*/*") },
+            onDeleteAttachment = component::onDeleteAttachment,
+            onSetAttachmentCaption = component::onSetAttachmentCaption,
+            onDeleteOnDeviceAttachment = component::onDeleteOnDeviceAttachment,
+            // Play a retained recording (#211): read its on-device bytes, then hand them to MediaPlayer.
+            onPlayOnDeviceAttachment = { att ->
+                scope.launch {
+                    val bytes = component.onDeviceAttachmentBytes(att.id) ?: return@launch
+                    playAudioBytes(context, bytes)
+                }
+            },
+        )
+    }
 }
 
 /**
