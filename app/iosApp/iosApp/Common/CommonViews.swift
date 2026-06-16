@@ -236,16 +236,6 @@ struct LoadingStrip: View {
     }
 }
 
-/// Whether the Tasks **secondary** pane shows a Task detail or nothing (ADR-0007 tier-2). Since the Item
-/// tree became the always-present **primary** pane (#227, ADR-0034), detail is the only secondary slot —
-/// so this is just "is a detail open?", with no co-resident precedence to resolve. Mirrors the shared
-/// `resolveSecondarySlot` the Android/desktop Views use.
-enum SecondarySlot { case detail, none }
-
-func resolveSecondarySlot(hasDetail: Bool) -> SecondarySlot {
-    hasDetail ? .detail : .none
-}
-
 /// A pushed secondary screen in the compact-width Tasks `NavigationStack` (ADR-0007). Detail is the only
 /// secondary slot now — the tree is the primary pane (the stack root) — so there is a single case.
 enum TaskRoute: Hashable { case detail }

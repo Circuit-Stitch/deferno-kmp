@@ -35,15 +35,11 @@ fun TasksScreen(component: TasksComponent, modifier: Modifier = Modifier) {
     val detailSlot by component.detail.subscribeAsState()
     val detail = detailSlot.child?.instance
 
-    // The shared secondary-pane precedence (#67/#227): the detail pane shows the detail when one is open.
-    // The same helper drives the desktop screen, so both platforms foreground the same slot.
-    val slot = resolveSecondarySlot(hasDetail = detail != null)
-
     val directive = calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth(currentWindowAdaptiveInfo())
-    // Which pane the single-pane (compact) collapse shows: the detail when open ([slot] != None), else the
-    // tree. In two panes both are visible, so this only governs the compact fold.
+    // Which pane the single-pane (compact) collapse shows: the detail when one is open, else the tree. In
+    // two panes both are visible, so this only governs the compact fold.
     val foreground =
-        if (slot == SecondarySlot.None) ListDetailPaneScaffoldRole.List else ListDetailPaneScaffoldRole.Detail
+        if (detail == null) ListDetailPaneScaffoldRole.List else ListDetailPaneScaffoldRole.Detail
     val scaffoldValue = calculateThreePaneScaffoldValue(
         maxHorizontalPartitions = directive.maxHorizontalPartitions,
         adaptStrategies = ListDetailPaneScaffoldDefaults.adaptStrategies(),
@@ -57,24 +53,23 @@ fun TasksScreen(component: TasksComponent, modifier: Modifier = Modifier) {
         value = scaffoldValue,
         modifier = modifier,
         listPane = { AnimatedPane { TaskListScreen(component.tree) } },
-        detailPane = { AnimatedPane { TasksDetailPane(slot, detail) } },
+        detailPane = { AnimatedPane { TasksDetailPane(detail) } },
     )
 }
 
 /**
- * The detail (secondary) pane: the Task detail when open, else a gentle placeholder (the two-pane "pick a
- * task" state). The desktop screen maps the same [SecondarySlot] to its own pane.
+ * The detail (secondary) pane: the Task detail when one is open, else a gentle placeholder (the two-pane
+ * "pick a task" state). The desktop screen renders the same choice in its own layout.
  */
 @Composable
 private fun TasksDetailPane(
-    slot: SecondarySlot,
     detail: TaskDetailComponent?,
     modifier: Modifier = Modifier,
 ) {
-    when (slot) {
-        // The helper only returns Detail when the slot is open, so the instance is non-null here.
-        SecondarySlot.Detail -> detail?.let { TaskDetailScreen(it, modifier) }
-        SecondarySlot.None -> EmptyState(
+    if (detail != null) {
+        TaskDetailScreen(detail, modifier)
+    } else {
+        EmptyState(
             title = "Nothing open",
             body = "Pick a task on the left to see its details here.",
             modifier = modifier,

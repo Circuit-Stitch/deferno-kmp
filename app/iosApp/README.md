@@ -176,13 +176,8 @@ xcrun simctl launch booted com.circuitstitch.deferno
 
 Unit coverage for the iOS View layer lives in the **`iosAppTests`** target — a host-app
 unit-test bundle (`@testable import iosApp` + `import Deferno`), wired into the `iosApp`
-scheme's Test action. Two suites, both green on the iOS 17.2 simulator under Xcode 15.2:
+scheme's Test action. Green on the iOS 17.2 simulator under Xcode 15.2:
 
-- **`SecondarySlotTests`** — the secondary-pane precedence (`resolveSecondarySlot`,
-  `Common/CommonViews.swift`). Because the Compose UI module can't target iOS (ADR-0004 /
-  #27), that rule is **hand-ported** from the shared Kotlin `resolveSecondarySlot`; this is
-  the Swift twin of the Kotlin `SecondarySlotTest` 12-row table, so the two copies can't
-  drift.
 - **`StateBridgeTests`** — the SKIE-free bridge end to end: it drives the *real* `DefernoDemo`
   components and asserts list state and the co-resident **detail** slot reach the SwiftUI
   observers on the main thread (a row tap → the shared component opens the detail slot).

@@ -16,7 +16,6 @@
 		DE0002000000000000000015 /* ItemTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000015 /* ItemTreeView.swift */; };
 		DE0002000000000000000016 /* TasksScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000016 /* TasksScreen.swift */; };
 		DE0002000000000000000017 /* PlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000017 /* PlanView.swift */; };
-		DE0002000000000000000021 /* SecondarySlotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000021 /* SecondarySlotTests.swift */; };
 		DE0002000000000000000023 /* DefernoThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000023 /* DefernoThemeTests.swift */; };
 		DE0002000000000000000022 /* StateBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000022 /* StateBridgeTests.swift */; };
 		DE0002000000000000000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000030 /* Assets.xcassets */; };
@@ -62,7 +61,6 @@
 		DE0001000000000000000016 /* TasksScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksScreen.swift; sourceTree = "<group>"; };
 		DE0001000000000000000017 /* PlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanView.swift; sourceTree = "<group>"; };
 		DE0001000000000000000020 /* iosAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = iosAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		DE0001000000000000000021 /* SecondarySlotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondarySlotTests.swift; sourceTree = "<group>"; };
 		DE0001000000000000000023 /* DefernoThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoThemeTests.swift; sourceTree = "<group>"; };
 		DE0001000000000000000022 /* StateBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateBridgeTests.swift; sourceTree = "<group>"; };
 		DE0001000000000000000030 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -210,7 +208,6 @@
 			isa = PBXGroup;
 			children = (
 				DE0001000000000000000023 /* DefernoThemeTests.swift */,
-				DE0001000000000000000021 /* SecondarySlotTests.swift */,
 				DE0001000000000000000022 /* StateBridgeTests.swift */,
 			);
 			path = iosAppTests;
@@ -466,7 +463,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				DE0002000000000000000023 /* DefernoThemeTests.swift in Sources */,
-				DE0002000000000000000021 /* SecondarySlotTests.swift in Sources */,
 				DE0002000000000000000022 /* StateBridgeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

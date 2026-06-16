@@ -30,14 +30,13 @@ struct TasksScreen: View {
     }
 
     var body: some View {
-        let slot = resolveSecondarySlot(hasDetail: detail.current != nil)
         if horizontalSizeClass == .regular {
             NavigationStack {
                 HStack(spacing: 0) {
                     ItemTreeView(component: root.tree)
                         .frame(width: 340)
                     Divider()
-                    secondaryPane(slot)
+                    secondaryPane()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 // Tasks is the documented carve-out: the shell bar's title is empty for Tasks (its panes
@@ -94,13 +93,10 @@ struct TasksScreen: View {
     /// The detail (secondary) column on regular width: the open detail, or a gentle "pick a task"
     /// placeholder when nothing is open.
     @ViewBuilder
-    private func secondaryPane(_ slot: SecondarySlot) -> some View {
-        switch slot {
-        case .detail:
-            if let detail = detail.current {
-                TaskDetailView(component: detail).id(BridgeKt.detailKey(component: detail))
-            }
-        case .none:
+    private func secondaryPane() -> some View {
+        if let detail = detail.current {
+            TaskDetailView(component: detail).id(BridgeKt.detailKey(component: detail))
+        } else {
             EmptyStateView(
                 title: "Nothing open",
                 message: "Pick a task on the left to see its details here."

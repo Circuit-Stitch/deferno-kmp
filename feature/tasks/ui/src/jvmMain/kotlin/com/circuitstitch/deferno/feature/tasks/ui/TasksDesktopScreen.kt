@@ -46,29 +46,22 @@ fun TasksDesktopScreen(component: TasksComponent, modifier: Modifier = Modifier)
     val detailSlot by component.detail.subscribeAsState()
     val detail = detailSlot.child?.instance
 
-    // The shared secondary-pane precedence (#67/#227), identical to the Android screen's (TasksScreen.kt):
-    // the detail pane shows the detail when one is open. Only the None fallback differs by layout — an empty
-    // "pick a task" state beside the two-pane tree, the tree itself in the single-pane fold.
-    val slot = resolveSecondarySlot(hasDetail = detail != null)
-
     BoxWithConstraints(modifier.fillMaxSize()) {
         if (maxWidth >= TasksTwoPaneMinWidth) {
-            // Two panes: the tree is always present on the left; the right pane is the resolved slot.
+            // Two panes: the tree is always present on the left; the right pane is the detail when one is
+            // open, else a "pick a task" placeholder.
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.width(TasksListPaneWidth).fillMaxHeight()) {
                     TreePane(component.tree)
                 }
                 VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Box(Modifier.weight(1f).fillMaxHeight()) {
-                    SecondaryPane(slot, detail)
+                    SecondaryPane(detail)
                 }
             }
         } else {
             // One pane: render the detail when open, else the tree (the home state when nothing is open).
-            when (slot) {
-                SecondarySlot.Detail -> detail?.let { TaskDetailScreen(it) }
-                SecondarySlot.None -> TreePane(component.tree)
-            }
+            if (detail != null) TaskDetailScreen(detail) else TreePane(component.tree)
         }
     }
 }
@@ -79,13 +72,13 @@ internal val TasksTwoPaneMinWidth = 720.dp
 /** Fixed width of the tree pane in the two-pane layout; the secondary pane takes the rest. */
 private val TasksListPaneWidth = 360.dp
 
-/** The right-hand pane in the two-pane layout: the resolved Task detail, else a gentle placeholder. */
+/** The right-hand pane in the two-pane layout: the Task detail when one is open, else a gentle placeholder. */
 @Composable
-private fun SecondaryPane(slot: SecondarySlot, detail: TaskDetailComponent?) {
-    when (slot) {
-        // The helper only returns Detail when the slot is open, so the instance is non-null here.
-        SecondarySlot.Detail -> detail?.let { TaskDetailScreen(it) }
-        SecondarySlot.None -> EmptyState(
+private fun SecondaryPane(detail: TaskDetailComponent?) {
+    if (detail != null) {
+        TaskDetailScreen(detail)
+    } else {
+        EmptyState(
             title = "Nothing open",
             body = "Pick a task on the left to see its details here.",
         )
