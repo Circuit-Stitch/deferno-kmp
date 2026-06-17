@@ -5,11 +5,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
@@ -111,7 +116,12 @@ internal fun SettingsListContent(
 ) {
     // The "Settings" title now lives in the shell's single top bar (Cand 1); this pane is just the list.
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            // Edge-to-edge (ADR-0035 #2): the list scrolls under the system nav bar but pads its last row
+            // clear of it.
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Bottom)),
     ) {
         SettingsCategory.entries.forEach { category ->
             // The device-local Speech engine row shows only when this device has a real engine (#93,
@@ -171,6 +181,9 @@ private fun CategoryDetail(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            // Edge-to-edge (ADR-0035 #2): the detail scrolls under the system nav bar but pads its last
+            // control clear of it.
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Bottom))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
