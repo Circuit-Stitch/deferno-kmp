@@ -251,6 +251,33 @@ above the offline-first write seam, so issuing a Command applies optimistically 
 (ADR-0001). It is not a UI; the [[View]]s and the agent are its *clients*.
 _Avoid_: dispatcher, bus, controller, menu.
 
+**OS intent** *(client)*:
+A user intent that arrives from a **caller's own assistant** — Google Assistant / Gemini on Android,
+Siri / App Intents on iOS, Alexa, Bixby, or any **MCP-speaking agent** (Claude, …) — rather than from
+Deferno's UI. The **caller's** intelligence does the speech recognition and the language understanding
+**off-Deferno**; Deferno exposes a **typed tool / intent surface** the caller maps the utterance onto,
+and runs **no inference of its own**. **Two routings:**
+- **Navigation / read intents** ("open my plan", "what do I have today") bind **deterministically** to
+  an existing [[Command]] or [[Destination]] by its stable `CommandId`.
+- **Capture intents** ("take out the trash every Tuesday") are categorized **by the caller** filling a
+  **behavioral schema** — *occurs at a set time you attend?* (→ [[Event]]); else *repeats?* (no →
+  [[Task]]); else *if its time passes undone, does it carry forward or lapse?* (carries forward →
+  [[Chore]]; lapses → [[Habit]]). The schema exposes **behavior, never Deferno's kind names**, so the
+  caller needs no Deferno taxonomy and the contract stays stable across backend API churn. Deferno
+  **derives the [[Item kind]]** from those fields and **commits directly** through the ordinary
+  `CreateItem` [[Command]] (offline-first: optimistic local apply + outbox enqueue, an honest "queued"
+  result — never "saved on the server").
+Because the inference is the **caller's**, not Deferno's [[Agent]], this path does **not** cross
+ADR-0027's propose-only boundary (which governs Deferno's *own* inference): an OS intent is just one more
+input modality on the [[Command registry]], peer to keyboard / context-menu / drag, and like them it
+**commits**. The [[Inbox]] is **not** on this path — it stays the fallback bucket only for a future
+capture route where **Deferno itself** must process raw input asynchronously (a low-capability caller
+hands plain text → the [[Extractor]] → a propose-only draft to review later).
+_Avoid_: [[Agent]] (Deferno's own propose-only inference — an OS intent's categorization is the
+*caller's*), voice command (the in-app [[Dictation]] non-goal of routing *Deferno-recognized* speech to
+Commands), App Action / App Intent / Siri shortcut / Alexa skill (the per-platform *mechanisms* that
+deliver an OS intent, not the concept).
+
 ### Agent
 
 **Agent** *(client)*:
