@@ -239,6 +239,55 @@ struct LoadingStrip: View {
     }
 }
 
+/// A selectable capsule **chip** — the category/kind pickers, the settings + search filter segments, and
+/// the task status picker all render through this one type. It exists because macOS's default button style
+/// ignores `.foregroundStyle` on a `Button`'s *title* and tints it with the accent, washing the label out
+/// on the dark capsule (the unreadable chips). Coloring an explicit `Text` + `.buttonStyle(.plain)` is the
+/// fix; centralizing it keeps every chip readable, on-theme, and consistent for free.
+///
+/// `prominence` picks the selected fill: `.high` = the bold brand `primary` (the New/Feedback pickers),
+/// `.low` = the softer `primaryContainer` (the settings + search filter segments). `compact` is the denser
+/// footnote size used by the filter rows.
+struct SelectableChip: View {
+    enum Prominence { case high, low }
+
+    let label: String
+    let selected: Bool
+    var prominence: Prominence = .high
+    var compact: Bool = false
+    /// Override the spoken label (e.g. the status picker's "…, current working state"); defaults to `label`.
+    var accessibilityLabel: String?
+    let action: () -> Void
+    @Environment(\.defernoColors) private var colors
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(compact ? .footnote : .subheadline)
+                .foregroundStyle(foreground)
+                .padding(.horizontal, compact ? 10 : 12)
+                .padding(.vertical, compact ? 6 : 8)
+                .frame(minHeight: Layout.minTouchTarget)
+                .background(fill, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel ?? label)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+
+    private var fill: Color {
+        guard selected else { return colors.surfaceVariant }
+        return prominence == .high ? colors.primary : colors.primaryContainer
+    }
+
+    // Selected + high prominence is the only case that flips onto the dark `onPrimary` ink; everything
+    // else (unselected, or the soft `primaryContainer` fill) reads on the light `onSurface` ink.
+    private var foreground: Color {
+        selected && prominence == .high ? colors.onPrimary : colors.onSurface
+    }
+}
+
 extension Task {
     /// Stable String identity for SwiftUI list diffing. `Task.id` is an erased value class (opaque
     /// `Any` in Swift), so the Kotlin bridge unwraps it to the underlying UUID String.
