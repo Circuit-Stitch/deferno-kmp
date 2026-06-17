@@ -13,6 +13,9 @@ import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
+import com.circuitstitch.deferno.core.domain.command.CommandResult
+import com.circuitstitch.deferno.core.domain.command.CreateItem
+import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
@@ -87,6 +90,26 @@ interface RootComponent {
      */
     fun openInbox()
 
+    /**
+     * The read/navigation OS intent (ADR-0036, #248): foreground the **Plan** Destination — the target
+     * of Google Assistant's "open my plan" App Action. No task content is spoken; it is a
+     * state-preserving lateral switch like a nav tap. Signed out, it is a no-op beyond the Auth shell
+     * already shown — Plan is the post-sign-in home Destination, so no deferral is needed (unlike
+     * [openInbox], whose target is not the home).
+     */
+    fun openPlan()
+
+    /**
+     * The capture OS intent (ADR-0036, #249): create a one-off [com.circuitstitch.deferno.core.model.ItemKind.Task]
+     * titled [title] verbatim — the slot Google Assistant's "add … to Deferno" App Action fills, with no
+     * triage and no inference (App Actions BIIs pre-classify; the four-kind behavioral triage is the App
+     * Functions slice, #250). Commits through the Active Account's offline-first create path (optimistic
+     * apply + outbox enqueue), so the confirmation is the honest "queued, it'll sync" — never a false
+     * server confirmation. Signed out, the dictated [title] is remembered and created once an Account
+     * becomes active (the Auth shell opens meanwhile — never a silent drop). A blank [title] is ignored.
+     */
+    fun addTask(title: String)
+
     sealed interface Child {
         class Auth(val component: AuthShellComponent) : Child
         class Main(val component: MainShellComponent) : Child
@@ -147,6 +170,12 @@ class DefaultRootComponent(
     private val recordBrainDump: suspend (LocalDate, String) -> Unit = { _, _ -> },
     /** The New surface's foreclosed-dictation-permission deep-link (#120). Host-handled, like the rest. */
     private val onOpenDictationPermissionSettings: () -> Unit = {},
+    /**
+     * The honest "queued, it'll sync" confirmation for an [addTask] capture OS intent (ADR-0036, #249).
+     * Invoked with the Task title only after the offline-first create is [CommandResult.Accepted] — the
+     * host surfaces it (a toast on Android). Defaulted to a no-op so tests / desktop build without it.
+     */
+    private val onTaskQueued: (title: String) -> Unit = {},
     /** The outbox driver's clock (#143) — injected so the flush timing is deterministic under test. */
     private val now: () -> Instant = { Clock.System.now() },
     /**
@@ -195,6 +224,9 @@ class DefaultRootComponent(
     /** A Brain dump "open the Inbox" deep-link that arrived before a Main shell existed (#150 Stage 4). */
     private var pendingInbox = false
 
+    /** An "add a task" capture OS intent (#249) whose title arrived before a Main shell existed (signed out). */
+    private var pendingTaskTitle: String? = null
+
     override val stack: Value<ChildStack<*, RootComponent.Child>> =
         childStack(
             source = navigation,
@@ -231,6 +263,42 @@ class DefaultRootComponent(
             is RootComponent.Child.Main -> child.component.selectDestination(Destination.Inbox)
             // Signed out (cold start into Auth): remember it and apply when the Main shell is built.
             is RootComponent.Child.Auth -> pendingInbox = true
+        }
+    }
+
+    override fun openPlan() {
+        when (val child = stack.value.active.instance) {
+            // A Main shell is up: bring Plan to front (state-preserving lateral switch, no content spoken).
+            is RootComponent.Child.Main -> child.component.selectDestination(Destination.Plan)
+            // Signed out: the Auth shell is already shown, and Plan is the post-sign-in home Destination —
+            // so there is nothing to defer (the user lands on Plan once they sign in).
+            is RootComponent.Child.Auth -> Unit
+        }
+    }
+
+    override fun addTask(title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return // a blank slot is ignored (no inference, no empty Task)
+        when (val child = stack.value.active.instance) {
+            // A Main shell is up: create through the Active Account's offline-first path now.
+            is RootComponent.Child.Main -> submitTask(activeSession, trimmed)
+            // Signed out: remember the dictated title and create it once an Account becomes active —
+            // the Auth shell opens meanwhile, never a silent drop.
+            is RootComponent.Child.Auth -> pendingTaskTitle = trimmed
+        }
+    }
+
+    /**
+     * Create a one-off Task titled [title] through [session]'s offline-first create seam (#249) and
+     * surface the honest "queued" confirmation. A create is optimistically applied + enqueued, so
+     * [CommandResult.Accepted] is the only truthful word — never "saved on the server".
+     */
+    private fun submitTask(session: AccountSession?, title: String) {
+        val active = session ?: return
+        scope.launch {
+            if (active.create(CreateItem.Payload.Task(CreateTaskPayload(title = title))) is CommandResult.Accepted) {
+                onTaskQueued(title)
+            }
         }
     }
 
@@ -337,6 +405,12 @@ class DefaultRootComponent(
                 if (pendingInbox) {
                     pendingInbox = false
                     shell.selectDestination(Destination.Inbox)
+                }
+                // A pending "add a task" capture OS intent dictated while signed out (#249): now that an
+                // Account is active, create it through this session, then consume it.
+                pendingTaskTitle?.let { title ->
+                    pendingTaskTitle = null
+                    submitTask(session, title)
                 }
                 RootComponent.Child.Main(shell)
             }

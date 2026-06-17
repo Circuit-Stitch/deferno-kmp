@@ -10,6 +10,7 @@ import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
+import com.circuitstitch.deferno.core.domain.command.CreateItem
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -66,6 +67,7 @@ class RootComponentTest {
         manager: AccountManager,
         session: AccountSession = FakeAccountSession(),
         signInService: SignInService = FakeSignInService { SignInResult.Unavailable },
+        onTaskQueued: (String) -> Unit = {},
     ) = DefaultRootComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         accountManager = manager,
@@ -75,6 +77,7 @@ class RootComponentTest {
         today = today,
         timeZone = "UTC",
         now = { t0 },
+        onTaskQueued = onTaskQueued,
         coroutineContext = Dispatchers.Unconfined,
     )
 
@@ -232,6 +235,73 @@ class RootComponentTest {
         tasks.detail.value.child?.instance?.onAddToPlanClicked()
 
         assertEquals(listOf(TaskId("t-1")), session.addedToPlan)
+    }
+
+    // --- OS-intent App Actions deep-links (ADR-0036): open Plan (#248) + add a Task (#249) ---
+
+    @Test
+    fun openPlan_onMainShell_bringsThePlanDestinationToFront() {
+        val root = root(FakeAccountManager(active = account))
+        val main = (root.activeChild() as RootComponent.Child.Main).component
+        // Drill off the Plan home so the switch is observable.
+        main.selectDestination(Destination.Settings)
+        assertEquals(Destination.Settings, main.stack.value.active.instance.destination)
+
+        root.openPlan()
+
+        assertEquals(Destination.Plan, main.stack.value.active.instance.destination)
+    }
+
+    @Test
+    fun openPlan_whenSignedOut_staysOnTheAuthShell() {
+        // ADR-0036 #248 AC: signed-out opens the Auth shell, not a blank Plan. No deferral needed —
+        // Plan is the post-sign-in home Destination.
+        val root = root(FakeAccountManager())
+        root.openPlan()
+        assertTrue(root.activeChild() is RootComponent.Child.Auth)
+    }
+
+    @Test
+    fun addTask_onMainShell_createsAVerbatimTaskThroughTheActiveSession_andConfirmsQueued() {
+        val session = FakeAccountSession()
+        val queued = mutableListOf<String>()
+        val root = root(FakeAccountManager(active = account), session = session, onTaskQueued = { queued += it })
+
+        root.addTask("  buy milk  ")
+
+        // The slot is the verbatim (trimmed) Task title — no triage, no inference (#249).
+        val payload = session.created.single() as CreateItem.Payload.Task
+        assertEquals("buy milk", payload.payload.title)
+        // The honest offline-first confirmation fires only on Accepted (queued), with the title.
+        assertEquals(listOf("buy milk"), queued)
+    }
+
+    @Test
+    fun addTask_withABlankSlot_isIgnored() {
+        val session = FakeAccountSession()
+        val root = root(FakeAccountManager(active = account), session = session)
+
+        root.addTask("   ")
+
+        assertTrue(session.created.isEmpty())
+    }
+
+    @Test
+    fun addTask_whenSignedOut_isDeferredAndCreatedOnceAnAccountBecomesActive() {
+        val session = FakeAccountSession()
+        val manager = FakeAccountManager()
+        val root = root(manager, session = session)
+
+        root.addTask("take out trash")
+        // Signed out: nothing created yet, and the Auth shell is shown (never a silent drop).
+        assertTrue(root.activeChild() is RootComponent.Child.Auth)
+        assertTrue(session.created.isEmpty())
+
+        manager.signIn(account)
+
+        // The Main shell is now built → the remembered title is created through the active session.
+        assertTrue(root.activeChild() is RootComponent.Child.Main)
+        assertEquals("take out trash", (session.created.single() as CreateItem.Payload.Task).payload.title)
     }
 
     @Test

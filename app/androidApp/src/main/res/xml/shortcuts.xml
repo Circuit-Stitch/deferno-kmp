@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Google Assistant App Actions (ADR-0036, #248/#249). Each <capability> binds a Google built-in intent
+  (BII) to a deep-link the manifest VIEW filter matches and MainActivity.routeAppActionsDeepLink routes
+  through the RootComponent. v1 is App-Actions-only (read + verbatim create); the four-kind behavioral
+  triage is the App Functions slice (#250).
+
+  App Actions deep-links carry NO task content off-device and need no runtime library — only this file +
+  the manifest filter. The live-Assistant binding (slot extraction, locale phrasings) is validated with
+  Google's App Actions Test Tool on a Gemini-capable device — a manual check (per the issues' AC).
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- #248 read intent: "open my plan in Deferno" foregrounds the Plan Destination (state-preserving,
+         no content spoken). Signed-out opens the Auth shell (handled in the RootComponent). -->
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.circuitstitch.deferno"
+            android:targetClass="com.circuitstitch.deferno.MainActivity">
+            <url-template android:value="com.circuitstitch.deferno://plan" />
+        </intent>
+    </capability>
+
+    <!-- #249 capture intent: "add <task> to Deferno" creates a verbatim, one-off Task offline-first
+         (no triage, no inference — App Actions BIIs pre-classify + slot-strip). The task.name slot maps
+         to the deep-link's `title` query parameter. -->
+    <capability android:name="actions.intent.CREATE_TASK">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.circuitstitch.deferno"
+            android:targetClass="com.circuitstitch.deferno.MainActivity">
+            <url-template android:value="com.circuitstitch.deferno://create{?title}" />
+            <parameter
+                android:name="task.name"
+                android:key="title" />
+        </intent>
+    </capability>
+
+</shortcuts>
