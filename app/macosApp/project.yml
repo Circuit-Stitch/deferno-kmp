@@ -12,6 +12,22 @@ options:
     macOS: "14.0"
   createIntermediateGroups: true
 
+# Machine-local signing, applied as the PROJECT-level base config (the slot CocoaPods leaves alone — it
+# owns each target's base config, the Pods xcconfig). Carrying the identity here means Xcode-GUI builds
+# pick up the same stable signature as `build.sh`, so the login-Keychain ACL on the bearer token survives
+# rebuilds and stops re-prompting (see Local.xcconfig). The file is gitignored; build.sh seeds an ad-hoc
+# default ("-") when it's absent, so a fresh clone / CI still generates + builds with no Dev account.
+configFiles:
+  Debug: Local.xcconfig
+  Release: Local.xcconfig
+
+# Give Local.xcconfig a parented file reference in the navigator. Without this, XcodeGen leaves the
+# config file in an orphan group (no parent), and `pod install`'s xcodeproj walk throws
+# "[Xcodeproj] Consistency issue: no parent for object Local.xcconfig". Listing it here dedups the
+# base-config reference onto a properly-grouped one, so CocoaPods can resolve its path.
+fileGroups:
+  - Local.xcconfig
+
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -49,9 +65,11 @@ settings:
     # entitlement is needed. (When the app gains the App Sandbox, add com.apple.security.device.audio-input.)
     INFOPLIST_KEY_NSMicrophoneUsageDescription: "Deferno transcribes your dictation on-device to fill in a new item."
     INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Deferno recognizes your speech on-device to fill in a new item — the audio never leaves your Mac."
-    # Local dev: ad-hoc sign so a headless xcodebuild + a local launch work without a Dev account.
-    # TCC/notarization signing (Phase 2+) is a Mac-session concern, kept out of git (ADR-0009/0029).
-    CODE_SIGN_IDENTITY: "-"
+    # Signing identity is NOT set here — it lives in the project-level Local.xcconfig (`configFiles`
+    # above) so the same stable identity reaches Xcode-GUI builds, not just build.sh. A setting here would
+    # OVERRIDE that base config, so CODE_SIGN_IDENTITY must stay out of this block. REQUIRED/ALLOWED stay:
+    # they gate only whether the app target signs (the static Pods/SidecarKit targets keep ALLOWED = NO),
+    # and the ad-hoc-by-default path (no Dev account) is preserved by build.sh's seeded Local.xcconfig.
     CODE_SIGNING_REQUIRED: NO
     CODE_SIGNING_ALLOWED: YES
     # The shared Kotlin/Native static `Deferno.framework`, staged by the gradle pre-build phase into
