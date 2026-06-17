@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
+import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.UploadHttpClient
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -20,7 +21,6 @@ import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -272,6 +272,18 @@ class KtorTaskDetailRepositoryTest {
     }
 
     @Test
+    fun updateAttachmentCaptionClearSendsExplicitNull() = runTest {
+        // #416: clearing must reach the wire as `caption: null`, not an omitted field — the shared
+        // DefernoJson (explicitNulls = false) would drop a null, which the server rejects as 422.
+        var captured: HttpRequestData? = null
+        val repo = KtorTaskDetailRepository(client { req -> captured = req; respondJson(attachmentEnvelope) })
+
+        assertTrue(repo.updateAttachmentCaption(TaskId("t1"), "att-1", null))
+        assertEquals(HttpMethod.Patch, captured?.method)
+        assertEquals("""{"caption":null}""", (captured?.body as? TextContent)?.text)
+    }
+
+    @Test
     fun updateAttachmentCaptionReturnsFalseOnFailure() = runTest {
         val repo = KtorTaskDetailRepository(client { respond("", HttpStatusCode.UnprocessableEntity) })
         assertFalse(repo.updateAttachmentCaption(TaskId("t1"), "att-1", "Receipt"))
@@ -298,7 +310,10 @@ class KtorTaskDetailRepositoryTest {
         handler: suspend MockRequestHandleScope.(HttpRequestData) -> io.ktor.client.request.HttpResponseData,
     ): HttpClient = HttpClient(MockEngine(handler)) {
         expectSuccess = false
-        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        // Use the production DefernoJson so these tests exercise the real wire serialization
+        // (explicitNulls = false). A default Json would mask serialization bugs like #416, where a
+        // null clear is dropped on the omit-vs-null boundary.
+        install(ContentNegotiation) { json(DefernoJson) }
         defaultRequest { url("https://api.example.test/") }
     }
 

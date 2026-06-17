@@ -149,7 +149,7 @@ internal class FakeTaskDetailComponent(
     val commentsDeleted = mutableListOf<String>()
     val attachmentsAdded = mutableListOf<List<AttachmentUpload>>()
     val attachmentsDeleted = mutableListOf<String>()
-    val attachmentCaptions = mutableListOf<Pair<String, String>>()
+    val attachmentCaptions = mutableListOf<Pair<String, String?>>()
     val onDeviceAttachmentsDeleted = mutableListOf<String>()
 
     /** Bytes the View can read back for an on-device attachment (#211) — keyed by attachment id. */
@@ -169,7 +169,7 @@ internal class FakeTaskDetailComponent(
     override fun onDeleteComment(commentId: String) { commentsDeleted += commentId }
     override fun onAddAttachments(files: List<AttachmentUpload>) { attachmentsAdded += files }
     override fun onDeleteAttachment(attachmentId: String) { attachmentsDeleted += attachmentId }
-    override fun onSetAttachmentCaption(attachmentId: String, caption: String) { attachmentCaptions += attachmentId to caption }
+    override fun onSetAttachmentCaption(attachmentId: String, caption: String?) { attachmentCaptions += attachmentId to caption }
     override fun onDeleteOnDeviceAttachment(attachmentId: String) { onDeviceAttachmentsDeleted += attachmentId }
     override suspend fun onDeviceAttachmentBytes(attachmentId: String): ByteArray? = onDeviceBytes[attachmentId]
 }

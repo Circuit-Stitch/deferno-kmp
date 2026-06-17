@@ -53,13 +53,3 @@ data class AttachmentIntentDto(
     val id: String,
     val caption: String? = null,
 )
-
-/**
- * `PATCH /tasks/{id}/attachments/{att_id}` body — set or change an attachment's [caption]. (Clearing
- * to null is unused: the editor disables save on a blank caption, and `DefernoJson`'s
- * `explicitNulls = false` would drop a null anyway, which the server rejects as "nothing to change".)
- */
-@Serializable
-data class UpdateAttachmentCaptionPayload(
-    val caption: String,
-)

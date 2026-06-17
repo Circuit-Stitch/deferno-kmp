@@ -17,7 +17,6 @@ import com.circuitstitch.deferno.core.network.dto.CommitAttachmentsPayload
 import com.circuitstitch.deferno.core.network.dto.CreateCommentPayload
 import com.circuitstitch.deferno.core.network.dto.PresignRequestDto
 import com.circuitstitch.deferno.core.network.dto.PresignResponseDto
-import com.circuitstitch.deferno.core.network.dto.UpdateAttachmentCaptionPayload
 import com.circuitstitch.deferno.core.network.dto.UpdateCommentPayload
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import com.circuitstitch.deferno.core.network.requestApi
@@ -33,6 +32,8 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.appendPathSegments
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * The production [TaskDetailRepository] over the shared authed Deferno [HttpClient] — online-only
@@ -155,12 +156,16 @@ class KtorTaskDetailRepository(
         return response.status.isSuccess()
     }
 
-    override suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String): Boolean {
+    override suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String?): Boolean {
         val result = client.requestApi<AttachmentViewDto> {
             method = HttpMethod.Patch
             url { appendPathSegments("tasks", taskId.value, "attachments", attachmentId) }
             contentType(ContentType.Application.Json)
-            setBody(UpdateAttachmentCaptionPayload(caption))
+            // #416: hand-build the body so a null clear is emitted explicitly as `caption: null`.
+            // The shared DefernoJson (explicitNulls = false) would drop a null on a typed payload,
+            // reaching the server as an omitted field it rejects (422). A JsonObject's JsonNull is
+            // serialized structurally, independent of explicitNulls.
+            setBody(buildJsonObject { put("caption", caption) })
         }
         return result is ApiResult.Success
     }
