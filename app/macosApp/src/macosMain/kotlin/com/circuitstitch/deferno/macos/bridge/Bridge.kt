@@ -82,17 +82,19 @@ class DetailSlot internal constructor(private val slot: Value<ChildSlot<*, TaskD
 // Concrete factories that pin each StateFlow's element type, so Swift gets a strongly-typed
 // StateFlowBridge<…> (the generic is resolved here) without ever naming `StateFlow`. They also keep
 // StateFlowBridge's constructor internal — Swift can only obtain a bridge through these.
+
+/** The Tasks **Item tree** pane state (ADR-0034, #227) — the flattened, depth-indented row list. */
 fun itemTreeStateBridge(component: ItemTreeComponent): StateFlowBridge<ItemTreeState> =
     StateFlowBridge(component.state)
+
+/** Whether a row's [kind] is a Task — the only kind with a detail surface today (the trailing `›`). */
+fun itemKindIsTask(kind: ItemKind): Boolean = kind == ItemKind.Task
 
 fun taskDetailStateBridge(component: TaskDetailComponent): StateFlowBridge<TaskDetailState> =
     StateFlowBridge(component.state)
 
 fun planStateBridge(component: PlanComponent): StateFlowBridge<PlanState> =
     StateFlowBridge(component.state)
-
-/** True when [kind] is the Task kind — Swift can't reliably `==` a bridged Kotlin enum in a static framework. */
-fun itemKindIsTask(kind: ItemKind): Boolean = kind == ItemKind.Task
 
 /**
  * A stable String identity for a [Task], for SwiftUI list diffing. `Task.id` is a [TaskId] value

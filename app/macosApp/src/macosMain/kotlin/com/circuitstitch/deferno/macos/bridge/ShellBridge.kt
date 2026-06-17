@@ -231,8 +231,8 @@ fun rootChildMain(child: RootComponent.Child): MainShellComponent? =
 fun destinationOf(child: MainShellComponent.DestinationChild): Destination = child.destination
 
 /**
- * Wrap a [TasksComponent] into the Swift-facing [TasksRoot] handle (flattened list/detail/tree slots +
- * `activePane` recency) the existing `TasksScreen` renders. [TasksRoot]'s constructor is `internal`
+ * Wrap a [TasksComponent] into the Swift-facing [TasksRoot] handle (the Item [tree] + the co-resident
+ * detail slot + `activePane` recency) the `TasksScreen` renders. [TasksRoot]'s constructor is `internal`
  * (the demo builds it directly), so the shell obtains one through this same-module factory.
  */
 fun tasksRoot(component: TasksComponent): TasksRoot = TasksRoot(component)
