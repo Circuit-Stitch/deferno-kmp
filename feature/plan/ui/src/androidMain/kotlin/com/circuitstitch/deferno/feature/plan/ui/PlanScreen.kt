@@ -1,7 +1,12 @@
 package com.circuitstitch.deferno.feature.plan.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.HorizontalDivider
@@ -47,7 +52,11 @@ internal fun PlanContent(
         if (tasks.isEmpty() && !isRefreshing) {
             EmptyPlan()
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                // Edge-to-edge (ADR-0035 #2): pad the last task row clear of the system nav bar.
+                contentPadding = WindowInsets.systemBars.only(WindowInsetsSides.Bottom).asPaddingValues(),
+            ) {
                 items(tasks, key = { it.id.value }) { task ->
                     PlanTaskRow(task = task, onClick = { onTaskClick(task.id) })
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
