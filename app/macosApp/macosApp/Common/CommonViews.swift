@@ -54,13 +54,90 @@ struct TaskRow: View {
             }
             .frame(minHeight: Layout.rowMinHeight)
             .padding(.horizontal, Layout.gutter)
-            .padding(.vertical, 12)
+            .padding(.vertical, Layout.rowVerticalPadding)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(task.title), \(task.workingState.label)")
         .accessibilityHint(task.pinned && showsPin ? "Pinned" : "")
+    }
+}
+
+/// One node of the Tasks **Item tree** (#227, ADR-0034). The leading ▾/▸ chevron *and* a body tap both
+/// toggle a parent's fold; a childless leaf's body is inert. The trailing › opens detail (Task kind only
+/// — the other kinds have no detail surface yet). `depth` drives the indent; a collapsed parent shows a
+/// `descendantDone/descendantTotal` progress badge (Tasks only); a terminal (Done/Dropped/Archived) row
+/// is de-emphasized. Stateless: the handlers take their params from the row, never from observed state.
+struct ItemRowView: View {
+    let row: ItemRow
+    let onToggleExpand: (String, Bool) -> Void
+    let onOpenDetail: (String, ItemKind) -> Void
+
+    private var isTask: Bool { BridgeKt.itemKindIsTask(kind: row.item.kind) }
+
+    /// "done/total" for a collapsed Task parent; nil otherwise (recurring kinds carry no subtree counts).
+    private var progressBadge: String? {
+        guard row.hasChildren, !row.isExpanded,
+              let done = row.item.descendantDone, let total = row.item.descendantTotal
+        else { return nil }
+        return "\(done.intValue)/\(total.intValue)"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if row.depth > 0 {
+                Spacer().frame(width: CGFloat(row.depth) * 16)
+            }
+            // Leading chevron — toggles fold; reserved (invisible) on a leaf so titles stay aligned. The
+            // glyph stays small, but the whole square is the click target (contentShape), so it's an easy
+            // pointer hit rather than a pixel-perfect one on the arrow itself.
+            Button {
+                if row.hasChildren { onToggleExpand(row.item.id, row.isExpanded) }
+            } label: {
+                Text(row.isExpanded ? "▾" : "▸")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
+                    .contentShape(Rectangle())
+                    .opacity(row.hasChildren ? 1 : 0)
+            }
+            .buttonStyle(.plain)
+            .disabled(!row.hasChildren)
+            .accessibilityLabel(row.isExpanded ? "Collapse" : "Expand")
+            .accessibilityHidden(!row.hasChildren)
+
+            // Title (+ collapsed progress badge). A body tap toggles a parent's fold; a leaf body is inert.
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.item.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                if let progressBadge {
+                    Text(progressBadge)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { if row.hasChildren { onToggleExpand(row.item.id, row.isExpanded) } }
+
+            // Trailing › — opens detail; Task kind only (the other kinds have no detail surface yet).
+            if isTask {
+                Button {
+                    onOpenDetail(row.item.id, row.item.kind)
+                } label: {
+                    Text("›").font(.title3).foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open details")
+            }
+        }
+        .frame(minHeight: Layout.rowMinHeight)
+        .padding(.horizontal, Layout.gutter)
+        .padding(.vertical, Layout.rowVerticalPadding)
+        .opacity(row.item.isTerminal ? 0.5 : 1.0)
     }
 }
 
@@ -162,18 +239,53 @@ struct LoadingStrip: View {
     }
 }
 
-/// Which co-resident slot fills the Tasks secondary pane (ADR-0007 tier-2), mirroring the shared
-/// `resolveSecondarySlot` precedence the Android/desktop Views use: the most-recently-foregrounded
-/// slot when it's actually open, else whichever remains, else nothing. Recency only wins when its own
-/// slot is present, so a tree→child drill-in keeps the tree foregrounded rather than snapping to detail.
-enum SecondarySlot { case detail, tree, none }
+/// A selectable capsule **chip** — the category/kind pickers, the settings + search filter segments, and
+/// the task status picker all render through this one type. It exists because macOS's default button style
+/// ignores `.foregroundStyle` on a `Button`'s *title* and tints it with the accent, washing the label out
+/// on the dark capsule (the unreadable chips). Coloring an explicit `Text` + `.buttonStyle(.plain)` is the
+/// fix; centralizing it keeps every chip readable, on-theme, and consistent for free.
+///
+/// `prominence` picks the selected fill: `.high` = the bold brand `primary` (the New/Feedback pickers),
+/// `.low` = the softer `primaryContainer` (the settings + search filter segments). `compact` is the denser
+/// footnote size used by the filter rows.
+struct SelectableChip: View {
+    enum Prominence { case high, low }
 
-func resolveSecondarySlot(activePane: TaskPane, hasDetail: Bool, hasTree: Bool) -> SecondarySlot {
-    if activePane === TaskPane.tree, hasTree { return .tree }
-    if activePane === TaskPane.detail, hasDetail { return .detail }
-    if hasTree { return .tree }
-    if hasDetail { return .detail }
-    return .none
+    let label: String
+    let selected: Bool
+    var prominence: Prominence = .high
+    var compact: Bool = false
+    /// Override the spoken label (e.g. the status picker's "…, current working state"); defaults to `label`.
+    var accessibilityLabel: String?
+    let action: () -> Void
+    @Environment(\.defernoColors) private var colors
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(compact ? .footnote : .subheadline)
+                .foregroundStyle(foreground)
+                .padding(.horizontal, compact ? 10 : 12)
+                .padding(.vertical, compact ? 6 : 8)
+                .frame(minHeight: Layout.minTouchTarget)
+                .background(fill, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel ?? label)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+
+    private var fill: Color {
+        guard selected else { return colors.surfaceVariant }
+        return prominence == .high ? colors.primary : colors.primaryContainer
+    }
+
+    // Selected + high prominence is the only case that flips onto the dark `onPrimary` ink; everything
+    // else (unselected, or the soft `primaryContainer` fill) reads on the light `onSurface` ink.
+    private var foreground: Color {
+        selected && prominence == .high ? colors.onPrimary : colors.onSurface
+    }
 }
 
 extension Task {

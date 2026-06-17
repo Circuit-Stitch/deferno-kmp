@@ -202,12 +202,9 @@ struct SettingsView: View {
         let options: [(String, Int)] = [("1 day", 86400), ("3 days", 259200), ("1 week", 604800), ("Always", -1)]
         return HStack(spacing: 8) {
             ForEach(options, id: \.1) { option in
-                let selected = option.1 == current
-                Button(option.0) { onSelect(option.1) }
-                    .font(.footnote)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(selected ? colors.primaryContainer : colors.surfaceVariant, in: Capsule())
-                    .foregroundStyle(colors.onSurface)
+                SelectableChip(label: option.0, selected: option.1 == current, prominence: .low, compact: true) {
+                    onSelect(option.1)
+                }
             }
         }
     }

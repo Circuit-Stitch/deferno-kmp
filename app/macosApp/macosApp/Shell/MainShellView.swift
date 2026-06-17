@@ -314,9 +314,13 @@ struct MainShellView: View {
         overlay.current.flatMap { ShellBridgeKt.overlayNew(child: $0) }
     }
 
+    private var overlayFeedbackComponent: FeedbackComponent? {
+        overlay.current.flatMap { ShellBridgeKt.overlayFeedback(child: $0) }
+    }
+
     private var overlayPresented: Binding<Bool> {
         Binding(
-            get: { overlaySearchComponent != nil || overlayNewComponent != nil },
+            get: { overlaySearchComponent != nil || overlayNewComponent != nil || overlayFeedbackComponent != nil },
             set: { presented in if !presented { component.dismissOverlay() } }
         )
     }
@@ -327,6 +331,8 @@ struct MainShellView: View {
             SearchView(component: search)
         } else if let new = overlayNewComponent {
             NewItemView(component: new)
+        } else if let feedback = overlayFeedbackComponent {
+            FeedbackView(component: feedback)
         }
     }
 

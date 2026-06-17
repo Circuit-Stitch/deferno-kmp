@@ -1,16 +1,21 @@
 import Deferno
 import SwiftUI
 
-// The iOS View layer is SwiftUI with **its own design system** (ADR-0003/0004) — not Compose tokens.
-// This is the small, touch-first token set the Tasks + Plan Views share (#51, ADR-0010): plain,
-// non-shaming working-state labels (matching the Android badge), accessible colour pairs (colour is
-// always reinforcement, never the sole signal — WCAG), and large touch targets (design-principles.md).
+// The macOS View layer is SwiftUI with **its own design system** (ADR-0003/0004) — not Compose tokens.
+// This is the small token set the Tasks + Plan Views share (#51, ADR-0010): plain, non-shaming
+// working-state labels (matching the Android badge), accessible colour pairs (colour is always
+// reinforcement, never the sole signal — WCAG), and **desktop-density** row metrics — pointer targets,
+// not the touch-first ≥44–48pt the iOS twin uses (a mouse hits a tighter row just fine).
 
 enum Layout {
-    /// Minimum height for a tappable row/control — design-principles.md "≥44–48pt" touch targets.
-    static let minTouchTarget: CGFloat = 48
-    static let rowMinHeight: CGFloat = 64
-    static let gutter: CGFloat = 16
+    /// Minimum height for a clickable row/control — desktop pointer target (the iOS twin uses 48pt touch).
+    static let minTouchTarget: CGFloat = 28
+    /// Minimum row height — compact desktop list density (the iOS twin uses 64pt).
+    static let rowMinHeight: CGFloat = 30
+    /// Horizontal row gutter — tighter desktop margins (the iOS twin uses 16pt).
+    static let gutter: CGFloat = 10
+    /// Vertical padding inside a row — compact desktop density (the iOS twin uses 12pt).
+    static let rowVerticalPadding: CGFloat = 5
 }
 
 extension WorkingState {

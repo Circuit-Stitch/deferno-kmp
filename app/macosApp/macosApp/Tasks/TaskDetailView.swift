@@ -312,18 +312,10 @@ private struct WorkingStateEditorView: View {
     @ViewBuilder
     private func chip(_ state: WorkingState) -> some View {
         let selected = state === current
-        Button { onSet(state) } label: {
-            Text(state.label)
-                .font(.subheadline)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    selected ? Color.accentColor : Color(.secondarySystemFill),
-                    in: Capsule()
-                )
-                .foregroundStyle(selected ? Color.white : Color.primary)
-        }
-        .frame(minHeight: Layout.minTouchTarget)
-        .accessibilityLabel(selected ? "\(state.label), current working state" : "Set to \(state.label)")
+        SelectableChip(
+            label: state.label,
+            selected: selected,
+            accessibilityLabel: selected ? "\(state.label), current working state" : "Set to \(state.label)"
+        ) { onSet(state) }
     }
 }

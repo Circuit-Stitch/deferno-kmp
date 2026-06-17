@@ -59,12 +59,10 @@ struct NewItemView: View {
         HStack(spacing: 8) {
             ForEach(ShellBridgeKt.itemKinds().indices, id: \.self) { i in
                 let kind = ShellBridgeKt.itemKinds()[i]
-                let selected = ShellBridgeKt.itemKindsEqual(a: value.selectedKind, b: kind)
-                Button(kind.name) { component.selectKind(kind: kind) }
-                    .font(.subheadline)
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(selected ? colors.primary : colors.surfaceVariant, in: Capsule())
-                    .foregroundStyle(selected ? colors.onPrimary : colors.onSurface)
+                SelectableChip(
+                    label: kind.name,
+                    selected: ShellBridgeKt.itemKindsEqual(a: value.selectedKind, b: kind)
+                ) { component.selectKind(kind: kind) }
             }
         }
         .accessibilityLabel("Kind picker")

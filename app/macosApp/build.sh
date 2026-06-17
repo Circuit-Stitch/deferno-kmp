@@ -19,13 +19,16 @@ WORKSPACE=macosApp.xcworkspace
 SCHEME=macosApp
 DESTINATION='platform=macOS,arch=arm64'
 
-# Optional machine-local signing override (gitignored Local.xcconfig). When present it swaps project.yml's
-# ad-hoc signing for a stable Apple Development identity, so the Keychain ACL survives rebuilds and the
-# app stops re-prompting for keychain access (see Local.xcconfig). Absent (CI / fresh clone) the build
-# stays ad-hoc. `-xcconfig` only overrides the signing keys it defines, so the Pods/SQLCipher base config
-# is untouched.
-XCCONFIG_ARG=""
-[ -f Local.xcconfig ] && XCCONFIG_ARG="-xcconfig Local.xcconfig"
+# Machine-local signing (gitignored Local.xcconfig) is wired as the PROJECT-level base config in
+# project.yml (`configFiles`) — the slot CocoaPods leaves alone — so its identity reaches Xcode-GUI builds
+# too, not just this script. A stable signature keeps the login-Keychain ACL on the bearer token across
+# rebuilds and stops the re-prompt (see Local.xcconfig). XcodeGen errors if the referenced file is
+# missing, so seed an ad-hoc default ("-") when absent: a fresh clone / CI then generates + builds with no
+# Dev account, exactly as before. An existing Local.xcconfig is never touched.
+if [ ! -f Local.xcconfig ]; then
+  echo "==> seeding ad-hoc Local.xcconfig (no Dev account; edit it to sign with a stable identity)"
+  printf '// Auto-seeded ad-hoc signing. Edit to a stable identity so the Keychain ACL survives rebuilds:\n//   security find-identity -v -p codesigning   # lists yours\n// e.g. CODE_SIGN_IDENTITY = Apple Development: You (XXXXXXXXXX)\nCODE_SIGN_STYLE = Manual\nCODE_SIGN_IDENTITY = -\nPROVISIONING_PROFILE_SPECIFIER =\n' > Local.xcconfig
+fi
 
 echo "==> xcodegen generate"
 xcodegen generate
@@ -35,7 +38,7 @@ pod install
 
 echo "==> xcodebuild ($SCHEME, Debug)"
 xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" \
-  -configuration Debug -destination "$DESTINATION" $XCCONFIG_ARG build
+  -configuration Debug -destination "$DESTINATION" build
 
 if [ "${1:-}" = "--open" ]; then
   echo "==> open"

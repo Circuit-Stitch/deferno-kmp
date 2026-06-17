@@ -153,11 +153,7 @@ struct SearchView: View {
     }
 
     private func chip(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(label, action: action)
-            .font(.footnote)
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(selected ? colors.primaryContainer : colors.surfaceVariant, in: Capsule())
-            .foregroundStyle(colors.onSurface)
+        SelectableChip(label: label, selected: selected, prominence: .low, compact: true, action: action)
     }
 
     /// A simple flowing wrap of chips (SwiftUI has no native FlowLayout pre-iOS 16 helper here).
