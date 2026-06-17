@@ -162,7 +162,7 @@ internal fun TaskDetailContent(
     onDeleteComment: (String) -> Unit,
     onAddAttachment: () -> Unit,
     onDeleteAttachment: (String) -> Unit,
-    onSetAttachmentCaption: (String, String) -> Unit,
+    onSetAttachmentCaption: (String, String?) -> Unit,
     onDeleteOnDeviceAttachment: (String) -> Unit = {},
     onPlayOnDeviceAttachment: (OnDeviceAttachment) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -227,7 +227,7 @@ private fun TaskBody(
     onDeleteComment: (String) -> Unit,
     onAddAttachment: () -> Unit,
     onDeleteAttachment: (String) -> Unit,
-    onSetAttachmentCaption: (String, String) -> Unit,
+    onSetAttachmentCaption: (String, String?) -> Unit,
     onDeleteOnDeviceAttachment: (String) -> Unit,
     onPlayOnDeviceAttachment: (OnDeviceAttachment) -> Unit,
 ) {

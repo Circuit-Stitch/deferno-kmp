@@ -390,7 +390,7 @@ internal fun AttachmentsSection(
     isUploading: Boolean,
     onAddClick: () -> Unit,
     onDelete: (String) -> Unit,
-    onSetCaption: (String, String) -> Unit,
+    onSetCaption: (String, String?) -> Unit,
     modifier: Modifier = Modifier,
     // On-device attachments (#211, e.g. a retained brain-dump recording). Rendered below the synced
     // attachments: they have no signed URL, so audio is played locally rather than opened in a browser.
@@ -466,7 +466,7 @@ private fun OnDeviceAttachmentRow(
 private fun AttachmentRow(
     attachment: Attachment,
     onDelete: (String) -> Unit,
-    onSetCaption: (String, String) -> Unit,
+    onSetCaption: (String, String?) -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
     var editing by remember(attachment.id) { mutableStateOf(false) }
@@ -506,6 +506,16 @@ private fun AttachmentRow(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             )
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                // #416: an explicit Remove clears the caption (sends null), distinct from typing an
+                // empty string — shown only when there's a caption to remove.
+                if (!attachment.caption.isNullOrBlank()) {
+                    TextButton(
+                        onClick = { onSetCaption(attachment.id, null); editing = false },
+                        modifier = Modifier.semantics {
+                            contentDescription = "Remove caption for ${attachment.filename}"
+                        },
+                    ) { Text("Remove") }
+                }
                 TextButton(onClick = { editing = false }) { Text("Cancel") }
                 Button(
                     onClick = {

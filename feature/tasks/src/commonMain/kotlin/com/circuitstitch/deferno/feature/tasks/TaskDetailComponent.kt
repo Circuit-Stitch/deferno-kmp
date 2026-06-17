@@ -180,8 +180,12 @@ interface TaskDetailComponent {
     /** Delete an attachment by [attachmentId], then re-fetch the list. */
     fun onDeleteAttachment(attachmentId: String)
 
-    /** Set or change an attachment's caption, then re-fetch the list. No-op on a blank caption. */
-    fun onSetAttachmentCaption(attachmentId: String, caption: String)
+    /**
+     * Set, change, or clear an attachment's caption, then re-fetch the list (#416). `null` clears
+     * it; a non-null blank string is a no-op (Save is gated to non-blank — clearing goes through the
+     * editor's Remove affordance, not an accidentally-emptied field).
+     */
+    fun onSetAttachmentCaption(attachmentId: String, caption: String?)
 
     /** Delete an on-device attachment by [attachmentId] (#211), then re-fetch the on-device list. */
     fun onDeleteOnDeviceAttachment(attachmentId: String)
@@ -403,10 +407,12 @@ class DefaultTaskDetailComponent(
         scope.launch { if (detailRepository.deleteAttachment(taskId, attachmentId)) loadAttachments() }
     }
 
-    override fun onSetAttachmentCaption(attachmentId: String, caption: String) {
-        val trimmed = caption.trim()
-        if (trimmed.isEmpty()) return
-        scope.launch { if (detailRepository.updateAttachmentCaption(taskId, attachmentId, trimmed)) loadAttachments() }
+    override fun onSetAttachmentCaption(attachmentId: String, caption: String?) {
+        // null clears (#416); a non-null blank is a no-op so an accidentally-emptied field can't
+        // silently wipe a caption — clearing is the explicit Remove path (caption == null).
+        val next = caption?.trim()
+        if (next != null && next.isEmpty()) return
+        scope.launch { if (detailRepository.updateAttachmentCaption(taskId, attachmentId, next)) loadAttachments() }
     }
 
     override fun onDeleteOnDeviceAttachment(attachmentId: String) {

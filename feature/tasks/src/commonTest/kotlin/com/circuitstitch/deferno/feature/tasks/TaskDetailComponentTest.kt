@@ -88,7 +88,7 @@ private class FakeTaskDetailRepository(
     val deleted = mutableListOf<String>()
     val uploaded = mutableListOf<Pair<TaskId, List<AttachmentUpload>>>()
     val deletedAttachments = mutableListOf<Pair<TaskId, String>>()
-    val captioned = mutableListOf<Pair<String, String>>()
+    val captioned = mutableListOf<Pair<String, String?>>()
 
     override suspend fun comments(taskId: TaskId): List<Comment>? { commentsCalls++; return commentsResult }
     override suspend fun postComment(taskId: TaskId, body: String): Boolean { posted += taskId to body; return true }
@@ -103,7 +103,7 @@ private class FakeTaskDetailRepository(
         deletedAttachments += taskId to attachmentId
         return true
     }
-    override suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String): Boolean {
+    override suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String?): Boolean {
         captioned += attachmentId to caption
         return true
     }
@@ -484,8 +484,21 @@ class TaskDetailComponentTest {
         component.onSetAttachmentCaption("att1", "  Receipt  ") // trimmed
         advanceUntilIdle()
 
-        assertEquals(listOf("att1" to "Receipt"), detail.captioned)
+        assertEquals(listOf<Pair<String, String?>>("att1" to "Receipt"), detail.captioned)
         assertEquals(2, detail.attachmentsCalls) // initial load + reload after the caption set
+    }
+
+    @Test
+    fun setAttachmentCaptionForwardsNullClear() = runTest {
+        val detail = FakeTaskDetailRepository()
+        val component = taskDetailComponent(TaskId("a"), FakeTaskRepository(listOf(task("a"))), detail = detail)
+        advanceUntilIdle()
+
+        component.onSetAttachmentCaption("att1", null) // #416: clear — forwarded as null, not ignored
+        advanceUntilIdle()
+
+        assertEquals(listOf<Pair<String, String?>>("att1" to null), detail.captioned)
+        assertEquals(2, detail.attachmentsCalls) // initial load + reload after the clear
     }
 
     @Test
