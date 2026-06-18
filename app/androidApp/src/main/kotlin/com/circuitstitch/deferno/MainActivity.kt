@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.addCallback
@@ -135,6 +136,11 @@ class MainActivity : ComponentActivity() {
                 // hands it to the background worker on Stop. The shell passes its injected today/timeZone
                 // (no Clock.System); the application Context backs the recording + the WorkManager enqueue.
                 recordBrainDump = { day, tz -> recordBrainDumpAudio(appContext, day, tz) },
+                // The "add a task" App Action's honest confirmation (ADR-0036, #249): the offline-first
+                // create is queued + will sync, so the toast says exactly that — never "saved".
+                onTaskQueued = { title ->
+                    Toast.makeText(appContext, appContext.getString(R.string.task_queued, title), Toast.LENGTH_SHORT).show()
+                },
                 // The AppScope connectivity monitor (#158): the outbox driver flushes on the
                 // offline→online edge and skips passes while known-offline.
                 connectivity = appComponent.connectivity,
@@ -193,6 +199,8 @@ class MainActivity : ComponentActivity() {
         forwardAuthRedirect(intent)
         // A cold start from tapping the Brain dump "drafts ready" notification opens the Inbox (#150 Stage 4).
         openInboxIfRequested(intent)
+        // A cold start from a Google Assistant App Action deep-link (ADR-0036): open Plan / add a Task.
+        routeAppActionsDeepLink(intent)
     }
 
     // The OAuth redirect (#15, ADR-0026) re-enters this singleTop activity as a new VIEW intent on the
@@ -203,12 +211,27 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         forwardAuthRedirect(intent)
         openInboxIfRequested(intent)
+        routeAppActionsDeepLink(intent)
     }
 
     private fun forwardAuthRedirect(intent: Intent?) {
         val data = intent?.data ?: return
-        if (data.scheme == AUTH_REDIRECT_SCHEME) {
+        // Scoped to the auth host so the App Action deep-links below (same scheme, plan/create hosts)
+        // don't leak into the OAuth redirect inbox.
+        if (data.scheme == APP_SCHEME && data.host == AUTH_REDIRECT_HOST) {
             (application as DefernoApplication).appComponent.authRedirectInbox.publish(data.toString())
+        }
+    }
+
+    // The Google Assistant App Actions deep-links (ADR-0036, #248/#249), declared in res/xml/shortcuts.xml
+    // and matched by the manifest VIEW filter. Routed through `root` (not a session directly) so
+    // signed-out opens the Auth shell rather than a blank Plan / a dropped task. The Uri → action parse is
+    // the pure, unit-tested [appActionRoute]; this method only dispatches it.
+    private fun routeAppActionsDeepLink(intent: Intent?) {
+        when (val route = appActionRoute(intent?.data)) {
+            AppActionRoute.OpenPlan -> root.openPlan()
+            is AppActionRoute.AddTask -> root.addTask(route.title)
+            null -> Unit
         }
     }
 
@@ -219,10 +242,42 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val AUTH_REDIRECT_SCHEME = "com.circuitstitch.deferno"
+        /** The OAuth redirect host (#15, ADR-0026): `com.circuitstitch.deferno://auth`. */
+        private const val AUTH_REDIRECT_HOST = "auth"
 
         /** Intent extra set by the Brain dump notification's PendingIntent to open the Inbox (#150 Stage 4). */
         const val EXTRA_OPEN_INBOX = "com.circuitstitch.deferno.OPEN_INBOX"
+    }
+}
+
+/** The app's custom URI scheme — shared by the OAuth redirect (#15) and the App Action deep-links (#248/#249). */
+private const val APP_SCHEME = "com.circuitstitch.deferno"
+
+private const val DEEP_LINK_HOST_PLAN = "plan"
+private const val DEEP_LINK_HOST_CREATE = "create"
+private const val DEEP_LINK_PARAM_TITLE = "title"
+
+/** A Google Assistant App Action (ADR-0036) resolved from its deep-link [Uri] — the read + capture v1 intents. */
+internal sealed interface AppActionRoute {
+    /** #248: foreground the Plan Destination ("open my plan"). */
+    object OpenPlan : AppActionRoute
+
+    /** #249: create a verbatim, one-off Task ("add <title> to Deferno"). */
+    data class AddTask(val title: String) : AppActionRoute
+}
+
+/**
+ * Map an incoming deep-link [data] to its App Action (ADR-0036, #248/#249), or `null` when it is not one
+ * (wrong scheme/host, or a create carrying no title slot). Pure — so the routing parse is unit-testable
+ * without launching the activity; [MainActivity.routeAppActionsDeepLink] dispatches the result to the
+ * RootComponent (which handles the signed-out / Active-Account targeting).
+ */
+internal fun appActionRoute(data: Uri?): AppActionRoute? {
+    if (data == null || data.scheme != APP_SCHEME) return null
+    return when (data.host) {
+        DEEP_LINK_HOST_PLAN -> AppActionRoute.OpenPlan
+        DEEP_LINK_HOST_CREATE -> data.getQueryParameter(DEEP_LINK_PARAM_TITLE)?.let { AppActionRoute.AddTask(it) }
+        else -> null
     }
 }
 

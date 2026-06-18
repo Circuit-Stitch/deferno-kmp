@@ -69,6 +69,23 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="com.circuitstitch.deferno" android:host="auth" />
             </intent-filter>
+            <!-- Google Assistant App Actions deep-links (ADR-0036, #248/#249): the BIIs declared in
+                 res/xml/shortcuts.xml open these URIs. `…://plan` foregrounds the Plan Destination;
+                 `…://create?title=<slot>` creates a verbatim Task offline-first. Distinct hosts from the
+                 OAuth `auth` filter above (same custom scheme). MainActivity.routeAppActionsDeepLink
+                 routes them through the RootComponent (signed-out → Auth shell). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.circuitstitch.deferno" android:host="plan" />
+                <data android:scheme="com.circuitstitch.deferno" android:host="create" />
+            </intent-filter>
+            <!-- App Actions capability inventory (ADR-0036): binds the open-Plan / create-Task BIIs to the
+                 deep-links above so Google Assistant can invoke them. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
     </application>
 

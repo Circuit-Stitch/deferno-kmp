@@ -81,6 +81,8 @@ private class FakeRoot(child: RootComponent.Child) : RootComponent {
     override val activeAccountSession: AccountSession? = null
     override fun onBackClicked(): Boolean = false
     override fun openInbox() = Unit
+    override fun openPlan() = Unit
+    override fun addTask(title: String) = Unit
 }
 
 /** Only [selectDestination] is exercised by the chrome routing; the rest is inert or unused. */
