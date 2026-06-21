@@ -18,13 +18,19 @@ import java.io.File
 class AudioFileRecorder(
     private val sampleRate: Int = WavCodec.SAMPLE_RATE,
 ) {
-    // Internal capture seam — not in the public API (MicAudioSource is module-internal).
-    private val source = MicAudioSource(sampleRate)
+    // Internal capture seam — not in the public API (MicAudioSource is module-internal). ~50 ms / 20 Hz
+    // chunks so the live spectrum tap tracks the mic near real-time (dictation keeps the 200 ms default).
+    private val source = MicAudioSource(sampleRate, chunkSamples = sampleRate / 20)
 
-    suspend fun recordTo(file: File) {
+    suspend fun recordTo(file: File, onPcm: (FloatArray) -> Unit = {}) {
         val chunks = ArrayList<FloatArray>()
         try {
-            source.stream().collect { chunks += it }
+            // Each chunk is buffered for the WAV and forwarded live to [onPcm] (the UI spectrum tap). The
+            // forwarded samples are transient — magnitudes out, never logged or persisted (ADR-0009/0018).
+            source.stream().collect {
+                chunks += it
+                onPcm(it)
+            }
         } finally {
             withContext(NonCancellable) {
                 val total = chunks.sumOf { it.size }

@@ -8,6 +8,7 @@ import com.circuitstitch.deferno.core.scopes.PlatformContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import software.amazon.app.kmplogger.LogLevel
 import software.amazon.app.kmplogger.Logger
@@ -30,6 +31,14 @@ class DefernoApplication : Application() {
 
     lateinit var appComponent: AppComponent
         private set
+
+    // The live Brain dump mic spectrum (per-band 0..1 levels) — the rendezvous between the recorder's
+    // audio tap (written from MainActivity's record seam) and the BrainDumpScreen visualizer that reads
+    // it. App-scoped on purpose: the recorder lambda is captured once in a retained component while the
+    // Compose host re-runs on rotation, so the holder must outlive both to stay connected (ADR-0018 keeps
+    // PCM/spectrum off the shared component — this is the Android-only side channel). Starts empty: the
+    // writer fills it at @integer/spectrum_bands, and the visualizer renders whatever length it carries.
+    val micSpectrum = MutableStateFlow(FloatArray(0))
 
     // Startup work (roster hydration + dev seeding) is off the main thread; the AccountManager's
     // StateFlows then drive the reactive shell. SupervisorJob so one failure doesn't cancel the rest.

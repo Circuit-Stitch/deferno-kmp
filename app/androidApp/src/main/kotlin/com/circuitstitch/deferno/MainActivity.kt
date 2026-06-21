@@ -27,6 +27,7 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.di.createAccountComponent
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
+import com.circuitstitch.deferno.core.speech.AudioSpectrum
 import com.circuitstitch.deferno.braindump.recordBrainDumpAudio
 import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
@@ -58,6 +59,9 @@ class MainActivity : ComponentActivity() {
 
         val app = application as DefernoApplication
         val appComponent = app.appComponent
+
+        // How many spectrum bands the mic tap computes — the visualizer reads the same @integer/spectrum_bands.
+        val spectrumBands = resources.getInteger(R.integer.spectrum_bands)
 
         // Retained across configuration changes so shell + Destination navigation survives rotation
         // (Decompose Android integration). The factory runs once per scene; the process-global
@@ -135,7 +139,16 @@ class MainActivity : ComponentActivity() {
                 // Brain dump (ADR-0027/#150, Stage 4): the voice_chat overlay records the mic to a WAV and
                 // hands it to the background worker on Stop. The shell passes its injected today/timeZone
                 // (no Clock.System); the application Context backs the recording + the WorkManager enqueue.
-                recordBrainDump = { day, tz -> recordBrainDumpAudio(appContext, day, tz) },
+                recordBrainDump = { day, tz ->
+                    recordBrainDumpAudio(
+                        appContext,
+                        day,
+                        tz,
+                        // The live mic tap → spectrum bars: compute per-band levels off each PCM chunk and
+                        // publish to the app-scoped holder the BrainDumpScreen reads (ADR-0018 side channel).
+                        onPcm = { pcm -> app.micSpectrum.value = AudioSpectrum.magnitudes(pcm, spectrumBands) },
+                    )
+                },
                 // The "add a task" App Action's honest confirmation (ADR-0036, #249): the offline-first
                 // create is queued + will sync, so the toast says exactly that — never "saved".
                 onTaskQueued = { title ->
