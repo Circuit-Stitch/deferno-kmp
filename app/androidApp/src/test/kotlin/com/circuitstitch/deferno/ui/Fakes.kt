@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
@@ -236,7 +237,7 @@ internal class FakeSearchComponent(initial: SearchState = SearchState()) : Searc
     val labelToggles = mutableListOf<String>()
     val dateRangeChanges = mutableListOf<Pair<LocalDate?, LocalDate?>>()
     val sortChanges = mutableListOf<SearchSort>()
-    val resultClicks = mutableListOf<TaskId>()
+    val resultClicks = mutableListOf<SearchHit>()
     var submitCount = 0
         private set
     var dismissCount = 0
@@ -250,7 +251,7 @@ internal class FakeSearchComponent(initial: SearchState = SearchState()) : Searc
     override fun onSortChanged(sort: SearchSort) { sortChanges += sort }
     override fun onDateRangeChanged(from: LocalDate?, to: LocalDate?) { dateRangeChanges += (from to to) }
     override fun onSubmit() { submitCount++ }
-    override fun onResultClicked(id: TaskId) { resultClicks += id }
+    override fun onResultClicked(hit: SearchHit) { resultClicks += hit }
     override fun onDismiss() { dismissCount++ }
 }
 

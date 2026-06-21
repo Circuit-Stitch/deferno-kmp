@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 
@@ -13,8 +14,8 @@ import com.circuitstitch.deferno.core.model.TaskId
 class FakeTaskRemoteSource(
     var details: Map<TaskId, Task> = emptyMap(),
     var failNext: Boolean = false,
-    /** Rows the next [search] returns (in server order); the repo applies the client sort over these. */
-    var searchResults: List<Task> = emptyList(),
+    /** Hits the next [search] returns (in server order); the repo applies the client sort over these. */
+    var searchResults: List<SearchHit> = emptyList(),
 ) : TaskRemoteSource {
 
     /** The [TaskSearchQuery] the last [search] received, for asserting the filters reached the wire. */

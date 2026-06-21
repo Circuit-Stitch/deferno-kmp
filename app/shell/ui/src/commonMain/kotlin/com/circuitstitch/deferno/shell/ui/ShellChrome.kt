@@ -1,6 +1,8 @@
 package com.circuitstitch.deferno.shell.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -17,10 +19,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -31,6 +35,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -41,7 +46,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,6 +59,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -62,11 +67,18 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
+import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.shell.ChromeActionKind
@@ -175,6 +187,11 @@ fun ShellChrome(
         ShellDrawer(
             component = component,
             activeDestination = activeDestination,
+            // The two top-of-drawer capture glyphs reuse the platform-injected painters (the same
+            // add_task / voice_chat glyphs the top bar uses) — not the design-system composeResources
+            // directly, which Robolectric can't serve from a dependency module (see this file's KDoc).
+            newIcon = newIcon,
+            brainDumpIcon = brainDumpIcon,
             onSelectDestination = {
                 onDrawerOpenChange(false)
                 component.selectDestination(it)
@@ -182,6 +199,16 @@ fun ShellChrome(
             onSearch = {
                 onDrawerOpenChange(false)
                 component.openOverlay(OverlayRoute.Search)
+            },
+            // The two top-of-drawer capture triggers (re-skin: the drawer surfaces the same overlay
+            // routes the top-bar create actions raise, so a capture path is always a tap away).
+            onNewTask = {
+                onDrawerOpenChange(false)
+                component.openOverlay(OverlayRoute.New())
+            },
+            onBrainDump = {
+                onDrawerOpenChange(false)
+                component.openOverlay(OverlayRoute.BrainDump)
             },
             modifier = Modifier.align(Alignment.CenterStart).width(drawerWidth).fillMaxHeight(),
         )
@@ -310,16 +337,24 @@ private fun ShellTopBar(
 }
 
 /**
- * The reveal-drawer menu: an Account header (a switcher when more than one Account, else a label), a
- * Search row, then one row per [Destination]. Search + each Destination close the drawer via the
- * caller's handlers.
+ * The reveal-drawer menu, restyled to the "See the trees" direction: the Deferno wordmark/flame at the
+ * top, an `ADD SOMETHING` band with the two capture triggers pinned beneath it (a solid **New task**
+ * and an outlined **Brain dump** — the two paths the design keeps a tap away), then the calm
+ * destination rows (a Search row + one per [Destination], the active one highlighted, the Inbox
+ * carrying its Ready badge), and a quiet account footer. Search + each Destination + the two capture
+ * triggers close the drawer via the caller's handlers, which raise the same overlay routes the top bar
+ * does — a pure re-skin, no new component surface (ADR-0015).
  */
 @Composable
 private fun ShellDrawer(
     component: MainShellComponent,
     activeDestination: Destination,
+    newIcon: Painter,
+    brainDumpIcon: Painter,
     onSelectDestination: (Destination) -> Unit,
     onSearch: () -> Unit,
+    onNewTask: () -> Unit,
+    onBrainDump: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val accounts by component.accounts.collectAsState()
@@ -332,48 +367,225 @@ private fun ShellDrawer(
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .verticalScroll(rememberScrollState())
-                .padding(vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 16.dp),
         ) {
+            // The Deferno wordmark + flame — the brand at the top of the menu.
+            DrawerWordmark()
+
+            Spacer(Modifier.height(20.dp))
+
+            // The two capture paths, pinned at the top (design: a tap away).
+            SectionLabel("ADD SOMETHING")
+            Spacer(Modifier.height(10.dp))
+            CaptureButton(
+                text = "New task",
+                subtitle = "Fill in the details",
+                icon = newIcon,
+                onClick = onNewTask,
+                solid = true,
+            )
+            Spacer(Modifier.height(10.dp))
+            CaptureButton(
+                text = "Brain dump",
+                subtitle = "Speak or type — sorts to Inbox",
+                icon = brainDumpIcon,
+                onClick = onBrainDump,
+                solid = false,
+            )
+
+            Spacer(Modifier.height(22.dp))
+
+            // The destinations — calm rows. Search first, then the Destination registry.
+            DrawerRow(
+                label = "Search",
+                icon = Icons.Filled.Search,
+                selected = false,
+                onClick = onSearch,
+            )
+            component.destinations.forEach { destination ->
+                DrawerRow(
+                    label = destination.label,
+                    icon = destination.icon,
+                    selected = destination == activeDestination,
+                    // The Inbox always declares whether there's anything to triage (ADR-0015 amendment).
+                    badge = if (destination == Destination.Inbox) {
+                        if (inboxCount == 0) "empty" else inboxCount.toString()
+                    } else {
+                        null
+                    },
+                    onClick = { onSelectDestination(destination) },
+                )
+            }
+
+            // The drawer scrolls, so the footer follows the destination list rather than being pinned to
+            // the bottom (a weight spacer is inert inside a verticalScroll).
+            Spacer(Modifier.height(24.dp))
+
+            // The quiet account footer, with the switcher when more than one Account.
             if (accounts.size > 1) {
                 AccountSwitcher(
                     accounts = accounts,
                     active = activeAccount,
                     onSwitch = component::switchAccount,
-                    modifier = Modifier.padding(horizontal = 12.dp),
                 )
             } else {
-                Text(
-                    text = activeAccount?.label ?: "Deferno",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier
-                        .padding(horizontal = 28.dp, vertical = 8.dp)
-                        .semantics { heading() },
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            NavigationDrawerItem(
-                label = { Text("Search") },
-                selected = false,
-                icon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                onClick = onSearch,
-                modifier = Modifier.padding(horizontal = 12.dp),
-            )
-            component.destinations.forEach { destination ->
-                NavigationDrawerItem(
-                    label = { Text(destination.label) },
-                    selected = destination == activeDestination,
-                    icon = { Icon(destination.icon, contentDescription = null) },
-                    // The Inbox always declares whether there's anything to triage (ADR-0015 amendment).
-                    badge = if (destination == Destination.Inbox) {
-                        { Text(if (inboxCount == 0) "empty" else inboxCount.toString()) }
-                    } else {
-                        null
-                    },
-                    onClick = { onSelectDestination(destination) },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
+                DrawerAccountFooter(active = activeAccount)
             }
         }
+    }
+}
+
+/** The Deferno wordmark with a small accent-tile flame standing in for the brand mark in the menu head. */
+@Composable
+private fun DrawerWordmark(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.semantics(mergeDescendants = true) { heading() },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center,
+        ) {
+            // A small flame glyph stand-in: the brand mark, tinted onto the accent tile.
+            Text("🔥", style = MaterialTheme.typography.bodyMedium)
+        }
+        Text(
+            text = "Deferno",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/**
+ * A drawer capture trigger — the design's two prominent "add something" buttons. [solid] = the filled
+ * primary New task button; otherwise the calm outlined Brain dump sibling. Both carry a leading glyph +
+ * title + subtitle on a ≥56dp rounded surface, fully labelled for TalkBack as one button. (Built here,
+ * not via the shared [com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton], because
+ * the design wants a leading **Painter** glyph + a subtitle line the single-line shared atom doesn't carry.)
+ */
+@Composable
+private fun CaptureButton(
+    text: String,
+    subtitle: String,
+    icon: Painter,
+    onClick: () -> Unit,
+    solid: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val container = if (solid) scheme.primary else scheme.surface
+    val content = if (solid) scheme.onPrimary else scheme.onSurface
+    val subtitleColor = if (solid) scheme.onPrimary.copy(alpha = 0.82f) else MaterialTheme.defernoColors.inkMuted
+    val iconTint = if (solid) scheme.onPrimary else scheme.primary
+    Surface(
+        color = container,
+        contentColor = content,
+        shape = RoundedCornerShape(16.dp),
+        border = if (solid) null else BorderStroke(1.dp, scheme.outlineVariant),
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(role = Role.Button, onClickLabel = text, onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = "$text. $subtitle" },
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(22.dp))
+            Column {
+                Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
+            }
+        }
+    }
+}
+
+/**
+ * A single calm destination row: a leading glyph + label, the active row lifted onto the primary
+ * container, an optional trailing [badge] (the Inbox Ready count). ≥48dp, an honest tab role + state
+ * for TalkBack.
+ */
+@Composable
+private fun DrawerRow(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    badge: String? = null,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .then(if (selected) Modifier.background(scheme.primaryContainer) else Modifier)
+            .clickable(role = Role.Tab, onClickLabel = label, onClick = onClick)
+            .semantics { this.selected = selected }
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (selected) MaterialTheme.defernoColors.amberDeep else scheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) scheme.onSurface else scheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (badge != null) {
+            Surface(
+                color = if (selected) scheme.surface else scheme.surfaceVariant,
+                contentColor = MaterialTheme.defernoColors.inkMuted,
+                shape = CircleShape,
+            ) {
+                MonoMeta(text = badge, modifier = Modifier.padding(horizontal = 9.dp, vertical = 2.dp))
+            }
+        }
+    }
+}
+
+/**
+ * The quiet single-Account footer: the Account name over a calm mono meta line, a divider above. (v1
+ * [Account] carries no Org — Org is a soft filter within an Account, not part of its identity, ADR-0002
+ * — so the meta line reads "Signed in" rather than inventing an org label on the wire.)
+ */
+@Composable
+private fun DrawerAccountFooter(active: Account?, modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                contentDescription = "Signed in as ${active?.label ?: "Deferno"}"
+            },
+    ) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = active?.label ?: "Deferno",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        MonoMeta(text = "Signed in", modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
     }
 }
 
@@ -390,20 +602,23 @@ private fun AccountSwitcher(
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Box(modifier) {
-        TextButton(onClick = { expanded = true }) {
-            Text(active?.label ?: "Select account")
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = "Switch account")
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            accounts.forEach { account ->
-                DropdownMenuItem(
-                    text = { Text(account.label) },
-                    onClick = {
-                        expanded = false
-                        if (account.id != active?.id) onSwitch(account.id)
-                    },
-                )
+    Column(modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+        Box {
+            TextButton(onClick = { expanded = true }) {
+                Text(active?.label ?: "Select account")
+                Icon(Icons.Filled.ArrowDropDown, contentDescription = "Switch account")
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                accounts.forEach { account ->
+                    DropdownMenuItem(
+                        text = { Text(account.label) },
+                        onClick = {
+                            expanded = false
+                            if (account.id != active?.id) onSwitch(account.id)
+                        },
+                    )
+                }
             }
         }
     }
@@ -453,6 +668,7 @@ val Destination.label: String
         Destination.Calendar -> "Calendar"
         Destination.Tasks -> "Tasks"
         Destination.Inbox -> "Inbox"
+        Destination.Activity -> "Activity"
         Destination.Profile -> "Profile"
         Destination.Settings -> "Settings"
     }
@@ -464,6 +680,7 @@ private val Destination.icon: ImageVector
         Destination.Calendar -> Icons.Filled.DateRange
         Destination.Tasks -> Icons.AutoMirrored.Filled.List
         Destination.Inbox -> Icons.Filled.MailOutline
+        Destination.Activity -> Icons.Filled.Notifications
         Destination.Profile -> Icons.Filled.Person
         Destination.Settings -> Icons.Filled.Settings
     }

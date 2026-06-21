@@ -10,14 +10,12 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
-import com.circuitstitch.deferno.core.model.Task
-import com.circuitstitch.deferno.core.model.TaskId
-import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.feature.tasks.SearchState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.time.Instant
 
 /**
  * The desktop Search-overlay render test (#86, cf. #39) — a Compose-Multiplatform UI test on the
@@ -29,12 +27,10 @@ import kotlin.time.Instant
 @OptIn(ExperimentalTestApi::class)
 class SearchDesktopScreenTest {
 
-    private val sampleTask = Task(
-        id = TaskId("1"),
-        orgSlug = "u-deferno",
+    private val sampleHit = SearchHit(
+        id = "1",
+        kind = ItemKind.Task,
         title = "Plan the spring launch",
-        workingState = WorkingState.InProgress,
-        dateCreated = Instant.parse("2026-01-01T00:00:00Z"),
     )
 
     @Test
@@ -45,18 +41,18 @@ class SearchDesktopScreenTest {
 
     @Test
     fun results_renderRows_andForwardOpenIntent() = runComposeUiTest {
-        val opened = mutableListOf<TaskId>()
+        val opened = mutableListOf<SearchHit>()
         setContent {
             Themed {
                 Content(
-                    state = SearchState(results = listOf(sampleTask), hasSearched = true),
+                    state = SearchState(results = listOf(sampleHit), hasSearched = true),
                     onResultClicked = { opened += it },
                 )
             }
         }
         onNodeWithText("Plan the spring launch").assertExists()
         onNodeWithText("Plan the spring launch").performClick()
-        assertEquals(listOf(TaskId("1")), opened)
+        assertEquals(listOf("1"), opened.map { it.id })
     }
 
     @Test
@@ -87,7 +83,7 @@ class SearchDesktopScreenTest {
 @Composable
 private fun Content(
     state: SearchState,
-    onResultClicked: (TaskId) -> Unit = {},
+    onResultClicked: (SearchHit) -> Unit = {},
     onDismiss: () -> Unit = {},
 ) {
     SearchDesktopContent(

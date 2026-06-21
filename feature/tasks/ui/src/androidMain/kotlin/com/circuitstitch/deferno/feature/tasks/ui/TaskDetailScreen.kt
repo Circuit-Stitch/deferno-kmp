@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -29,17 +29,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
+import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
+import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
+import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
-import com.circuitstitch.deferno.core.designsystem.theme.plexMono
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
@@ -174,8 +179,10 @@ internal fun TaskDetailContent(
     // system bars so the header clears the status-bar clock and the body clears the nav bar.
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
-            // In single-pane the leading control returns to the list, so it reads as "Back".
-            PaneHeader(title = task?.title ?: "Task", onBack = onClose)
+            // "See the trees" (#231): the prominent title now lives in the body title block (kind chip +
+            // headline), so the header is the calm "Details" label — matching the design and avoiding a
+            // duplicate title node. In single-pane the leading control returns to the list ("Back").
+            PaneHeader(title = "Details", onBack = onClose)
             if (state.isHydrating) {
                 LoadingStrip(label = "Loading details…")
             }
@@ -231,21 +238,21 @@ private fun TaskBody(
     onDeleteOnDeviceAttachment: (String) -> Unit,
     onPlayOnDeviceAttachment: (OnDeviceAttachment) -> Unit,
 ) {
+    // Reset the scroll to the top when drilling into a different task (key by id) — the detail composable
+    // is reused across the parent→subtask navigation, so an unkeyed scroll state would carry the parent's
+    // scroll position into the child and open it past its title (#231).
+    val scrollState = remember(task.id) { ScrollState(0) }
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        task.ref?.let { ref ->
-            Text(
-                text = ref,
-                style = MaterialTheme.typography.labelMedium,
-                fontFamily = plexMono(),
-                color = MaterialTheme.defernoColors.inkMuted,
-            )
-        }
+        // The "Everything in one place" title block (#231): a kind chip, the title, then a mono meta line
+        // (ref · due · subtask count). The kind here is always Task — this detail hydrates a Task — but it
+        // still wears the kind marker so the four kinds read consistently across the app.
+        DetailTitleBlock(task = task, subtaskDone = state.subtaskDone, subtaskTotal = state.subtaskTotal)
         WorkingStateEditor(current = task.workingState, onSetWorkingState = onSetWorkingState)
 
         val description = task.description
@@ -304,6 +311,48 @@ private fun TaskBody(
             onEdit = onEditComment,
             onDelete = onDeleteComment,
         )
+    }
+}
+
+/**
+ * The "Everything in one place" title block (#231): the kind as a [TreeChip] (filled, in the kind's
+ * colour), the Task title at headline rank, a mono meta line (human ref + due day), and — when the Task
+ * parents subtasks — an **overall-status** progress bar with a `{done} of {total} done` label right
+ * under the title (#231), so the whole's completion is legible above the fold without scrolling to the
+ * Subtasks section. Calm, low-overwhelm; the ref keeps IBM Plex Mono.
+ */
+@Composable
+private fun DetailTitleBlock(task: Task, subtaskDone: Int, subtaskTotal: Int) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        TreeChip(
+            text = kindLabel(ItemKind.Task),
+            filled = true,
+            container = kindColor(ItemKind.Task),
+            content = MaterialTheme.colorScheme.onPrimary,
+            semanticLabel = "Task",
+        )
+        Text(text = task.title, style = MaterialTheme.typography.headlineSmall)
+        val meta = buildList {
+            task.ref?.let { add(it) }
+            task.completeBy?.let { add("Due ${it.toDisplayDate()}") }
+        }
+        if (meta.isNotEmpty()) {
+            MonoMeta(text = meta.joinToString("  ·  "))
+        }
+        if (subtaskTotal > 0) {
+            // A "{done} of {total} done" label over a full-width bar — the same proven pattern as the
+            // Subtasks section (a bare weighted Row mis-measured the title block here).
+            MonoMeta(
+                text = "$subtaskDone of $subtaskTotal done",
+                modifier = Modifier.padding(top = 2.dp).clearAndSetSemantics {
+                    contentDescription = "$subtaskDone of $subtaskTotal subtasks done"
+                },
+            )
+            ProgressBarThin(
+                fraction = subtaskDone.toFloat() / subtaskTotal,
+                modifier = Modifier.fillMaxWidth().clearAndSetSemantics {},
+            )
+        }
     }
 }
 

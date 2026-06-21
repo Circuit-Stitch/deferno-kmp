@@ -1,7 +1,9 @@
 package com.circuitstitch.deferno.core.network.mapper
 
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.dto.ItemView
@@ -78,6 +80,31 @@ fun TaskDetailDto.toDomain(): Task = Task(
     description = description,
     nextTaskId = nextTaskId?.let(::TaskId),
 )
+
+/**
+ * Maps a search summary to a kind-agnostic [SearchHit] (#231). Unlike [toDomain] (which force-fits every
+ * summary into a [Task] and drops the wire `type`), this **keeps the kind**: the search endpoint returns
+ * items of every [ItemKind] with the `type` discriminant required on each row, so a hit wears its real
+ * kind. [isTerminal] folds the wire status through [TaskStatusWire.toWorkingState] (the search shape
+ * reports status on the Task axis for all kinds), giving the done/active de-emphasis signal.
+ */
+fun TaskSummaryDto.toSearchHit(): SearchHit = SearchHit(
+    id = id,
+    kind = type.toItemKind(),
+    title = title,
+    isTerminal = status.toWorkingState().isTerminal,
+    completeBy = completeBy.toInstantOrNull(),
+    deadlineTimeOfDay = deadlineTimeOfDay.toLocalTimeOrNull(),
+    ref = ref,
+)
+
+/** The wire `type` discriminant (`task`/`habit`/`chore`/`event`) → domain [ItemKind]; unknown ⇒ Task. */
+private fun String?.toItemKind(): ItemKind = when (this?.lowercase()) {
+    "habit" -> ItemKind.Habit
+    "chore" -> ItemKind.Chore
+    "event" -> ItemKind.Event
+    else -> ItemKind.Task
+}
 
 /**
  * Maps the `task` variant of an [ItemView] to a [HydrationState.Full] domain [Task]; returns `null`

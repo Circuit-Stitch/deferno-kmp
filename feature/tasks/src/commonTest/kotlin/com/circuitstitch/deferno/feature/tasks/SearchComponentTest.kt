@@ -6,6 +6,8 @@ import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
 import com.circuitstitch.deferno.core.data.task.TaskSearchResult
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,7 +30,7 @@ import kotlin.test.assertTrue
 class SearchComponentTest {
 
     private class RecordingSearch(
-        var results: List<com.circuitstitch.deferno.core.model.Task> = emptyList(),
+        var results: List<SearchHit> = emptyList(),
         var unavailable: Boolean = false,
     ) : SearchTasks {
         val queries = mutableListOf<TaskSearchQuery>()
@@ -50,7 +52,7 @@ class SearchComponentTest {
 
     @Test
     fun submitSearchesWithTheQueryAndFiltersAndLandsResults() = runTest {
-        val search = RecordingSearch(results = listOf(task("a", title = "Spring launch")))
+        val search = RecordingSearch(results = listOf(hit("a", title = "Spring launch")))
         val component = component(search)
 
         component.onQueryChanged("spring")
@@ -61,7 +63,7 @@ class SearchComponentTest {
         assertEquals(1, search.queries.size)
         assertEquals("spring", search.queries.single().query)
         assertEquals(setOf(WorkingState.InProgress), search.queries.single().statuses)
-        assertEquals(listOf(TaskId("a")), component.state.value.results.map { it.id })
+        assertEquals(listOf("a"), component.state.value.results.map { it.id })
         assertTrue(component.state.value.hasSearched)
         assertFalse(component.state.value.isSearching)
     }
@@ -101,7 +103,7 @@ class SearchComponentTest {
 
     @Test
     fun aQueryBelowTheTwoCharFloorDoesNotSearch() = runTest {
-        val search = RecordingSearch(results = listOf(task("a")))
+        val search = RecordingSearch(results = listOf(hit("a")))
         val component = component(search)
 
         component.onQueryChanged("a")
@@ -118,9 +120,21 @@ class SearchComponentTest {
         val outputs = mutableListOf<SearchComponent.Output>()
         val component = component(RecordingSearch(), outputs::add)
 
-        component.onResultClicked(TaskId("x"))
+        component.onResultClicked(hit("x"))
 
         assertEquals(listOf<SearchComponent.Output>(SearchComponent.Output.OpenTask(TaskId("x"))), outputs)
+    }
+
+    @Test
+    fun tappingANonTaskHitDoesNotOpenAnything() = runTest {
+        // No v1 detail screen exists for habit/chore/event, so a non-Task tap is a calm no-op (#231) —
+        // mirrors the Tasks tree, which only opens Task rows.
+        val outputs = mutableListOf<SearchComponent.Output>()
+        val component = component(RecordingSearch(), outputs::add)
+
+        component.onResultClicked(hit("h", kind = ItemKind.Habit))
+
+        assertTrue(outputs.isEmpty())
     }
 
     @Test
@@ -135,7 +149,7 @@ class SearchComponentTest {
 
     @Test
     fun isSearchingFlipsTrueWhileTheSearchIsInFlightThenFalse() = runTest {
-        val search = RecordingSearch(results = listOf(task("a")))
+        val search = RecordingSearch(results = listOf(hit("a")))
         val component = component(search)
         component.onQueryChanged("spring")
 
@@ -146,7 +160,7 @@ class SearchComponentTest {
             advanceUntilIdle()
             val settled = awaitItem()
             assertFalse(settled.isSearching, "isSearching clears when results land")
-            assertEquals(listOf(TaskId("a")), settled.results.map { it.id })
+            assertEquals(listOf("a"), settled.results.map { it.id })
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -169,16 +183,16 @@ class SearchComponentTest {
 
         // A subsequent successful search clears the failure.
         search.unavailable = false
-        search.results = listOf(task("a"))
+        search.results = listOf(hit("a"))
         component.onSubmit()
         advanceUntilIdle()
         assertFalse(component.state.value.searchFailed)
-        assertEquals(listOf(TaskId("a")), component.state.value.results.map { it.id })
+        assertEquals(listOf("a"), component.state.value.results.map { it.id })
     }
 
     @Test
     fun changingTheSortReRunsAnAlreadyCompletedSearch() = runTest {
-        val search = RecordingSearch(results = listOf(task("a")))
+        val search = RecordingSearch(results = listOf(hit("a")))
         val component = component(search)
         component.onQueryChanged("spring")
         component.onSubmit()

@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.network.mapper
 
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -28,6 +29,7 @@ class TaskMapperTest {
         sequence: Long? = 1L,
         parentId: String? = null,
         deletedAt: String? = null,
+        type: String? = "task",
     ) = TaskSummaryDto(
         id = id,
         title = "<title>",
@@ -43,7 +45,7 @@ class TaskMapperTest {
         ref = ref,
         orgSlug = "u-e4h2qk",
         sequence = sequence,
-        type = "task",
+        type = type,
         deletedAt = deletedAt,
     )
 
@@ -85,6 +87,32 @@ class TaskMapperTest {
         val task = summary(deletedAt = "2026-06-01T00:00:00Z").toDomain()
         assertEquals(Instant.parse("2026-06-01T00:00:00Z"), task.deletedAt)
         assertEquals(true, task.isDeleted)
+    }
+
+    @Test
+    fun taskSummaryDtoMapsToKindAgnosticSearchHit() {
+        // The wire `type` discriminant is carried into the hit's kind (not dropped, the way toDomain
+        // force-fits everything to Task), and a Dropped status folds into the terminal de-emphasis (#231).
+        val hit = summary(type = "habit").toSearchHit()
+        assertEquals(TaskId("7033cae7-eff6-4df1-bed9-01d16e89c2b0").value, hit.id)
+        assertEquals(ItemKind.Habit, hit.kind)
+        assertEquals("<title>", hit.title)
+        assertEquals(true, hit.isTerminal) // Dropped is terminal
+        assertEquals(Instant.parse("2026-04-10T07:45:00Z"), hit.completeBy)
+        assertEquals("u-e4h2qk-1", hit.ref)
+    }
+
+    @Test
+    fun toSearchHitMapsEveryKindAndDefaultsUnknownToTask() {
+        assertEquals(ItemKind.Task, summary(type = "task").toSearchHit().kind)
+        assertEquals(ItemKind.Habit, summary(type = "habit").toSearchHit().kind)
+        assertEquals(ItemKind.Chore, summary(type = "chore").toSearchHit().kind)
+        assertEquals(ItemKind.Event, summary(type = "event").toSearchHit().kind)
+        // An absent or additive/unknown `type` degrades to Task rather than dropping the row.
+        assertEquals(ItemKind.Task, summary(type = null).toSearchHit().kind)
+        assertEquals(ItemKind.Task, summary(type = "subproject").toSearchHit().kind)
+        // A non-terminal status leaves the hit active.
+        assertEquals(false, summary(status = TaskStatusWire.InProgress).toSearchHit().isTerminal)
     }
 
     private fun detail(

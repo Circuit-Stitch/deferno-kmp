@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -34,9 +35,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.task.SearchSort
+import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
-import com.circuitstitch.deferno.core.model.Task
-import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
@@ -86,7 +87,7 @@ internal fun SearchDesktopContent(
     onLabelToggled: (String) -> Unit,
     onDateRangeChanged: (from: LocalDate?, to: LocalDate?) -> Unit,
     onSortChanged: (SearchSort) -> Unit,
-    onResultClicked: (TaskId) -> Unit,
+    onResultClicked: (SearchHit) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -287,11 +288,11 @@ private fun SortControl(selected: SearchSort, onChange: (SearchSort) -> Unit) {
 }
 
 @Composable
-private fun SearchResults(state: SearchState, onResultClicked: (TaskId) -> Unit) {
+private fun SearchResults(state: SearchState, onResultClicked: (SearchHit) -> Unit) {
     when {
         state.results.isNotEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
-            items(state.results, key = { it.id.value }) { task: Task ->
-                TaskRow(task = task, onClick = { onResultClicked(task.id) })
+            items(state.results, key = { it.id }) { hit ->
+                SearchHitRow(hit = hit, onClick = { onResultClicked(hit) })
                 HorizontalDivider()
             }
         }
@@ -308,6 +309,28 @@ private fun SearchResults(state: SearchState, onResultClicked: (TaskId) -> Unit)
         else -> EmptyState(
             title = "Search your tasks",
             body = "Type at least two characters to find tasks by title or description.",
+        )
+    }
+}
+
+/** A kind-aware desktop search row (#231): a kind dot in the hit's real colour + its title (muted/struck
+ *  when terminal). Desktop keeps the existing filter controls; only the result rendering goes kind-agnostic. */
+@Composable
+private fun SearchHitRow(hit: SearchHit, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clickable(onClickLabel = "Open ${hit.title}", onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        KindDot(color = kindColor(hit.kind), modifier = Modifier.semantics { contentDescription = hit.kind.name.lowercase() })
+        Text(
+            text = hit.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = if (hit.isTerminal) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f).padding(start = 12.dp),
         )
     }
 }

@@ -41,6 +41,8 @@ data class SubtaskRow(
     val depth: Int,
     val hasChildren: Boolean,
     val isExpanded: Boolean,
+    // The curvy connecting rail's per-column flags (length == [depth]); see [ItemRow.spine] (#231).
+    val spine: List<Boolean> = emptyList(),
 )
 
 /**
@@ -262,7 +264,7 @@ class DefaultTaskDetailComponent(
                     id = { it.id.value },
                     parentId = { it.parentId?.value },
                     siblingOrder = SUBTASK_ORDER,
-                ) { node, depth, hasChildren, isExpanded -> SubtaskRow(node, depth, hasChildren, isExpanded) },
+                ) { node, depth, spine, hasChildren, isExpanded -> SubtaskRow(node, depth, hasChildren, isExpanded, spine) },
                 // Progress counts the whole subtree, independent of which nodes are folded away.
                 subtaskDone = descendants.count { it.workingState == WorkingState.Done },
                 subtaskTotal = descendants.size,

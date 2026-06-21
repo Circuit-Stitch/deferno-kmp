@@ -7,10 +7,18 @@ import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.dp
 
 /** The two brand palettes (ADR-0010). Each renders light or dark; the switcher selects between them. */
 enum class DefernoPalette { Deferno, Mono }
+
+/**
+ * The active brand [DefernoPalette] of the enclosing [DefernoTheme] — exposed so an **immersive** surface
+ * (Brain dump, Focus, Move) can re-theme itself dark to match its mock while keeping the user's chosen
+ * palette (Deferno vs Mono): `DefernoTheme(palette = LocalDefernoPalette.current, darkTheme = true) { … }`.
+ */
+val LocalDefernoPalette = staticCompositionLocalOf { DefernoPalette.Deferno }
 
 // Slightly rounded, mobile-first shapes — gentler than the web's 4–6px corners (ADR-0010: own the
 // system, don't port web tokens), while staying close to the familiar M3 scale.
@@ -42,7 +50,7 @@ fun DefernoTheme(
         DefernoPalette.Deferno -> if (darkTheme) DefernoDarkBrand else DefernoLightBrand
         DefernoPalette.Mono -> if (darkTheme) MonoDarkBrand else MonoLightBrand
     }
-    CompositionLocalProvider(LocalDefernoColors provides brand) {
+    CompositionLocalProvider(LocalDefernoColors provides brand, LocalDefernoPalette provides palette) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = defernoTypography(),

@@ -1,21 +1,20 @@
 package com.circuitstitch.deferno.ui
 
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
-import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.SearchState
 import com.circuitstitch.deferno.feature.tasks.ui.SearchScreen
-import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -23,10 +22,11 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * Compose UI interaction tests for the global Search overlay View (#73), on the JVM via Robolectric.
- * They assert the thin View forwards the right intents to its [com.circuitstitch.deferno.feature.tasks.SearchComponent]
- * and renders the gentle empty / no-results copy (design-principles.md); the search logic itself is
- * tested in the slice's commonTest (`SearchComponentTest`).
+ * Compose UI interaction tests for the restyled global Search overlay ("Deep search", #231), on the JVM
+ * via Robolectric. They assert the thin View forwards the right intents to its [SearchComponent] — the
+ * amber search field, the kind-aware result rows, the back/dismiss, the filter sheet (STATUS/WHEN/LABELS)
+ * and the sort affordance — and renders the gentle empty / no-match copy (design-principles.md). The
+ * search logic itself is tested in the slice's commonTest (`SearchComponentTest`).
  */
 @RunWith(RobolectricTestRunner::class)
 @OptIn(ExperimentalTestApi::class)
@@ -39,94 +39,39 @@ class SearchScreenInteractionTest {
         composeRule.setContent { DefernoTheme { content() } }
     }
 
+    private fun hit(id: String, title: String, kind: ItemKind = ItemKind.Task) =
+        SearchHit(id = id, kind = kind, title = title)
+
     @Test
     fun typingForwardsTheQueryChange() {
         val component = FakeSearchComponent()
         setContent { SearchScreen(component) }
 
-        composeRule.onNodeWithText("Search tasks").performTextInput("spring")
+        composeRule.onNodeWithText("Search all your trees…").performTextInput("spring")
 
         assertEquals(listOf("spring"), component.queryChanges)
     }
 
     @Test
-    fun statusChipForwardsTheToggle() {
+    fun backForwardsTheDismissIntent() {
         val component = FakeSearchComponent()
         setContent { SearchScreen(component) }
 
-        composeRule.onNodeWithText("In progress").performClick()
+        composeRule.onNodeWithContentDescription("Back").performClick()
 
-        assertEquals(listOf(WorkingState.InProgress), component.statusToggles)
-    }
-
-    @Test
-    fun sortChipForwardsTheSortChange() {
-        val component = FakeSearchComponent()
-        setContent { SearchScreen(component) }
-
-        composeRule.onNodeWithText("Title (A–Z)").performClick()
-
-        assertEquals(listOf(SearchSort.TitleAsc), component.sortChanges)
-    }
-
-    @Test
-    fun addingATagForwardsTheLabelToggle() {
-        // #73 follow-up DEFECT 3: the overlay must offer a tags/label control wired to onLabelToggled —
-        // it was a dead handler the View never called.
-        val component = FakeSearchComponent()
-        setContent { SearchScreen(component) }
-
-        composeRule.onNodeWithText("Add a tag").performTextInput("home")
-        composeRule.onNodeWithText("Add tag").performClick()
-
-        assertEquals(listOf("home"), component.labelToggles)
-    }
-
-    @Test
-    fun tappingASelectedTagChipForwardsTheToggleToRemoveIt() {
-        // A selected tag renders as a chip; tapping it toggles it back off (removing it from the query).
-        val component = FakeSearchComponent(SearchState(labels = setOf("errands")))
-        setContent { SearchScreen(component) }
-
-        composeRule.onNodeWithText("errands").performClick()
-
-        assertEquals(listOf("errands"), component.labelToggles)
-    }
-
-    @Test
-    fun enteringADateRangeForwardsTheDateRangeChange() {
-        // #73 follow-up DEFECT 3: the overlay must offer a date-range (from/to) control wired to
-        // onDateRangeChanged — it was a dead handler the View never called.
-        val component = FakeSearchComponent()
-        setContent { SearchScreen(component) }
-
-        composeRule.onNodeWithText("From (YYYY-MM-DD)").performTextInput("2026-06-01")
-        composeRule.onNodeWithText("To (YYYY-MM-DD)").performTextInput("2026-06-30")
-
-        // Both edits forward the current (from, to) pair; the last carries both parsed dates.
-        assertEquals(LocalDate(2026, 6, 1) to null, component.dateRangeChanges.first())
-        assertEquals(LocalDate(2026, 6, 1) to LocalDate(2026, 6, 30), component.dateRangeChanges.last())
+        assertEquals(1, component.dismissCount)
     }
 
     @Test
     fun resultRowForwardsTheOpenIntent() {
-        val results = listOf(sampleTask("3", "Reply to Sam"))
-        val component = FakeSearchComponent(SearchState(query = "reply", results = results, hasSearched = true))
+        val component = FakeSearchComponent(
+            SearchState(query = "reply", results = listOf(hit("3", "Reply to Sam")), hasSearched = true),
+        )
         setContent { SearchScreen(component) }
 
         composeRule.onNodeWithText("Reply to Sam").performClick()
 
-        assertEquals(listOf(TaskId("3")), component.resultClicks)
-    }
-
-    @Test
-    fun closeForwardsTheDismissIntent() {
-        val component = FakeSearchComponent()
-        setContent { SearchScreen(component) }
-
-        composeRule.onNodeWithText("Close").performClick()
-
-        assertEquals(1, component.dismissCount)
+        assertEquals(listOf("3"), component.resultClicks.map { it.id })
     }
 
     @Test
@@ -134,7 +79,7 @@ class SearchScreenInteractionTest {
         val component = FakeSearchComponent()
         setContent { SearchScreen(component) }
 
-        composeRule.onNodeWithText("Search your tasks").assertIsDisplayed()
+        composeRule.onNodeWithText("Search your trees").assertIsDisplayed()
     }
 
     @Test
@@ -156,18 +101,61 @@ class SearchScreenInteractionTest {
     }
 
     @Test
-    fun searchButtonForwardsTheSubmit_andIsGatedOnCanSearch() {
+    fun openingFiltersShowsTheSheetSections() {
+        val component = FakeSearchComponent()
+        setContent { SearchScreen(component) }
+
+        composeRule.onNodeWithText("Filters").performClick()
+
+        composeRule.onNodeWithText("STATUS").assertIsDisplayed()
+        composeRule.onNodeWithText("WHEN").assertIsDisplayed()
+        composeRule.onNodeWithText("LABELS").assertIsDisplayed()
+    }
+
+    @Test
+    fun statusSegmentForwardsTheToggles() {
+        // The Active/Done/All segment maps onto the WorkingState set: picking "Done" toggles on the two
+        // terminal states (the View keeps the component's single-toggle API).
+        val component = FakeSearchComponent()
+        setContent { SearchScreen(component) }
+
+        composeRule.onNodeWithText("Filters").performClick()
+        composeRule.onNodeWithText("Done").performClick()
+
+        assertEquals(listOf(WorkingState.Done, WorkingState.Dropped), component.statusToggles)
+    }
+
+    @Test
+    fun applyFiltersForwardsTheSubmit() {
         val component = FakeSearchComponent(SearchState(query = "spring"))
         setContent { SearchScreen(component) }
 
-        // hasText + hasClickAction singles out the button (the screen heading is also "Search").
-        val searchButton = composeRule.onNode(hasText("Search") and hasClickAction())
-        searchButton.performClick()
-        assertEquals(1, component.submitCount)
+        composeRule.onNodeWithText("Filters").performClick()
+        composeRule.onNodeWithText("Apply filters").performClick()
 
-        // Below the 2-char floor the button is disabled — a click forwards nothing.
-        component.setState(SearchState(query = "a"))
-        searchButton.performClick()
         assertEquals(1, component.submitCount)
+    }
+
+    @Test
+    fun sortAffordanceForwardsTheNextSort() {
+        // The "Best match ▾" affordance cycles to the next sort (Relevance → Title (A–Z)).
+        val component = FakeSearchComponent(
+            SearchState(query = "spring", results = listOf(hit("1", "Spring launch")), hasSearched = true),
+        )
+        setContent { SearchScreen(component) }
+
+        composeRule.onNodeWithText("Best match").performClick()
+
+        assertEquals(listOf(SearchSort.TitleAsc), component.sortChanges)
+    }
+
+    @Test
+    fun removingAnActiveLabelChipForwardsTheToggle() {
+        val component = FakeSearchComponent(SearchState(query = "spring", labels = setOf("errands")))
+        setContent { SearchScreen(component) }
+
+        composeRule.onNodeWithContentDescription("Remove #errands").performClick()
+
+        assertEquals(listOf("errands"), component.labelToggles)
     }
 }

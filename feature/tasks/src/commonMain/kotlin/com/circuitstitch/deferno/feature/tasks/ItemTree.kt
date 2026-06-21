@@ -8,12 +8,19 @@ import com.circuitstitch.deferno.core.model.Item
  * parents anything in the visible forest (a childless leaf's body is inert, ADR-0034 decision 7);
  * [isExpanded] is meaningful only when [hasChildren] — a collapsed parent ([hasChildren] && ![isExpanded])
  * shows the `descendant_done`/`descendant_total` progress badge.
+ *
+ * [spine] drives the curvy connecting rail ("See the trees", #231): one flag per gutter column (length =
+ * [depth]). Column `i < depth-1` is an **ancestor column** — `true` means that ancestor has a following
+ * sibling, so a full-height vertical line runs through this row to reach it. The final entry (`depth-1`,
+ * this row's own elbow column) is `true` when this row itself has a following sibling, so the rail
+ * continues below the elbow. A depth-0 root has an empty [spine] and no rail.
  */
 data class ItemRow(
     val item: Item,
     val depth: Int,
     val hasChildren: Boolean,
     val isExpanded: Boolean,
+    val spine: List<Boolean> = emptyList(),
 )
 
 /**
@@ -37,8 +44,8 @@ internal const val MAX_DEFAULT_EXPANDED_DEPTH = 2
  */
 fun buildItemTree(items: List<Item>, expandedOverrides: Map<String, Boolean> = emptyMap()): List<ItemRow> =
     foldFlatten(items, expandedOverrides, id = { it.id }, parentId = { it.parentId }, siblingOrder = SIBLING_ORDER) {
-        node, depth, hasChildren, isExpanded ->
-        ItemRow(node, depth, hasChildren, isExpanded)
+        node, depth, spine, hasChildren, isExpanded ->
+        ItemRow(node, depth, hasChildren, isExpanded, spine)
     }
 
 private val SIBLING_ORDER: Comparator<Item> =
@@ -150,7 +157,7 @@ internal fun <T, R> foldFlatten(
     id: (T) -> String,
     parentId: (T) -> String?,
     siblingOrder: Comparator<T>,
-    row: (node: T, depth: Int, hasChildren: Boolean, isExpanded: Boolean) -> R,
+    row: (node: T, depth: Int, spine: List<Boolean>, hasChildren: Boolean, isExpanded: Boolean) -> R,
 ): List<R> {
     val visibleIds = nodes.mapTo(HashSet(nodes.size), id)
     val childrenByParent: Map<String?, List<T>> = nodes
@@ -158,13 +165,19 @@ internal fun <T, R> foldFlatten(
         .mapValues { (_, kids) -> kids.sortedWith(siblingOrder) }
 
     val rows = ArrayList<R>(nodes.size)
-    fun emit(node: T, depth: Int) {
+    // [spine] (length == depth) carries one rail flag per gutter column: each ancestor column's flag is
+    // "that ancestor has a following sibling" (draw a full vertical), and a child appends its own
+    // "I have a following sibling" flag — so the curvy rail renders correctly at any depth.
+    fun emit(node: T, depth: Int, spine: List<Boolean>) {
         val children = childrenByParent[id(node)].orEmpty()
         val hasChildren = children.isNotEmpty()
         val expanded = hasChildren && (expandedOverrides[id(node)] ?: (depth <= MAX_DEFAULT_EXPANDED_DEPTH))
-        rows += row(node, depth, hasChildren, expanded)
-        if (expanded) children.forEach { emit(it, depth + 1) }
+        rows += row(node, depth, spine, hasChildren, expanded)
+        if (expanded) {
+            val lastIndex = children.lastIndex
+            children.forEachIndexed { index, child -> emit(child, depth + 1, spine + (index != lastIndex)) }
+        }
     }
-    childrenByParent[null].orEmpty().forEach { emit(it, 0) }
+    childrenByParent[null].orEmpty().forEach { emit(it, 0, emptyList()) }
     return rows
 }

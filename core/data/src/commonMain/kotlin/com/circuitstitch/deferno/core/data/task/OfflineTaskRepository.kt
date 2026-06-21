@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.data.item.ItemSync
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.flow.Flow
@@ -57,15 +58,15 @@ class OfflineTaskRepository(
         if (query.query.trim().length < MIN_SEARCH_QUERY_LENGTH) return TaskSearchResult.Success(emptyList())
         return when (val result = remoteSource.search(query)) {
             is TaskSearchResult.Success ->
-                TaskSearchResult.Success(result.tasks.sortedWith(query.sort.comparator()))
+                TaskSearchResult.Success(result.hits.sortedWith(query.sort.comparator()))
             TaskSearchResult.Unavailable -> result
         }
     }
 
-    private fun SearchSort.comparator(): Comparator<Task> = when (this) {
+    private fun SearchSort.comparator(): Comparator<SearchHit> = when (this) {
         SearchSort.Relevance -> Comparator { _, _ -> 0 } // keep the server's ranking
         SearchSort.TitleAsc -> compareBy { it.title.lowercase() }
-        // Soonest deadline first; tasks without a deadline sort last (nulls last).
+        // Soonest deadline first; hits without a deadline sort last (nulls last).
         SearchSort.DeadlineAsc -> compareBy(nullsLast()) { it.completeBy }
     }
 }

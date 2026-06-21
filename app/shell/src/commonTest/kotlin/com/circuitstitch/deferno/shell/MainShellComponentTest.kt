@@ -9,6 +9,7 @@ import com.circuitstitch.deferno.core.model.BrainDumpDraftId
 import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.demo.DemoItemRepository
 import com.circuitstitch.deferno.demo.DemoPlanRepository
@@ -241,6 +242,9 @@ class MainShellComponentTest {
                 Destination.Calendar,
                 Destination.Tasks,
                 Destination.Inbox,
+                // Activity: a placeholder Destination for now (a ComingSoon body) — its global
+                // action-ledger feed is tracked in #260. Ordered after Inbox among the secondaries.
+                Destination.Activity,
                 Destination.Profile,
                 Destination.Settings,
             ),
@@ -605,7 +609,7 @@ class MainShellComponentTest {
         shell.openOverlay(OverlayRoute.Search)
         val search = (shell.overlay.value.child?.instance as MainShellComponent.OverlayChild.Search).component
 
-        search.onResultClicked(TaskId("t-1"))
+        search.onResultClicked(SearchHit(id = "t-1", kind = ItemKind.Task, title = "Task t-1"))
 
         // Mirrors the Plan-tap routing: switch to Tasks, open the Task, and pop the overlay.
         assertNull(shell.overlay.value.child, "the overlay is dismissed on result tap")

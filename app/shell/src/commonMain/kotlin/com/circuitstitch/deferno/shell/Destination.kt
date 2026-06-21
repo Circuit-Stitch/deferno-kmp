@@ -26,6 +26,11 @@ enum class Destination(val slot: NavSlot) {
     // The Inbox: the triage queue for persisted Brain dump draft Tasks (ADR-0015 Inbox amendment). A
     // Secondary peer (reached via "More" on compact), ordered first among the secondaries.
     Inbox(NavSlot.Secondary),
+    // Activity: a global cross-surface action ledger (every action across what's visible to the person —
+    // MCP / Website / Mobile app / Google Voice). A PLACEHOLDER for now (a ComingSoon body) until the
+    // global history feed lands — tracked in #260. Still a real Secondary Destination with its
+    // own retained back stack, so the slice drops in later with no structural change (ADR-0015).
+    Activity(NavSlot.Secondary),
     Profile(NavSlot.Secondary),
     Settings(NavSlot.Secondary),
 }

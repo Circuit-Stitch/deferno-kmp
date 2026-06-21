@@ -144,6 +144,11 @@ object CoverageConfig {
     /** Package globs excluded from coverage (generated DI contribution hints + platform glue). */
     val EXCLUDED_PACKAGES: List<String> = listOf(
         "amazon.lastmile.inject", // anvil contribution-hint classes
+        // The shared "See the trees" design-language atoms (#design): stateless, palette-adaptive
+        // Compose Composables + their hand-built icon vectors. Thin UI glue exercised by Roborazzi
+        // screenshots, not the headless JVM gate — same rationale as the designsystem theme above and
+        // the feature `*.ui` packages below (ADR-0006).
+        "com.circuitstitch.deferno.core.designsystem.component",
         // Per-target Ktor engine providers (issue #17): real OkHttp/Darwin engine creation
         // runs only on a device / desktop / Apple target and is exercised by integration, not
         // the headless MockEngine gate (ADR-0006) — same rationale as the secure-storage

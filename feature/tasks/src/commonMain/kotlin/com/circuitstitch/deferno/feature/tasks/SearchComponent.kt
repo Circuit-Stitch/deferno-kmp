@@ -7,7 +7,8 @@ import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
 import com.circuitstitch.deferno.core.data.task.TaskSearchResult
-import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +37,7 @@ data class SearchState(
     val fromDate: LocalDate? = null,
     val toDate: LocalDate? = null,
     val sort: SearchSort = SearchSort.Relevance,
-    val results: List<Task> = emptyList(),
+    val results: List<SearchHit> = emptyList(),
     val isSearching: Boolean = false,
     val hasSearched: Boolean = false,
     val searchFailed: Boolean = false,
@@ -66,7 +67,12 @@ interface SearchComponent {
     /** Run the search for the current query + filters (a no-op if the query is below the 2-char floor). */
     fun onSubmit()
 
-    fun onResultClicked(id: TaskId)
+    /**
+     * A result row was tapped (#231). Kind-aware: a Task hit emits [Output.OpenTask] (the Tasks
+     * Destination has a Task detail); a non-Task hit is a no-op for now, since habit/chore/event have no
+     * v1 detail screen — mirrors the Tasks tree, which only opens Task rows.
+     */
+    fun onResultClicked(hit: SearchHit)
     fun onDismiss()
 
     sealed interface Output {
@@ -130,7 +136,7 @@ class DefaultSearchComponent(
             _state.update {
                 when (outcome) {
                     is TaskSearchResult.Success -> it.copy(
-                        results = outcome.tasks,
+                        results = outcome.hits,
                         isSearching = false,
                         hasSearched = true,
                         searchFailed = false,
@@ -146,8 +152,9 @@ class DefaultSearchComponent(
         }
     }
 
-    override fun onResultClicked(id: TaskId) {
-        output(SearchComponent.Output.OpenTask(id))
+    override fun onResultClicked(hit: SearchHit) {
+        // Only Task hits have a v1 detail screen; a non-Task tap is a calm no-op (mirrors the tree).
+        if (hit.kind == ItemKind.Task) output(SearchComponent.Output.OpenTask(TaskId(hit.id)))
     }
 
     override fun onDismiss() {

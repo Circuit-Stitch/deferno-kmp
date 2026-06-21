@@ -181,35 +181,35 @@ class OfflineTaskRepositoryTest {
 
     @Test
     fun searchDelegatesToTheRemoteSourceAndCarriesTheFilters() = runTest {
-        val remote = FakeTaskRemoteSource(searchResults = listOf(summary("a"), summary("b")))
+        val remote = FakeTaskRemoteSource(searchResults = listOf(hit("a"), hit("b")))
         val query = TaskSearchQuery(query = "spring", statuses = setOf(WorkingState.InProgress))
 
-        val results = (repo(remote = remote).search(query) as TaskSearchResult.Success).tasks
+        val results = (repo(remote = remote).search(query) as TaskSearchResult.Success).hits
 
-        assertEquals(listOf(TaskId("a"), TaskId("b")), results.map { it.id })
+        assertEquals(listOf("a", "b"), results.map { it.id })
         assertEquals(query, remote.lastSearchQuery)
     }
 
     @Test
     fun searchSkipsTheRoundTripForATooShortQuery() = runTest {
-        val remote = FakeTaskRemoteSource(searchResults = listOf(summary("a")))
+        val remote = FakeTaskRemoteSource(searchResults = listOf(hit("a")))
 
         // Below the contract's 2-char minimum → empty success, with no call reaching the remote.
         val outcome = repo(remote = remote).search(TaskSearchQuery(query = "a"))
-        assertTrue((outcome as TaskSearchResult.Success).tasks.isEmpty())
+        assertTrue((outcome as TaskSearchResult.Success).hits.isEmpty())
         assertNull(remote.lastSearchQuery)
     }
 
     @Test
     fun searchAppliesTheClientSideTitleSort() = runTest {
         val remote = FakeTaskRemoteSource(
-            searchResults = listOf(summary("1", title = "Zebra"), summary("2", title = "apple")),
+            searchResults = listOf(hit("1", title = "Zebra"), hit("2", title = "apple")),
         )
 
         val outcome = repo(remote = remote).search(TaskSearchQuery("task", sort = SearchSort.TitleAsc))
 
         // Case-insensitive A→Z over the server's order.
-        assertEquals(listOf("apple", "Zebra"), (outcome as TaskSearchResult.Success).tasks.map { it.title })
+        assertEquals(listOf("apple", "Zebra"), (outcome as TaskSearchResult.Success).hits.map { it.title })
     }
 
     @Test
@@ -218,24 +218,24 @@ class OfflineTaskRepositoryTest {
         val later = Instant.parse("2026-06-20T00:00:00Z")
         val remote = FakeTaskRemoteSource(
             searchResults = listOf(
-                summary("none").copy(completeBy = null),
-                summary("later").copy(completeBy = later),
-                summary("soon").copy(completeBy = soon),
+                hit("none", completeBy = null),
+                hit("later", completeBy = later),
+                hit("soon", completeBy = soon),
             ),
         )
 
         val outcome = repo(remote = remote).search(TaskSearchQuery("task", sort = SearchSort.DeadlineAsc))
 
         assertEquals(
-            listOf(TaskId("soon"), TaskId("later"), TaskId("none")),
-            (outcome as TaskSearchResult.Success).tasks.map { it.id },
+            listOf("soon", "later", "none"),
+            (outcome as TaskSearchResult.Success).hits.map { it.id },
         )
     }
 
     @Test
     fun searchDoesNotWriteResultsIntoTheObservedCache() = runTest {
         val local = FakeTaskLocalStore()
-        val remote = FakeTaskRemoteSource(searchResults = listOf(summary("hit")))
+        val remote = FakeTaskRemoteSource(searchResults = listOf(hit("hit")))
         val repository = repo(local, remote)
 
         repository.search(TaskSearchQuery("hit"))
@@ -248,8 +248,17 @@ class OfflineTaskRepositoryTest {
     fun searchStaysUnavailableWhenTheRemoteFails() = runTest {
         // The repository must not coerce a failed search to an empty success (#73 follow-up): the
         // overlay renders Unavailable distinctly from "no matches".
-        val remote = FakeTaskRemoteSource(searchResults = listOf(summary("a")), failNext = true)
+        val remote = FakeTaskRemoteSource(searchResults = listOf(hit("a")), failNext = true)
 
         assertEquals(TaskSearchResult.Unavailable, repo(remote = remote).search(TaskSearchQuery("query")))
     }
+
+    /** Concise kind-agnostic [com.circuitstitch.deferno.core.model.SearchHit] fixture for the search tests. */
+    private fun hit(id: String, title: String = "Task $id", completeBy: Instant? = null) =
+        com.circuitstitch.deferno.core.model.SearchHit(
+            id = id,
+            kind = com.circuitstitch.deferno.core.model.ItemKind.Task,
+            title = title,
+            completeBy = completeBy,
+        )
 }

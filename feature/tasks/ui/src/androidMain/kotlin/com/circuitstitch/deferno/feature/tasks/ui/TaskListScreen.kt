@@ -41,7 +41,15 @@ import kotlin.math.sqrt
  * [ItemTreeComponent.undoLastMove] path.
  */
 @Composable
-fun TaskListScreen(component: ItemTreeComponent, modifier: Modifier = Modifier) {
+fun TaskListScreen(
+    component: ItemTreeComponent,
+    modifier: Modifier = Modifier,
+    // The "See the trees" header affordances (#231): the read-only search bar opens the global Search
+    // overlay, "Add a tree" starts a new item. Both are shell concerns the ItemTreeComponent doesn't own,
+    // so they're threaded in with no-op defaults — the integrator wires them from the shell.
+    onSearch: () -> Unit = {},
+    onAdd: () -> Unit = {},
+) {
     val state by component.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -74,6 +82,8 @@ fun TaskListScreen(component: ItemTreeComponent, modifier: Modifier = Modifier) 
             onToggleExpand = component::onToggleExpand,
             onOpenDetail = component::onOpenDetail,
             onRefresh = component::onRefresh,
+            onSearch = onSearch,
+            onAdd = onAdd,
             moveMode = state.moveMode,
             onEnterMoveMode = component::onEnterMoveMode,
             onMoveUp = component::onMoveUp,

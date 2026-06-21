@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
 import com.circuitstitch.deferno.core.network.dto.TaskSummaryDto
 import com.circuitstitch.deferno.core.network.mapper.toDomain
+import com.circuitstitch.deferno.core.network.mapper.toSearchHit
 import com.circuitstitch.deferno.core.network.mapper.toWireToken
 import com.circuitstitch.deferno.core.network.requestApi
 import io.ktor.client.HttpClient
@@ -60,7 +61,9 @@ class KtorTaskRemoteSource(
             query.toDate?.let { parameter("to", it.toString()) }
         }
         return when (result) {
-            is ApiResult.Success -> TaskSearchResult.Success(result.data.map { it.toDomain() })
+            // Kind-agnostic (#231): keep each result's real kind via toSearchHit, instead of force-fitting
+            // every summary to a Task (which dropped the wire `type` and painted non-Tasks as Tasks).
+            is ApiResult.Success -> TaskSearchResult.Success(result.data.map { it.toSearchHit() })
             is ApiResult.Failure -> TaskSearchResult.Unavailable
         }
     }
