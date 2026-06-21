@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -667,6 +668,7 @@ val Destination.label: String
         Destination.Calendar -> "Calendar"
         Destination.Tasks -> "Tasks"
         Destination.Inbox -> "Inbox"
+        Destination.Activity -> "Activity"
         Destination.Profile -> "Profile"
         Destination.Settings -> "Settings"
     }
@@ -678,6 +680,7 @@ private val Destination.icon: ImageVector
         Destination.Calendar -> Icons.Filled.DateRange
         Destination.Tasks -> Icons.AutoMirrored.Filled.List
         Destination.Inbox -> Icons.Filled.MailOutline
+        Destination.Activity -> Icons.Filled.Notifications
         Destination.Profile -> Icons.Filled.Person
         Destination.Settings -> Icons.Filled.Settings
     }

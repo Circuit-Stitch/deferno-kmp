@@ -454,6 +454,8 @@ class DefaultMainShellComponent(
         data object Calendar : Config
         data object Tasks : Config
         data object Inbox : Config
+        // The Activity ledger is a placeholder Destination for now (no slice yet) — see createChild.
+        data object Activity : Config
         data object Profile : Config
         data object Settings : Config
     }
@@ -630,6 +632,11 @@ class DefaultMainShellComponent(
                         coroutineContext = coroutineContext,
                     ),
                 )
+
+            // Activity has no slice yet — a logic-less Placeholder the View renders as a ComingSoon body
+            // (the global action-ledger feed is tracked in #260). Still a real tier-1 Destination.
+            Config.Activity ->
+                MainShellComponent.DestinationChild.Placeholder(Destination.Activity)
 
             Config.Profile ->
                 MainShellComponent.DestinationChild.Profile(
@@ -922,6 +929,7 @@ class DefaultMainShellComponent(
             Destination.Calendar -> Config.Calendar
             Destination.Tasks -> Config.Tasks
             Destination.Inbox -> Config.Inbox
+            Destination.Activity -> Config.Activity
             Destination.Profile -> Config.Profile
             Destination.Settings -> Config.Settings
         }

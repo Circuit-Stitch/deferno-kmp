@@ -241,6 +241,9 @@ class MainShellComponentTest {
                 Destination.Calendar,
                 Destination.Tasks,
                 Destination.Inbox,
+                // Activity: a placeholder Destination for now (a ComingSoon body) — its global
+                // action-ledger feed is tracked in #260. Ordered after Inbox among the secondaries.
+                Destination.Activity,
                 Destination.Profile,
                 Destination.Settings,
             ),
