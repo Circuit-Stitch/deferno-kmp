@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -88,14 +90,17 @@ internal fun SearchContent(
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
             Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "Search",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() },
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Eyebrow("DEEP SEARCH")
+                    Text(
+                        text = "Reach any tree",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                }
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
 
@@ -126,6 +131,7 @@ internal fun SearchContent(
                 TagsFilter(selected = state.labels, onToggle = onLabelToggled)
                 DateRangeFilter(from = state.fromDate, to = state.toDate, onChange = onDateRangeChanged)
                 SortControl(selected = state.sort, onChange = onSortChanged)
+                ActiveFilterChips(state)
             }
 
             HorizontalDivider(Modifier.padding(top = 8.dp))
@@ -285,13 +291,39 @@ private fun SortControl(selected: SearchSort, onChange: (SearchSort) -> Unit) {
     }
 }
 
+/**
+ * The active filters at a glance (#231): the chosen statuses, tags, and a date bound surfaced as calm
+ * [TreeChip]s so a user sees what's narrowing their search without re-reading every control. Read-only —
+ * the controls above own the toggling; this is a summary line. Hidden when nothing is selected.
+ */
+@Composable
+private fun ActiveFilterChips(state: SearchState) {
+    val chips = buildList {
+        state.statuses.forEach { add(workingStateLabel(it)) }
+        state.labels.forEach { add("#$it") }
+        if (state.fromDate != null || state.toDate != null) {
+            add("${state.fromDate?.toString() ?: "…"} → ${state.toDate?.toString() ?: "…"}")
+        }
+    }
+    if (chips.isEmpty()) return
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        chips.forEach { chip -> TreeChip(text = chip, filled = true) }
+    }
+}
+
 @Composable
 private fun SearchResults(state: SearchState, onResultClicked: (TaskId) -> Unit) {
     when {
         state.results.isNotEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
+            item {
+                SectionLabel(
+                    text = if (state.results.size == 1) "1 TREE" else "${state.results.size} TREES",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
             items(state.results, key = { it.id.value }) { task: Task ->
-                TaskRow(task = task, onClick = { onResultClicked(task.id) })
-                HorizontalDivider()
+                SearchResultRow(task = task, onClick = { onResultClicked(task.id) })
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
         state.isSearching -> LoadingStrip(label = "Searching…")
@@ -308,6 +340,46 @@ private fun SearchResults(state: SearchState, onResultClicked: (TaskId) -> Unit)
             title = "Search your tasks",
             body = "Type at least two characters to find tasks by title or description.",
         )
+    }
+}
+
+/**
+ * A re-skinned search result (#231): a leading [KindDot] (a search hit is a Task, so it wears the Task
+ * colour), the title, the working-state badge, and a mono meta line for the ref + labels.
+ *
+ * ponytail: the design's breadcrumb "path to the tree" is omitted — a [Task] search result carries no
+ * ancestry (no parent chain in [SearchState.results]); surfacing it would need a new query field. We show
+ * the ref + labels instead, which the result does carry. Wire [Breadcrumb] here when ancestry lands.
+ */
+@Composable
+private fun SearchResultRow(task: Task, onClick: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .clickable(onClickLabel = "Open ${task.title}", onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            KindDot(
+                color = kindColor(ItemKind.Task),
+                modifier = Modifier.semantics { contentDescription = "task" },
+            )
+            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                Text(
+                    text = task.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                )
+                val meta = buildList {
+                    task.ref?.let { add(it) }
+                    if (task.labels.isNotEmpty()) add(task.labels.joinToString(" ") { "#$it" })
+                }
+                if (meta.isNotEmpty()) MonoMeta(text = meta.joinToString("  ·  "))
+            }
+            WorkingStateBadge(task.workingState)
+        }
     }
 }
 

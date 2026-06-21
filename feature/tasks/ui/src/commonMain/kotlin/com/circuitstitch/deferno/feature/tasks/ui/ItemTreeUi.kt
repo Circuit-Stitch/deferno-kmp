@@ -1,10 +1,10 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,13 +34,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
@@ -53,7 +54,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
@@ -61,12 +64,12 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.feature.tasks.ItemRow
 import com.circuitstitch.deferno.feature.tasks.MoveMode
 
-// The Tasks Item-tree renderer (ADR-0034, #227/#228): the cross-kind forest flattened to depth-indented
-// rows in one LazyColumn, shared by the Android (TaskListScreen) and desktop (TasksDesktopScreen) primary
-// pane. Stateless and platform-neutral; the component (DefaultItemTreeComponent) holds all logic — these
-// only render the [ItemRow]s, forward taps, and drive the modal move mode. Handlers take their args from
-// the ROW, never from a state snapshot (the component's StateFlow is WhileSubscribed — empty without a
-// live subscriber).
+// The Tasks Item-tree renderer (ADR-0034, #227/#228) restyled to the "See the trees" direction (#231):
+// the cross-kind forest ("Everything") flattened to depth-indented rows in one LazyColumn, shared by the
+// Android (TaskListScreen) and desktop (TasksDesktopScreen) primary pane. Stateless and platform-neutral;
+// the component (DefaultItemTreeComponent) holds all logic — these only render the [ItemRow]s, forward
+// taps, and drive the modal move mode. Handlers take their args from the ROW, never from a state snapshot
+// (the component's StateFlow is WhileSubscribed — empty without a live subscriber).
 
 /** Per-depth leading indent; the chevron gutter keeps a [chevronGutter] column so titles align. */
 private val IndentPerDepth = 16.dp
@@ -75,13 +78,22 @@ private val chevronGutter = MinTouchTarget
 /** Test tag on the tree Column — the move-mode focus + key-event target (see ItemTreeKeyboardTest). */
 internal const val ItemTreeTag = "itemTree"
 
+/** The calm in-list filter segments — local view state, not a component intent. "Active" hides terminals. */
+private val TreeFilters = listOf("In today", "Active", "All")
+
 /**
- * The Tasks Item tree: a header (with Refresh) over a `LazyColumn` of [rows]. Each parent row toggles its
- * fold on a chevron/body tap; a childless leaf's body is inert; the trailing `›` opens detail (ADR-0034
- * decision 7). A **long-press** lifts the row into [moveMode] (decision 6, #228): the lifted row is
- * highlighted, the rest calmed, and a bottom bar offers **↑ ↓ ‹ ›** (illegal directions greyed) + Done —
- * mirrored on the keyboard (Alt+↑/↓ reorder, Tab / Shift-Tab indent / outdent, Esc = Done). Empty/refreshing states
- * mirror the calm copy of the other Tasks panes.
+ * The Tasks Item tree ("Everything"): a calm header band (title + count + a read-only search bar + a
+ * local segmented filter) over a `LazyColumn` of [rows], capped by an "Add a tree" affordance. Each parent
+ * row toggles its fold on a chevron/body tap; a childless leaf's body is inert; the trailing `›` opens
+ * detail (ADR-0034 decision 7). A **long-press** lifts the row into [moveMode] (decision 6, #228): the
+ * lifted row is highlighted, the rest calmed, and a bottom bar offers **↑ ↓ ‹ ›** (illegal directions
+ * greyed) + Done — mirrored on the keyboard (Alt+↑/↓ reorder, Tab / Shift-Tab indent / outdent, Esc =
+ * Done). Empty/refreshing states mirror the calm copy of the other Tasks panes.
+ *
+ * [onSearch] opens the global Search overlay (no-op default; the integrator wires it). [onAdd] starts a new
+ * tree (no-op default). The segmented filter is **local view state**: it filters the displayed rows only —
+ * "Active" hides terminal items, "All" shows everything; "In today" shows all for now (plan membership
+ * isn't on [com.circuitstitch.deferno.core.model.Item] yet).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -92,6 +104,10 @@ internal fun ItemTreeContent(
     onOpenDetail: (id: String, kind: ItemKind) -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
+    // The "See the trees" header affordances (#231). Defaulted no-ops so read-only callers / tests render
+    // without wiring them; the integrator threads the real Search / new-tree intents.
+    onSearch: () -> Unit = {},
+    onAdd: () -> Unit = {},
     // Modal move mode (#228). Defaulted so the read-only callers / tests render without wiring it.
     moveMode: MoveMode? = null,
     onEnterMoveMode: (id: String) -> Unit = {},
@@ -113,6 +129,18 @@ internal fun ItemTreeContent(
         if (moveMode != null) runCatching { focusRequester.requestFocus() }
     }
     val moveFocus = if (moveMode != null) Modifier.focusRequester(focusRequester).focusable() else Modifier
+
+    // Local in-list filter (#231): "Active" hides terminal items; "All" shows everything. Defaults to "All"
+    // so the tree's existing behaviour is unchanged (terminal rows still show, de-emphasized) — the filter
+    // is an opt-in narrowing, calm and non-destructive. ponytail: "In today" shows all for now — plan
+    // membership isn't on the Item projection yet, so there's nothing to narrow on without a new field.
+    var filterIndex by remember { mutableIntStateOf(2) } // default to "All" — preserve existing behaviour
+    val visibleRows = remember(rows, filterIndex) {
+        when (filterIndex) {
+            1 -> rows.filterNot { it.item.isTerminal } // Active
+            else -> rows // In today (for now) + All
+        }
+    }
 
     Column(
         modifier = modifier
@@ -136,23 +164,29 @@ internal fun ItemTreeContent(
                 }
             },
     ) {
-        PaneHeader(
-            title = "Tasks",
-            actions = {
-                TextButton(
-                    onClick = onRefresh,
-                    enabled = !isRefreshing,
-                    modifier = Modifier.heightIn(min = MinTouchTarget),
-                ) { Text("Refresh") }
-            },
-        )
+        // The calm header band: "Everything" + a tree count, the Refresh action, then a read-only search
+        // bar and the segmented filter. Hidden in move mode so the lifted-row focus owns the surface.
+        if (moveMode == null) {
+            EverythingHeader(
+                treeCount = rows.count { it.depth == 0 },
+                isRefreshing = isRefreshing,
+                onRefresh = onRefresh,
+                onSearch = onSearch,
+                filterIndex = filterIndex,
+                onFilterSelect = { filterIndex = it },
+            )
+        }
         if (isRefreshing) {
             LoadingStrip(label = "Refreshing…")
         }
-        if (rows.isEmpty() && !isRefreshing) {
+        if (visibleRows.isEmpty() && !isRefreshing) {
             EmptyState(
-                title = "No tasks yet",
-                body = "When you add a task, it shows up here. One small step at a time.",
+                title = if (rows.isEmpty()) "No trees yet" else "Nothing to show here",
+                body = if (rows.isEmpty()) {
+                    "When you add a tree, it shows up here. One small step at a time."
+                } else {
+                    "Everything here is done. Switch to “All” to see it again."
+                },
             )
         } else {
             LazyColumn(
@@ -166,7 +200,7 @@ internal fun ItemTreeContent(
                     PaddingValues()
                 },
             ) {
-                items(rows, key = { it.item.id }) { row ->
+                items(visibleRows, key = { it.item.id }) { row ->
                     ItemTreeRow(
                         row = row,
                         inMoveMode = moveMode != null,
@@ -178,6 +212,16 @@ internal fun ItemTreeContent(
                         onUndoMove = onUndoMove,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
+                // "Add a tree" foot (#231) — only outside move mode (the list is calm during a move).
+                if (moveMode == null) {
+                    item {
+                        DashedAddButton(
+                            text = "Add a tree",
+                            onClick = onAdd,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
                 }
             }
         }
@@ -195,11 +239,53 @@ internal fun ItemTreeContent(
 }
 
 /**
- * One depth-indented tree row. Outside move mode a parent's chevron + body tap toggle its fold, the
+ * The calm "Everything" header band: the pane title + a `{n} trees` count, a Refresh action, a read-only
+ * [SearchBarDisplay] that opens the global Search overlay, and the local [SegmentedFilter]. All on
+ * `surface`, generously spaced — low-overwhelm even at 300+ items.
+ */
+@Composable
+private fun EverythingHeader(
+    treeCount: Int,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    onSearch: () -> Unit,
+    filterIndex: Int,
+    onFilterSelect: (Int) -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Everything",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    MonoMeta(text = if (treeCount == 1) "1 tree" else "$treeCount trees")
+                }
+                TextButton(
+                    onClick = onRefresh,
+                    enabled = !isRefreshing,
+                    modifier = Modifier.heightIn(min = MinTouchTarget),
+                ) { Text("Refresh") }
+            }
+            SearchBarDisplay(placeholder = "Search all your trees…", onClick = onSearch)
+            SegmentedFilter(options = TreeFilters, selectedIndex = filterIndex, onSelect = onFilterSelect)
+        }
+    }
+}
+
+/**
+ * One depth-indented tree row, restyled (#231). A leading [KindDot] marks the Item's kind; the chevron
+ * gutter shows ▾/▸ for a parent. Outside move mode a parent's chevron + body tap toggle its fold, the
  * trailing `›` (a fixed, always-present target) opens detail, and a **long-press** opens a minimal menu
  * whose "Move" entry lifts the row into move mode (#228). In move mode taps are inert (the list goes
  * calm): the lifted row is highlighted, the rest dimmed. A collapsed parent with subtree counts shows a
- * `done/total` badge; a terminal (Done/Dropped/Archived) item is de-emphasized.
+ * `{done} of {total}` MonoMeta + a thin progress bar; a terminal (Done/Dropped/Archived) item is
+ * de-emphasized (muted + strikethrough title).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -256,35 +342,43 @@ private fun ItemTreeRow(
                 Box(Modifier.size(chevronGutter), contentAlignment = Alignment.Center) {
                     if (row.hasChildren) {
                         Text(
-                            text = if (row.isExpanded) "▾" else "▸",
+                            text = if (row.isExpanded) DefernoIcons.ChevronDown else DefernoIcons.ChevronRight,
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = titleColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).padding(vertical = 12.dp),
-                )
-                // Collapsed parent with server-computed counts → a done/total progress badge.
-                if (row.hasChildren && !row.isExpanded && item.descendantTotal != null) {
-                    val done = item.descendantDone ?: 0
-                    val total = item.descendantTotal
+                // The kind marker: a calm dot in the kind's colour. Decorative — colour is reinforcement,
+                // never the sole signal (a terminal item also strikes the title and mutes the text), so it
+                // stays out of the row's spoken output (which is chevron + title + the open-detail action).
+                KindDot(color = kindColor(item.kind), modifier = Modifier.clearAndSetSemantics {})
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f).padding(vertical = 10.dp)) {
                     Text(
-                        text = "$done/$total",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                            .clearAndSetSemantics { contentDescription = "$done of $total done" },
+                        text = item.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = titleColor,
+                        textDecoration = if (item.isTerminal) TextDecoration.LineThrough else TextDecoration.None,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
+                    // Collapsed parent with server-computed counts → a done/total meta + thin progress bar.
+                    val total = item.descendantTotal
+                    if (row.hasChildren && !row.isExpanded && total != null) {
+                        val done = item.descendantDone ?: 0
+                        Spacer(Modifier.size(4.dp))
+                        MonoMeta(
+                            text = "$done of $total",
+                            modifier = Modifier.clearAndSetSemantics { contentDescription = "$done of $total done" },
+                        )
+                        if (total > 0) {
+                            Spacer(Modifier.size(2.dp))
+                            ProgressBarThin(
+                                fraction = done.toFloat() / total,
+                                modifier = Modifier.fillMaxWidth().clearAndSetSemantics {},
+                            )
+                        }
+                    }
                 }
                 // The lone open-detail affordance: a fixed target, immune to title length (ADR-0034 dec. 7).
                 // Inert in move mode (the list is calm). An icon-only control, so it carries its own
@@ -297,9 +391,9 @@ private fun ItemTreeRow(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "›",
+                        text = DefernoIcons.ChevronRight,
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.defernoColors.inkMuted,
                         modifier = Modifier.clearAndSetSemantics {},
                     )
                 }
@@ -357,8 +451,8 @@ private fun MoveModeBar(
         ) {
             MoveControl(glyph = "↑", description = "Move up", enabled = move.canMoveUp, onClick = onMoveUp)
             MoveControl(glyph = "↓", description = "Move down", enabled = move.canMoveDown, onClick = onMoveDown)
-            MoveControl(glyph = "‹", description = "Outdent", enabled = move.canOutdent, onClick = onOutdent)
-            MoveControl(glyph = "›", description = "Indent", enabled = move.canIndent, onClick = onIndent)
+            MoveControl(glyph = DefernoIcons.ChevronLeft, description = "Outdent", enabled = move.canOutdent, onClick = onOutdent)
+            MoveControl(glyph = DefernoIcons.ChevronRight, description = "Indent", enabled = move.canIndent, onClick = onIndent)
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onDone, modifier = Modifier.heightIn(min = MinTouchTarget)) { Text("Done") }
         }

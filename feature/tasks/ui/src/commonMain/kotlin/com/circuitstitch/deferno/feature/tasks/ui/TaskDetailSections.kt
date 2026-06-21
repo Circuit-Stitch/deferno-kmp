@@ -15,14 +15,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.InputChip
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -34,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -60,27 +61,15 @@ import kotlin.time.Instant
 
 private const val MaxCommentLength = 5000
 
-/** A calm section header: a heading title with an optional trailing count (e.g. "0/3", "2"). */
+/**
+ * A calm, all-caps section header (#231): "ATTACHMENTS", "SUBTASKS · 3", "ACTIVITY · 2". The [trailing]
+ * count, when present, folds into the label after a mid-dot so the header reads as one heading. Rendered
+ * through the shared [SectionLabel] atom (a heading for screen readers).
+ */
 @Composable
 internal fun SectionHeader(title: String, modifier: Modifier = Modifier, trailing: String? = null) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.defernoColors.inkMuted,
-            modifier = Modifier.weight(1f).semantics { heading() },
-        )
-        if (trailing != null) {
-            Text(
-                text = trailing,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.defernoColors.inkMuted,
-            )
-        }
-    }
+    val label = if (trailing != null) "${title.uppercase()} · $trailing" else title.uppercase()
+    SectionLabel(text = label, modifier = modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp))
 }
 
 // --- Properties (DUE · TIME · LABELS · OWNER) ---
@@ -282,10 +271,10 @@ internal fun SubtasksSection(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth()) {
-        SectionHeader("Subtasks", trailing = if (total > 0) "$done/$total" else null)
+        SectionHeader("Subtasks", trailing = if (total > 0) "$done of $total" else null)
         if (total > 0) {
-            LinearProgressIndicator(
-                progress = { done.toFloat() / total },
+            ProgressBarThin(
+                fraction = done.toFloat() / total,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             )
         }
@@ -311,11 +300,11 @@ private fun SubtaskRowView(
             .padding(start = (row.depth * 20).dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Chevron gutter: ▾/▸ for a parent (toggles fold), blank for a leaf so checkboxes still align.
+        // Chevron gutter: ▾/▸ for a parent (toggles fold), blank for a leaf so the check dots still align.
         Box(Modifier.size(SubtaskChevronGutter), contentAlignment = Alignment.Center) {
             if (row.hasChildren) {
                 Text(
-                    text = if (row.isExpanded) "▾" else "▸",
+                    text = if (row.isExpanded) DefernoIcons.ChevronDown else DefernoIcons.ChevronRight,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickable(
@@ -324,14 +313,20 @@ private fun SubtaskRowView(
                 )
             }
         }
-        Checkbox(
+        // The round done toggle (#231) replaces the square checkbox — calmer, and the kind marker rides
+        // alongside it so each branch reads as part of the forest.
+        CheckDot(
             checked = done,
             onCheckedChange = { onToggleDone(task) },
-            modifier = Modifier.semantics {
-                contentDescription = if (done) "Mark “${task.title}” not done" else "Mark “${task.title}” done"
-            },
+            contentDescription = if (done) "Mark “${task.title}” not done" else "Mark “${task.title}” done",
         )
-        // Tapping the title (not the checkbox) drills into that subtask's own detail — web's chevron.
+        KindDot(
+            color = kindColor(ItemKind.Task),
+            modifier = Modifier
+                .padding(end = 8.dp)
+                .clearAndSetSemantics {},
+        )
+        // Tapping the title (not the check dot) drills into that subtask's own detail — web's chevron.
         Text(
             text = task.title,
             style = MaterialTheme.typography.bodyLarge,
@@ -342,7 +337,7 @@ private fun SubtaskRowView(
                 .clickable(onClickLabel = "Open ${task.title}") { onOpen(task) },
         )
         Text(
-            text = "›",
+            text = DefernoIcons.ChevronRight,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.defernoColors.inkMuted,
             modifier = Modifier.padding(horizontal = 8.dp),
@@ -433,33 +428,40 @@ private fun OnDeviceAttachmentRow(
     onDelete: (String) -> Unit,
     onPlay: (OnDeviceAttachment) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(attachment.filename, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-            Text(
-                text = "${formatBytes(attachment.size)} · ${attachment.mime} · On device",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.defernoColors.inkMuted,
-                maxLines = 1,
-            )
-            attachment.caption?.takeIf { it.isNotBlank() }?.let { caption ->
-                Text(caption, style = MaterialTheme.typography.bodyMedium)
+    DetailCard {
+        Row(
+            modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(attachment.filename, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                MonoMeta(text = "${formatBytes(attachment.size)} · ${attachment.mime} · On device")
+                attachment.caption?.takeIf { it.isNotBlank() }?.let { caption ->
+                    Text(caption, style = MaterialTheme.typography.bodyMedium)
+                }
             }
-        }
-        if (attachment.isAudio) {
+            if (attachment.isAudio) {
+                TextButton(
+                    onClick = { onPlay(attachment) },
+                    modifier = Modifier.semantics { contentDescription = "Play ${attachment.filename}" },
+                ) { Text("Play") }
+            }
             TextButton(
-                onClick = { onPlay(attachment) },
-                modifier = Modifier.semantics { contentDescription = "Play ${attachment.filename}" },
-            ) { Text("Play") }
+                onClick = { onDelete(attachment.id) },
+                modifier = Modifier.semantics { contentDescription = "Delete ${attachment.filename}" },
+            ) { Text("Delete") }
         }
-        TextButton(
-            onClick = { onDelete(attachment.id) },
-            modifier = Modifier.semantics { contentDescription = "Delete ${attachment.filename}" },
-        ) { Text("Delete") }
     }
+}
+
+/** A calm card for a detail row (attachment / comment): surfaceContainerLow, rounded, gentle spacing. */
+@Composable
+private fun DetailCard(content: @Composable () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) { content() }
 }
 
 @Composable
@@ -470,7 +472,8 @@ private fun AttachmentRow(
 ) {
     val uriHandler = LocalUriHandler.current
     var editing by remember(attachment.id) { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+    DetailCard {
+      Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
             verticalAlignment = Alignment.CenterVertically,
@@ -481,12 +484,7 @@ private fun AttachmentRow(
                     .clickable(onClickLabel = "Open ${attachment.filename}") { uriHandler.openUri(attachment.url) },
             ) {
                 Text(attachment.filename, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-                Text(
-                    text = "${formatBytes(attachment.size)} · ${attachment.mime}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.defernoColors.inkMuted,
-                    maxLines = 1,
-                )
+                MonoMeta(text = "${formatBytes(attachment.size)} · ${attachment.mime}")
                 attachment.caption?.takeIf { it.isNotBlank() }?.let { caption ->
                     Text(caption, style = MaterialTheme.typography.bodyMedium)
                 }
@@ -531,6 +529,7 @@ private fun AttachmentRow(
                 modifier = Modifier.semantics { contentDescription = "Edit caption for ${attachment.filename}" },
             ) { Text(if (attachment.caption.isNullOrBlank()) "Add caption" else "Edit caption") }
         }
+      }
     }
 }
 
@@ -603,7 +602,8 @@ private fun CommentRow(
     onDelete: (String) -> Unit,
 ) {
     var editing by remember(comment.id) { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+    DetailCard {
+      Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = if (isMine) "You" else "Member",
@@ -645,6 +645,7 @@ private fun CommentRow(
                 }
             }
         }
+      }
     }
 }
 

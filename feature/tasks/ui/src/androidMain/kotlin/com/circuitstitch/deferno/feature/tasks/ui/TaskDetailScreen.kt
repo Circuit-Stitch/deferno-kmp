@@ -39,7 +39,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
-import com.circuitstitch.deferno.core.designsystem.theme.plexMono
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
@@ -238,14 +238,10 @@ private fun TaskBody(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        task.ref?.let { ref ->
-            Text(
-                text = ref,
-                style = MaterialTheme.typography.labelMedium,
-                fontFamily = plexMono(),
-                color = MaterialTheme.defernoColors.inkMuted,
-            )
-        }
+        // The "Everything in one place" title block (#231): a kind chip, the title, then a mono meta line
+        // (ref · due · subtask count). The kind here is always Task — this detail hydrates a Task — but it
+        // still wears the kind marker so the four kinds read consistently across the app.
+        DetailTitleBlock(task = task, subtaskTotal = state.subtaskTotal)
         WorkingStateEditor(current = task.workingState, onSetWorkingState = onSetWorkingState)
 
         val description = task.description
@@ -304,6 +300,33 @@ private fun TaskBody(
             onEdit = onEditComment,
             onDelete = onDeleteComment,
         )
+    }
+}
+
+/**
+ * The "Everything in one place" title block (#231): the kind as a [TreeChip] (filled, in the kind's
+ * colour), the Task title at headline rank, and a mono meta line that folds in the human ref, the due day,
+ * and the subtask count when present. Calm, low-overwhelm; the ref keeps IBM Plex Mono.
+ */
+@Composable
+private fun DetailTitleBlock(task: Task, subtaskTotal: Int) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        TreeChip(
+            text = kindLabel(ItemKind.Task),
+            filled = true,
+            container = kindColor(ItemKind.Task),
+            content = MaterialTheme.colorScheme.onPrimary,
+            semanticLabel = "Task",
+        )
+        Text(text = task.title, style = MaterialTheme.typography.headlineSmall)
+        val meta = buildList {
+            task.ref?.let { add(it) }
+            task.completeBy?.let { add("Due ${it.toDisplayDate()}") }
+            if (subtaskTotal > 0) add(if (subtaskTotal == 1) "1 subtask" else "$subtaskTotal subtasks")
+        }
+        if (meta.isNotEmpty()) {
+            MonoMeta(text = meta.joinToString("  ·  "))
+        }
     }
 }
 
