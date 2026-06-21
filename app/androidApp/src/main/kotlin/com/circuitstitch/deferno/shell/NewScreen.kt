@@ -15,9 +15,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -27,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -37,23 +42,28 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.circuitstitch.deferno.R
+import com.circuitstitch.deferno.core.designsystem.component.Eyebrow
+import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
+import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
+import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
+import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.shell.ui.NewDateField
 import com.circuitstitch.deferno.shell.ui.NewDeadlineTimeField
 import com.circuitstitch.deferno.shell.ui.NewDictationMessage
 import com.circuitstitch.deferno.shell.ui.NewEventEndField
 import com.circuitstitch.deferno.shell.ui.NewEventStartField
-import com.circuitstitch.deferno.shell.ui.NewKindPicker
 import com.circuitstitch.deferno.shell.ui.NewNotesField
 import com.circuitstitch.deferno.shell.ui.NewStatusMessage
-import com.circuitstitch.deferno.shell.ui.NewSubmitButton
 import com.circuitstitch.deferno.shell.ui.NewTitleField
 
 /**
- * The **New** create surface View (#71, ADR-0015/0016): an **explicit** Task/Habit/Chore/Event kind
- * picker (a segmented row — *not* field-inference, design-principle #5) above a per-kind form. The
- * form adapts to the chosen kind; Create routes through the online-only create seam and, when
- * offline, the View shows a gentle "reconnect to save" rather than queuing (ADR-0016).
+ * The **New task** create surface View (#71, ADR-0015/0016), restyled to the "See the trees" direction:
+ * a deliberate, low-overwhelm form where the person **chooses the kind explicitly** (Task/Habit/Chore/
+ * Event — *never* field-inference, design-principle #5: "Deferno never guesses on New") above a per-kind
+ * form. Create routes through the online-only create seam and, when offline, the View shows a gentle
+ * "reconnect to save" rather than queuing (ADR-0016).
  *
  * Each text field carries a **[[Dictation]]** mic affordance (#92, ADR-0018) when on-device speech is
  * available: the first tap prompts for `RECORD_AUDIO`; with permission, spoken English streams as
@@ -62,11 +72,13 @@ import com.circuitstitch.deferno.shell.ui.NewTitleField
  * failure. Dictation only fills text; the kind is still chosen explicitly, and create still gates on
  * connectivity.
  *
- * Pure **chrome** since #175: the form rows themselves (kind picker, dictating Title/Notes, date and
- * Event start/end, the status + Dictation feedback, submit) are the shared stateless atoms in
- * `:app:shell:ui` — one form binding for Android and desktop. This View keeps only the phone overlay
- * layout and the Android affordances: the `RECORD_AUDIO` permission round-trip and the app-settings
- * deep-link intent.
+ * Visual-only restyle (#175 split preserved): the form rows themselves (the dictating Title/Notes,
+ * date and Event start/end, the status + Dictation feedback) are the shared stateless atoms in
+ * `:app:shell:ui`. The kind picker is rendered here with the shared
+ * [com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter] (the "See the trees" segmented
+ * control) bound to the same [NewComponent.selectKind] seam the old picker used — no behavior change.
+ * This View keeps only the phone overlay layout + the Android affordances: the `RECORD_AUDIO`
+ * permission round-trip and the app-settings deep-link intent.
  */
 @Composable
 fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
@@ -109,31 +121,60 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
 
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         // Edge-to-edge (ADR-0035): this overlay sits above the whole chrome, so it owns its system-bar
-        // insets — title clears the status bar, Submit clears the nav bar (mirrors SearchScreen).
-        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(24.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        // insets — title clears the status bar, Create clears the nav bar (mirrors SearchScreen).
+        Column(
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars)
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = "New",
+                    text = "New task",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.semantics { heading() },
                 )
                 TextButton(onClick = component::dismiss) { Text("Cancel") }
             }
 
-            Spacer(Modifier.padding(top = 16.dp))
+            Spacer(Modifier.height(20.dp))
 
-            NewKindPicker(selectedKind = state.selectedKind, onSelectKind = component::selectKind)
+            // The explicit kind choice — the "See the trees" segmented control. Bound to the same
+            // selectKind seam the old FilterChip picker used (ItemKind.entries is Task/Habit/Chore/Event).
+            SectionLabel("WHAT KIND OF THING?")
+            Spacer(Modifier.height(8.dp))
+            SegmentedFilter(
+                options = kindOptions,
+                selectedIndex = ItemKind.entries.indexOf(state.selectedKind),
+                onSelect = { component.selectKind(ItemKind.entries[it]) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "You choose the kind here — Deferno never guesses it on New.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.defernoColors.inkMuted,
+            )
 
-            Spacer(Modifier.padding(top = 16.dp))
+            Spacer(Modifier.height(20.dp))
 
             // The dictation mic glyph: a native res/drawable on Android (the app packages no
             // dependency-module composeResources, so the shared atom takes an injected painter — the
             // same approach as the shell-chrome icons).
             val micIcon = painterResource(R.drawable.ic_mic)
+            SectionLabel("TITLE")
+            Spacer(Modifier.height(8.dp))
             NewTitleField(state = state, onTitleChange = component::setTitle, onMic = ::onMic, micIcon = micIcon)
 
-            Spacer(Modifier.padding(top = 8.dp))
+            Spacer(Modifier.height(16.dp))
 
+            SectionLabel("NOTES · OPTIONAL")
+            Spacer(Modifier.height(8.dp))
             NewNotesField(state = state, onNotesChange = component::setNotes, onMic = ::onMic, micIcon = micIcon)
 
             // The gentle Dictation feedback (#92): permission states + recognition errors, never silent.
@@ -154,31 +195,54 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(top = 8.dp),
             )
 
-            // A Date the item anchors to (#74) — the Calendar FAB pre-dates this to the selected day, and
-            // it maps to `complete_by`. Shown for the non-Event kinds (an Event uses its fixed start
-            // below instead).
-            if (state.selectedKind != ItemKind.Event) {
-                Spacer(Modifier.padding(top = 8.dp))
-                NewDateField(value = state.date, onValueChange = component::setDate)
-                Spacer(Modifier.padding(top = 8.dp))
-                NewDeadlineTimeField(value = state.deadlineTime, onValueChange = component::setDeadlineTime)
-            }
+            Spacer(Modifier.height(16.dp))
 
-            // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2): a required start +
-            // optional end so a real Event create succeeds.
-            if (state.selectedKind == ItemKind.Event) {
-                Spacer(Modifier.padding(top = 8.dp))
-                NewEventStartField(value = state.start, onValueChange = component::setStart)
-                Spacer(Modifier.padding(top = 8.dp))
-                NewEventEndField(value = state.end, onValueChange = component::setEnd)
+            // The "When / details" settings card: the date + deadline-time rows (the non-Event kinds) or
+            // the Event's fixed start/end window — re-skinned into one calm card, the same atoms + seams.
+            SectionLabel("WHEN")
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    // A Date the item anchors to (#74) — the Calendar FAB pre-dates this; maps to
+                    // `complete_by`. Shown for the non-Event kinds (an Event uses its fixed start instead).
+                    if (state.selectedKind != ItemKind.Event) {
+                        NewDateField(value = state.date, onValueChange = component::setDate)
+                        Spacer(Modifier.height(12.dp))
+                        NewDeadlineTimeField(value = state.deadlineTime, onValueChange = component::setDeadlineTime)
+                    } else {
+                        // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2): a required
+                        // start + optional end so a real Event create succeeds.
+                        NewEventStartField(value = state.start, onValueChange = component::setStart)
+                        Spacer(Modifier.height(12.dp))
+                        NewEventEndField(value = state.end, onValueChange = component::setEnd)
+                    }
+                }
             }
 
             // The gentle online-only feedback (ADR-0016).
             NewStatusMessage(status = state.status, modifier = Modifier.padding(top = 16.dp))
 
-            Spacer(Modifier.padding(top = 24.dp))
+            Spacer(Modifier.height(20.dp))
 
-            NewSubmitButton(status = state.status, canSubmit = state.canSubmit, onSubmit = component::submit)
+            Eyebrow("SAVES ONLINE · YOU CAN CHANGE ANYTHING LATER")
+            Spacer(Modifier.height(10.dp))
+
+            // Create — the big, thumb-reachable primary action (the "See the trees" verb), gated by the
+            // same canSubmit rule and surfacing the submitting state ("Saving…"), wired to the existing
+            // create seam.
+            PrimaryActionButton(
+                text = if (state.status == NewStatus.Submitting) "Saving…" else "Create task",
+                onClick = component::submit,
+                icon = null,
+                enabled = state.canSubmit,
+            )
         }
     }
 }
+
+/** The kind-picker labels — the explicit Task/Habit/Chore/Event choice, in [ItemKind.entries] order. */
+private val kindOptions = listOf("Task", "Habit", "Chore", "Event")
