@@ -1,27 +1,41 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -30,34 +44,46 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.task.SearchSort
-import com.circuitstitch.deferno.core.designsystem.component.Eyebrow
+import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
+import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
-import com.circuitstitch.deferno.core.designsystem.component.TreeChip
+import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
-import com.circuitstitch.deferno.core.model.Task
-import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
-import kotlinx.datetime.LocalDate
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
+import kotlin.time.Clock
 
 /**
- * The global Search overlay View (#73): a thin renderer of [SearchComponent]. It hosts the query
- * field, the date / status / tags filter chips, the sort control, and the results list (reusing
- * [TaskRow]), and forwards every interaction as an intent — no logic here (ADR-0007). The whole
- * surface is opaque (a [Surface] over the foreground Destination) and carries a Close affordance that
- * dismisses back to origin.
+ * The global Search overlay View ("Deep search", #73/#231): a thin renderer of [SearchComponent]. The
+ * mock's "Find & move" layout — a back chevron + an amber-focused search field, a horizontal filter bar
+ * (a "Filters" pill + removable active chips), the result-meta + sort, and **kind-aware** result rows —
+ * with the filters tucked into a bottom sheet. Forwards every interaction as an intent (ADR-0007).
  *
- * Distinct from the in-place Tasks-list filter chips: this is the global search, a separate surface.
+ * Results are now kind-agnostic [SearchHit]s (#231): the server returns items of every kind, so a row
+ * wears its real kind dot/label instead of being painted as a Task. Grove + breadcrumb stay omitted —
+ * neither is on the search wire (a hit carries only structure + its kind).
  */
 @Composable
 fun SearchScreen(component: SearchComponent, modifier: Modifier = Modifier) {
@@ -84,104 +110,286 @@ internal fun SearchContent(
     onSubmit: () -> Unit,
     onStatusToggled: (WorkingState) -> Unit,
     onLabelToggled: (String) -> Unit,
-    onDateRangeChanged: (from: LocalDate?, to: LocalDate?) -> Unit,
+    onDateRangeChanged: (from: kotlinx.datetime.LocalDate?, to: kotlinx.datetime.LocalDate?) -> Unit,
     onSortChanged: (SearchSort) -> Unit,
-    onResultClicked: (TaskId) -> Unit,
+    onResultClicked: (SearchHit) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Edge-to-edge overlay (#73): the Surface paints under the system bars; the content insets past
-    // them so the header clears the status-bar clock and the results clear the nav bar.
+    var showFilters by remember { mutableStateOf(false) }
+
+    // Edge-to-edge overlay: the Surface paints under the system bars; content insets past them.
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Eyebrow("DEEP SEARCH")
+            SearchHeader(query = state.query, onQueryChanged = onQueryChanged, onSubmit = onSubmit, onBack = onDismiss)
+            FilterBar(
+                state = state,
+                onOpenFilters = { showFilters = true },
+                onRemoveStatuses = { setStatusPreset(emptySet(), state.statuses, onStatusToggled); onSubmit() },
+                onRemoveLabel = { onLabelToggled(it); onSubmit() },
+                onRemoveDates = { onDateRangeChanged(null, null); onSubmit() },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SearchResults(state = state, onResultClicked = onResultClicked, onSortChanged = onSortChanged)
+        }
+    }
+
+    if (showFilters) {
+        FilterSheet(
+            state = state,
+            onStatusToggled = onStatusToggled,
+            onLabelToggled = onLabelToggled,
+            onDateRangeChanged = onDateRangeChanged,
+            onApply = { showFilters = false; onSubmit() },
+            onDismissSheet = { showFilters = false },
+        )
+    }
+}
+
+/** The header: a back chevron + the amber-focused search field with a leading magnifier and a clear ×. */
+@Composable
+private fun SearchHeader(query: String, onQueryChanged: (String) -> Unit, onSubmit: () -> Unit, onBack: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            imageVector = DefernoIcons.ChevronLeft,
+            contentDescription = "Back",
+            tint = MaterialTheme.defernoColors.amberDeep,
+            modifier = Modifier
+                .size(MinTouchTarget)
+                .clip(CircleShape)
+                .clickable(onClickLabel = "Back", onClick = onBack)
+                .padding(10.dp),
+        )
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChanged,
+            placeholder = { Text("Search all your trees…") },
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            leadingIcon = {
+                Icon(DefernoIcons.Search, contentDescription = null, tint = MaterialTheme.defernoColors.inkMuted)
+            },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
                     Text(
-                        text = "Reach any tree",
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.semantics { heading() },
+                        text = "×",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.defernoColors.inkMuted,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable(onClickLabel = "Clear search") { onQueryChanged("") }
+                            .padding(horizontal = 8.dp),
                     )
                 }
-                TextButton(onClick = onDismiss) { Text("Close") }
-            }
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                cursorColor = MaterialTheme.colorScheme.primary,
+            ),
+            keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
 
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedTextField(
-                        value = state.query,
-                        onValueChange = onQueryChanged,
-                        label = { Text("Search tasks") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSubmit() }),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search),
-                    )
-                    // A visible submit affordance — the IME Search key alone is undiscoverable (#73).
-                    Button(onClick = onSubmit, enabled = state.canSearch && !state.isSearching) {
-                        Text("Search")
-                    }
-                }
-
-                StatusFilters(selected = state.statuses, onToggle = onStatusToggled)
-                TagsFilter(selected = state.labels, onToggle = onLabelToggled)
-                DateRangeFilter(from = state.fromDate, to = state.toDate, onChange = onDateRangeChanged)
-                SortControl(selected = state.sort, onChange = onSortChanged)
-                ActiveFilterChips(state)
-            }
-
-            HorizontalDivider(Modifier.padding(top = 8.dp))
-
-            SearchResults(state = state, onResultClicked = onResultClicked)
+/** The horizontal filter bar: a "Filters" pill (count badge → opens the sheet) + removable active chips. */
+@Composable
+private fun FilterBar(
+    state: SearchState,
+    onOpenFilters: () -> Unit,
+    onRemoveStatuses: () -> Unit,
+    onRemoveLabel: (String) -> Unit,
+    onRemoveDates: () -> Unit,
+) {
+    val activeCount = (if (state.statuses.isNotEmpty()) 1 else 0) +
+        state.labels.size +
+        (if (state.fromDate != null || state.toDate != null) 1 else 0)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FiltersPill(count = activeCount, onClick = onOpenFilters)
+        if (state.statuses.isNotEmpty()) {
+            RemovableChip(label = statusSummary(state.statuses), onRemove = onRemoveStatuses)
+        }
+        state.labels.forEach { label ->
+            RemovableChip(label = "#$label", onRemove = { onRemoveLabel(label) })
+        }
+        if (state.fromDate != null || state.toDate != null) {
+            RemovableChip(label = "When", onRemove = onRemoveDates)
         }
     }
 }
 
-/** The status filter chips (#73): tap to narrow results to selected [WorkingState]s. */
+/** The amber "Filters" pill with a count badge (white disc, amber number) — opens the filter sheet. */
 @Composable
-private fun StatusFilters(
-    selected: Set<WorkingState>,
-    onToggle: (WorkingState) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = "Status",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.defernoColors.inkMuted,
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            WorkingState.entries.forEach { status ->
-                val label = workingStateLabel(status)
-                FilterChip(
-                    selected = status in selected,
-                    onClick = { onToggle(status) },
-                    label = { Text(label) },
+private fun FiltersPill(count: Int, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary)
+            .clickable(onClickLabel = "Filters", onClick = onClick)
+            .heightIn(min = 36.dp)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Text(text = "Filters", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimary)
+        if (count > 0) {
+            Box(
+                modifier = Modifier
+                    .size(18.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onPrimary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "$count",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
     }
 }
 
-/**
- * The tags/label filter (#73): a small input to add a tag plus a removable chip per currently-selected
- * label. Adding a tag and tapping a selected chip both forward [onToggle] — the component owns the
- * toggle semantics (add if absent, remove if present), so this stays a thin renderer (ADR-0007).
- * Feeds [com.circuitstitch.deferno.core.data.task.TaskSearchQuery.labels].
- */
+/** A removable active-filter chip: its label + a × that clears it. */
 @Composable
-private fun TagsFilter(
-    selected: Set<String>,
-    onToggle: (String) -> Unit,
+private fun RemovableChip(label: String, onRemove: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+            .heightIn(min = 36.dp)
+            .padding(start = 12.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(text = label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            text = "×",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.defernoColors.inkMuted,
+            modifier = Modifier
+                .clip(CircleShape)
+                .clickable(onClickLabel = "Remove $label", onClick = onRemove)
+                .padding(horizontal = 4.dp)
+                .semantics { contentDescription = "Remove $label" },
+        )
+    }
+}
+
+/** The bottom-sheet filters (#231): STATUS (Active/Done/All) · WHEN presets · LABELS, with an Apply footer. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FilterSheet(
+    state: SearchState,
+    onStatusToggled: (WorkingState) -> Unit,
+    onLabelToggled: (String) -> Unit,
+    onDateRangeChanged: (from: kotlinx.datetime.LocalDate?, to: kotlinx.datetime.LocalDate?) -> Unit,
+    onApply: () -> Unit,
+    onDismissSheet: () -> Unit,
 ) {
+    val sheetState = rememberModalBottomSheetState()
+    val today = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
+    ModalBottomSheet(onDismissRequest = onDismissSheet, sheetState = sheetState) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Filters",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = "Reset",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.defernoColors.amberDeep,
+                    modifier = Modifier.clickable(onClickLabel = "Reset filters") {
+                        setStatusPreset(emptySet(), state.statuses, onStatusToggled)
+                        state.labels.forEach(onLabelToggled)
+                        onDateRangeChanged(null, null)
+                    },
+                )
+            }
+
+            // STATUS — Active / Done / All, mapped onto the WorkingState set.
+            Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                SectionLabel("STATUS")
+                SegmentedFilter(
+                    options = StatusPresets.map { it.label },
+                    selectedIndex = statusPresetIndex(state.statuses),
+                    onSelect = { setStatusPreset(StatusPresets[it].statuses, state.statuses, onStatusToggled) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            // WHEN — calm presets that set the date range (Custom… is deferred — no inline picker yet).
+            Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                SectionLabel("WHEN")
+                val whenPresets = listOf(
+                    "Any time" to (null to null),
+                    "This week" to (today to today.plus(7, DateTimeUnit.DAY)),
+                    "Overdue" to (null to today),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    whenPresets.forEach { (label, range) ->
+                        val selected = state.fromDate == range.first && state.toDate == range.second
+                        ChoiceChip(label = label, selected = selected) { onDateRangeChanged(range.first, range.second) }
+                    }
+                }
+            }
+
+            // LABELS — add a tag, plus a removable chip per selected label.
+            Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                SectionLabel("LABELS")
+                LabelsEditor(selected = state.labels, onToggle = onLabelToggled)
+            }
+
+            PrimaryActionButton(text = "Apply filters", onClick = onApply, icon = null)
+        }
+    }
+}
+
+/** A pill toggle used inside the sheet (WHEN presets): amber when [selected], calm surface otherwise. */
+@Composable
+private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClickLabel = label, onClick = onClick)
+            .heightIn(min = 38.dp)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/** Add-a-tag field + a removable chip per selected label (feeds the search query's `labels`). */
+@Composable
+private fun LabelsEditor(selected: Set<String>, onToggle: (String) -> Unit) {
     var draft by remember { mutableStateOf("") }
     val add = {
         val tag = draft.trim()
@@ -190,144 +398,36 @@ private fun TagsFilter(
             draft = ""
         }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = "Tags",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.defernoColors.inkMuted,
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = draft,
+            onValueChange = { draft = it },
+            placeholder = { Text("Add a label…") },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            keyboardActions = KeyboardActions(onDone = { add() }),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            modifier = Modifier.fillMaxWidth(),
         )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { draft = it },
-                label = { Text("Add a tag") },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { add() }),
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Done),
-            )
-            TextButton(onClick = add) { Text("Add tag") }
-        }
         if (selected.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                selected.forEach { label ->
-                    FilterChip(
-                        selected = true,
-                        onClick = { onToggle(label) },
-                        label = { Text(label) },
-                        modifier = Modifier.semantics { contentDescription = "Remove tag $label" },
-                    )
-                }
+                selected.forEach { label -> RemovableChip(label = "#$label", onRemove = { onToggle(label) }) }
             }
         }
     }
 }
 
-/**
- * The date-range filter (#73): two ISO-date (YYYY-MM-DD) inputs feeding
- * [com.circuitstitch.deferno.core.data.task.TaskSearchQuery.fromDate]/[toDate]. A full Material
- * date-range picker is deferred; a blank or unparseable field is treated as "no bound" (`null`), so
- * the user can clear an end of the range by emptying it. Each edit forwards the current (from, to) pair.
- */
 @Composable
-private fun DateRangeFilter(
-    from: LocalDate?,
-    to: LocalDate?,
-    onChange: (from: LocalDate?, to: LocalDate?) -> Unit,
+private fun SearchResults(
+    state: SearchState,
+    onResultClicked: (SearchHit) -> Unit,
+    onSortChanged: (SearchSort) -> Unit,
 ) {
-    var fromText by remember { mutableStateOf(from?.toString() ?: "") }
-    var toText by remember { mutableStateOf(to?.toString() ?: "") }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = "Date range",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.defernoColors.inkMuted,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = fromText,
-                onValueChange = {
-                    fromText = it
-                    onChange(parseIsoDateOrNull(it), parseIsoDateOrNull(toText))
-                },
-                label = { Text("From (YYYY-MM-DD)") },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            OutlinedTextField(
-                value = toText,
-                onValueChange = {
-                    toText = it
-                    onChange(parseIsoDateOrNull(fromText), parseIsoDateOrNull(it))
-                },
-                label = { Text("To (YYYY-MM-DD)") },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
-/** Parse an ISO `YYYY-MM-DD` string to a [LocalDate], or `null` if blank/malformed (treated as no bound). */
-private fun parseIsoDateOrNull(text: String): LocalDate? =
-    text.trim().takeIf { it.isNotEmpty() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-
-/** The client-side sort control (#73): a chip per [SearchSort] option. */
-@Composable
-private fun SortControl(selected: SearchSort, onChange: (SearchSort) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = "Sort",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.defernoColors.inkMuted,
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SearchSort.entries.forEach { sort ->
-                FilterChip(
-                    selected = sort == selected,
-                    onClick = { onChange(sort) },
-                    label = { Text(sortLabel(sort)) },
-                )
-            }
-        }
-    }
-}
-
-/**
- * The active filters at a glance (#231): the chosen statuses, tags, and a date bound surfaced as calm
- * [TreeChip]s so a user sees what's narrowing their search without re-reading every control. Read-only —
- * the controls above own the toggling; this is a summary line. Hidden when nothing is selected.
- */
-@Composable
-private fun ActiveFilterChips(state: SearchState) {
-    val chips = buildList {
-        state.statuses.forEach { add(workingStateLabel(it)) }
-        state.labels.forEach { add("#$it") }
-        if (state.fromDate != null || state.toDate != null) {
-            add("${state.fromDate?.toString() ?: "…"} → ${state.toDate?.toString() ?: "…"}")
-        }
-    }
-    if (chips.isEmpty()) return
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        chips.forEach { chip -> TreeChip(text = chip, filled = true) }
-    }
-}
-
-@Composable
-private fun SearchResults(state: SearchState, onResultClicked: (TaskId) -> Unit) {
     when {
         state.results.isNotEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
-            item {
-                SectionLabel(
-                    text = if (state.results.size == 1) "1 TREE" else "${state.results.size} TREES",
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
-            items(state.results, key = { it.id.value }) { task: Task ->
-                SearchResultRow(task = task, onClick = { onResultClicked(task.id) })
+            item { ResultMeta(count = state.results.size, sort = state.sort, onSortChanged = onSortChanged) }
+            items(state.results, key = { it.id }) { hit ->
+                SearchResultRow(hit = hit, query = state.query, onClick = { onResultClicked(hit) })
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
@@ -342,48 +442,112 @@ private fun SearchResults(state: SearchState, onResultClicked: (TaskId) -> Unit)
             body = "Nothing matched your search. Try a different word or fewer filters.",
         )
         else -> EmptyState(
-            title = "Search your tasks",
-            body = "Type at least two characters to find tasks by title or description.",
+            title = "Search your trees",
+            body = "Type at least two characters to find anything by title.",
         )
     }
 }
 
+/** The result-meta line: a "N TREES" count and a tappable "Best match ▾" sort affordance (cycles options). */
+@Composable
+private fun ResultMeta(count: Int, sort: SearchSort, onSortChanged: (SearchSort) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SectionLabel(text = if (count == 1) "1 TREE" else "$count TREES")
+        val next = SearchSort.entries[(SearchSort.entries.indexOf(sort) + 1) % SearchSort.entries.size]
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClickLabel = "Sort: ${sortLabel(sort)}. Tap to change.") { onSortChanged(next) }
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = sortLabel(sort),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.defernoColors.amberDeep,
+            )
+            Icon(
+                imageVector = DefernoIcons.ChevronDown,
+                contentDescription = null,
+                tint = MaterialTheme.defernoColors.amberDeep,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
 /**
- * A re-skinned search result (#231): a leading [KindDot] (a search hit is a Task, so it wears the Task
- * colour), the title, the working-state badge, and a mono meta line for the ref + labels.
- *
- * ponytail: the design's breadcrumb "path to the tree" is omitted — a [Task] search result carries no
- * ancestry (no parent chain in [SearchState.results]); surfacing it would need a new query field. We show
- * the ref + labels instead, which the result does carry. Wire [Breadcrumb] here when ancestry lands.
+ * A kind-aware search result (#231): a leading [KindDot] in the hit's real kind colour, the title with
+ * the matched term highlighted, a calm mono meta line (kind label + ref), and a trailing due date. A
+ * done (terminal) hit strikes + mutes its title. Breadcrumb/grove stay omitted (not on the search wire).
  */
 @Composable
-private fun SearchResultRow(task: Task, onClick: () -> Unit) {
+private fun SearchResultRow(hit: SearchHit, query: String, onClick: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surface) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 64.dp)
-                .clickable(onClickLabel = "Open ${task.title}", onClick = onClick)
+                .clickable(onClickLabel = "Open ${hit.title}", onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             KindDot(
-                color = kindColor(ItemKind.Task),
-                modifier = Modifier.semantics { contentDescription = "task" },
+                color = kindColor(hit.kind),
+                modifier = Modifier.semantics { contentDescription = hit.kind.name.lowercase() },
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(
-                    text = task.title,
+                    text = highlightedTitle(hit.title, query),
                     style = MaterialTheme.typography.titleMedium,
+                    color = if (hit.isTerminal) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
+                    textDecoration = if (hit.isTerminal) TextDecoration.LineThrough else TextDecoration.None,
                     maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 val meta = buildList {
-                    task.ref?.let { add(it) }
-                    if (task.labels.isNotEmpty()) add(task.labels.joinToString(" ") { "#$it" })
+                    add(kindLabel(hit.kind))
+                    hit.ref?.let { add(it) }
                 }
-                if (meta.isNotEmpty()) MonoMeta(text = meta.joinToString("  ·  "))
+                MonoMeta(text = meta.joinToString("  ·  "))
             }
-            WorkingStateBadge(task.workingState)
+            if (!hit.isTerminal) {
+                hit.completeBy?.let { due ->
+                    Spacer(Modifier.width(10.dp))
+                    MonoMeta(text = due.toDisplayDate())
+                }
+            }
+        }
+    }
+}
+
+/** The hit title with case-insensitive matches of [query] highlighted in the accent container colour. */
+@Composable
+private fun highlightedTitle(title: String, query: String): AnnotatedString {
+    val q = query.trim()
+    if (q.isEmpty()) return AnnotatedString(title)
+    val hl = SpanStyle(
+        background = MaterialTheme.colorScheme.primaryContainer,
+        color = MaterialTheme.defernoColors.amberDeep,
+    )
+    return buildAnnotatedString {
+        val lcTitle = title.lowercase()
+        val lcQuery = q.lowercase()
+        var start = 0
+        while (true) {
+            val idx = lcTitle.indexOf(lcQuery, start)
+            if (idx < 0) {
+                append(title.substring(start))
+                break
+            }
+            append(title.substring(start, idx))
+            withStyle(hl) { append(title.substring(idx, idx + q.length)) }
+            start = idx + q.length
         }
     }
 }
@@ -393,4 +557,30 @@ private fun sortLabel(sort: SearchSort): String = when (sort) {
     SearchSort.Relevance -> "Best match"
     SearchSort.TitleAsc -> "Title (A–Z)"
     SearchSort.DeadlineAsc -> "Soonest due"
+}
+
+/** The three STATUS presets the sheet offers, each mapped onto a [WorkingState] set. */
+private class StatusPreset(val label: String, val statuses: Set<WorkingState>)
+
+private val StatusPresets = listOf(
+    StatusPreset("Active", setOf(WorkingState.Open, WorkingState.InProgress, WorkingState.InReview)),
+    StatusPreset("Done", setOf(WorkingState.Done, WorkingState.Dropped)),
+    StatusPreset("All", emptySet()),
+)
+
+/** Which STATUS preset the current set reads as (empty ⇒ All; the terminal set ⇒ Done; else Active). */
+private fun statusPresetIndex(statuses: Set<WorkingState>): Int =
+    StatusPresets.indexOfFirst { it.statuses == statuses }.takeIf { it >= 0 }
+        ?: if (statuses.isEmpty()) 2 else 0
+
+/** A short summary of the active STATUS chip (Active / Done / Status). */
+private fun statusSummary(statuses: Set<WorkingState>): String =
+    StatusPresets.firstOrNull { it.statuses == statuses && it.statuses.isNotEmpty() }?.label ?: "Status"
+
+/**
+ * Apply a STATUS [target] set through the single-toggle [onToggle] intent: flip exactly the statuses whose
+ * membership differs. Keeps the component's narrow `onStatusToggled` API (no new set-setter needed).
+ */
+private fun setStatusPreset(target: Set<WorkingState>, current: Set<WorkingState>, onToggle: (WorkingState) -> Unit) {
+    WorkingState.entries.forEach { ws -> if ((ws in target) != (ws in current)) onToggle(ws) }
 }

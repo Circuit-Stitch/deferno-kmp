@@ -307,7 +307,9 @@ private fun SubtaskRowView(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
-            .padding(start = (row.depth * 20).dp),
+            // The curvy connecting rail (#231) hangs each subtask off its parent as a continuous spine in
+            // a calm tint of the Task accent (the detail outline is Task-only); also adds the depth indent.
+            .treeRail(row.spine, kindColor(ItemKind.Task).copy(alpha = RailTintAlpha)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Chevron gutter: ▾/▸ for a parent (toggles fold), blank for a leaf so the check dots still align.

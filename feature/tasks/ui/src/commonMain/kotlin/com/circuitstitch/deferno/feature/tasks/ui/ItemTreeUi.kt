@@ -79,9 +79,10 @@ import com.circuitstitch.deferno.feature.tasks.MoveMode
 // taps, and drive the modal move mode. Handlers take their args from the ROW, never from a state snapshot
 // (the component's StateFlow is WhileSubscribed — empty without a live subscriber).
 
-/** Per-depth leading indent; the chevron gutter keeps a [chevronGutter] column so titles align. */
-private val IndentPerDepth = 16.dp
+/** The trailing open-detail control keeps a full [MinTouchTarget]; the leading fold chevron is tighter so
+ *  the rail elbow lands close to the kind dot (the row body is the real fold target anyway). */
 private val chevronGutter = MinTouchTarget
+private val leadingGutter = 30.dp
 
 /** Test tag on the tree Column — the move-mode focus + key-event target (see ItemTreeKeyboardTest). */
 internal const val ItemTreeTag = "itemTree"
@@ -343,11 +344,14 @@ private fun ItemTreeRow(
                     .heightIn(min = 56.dp)
                     .then(bodyModifier)
                     .alpha(dim)
-                    .padding(PaddingValues(start = IndentPerDepth * row.depth)),
+                    // The curvy connecting rail (#231) replaces a flat depth indent: a continuous spine
+                    // hangs each child off its parent in a calm tint of the row's accent (matching the
+                    // KindDot). Root rows render none. The modifier also adds the per-depth indent.
+                    .treeRail(row.spine, kindColor(item.kind).copy(alpha = RailTintAlpha)),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Chevron gutter: ▾/▸ for a parent, blank for a leaf so titles still align.
-                Box(Modifier.size(chevronGutter), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(leadingGutter), contentAlignment = Alignment.Center) {
                     if (row.hasChildren) {
                         Icon(
                             imageVector = if (row.isExpanded) DefernoIcons.ChevronDown else DefernoIcons.ChevronRight,

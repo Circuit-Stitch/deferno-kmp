@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,15 +31,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -60,10 +64,12 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.circuitstitch.deferno.R
+import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
 import com.circuitstitch.deferno.core.designsystem.component.Eyebrow
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
-import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
+import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.core.designsystem.theme.LocalDefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 
 /**
@@ -160,23 +166,23 @@ internal fun BrainDumpContent(
     var typeMode by remember { mutableStateOf(false) }
     var typed by remember { mutableStateOf("") }
 
+    // Brain dump is an immersive surface — forced dark to match the mock (like Focus/Move), keeping the
+    // user's chosen palette (Deferno vs Mono). So #2A2620 paper + #E8B870 amber regardless of app theme.
+    DefernoTheme(palette = LocalDefernoPalette.current, darkTheme = true) {
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         // Edge-to-edge (ADR-0035): this overlay sits above the whole chrome, so it owns its system-bar
         // insets — title clears the status bar, controls clear the nav bar (mirrors SearchScreen).
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(24.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Brain dump",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.semantics { heading() },
-                )
-                TextButton(onClick = onClose) { Text("Close") }
-            }
+            // The Close affordance: a left-aligned chevron-down + label (the mock's calm dismiss) in the
+            // accent colour. Dismiss plumbing is unchanged (onClose → component.dismiss).
+            CloseHeader(onClose = onClose)
 
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "Brain dump",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.semantics { heading() },
+            )
             Spacer(Modifier.height(8.dp))
             Text(
                 text = "Speak or type whatever's on your mind. I'll draft trees from it — nothing's added " +
@@ -187,12 +193,12 @@ internal fun BrainDumpContent(
 
             Spacer(Modifier.height(16.dp))
 
-            // The Speak / Type choice. The recorder phases live entirely inside the Speak pane; switching
-            // to Type while a recording is active is harmless (the orb's Stop is reachable by switching back).
-            SegmentedFilter(
-                options = speakTypeOptions,
-                selectedIndex = if (typeMode) 1 else 0,
-                onSelect = { typeMode = it == 1 },
+            // The Speak / Type choice — a 50/50 amber-active sliding toggle with icons (#231). The recorder
+            // phases live entirely inside the Speak pane; switching to Type while a recording is active is
+            // harmless (the orb's Stop is reachable by switching back).
+            SpeakTypeToggle(
+                typeMode = typeMode,
+                onSelect = { typeMode = it },
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -210,6 +216,7 @@ internal fun BrainDumpContent(
                 )
             }
         }
+    }
     }
 }
 
@@ -237,7 +244,13 @@ private fun SpeakPane(
             }
             Phase.Recording -> {
                 MicOrb(active = true, reducedMotion = reducedMotion, contentDescription = "Stop", onClick = onMic)
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(20.dp))
+                // A gentle "I'm listening" waveform — decorative (no live amplitude seam yet), so it's
+                // gated on reduced-motion like the orb pulse and carries no semantics.
+                if (!reducedMotion) {
+                    Waveform(color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(16.dp))
+                }
                 Eyebrow("LISTENING…", modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 Spacer(Modifier.height(8.dp))
                 Text("Recording…", style = MaterialTheme.typography.titleMedium)
@@ -280,6 +293,12 @@ private fun TypePane(text: String, onTextChange: (String) -> Unit) {
             onValueChange = onTextChange,
             label = { Text("What's on your mind?") },
             minLines = 6,
+            // Amber cursor + focus accent to match the toggle (the system caret already blinks).
+            colors = OutlinedTextFieldDefaults.colors(
+                cursorColor = MaterialTheme.colorScheme.primary,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 160.dp)
@@ -423,5 +442,115 @@ private fun StatusNote(text: String) {
     Text(text = text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.defernoColors.inkMuted)
 }
 
-/** The Speak / Type mode labels. */
-private val speakTypeOptions = listOf("Speak", "Type")
+/** The left-aligned dismiss: a chevron-down + "Close" in the accent colour (the mock's calm close). */
+@Composable
+private fun CloseHeader(onClose: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClickLabel = "Close", onClick = onClose)
+            .padding(vertical = 4.dp, horizontal = 2.dp),
+    ) {
+        Icon(
+            imageVector = DefernoIcons.ChevronDown,
+            contentDescription = null,
+            tint = MaterialTheme.defernoColors.amberDeep,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = "Close",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.defernoColors.amberDeep,
+        )
+    }
+}
+
+/**
+ * The Speak / Type mode toggle — a 50/50 sliding segmented control (#231): the active half fills with the
+ * accent (amber) and carries dark text + a leading icon; the inactive half is transparent + muted. Built
+ * bespoke because the shared SegmentedFilter is text-only with a neutral active fill.
+ */
+@Composable
+private fun SpeakTypeToggle(typeMode: Boolean, onSelect: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(15.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+            .padding(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        ToggleHalf(
+            label = "Speak",
+            iconResId = R.drawable.ic_mic,
+            selected = !typeMode,
+            onClick = { onSelect(false) },
+            modifier = Modifier.weight(1f),
+        )
+        ToggleHalf(
+            label = "Type",
+            iconResId = R.drawable.ic_keyboard,
+            selected = typeMode,
+            onClick = { onSelect(true) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** One half of the [SpeakTypeToggle]: an icon + label, amber-filled when [selected], else transparent. */
+@Composable
+private fun ToggleHalf(
+    label: String,
+    iconResId: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.defernoColors.inkMuted
+    Row(
+        modifier
+            .clip(RoundedCornerShape(11.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+            .clickable(onClickLabel = label, onClick = onClick)
+            .heightIn(min = 42.dp)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painter = painterResource(iconResId), contentDescription = null, tint = fg, modifier = Modifier.size(17.dp))
+        Spacer(Modifier.width(7.dp))
+        Text(text = label, style = MaterialTheme.typography.titleSmall, color = fg)
+    }
+}
+
+/** A decorative "listening" waveform — five bars rising and falling out of phase, anchored at the bottom. */
+@Composable
+private fun Waveform(color: Color, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "waveform")
+    Row(
+        modifier.height(30.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        repeat(5) { i ->
+            val fraction = transition.animateFloat(
+                initialValue = 0.35f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 600, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse,
+                    initialStartOffset = StartOffset(i * 120),
+                ),
+                label = "bar-$i",
+            ).value
+            Box(
+                Modifier
+                    .width(4.dp)
+                    .fillMaxHeight(fraction)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(color),
+            )
+        }
+    }
+}

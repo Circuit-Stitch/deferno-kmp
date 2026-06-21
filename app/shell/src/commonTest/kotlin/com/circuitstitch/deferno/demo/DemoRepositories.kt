@@ -8,6 +8,7 @@ import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.flow.Flow
@@ -15,6 +16,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.datetime.LocalDate
+
+/** Demo Task → kind-agnostic [SearchHit] (demo rows are all Tasks) for the search overlay fakes (#231). */
+private fun Task.toDemoSearchHit(): SearchHit = SearchHit(
+    id = id.value,
+    kind = ItemKind.Task,
+    title = title,
+    isTerminal = workingState.isTerminal,
+    completeBy = completeBy,
+    deadlineTimeOfDay = deadlineTimeOfDay,
+    ref = ref,
+)
 
 /**
  * In-memory [TaskRepository] **test fake** for the shell + Compose-View tests (#27/#55). Honors the
@@ -55,13 +67,15 @@ internal class DemoTaskRepository(initial: List<Task>) : TaskRepository {
         // the online `GET /tasks/search`, so the shell's Search overlay returns rows in tests, #73).
         val term = query.query.trim().lowercase()
         if (term.length < 2) return TaskSearchResult.Success(emptyList())
-        return TaskSearchResult.Success(tasks.value.filter { task ->
-            val matchesTerm = task.title.lowercase().contains(term) ||
-                task.description?.lowercase()?.contains(term) == true
-            val matchesStatus = query.statuses.isEmpty() || task.workingState in query.statuses
-            val matchesLabel = query.labels.isEmpty() || task.labels.any { it in query.labels }
-            matchesTerm && matchesStatus && matchesLabel
-        })
+        return TaskSearchResult.Success(
+            tasks.value.filter { task ->
+                val matchesTerm = task.title.lowercase().contains(term) ||
+                    task.description?.lowercase()?.contains(term) == true
+                val matchesStatus = query.statuses.isEmpty() || task.workingState in query.statuses
+                val matchesLabel = query.labels.isEmpty() || task.labels.any { it in query.labels }
+                matchesTerm && matchesStatus && matchesLabel
+            }.map { it.toDemoSearchHit() },
+        )
     }
 
     /** Current snapshot of a Task (used to mirror an add-to-plan into the demo plan). */

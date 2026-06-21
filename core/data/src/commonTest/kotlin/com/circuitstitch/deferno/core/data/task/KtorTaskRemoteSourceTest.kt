@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -37,9 +38,9 @@ class KtorTaskRemoteSourceTest {
 
     private val listEnvelope = """
         {"version":"0.1","data":[
-            {"id":"a","org_slug":"u-e4h2qk","title":"first","status":"open","sequence":1,
+            {"id":"a","org_slug":"u-e4h2qk","title":"first","status":"open","sequence":1,"type":"task",
              "date_created":"2026-05-20T16:11:42Z"},
-            {"id":"b","org_slug":"u-e4h2qk","title":"second","status":"in-progress","sequence":2,
+            {"id":"b","org_slug":"u-e4h2qk","title":"second","status":"in-progress","sequence":2,"type":"habit",
              "date_created":"2026-05-20T16:11:42Z","deleted_at":"2026-06-01T00:00:00Z"}
         ]}
     """.trimIndent()
@@ -100,8 +101,11 @@ class KtorTaskRemoteSourceTest {
         assertEquals("2026-06-30", params?.get("to"))
         assertNull(params?.get("from_date"), "the MCP tool param name must not leak onto the REST query")
         assertNull(params?.get("to_date"), "the MCP tool param name must not leak onto the REST query")
-        val tasks = (outcome as TaskSearchResult.Success).tasks
-        assertEquals(listOf(TaskId("a"), TaskId("b")), tasks.map { it.id })
+        val hits = (outcome as TaskSearchResult.Success).hits
+        assertEquals(listOf("a", "b"), hits.map { it.id })
+        // Kind-agnostic (#231): the wire `type` discriminant is carried through, not discarded — so the
+        // habit hit reads as a Habit, not force-fit to Task the way the v1 client did.
+        assertEquals(listOf(ItemKind.Task, ItemKind.Habit), hits.map { it.kind })
     }
 
     @Test

@@ -119,6 +119,27 @@ class ItemTreeTest {
         assertFalse(row.isExpanded)
     }
 
+    @Test
+    fun spineCarriesTheCurvyRailFlagsPerGutterColumn() {
+        // root → [a, b]; a → [a1]. The rail [ItemRow.spine] (length == depth) carries one flag per gutter
+        // column (#231): each ancestor column's "does it continue below?" plus the row's own
+        // "do I have a following sibling?" in the last slot.
+        val byId = buildItemTree(
+            listOf(
+                item("root", sequence = 0),
+                item("a", parentId = "root", sequence = 0),
+                item("b", parentId = "root", sequence = 1),
+                item("a1", parentId = "a", sequence = 0),
+            ),
+        ).byId()
+
+        assertEquals(emptyList(), byId.getValue("root").spine) // a root has no rail
+        assertEquals(listOf(true), byId.getValue("a").spine) // a has a following sibling (b) → continues
+        assertEquals(listOf(false), byId.getValue("b").spine) // b is last → its rail stops at the elbow
+        // a1's ancestor column (a) continues past it to reach b; a1's own column is last → no continuation.
+        assertEquals(listOf(true, false), byId.getValue("a1").spine)
+    }
+
     /** A parent→child chain (each links to the next via parentId), for depth-fold assertions. */
     private fun chain(vararg ids: String): List<Item> =
         ids.mapIndexed { i, id -> item(id, parentId = ids.getOrNull(i - 1)) }

@@ -8,6 +8,7 @@ import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -16,6 +17,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.datetime.LocalDate
+
+/** Demo Task → kind-agnostic [SearchHit] (demo rows are all Tasks) for the search overlay fake (#231). */
+private fun Task.toDemoSearchHit(): SearchHit = SearchHit(
+    id = id.value,
+    kind = ItemKind.Task,
+    title = title,
+    isTerminal = workingState.isTerminal,
+    completeBy = completeBy,
+    deadlineTimeOfDay = deadlineTimeOfDay,
+    ref = ref,
+)
 
 /**
  * In-memory [TaskRepository] fake for the **iOS demo harness** (#51) — the SwiftUI counterpart of the
@@ -66,7 +78,7 @@ internal class DemoTaskRepository(initial: List<Task>) : TaskRepository, ItemRep
                 val matchesStatus = query.statuses.isEmpty() || task.workingState in query.statuses
                 val matchesLabel = query.labels.isEmpty() || task.labels.any { it in query.labels }
                 matchesTerm && matchesStatus && matchesLabel
-            },
+            }.map { it.toDemoSearchHit() },
         )
     }
 

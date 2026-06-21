@@ -4,6 +4,8 @@ import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
 import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -31,8 +33,8 @@ class FakeTaskRepository(initial: List<Task> = emptyList()) : TaskRepository {
     /** Full rows returned by `hydrate()`, keyed by id (summary → full upgrade, #22). */
     var hydrateResults: Map<TaskId, Task> = emptyMap()
 
-    /** Rows the next `search()` returns; the recorded queries let a test assert what was searched (#73). */
-    var searchResults: List<Task> = emptyList()
+    /** Hits the next `search()` returns; the recorded queries let a test assert what was searched (#73). */
+    var searchResults: List<SearchHit> = emptyList()
     val searchQueries = mutableListOf<TaskSearchQuery>()
 
     override fun observeTasks(): Flow<List<Task>> = tasks
@@ -82,3 +84,11 @@ internal fun task(
     hydration = hydration,
     description = description,
 )
+
+/** Concise kind-agnostic [SearchHit] fixture for the search component tests (#231). */
+internal fun hit(
+    id: String,
+    kind: ItemKind = ItemKind.Task,
+    title: String = "Task $id",
+    isTerminal: Boolean = false,
+): SearchHit = SearchHit(id = id, kind = kind, title = title, isTerminal = isTerminal)
