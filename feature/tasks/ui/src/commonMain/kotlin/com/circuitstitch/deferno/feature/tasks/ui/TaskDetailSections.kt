@@ -18,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -40,6 +41,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.component.CheckDot
+import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
+import com.circuitstitch.deferno.core.designsystem.component.KindDot
+import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
+import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
+import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
@@ -69,7 +76,10 @@ private const val MaxCommentLength = 5000
 @Composable
 internal fun SectionHeader(title: String, modifier: Modifier = Modifier, trailing: String? = null) {
     val label = if (trailing != null) "${title.uppercase()} · $trailing" else title.uppercase()
-    SectionLabel(text = label, modifier = modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp))
+    SectionLabel(
+        text = label,
+        modifier = modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp).semantics { heading() },
+    )
 }
 
 // --- Properties (DUE · TIME · LABELS · OWNER) ---
@@ -303,11 +313,11 @@ private fun SubtaskRowView(
         // Chevron gutter: ▾/▸ for a parent (toggles fold), blank for a leaf so the check dots still align.
         Box(Modifier.size(SubtaskChevronGutter), contentAlignment = Alignment.Center) {
             if (row.hasChildren) {
-                Text(
-                    text = if (row.isExpanded) DefernoIcons.ChevronDown else DefernoIcons.ChevronRight,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.clickable(
+                Icon(
+                    imageVector = if (row.isExpanded) DefernoIcons.ChevronDown else DefernoIcons.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp).clickable(
                         onClickLabel = if (row.isExpanded) "Collapse ${task.title}" else "Expand ${task.title}",
                     ) { onToggleExpand(task.id.value, row.isExpanded) },
                 )
@@ -336,11 +346,11 @@ private fun SubtaskRowView(
                 .weight(1f)
                 .clickable(onClickLabel = "Open ${task.title}") { onOpen(task) },
         )
-        Text(
-            text = DefernoIcons.ChevronRight,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.defernoColors.inkMuted,
-            modifier = Modifier.padding(horizontal = 8.dp),
+        Icon(
+            imageVector = DefernoIcons.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.defernoColors.inkMuted,
+            modifier = Modifier.padding(horizontal = 8.dp).size(20.dp),
         )
     }
 }

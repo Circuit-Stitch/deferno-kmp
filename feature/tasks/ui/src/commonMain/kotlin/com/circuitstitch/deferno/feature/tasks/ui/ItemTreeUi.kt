@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,6 +60,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.component.DashedAddButton
+import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
+import com.circuitstitch.deferno.core.designsystem.component.KindDot
+import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
+import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
+import com.circuitstitch.deferno.core.designsystem.component.SearchBarDisplay
+import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.feature.tasks.ItemRow
@@ -341,10 +349,11 @@ private fun ItemTreeRow(
                 // Chevron gutter: ▾/▸ for a parent, blank for a leaf so titles still align.
                 Box(Modifier.size(chevronGutter), contentAlignment = Alignment.Center) {
                     if (row.hasChildren) {
-                        Text(
-                            text = if (row.isExpanded) DefernoIcons.ChevronDown else DefernoIcons.ChevronRight,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        Icon(
+                            imageVector = if (row.isExpanded) DefernoIcons.ChevronDown else DefernoIcons.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
@@ -390,11 +399,11 @@ private fun ItemTreeRow(
                         .semantics { contentDescription = "Open ${item.title}" },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = DefernoIcons.ChevronRight,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.defernoColors.inkMuted,
-                        modifier = Modifier.clearAndSetSemantics {},
+                    Icon(
+                        imageVector = DefernoIcons.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.defernoColors.inkMuted,
+                        modifier = Modifier.size(20.dp).clearAndSetSemantics {},
                     )
                 }
             }
@@ -451,8 +460,8 @@ private fun MoveModeBar(
         ) {
             MoveControl(glyph = "↑", description = "Move up", enabled = move.canMoveUp, onClick = onMoveUp)
             MoveControl(glyph = "↓", description = "Move down", enabled = move.canMoveDown, onClick = onMoveDown)
-            MoveControl(glyph = DefernoIcons.ChevronLeft, description = "Outdent", enabled = move.canOutdent, onClick = onOutdent)
-            MoveControl(glyph = DefernoIcons.ChevronRight, description = "Indent", enabled = move.canIndent, onClick = onIndent)
+            MoveControl(glyph = "‹", description = "Outdent", enabled = move.canOutdent, onClick = onOutdent)
+            MoveControl(glyph = "›", description = "Indent", enabled = move.canIndent, onClick = onIndent)
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onDone, modifier = Modifier.heightIn(min = MinTouchTarget)) { Text("Done") }
         }

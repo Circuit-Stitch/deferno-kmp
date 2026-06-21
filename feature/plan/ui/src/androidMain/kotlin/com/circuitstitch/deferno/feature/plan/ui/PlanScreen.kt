@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,8 +48,20 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.component.CheckDot
+import com.circuitstitch.deferno.core.designsystem.component.DashedAddButton
+import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
+import com.circuitstitch.deferno.core.designsystem.component.Eyebrow
+import com.circuitstitch.deferno.core.designsystem.component.KindDot
+import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
+import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
+import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.component.StartPill
+import com.circuitstitch.deferno.core.designsystem.component.TextLink
+import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -199,7 +212,7 @@ internal fun PlanContent(
 
             item(key = "section") {
                 SectionLabel(
-                    text = "Your day",
+                    text = "YOUR DAY",
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                 )
             }
@@ -272,9 +285,9 @@ private fun SuggestionBanner(task: Task, onStart: () -> Unit, modifier: Modifier
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = GlyphSparkle, color = scheme.primary, style = MaterialTheme.typography.titleMedium)
+            Icon(DefernoIcons.Sparkle, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Eyebrow(text = "If you're not sure, start here")
+            Eyebrow(text = "IF YOU'RE NOT SURE, START HERE")
         }
         Spacer(Modifier.height(8.dp))
         Text(
@@ -329,10 +342,11 @@ private fun DayRow(task: Task, highlighted: Boolean, onClick: () -> Unit, modifi
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (highlighted) {
-                    Text(
-                        text = GlyphSparkle,
-                        color = scheme.primary,
-                        style = MaterialTheme.typography.titleMedium,
+                    Icon(
+                        DefernoIcons.Sparkle,
+                        contentDescription = null,
+                        tint = scheme.primary,
+                        modifier = Modifier.size(16.dp),
                     )
                     Spacer(Modifier.width(6.dp))
                 }
@@ -340,7 +354,7 @@ private fun DayRow(task: Task, highlighted: Boolean, onClick: () -> Unit, modifi
                     text = task.title,
                     style = MaterialTheme.typography.titleMedium,
                     color = if (done) brand.inkMuted else scheme.onSurface,
-                    textDecoration = TextDecorationFor(done),
+                    textDecoration = if (done) TextDecoration.LineThrough else null,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -448,7 +462,7 @@ internal fun ChoiceCard(
             .clip(RoundedCornerShape(14.dp))
             .background(if (selected) scheme.surfaceContainerLow else scheme.surface)
             .border(if (selected) 2.dp else 1.dp, border, RoundedCornerShape(14.dp))
-            .heightIn(min = MinTouch)
+            .heightIn(min = MinTouchTarget)
             .clickable(
                 onClickLabel = "Choose ${task.title}",
                 role = androidx.compose.ui.semantics.Role.RadioButton,
@@ -470,7 +484,7 @@ internal fun ChoiceCard(
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             if (isSuggested) {
-                TreeChip(text = "Suggested", leadingGlyph = GlyphSparkle, semanticLabel = "Suggested")
+                TreeChip(text = "Suggested", leadingIcon = DefernoIcons.Sparkle, semanticLabel = "Suggested")
                 Spacer(Modifier.height(6.dp))
             }
             Text(
@@ -494,7 +508,7 @@ internal fun ChoiceCard(
                 modifier = Modifier.size(24.dp).clip(CircleShape).background(scheme.primary),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text = GlyphCheck, color = scheme.onPrimary, style = MaterialTheme.typography.labelMedium)
+                Icon(DefernoIcons.Check, contentDescription = null, tint = scheme.onPrimary, modifier = Modifier.size(15.dp))
             }
         }
     }
@@ -578,7 +592,7 @@ internal fun FocusContent(
 
         PrimaryActionButton(
             text = "Done — next step",
-            glyph = GlyphCheck,
+            icon = DefernoIcons.Check,
             onClick = onDone,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -642,10 +656,11 @@ private fun FocusRing(reducedMotion: Boolean, modifier: Modifier = Modifier) {
                 .border(2.dp, scheme.primary.copy(alpha = 0.5f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = GlyphClock,
-                style = MaterialTheme.typography.displaySmall,
-                color = scheme.primary,
+            Icon(
+                DefernoIcons.Clock,
+                contentDescription = null,
+                tint = scheme.primary,
+                modifier = Modifier.size(34.dp),
             )
         }
     }
