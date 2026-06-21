@@ -92,7 +92,7 @@ class TaskScreenInteractionTest {
         val component = FakeItemTreeComponent(ItemTreeState(rows = emptyList()))
         setContent { TaskListScreen(component) }
 
-        composeRule.onNodeWithText("No tasks yet").assertIsDisplayed()
+        composeRule.onNodeWithText("No trees yet").assertIsDisplayed()
     }
 
     @Test
@@ -121,8 +121,9 @@ class TaskScreenInteractionTest {
         val component = FakeTaskDetailComponent(state)
         setContent { TaskDetailScreen(component) }
 
-        // The inline subtask checkbox forwards a done-toggle for that child.
-        composeRule.onNodeWithContentDescription("Mark “Draft the announcement” done").performClick()
+        // The inline subtask checkbox forwards a done-toggle for that child. The "See the trees" detail
+        // is taller (title block + properties + subtask tree), so scroll the row into view before tapping.
+        composeRule.onNodeWithContentDescription("Mark “Draft the announcement” done").performScrollTo().performClick()
         // The Activity composer forwards the posted comment text. With the PROPERTIES section added
         // (#195) the detail is taller, so scroll the composer into view before interacting.
         composeRule.onNodeWithText("Add a comment…").performScrollTo().performTextInput("Looks good")

@@ -176,8 +176,10 @@ internal fun TaskDetailContent(
     // system bars so the header clears the status-bar clock and the body clears the nav bar.
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
-            // In single-pane the leading control returns to the list, so it reads as "Back".
-            PaneHeader(title = task?.title ?: "Task", onBack = onClose)
+            // "See the trees" (#231): the prominent title now lives in the body title block (kind chip +
+            // headline), so the header is the calm "Details" label — matching the design and avoiding a
+            // duplicate title node. In single-pane the leading control returns to the list ("Back").
+            PaneHeader(title = "Details", onBack = onClose)
             if (state.isHydrating) {
                 LoadingStrip(label = "Loading details…")
             }

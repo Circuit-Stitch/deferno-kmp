@@ -81,7 +81,7 @@ class NewOverlayInteractionTest {
         // The explicit kind picker is shown and defaults to Task (the form's Title field is present).
         composeRule.onNodeWithText("Task").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Title").performTextInput("buy milk")
-        composeRule.onNodeWithText("Create").performClick()
+        composeRule.onNodeWithText("Create task").performClick()
 
         // The online-only create command was dispatched with a Task payload; Accepted dismisses the overlay.
         assertEquals(1, created.size)
@@ -95,7 +95,7 @@ class NewOverlayInteractionTest {
 
         composeRule.onNodeWithContentDescription("New").performClick()
         composeRule.onNodeWithContentDescription("Title").performTextInput("buy milk")
-        composeRule.onNodeWithText("Create").performClick()
+        composeRule.onNodeWithText("Create task").performClick()
 
         // The gentle "reconnect to save" is shown; the overlay stays open (nothing was enqueued).
         composeRule.onNodeWithContentDescription("Reconnect to save").assertIsDisplayed()
@@ -114,7 +114,7 @@ class NewOverlayInteractionTest {
         // Explicitly pick Habit (segmented control, not inferred), then create.
         composeRule.onNodeWithText("Habit").performClick()
         composeRule.onNodeWithContentDescription("Title").performTextInput("stretch")
-        composeRule.onNodeWithText("Create").performClick()
+        composeRule.onNodeWithText("Create task").performClick()
 
         assertTrue(created[0] is CreateItem.Payload.Habit)
     }

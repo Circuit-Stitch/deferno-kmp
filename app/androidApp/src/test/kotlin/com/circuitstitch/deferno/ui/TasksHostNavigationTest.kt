@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
@@ -63,7 +64,7 @@ class TasksHostNavigationTest {
         // Tree → open the parent's detail (trailing `›`) → tap the child subtask row to drill into its
         // detail. In the compact fold the tree is hidden once detail opens, so "Child step" is unambiguous.
         composeRule.onNodeWithContentDescription("Open Parent task").performClick()
-        composeRule.onNodeWithText("Child step").performClick()
+        composeRule.onNodeWithText("Child step").performScrollTo().performClick()
 
         // The child's *detail* is now foregrounded: its title header and the detail-only action show.
         composeRule.onNodeWithText("Child step").assertIsDisplayed()
