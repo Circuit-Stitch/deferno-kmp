@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.layout.AnimatedPane
@@ -31,7 +33,14 @@ import com.circuitstitch.deferno.feature.tasks.TasksComponent
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun TasksScreen(component: TasksComponent, modifier: Modifier = Modifier) {
+fun TasksScreen(
+    component: TasksComponent,
+    modifier: Modifier = Modifier,
+    // Hoisted by the shell so it can dock a compact search into the top bar on scroll; [onSearch] opens the
+    // shell Search overlay (no-op default for callers that don't wire it).
+    listState: LazyListState = rememberLazyListState(),
+    onSearch: () -> Unit = {},
+) {
     val detailSlot by component.detail.subscribeAsState()
     val detail = detailSlot.child?.instance
 
@@ -52,7 +61,7 @@ fun TasksScreen(component: TasksComponent, modifier: Modifier = Modifier) {
         directive = directive,
         value = scaffoldValue,
         modifier = modifier,
-        listPane = { AnimatedPane { TaskListScreen(component.tree) } },
+        listPane = { AnimatedPane { TaskListScreen(component.tree, listState = listState, onSearch = onSearch) } },
         detailPane = { AnimatedPane { TasksDetailPane(detail) } },
     )
 }

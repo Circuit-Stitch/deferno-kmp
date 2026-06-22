@@ -22,7 +22,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -84,6 +86,9 @@ private val chevronGutter = MinTouchTarget
 /** Test tag on the tree Column — the move-mode focus + key-event target (see ItemTreeKeyboardTest). */
 internal const val ItemTreeTag = "itemTree"
 
+/** Breathing room between the tree filigree (the left-most rail line / depth-0 dot) and the screen edge. */
+private val TreeRowStartInset = 12.dp
+
 /** The calm in-list filter segments — local view state, not a component intent. "Active" hides terminals. */
 private val TreeFilters = listOf("In today", "Active", "All")
 
@@ -114,6 +119,12 @@ internal fun ItemTreeContent(
     // without wiring them; the integrator threads the real Search / new-tree intents.
     onSearch: () -> Unit = {},
     onAdd: () -> Unit = {},
+    // Hoisted so the host can read the scroll position (Android docks a compact search into the shell top
+    // bar once the inline header scrolls off — see MainShell). [pinSearch] keeps the inline search/filter
+    // band pinned (a stickyHeader) for hosts with no dock (desktop); Android sets it false so the band
+    // scrolls away and the docked bar search takes over.
+    listState: LazyListState = rememberLazyListState(),
+    pinSearch: Boolean = true,
     // Modal move mode (#228). Defaulted so the read-only callers / tests render without wiring it.
     moveMode: MoveMode? = null,
     onEnterMoveMode: (id: String) -> Unit = {},
@@ -171,6 +182,7 @@ internal fun ItemTreeContent(
             },
     ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.weight(1f),
             // Edge-to-edge (ADR-0035 #2): the list draws under the nav bar but pads its last row clear of
             // it — only when no move bar is shown (in move mode the bar owns that inset, so the list above
@@ -192,12 +204,22 @@ internal fun ItemTreeContent(
                         onRefresh = onRefresh,
                     )
                 }
-                stickyHeader(key = "everything-search") {
-                    EverythingSearchFilter(
-                        onSearch = onSearch,
-                        filterIndex = filterIndex,
-                        onFilterSelect = { filterIndex = it },
-                    )
+                if (pinSearch) {
+                    stickyHeader(key = "everything-search") {
+                        EverythingSearchFilter(
+                            onSearch = onSearch,
+                            filterIndex = filterIndex,
+                            onFilterSelect = { filterIndex = it },
+                        )
+                    }
+                } else {
+                    item(key = "everything-search") {
+                        EverythingSearchFilter(
+                            onSearch = onSearch,
+                            filterIndex = filterIndex,
+                            onFilterSelect = { filterIndex = it },
+                        )
+                    }
                 }
             }
             if (isRefreshing) {
@@ -364,6 +386,7 @@ private fun ItemTreeRow(
                     .heightIn(min = 56.dp)
                     .then(bodyModifier)
                     .alpha(dim)
+                    .padding(start = TreeRowStartInset)
                     // The curvy connecting rail (#231) replaces a flat depth indent: a continuous spine
                     // hangs each child off its parent in a calm tint of the row's accent (matching the
                     // node). It lands its elbow in the kind dot (connectToDot) and, for an expanded parent,

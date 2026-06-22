@@ -7,6 +7,8 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -49,6 +51,8 @@ fun TaskListScreen(
     // so they're threaded in with no-op defaults — the integrator wires them from the shell.
     onSearch: () -> Unit = {},
     onAdd: () -> Unit = {},
+    // Hoisted so the shell can dock a compact search into the top bar once this scrolls off (#…).
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val state by component.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -84,6 +88,8 @@ fun TaskListScreen(
             onRefresh = component::onRefresh,
             onSearch = onSearch,
             onAdd = onAdd,
+            listState = listState,
+            pinSearch = false,
             moveMode = state.moveMode,
             onEnterMoveMode = component::onEnterMoveMode,
             onMoveUp = component::onMoveUp,

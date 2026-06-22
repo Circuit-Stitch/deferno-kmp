@@ -127,6 +127,9 @@ fun ShellChrome(
     brainDumpIcon: Painter,
     newIcon: Painter,
     modifier: Modifier = Modifier,
+    // Optional slot rendered in the top bar's centre (where the title would go) in place of the title — the
+    // Tasks destination docks a compact search here once its inline header scrolls off (#…). Null = title.
+    topBarCenter: (@Composable () -> Unit)? = null,
     body: @Composable () -> Unit,
 ) {
     val chrome by component.chrome.collectAsState()
@@ -240,6 +243,7 @@ fun ShellChrome(
                         newIcon = newIcon,
                         onMenu = { onDrawerOpenChange(!drawerOpen) },
                         onBack = { component.onBack() },
+                        topBarCenter = topBarCenter,
                     )
                     Box(Modifier.weight(1f).fillMaxWidth()) { body() }
                 }
@@ -312,6 +316,7 @@ private fun ShellTopBar(
     onMenu: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    topBarCenter: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -342,13 +347,18 @@ private fun ShellTopBar(
                 ChromeActionKind.BrainDump, ChromeActionKind.New -> Unit
             }
         }
-        Text(
-            text = chrome.title,
-            style = MaterialTheme.typography.titleLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() },
-        )
+        if (topBarCenter != null) {
+            // The docked slot (e.g. the Tasks compact search) takes the title's place + weight.
+            Box(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) { topBarCenter() }
+        } else {
+            Text(
+                text = chrome.title,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() },
+            )
+        }
     }
 }
 
