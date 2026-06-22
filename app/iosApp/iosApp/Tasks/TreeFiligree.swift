@@ -7,8 +7,13 @@ import SwiftUI
 // bridged `ItemRow` geometry (spine / depth / hasChildren / isExpanded) — no shared-component change.
 
 enum TreeGeometry {
-    /// Width of the leading rail+node region for a row at `depth` (columns 0…depth).
-    static func leadingWidth(depth: Int) -> CGFloat { CGFloat(depth + 1) * Tree.railGutter }
+    /// Width of the leading rail+node region for a row at `depth` (columns 0…depth). Never narrower than
+    /// the node's own footprint (`parentDisc`): a depth-0 row reserves only one gutter (22) but the node
+    /// disc is 24 wide, and `.frame(width:)` wrapping content wider than the frame center-shifts the whole
+    /// region ~1px left — which dragged the root's disc + descend line off the trunk its children draw
+    /// (every deeper row's region is already ≥44, so they never shrink). Clamping to the node width keeps
+    /// every depth's column on the same x.
+    static func leadingWidth(depth: Int) -> CGFloat { max(CGFloat(depth + 1) * Tree.railGutter, Tree.parentDisc) }
     /// The x of the node column centre for a row at `depth`.
     static func nodeCenterX(depth: Int) -> CGFloat { CGFloat(depth) * Tree.railGutter + Tree.railGutter / 2 }
 }
@@ -45,16 +50,19 @@ struct TreeRail: View {
                 if i < depth - 1 {
                     if continues { vline(x, 0, size.height) }
                 } else {
-                    // The parent column: an elbow from the top down into this node, then continue below
-                    // when this row has a following sibling (├), else stop at the corner (└).
+                    // The row's own column: draw the vertical spine ONCE — full-height when a sibling
+                    // follows below (├), else only down to the elbow corner (└) — then start the elbow
+                    // path at that corner. Drawing the vertical inside the elbow path too (as before)
+                    // double-strokes the top half, making the spine read uneven in weight. Mirrors the
+                    // Compose twin (TreeAtoms.treeRail).
                     let r: CGFloat = 8
+                    let corner = midY - r
+                    vline(x, 0, continues ? size.height : corner)
                     var elbow = Path()
-                    elbow.move(to: CGPoint(x: x, y: 0))
-                    elbow.addLine(to: CGPoint(x: x, y: midY - r))
+                    elbow.move(to: CGPoint(x: x, y: corner))
                     elbow.addQuadCurve(to: CGPoint(x: x + r, y: midY), control: CGPoint(x: x, y: midY))
                     elbow.addLine(to: CGPoint(x: nodeX - nodeRadius, y: midY))
                     ctx.stroke(elbow, with: .color(lineColor), lineWidth: stroke)
-                    if continues { vline(x, 0, size.height) }
                 }
             }
 

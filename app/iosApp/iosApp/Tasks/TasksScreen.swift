@@ -51,13 +51,15 @@ struct TasksScreen: View {
                 .navigationBarTitleDisplayMode(.inline)
             }
         } else {
-            // Compact: the tree is the stack root (carrying the Destination nav bar); a foregrounded
-            // detail is a native push. SwiftUI owns `compactPath` so a native back/swipe pops cleanly; we
-            // mirror the Decompose slot state into it and, on a user pop, close the slot it removed.
+            // Compact: the tree is the stack root; a foregrounded detail is a native push. SwiftUI owns
+            // `compactPath` so a native back/swipe pops cleanly; we mirror the Decompose slot state into it
+            // and, on a user pop, close the slot it removed. The tree root hides its nav bar — the shell bar
+            // + the tree's own "Everything" header are the only chrome (parity with Android's two bands; a
+            // "Tasks" nav title here was a redundant third header). A pushed detail brings its own bar (back
+            // chevron + title) via `paneNavigationTitle`.
             NavigationStack(path: $compactPath) {
                 ItemTreeView(component: root.tree, onSearch: onSearch, onAdd: onAdd)
-                    .navigationTitle("Tasks")
-                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar(.hidden, for: .navigationBar)
                     .navigationDestination(for: TaskRoute.self, destination: pushedPane)
             }
             .onAppear { compactPath = currentPath }
