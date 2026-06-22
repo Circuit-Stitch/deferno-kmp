@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.di
 
+import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
@@ -122,6 +123,13 @@ abstract class AccountComponent(
 
     /** The offline outbox replay engine (#23) for this Account; the app drives [OutboxProcessor.flush]. */
     abstract val outboxProcessor: OutboxProcessor
+
+    /**
+     * The offline-first activity ledger (#260): the durable, append-only journal of every applied write,
+     * read reverse-chronologically by the Activity Destination. Exposing it anchors anvil's compile-time
+     * validation of its AccountScope chain (store → DB) and gives the shell its read accessor.
+     */
+    abstract val activityLedgerStore: ActivityLedgerStore
 }
 
 @CreateComponent

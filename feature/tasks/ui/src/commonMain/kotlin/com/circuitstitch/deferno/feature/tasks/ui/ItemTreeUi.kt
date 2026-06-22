@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -62,7 +61,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.DashedAddButton
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
-import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SearchBarDisplay
@@ -79,10 +77,9 @@ import com.circuitstitch.deferno.feature.tasks.MoveMode
 // taps, and drive the modal move mode. Handlers take their args from the ROW, never from a state snapshot
 // (the component's StateFlow is WhileSubscribed — empty without a live subscriber).
 
-/** The trailing open-detail control keeps a full [MinTouchTarget]; the leading fold chevron is tighter so
- *  the rail elbow lands close to the kind dot (the row body is the real fold target anyway). */
+/** The trailing open-detail control keeps a full [MinTouchTarget]; the leading fold affordance is the
+ *  connected [TreeNode] glyph (the row body stays a fold target too). */
 private val chevronGutter = MinTouchTarget
-private val leadingGutter = 30.dp
 
 /** Test tag on the tree Column — the move-mode focus + key-event target (see ItemTreeKeyboardTest). */
 internal const val ItemTreeTag = "itemTree"
@@ -173,42 +170,51 @@ internal fun ItemTreeContent(
                 }
             },
     ) {
-        // The calm header band: "Everything" + a tree count, the Refresh action, then a read-only search
-        // bar and the segmented filter. Hidden in move mode so the lifted-row focus owns the surface.
-        if (moveMode == null) {
-            EverythingHeader(
-                treeCount = rows.count { it.depth == 0 },
-                isRefreshing = isRefreshing,
-                onRefresh = onRefresh,
-                onSearch = onSearch,
-                filterIndex = filterIndex,
-                onFilterSelect = { filterIndex = it },
-            )
-        }
-        if (isRefreshing) {
-            LoadingStrip(label = "Refreshing…")
-        }
-        if (visibleRows.isEmpty() && !isRefreshing) {
-            EmptyState(
-                title = if (rows.isEmpty()) "No trees yet" else "Nothing to show here",
-                body = if (rows.isEmpty()) {
-                    "When you add a tree, it shows up here. One small step at a time."
-                } else {
-                    "Everything here is done. Switch to “All” to see it again."
-                },
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                // Edge-to-edge (ADR-0035 #2): the list draws under the nav bar but pads its last row clear of
-                // it — only when no move bar is shown (in move mode the bar owns that inset, so the list above
-                // it must not double-pad). Empty inset on desktop.
-                contentPadding = if (moveMode == null) {
-                    WindowInsets.systemBars.only(WindowInsetsSides.Bottom).asPaddingValues()
-                } else {
-                    PaddingValues()
-                },
-            ) {
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            // Edge-to-edge (ADR-0035 #2): the list draws under the nav bar but pads its last row clear of
+            // it — only when no move bar is shown (in move mode the bar owns that inset, so the list above
+            // it must not double-pad). Empty inset on desktop.
+            contentPadding = if (moveMode == null) {
+                WindowInsets.systemBars.only(WindowInsetsSides.Bottom).asPaddingValues()
+            } else {
+                PaddingValues()
+            },
+        ) {
+            // The "Everything" title scrolls away with the list to free room for the forest (#260 restyle);
+            // the search + filter band below it PINS (stickyHeader), so search/narrow stays reachable once
+            // you're deep in the list. Both hidden in move mode (the lifted-row focus owns the surface).
+            if (moveMode == null) {
+                item(key = "everything-title") {
+                    EverythingTitle(
+                        treeCount = rows.count { it.depth == 0 },
+                        isRefreshing = isRefreshing,
+                        onRefresh = onRefresh,
+                    )
+                }
+                stickyHeader(key = "everything-search") {
+                    EverythingSearchFilter(
+                        onSearch = onSearch,
+                        filterIndex = filterIndex,
+                        onFilterSelect = { filterIndex = it },
+                    )
+                }
+            }
+            if (isRefreshing) {
+                item(key = "refreshing") { LoadingStrip(label = "Refreshing…") }
+            }
+            if (visibleRows.isEmpty() && !isRefreshing) {
+                item(key = "empty") {
+                    EmptyState(
+                        title = if (rows.isEmpty()) "No trees yet" else "Nothing to show here",
+                        body = if (rows.isEmpty()) {
+                            "When you add a tree, it shows up here. One small step at a time."
+                        } else {
+                            "Everything here is done. Switch to “All” to see it again."
+                        },
+                    )
+                }
+            } else {
                 items(visibleRows, key = { it.item.id }) { row ->
                     ItemTreeRow(
                         row = row,
@@ -222,15 +228,15 @@ internal fun ItemTreeContent(
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
-                // "Add a tree" foot (#231) — only outside move mode (the list is calm during a move).
-                if (moveMode == null) {
-                    item {
-                        DashedAddButton(
-                            text = "Add a tree",
-                            onClick = onAdd,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        )
-                    }
+            }
+            // "Add a tree" foot (#231) — only outside move mode (the list is calm during a move).
+            if (moveMode == null) {
+                item(key = "add-tree") {
+                    DashedAddButton(
+                        text = "Add a tree",
+                        onClick = onAdd,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
                 }
             }
         }
@@ -248,39 +254,53 @@ internal fun ItemTreeContent(
 }
 
 /**
- * The calm "Everything" header band: the pane title + a `{n} trees` count, a Refresh action, a read-only
- * [SearchBarDisplay] that opens the global Search overlay, and the local [SegmentedFilter]. All on
- * `surface`, generously spaced — low-overwhelm even at 300+ items.
+ * The "Everything" title band — the pane title + a `{n} trees` count + the Refresh action. Rendered as
+ * the first (scrolling) list item, so it slides away to free room for the forest as you scroll (#260).
  */
 @Composable
-private fun EverythingHeader(
+private fun EverythingTitle(
     treeCount: Int,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Everything",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.semantics { heading() },
+                )
+                MonoMeta(text = if (treeCount == 1) "1 tree" else "$treeCount trees")
+            }
+            TextButton(
+                onClick = onRefresh,
+                enabled = !isRefreshing,
+                modifier = Modifier.heightIn(min = MinTouchTarget),
+            ) { Text("Refresh") }
+        }
+    }
+}
+
+/**
+ * The read-only [SearchBarDisplay] + the local [SegmentedFilter] — the part that PINS (a `stickyHeader`)
+ * so search/narrow stays reachable after the title scrolls off. An opaque `surface` so scrolling rows
+ * pass cleanly beneath it.
+ */
+@Composable
+private fun EverythingSearchFilter(
     onSearch: () -> Unit,
     filterIndex: Int,
     onFilterSelect: (Int) -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.surface) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Everything",
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                    MonoMeta(text = if (treeCount == 1) "1 tree" else "$treeCount trees")
-                }
-                TextButton(
-                    onClick = onRefresh,
-                    enabled = !isRefreshing,
-                    modifier = Modifier.heightIn(min = MinTouchTarget),
-                ) { Text("Refresh") }
-            }
             SearchBarDisplay(placeholder = "Search all your trees…", onClick = onSearch)
             SegmentedFilter(options = TreeFilters, selectedIndex = filterIndex, onSelect = onFilterSelect)
         }
@@ -346,26 +366,29 @@ private fun ItemTreeRow(
                     .alpha(dim)
                     // The curvy connecting rail (#231) replaces a flat depth indent: a continuous spine
                     // hangs each child off its parent in a calm tint of the row's accent (matching the
-                    // KindDot). Root rows render none. The modifier also adds the per-depth indent.
-                    .treeRail(row.spine, kindColor(item.kind).copy(alpha = RailTintAlpha)),
+                    // node). It lands its elbow in the kind dot (connectToDot) and, for an expanded parent,
+                    // drops a line to its subtree (descendToChildren). Also adds the per-depth indent.
+                    .treeRail(
+                        row.spine,
+                        kindColor(item.kind).copy(alpha = RailTintAlpha),
+                        connectToDot = true,
+                        descendToChildren = row.hasChildren && row.isExpanded,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Chevron gutter: ▾/▸ for a parent, blank for a leaf so titles still align.
-                Box(Modifier.size(leadingGutter), contentAlignment = Alignment.Center) {
-                    if (row.hasChildren) {
-                        Icon(
-                            imageVector = if (row.isExpanded) DefernoIcons.ChevronDown else DefernoIcons.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-                // The kind marker: a calm dot in the kind's colour. Decorative — colour is reinforcement,
-                // never the sole signal (a terminal item also strikes the title and mutes the text), so it
-                // stays out of the row's spoken output (which is chevron + title + the open-detail action).
-                KindDot(color = kindColor(item.kind), modifier = Modifier.clearAndSetSemantics {})
-                Spacer(Modifier.width(12.dp))
+                // The connected tree node (#231 follow-up): the rail elbow lands at its left edge and the
+                // glyph carries the line into the kind dot — merged with the fold chevron for a parent (a
+                // real, keyboard-focusable Button). Colour is reinforcement, never the sole signal (a
+                // terminal item also strikes the title + mutes the text); a leaf's node is decorative.
+                TreeNode(
+                    hasChildren = row.hasChildren,
+                    isExpanded = row.isExpanded,
+                    title = item.title,
+                    accent = kindColor(item.kind),
+                    ringColor = rowColor,
+                    inMoveMode = inMoveMode,
+                    onToggle = { onToggleExpand(item.id, row.isExpanded) },
+                )
                 Column(modifier = Modifier.weight(1f).padding(vertical = 10.dp)) {
                     Text(
                         text = item.title,

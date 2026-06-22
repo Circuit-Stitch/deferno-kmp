@@ -362,6 +362,9 @@ class DefaultRootComponent(
                         // routed through this Account's command executor (Set/ClearTaskDeadline, SetTaskLabels).
                         setDeadline = session.setDeadline,
                         setLabels = session.setLabels,
+                        // The detail's destructive Delete seam (kebab → confirm), routed through this
+                        // Account's command executor (DeleteTask).
+                        deleteTask = session.deleteTask,
                         // On-device attachments (#211): the detail shows + plays this Account's retained recordings.
                         onDeviceAttachments = session.onDeviceAttachments,
                         searchTasks = SearchTasks.of(session.taskRepository),
@@ -399,6 +402,8 @@ class DefaultRootComponent(
                         upsertBrainDumpDraft = session::upsertBrainDumpDraft,
                         // The Inbox accept's recording-attach (#211): attach the retained WAV to the new Task.
                         attachBrainDumpRecording = session::attachBrainDumpRecording,
+                        // The Activity Destination's reverse-chron ledger feed (#260).
+                        observeActivity = session::observeActivity,
                     )
                 // A pending Inbox deep-link (the Brain dump notification tapped on a cold start into the
                 // Auth shell, ADR-0027 Stage 4): now that the Main shell exists, apply it, then consume it.

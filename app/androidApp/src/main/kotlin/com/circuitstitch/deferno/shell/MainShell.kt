@@ -99,6 +99,9 @@ private fun DestinationBody(active: MainShellComponent.DestinationChild, modifie
         is MainShellComponent.DestinationChild.Settings ->
             SettingsScreen(active.component, modifier)
 
+        is MainShellComponent.DestinationChild.Activity ->
+            ActivityScreen(active.component, modifier)
+
         is MainShellComponent.DestinationChild.Placeholder ->
             ComingSoon(active.destination, modifier)
     }

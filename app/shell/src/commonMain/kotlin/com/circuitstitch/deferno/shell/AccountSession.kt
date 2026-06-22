@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.shell
 
+import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
@@ -14,6 +15,7 @@ import com.circuitstitch.deferno.core.domain.command.ClearTaskDeadline
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.domain.command.CommandResult
 import com.circuitstitch.deferno.core.domain.command.CreateItem
+import com.circuitstitch.deferno.core.domain.command.DeleteTask
 import com.circuitstitch.deferno.core.domain.command.MarkOccurrence
 import com.circuitstitch.deferno.core.domain.command.MoveItem
 import com.circuitstitch.deferno.core.domain.command.RescheduleOccurrence
@@ -112,6 +114,13 @@ interface AccountSession {
     val setLabels: suspend (TaskId, List<String>) -> Unit
 
     /**
+     * The Task detail's **Delete** write seam (the kebab → confirm): maps a [TaskId] to the destructive
+     * `DeleteTask` Command and dispatches it through the command executor (optimistic local apply + outbox
+     * enqueue, ADR-0001/0007), so the feature layer never touches the registry directly (mirrors [setDeadline]).
+     */
+    val deleteTask: suspend (TaskId) -> Unit
+
+    /**
      * The Tasks Item-tree move seam the modal move mode drives (ADR-0034 #228): maps a relative move to a
      * `MoveItem` Command and dispatches it through the command executor (optimistic cross-kind reorder +
      * outbox enqueue), so the feature layer never touches the registry directly (mirrors [workingStateEditor]).
@@ -130,6 +139,13 @@ interface AccountSession {
 
     /** Persist a draft's status change (the Inbox accept's mark-Accepted, and dismiss / undo). */
     suspend fun upsertBrainDumpDraft(draft: BrainDumpDraft)
+
+    /**
+     * The Activity Destination's reverse-chronological feed (#260): the offline-first ledger of every
+     * applied write, observed live so it re-emits as new changes land. A function seam (not the concrete
+     * store) so the shell stays testable on fakes.
+     */
+    fun observeActivity(): Flow<List<ActivityEntry>>
 
     /**
      * Attach this Account's retained brain-dump recording for [draft] to the just-created Task [taskId]
@@ -192,6 +208,8 @@ class AccountComponentSession(private val component: AccountComponent) : Account
 
     override fun observeBrainDumpDrafts() = component.brainDumpDraftRepository.observeDrafts()
 
+    override fun observeActivity() = component.activityLedgerStore.recent()
+
     override suspend fun upsertBrainDumpDraft(draft: BrainDumpDraft) {
         component.brainDumpDraftRepository.upsert(draft)
         // #211: a draft leaving the Ready queue (accept marks it Accepted, dismiss marks it Dismissed) is a
@@ -237,6 +255,9 @@ class AccountComponentSession(private val component: AccountComponent) : Account
 
     override val setLabels: suspend (TaskId, List<String>) -> Unit =
         commandSetLabels(component.commandExecutor)
+
+    override val deleteTask: suspend (TaskId) -> Unit =
+        commandDeleteTask(component.commandExecutor)
 
     override val moveEditor: MoveEditor =
         commandMoveEditor(component.commandExecutor)
@@ -285,6 +306,14 @@ internal fun commandSetDeadline(executor: CommandExecutor): suspend (TaskId, Ins
  */
 internal fun commandSetLabels(executor: CommandExecutor): suspend (TaskId, List<String>) -> Unit =
     { id, labels -> executor.execute(SetTaskLabels(id, labels)) }
+
+/**
+ * The Delete write seam backed by a [CommandExecutor]: dispatches the destructive [DeleteTask] (the
+ * writer marks the row deleted + enqueues `DELETE /tasks/{id}`). No `current` row — the command's own
+ * `enabledFor` gate handles the already-deleted case. Shared by production and tests.
+ */
+internal fun commandDeleteTask(executor: CommandExecutor): suspend (TaskId) -> Unit =
+    { id -> executor.execute(DeleteTask(id)) }
 
 /**
  * The Tasks Item-tree move seam backed by a [CommandExecutor] (ADR-0034 #228): dispatches a [MoveItem]

@@ -135,6 +135,13 @@ interface TaskDetailComponent {
     fun onSetWorkingState(target: WorkingState)
 
     /**
+     * Delete this Task (the kebab → confirm, destructive `task.delete`) — issued as a Command through the
+     * injected [delete] seam (optimistic local apply + outbox enqueue, ADR-0001/0007) — then close the
+     * detail since its row is gone. Default no-op body so other implementations/fakes don't break (#262).
+     */
+    fun onDelete() {}
+
+    /**
      * Set or clear this Task's deadline DUE date — issued as a Command through the injected [setDeadline]
      * seam (optimistic local apply + outbox enqueue, ADR-0001). [date] is the user-picked day at the
      * device zone; it is combined with the Task's current `deadlineTimeOfDay` (or start-of-day when none,
@@ -231,6 +238,10 @@ class DefaultTaskDetailComponent(
     // The LABELS write seam (taskId, labels) — replaces the Task's label set (empty clears). Wired from
     // the shell's command executor (SetTaskLabels); defaults to a no-op for the same reason.
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
+    // The destructive Delete seam (the kebab → confirm) — wired from the shell's command executor
+    // (DeleteTask). Defaults to a no-op like the editors above so the read/navigation-only tests build
+    // without it.
+    private val delete: suspend (TaskId) -> Unit = {},
     // On-device attachments (#210/#211): the read/delete/read-bytes seam wired from this Account's
     // LocalAttachmentRepository. Defaulted to the empty NONE so the many tests and the platforms without
     // on-device capture build without it (the detail then shows no on-device rows).
@@ -337,6 +348,14 @@ class DefaultTaskDetailComponent(
         // stale transition (the state the Task is already in) before any write — ADR-0007.
         val current = state.value.task
         scope.launch { workingStateEditor.setWorkingState(taskId, target, current) }
+    }
+
+    override fun onDelete() {
+        // Fire the destructive command, then pop the detail — its row is gone, so there's nothing to show.
+        scope.launch {
+            delete(taskId)
+            onCloseClicked()
+        }
     }
 
     override fun onSetDeadline(date: LocalDate?) {

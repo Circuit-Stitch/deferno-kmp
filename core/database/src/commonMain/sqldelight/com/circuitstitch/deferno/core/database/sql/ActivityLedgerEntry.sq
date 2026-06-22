@@ -1,0 +1,41 @@
+-- The offline-first activity ledger (issue #260): a durable, append-only record of EVERY mutation the
+-- app makes, shown in the Activity destination in reverse-chronological order. It is the read-only twin
+-- of the `outboxEntry` queue — where the outbox is a transient replay queue (rows are deleted once
+-- dispatched), the ledger is a permanent journal that survives sync. Every write the app applies is
+-- recorded here at apply-time via the single outbox choke-point (a `LedgerRecordingOutboxStore`
+-- decorator), so a new write path cannot forget to log.
+--
+-- A row mirrors the outbox's already-rendered shape — `target` (the structured partition key, e.g.
+-- "task:{id}" / "create:Task:{id}" / "plan:{date}:{tz}", which encodes the entity kind + id), `method`
+-- (POST/PATCH/PUT/DELETE), and `path` (the `\n`-joined request segments) — so the human summary can be
+-- derived at read-time and refined without a migration. `source` is who made the change: "Mobile" for
+-- a local app-side write now; "Website" / "Mcp" once a server-sourced reconcile records remote changes
+-- (issue #260 follow-up). `recorded_at` is the RFC3339 instant the change was applied.
+--
+-- `seq INTEGER PRIMARY KEY AUTOINCREMENT` is the monotonic, never-reused order key — the reverse-chron
+-- feed reads it `DESC`.
+CREATE TABLE activityLedgerEntry (
+    seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+    recorded_at TEXT NOT NULL,
+    source      TEXT NOT NULL,
+    target      TEXT NOT NULL,
+    method      TEXT NOT NULL,
+    path        TEXT NOT NULL
+);
+
+-- Append one applied change to the ledger. `seq` is assigned by AUTOINCREMENT.
+record:
+INSERT INTO activityLedgerEntry(recorded_at, source, target, method, path)
+VALUES (?, ?, ?, ?, ?);
+
+-- The most-recent [limit] entries, newest first — the Activity feed (observed as a Flow).
+recent:
+SELECT * FROM activityLedgerEntry ORDER BY seq DESC LIMIT ?;
+
+-- The total recorded count (diagnostics / a possible "N changes" header).
+count:
+SELECT count(*) FROM activityLedgerEntry;
+
+-- Clear the ledger (account sign-out cleanup, mirroring the outbox's deleteAll).
+deleteAll:
+DELETE FROM activityLedgerEntry;

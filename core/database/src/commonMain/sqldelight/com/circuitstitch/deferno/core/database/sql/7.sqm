@@ -1,0 +1,13 @@
+-- Migration 7 -> 8: add the offline-first activity ledger (issue #260).
+--
+-- A new, additive table only — no existing table changes — so existing installs simply gain an empty
+-- ledger that fills from the next write onward. The table mirrors `ActivityLedgerEntry.sq`; keep the two
+-- in sync. Never edit a released migration or snapshot — ADR-0022 runbook.
+CREATE TABLE activityLedgerEntry (
+    seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+    recorded_at TEXT NOT NULL,
+    source      TEXT NOT NULL,
+    target      TEXT NOT NULL,
+    method      TEXT NOT NULL,
+    path        TEXT NOT NULL
+);

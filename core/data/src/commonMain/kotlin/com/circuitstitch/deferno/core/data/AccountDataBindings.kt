@@ -34,7 +34,10 @@ import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceLocalStore
+import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
+import com.circuitstitch.deferno.core.data.activity.SqlDelightActivityLedgerStore
 import com.circuitstitch.deferno.core.data.outbox.CreateReplayListener
+import com.circuitstitch.deferno.core.data.outbox.LedgerRecordingOutboxStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
@@ -92,9 +95,19 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun settingsLocalStore(db: DefernoDatabase): SettingsLocalStore = SqlDelightSettingsLocalStore(db)
 
+    // The offline-first activity ledger (#260): a durable, append-only journal of every applied write,
+    // read reverse-chronologically by the Activity destination. The read side here; the write side is
+    // the [LedgerRecordingOutboxStore] decorator wrapping the outbox below.
     @Provides
     @SingleIn(AccountScope::class)
-    fun outboxStore(db: DefernoDatabase): OutboxStore = SqlDelightOutboxStore(db)
+    fun activityLedgerStore(db: DefernoDatabase): ActivityLedgerStore = SqlDelightActivityLedgerStore(db)
+
+    // Every write funnels through OutboxStore.enqueue, so wrapping it in the ledger recorder captures the
+    // whole app's mutations at one choke-point (no per-writer edits) — a write path cannot forget to log.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun outboxStore(db: DefernoDatabase, ledger: ActivityLedgerStore): OutboxStore =
+        LedgerRecordingOutboxStore(SqlDelightOutboxStore(db), ledger)
 
     // The offline-create side table (#185): tracks each client-created Item's replay lifecycle
     // (pending → confirmed) without a transient flag on the domain Item models. Read by the Task

@@ -46,6 +46,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -81,6 +82,7 @@ import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.shell.ChromeAction
 import com.circuitstitch.deferno.shell.ChromeActionKind
 import com.circuitstitch.deferno.shell.ChromeSpec
 import com.circuitstitch.deferno.shell.Destination
@@ -241,6 +243,17 @@ fun ShellChrome(
                     )
                     Box(Modifier.weight(1f).fillMaxWidth()) { body() }
                 }
+                // The capture FAB pair floats top-end, vertically centred in the bar row (Refresh sits on
+                // the leading side so the trailing corner is theirs).
+                ShellCaptureFabs(
+                    actions = chrome.actions,
+                    brainDumpIcon = brainDumpIcon,
+                    newIcon = newIcon,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(top = 8.dp, end = 16.dp),
+                )
                 // When open, the slid-aside content is the dismiss target: tap to close, or drag it back
                 // toward the edge (finger-tracking) to close.
                 if (drawerOpen) {
@@ -317,6 +330,18 @@ private fun ShellTopBar(
                 Icon(Icons.Filled.Menu, contentDescription = "Menu")
             }
         }
+        // Only Refresh stays in the bar — leading, next to the ☰/← — because the Brain dump + New capture
+        // actions are the FAB pair now (ShellCaptureFabs), floating at the trailing corner. So the bar is a
+        // calm ☰ + (maybe refresh) + title, not an action cluster, and nothing collides with the FABs.
+        chrome.actions.forEach { action ->
+            when (action.kind) {
+                ChromeActionKind.Refresh ->
+                    IconButton(onClick = action.onInvoke) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                    }
+                ChromeActionKind.BrainDump, ChromeActionKind.New -> Unit
+            }
+        }
         Text(
             text = chrome.title,
             style = MaterialTheme.typography.titleLarge,
@@ -324,13 +349,47 @@ private fun ShellTopBar(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() },
         )
-        chrome.actions.forEach { action ->
-            IconButton(onClick = action.onInvoke) {
-                when (action.kind) {
-                    ChromeActionKind.Refresh -> Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-                    ChromeActionKind.BrainDump -> Icon(brainDumpIcon, contentDescription = "Brain dump")
-                    ChromeActionKind.New -> Icon(newIcon, contentDescription = "New")
-                }
+    }
+}
+
+/**
+ * The capture **FAB pair** (#260 chrome restyle): two small floating action buttons pinned bottom-end over
+ * the body — **New task** (primary) with **Brain dump** (secondary) above it — replacing the old top-bar
+ * action cluster. Driven by the same [ChromeSpec] actions the bar used, so they appear only where capture
+ * is offered (a Destination root, not a drilled detail) and raise the same overlay routes. The injected
+ * [newIcon] / [brainDumpIcon] painters match the drawer's capture glyphs.
+ */
+@Composable
+private fun ShellCaptureFabs(
+    actions: List<ChromeAction>,
+    brainDumpIcon: Painter,
+    newIcon: Painter,
+    modifier: Modifier = Modifier,
+) {
+    val brainDump = actions.firstOrNull { it.kind == ChromeActionKind.BrainDump }
+    val new = actions.firstOrNull { it.kind == ChromeActionKind.New }
+    if (brainDump == null && new == null) return
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (brainDump != null) {
+            SmallFloatingActionButton(
+                onClick = brainDump.onInvoke,
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ) {
+                Icon(brainDumpIcon, contentDescription = "Brain dump", modifier = Modifier.size(22.dp))
+            }
+        }
+        if (new != null) {
+            SmallFloatingActionButton(
+                onClick = new.onInvoke,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
+                Icon(newIcon, contentDescription = "New", modifier = Modifier.size(22.dp))
             }
         }
     }
