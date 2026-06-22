@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -127,8 +128,9 @@ fun ShellChrome(
     brainDumpIcon: Painter,
     newIcon: Painter,
     modifier: Modifier = Modifier,
-    // Optional slot rendered in the top bar's centre (where the title would go) in place of the title — the
-    // Tasks destination docks a compact search here once its inline header scrolls off (#…). Null = title.
+    // Optional slot that, at a destination root, OWNS the bar interior in place of the ☰ + title — it must
+    // supply its own leading control. The Tasks destination puts a Files-style search pill (☰ inside it +
+    // trailing magnifier) here so search reads as the native top bar. Ignored when drilled. Null = ☰ + title.
     topBarCenter: (@Composable () -> Unit)? = null,
     body: @Composable () -> Unit,
 ) {
@@ -247,16 +249,16 @@ fun ShellChrome(
                     )
                     Box(Modifier.weight(1f).fillMaxWidth()) { body() }
                 }
-                // The capture FAB pair floats top-end, vertically centred in the bar row (Refresh sits on
-                // the leading side so the trailing corner is theirs).
+                // The capture FAB pair floats bottom-centre, clear of the nav bar — the native thumb-reach
+                // home for the primary actions, leaving the top bar free for a full-width search pill.
                 ShellCaptureFabs(
                     actions = chrome.actions,
                     brainDumpIcon = brainDumpIcon,
                     newIcon = newIcon,
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(top = 8.dp, end = 16.dp),
+                        .align(Alignment.BottomCenter)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = 16.dp),
                 )
                 // When open, the slid-aside content is the dismiss target: tap to close, or drag it back
                 // toward the edge (finger-tracking) to close.
@@ -326,45 +328,55 @@ private fun ShellTopBar(
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (chrome.drilled) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+        when {
+            // Drilled into a tier-3 detail: ← back + the detail title, regardless of any center slot.
+            chrome.drilled -> {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+                Text(
+                    text = chrome.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() },
+                )
             }
-        } else {
-            IconButton(onClick = onMenu) {
-                Icon(Icons.Filled.Menu, contentDescription = "Menu")
+            // A center slot owns the whole bar interior — its own leading control included. The Tasks
+            // destination puts a Files-style search pill here (☰ inside it), so no separate ☰ is drawn.
+            topBarCenter != null -> {
+                Box(modifier = Modifier.weight(1f)) { topBarCenter() }
             }
-        }
-        // Only Refresh stays in the bar — leading, next to the ☰/← — because the Brain dump + New capture
-        // actions are the FAB pair now (ShellCaptureFabs), floating at the trailing corner. So the bar is a
-        // calm ☰ + (maybe refresh) + title, not an action cluster, and nothing collides with the FABs.
-        chrome.actions.forEach { action ->
-            when (action.kind) {
-                ChromeActionKind.Refresh ->
-                    IconButton(onClick = action.onInvoke) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+            // The plain destination root: ☰ menu + (maybe Refresh) + title. The Brain dump + New capture
+            // actions are the FAB pair (ShellCaptureFabs) floating at the trailing corner, not bar buttons.
+            else -> {
+                IconButton(onClick = onMenu) {
+                    Icon(Icons.Filled.Menu, contentDescription = "Menu")
+                }
+                chrome.actions.forEach { action ->
+                    when (action.kind) {
+                        ChromeActionKind.Refresh ->
+                            IconButton(onClick = action.onInvoke) {
+                                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                            }
+                        ChromeActionKind.BrainDump, ChromeActionKind.New -> Unit
                     }
-                ChromeActionKind.BrainDump, ChromeActionKind.New -> Unit
+                }
+                Text(
+                    text = chrome.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() },
+                )
             }
-        }
-        if (topBarCenter != null) {
-            // The docked slot (e.g. the Tasks compact search) takes the title's place + weight.
-            Box(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) { topBarCenter() }
-        } else {
-            Text(
-                text = chrome.title,
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() },
-            )
         }
     }
 }
 
 /**
- * The capture **FAB pair** (#260 chrome restyle): two small floating action buttons pinned bottom-end over
- * the body — **New task** (primary) with **Brain dump** (secondary) above it — replacing the old top-bar
+ * The capture **FAB pair** (#260 chrome restyle): two small floating action buttons pinned bottom-centre
+ * over the body — **Brain dump** (secondary) beside **New task** (primary) — replacing the old top-bar
  * action cluster. Driven by the same [ChromeSpec] actions the bar used, so they appear only where capture
  * is offered (a Destination root, not a drilled detail) and raise the same overlay routes. The injected
  * [newIcon] / [brainDumpIcon] painters match the drawer's capture glyphs.

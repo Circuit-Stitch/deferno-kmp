@@ -90,6 +90,9 @@ fun TaskListScreen(
             onAdd = onAdd,
             listState = listState,
             pinSearch = false,
+            // Search lives in the shell's native top bar on Android (the Files-style pill), so the inline
+            // band shows only the local filter — no duplicate search box.
+            searchInList = false,
             moveMode = state.moveMode,
             onEnterMoveMode = component::onEnterMoveMode,
             onMoveUp = component::onMoveUp,

@@ -125,6 +125,9 @@ internal fun ItemTreeContent(
     // scrolls away and the docked bar search takes over.
     listState: LazyListState = rememberLazyListState(),
     pinSearch: Boolean = true,
+    // Whether to render the inline search bar in the header band. Android sets this false — the shell hosts
+    // search as the native top bar (the Files-style pill) — so the band shows only the local filter there.
+    searchInList: Boolean = true,
     // Modal move mode (#228). Defaulted so the read-only callers / tests render without wiring it.
     moveMode: MoveMode? = null,
     onEnterMoveMode: (id: String) -> Unit = {},
@@ -208,6 +211,7 @@ internal fun ItemTreeContent(
                     stickyHeader(key = "everything-search") {
                         EverythingSearchFilter(
                             onSearch = onSearch,
+                            showSearch = searchInList,
                             filterIndex = filterIndex,
                             onFilterSelect = { filterIndex = it },
                         )
@@ -216,6 +220,7 @@ internal fun ItemTreeContent(
                     item(key = "everything-search") {
                         EverythingSearchFilter(
                             onSearch = onSearch,
+                            showSearch = searchInList,
                             filterIndex = filterIndex,
                             onFilterSelect = { filterIndex = it },
                         )
@@ -315,6 +320,7 @@ private fun EverythingTitle(
 @Composable
 private fun EverythingSearchFilter(
     onSearch: () -> Unit,
+    showSearch: Boolean,
     filterIndex: Int,
     onFilterSelect: (Int) -> Unit,
 ) {
@@ -323,7 +329,8 @@ private fun EverythingSearchFilter(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            SearchBarDisplay(placeholder = "Search all your trees…", onClick = onSearch)
+            // Hosts with a top-bar search (Android) omit the inline bar; desktop keeps it (no top-bar dock).
+            if (showSearch) SearchBarDisplay(placeholder = "Search all your trees…", onClick = onSearch)
             SegmentedFilter(options = TreeFilters, selectedIndex = filterIndex, onSelect = onFilterSelect)
         }
     }

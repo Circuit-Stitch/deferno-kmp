@@ -1,12 +1,9 @@
 package com.circuitstitch.deferno.ui
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -14,9 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
-import com.circuitstitch.deferno.R
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
-import com.circuitstitch.deferno.core.designsystem.component.SearchBarDisplay
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.demo.DemoItemRepository
@@ -102,28 +97,13 @@ class MainShellNavScreenshotTest {
         composeRule.onRoot().captureRoboImage("src/test/screenshots/shell_chrome_open_light.png")
     }
 
-    // The Tasks docked search: once the inline "Everything" header scrolls off, the top bar docks a
-    // compact search between the ☰ menu and the trailing capture FAB pair. The scroll trigger lives in
-    // MainShell (a hoisted LazyListState); this baselines the docked *layout* by driving the ShellChrome
-    // topBarCenter slot directly, so a regression in the search/FAB clearance (the `end` padding) is caught.
+    // The Tasks search-as-top-bar (Files pattern): on the Tasks destination the top bar IS a full-width
+    // search pill (☰ inside it + trailing magnifier), with the capture FABs moved to bottom-centre. Drives
+    // the real MainShell on Tasks so the bar treatment + FAB placement are both baselined.
     @Test
     @Config(qualifiers = "w400dp-h800dp")
-    fun tasksDockedSearch_light() {
-        val component = shell().also { it.selectDestination(Destination.Tasks) }
-        setContent {
-            ShellChrome(
-                component = component,
-                activeDestination = Destination.Tasks,
-                drawerOpen = false,
-                onDrawerOpenChange = {},
-                brainDumpIcon = painterResource(R.drawable.ic_voice_chat),
-                newIcon = painterResource(R.drawable.ic_add_task),
-                topBarCenter = {
-                    SearchBarDisplay(placeholder = "Search", onClick = {}, modifier = Modifier.padding(end = 100.dp))
-                },
-                body = { Box(Modifier.fillMaxSize()) },
-            )
-        }
-        composeRule.onRoot().captureRoboImage("src/test/screenshots/shell_tasks_docked_search_light.png")
+    fun tasksSearchBar_light() {
+        setContent { MainShell(shell().also { it.selectDestination(Destination.Tasks) }) }
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/shell_tasks_search_bar_light.png")
     }
 }

@@ -1,19 +1,28 @@
 package com.circuitstitch.deferno.shell
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -23,13 +32,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.R
-import com.circuitstitch.deferno.core.designsystem.component.SearchBarDisplay
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.feature.braindumps.ui.InboxScreen
 import com.circuitstitch.deferno.feature.calendar.ui.CalendarScreen
@@ -62,12 +72,6 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = drawerOpen) { drawerOpen = false }
 
-    // The Tasks tree's scroll state, hoisted here so the top bar can dock a compact search once the inline
-    // "Everything" header (title item + search item) scrolls off — index > 1 means both are past the top.
-    val tasksListState = rememberLazyListState()
-    val tasksDocked by remember {
-        derivedStateOf { tasksListState.firstVisibleItemIndex > 1 }
-    }
     val openSearch = { component.openOverlay(OverlayRoute.Search) }
 
     Box(modifier.fillMaxSize()) {
@@ -80,20 +84,15 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
             // composeResources; the real app loads these fine either way) — see ShellChrome's KDoc.
             brainDumpIcon = painterResource(R.drawable.ic_voice_chat),
             newIcon = painterResource(R.drawable.ic_add_task),
-            // Dock a compact search in the bar (between ☰ and the capture FABs) only on Tasks, once scrolled.
-            // end padding keeps it clear of the trailing FAB pair.
-            topBarCenter = if (active.destination == Destination.Tasks && tasksDocked) {
-                {
-                    SearchBarDisplay(
-                        placeholder = "Search",
-                        onClick = openSearch,
-                        modifier = Modifier.padding(end = 100.dp),
-                    )
-                }
+            // Tasks makes the search bar the native top chrome (Files-style: ☰ inside the pill, magnifier
+            // trailing). It owns the bar, so its inline search band is dropped (TaskListScreen). end padding
+            // keeps the pill clear of the trailing capture FAB pair.
+            topBarCenter = if (active.destination == Destination.Tasks) {
+                { TasksSearchBar(onMenu = { drawerOpen = !drawerOpen }, onSearch = openSearch) }
             } else {
                 null
             },
-            body = { DestinationBody(active, tasksListState, openSearch, Modifier.fillMaxSize()) },
+            body = { DestinationBody(active, openSearch, Modifier.fillMaxSize()) },
         )
 
         // The shell overlay route sits above the whole chrome (ADR-0015); back dismisses it first.
@@ -103,11 +102,58 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * The Tasks **search-as-top-bar** (Files pattern): a full-width pill that IS the bar — the ☰ menu inside
+ * it on the left, a "Search" placeholder, a trailing magnifier — making search read as the native top
+ * chrome rather than a row below a title. Tapping the pill opens the Search overlay; the leading ☰ toggles
+ * the drawer. Spans the full bar now that the capture FABs sit bottom-centre (ShellCaptureFabs).
+ */
+@Composable
+private fun TasksSearchBar(onMenu: () -> Unit, onSearch: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(26.dp),
+        // A fixed pill height — NOT heightIn(min): the bar Row passes an open max-height down, so a
+        // min-only height lets the inner fillMaxHeight expand the pill to fill the screen (eats the body).
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .padding(start = 8.dp, end = 8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onMenu) {
+                Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable(role = Role.Button, onClickLabel = "Search", onClick = onSearch),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Search",
+                    color = MaterialTheme.defernoColors.inkMuted,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    Icons.Filled.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.defernoColors.inkMuted,
+                    modifier = Modifier.padding(end = 14.dp).size(20.dp),
+                )
+            }
+        }
+    }
+}
+
 /** Renders the foreground Destination's screen (or a coming-soon body for a not-yet-built Destination). */
 @Composable
 private fun DestinationBody(
     active: MainShellComponent.DestinationChild,
-    tasksListState: LazyListState,
     onSearch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -119,7 +165,7 @@ private fun DestinationBody(
             CalendarScreen(active.component, modifier)
 
         is MainShellComponent.DestinationChild.Tasks ->
-            TasksScreen(active.component, modifier, listState = tasksListState, onSearch = onSearch)
+            TasksScreen(active.component, modifier, onSearch = onSearch)
 
         is MainShellComponent.DestinationChild.Inbox ->
             InboxScreen(active.component, modifier)
