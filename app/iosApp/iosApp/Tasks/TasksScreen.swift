@@ -17,6 +17,10 @@ import SwiftUI
 /// detail's `onCloseClicked()`, which runs the component's own fallback so get/set stay consistent.
 struct TasksScreen: View {
     let root: TasksRoot
+    /// Shell concerns the Tasks component doesn't own (#73/#231): the tree header's search well opens the
+    /// global Search overlay; the "Add a tree" footer opens the New create overlay. Threaded from the shell.
+    var onSearch: () -> Void = {}
+    var onAdd: () -> Void = {}
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var detail: DetailSlotObserver
     /// The compact `NavigationStack` path, **owned by SwiftUI** so a native back/swipe pops cleanly. It's
@@ -24,8 +28,10 @@ struct TasksScreen: View {
     /// the compact branch in `body`.
     @State private var compactPath: [TaskRoute] = []
 
-    init(root: TasksRoot) {
+    init(root: TasksRoot, onSearch: @escaping () -> Void = {}, onAdd: @escaping () -> Void = {}) {
         self.root = root
+        self.onSearch = onSearch
+        self.onAdd = onAdd
         _detail = StateObject(wrappedValue: DetailSlotObserver(root.detail))
     }
 
@@ -33,7 +39,7 @@ struct TasksScreen: View {
         if horizontalSizeClass == .regular {
             NavigationStack {
                 HStack(spacing: 0) {
-                    ItemTreeView(component: root.tree)
+                    ItemTreeView(component: root.tree, onSearch: onSearch, onAdd: onAdd)
                         .frame(width: 340)
                     Divider()
                     secondaryPane()
@@ -49,7 +55,7 @@ struct TasksScreen: View {
             // detail is a native push. SwiftUI owns `compactPath` so a native back/swipe pops cleanly; we
             // mirror the Decompose slot state into it and, on a user pop, close the slot it removed.
             NavigationStack(path: $compactPath) {
-                ItemTreeView(component: root.tree)
+                ItemTreeView(component: root.tree, onSearch: onSearch, onAdd: onAdd)
                     .navigationTitle("Tasks")
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationDestination(for: TaskRoute.self, destination: pushedPane)
