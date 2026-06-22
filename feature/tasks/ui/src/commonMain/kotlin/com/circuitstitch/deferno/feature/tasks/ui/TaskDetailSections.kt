@@ -33,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -279,6 +281,8 @@ internal fun SubtasksSection(
     onOpen: (Task) -> Unit,
     onAddSubtask: (String) -> Unit,
     modifier: Modifier = Modifier,
+    // The kebab's "Add subtask" requests focus on the add field via this — null when no kebab drives it.
+    addSubtaskFocus: FocusRequester? = null,
 ) {
     Column(modifier.fillMaxWidth()) {
         SectionHeader("Subtasks", trailing = if (total > 0) "$done of $total" else null)
@@ -289,7 +293,7 @@ internal fun SubtasksSection(
             )
         }
         rows.forEach { row -> SubtaskRowView(row, onToggleDone, onToggleExpand, onOpen) }
-        AddSubtaskField(onAddSubtask)
+        AddSubtaskField(onAddSubtask, addSubtaskFocus)
     }
 }
 
@@ -361,7 +365,7 @@ private fun SubtaskRowView(
 private val SubtaskChevronGutter = 28.dp
 
 @Composable
-private fun AddSubtaskField(onAdd: (String) -> Unit) {
+private fun AddSubtaskField(onAdd: (String) -> Unit, focusRequester: FocusRequester? = null) {
     var text by remember { mutableStateOf("") }
     fun submit() {
         if (text.isNotBlank()) {
@@ -379,7 +383,8 @@ private fun AddSubtaskField(onAdd: (String) -> Unit) {
         trailingIcon = {
             TextButton(onClick = ::submit, enabled = text.isNotBlank()) { Text("Add") }
         },
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
     )
 }
 

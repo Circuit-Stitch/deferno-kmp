@@ -72,6 +72,9 @@ class DefaultTasksComponent(
     // slot. Both default to no-ops so existing tests/callers build without supplying them.
     private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
+    // The detail's destructive Delete seam (kebab → confirm), threaded down into the detail slot. Defaults
+    // to a no-op so existing tests/callers build without supplying it.
+    private val deleteTask: suspend (TaskId) -> Unit = { _ -> },
     // The detail's on-device attachment seam (#211), threaded down into the detail slot. Defaults to the
     // empty NONE so existing tests/callers build without it.
     private val onDeviceAttachments: OnDeviceAttachments = OnDeviceAttachments.NONE,
@@ -117,6 +120,7 @@ class DefaultTasksComponent(
                 createSubtask = createSubtask,
                 setDeadline = setDeadline,
                 setLabels = setLabels,
+                delete = deleteTask,
                 onDeviceAttachments = onDeviceAttachments,
                 foldStore = foldStore,
                 coroutineContext = coroutineContext,

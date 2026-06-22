@@ -40,6 +40,7 @@ private fun TestScope.taskDetailComponent(
     createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
     setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
     setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
+    delete: suspend (TaskId) -> Unit = {},
     onDeviceAttachments: OnDeviceAttachments = OnDeviceAttachments.NONE,
     foldStore: InMemoryItemFoldStore = InMemoryItemFoldStore(),
 ) = DefaultTaskDetailComponent(
@@ -53,6 +54,7 @@ private fun TestScope.taskDetailComponent(
     createSubtask = createSubtask,
     setDeadline = setDeadline,
     setLabels = setLabels,
+    delete = delete,
     onDeviceAttachments = onDeviceAttachments,
     foldStore = foldStore,
     coroutineContext = StandardTestDispatcher(testScheduler),
@@ -351,6 +353,25 @@ class TaskDetailComponentTest {
         advanceUntilIdle()
 
         assertEquals(listOf(TaskId("a") to "New step"), added)
+    }
+
+    @Test
+    fun onDeleteIssuesTheDeleteSeamThenCloses() = runTest {
+        val deleted = mutableListOf<TaskId>()
+        val outputs = mutableListOf<TaskDetailComponent.Output>()
+        val component = taskDetailComponent(
+            TaskId("a"),
+            FakeTaskRepository(listOf(task("a"))),
+            output = { outputs += it },
+            delete = { id -> deleted += id },
+        )
+        advanceUntilIdle()
+
+        component.onDelete()
+        advanceUntilIdle()
+
+        assertEquals(listOf(TaskId("a")), deleted)
+        assertEquals(listOf<TaskDetailComponent.Output>(TaskDetailComponent.Output.Closed), outputs)
     }
 
     @Test

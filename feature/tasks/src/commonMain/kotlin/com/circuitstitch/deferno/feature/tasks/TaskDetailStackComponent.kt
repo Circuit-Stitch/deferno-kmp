@@ -43,6 +43,7 @@ class DefaultTaskDetailStackComponent(
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
     private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
+    private val deleteTask: suspend (TaskId) -> Unit = { _ -> },
     private val coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : TaskDetailStackComponent, ComponentContext by componentContext {
 
@@ -71,6 +72,7 @@ class DefaultTaskDetailStackComponent(
                     createSubtask = createSubtask,
                     setDeadline = setDeadline,
                     setLabels = setLabels,
+                    delete = deleteTask,
                     coroutineContext = coroutineContext,
                 )
             },

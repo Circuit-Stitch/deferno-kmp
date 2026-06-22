@@ -73,6 +73,13 @@ object DefernoIcons {
         }
     }
 
+    /** Vertical three-dot overflow ("⋮") — the detail's more-actions kebab. Each dot is an r2 circle. */
+    val MoreVert: ImageVector by lazy {
+        fill("MoreVert") {
+            dot(12f, 5f); dot(12f, 12f); dot(12f, 19f)
+        }
+    }
+
     /** Magnifier — the calm search affordance. */
     val Search: ImageVector by lazy {
         stroke("Search") {
@@ -92,6 +99,14 @@ object DefernoIcons {
             arcToRelative(9f, 9f, 0f, true, true, 18f, 0f)
             moveTo(12f, 7.5f); verticalLineTo(12f); lineToRelative(3f, 2f)
         }
+    }
+
+    /** A filled circle of radius [r] at ([cx], [cy]) — two relative semicircle arcs (cf. [Search]). */
+    private fun androidx.compose.ui.graphics.vector.PathBuilder.dot(cx: Float, cy: Float, r: Float = 2f) {
+        moveTo(cx + r, cy)
+        arcToRelative(r, r, 0f, true, true, -2 * r, 0f)
+        arcToRelative(r, r, 0f, true, true, 2 * r, 0f)
+        close()
     }
 
     private fun fill(name: String, pathBuilder: androidx.compose.ui.graphics.vector.PathBuilder.() -> Unit): ImageVector =

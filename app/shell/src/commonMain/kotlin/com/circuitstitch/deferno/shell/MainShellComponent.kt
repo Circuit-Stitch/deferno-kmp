@@ -334,6 +334,9 @@ class DefaultMainShellComponent(
     // (overlay + Tasks Destination). Defaulted to no-ops so the many shell tests build without them.
     private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
+    // The Task detail's destructive Delete seam (kebab → confirm), threaded into the detail (overlay +
+    // Tasks Destination). Defaults to a no-op so the many shell tests build without it.
+    private val deleteTask: suspend (TaskId) -> Unit = { _ -> },
     // The Task detail's on-device attachment seam (#211), threaded into the Tasks destination + the
     // TaskDetail overlay. Defaults to the empty NONE so the many shell tests build without it; production
     // threads this Account's seam from the session.
@@ -574,6 +577,7 @@ class DefaultMainShellComponent(
                                     createSubtask = createSubtask,
                                     setDeadline = setDeadline,
                                     setLabels = setLabels,
+                                    delete = deleteTask,
                                     onDeviceAttachments = onDeviceAttachments,
                                     // The Account-scoped fold store: a subtask folded in the Plan-tap
                                     // detail matches the Tasks tree and survives restart (ADR-0034 dec. 4).
@@ -626,6 +630,7 @@ class DefaultMainShellComponent(
                         createSubtask = createSubtask,
                         setDeadline = setDeadline,
                         setLabels = setLabels,
+                        deleteTask = deleteTask,
                         onDeviceAttachments = onDeviceAttachments,
                         coroutineContext = coroutineContext,
                     ),

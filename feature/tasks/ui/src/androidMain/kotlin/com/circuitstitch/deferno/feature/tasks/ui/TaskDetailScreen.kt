@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,18 +21,28 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -40,6 +51,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
+import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
@@ -87,6 +99,7 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
         TaskDetailContent(
             state = state,
             onClose = component::onCloseClicked,
+            onDelete = component::onDelete,
             onAddToPlan = component::onAddToPlanClicked,
             onSetWorkingState = component::onSetWorkingState,
             onSetDeadline = component::onSetDeadline,
@@ -154,6 +167,7 @@ private fun readAttachmentUpload(context: Context, uri: Uri): AttachmentUpload? 
 internal fun TaskDetailContent(
     state: TaskDetailState,
     onClose: () -> Unit,
+    onDelete: () -> Unit = {},
     onAddToPlan: () -> Unit,
     onSetWorkingState: (WorkingState) -> Unit,
     onSetDeadline: (LocalDate?) -> Unit,
@@ -195,6 +209,7 @@ internal fun TaskDetailContent(
                 else -> TaskBody(
                     task = task,
                     state = state,
+                    onDelete = onDelete,
                     onAddToPlan = onAddToPlan,
                     onSetWorkingState = onSetWorkingState,
                     onSetDeadline = onSetDeadline,
@@ -221,6 +236,7 @@ internal fun TaskDetailContent(
 private fun TaskBody(
     task: Task,
     state: TaskDetailState,
+    onDelete: () -> Unit,
     onAddToPlan: () -> Unit,
     onSetWorkingState: (WorkingState) -> Unit,
     onSetDeadline: (LocalDate?) -> Unit,
@@ -242,6 +258,10 @@ private fun TaskBody(
     // is reused across the parent→subtask navigation, so an unkeyed scroll state would carry the parent's
     // scroll position into the child and open it past its title (#231).
     val scrollState = remember(task.id) { ScrollState(0) }
+    // The add-subtask field lives far down in the body; the kebab's "Add subtask" requests focus on it,
+    // which auto-scrolls it into view and pops the keyboard (it's always composed — verticalScroll is eager).
+    val addSubtaskFocus = remember(task.id) { FocusRequester() }
+    var confirmDelete by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -251,8 +271,18 @@ private fun TaskBody(
     ) {
         // The "Everything in one place" title block (#231): a kind chip, the title, then a mono meta line
         // (ref · due · subtask count). The kind here is always Task — this detail hydrates a Task — but it
-        // still wears the kind marker so the four kinds read consistently across the app.
-        DetailTitleBlock(task = task, subtaskDone = state.subtaskDone, subtaskTotal = state.subtaskTotal)
+        // still wears the kind marker so the four kinds read consistently across the app. The ⋮ kebab rides
+        // top-right of the block (body-level, so it works for both the Tasks pane and the Plan drill, #262).
+        Row(verticalAlignment = Alignment.Top) {
+            Box(Modifier.weight(1f)) {
+                DetailTitleBlock(task = task, subtaskDone = state.subtaskDone, subtaskTotal = state.subtaskTotal)
+            }
+            TaskOverflowMenu(
+                onAddSubtask = { addSubtaskFocus.requestFocus() },
+                onDrop = { onSetWorkingState(WorkingState.Dropped) },
+                onDelete = { confirmDelete = true },
+            )
+        }
         WorkingStateEditor(current = task.workingState, onSetWorkingState = onSetWorkingState)
 
         val description = task.description
@@ -286,6 +316,7 @@ private fun TaskBody(
             onToggleExpand = onToggleSubtaskExpand,
             onOpen = onOpenSubtask,
             onAddSubtask = onAddSubtask,
+            addSubtaskFocus = addSubtaskFocus,
         )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -311,6 +342,58 @@ private fun TaskBody(
             onEdit = onEditComment,
             onDelete = onDeleteComment,
         )
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete this task?") },
+            text = { Text("This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    onDelete()
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+/**
+ * The detail's ⋮ more-actions kebab (#262): Add subtask (focuses the always-present add field), Drop task,
+ * and the destructive Delete (the caller gates it behind a confirm). Icon-only trigger, so it carries its
+ * own contentDescription for TalkBack.
+ */
+@Composable
+private fun TaskOverflowMenu(
+    onAddSubtask: () -> Unit,
+    onDrop: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(imageVector = DefernoIcons.MoreVert, contentDescription = "More actions")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Add subtask") },
+                onClick = { expanded = false; onAddSubtask() },
+            )
+            // The app's vocabulary for WorkingState.Dropped is "Set aside" (the chip below + SearchScreen),
+            // so the kebab uses the same word rather than web's "Drop" — one term per concept.
+            DropdownMenuItem(
+                text = { Text("Set aside") },
+                onClick = { expanded = false; onDrop() },
+            )
+            DropdownMenuItem(
+                text = { Text("Delete") },
+                onClick = { expanded = false; onDelete() },
+            )
+        }
     }
 }
 

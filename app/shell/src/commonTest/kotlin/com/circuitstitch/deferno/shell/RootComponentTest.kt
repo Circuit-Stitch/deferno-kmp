@@ -594,6 +594,7 @@ internal class FakeAccountSession(
 
     val deadlinesSet = mutableListOf<Pair<TaskId, Instant?>>()
     val labelsSet = mutableListOf<Pair<TaskId, List<String>>>()
+    val tasksDeleted = mutableListOf<TaskId>()
 
     override val setDeadline: suspend (TaskId, Instant?) -> Unit = { id, completeBy ->
         deadlinesSet += id to completeBy
@@ -602,6 +603,8 @@ internal class FakeAccountSession(
     override val setLabels: suspend (TaskId, List<String>) -> Unit = { id, labels ->
         labelsSet += id to labels
     }
+
+    override val deleteTask: suspend (TaskId) -> Unit = { id -> tasksDeleted += id }
 
     val movesIssued = mutableListOf<Triple<String, String?, Int>>()
 
