@@ -123,11 +123,18 @@ struct BrainDumpView: View {
     }
 
     private func requestThenRecord() {
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+        let handle: (Bool) -> Void = { granted in
             DispatchQueue.main.async {
                 if granted { component.startRecording() }
                 else { component.dictationPermissionDenied(permanentlyDenied: false) }
             }
+        }
+        // AVAudioApplication is the iOS-17 home for record-permission; fall back to the (now-deprecated)
+        // AVAudioSession call on iOS 16 (the deployment target).
+        if #available(iOS 17.0, *) {
+            AVAudioApplication.requestRecordPermission(completionHandler: handle)
+        } else {
+            AVAudioSession.sharedInstance().requestRecordPermission(handle)
         }
     }
 
@@ -203,7 +210,7 @@ final class AudioMeter: ObservableObject {
             }
         }
         engine.prepare()
-        running = (try? { try engine.start(); return true }()) ?? false
+        running = (try? engine.start()) != nil
     }
 
     func stop() {
