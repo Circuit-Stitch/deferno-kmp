@@ -1,0 +1,10 @@
+<resources>
+    <!-- Brain dump "listening" spectrum bars (see SpectrumBars in BrainDumpScreen.kt). The look lives here
+         so it can be tuned in one place; the bar *count* is @integer/spectrum_bands. Bars are mirrored
+         about the vertical center, so the height is the full top-to-bottom extent at full scale. -->
+    <dimen name="spectrum_bar_height">60dp</dimen>
+    <dimen name="spectrum_bar_gap">2dp</dimen>
+    <dimen name="spectrum_bar_min_width">2dp</dimen>
+    <dimen name="spectrum_bar_min_height">3dp</dimen>
+    <dimen name="spectrum_bar_corner_radius">2dp</dimen>
+</resources>

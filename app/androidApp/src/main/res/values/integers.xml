@@ -1,0 +1,6 @@
+<resources>
+    <!-- Number of bars in the Brain dump "listening" spectrum — shared by the recorder's writer (how many
+         DFT bands to compute) and the SpectrumBars visualizer. More = narrower bars. The dp look-knobs are
+         in dimens.xml (@dimen/spectrum_bar_*). -->
+    <integer name="spectrum_bands">36</integer>
+</resources>

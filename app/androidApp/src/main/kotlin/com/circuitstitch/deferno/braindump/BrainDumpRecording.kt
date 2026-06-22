@@ -19,13 +19,22 @@ import java.io.File
  * WAV header) is dropped, not enqueued. Privacy (ADR-0009/0018): the worker owns the WAV's lifetime and
  * deletes it after transcription; nothing here logs audio. The caller must already hold `RECORD_AUDIO`.
  */
-suspend fun recordBrainDumpAudio(context: Context, today: LocalDate, timeZone: String) {
+suspend fun recordBrainDumpAudio(
+    context: Context,
+    today: LocalDate,
+    timeZone: String,
+    onPcm: (FloatArray) -> Unit = {},
+) {
     val wav = File.createTempFile("braindump", ".wav", context.cacheDir)
     try {
         // Suspends for the duration of the recording; on cancel it finalises the WAV, then re-throws.
-        AudioFileRecorder().recordTo(wav)
+        // [onPcm] is the live spectrum tap the recorder forwards each chunk to (for the listening viz).
+        AudioFileRecorder().recordTo(wav, onPcm)
     } finally {
         withContext(NonCancellable) {
+            // Reset the live spectrum (empty chunk → zero bars) so the visualizer settles to silence on
+            // Stop instead of freezing on the last frame / leaking into the next recording.
+            onPcm(FloatArray(0))
             try {
                 if (wav.length() > WAV_HEADER_BYTES) {
                     enqueueBrainDump(context, wav, today, timeZone)

@@ -23,6 +23,11 @@ import kotlinx.coroutines.launch
  */
 internal class MicAudioSource(
     private val sampleRate: Int = 16_000,
+    // Read granularity (samples per emitted chunk): smaller = lower-latency, more frequent chunks. The
+    // Brain dump spectrum wants ~50 ms (20 Hz) to feel near real-time; streaming dictation keeps the
+    // ~200 ms default (whisper just concatenates chunks, so finer is fine but unnecessary). The AudioRecord
+    // internal buffer is sized separately (below) and is unaffected.
+    private val chunkSamples: Int = sampleRate / 5,
 ) {
     @SuppressLint("MissingPermission") // RECORD_AUDIO is enforced by the caller (the New surface, L3).
     fun stream(): Flow<FloatArray> = callbackFlow {
@@ -48,7 +53,7 @@ internal class MicAudioSource(
             return@callbackFlow
         }
 
-        val pcm = ShortArray(sampleRate / 5) // ~200 ms read granularity
+        val pcm = ShortArray(chunkSamples)
         record.startRecording()
         val reader = launch(Dispatchers.IO) {
             while (isActive) {
