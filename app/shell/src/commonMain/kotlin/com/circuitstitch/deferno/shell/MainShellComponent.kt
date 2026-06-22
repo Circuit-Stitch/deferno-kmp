@@ -16,6 +16,7 @@ import com.arkivanov.decompose.value.Value
 import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.arkivanov.essenty.lifecycle.doOnResume
 import com.circuitstitch.deferno.core.common.log.Logger
+import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
@@ -213,6 +214,11 @@ interface MainShellComponent {
             override val destination: Destination = Destination.Settings
         }
 
+        /** The Activity Destination (#260): a reverse-chronological feed of the offline-first ledger. */
+        class Activity(val component: ActivityComponent) : DestinationChild {
+            override val destination: Destination = Destination.Activity
+        }
+
         /**
          * A Destination whose own slice isn't built yet (Calendar #74) — a logic-less child the View
          * renders as a placeholder body. It is still a real tier-1 Destination with its own retained
@@ -394,6 +400,9 @@ class DefaultMainShellComponent(
     // this Account's session (reads the on-device recording + writes a per-Task attachment copy). No-op
     // default for the many shell tests / non-brain-dump platforms.
     private val attachBrainDumpRecording: suspend (taskId: String, BrainDumpDraft) -> Unit = { _, _ -> },
+    // The Activity Destination's reverse-chron ledger feed (#260). Wired from this Account's session;
+    // defaulted to "no activity" so the many shell tests build without supplying it.
+    private val observeActivity: () -> Flow<List<ActivityEntry>> = { flowOf(emptyList()) },
 ) : MainShellComponent, ComponentContext by componentContext {
 
     // "Add subtask" on the Task detail: an online-only create of a child Task, derived from the same
@@ -633,10 +642,16 @@ class DefaultMainShellComponent(
                     ),
                 )
 
-            // Activity has no slice yet — a logic-less Placeholder the View renders as a ComingSoon body
-            // (the global action-ledger feed is tracked in #260). Still a real tier-1 Destination.
+            // The Activity Destination (#260): the reverse-chron feed over this Account's offline-first
+            // ledger, observed live so it re-emits as new changes land.
             Config.Activity ->
-                MainShellComponent.DestinationChild.Placeholder(Destination.Activity)
+                MainShellComponent.DestinationChild.Activity(
+                    DefaultActivityComponent(
+                        componentContext = childContext,
+                        observeActivity = observeActivity,
+                        coroutineContext = coroutineContext,
+                    ),
+                )
 
             Config.Profile ->
                 MainShellComponent.DestinationChild.Profile(
@@ -710,7 +725,7 @@ class DefaultMainShellComponent(
     override val chrome: StateFlow<ChromeSpec> =
         stack.asFlow()
             .flatMapLatest { st -> chromeFor(st.active.instance) }
-            .stateIn(overlayScope, SharingStarted.WhileSubscribed(5_000L), rootChrome("Today"))
+            .stateIn(overlayScope, SharingStarted.WhileSubscribed(5_000L), rootChrome(""))
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun chromeFor(active: MainShellComponent.DestinationChild): Flow<ChromeSpec> =
@@ -719,8 +734,10 @@ class DefaultMainShellComponent(
             is MainShellComponent.DestinationChild.Plan ->
                 active.stack.asFlow().flatMapLatest { ps ->
                     when (val child = ps.active.instance) {
+                        // No bar title — the Plan dashboard body carries the big "Today" header itself,
+                        // so a bar title would duplicate it (#260 chrome restyle). Just ☰ + Refresh.
                         is MainShellComponent.PlanChild.Dashboard ->
-                            flowOf(rootChrome("Today", onRefresh = child.component::onRefresh))
+                            flowOf(rootChrome("", onRefresh = child.component::onRefresh))
                         is MainShellComponent.PlanChild.Detail ->
                             child.component.state.map { drilledChrome(it.task?.title ?: "Task") }
                     }
@@ -746,6 +763,7 @@ class DefaultMainShellComponent(
 
             is MainShellComponent.DestinationChild.Inbox -> flowOf(rootChrome("Inbox"))
             is MainShellComponent.DestinationChild.Profile -> flowOf(rootChrome("Profile"))
+            is MainShellComponent.DestinationChild.Activity -> flowOf(rootChrome("Activity"))
             is MainShellComponent.DestinationChild.Placeholder -> flowOf(rootChrome(active.destination.name))
         }
 
@@ -949,6 +967,8 @@ class DefaultMainShellComponent(
             is MainShellComponent.DestinationChild.Profile -> false
             // Settings is a tier-3 drill-down: back pops an open category detail to the list first (#72).
             is MainShellComponent.DestinationChild.Settings -> component.onBack()
+            // Activity is a single-pane read-only feed: nothing to dismiss inside it.
+            is MainShellComponent.DestinationChild.Activity -> false
             is MainShellComponent.DestinationChild.Placeholder -> false
         }
 }

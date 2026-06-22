@@ -111,6 +111,11 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
         is MainShellComponent.DestinationChild.Settings ->
             SettingsDesktopScreen(active.component, Modifier.fillMaxSize())
 
+        // The Activity ledger feed has an Android View only for now; desktop renders the calm stand-in
+        // (the desktop client is a stub, ADR-0003). The component still records — the feed View is a follow-up.
+        is MainShellComponent.DestinationChild.Activity ->
+            ComingSoon(active.destination)
+
         is MainShellComponent.DestinationChild.Placeholder ->
             ComingSoon(active.destination)
     }

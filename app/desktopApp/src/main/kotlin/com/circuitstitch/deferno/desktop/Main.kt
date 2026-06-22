@@ -639,11 +639,12 @@ private fun MainShellComponent.refreshActiveDestination() {
                 ?.component?.onRefresh() ?: Unit
         is MainShellComponent.DestinationChild.Tasks -> active.component.tree.onRefresh()
         // Calendar (auto-refreshes its window on open/nav), Inbox (re-queries on resume), Profile,
-        // Settings, placeholder: no manual refresh.
+        // Settings, Activity (a live ledger feed), placeholder: no manual refresh.
         is MainShellComponent.DestinationChild.Calendar,
         is MainShellComponent.DestinationChild.Inbox,
         is MainShellComponent.DestinationChild.Profile,
         is MainShellComponent.DestinationChild.Settings,
+        is MainShellComponent.DestinationChild.Activity,
         is MainShellComponent.DestinationChild.Placeholder,
         -> Unit
     }

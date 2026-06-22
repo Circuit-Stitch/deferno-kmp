@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.shell
 
+import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
@@ -132,6 +133,13 @@ interface AccountSession {
     suspend fun upsertBrainDumpDraft(draft: BrainDumpDraft)
 
     /**
+     * The Activity Destination's reverse-chronological feed (#260): the offline-first ledger of every
+     * applied write, observed live so it re-emits as new changes land. A function seam (not the concrete
+     * store) so the shell stays testable on fakes.
+     */
+    fun observeActivity(): Flow<List<ActivityEntry>>
+
+    /**
      * Attach this Account's retained brain-dump recording for [draft] to the just-created Task [taskId]
      * (#211, ADR-0015 Inbox accept). A no-op when no recording was retained (the setting was off at
      * capture, or this isn't a brain-dump platform). The Inbox accept calls it with the created Task id
@@ -191,6 +199,8 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val calendarRepository: CalendarRepository get() = component.calendarRepository
 
     override fun observeBrainDumpDrafts() = component.brainDumpDraftRepository.observeDrafts()
+
+    override fun observeActivity() = component.activityLedgerStore.recent()
 
     override suspend fun upsertBrainDumpDraft(draft: BrainDumpDraft) {
         component.brainDumpDraftRepository.upsert(draft)

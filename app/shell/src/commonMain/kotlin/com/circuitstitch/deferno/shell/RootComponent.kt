@@ -399,6 +399,8 @@ class DefaultRootComponent(
                         upsertBrainDumpDraft = session::upsertBrainDumpDraft,
                         // The Inbox accept's recording-attach (#211): attach the retained WAV to the new Task.
                         attachBrainDumpRecording = session::attachBrainDumpRecording,
+                        // The Activity Destination's reverse-chron ledger feed (#260).
+                        observeActivity = session::observeActivity,
                     )
                 // A pending Inbox deep-link (the Brain dump notification tapped on a cold start into the
                 // Auth shell, ADR-0027 Stage 4): now that the Main shell exists, apply it, then consume it.
