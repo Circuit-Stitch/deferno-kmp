@@ -64,58 +64,73 @@ struct TaskRow: View {
     }
 }
 
-/// One node of the Tasks **Item tree** (#227, ADR-0034). The leading ▾/▸ chevron *and* a body tap both
-/// toggle a parent's fold; a childless leaf's body is inert. The trailing › opens detail (Task kind only
-/// — the other kinds have no detail surface yet). `depth` drives the indent; a collapsed parent shows a
-/// `descendantDone/descendantTotal` progress badge (Tasks only); a terminal (Done/Dropped/Archived) row
-/// is de-emphasized. Stateless: the handlers take their params from the row, never from observed state.
+/// One node of the Tasks **Item tree** (#227, #231, ADR-0034) — the "See the trees" connected-tree row
+/// (iOS twin of feature/tasks/ui `ItemTreeRow`/`TreeAtoms.kt`). A curvy [TreeRail] hangs each child off
+/// its parent in a calm tint of the row's kind accent and lands its elbow in the kind node; the [TreeNode]
+/// is the kind dot (leaf) or an accent fold-disc with a rotating chevron (parent) — tapping it toggles a
+/// parent's fold (a leaf node is decorative). A collapsed Task parent shows a `done of total` MonoMeta + a
+/// thin progress bar; the trailing › opens detail (Task kind only — the other kinds have no detail surface
+/// yet). A terminal (Done/Dropped/Archived) row is de-emphasized. Stateless: the handlers take their params
+/// from the row, never from observed state.
 struct ItemRowView: View {
     let row: ItemRow
     let onToggleExpand: (String, Bool) -> Void
     let onOpenDetail: (String, ItemKind) -> Void
 
+    @Environment(\.defernoColors) private var colors
+
     private var isTask: Bool { BridgeKt.itemKindIsTask(kind: row.item.kind) }
 
-    /// "done/total" for a collapsed Task parent; nil otherwise (recurring kinds carry no subtree counts).
-    private var progressBadge: String? {
-        guard row.hasChildren, !row.isExpanded,
-              let done = row.item.descendantDone, let total = row.item.descendantTotal
-        else { return nil }
-        return "\(done.intValue)/\(total.intValue)"
+    /// The connecting-rail / node accent — the row's kind colour (also tinted for the rail spine).
+    private var accent: Color { kindColor(row.item.kind, colors) }
+
+    /// `(done, total)` for a collapsed Task parent carrying server-computed subtree counts; nil otherwise
+    /// (an expanded parent, a leaf, or a recurring kind with no subtree counts).
+    private var progress: (done: Int, total: Int)? {
+        guard row.hasChildren, !row.isExpanded, let total = row.item.descendantTotal else { return nil }
+        return (Int(row.item.descendantDone?.intValue ?? 0), Int(total.intValue))
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            if row.depth > 0 {
-                Spacer().frame(width: CGFloat(row.depth) * 16)
+        HStack(spacing: 0) {
+            // Leading rail+node region: the curvy spine (underlay) with the kind node landed at its column.
+            ZStack(alignment: .topLeading) {
+                TreeRail(
+                    spine: row.spine.map { $0.boolValue },
+                    depth: Int(row.depth),
+                    hasChildren: row.hasChildren,
+                    isExpanded: row.isExpanded,
+                    color: accent
+                )
+                TreeNode(
+                    kindColor: accent,
+                    hasChildren: row.hasChildren,
+                    isExpanded: row.isExpanded,
+                    onToggle: { if row.hasChildren { onToggleExpand(row.item.id, row.isExpanded) } }
+                )
+                .frame(maxHeight: .infinity)
+                .offset(x: TreeGeometry.nodeCenterX(depth: Int(row.depth)) - Tree.parentDisc / 2)
             }
-            // Leading chevron — toggles fold; reserved (invisible) on a leaf so titles stay aligned.
-            Button {
-                if row.hasChildren { onToggleExpand(row.item.id, row.isExpanded) }
-            } label: {
-                Text(row.isExpanded ? "▾" : "▸")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16)
-                    .opacity(row.hasChildren ? 1 : 0)
-            }
-            .buttonStyle(.plain)
-            .disabled(!row.hasChildren)
-            .accessibilityLabel(row.isExpanded ? "Collapse" : "Expand")
-            .accessibilityHidden(!row.hasChildren)
+            .frame(width: TreeGeometry.leadingWidth(depth: Int(row.depth)))
 
-            // Title (+ collapsed progress badge). A body tap toggles a parent's fold; a leaf body is inert.
+            // Title (+ collapsed progress meta). A body tap toggles a parent's fold; a leaf body is inert.
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.item.title)
                     .font(.headline)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                if let progressBadge {
-                    Text(progressBadge)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    .strikethrough(row.item.isTerminal)
+                if let progress {
+                    MonoMeta("\(progress.done) of \(progress.total)")
+                        .padding(.top, 2)
+                    if progress.total > 0 {
+                        ProgressBarThin(fraction: Double(progress.done) / Double(progress.total))
+                            .padding(.top, 2)
+                    }
                 }
             }
+            .padding(.leading, 8)
+            .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture { if row.hasChildren { onToggleExpand(row.item.id, row.isExpanded) } }
@@ -125,15 +140,17 @@ struct ItemRowView: View {
                 Button {
                     onOpenDetail(row.item.id, row.item.kind)
                 } label: {
-                    Text("›").font(.title3).foregroundStyle(.secondary)
+                    DefernoIcon.chevronRight.image(size: 20)
+                        .foregroundStyle(colors.inkMuted)
+                        .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Open details")
+                .accessibilityLabel("Open \(row.item.title)")
             }
         }
-        .frame(minHeight: Layout.rowMinHeight)
         .padding(.horizontal, Layout.gutter)
-        .padding(.vertical, 12)
+        .frame(minHeight: Layout.rowMinHeight)
         .opacity(row.item.isTerminal ? 0.5 : 1.0)
     }
 }

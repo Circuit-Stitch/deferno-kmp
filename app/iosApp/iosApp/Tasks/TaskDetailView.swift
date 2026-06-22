@@ -17,6 +17,11 @@ struct TaskDetailView: View {
     @State private var newLabel = ""
     @State private var commentDraft = ""
     @State private var importing = false
+    // Kebab affordances (#262): the "Add subtask" prompt and the destructive Delete confirmation.
+    @State private var showingAddSubtask = false
+    @State private var kebabSubtask = ""
+    @State private var confirmingDelete = false
+    @Environment(\.defernoColors) private var colors
 
     init(component: TaskDetailComponent, showsHeader: Bool = true) {
         self.component = component
@@ -58,10 +63,13 @@ struct TaskDetailView: View {
     private func taskBody(for task: Task, state value: TaskDetailState) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                if let ref = task.ref {
-                    Text(ref)
-                        .font(.footnote.monospaced())
-                        .foregroundStyle(.secondary)
+                // The "Everything in one place" title block (#231/#262): kind chip + headline title + a mono
+                // meta line (ref · owner · time) + an overall subtask-progress bar, with the ⋮ kebab riding
+                // top-right of the block (body-level, so it works for both the Tasks pane and the Plan drill).
+                HStack(alignment: .top, spacing: 8) {
+                    detailTitleBlock(task, state: value)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    overflowMenu
                 }
 
                 WorkingStateEditorView(current: task.workingState) { component.onSetWorkingState(target: $0) }
@@ -96,6 +104,77 @@ struct TaskDetailView: View {
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { addAttachments(urls) }
         }
+        // The kebab's "Add subtask" prompt: a calm inline title entry, mirroring the always-present
+        // add-subtask field below — Add forwards a trimmed, non-empty title and clears.
+        .alert("Add subtask", isPresented: $showingAddSubtask) {
+            TextField("Subtask title", text: $kebabSubtask)
+            Button("Cancel", role: .cancel) { kebabSubtask = "" }
+            Button("Add") {
+                let trimmed = kebabSubtask.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { component.onAddSubtask(title: trimmed) }
+                kebabSubtask = ""
+            }
+        }
+        // The destructive Delete, gated behind a confirmation (the kebab item is destructive).
+        .confirmationDialog(
+            "Delete this task?",
+            isPresented: $confirmingDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) { component.onDelete() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone.")
+        }
+    }
+
+    // MARK: - Title block + overflow kebab (#262)
+
+    /// The kind chip + headline title + mono meta line (ref · owner · time), plus — when the Task parents
+    /// subtasks — an overall-status `<done> of <total>` progress bar right under the title, so the whole's
+    /// completion is legible above the fold (#231). The kind here is always Task; it still wears the marker.
+    @ViewBuilder
+    private func detailTitleBlock(_ task: Task, state value: TaskDetailState) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TreeChip(text: "Task", tone: .accent)
+            Text(task.title)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(colors.onSurface)
+                .fixedSize(horizontal: false, vertical: true)
+            let meta = [
+                task.ref,
+                BridgeKt.taskOwnerLabel(task: task),
+                BridgeKt.taskTimeLabel(task: task),
+            ]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty && $0 != "—" }
+            if !meta.isEmpty {
+                MonoMeta(meta.joined(separator: "  ·  "))
+            }
+            if value.subtaskTotal > 0 {
+                MonoMeta("\(value.subtaskDone) of \(value.subtaskTotal) done")
+                    .accessibilityLabel("\(value.subtaskDone) of \(value.subtaskTotal) subtasks done")
+                ProgressBarThin(fraction: Double(value.subtaskDone) / Double(value.subtaskTotal))
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    /// The detail's ⋮ more-actions kebab: Add subtask (prompts for a title), Set aside (Dropped), and the
+    /// destructive Delete (the caller gates it behind a confirm). Icon-only trigger; self-describing label.
+    private var overflowMenu: some View {
+        Menu {
+            Button("Add subtask") { kebabSubtask = ""; showingAddSubtask = true }
+            // The app's word for WorkingState.Dropped is "Set aside" (the chip editor below), so the kebab
+            // uses the same term rather than web's "Drop" — one term per concept.
+            Button("Set aside") { component.onSetWorkingState(target: WorkingState.dropped) }
+            Button("Delete", role: .destructive) { confirmingDelete = true }
+        } label: {
+            DefernoIcon.moreVert.image
+                .foregroundStyle(colors.onSurfaceVariant)
+                .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
+        }
+        .accessibilityLabel("More actions")
     }
 
     // MARK: - Properties (Due · Time · Labels · Owner)

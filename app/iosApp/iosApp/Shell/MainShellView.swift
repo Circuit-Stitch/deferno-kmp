@@ -20,6 +20,9 @@ struct MainShellView: View {
     @StateObject private var overlay: OverlaySlotObserver
     @StateObject private var accounts: AccountsObserver
     @StateObject private var chrome: StateFlowObserver<ChromeSpec>
+    /// The live count of Ready brain-dump drafts — the Inbox drawer-row badge (shell-level, so it shows
+    /// even before the Inbox Destination is first visited).
+    @StateObject private var inboxBadge: StateFlowObserver<KotlinInt>
     @State private var drawerOpen = false
     /// Non-nil only while a finger is dragging the open content back toward the edge — makes the drawer
     /// track the finger 1:1. The effective open fraction is `dragX != nil ? base + dragX/width : base`.
@@ -31,6 +34,7 @@ struct MainShellView: View {
         _overlay = StateObject(wrappedValue: OverlaySlotObserver(ShellBridgeKt.overlaySlotBridge(component: component)))
         _accounts = StateObject(wrappedValue: AccountsObserver(ShellBridgeKt.accountSwitcherBridge(component: component)))
         _chrome = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.chromeBridge(component: component)))
+        _inboxBadge = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.inboxReadyCountBridge(component: component)))
     }
 
     private var active: MainShellComponentDestinationChild { destinations.active }
@@ -127,11 +131,11 @@ struct MainShellView: View {
             ForEach(0..<Int(ShellBridgeKt.chromeActionCount(spec: spec)), id: \.self) { i in
                 let index = Int32(i)
                 let kind = ShellBridgeKt.chromeActionKind(spec: spec, index: index)
-                if kind != "BrainDump", let glyph = actionGlyph(kind) {
+                if let glyph = actionGlyph(kind) {
                     Button { ShellBridgeKt.chromeInvoke(spec: spec, index: index) } label: {
                         Image(systemName: glyph)
                     }
-                    .accessibilityLabel(kind)
+                    .accessibilityLabel(kind == "BrainDump" ? "Brain dump" : kind)
                 }
             }
         }
@@ -142,12 +146,13 @@ struct MainShellView: View {
         .background(colors.background)
     }
 
-    /// The SF Symbol for a `ChromeActionKind` (mirrors `ShellChrome`'s glyph switch). Brain dump is handled
-    /// separately (skipped on iOS), so it has no glyph here.
+    /// The SF Symbol for a `ChromeActionKind` (mirrors `ShellChrome`'s glyph switch). Brain dump now opens
+    /// the iOS recorder overlay (DefernoRoot wires the native record seam, ADR-0027).
     private func actionGlyph(_ kind: String) -> String? {
         switch kind {
         case "Refresh": return "arrow.clockwise"
         case "New": return "plus"
+        case "BrainDump": return "waveform"
         default: return nil
         }
     }
@@ -165,6 +170,10 @@ struct MainShellView: View {
             ProfileView(component: profile)
         } else if let settings = ShellBridgeKt.destSettings(child: child) {
             SettingsView(component: settings)
+        } else if let inbox = ShellBridgeKt.destInbox(child: child) {
+            InboxView(component: inbox)
+        } else if let activity = ShellBridgeKt.destActivity(child: child) {
+            ActivityView(component: activity)
         } else {
             EmptyStateView(title: "\(activeName) is coming soon", message: "This area is on the way.")
         }
@@ -175,20 +184,45 @@ struct MainShellView: View {
     private var drawer: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
-                accountHeader
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                // Brand wordmark (mirrors Android's ShellDrawer header).
+                HStack(spacing: 8) {
+                    Brandmark(height: 24)
+                    Text("Deferno").font(.title3.weight(.bold)).foregroundStyle(colors.onSurface)
+                }
+                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 4)
+
+                // "Add something" — the two capture affordances (parity with Android's drawer).
+                SectionLabel("Add something").padding(.horizontal, 16).padding(.top, 8)
+                PrimaryActionButton(title: "New task", subtitle: "Fill in the details", icon: .plus) {
+                    setDrawer(false)
+                    ShellBridgeKt.openNewOverlay(component: component)
+                }
+                .padding(.horizontal, 16).padding(.top, 4)
+                TonalActionButton(title: "Brain dump", subtitle: "Speak or type — sorts to Inbox", icon: .waveform) {
+                    setDrawer(false)
+                    ShellBridgeKt.openBrainDumpOverlay(component: component)
+                }
+                .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 8)
+
                 drawerRow(label: "Search", system: "magnifyingglass", selected: false) {
                     setDrawer(false)
                     ShellBridgeKt.openSearchOverlay(component: component)
                 }
                 ForEach(component.destinations) { dest in
                     let name = ShellBridgeKt.destinationName(destination: dest)
-                    drawerRow(label: name, system: icon(name), selected: name == activeName) {
+                    let badge: String? = name == "Inbox"
+                        ? (inboxBadge.value.intValue > 0 ? "\(inboxBadge.value.intValue)" : "empty")
+                        : nil
+                    drawerRow(label: name, system: icon(name), selected: name == activeName, badge: badge) {
                         setDrawer(false)
                         component.selectDestination(destination: dest)
                     }
                 }
+
+                Divider().background(colors.outlineVariant).padding(.horizontal, 16).padding(.vertical, 8)
+                accountHeader
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
             }
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -220,12 +254,19 @@ struct MainShellView: View {
         }
     }
 
-    private func drawerRow(label: String, system: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func drawerRow(label: String, system: String, selected: Bool, badge: String? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 16) {
                 Image(systemName: system).font(.system(size: 20)).frame(width: 24)
                 Text(label).font(.body)
                 Spacer()
+                if let badge {
+                    Text(badge)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(colors.inkMuted)
+                        .padding(.horizontal, 8).padding(.vertical, 2)
+                        .background(colors.surface, in: Capsule())
+                }
             }
             .padding(.horizontal, 16)
             .frame(minHeight: Layout.minTouchTarget)
@@ -234,6 +275,8 @@ struct MainShellView: View {
             .contentShape(Rectangle())
         }
         .padding(.horizontal, 12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(badge != nil ? "\(label), \(badge!)" : label)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -279,9 +322,14 @@ struct MainShellView: View {
         overlay.current.flatMap { ShellBridgeKt.overlayFeedback(child: $0) }
     }
 
+    private var overlayBrainDumpComponent: BrainDumpComponent? {
+        overlay.current.flatMap { ShellBridgeKt.overlayBrainDump(child: $0) }
+    }
+
     private var overlayPresented: Binding<Bool> {
         Binding(
-            get: { overlaySearchComponent != nil || overlayNewComponent != nil || overlayFeedbackComponent != nil },
+            get: { overlaySearchComponent != nil || overlayNewComponent != nil
+                || overlayFeedbackComponent != nil || overlayBrainDumpComponent != nil },
             set: { presented in if !presented { component.dismissOverlay() } }
         )
     }
@@ -295,6 +343,9 @@ struct MainShellView: View {
         } else if let feedback = overlayFeedbackComponent {
             // Settings → Help & Feedback opens the in-app feedback form here (#375).
             FeedbackView(component: feedback)
+        } else if let brainDump = overlayBrainDumpComponent {
+            // The shell top-bar voice action opens the iOS Brain dump recorder (ADR-0027).
+            BrainDumpView(component: brainDump)
         }
     }
 
@@ -305,6 +356,8 @@ struct MainShellView: View {
         case "Plan": return "house.fill"
         case "Calendar": return "calendar"
         case "Tasks": return "list.bullet"
+        case "Inbox": return "tray"
+        case "Activity": return "bell"
         case "Profile": return "person.fill"
         case "Settings": return "gearshape.fill"
         default: return "circle"
