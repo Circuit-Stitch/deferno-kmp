@@ -201,6 +201,9 @@ fun overlaySlotBridge(component: MainShellComponent): OverlaySlotBridge = Overla
 // ---------------------------------------------------------------------------------------------------
 
 fun chromeBridge(component: MainShellComponent): StateFlowBridge<ChromeSpec> = StateFlowBridge(component.chrome)
+
+/** An empty chrome spec (no actions) for demo / preview call sites — the live shell supplies a real one. */
+fun emptyChrome(): ChromeSpec = ChromeSpec(title = "Everything")
 fun chromeTitle(spec: ChromeSpec): String = spec.title
 fun chromeDrilled(spec: ChromeSpec): Boolean = spec.drilled
 fun chromeActionCount(spec: ChromeSpec): Int = spec.actions.size

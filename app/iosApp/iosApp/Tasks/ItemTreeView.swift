@@ -7,22 +7,26 @@ import SwiftUI
 /// each row's toggle/open/refresh to the component, holding no logic of its own (ADR-0007).
 ///
 /// Restyled to the "See the trees" direction (#231) + the modal move mode and undo of ADR-0034
-/// decisions 6/8 (#228/#230), mirroring the Android `ItemTreeContent`:
-///  - a calm header band: the "Everything" title, a `{n} trees` MonoMeta count, a read-only
-///    `SearchBarDisplay`, and a local `SegmentedFilter` (In today / Active / All);
-///  - a "Add a tree" `DashedAddButton` footer;
-///  - a **modal move mode**: a long-press lifts a row (`onEnterMoveMode`), the lifted row is
-///    highlighted and the rest calmed, and a bottom bar offers ↑ ↓ ‹ › (illegal directions greyed)
-///    + Done;
-///  - a top **undo snackbar** offered after a move, reverting through `undoLastMove`.
+/// decisions 6/8 (#228/#230), mirroring the Android `ItemTreeContent`. On iOS the header chrome is now
+/// **native** (#263): the host (`TasksScreen`) supplies the large "Everything" nav title, a collapse-on-
+/// scroll `.searchable` field, and the shell `.toolbar`, so this View renders only the in-list body:
+///  - a slim `{n} trees` count + a local `SegmentedFilter` (In today / Active / All) as the first row;
+///  - the forest rows + an "Add a tree" `DashedAddButton` footer;
+///  - a **modal move mode** (long-press lift, ↑ ↓ ‹ › + Done) and a top **undo snackbar** after a move.
 ///
-/// `onSearch` / `onAdd` are shell concerns the component doesn't own, so they're threaded in with
-/// no-op defaults (keeping the `init(component:)` call sites stable). The integrator wires the real
-/// Search overlay / new-tree intents — see `summary`.
+/// `query` is the native search text — an inline filter over the loaded forest; `onAdd` opens the New
+/// create overlay. Both default so existing `init(component:)` call sites stay stable.
 struct ItemTreeView: View {
     let component: ItemTreeComponent
-    let onSearch: () -> Void
     let onAdd: () -> Void
+    /// The native `.searchable` text, threaded from the host's nav bar. Empty → no filtering; otherwise a
+    /// flat, case-insensitive title match over the loaded forest (#263). Cross-everything search is the
+    /// drawer's "Search" row, not this.
+    let query: String
+    /// Render an in-list "Everything" headline above the count. Only the **regular/iPad** two-pane column
+    /// sets this: there the nav title is the whole-screen "Tasks", so the 340pt column would otherwise be
+    /// anonymous. Compact leaves it false — its large nav title already says "Everything" (#263).
+    let showsColumnTitle: Bool
     @StateObject private var state: StateFlowObserver<ItemTreeState>
     @Environment(\.defernoColors) private var colors
 
@@ -38,10 +42,16 @@ struct ItemTreeView: View {
 
     private static let filters = ["In today", "Active", "All"]
 
-    init(component: ItemTreeComponent, onSearch: @escaping () -> Void = {}, onAdd: @escaping () -> Void = {}) {
+    init(
+        component: ItemTreeComponent,
+        onAdd: @escaping () -> Void = {},
+        query: String = "",
+        showsColumnTitle: Bool = false
+    ) {
         self.component = component
-        self.onSearch = onSearch
         self.onAdd = onAdd
+        self.query = query
+        self.showsColumnTitle = showsColumnTitle
         _state = StateObject(wrappedValue: StateFlowObserver(BridgeKt.itemTreeStateBridge(component: component)))
     }
 
@@ -54,28 +64,35 @@ struct ItemTreeView: View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
                 List {
-                    // The header band scrolls away with the list to free room for the forest; hidden in
-                    // move mode (the lifted-row focus owns the surface).
+                    // A slim count + the local filter as the first row; scrolls away with the list, hidden in
+                    // move mode (the lifted-row focus owns the surface). The title + search are the native bar.
                     if !inMoveMode {
-                        header(treeCount: treeCount, isRefreshing: value.isRefreshing)
+                        metaFilterBar(treeCount: treeCount)
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                     }
 
                     if value.isRefreshing {
                         LoadingStrip(label: "Refreshing…")
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                     }
 
                     if visibleRows.isEmpty && !value.isRefreshing {
-                        emptyState(allEmpty: value.rows.isEmpty)
+                        emptyState(
+                            allEmpty: value.rows.isEmpty,
+                            searching: !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        )
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                     } else {
                         ForEach(visibleRows, id: \.item.id) { row in
                             self.row(row, moveMode: value.moveMode)
                                 .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
                         }
                     }
 
@@ -86,9 +103,13 @@ struct ItemTreeView: View {
                             .padding(.vertical, 12)
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                     }
                 }
                 .listStyle(.plain)
+                // The List otherwise paints its own systemBackground (white) over the screen's beige
+                // colors.background; hide it (+ clear row cells below) so the warm surface shows through.
+                .scrollContentBackground(.hidden)
                 .refreshable { component.onRefresh() }
 
                 // The contextual move-mode control (ADR-0034 decision 6, #228).
@@ -123,30 +144,20 @@ struct ItemTreeView: View {
         .background(colors.background)
     }
 
-    // MARK: - Header band
+    // MARK: - In-list header (count + filter)
 
+    /// The `{n} trees` count + the local In today / Active / All filter — the first list row. The
+    /// "Everything" title, search field, and create actions are the native nav bar (`TasksScreen`).
     @ViewBuilder
-    private func header(treeCount: Int, isRefreshing: Bool) -> some View {
+    private func metaFilterBar(treeCount: Int) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Everything")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(colors.onSurface)
-                        .accessibilityAddTraits(.isHeader)
-                    MonoMeta(treeCount == 1 ? "1 tree" : "\(treeCount) trees")
-                }
-                Spacer(minLength: 8)
-                Button { component.onRefresh() } label: {
-                    DefernoIcon.refresh.image(size: 18).foregroundStyle(colors.inkMuted)
-                        .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(isRefreshing)
-                .accessibilityLabel("Refresh")
+            // iPad column identity — compact gets this from the large nav title instead.
+            if showsColumnTitle {
+                Text("Everything")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(colors.onSurface)
             }
-            SearchBarDisplay(placeholder: "Search all your trees…", onTap: onSearch)
+            MonoMeta(treeCount == 1 ? "1 tree" : "\(treeCount) trees")
             SegmentedFilter(
                 options: Self.filters,
                 selectedIndex: filterIndex,
@@ -160,19 +171,49 @@ struct ItemTreeView: View {
     }
 
     private func filteredRows(_ rows: [ItemRow]) -> [ItemRow] {
-        switch filterIndex {
-        case 0, 1: return rows.filter { !$0.item.isTerminal } // In today / Active → non-terminal
-        default: return rows // All → everything
+        // In today / Active → non-terminal only; All → everything. Applied to the *match*, never to a
+        // kept ancestor (an ancestor shows to root the match even if it's terminal).
+        func stateMatch(_ row: ItemRow) -> Bool {
+            switch filterIndex {
+            case 0, 1: return !row.item.isTerminal
+            default: return true
+            }
         }
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return rows.filter(stateMatch) }
+
+        // Title search keeps each match **plus its ancestor chain**, so the filigree spine + indentation
+        // stay rooted (a bare leaf match would otherwise draw a rail hanging from a filtered-out parent).
+        // The ancestor at each column is the most recent earlier row of shallower depth — reconstructed
+        // from the pre-order `depth` sequence, no parentId on the bridged item needed.
+        // ponytail: spine bools are still the full-tree ones, so a kept ancestor whose siblings were
+        // filtered out can imply a sibling that isn't shown — same minor imperfection the segmented
+        // filter already has, and far better than orphaned rails. Upgrade only if it reads wrong.
+        var keep = Set<Int>()   // indices into `rows` to render
+        var chain: [Int] = []   // chain[d] = index of the current ancestor at depth d; last entry is self
+        for (i, row) in rows.enumerated() {
+            let d = Int(row.depth)
+            if chain.count > d { chain.removeLast(chain.count - d) }
+            chain.append(i)
+            if stateMatch(row) && row.item.title.localizedCaseInsensitiveContains(q) {
+                keep.formUnion(chain) // the match (chain.last) + every ancestor
+            }
+        }
+        return rows.enumerated().filter { keep.contains($0.offset) }.map(\.element)
     }
 
+    /// `allEmpty` → the forest itself is empty. Otherwise rows exist but the active narrowing hid them:
+    /// `searching` distinguishes a no-match query (clear the search) from the segmented filter hiding
+    /// everything (switch to All) — the prior copy misdirected by always saying "clear the search".
     @ViewBuilder
-    private func emptyState(allEmpty: Bool) -> some View {
+    private func emptyState(allEmpty: Bool, searching: Bool) -> some View {
         EmptyStateView(
-            title: allEmpty ? "No trees yet" : "Nothing to show here",
+            title: allEmpty ? "No trees yet" : (searching ? "No matches" : "Nothing to show here"),
             message: allEmpty
                 ? "When you add a tree, it shows up here. One small step at a time."
-                : "Everything here is done. Switch to “All” to see it again."
+                : (searching
+                    ? "No tree matches your search. Clear it to see them all."
+                    : "Everything here is done. Switch to “All” to see it again.")
         )
     }
 

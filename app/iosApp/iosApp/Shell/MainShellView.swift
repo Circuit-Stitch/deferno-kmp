@@ -95,66 +95,42 @@ struct MainShellView: View {
         return min(max(base + dragX / drawerWidth, 0), 1)
     }
 
-    // MARK: Content card (top bar + active Destination), drawn on top of the drawer
+    // MARK: Content card (native nav bar + active Destination), drawn on top of the drawer
 
+    /// The active Destination under a **native** nav bar (#263). Every non-Tasks Destination is wrapped in
+    /// a shell-owned `NavigationStack` whose `.toolbar` renders the shared `ChromeSpec` (the SwiftUI twin of
+    /// Android's `ShellTopBar`: a leading ☰ menu at a Destination root / ← back when drilled into a tier-3
+    /// detail, the shell-computed title, and the trailing create actions). Tasks owns its **own** stack +
+    /// bar so its `.searchable` collapse-on-scroll field can live on the tree (see `TasksScreen`); the shell
+    /// just threads the chrome spec + menu open down. All real navigation is Decompose — the shell's stack
+    /// never pushes (its path stays empty); it is a chrome surface driven by `chrome`.
     private var content: some View {
-        VStack(spacing: 0) {
-            shellTopBar
-            destinationBody
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .background(colors.background)
-    }
-
-    /// The one adaptive top bar (Cand 1), the SwiftUI twin of Android's `ShellTopBar`: a leading ☰ menu at
-    /// a Destination root (opens the drawer) or ← back when drilled into a tier-3 detail (pops via the
-    /// shell's `onBack`), the shell-computed title, and the trailing create actions by kind. Brain dump is
-    /// skipped on iOS — there's no iOS inference engine / overlay yet (DefernoRoot.kt, ADR-0027/#150).
-    private var shellTopBar: some View {
-        let spec = chrome.value
-        let drilled = ShellBridgeKt.chromeDrilled(spec: spec)
-        return HStack(spacing: 4) {
-            if drilled {
-                Button { _ = component.onBack() } label: { Image(systemName: "chevron.backward") }
-                    .accessibilityLabel("Back")
+        let child = active
+        return Group {
+            if let tasks = ShellBridgeKt.destTasks(child: child) {
+                TasksScreen(
+                    root: ShellBridgeKt.tasksRoot(component: tasks),
+                    onAdd: { ShellBridgeKt.openNewOverlay(component: component) },
+                    onMenu: { setDrawer(true) },
+                    chromeSpec: chrome.value
+                )
             } else {
-                Button { setDrawer(true) } label: { Image(systemName: "line.3.horizontal") }
-                    .accessibilityLabel("Menu")
-            }
-            Text(ShellBridgeKt.chromeTitle(spec: spec))
-                .font(.title3.weight(.semibold))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 4)
-                .accessibilityAddTraits(.isHeader)
-            ForEach(0..<Int(ShellBridgeKt.chromeActionCount(spec: spec)), id: \.self) { i in
-                let index = Int32(i)
-                let kind = ShellBridgeKt.chromeActionKind(spec: spec, index: index)
-                if let glyph = actionGlyph(kind) {
-                    Button { ShellBridgeKt.chromeInvoke(spec: spec, index: index) } label: {
-                        Image(systemName: glyph)
-                    }
-                    .accessibilityLabel(kind == "BrainDump" ? "Brain dump" : kind)
+                NavigationStack {
+                    destinationBody
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .navigationTitle(ShellBridgeKt.chromeTitle(spec: chrome.value))
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ChromeToolbar(
+                                spec: chrome.value,
+                                onMenu: { setDrawer(true) },
+                                onBack: { _ = component.onBack() }
+                            )
+                        }
                 }
             }
         }
-        .font(.title3)
-        .foregroundStyle(colors.onSurface)
-        .padding(.horizontal, 8)
-        .frame(minHeight: 52)
         .background(colors.background)
-    }
-
-    /// The SF Symbol for a `ChromeActionKind` (mirrors `ShellChrome`'s glyph switch). Brain dump now opens
-    /// the iOS recorder overlay (DefernoRoot wires the native record seam, ADR-0027).
-    private func actionGlyph(_ kind: String) -> String? {
-        switch kind {
-        case "Refresh": return "arrow.clockwise"
-        case "New": return "plus"
-        case "BrainDump": return "waveform"
-        default: return nil
-        }
     }
 
     @ViewBuilder
@@ -164,12 +140,6 @@ struct MainShellView: View {
             PlanHostView(plan: plan)
         } else if let calendar = ShellBridgeKt.destCalendar(child: child) {
             CalendarView(component: calendar)
-        } else if let tasks = ShellBridgeKt.destTasks(child: child) {
-            TasksScreen(
-                root: ShellBridgeKt.tasksRoot(component: tasks),
-                onSearch: { ShellBridgeKt.openSearchOverlay(component: component) },
-                onAdd: { ShellBridgeKt.openNewOverlay(component: component) }
-            )
         } else if let profile = ShellBridgeKt.destProfile(child: child) {
             ProfileView(component: profile)
         } else if let settings = ShellBridgeKt.destSettings(child: child) {
@@ -365,6 +335,52 @@ struct MainShellView: View {
         case "Profile": return "person.fill"
         case "Settings": return "gearshape.fill"
         default: return "circle"
+        }
+    }
+}
+
+/// The native nav-bar twin of the old hand-drawn shell bar (#263): renders the Compose-free `ChromeSpec`
+/// as SwiftUI `.toolbar` items — a leading ☰ menu (Destination root) or ← back (drilled tier-3), and the
+/// trailing create actions by kind. Shared so the chrome is identical app-wide: the shell's NavigationStack
+/// uses it for every non-Tasks Destination, and `TasksScreen`'s own stack uses it for the tree. Actions
+/// carry their own handler (`chromeInvoke`); only the shell-level menu/back are threaded in as closures.
+struct ChromeToolbar: ToolbarContent {
+    let spec: ChromeSpec
+    var onMenu: () -> Void = {}
+    var onBack: () -> Void = {}
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            if ShellBridgeKt.chromeDrilled(spec: spec) {
+                Button { onBack() } label: { Image(systemName: "chevron.backward") }
+                    .accessibilityLabel("Back")
+            } else {
+                Button { onMenu() } label: { Image(systemName: "line.3.horizontal") }
+                    .accessibilityLabel("Menu")
+            }
+        }
+        ToolbarItemGroup(placement: .navigationBarTrailing) {
+            ForEach(0..<Int(ShellBridgeKt.chromeActionCount(spec: spec)), id: \.self) { i in
+                let index = Int32(i)
+                let kind = ShellBridgeKt.chromeActionKind(spec: spec, index: index)
+                if let glyph = Self.actionGlyph(kind) {
+                    Button { ShellBridgeKt.chromeInvoke(spec: spec, index: index) } label: {
+                        Image(systemName: glyph)
+                    }
+                    .accessibilityLabel(kind == "BrainDump" ? "Brain dump" : kind)
+                }
+            }
+        }
+    }
+
+    /// The SF Symbol for a `ChromeActionKind` (mirrors `ShellChrome`'s glyph switch). Brain dump opens the
+    /// iOS recorder overlay (DefernoRoot wires the native record seam, ADR-0027).
+    private static func actionGlyph(_ kind: String) -> String? {
+        switch kind {
+        case "Refresh": return "arrow.clockwise"
+        case "New": return "plus"
+        case "BrainDump": return "waveform"
+        default: return nil
         }
     }
 }
