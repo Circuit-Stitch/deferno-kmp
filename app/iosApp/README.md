@@ -189,6 +189,33 @@ xcodebuild test -workspace iosApp.xcworkspace -scheme iosApp -configuration Debu
   -destination 'platform=iOS Simulator,name=iPhone 15'
 ```
 
+## "See the trees" parity (iOS)
+
+The SwiftUI Views track the Android "See the trees" restyle + features. The iOS design system
+gained the shared atoms (`DesignSystem/Atoms.swift`, `DefernoIcons.swift`, `Tasks/TreeFiligree.swift`
+— the connected-tree rail + fold node), and the shell now renders **seven** Destinations: the prior
+five plus **Inbox** (`Inbox/InboxView.swift`, the brain-dump triage queue — `:feature:braindumps` is
+now exported) and **Activity** (`Activity/ActivityView.swift`, the offline-first change ledger). The
+Tasks tree has connected filigree, modal **move mode** + **undo**, and the task-detail **⋮ kebab**
+(Add subtask / Set aside / Delete); the Plan home has the hero header, "start here" suggestion banner,
+`CheckDot` rows, and the **What's next** / **Focus** surfaces (derived client-side from `PlanState`);
+New gained the deadline time-of-day field; the drawer gained the "Add something" capture pair + the
+Inbox Ready badge; and the shell top-bar **Brain dump** action opens `BrainDump/BrainDumpView.swift`, a
+native `AVAudioEngine` recorder with a live audio spectrum + m:ss timer over the shared
+`BrainDumpComponent`.
+
+New Swift files are registered into the hand-authored `iosApp.xcodeproj` via `scripts/pbxadd.py`
+(`Group=File.swift`), which follows the project's synthetic `DE000x…` id scheme.
+
+**Documented follow-ups** (need deeper-than-View work or a capability iOS doesn't have yet):
+- A native iOS `SpeechToText` (`SFSpeechRecognizer`) in `core/speech` to light up New-form **dictation**
+  and feed the brain-dump transcription. Until it ships the New mic stays hidden (unchanged from before).
+- The brain-dump **transcription → Inbox drafts** pipeline (the `recordBrainDump` seam on `DefernoRoot`,
+  still the no-op default): a take records + enqueues, but multi-draft LLM extraction needs an on-device
+  inference engine, which iOS does not have yet (`InferenceEngineId.Off`).
+- **Shake-to-undo** (CoreMotion) as a redundant secondary undo trigger (the snackbar is the primary path).
+- Settings: the **Storage provider** category + the keep-recordings / shake-to-undo toggles.
+
 ## SKIE (deferred) and the hand-written bridge
 
 ADR-0003 calls for **SKIE** to bridge `Flow`/suspend/sealed types into idiomatic Swift.
