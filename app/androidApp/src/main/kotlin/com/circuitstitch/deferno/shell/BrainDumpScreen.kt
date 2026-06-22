@@ -2,10 +2,12 @@ package com.circuitstitch.deferno.shell
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
@@ -76,7 +78,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.circuitstitch.deferno.DefernoApplication
 import com.circuitstitch.deferno.R
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
-import com.circuitstitch.deferno.core.designsystem.component.Eyebrow
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
@@ -148,6 +149,13 @@ fun BrainDumpScreen(component: BrainDumpComponent, modifier: Modifier = Modifier
         ) == 0f
     }
 
+    // "Visual audio feedback" toggle (tap the spectrum to flip it). A purely Android-UI choice about an
+    // Android-only visual (the spectrum is off the shared component, ADR-0018), so it stays at the edge:
+    // SharedPreferences directly, no DI/shared-data abstraction. ponytail: reuses the app's device-local
+    // app-settings bag for consistency with the other App settings.
+    val prefs = remember(context) { context.getSharedPreferences(APP_SETTINGS_PREFS, Context.MODE_PRIVATE) }
+    var feedbackEnabled by remember { mutableStateOf(prefs.getBoolean(VISUAL_FEEDBACK_KEY, true)) }
+
     BrainDumpContent(
         state = state,
         levels = levels,
@@ -162,9 +170,25 @@ fun BrainDumpScreen(component: BrainDumpComponent, modifier: Modifier = Modifier
             )
         },
         reducedMotion = reducedMotion,
+        feedbackEnabled = feedbackEnabled,
+        onToggleFeedback = {
+            val next = !feedbackEnabled
+            feedbackEnabled = next
+            prefs.edit().putBoolean(VISUAL_FEEDBACK_KEY, next).apply()
+            Toast.makeText(
+                context,
+                context.getString(if (next) R.string.visual_feedback_on else R.string.visual_feedback_off),
+                Toast.LENGTH_SHORT,
+            ).show()
+        },
         modifier = modifier,
     )
 }
+
+// The app's device-local app-settings SharedPreferences bag (mirrors core/data's STORAGE_PREFS_NAME) and
+// the namespaced key for the Brain dump visual-feedback toggle. Defaults to on.
+private const val APP_SETTINGS_PREFS = "deferno_storage"
+private const val VISUAL_FEEDBACK_KEY = "braindump.visual-feedback"
 
 /**
  * The stateless Brain dump body — every recorder visual state driven by [state], no platform affordances.
@@ -183,6 +207,10 @@ internal fun BrainDumpContent(
     // The live mic spectrum (per-band 0..1 levels). Empty by default so static renders (tests, previews)
     // need not supply it — it is only collected when the recorder is active and motion is allowed.
     levels: StateFlow<FloatArray> = MutableStateFlow(FloatArray(0)),
+    // Whether the live spectrum reacts to mic audio (tap the spectrum to toggle; persisted by the screen).
+    // Defaults to on; when off the strip stays at its centred baseline but remains tappable to re-enable.
+    feedbackEnabled: Boolean = true,
+    onToggleFeedback: () -> Unit = {},
 ) {
     // Speak ↔ Type is a presentation-only choice (// ponytail: local state — BrainDumpComponent exposes
     // only the recorder seam, so there is no typed-extract callback to bind it to). Speak drives the real
@@ -238,6 +266,8 @@ internal fun BrainDumpContent(
                     onOpenSettings = onOpenSettings,
                     reducedMotion = reducedMotion,
                     levels = levels,
+                    feedbackEnabled = feedbackEnabled,
+                    onToggleFeedback = onToggleFeedback,
                 )
             }
         }
@@ -247,8 +277,9 @@ internal fun BrainDumpContent(
 
 /**
  * The SPEAK pane: the mic orb + the recorder lifecycle. The orb is a tap target for [onMic]; while
- * recording it shows a calm "LISTENING…" [Eyebrow] and (unless [reducedMotion]) a gentle pulse halo —
- * the static fallback is the steady orb. Recorder strings are preserved verbatim (pinned by tests).
+ * recording it shows a calm "Recording…" status + an m:ss elapsed counter ([RecordingTimer]), and (unless
+ * [reducedMotion]) a gentle pulse halo — the static fallback is the steady orb. The "Recording…" string is
+ * preserved (pinned by tests).
  */
 @Composable
 private fun SpeakPane(
@@ -258,6 +289,8 @@ private fun SpeakPane(
     onOpenSettings: () -> Unit,
     reducedMotion: Boolean,
     levels: StateFlow<FloatArray>,
+    feedbackEnabled: Boolean,
+    onToggleFeedback: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         when (state.phase) {
@@ -272,14 +305,28 @@ private fun SpeakPane(
                 MicOrb(active = true, reducedMotion = reducedMotion, contentDescription = "Stop", onClick = onMic)
                 Spacer(Modifier.height(20.dp))
                 // The live "listening" spectrum — real mic-audio energy across ~100–500 Hz (see
-                // [SpectrumBars]). Gated on reduced-motion like the orb pulse; carries no semantics.
+                // [SpectrumBars]). Gated on reduced-motion like the orb pulse. Tapping it toggles whether it
+                // reacts to audio (the strip stays as a tap target even when off, to re-enable).
                 if (!reducedMotion) {
-                    SpectrumBars(levels = levels, color = MaterialTheme.colorScheme.primary)
+                    SpectrumBars(
+                        levels = levels,
+                        enabled = feedbackEnabled,
+                        onToggle = onToggleFeedback,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                     Spacer(Modifier.height(16.dp))
                 }
-                Eyebrow("LISTENING…", modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                // One status line now (was "LISTENING…" + "Recording…"); the polite live region stays here
+                // so a screen reader still announces when recording begins.
+                Text(
+                    "Recording…",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
                 Spacer(Modifier.height(8.dp))
-                Text("Recording…", style = MaterialTheme.typography.titleMedium)
+                // Elapsed-recording counter (m:ss) in the project monospace. Independent of the spectrum, so
+                // it keeps ticking even when visual feedback is toggled off.
+                RecordingTimer()
                 Spacer(Modifier.height(16.dp))
                 TranscriptCard(
                     "Listening for what's on your mind. Tap to stop when you're done — I'll draft from it.",
@@ -303,6 +350,32 @@ private fun SpeakPane(
             Phase.PermissionPermanentlyDenied -> PermissionBody(permanent = true, onMic = onMic, onOpenSettings = onOpenSettings)
         }
     }
+}
+
+/**
+ * The elapsed-recording counter (m:ss), shown beneath "Recording…" in the project monospace ([MonoMeta]).
+ * Starts at 0:00 when the Recording phase is entered (a fresh composition per take) and ticks up a second
+ * at a time for as long as it's on screen. Driven by the animation frame clock — the same seam as
+ * [SpectrumBars], and unlike a `delay()` loop it's recognised by the Compose test clock as an infinite
+ * animation, so it never blocks `waitForIdle`. It's information, not motion, so it runs regardless of
+ * reduced-motion and of the visual-feedback toggle.
+ */
+@Composable
+private fun RecordingTimer(modifier: Modifier = Modifier) {
+    var elapsedSeconds by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        var startFrame = 0L
+        while (true) {
+            withInfiniteAnimationFrameMillis { frameMillis ->
+                if (startFrame == 0L) startFrame = frameMillis
+                elapsedSeconds = ((frameMillis - startFrame) / 1000L).toInt()
+            }
+        }
+    }
+    MonoMeta(
+        text = "${elapsedSeconds / 60}:${(elapsedSeconds % 60).toString().padStart(2, '0')}",
+        modifier = modifier,
+    )
 }
 
 /**
@@ -563,7 +636,13 @@ private fun ToggleHalf(
  * animation feel, not a dimension).
  */
 @Composable
-private fun SpectrumBars(levels: StateFlow<FloatArray>, color: Color, modifier: Modifier = Modifier) {
+private fun SpectrumBars(
+    levels: StateFlow<FloatArray>,
+    enabled: Boolean,
+    onToggle: () -> Unit,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
     val bands = integerResource(R.integer.spectrum_bands)
     val barHeight = dimensionResource(R.dimen.spectrum_bar_height)
     val barGap = dimensionResource(R.dimen.spectrum_bar_gap)
@@ -579,19 +658,21 @@ private fun SpectrumBars(levels: StateFlow<FloatArray>, color: Color, modifier: 
         val seed = levels.value
         mutableStateListOf<Float>().apply { repeat(bands) { add(seed.getOrElse(it) { 0f }) } }
     }
-    LaunchedEffect(levels) {
+    LaunchedEffect(levels, enabled) {
         var lastFrame = 0L
         while (true) {
             withInfiniteAnimationFrameMillis { frameMillis ->
                 // Frame-rate-independent exponential smoothing: derive the per-frame lerp from the actual
                 // frame Δt + a fixed time constant, so the glide feels identical at 60/90/120 Hz. First
-                // frame (Δt 0) holds still.
+                // frame (Δt 0) holds still. When feedback is off the target is zero, so the bars glide down
+                // to the centred baseline and rest there (still a tap target to re-enable).
                 val dt = if (lastFrame == 0L) 0L else frameMillis - lastFrame
                 lastFrame = frameMillis
                 val alpha = (1.0 - exp(-dt / SPECTRUM_TAU_MS)).toFloat()
                 val target = levels.value
                 for (i in displayed.indices) {
-                    displayed[i] += (target.getOrElse(i) { 0f } - displayed[i]) * alpha
+                    val t = if (enabled) target.getOrElse(i) { 0f } else 0f
+                    displayed[i] += (t - displayed[i]) * alpha
                 }
             }
         }
@@ -600,6 +681,10 @@ private fun SpectrumBars(levels: StateFlow<FloatArray>, color: Color, modifier: 
         modifier
             .fillMaxWidth()
             .height(barHeight)
+            .clickable(
+                onClickLabel = if (enabled) "Turn off visual audio feedback" else "Turn on visual audio feedback",
+                onClick = onToggle,
+            )
             .drawBehind {
                 val n = displayed.size
                 if (n == 0) return@drawBehind
@@ -665,6 +750,8 @@ private fun SpectrumBarsPreview(
         Surface(color = MaterialTheme.colorScheme.surface) {
             SpectrumBars(
                 levels = MutableStateFlow(levels),
+                enabled = true,
+                onToggle = {},
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(24.dp),
             )

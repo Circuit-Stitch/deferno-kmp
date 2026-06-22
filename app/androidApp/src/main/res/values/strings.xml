@@ -3,4 +3,8 @@
     <!-- Honest offline-first confirmation for an "add a task" App Action (ADR-0036, #249): the create is
          queued + will sync, never "saved on the server". %1$s is the verbatim task title. -->
     <string name="task_queued">Added “%1$s” — it’ll sync</string>
+    <!-- Toasts when the person taps the Brain dump "listening" spectrum to toggle the live visual
+         (SpectrumBars in BrainDumpScreen.kt). The choice persists device-locally. -->
+    <string name="visual_feedback_on">Visual audio feedback turned on</string>
+    <string name="visual_feedback_off">Visual audio feedback turned off</string>
 </resources>
