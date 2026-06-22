@@ -44,6 +44,8 @@ kotlin {
             export(project(":feature:profile"))
             export(project(":feature:settings"))
             export(project(":feature:signin"))
+            // The Inbox Destination renders feature:braindumps' InboxComponent/InboxState (#260 iOS parity).
+            export(project(":feature:braindumps"))
             export(project(":core:model"))
             export(project(":core:speech"))
             export(libs.decompose)
@@ -65,6 +67,7 @@ kotlin {
             api(project(":feature:profile"))
             api(project(":feature:settings"))
             api(project(":feature:signin"))
+            api(project(":feature:braindumps"))
             api(project(":core:model"))
             api(project(":core:speech"))
             api(libs.decompose)

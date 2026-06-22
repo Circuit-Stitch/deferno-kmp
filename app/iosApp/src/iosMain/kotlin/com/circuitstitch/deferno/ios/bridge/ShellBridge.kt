@@ -54,10 +54,25 @@ import kotlinx.coroutines.launch
 import platform.Foundation.NSData
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
+import com.circuitstitch.deferno.shell.ActivityComponent
+import com.circuitstitch.deferno.shell.ActivityFeedRow
+import com.circuitstitch.deferno.shell.ActivityFeedState
+import com.circuitstitch.deferno.shell.BrainDumpComponent
+import com.circuitstitch.deferno.shell.BrainDumpState
+import com.circuitstitch.deferno.shell.DictationField
+import com.circuitstitch.deferno.shell.DictationStatus
+import com.circuitstitch.deferno.shell.Phase
+import com.circuitstitch.deferno.core.model.BrainDumpDraft
+import com.circuitstitch.deferno.feature.braindumps.InboxComponent
+import com.circuitstitch.deferno.feature.braindumps.InboxState
+import com.circuitstitch.deferno.feature.tasks.ShakeOutcome
 
 /**
  * The **shell half of the SKIE-free bridge** (#35) — the navigation frame + the new Destinations the
@@ -186,6 +201,9 @@ fun overlaySlotBridge(component: MainShellComponent): OverlaySlotBridge = Overla
 // ---------------------------------------------------------------------------------------------------
 
 fun chromeBridge(component: MainShellComponent): StateFlowBridge<ChromeSpec> = StateFlowBridge(component.chrome)
+
+/** An empty chrome spec (no actions) for demo / preview call sites — the live shell supplies a real one. */
+fun emptyChrome(): ChromeSpec = ChromeSpec(title = "Everything")
 fun chromeTitle(spec: ChromeSpec): String = spec.title
 fun chromeDrilled(spec: ChromeSpec): Boolean = spec.drilled
 fun chromeActionCount(spec: ChromeSpec): Int = spec.actions.size
@@ -472,3 +490,98 @@ fun openSearchOverlay(component: MainShellComponent) = component.openOverlay(Ove
 
 /** Open the New create overlay, undated (the shell FAB on a non-Calendar Destination, #71). */
 fun openNewOverlay(component: MainShellComponent) = component.openOverlay(OverlayRoute.New(null))
+
+/** Open the Brain dump record overlay (the shell top-bar voice action, ADR-0027). */
+fun openBrainDumpOverlay(component: MainShellComponent) = component.openOverlay(OverlayRoute.BrainDump)
+
+// ---------------------------------------------------------------------------------------------------
+// Inbox + Activity Destinations (ADR-0015 amendment / #260) — the two Secondary Destinations the iOS
+// drawer now reaches. Inbox lives in feature:braindumps (newly exported); Activity in app:shell.
+// ---------------------------------------------------------------------------------------------------
+
+fun destInbox(child: MainShellComponent.DestinationChild) =
+    (child as? MainShellComponent.DestinationChild.Inbox)?.component
+
+fun destActivity(child: MainShellComponent.DestinationChild) =
+    (child as? MainShellComponent.DestinationChild.Activity)?.component
+
+fun inboxStateBridge(component: InboxComponent): StateFlowBridge<InboxState> = StateFlowBridge(component.state)
+
+/** Stable identity of a draft for SwiftUI list diffing (BrainDumpDraftId value class is header-erased). */
+fun inboxDraftKey(draft: BrainDumpDraft): String = draft.id.value
+
+// Accept / dismiss / undo / clear-note take the draft (Swift can't name its BrainDumpDraftId).
+fun acceptInboxDraft(component: InboxComponent, draft: BrainDumpDraft) = component.onAccept(draft.id)
+fun dismissInboxDraft(component: InboxComponent, draft: BrainDumpDraft) = component.onDismiss(draft.id)
+fun clearInboxNote(component: InboxComponent, draft: BrainDumpDraft) = component.onClearNote(draft.id)
+
+/** A draft's deadline subtitle (LocalDate + optional LocalTime), or empty when undated. */
+fun inboxDraftDeadlineLabel(draft: BrainDumpDraft): String {
+    val date = draft.completeBy?.toString() ?: return ""
+    val time = draft.deadlineTimeOfDay?.let { " ${it}" } ?: ""
+    return date + time
+}
+
+fun activityStateBridge(component: ActivityComponent): StateFlowBridge<ActivityFeedState> =
+    StateFlowBridge(component.state)
+
+/** A render-ready "when" label for an Activity row (Instant → local "yyyy-MM-dd HH:mm"). */
+fun activityWhenLabel(row: ActivityFeedRow): String {
+    val dt = row.recordedAt.toLocalDateTime(TimeZone.currentSystemDefault())
+    val hh = dt.hour.toString().padStart(2, '0')
+    val mm = dt.minute.toString().padStart(2, '0')
+    return "${dt.date} $hh:$mm"
+}
+
+/** The Inbox nav badge — the live count of Ready drafts (shown even before the Inbox is first visited). */
+fun inboxReadyCountBridge(component: MainShellComponent): StateFlowBridge<Int> =
+    StateFlowBridge(component.inboxReadyCount)
+
+// ---------------------------------------------------------------------------------------------------
+// Brain dump overlay (ADR-0027) — the recorder surface; Phase is sealed, so Swift reads its name.
+// ---------------------------------------------------------------------------------------------------
+
+fun overlayBrainDump(child: MainShellComponent.OverlayChild) =
+    (child as? MainShellComponent.OverlayChild.BrainDump)?.component
+
+fun brainDumpStateBridge(component: BrainDumpComponent): StateFlowBridge<BrainDumpState> =
+    StateFlowBridge(component.state)
+
+/** The active recorder phase as a stable String the View maps to its UI. */
+fun brainDumpPhaseName(state: BrainDumpState): String = when (state.phase) {
+    Phase.Idle -> "Idle"
+    Phase.Recording -> "Recording"
+    Phase.Enqueued -> "Enqueued"
+    Phase.Failed -> "Failed"
+    Phase.PermissionDenied -> "PermissionDenied"
+    Phase.PermissionPermanentlyDenied -> "PermissionPermanentlyDenied"
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Item-tree Move + Undo (#228/#230) — MoveMode/MoveUndo are plain data classes Swift reads directly;
+// only ShakeOutcome is sealed, so Swift reads the confirm operation through this discriminator.
+// ---------------------------------------------------------------------------------------------------
+
+/** The operation a device-shake offers to undo, or null when the shake had nothing to undo. */
+fun shakeConfirmOperation(outcome: ShakeOutcome): String? =
+    (outcome as? ShakeOutcome.Confirm)?.operation
+
+// ---------------------------------------------------------------------------------------------------
+// New form — deadline time-of-day (#348) + dictation (#92). LocalTime/DictationStatus aren't built or
+// discriminated in Swift, so these seams own them.
+// ---------------------------------------------------------------------------------------------------
+
+fun newDeadlineTimeHour(state: NewState): Int = state.deadlineTime?.hour ?: -1
+fun newDeadlineTimeMinute(state: NewState): Int = state.deadlineTime?.minute ?: -1
+fun setNewDeadlineTime(component: NewComponent, hour: Int, minute: Int) =
+    component.setDeadlineTime(LocalTime(hour, minute))
+fun clearNewDeadlineTime(component: NewComponent) = component.setDeadlineTime(null)
+
+fun newDictationIsListening(state: NewState): Boolean = state.dictation is DictationStatus.Listening
+fun newDictationIsPermissionDenied(state: NewState): Boolean = state.dictation is DictationStatus.PermissionDenied
+fun newDictationIsPermanentlyDenied(state: NewState): Boolean =
+    state.dictation is DictationStatus.PermissionPermanentlyDenied
+fun newDictationFieldIsTitle(state: NewState): Boolean = state.dictationField == DictationField.Title
+fun startNewDictationTitle(component: NewComponent) = component.startDictation(DictationField.Title)
+fun startNewDictationNotes(component: NewComponent) = component.startDictation(DictationField.Notes)
+fun stopNewDictation(component: NewComponent) = component.stopDictation()

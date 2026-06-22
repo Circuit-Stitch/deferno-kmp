@@ -92,5 +92,6 @@ speech-model-pack/src/main/assets/models/
 # by :app:desktopApp:downloadWhisperModel. Never committed; the .gitkeep keeps the tree present.
 app/desktopApp/desktopResources/common/models/*.bin
 
-# Claude Code agent worktrees (session-local, never committed)
+# Claude Code agent worktrees + scheduler lock (session-local, never committed)
 .claude/worktrees/
+.claude/scheduled_tasks.lock

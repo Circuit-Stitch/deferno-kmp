@@ -36,7 +36,12 @@ struct NewItemView: View {
                     kindPicker(value)
                     titleField(value)
                     notesField(value)
-                    if isEvent(value) { eventFields } else { dateField }
+                    if isEvent(value) {
+                        eventFields
+                    } else {
+                        dateField
+                        deadlineTimeField(value)
+                    }
                     statusMessage(value)
                     createButton(value)
                 }
@@ -87,6 +92,65 @@ struct NewItemView: View {
             .autocorrectionDisabled(true)
             .onChange(of: dateText) { _ in component.setDate(date: ShellBridgeKt.parseLocalDate(text: dateText)) }
             .accessibilityLabel("Date")
+    }
+
+    /// The deadline time-of-day row (#348) — shown for the non-Event kinds alongside the date, mirroring
+    /// Android's `NewDeadlineTimeField`. A `.hourAndMinute` DatePicker bound to the shared deadline-time
+    /// seam: `setNewDeadlineTime(component:hour:minute:)` on change, `clearNewDeadlineTime(component:)` to
+    /// remove it. The bridge returns -1 for "no time set"; the row offers an explicit "Add" affordance so
+    /// the field stays unset until the person chooses a time, and a "Clear" button to unset it again.
+    @ViewBuilder
+    private func deadlineTimeField(_ value: NewState) -> some View {
+        let hour = Int(ShellBridgeKt.doNewDeadlineTimeHour(state: value))
+        let minute = Int(ShellBridgeKt.doNewDeadlineTimeMinute(state: value))
+        let hasTime = hour >= 0 && minute >= 0
+        HStack(spacing: 8) {
+            Text("Time")
+                .font(.subheadline)
+                .foregroundStyle(colors.onSurfaceVariant)
+            Spacer()
+            if hasTime {
+                DatePicker(
+                    "",
+                    selection: deadlineTimeBinding(hour: hour, minute: minute),
+                    displayedComponents: .hourAndMinute
+                )
+                .labelsHidden()
+                .accessibilityLabel("Deadline time")
+                Button("Clear") { ShellBridgeKt.clearNewDeadlineTime(component: component) }
+                    .font(.footnote)
+                    .accessibilityLabel("Clear deadline time")
+            } else {
+                Button("Add") { ShellBridgeKt.setNewDeadlineTime(component: component, hour: 9, minute: 0) }
+                    .font(.subheadline)
+                    .accessibilityLabel("Add deadline time")
+            }
+        }
+        .frame(minHeight: Layout.minTouchTarget)
+    }
+
+    /// A `Date` binding over the shared deadline-time hour/minute. The wall-clock components are the only
+    /// meaningful payload (the day is irrelevant); reading composes today's date with the stored time,
+    /// writing extracts the picked hour/minute back through `setNewDeadlineTime`.
+    private func deadlineTimeBinding(hour: Int, minute: Int) -> Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(
+                    bySettingHour: max(0, hour),
+                    minute: max(0, minute),
+                    second: 0,
+                    of: Date()
+                ) ?? Date()
+            },
+            set: { picked in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: picked)
+                ShellBridgeKt.setNewDeadlineTime(
+                    component: component,
+                    hour: Int32(parts.hour ?? 0),
+                    minute: Int32(parts.minute ?? 0)
+                )
+            }
+        )
     }
 
     private var eventFields: some View {

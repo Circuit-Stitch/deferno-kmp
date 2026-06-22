@@ -10,6 +10,11 @@
 	     both Debug-only). Empty in Release / CI / a fresh clone, so DefernoRoot seeds no dev account there. -->
 	<key>DevStagingToken</key>
 	<string>$(DEV_STAGING_TOKEN)</string>
+	<!-- The Brain dump recorder + New-form dictation capture the mic (ADR-0027/#92). -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Deferno uses the microphone to capture a brain dump or dictate a task by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Deferno transcribes your voice on-device to turn a brain dump into tasks.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
