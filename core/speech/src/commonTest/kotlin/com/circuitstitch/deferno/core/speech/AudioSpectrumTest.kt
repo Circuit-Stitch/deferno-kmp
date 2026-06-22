@@ -6,7 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The pure spectrum math behind the Brain dump visualizer: direct DFT into log-spaced 100–500 Hz bands. */
+/** The pure spectrum math behind the Brain dump visualizer: direct DFT into log-spaced ≈110 Hz–3.5 kHz bands. */
 class AudioSpectrumTest {
 
     private val bands = 16
@@ -35,7 +35,7 @@ class AudioSpectrumTest {
     fun toneInRange_peaksAtTheNearestInteriorBand() {
         val out = AudioSpectrum.magnitudes(tone(300.0), bands)
         val peak = argMax(out)
-        // 300 Hz sits mid-range in the 100–500 Hz log span: a clear interior maximum that beats both sides.
+        // 300 Hz sits comfortably inside the ≈110 Hz–3.5 kHz log span: a clear interior maximum beating both sides.
         assertTrue(peak in 1 until out.lastIndex, "peak should be interior, was $peak (${out.toList()})")
         assertTrue(out[peak] > out[peak - 1] && out[peak] > out[peak + 1])
     }
