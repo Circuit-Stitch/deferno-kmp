@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -142,6 +143,10 @@ fun BrainDumpScreen(component: BrainDumpComponent, modifier: Modifier = Modifier
     // app-settings bag for consistency with the other App settings.
     val prefs = remember(context) { context.getSharedPreferences(APP_SETTINGS_PREFS, Context.MODE_PRIVATE) }
     var feedbackEnabled by remember { mutableStateOf(prefs.getBoolean(VISUAL_FEEDBACK_KEY, true)) }
+    // Resolve the toggle-confirmation strings in composition (not via context.getString in the click
+    // lambda) — the config-correct path lint wants (LocalContextGetResourceValueCall).
+    val feedbackOnMsg = stringResource(R.string.visual_feedback_on)
+    val feedbackOffMsg = stringResource(R.string.visual_feedback_off)
 
     BrainDumpContent(
         state = state,
@@ -164,7 +169,7 @@ fun BrainDumpScreen(component: BrainDumpComponent, modifier: Modifier = Modifier
             prefs.edit().putBoolean(VISUAL_FEEDBACK_KEY, next).apply()
             Toast.makeText(
                 context,
-                context.getString(if (next) R.string.visual_feedback_on else R.string.visual_feedback_off),
+                if (next) feedbackOnMsg else feedbackOffMsg,
                 Toast.LENGTH_SHORT,
             ).show()
         },

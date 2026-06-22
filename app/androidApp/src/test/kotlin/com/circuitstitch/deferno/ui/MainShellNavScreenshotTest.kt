@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
@@ -18,7 +19,9 @@ import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
 import com.circuitstitch.deferno.demo.SampleData
 import com.circuitstitch.deferno.shell.DefaultMainShellComponent
+import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.MainShell
+import com.circuitstitch.deferno.shell.ui.ShellChrome
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.LocalDate
@@ -92,5 +95,15 @@ class MainShellNavScreenshotTest {
         setContent { MainShell(shell()) }
         composeRule.onNodeWithContentDescription("Menu").performClick()
         composeRule.onRoot().captureRoboImage("src/test/screenshots/shell_chrome_open_light.png")
+    }
+
+    // The Tasks search-as-top-bar (Files pattern): on the Tasks destination the top bar IS a full-width
+    // search pill (☰ inside it + trailing magnifier), with the capture FABs moved to bottom-centre. Drives
+    // the real MainShell on Tasks so the bar treatment + FAB placement are both baselined.
+    @Test
+    @Config(qualifiers = "w400dp-h800dp")
+    fun tasksSearchBar_light() {
+        setContent { MainShell(shell().also { it.selectDestination(Destination.Tasks) }) }
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/shell_tasks_search_bar_light.png")
     }
 }

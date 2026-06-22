@@ -751,7 +751,10 @@ class DefaultMainShellComponent(
             // Tasks is the multi-pane workspace (ADR-0007 t2): its co-resident panes carry their own
             // headers (title · back · refresh), so the shell bar shows only the global actions here — no
             // title — and Tasks needs no View change. The single-pane Destinations title the bar instead.
-            is MainShellComponent.DestinationChild.Tasks -> flowOf(rootChrome(""))
+            // Drop the capture actions (→ no FAB pair) while the Item tree is in move mode: the FABs sit
+            // bottom-centre now and would cover the modal move bar's ↑↓‹›/Done controls otherwise.
+            is MainShellComponent.DestinationChild.Tasks ->
+                active.component.tree.state.map { rootChrome("", capture = it.moveMode == null) }
 
             // Settings is a tier-3 stack: the category list ("Settings") or a drilled category (its title).
             is MainShellComponent.DestinationChild.Settings ->
@@ -778,13 +781,18 @@ class DefaultMainShellComponent(
         title: String,
         onRefresh: (() -> Unit)? = null,
         onNew: () -> Unit = { openOverlay(OverlayRoute.New()) },
+        capture: Boolean = true,
     ): ChromeSpec = ChromeSpec(
         title = title,
         drilled = false,
         actions = buildList {
             if (onRefresh != null) add(ChromeAction(ChromeActionKind.Refresh, onRefresh))
-            add(ChromeAction(ChromeActionKind.BrainDump) { openOverlay(OverlayRoute.BrainDump) })
-            add(ChromeAction(ChromeActionKind.New, onNew))
+            // The capture pair (Brain dump + New) — the FAB pair. Suppressed where a modal bottom bar owns
+            // the bottom of the screen (the Tasks move mode), so the FABs don't cover its controls.
+            if (capture) {
+                add(ChromeAction(ChromeActionKind.BrainDump) { openOverlay(OverlayRoute.BrainDump) })
+                add(ChromeAction(ChromeActionKind.New, onNew))
+            }
         },
     )
 
