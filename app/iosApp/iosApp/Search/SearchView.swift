@@ -123,8 +123,11 @@ struct SearchView: View {
     private func results(_ value: SearchState) -> some View {
         if !value.results.isEmpty {
             VStack(spacing: 0) {
-                ForEach(value.results, id: \.stableKey) { task in
-                    TaskRow(task: task) { component.onResultClicked(id: task.id) }
+                // `results` is now a list of `SearchHit` (a lightweight title/kind/ref projection), not
+                // full `Task`s (the pull no longer hydrates the whole record). Render the hit directly and
+                // forward the hit to `onResultClicked` (the component resolves it to the Tasks Destination).
+                ForEach(value.results, id: \.id) { hit in
+                    SearchHitRow(hit: hit) { component.onResultClicked(hit: hit) }
                     Divider().background(colors.outlineVariant)
                 }
             }
@@ -175,5 +178,42 @@ struct SearchView: View {
         case "DeadlineAsc": return "Soonest due"
         default: return key
         }
+    }
+}
+
+/// A single global-search result. `SearchHit` is a lightweight projection (title · kind · optional human
+/// `ref`), so the row renders it directly rather than a full `Task`. A terminal hit (Done/Dropped/…) is
+/// de-emphasized, mirroring the Item-tree row.
+private struct SearchHitRow: View {
+    let hit: SearchHit
+    let onTap: () -> Void
+    @Environment(\.defernoColors) private var colors
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                KindDot(color: kindColor(hit.kind, colors))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(hit.title)
+                        .font(.headline)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    if let ref = hit.ref {
+                        MonoMeta(text: ref)
+                    }
+                }
+                Spacer(minLength: 12)
+                DefernoIcon.chevronRight.image.foregroundStyle(colors.inkMuted)
+            }
+            .frame(minHeight: Layout.rowMinHeight)
+            .padding(.horizontal, Layout.gutter)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+            .opacity(hit.isTerminal ? 0.5 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(hit.title)
+        .accessibilityHint("Open")
     }
 }
