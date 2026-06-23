@@ -8,11 +8,20 @@ import SwiftUI
 /// (ADR-0013/0017). Bridged by the hand-written SKIE-free bridge until SKIE supports Kotlin 2.4.0.
 @main
 struct DefernoApp: App {
-    @State private var host = DefernoRoot()
+    // The Brain dump mic recorder (#267) is shared: the Kotlin host drives it (record → on-device pipeline),
+    // and the Brain dump overlay observes its `levels` for the spectrum — one engine, no second mic tap.
+    @StateObject private var recorder: BrainDumpRecorder
+    @State private var host: DefernoRoot
+
+    init() {
+        let recorder = BrainDumpRecorder()
+        _recorder = StateObject(wrappedValue: recorder)
+        _host = State(initialValue: DefernoRoot(recorder: recorder))
+    }
 
     var body: some Scene {
         WindowGroup {
-            RootView(root: host.root)
+            RootView(root: host.root, recorder: recorder)
                 // OAuth redirect fallback (ADR-0026, #137): sign-in normally runs in an in-app
                 // `ASWebAuthenticationSession` sheet that captures its own redirect, but if the
                 // registered `com.circuitstitch.deferno` scheme (CFBundleURLTypes, Info.plist) ever

@@ -13,10 +13,14 @@ import com.circuitstitch.deferno.core.scopes.PlatformContext
 import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.RootComponent
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import kotlin.experimental.ExperimentalNativeApi
@@ -47,8 +51,11 @@ import software.amazon.app.kmplogger.logger
  * Per-Account data (the encrypted SQLite DB the [AccountComponentSession] opens) requires the
  * SQLCipher dependency linked in the Xcode project; the Auth shell + paste-PAT sign-in path need only
  * the AppScope network client + the Keychain vault, so first-run login works regardless.
+ *
+ * [recorder] is the injected Swift mic recorder (#267, ADR-0037) the Brain dump `record` seam drives; `null`
+ * (e.g. a unit host) leaves that seam the inert no-op default.
  */
-class DefernoRoot {
+class DefernoRoot(private val recorder: NativeAudioRecorder? = null) {
 
     init {
         // Configure the shared logger ONCE per process, before the DI graph builds or anything logs
@@ -77,6 +84,13 @@ class DefernoRoot {
     // Startup work (roster hydration + dev seeding) runs off the main thread; the AccountManager's
     // StateFlows then drive the reactive shell. SupervisorJob so one failure doesn't cancel the rest.
     private val bootstrapScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    // Brain dump's record→Inbox seam (#267, ADR-0037): records the mic to a durable WAV, then on Stop hands
+    // the take to the shared pipeline on an app-scope coroutine — the WorkManager-less iOS twin of Android's
+    // background worker. A null recorder keeps the inert no-op default (the desktop/unit behaviour).
+    private val recordBrainDump: suspend (LocalDate, String) -> Unit = { today, timeZone ->
+        recorder?.let { recordBrainDumpTake(it, today, timeZone) }
+    }
 
     private val lifecycle = LifecycleRegistry()
 
@@ -122,9 +136,9 @@ class DefernoRoot {
             // Agent inference-engine choice + entitlement gate (#150): threaded from the AppScope graph; iOS
             // has no Agent Settings surface yet, but the gate exists app-wide (the selection defaults to Off).
             inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
-            // Brain dump's recordBrainDump seam (#150 Stage 4) is left at the no-op default on iOS: the
-            // mic-record → on-device-transcribe flow is Android-only, and the Brain dump overlay is unwired
-            // on iOS (no overlayBrainDump bridge), so there is nothing to thread until an iOS engine ships.
+            // Brain dump's record→Inbox seam (#267, ADR-0037): records the mic to a durable WAV and hands
+            // the take to the shared pipeline on Stop (salvage-only until #269 wires the file transcriber).
+            recordBrainDump = recordBrainDump,
             // The AppScope connectivity monitor (#158): the outbox driver flushes on the
             // offline→online edge and skips passes while known-offline.
             connectivity = appComponent.connectivity,
@@ -136,6 +150,48 @@ class DefernoRoot {
     /** Tears down the retained component tree when the SwiftUI app scene goes away. */
     fun destroy() {
         lifecycle.destroy()
+    }
+
+    /**
+     * The iOS recorder seam (#267, ADR-0037): start the mic, suspend until either the overlay's Stop cancels
+     * this job **or** the mic engine fails to open, then — under [NonCancellable] so a closing overlay never
+     * half-writes — finalize the WAV and, on a real Stop, launch the shared pipeline on the app-lifetime
+     * [bootstrapScope] (so processing outlives the overlay). A mic-open failure rethrows, so the shared
+     * `DefaultBrainDumpComponent` flips to its gentle Failed state (Android parity — a take is never silently
+     * lost), and the empty WAV is dropped.
+     *
+     * Threading: this seam runs on the Decompose component context, which is [Dispatchers.Main] (the root's
+     * default, threaded through the overlay scope) — so [NativeAudioRecorder.stop]'s synchronous Swift
+     * teardown runs **on the main thread**. The Swift `Thread.isMainThread` guard (which runs the teardown
+     * inline rather than `main.sync`-ing onto the queue it is already on) is what keeps it deadlock-free — it
+     * is load-bearing, not defensive. The heavy pipeline work runs off-main on [bootstrapScope]
+     * ([Dispatchers.Default]). [createdAt] is the take's single instant — the retained recording's key —
+     * captured here at the recorder boundary (the host's job; the pipeline itself stays clock-free).
+     */
+    private suspend fun recordBrainDumpTake(recorder: NativeAudioRecorder, today: LocalDate, timeZone: String) {
+        val createdAt = Clock.System.now()
+        val wavPath = brainDumpPendingWavPath(createdAt)
+        ensureBrainDumpPendingDir()
+        // Completed exceptionally only if the mic engine never opened (start() is async, so it can't throw).
+        // On a normal Stop the job is cancelled, this stays incomplete, and the take is handed off.
+        val micFailed = CompletableDeferred<Unit>()
+        recorder.start(wavPath) {
+            micFailed.completeExceptionally(IllegalStateException("brain-dump mic engine failed to start"))
+        }
+        try {
+            micFailed.await() // suspends until Stop cancels this job; throws if the mic never opened
+        } finally {
+            withContext(NonCancellable) {
+                recorder.stop() // finalizes the WAV synchronously (inline on main — see the threading note)
+                if (micFailed.isCompleted) {
+                    deleteFile(wavPath) // mic never opened — nothing captured; the rethrow flips Phase.Failed
+                } else {
+                    bootstrapScope.launch {
+                        processBrainDumpTake(appComponent, wavPath, today, timeZone, createdAt)
+                    }
+                }
+            }
+        }
     }
 
     /**

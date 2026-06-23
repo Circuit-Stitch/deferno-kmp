@@ -8,11 +8,14 @@ import SwiftUI
 /// surface changes out from under the sign-in screen (there is no success callback to wire).
 struct RootView: View {
     let root: RootComponent
+    /// Threaded down to the Brain dump overlay's spectrum (#267) — RootView only forwards it.
+    let recorder: BrainDumpRecorder
     @StateObject private var stack: RootStackObserver
     @StateObject private var theme: StateFlowObserver<UserSettings>
 
-    init(root: RootComponent) {
+    init(root: RootComponent, recorder: BrainDumpRecorder) {
         self.root = root
+        self.recorder = recorder
         _stack = StateObject(wrappedValue: RootStackObserver(ShellBridgeKt.rootStackBridge(component: root)))
         _theme = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.themeSettingsBridge(component: root)))
     }
@@ -26,7 +29,7 @@ struct RootView: View {
     private var content: some View {
         let child = stack.active
         if let main = ShellBridgeKt.rootChildMain(child: child) {
-            MainShellView(component: main)
+            MainShellView(component: main, recorder: recorder)
         } else if let auth = ShellBridgeKt.rootChildAuth(child: child) {
             SignInView(component: auth.signIn)
         }

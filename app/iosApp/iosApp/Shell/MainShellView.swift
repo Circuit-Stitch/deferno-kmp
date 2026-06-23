@@ -15,6 +15,8 @@ import SwiftUI
 /// finger is tracked 1:1, then settles to the nearer end on release).
 struct MainShellView: View {
     let component: MainShellComponent
+    /// The shared Brain dump recorder (#267) — forwarded to the overlay's spectrum.
+    let recorder: BrainDumpRecorder
     @Environment(\.defernoColors) private var colors
     @StateObject private var destinations: DestinationStackObserver
     @StateObject private var overlay: OverlaySlotObserver
@@ -28,8 +30,9 @@ struct MainShellView: View {
     /// track the finger 1:1. The effective open fraction is `dragX != nil ? base + dragX/width : base`.
     @State private var dragX: CGFloat? = nil
 
-    init(component: MainShellComponent) {
+    init(component: MainShellComponent, recorder: BrainDumpRecorder) {
         self.component = component
+        self.recorder = recorder
         _destinations = StateObject(wrappedValue: DestinationStackObserver(ShellBridgeKt.destinationStackBridge(component: component)))
         _overlay = StateObject(wrappedValue: OverlaySlotObserver(ShellBridgeKt.overlaySlotBridge(component: component)))
         _accounts = StateObject(wrappedValue: AccountsObserver(ShellBridgeKt.accountSwitcherBridge(component: component)))
@@ -319,7 +322,7 @@ struct MainShellView: View {
             FeedbackView(component: feedback)
         } else if let brainDump = overlayBrainDumpComponent {
             // The shell top-bar voice action opens the iOS Brain dump recorder (ADR-0027).
-            BrainDumpView(component: brainDump)
+            BrainDumpView(component: brainDump, recorder: recorder)
         }
     }
 

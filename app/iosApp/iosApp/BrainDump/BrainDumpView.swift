@@ -7,20 +7,23 @@ import SwiftUI
 /// render of the shared `BrainDumpComponent` state machine (Idle → Recording → Enqueued); the View owns
 /// the iOS mic permission prompt and the `AVAudioEngine` meter that drives the spectrum.
 ///
-/// Scope note (ponytail): the spectrum + capture are real and native; the transcription→draft pipeline
-/// (SFSpeechRecognizer → Inbox drafts) rides the shared `recordBrainDump` seam, which is not yet wired on
-/// iOS (DefernoRoot) — so a take currently records + enqueues without yet producing drafts. The upgrade
-/// path is to implement that seam; this overlay needs no change when it lands.
+/// The capture, spectrum, AND on-device pipeline are real (#267): the shared `recordBrainDump` seam
+/// (`DefernoRoot`) records the mic to a durable WAV and, on Stop, hands the take to the shared
+/// `BrainDumpPipeline` — which drops a Salvage draft into the Inbox (on-device transcription → real drafts
+/// arrives in #269). The spectrum is driven by the injected `BrainDumpRecorder`, the single mic owner, so
+/// there is no second `AVAudioEngine` tap contending on the shared `AVAudioSession`.
 struct BrainDumpView: View {
     let component: BrainDumpComponent
     @StateObject private var state: StateFlowObserver<BrainDumpState>
-    @StateObject private var meter = AudioMeter()
+    /// The shared recorder the Kotlin seam drives; the View only observes its `levels` for the spectrum.
+    @ObservedObject var recorder: BrainDumpRecorder
     @Environment(\.defernoColors) private var colors
     @State private var elapsed: Int = 0
     @State private var timer: Timer?
 
-    init(component: BrainDumpComponent) {
+    init(component: BrainDumpComponent, recorder: BrainDumpRecorder) {
         self.component = component
+        self.recorder = recorder
         _state = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.brainDumpStateBridge(component: component)))
     }
 
@@ -31,7 +34,7 @@ struct BrainDumpView: View {
             HStack {
                 Text("Brain dump").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
                 Spacer()
-                Button("Close") { stopMeter(); component.dismiss() }
+                Button("Close") { stopTimer(); component.dismiss() }
             }
             .padding(.horizontal, Layout.gutter).frame(minHeight: 56)
 
@@ -41,9 +44,9 @@ struct BrainDumpView: View {
         }
         .background(colors.background.ignoresSafeArea())
         .onChange(of: phase) { newPhase in
-            if newPhase == "Recording" { startMeter() } else { stopMeter() }
+            if newPhase == "Recording" { startTimer() } else { stopTimer() }
         }
-        .onDisappear { stopMeter() }
+        .onDisappear { stopTimer() }
     }
 
     @ViewBuilder
@@ -51,7 +54,7 @@ struct BrainDumpView: View {
         switch phase {
         case "Recording":
             VStack(spacing: 28) {
-                SpectrumBars(levels: meter.levels, color: colors.primary)
+                SpectrumBars(levels: recorder.levels, color: colors.primary)
                     .frame(height: 96).padding(.horizontal, 32)
                 MonoMeta(text: timeLabel(elapsed))
                 stopButton
@@ -138,17 +141,15 @@ struct BrainDumpView: View {
         }
     }
 
-    // MARK: meter + timer
+    // MARK: elapsed timer (the mic + spectrum are owned by the injected BrainDumpRecorder)
 
-    private func startMeter() {
-        meter.start()
+    private func startTimer() {
         elapsed = 0
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in elapsed += 1 }
     }
 
-    private func stopMeter() {
-        meter.stop()
+    private func stopTimer() {
         timer?.invalidate(); timer = nil
     }
 
@@ -178,49 +179,4 @@ struct SpectrumBars: View {
         }
         .accessibilityHidden(true)
     }
-}
-
-/// An `AVAudioEngine` mic meter that publishes a rolling window of RMS levels (0…1) for `SpectrumBars`.
-final class AudioMeter: ObservableObject {
-    @Published var levels: [CGFloat] = Array(repeating: 0.05, count: 28)
-    private let engine = AVAudioEngine()
-    private var running = false
-
-    func start() {
-        guard !running else { return }
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.record, mode: .measurement, options: [])
-        try? session.setActive(true, options: [])
-        let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            guard let self, let channel = buffer.floatChannelData?[0] else { return }
-            let count = Int(buffer.frameLength)
-            guard count > 0 else { return }
-            var sum: Float = 0
-            for i in 0..<count { let s = channel[i]; sum += s * s }
-            let rms = sqrt(sum / Float(count))
-            // Map RMS to a lively 0…1 bar height (mic input is quiet; scale + clamp).
-            let level = CGFloat(min(1, max(0.05, CGFloat(rms) * 14)))
-            DispatchQueue.main.async {
-                var next = self.levels
-                next.removeFirst()
-                next.append(level)
-                self.levels = next
-            }
-        }
-        engine.prepare()
-        running = (try? engine.start()) != nil
-    }
-
-    func stop() {
-        guard running else { return }
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
-        try? AVAudioSession.sharedInstance().setActive(false, options: [])
-        running = false
-        levels = Array(repeating: 0.05, count: 28)
-    }
-
-    deinit { stop() }
 }

@@ -40,6 +40,7 @@
 		DE0002000000000000000105 /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000105 /* ActivityView.swift */; };
 		DE0002000000000000000107 /* PlanExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000107 /* PlanExtras.swift */; };
 		DE0002000000000000000108 /* BrainDumpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000108 /* BrainDumpView.swift */; };
+		DE0002000000000000000110 /* BrainDumpRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000110 /* BrainDumpRecorder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -91,6 +92,7 @@
 		DE0001000000000000000105 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
 		DE0001000000000000000107 /* PlanExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanExtras.swift; sourceTree = "<group>"; };
 		DE0001000000000000000108 /* BrainDumpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDumpView.swift; sourceTree = "<group>"; };
+		DE0001000000000000000110 /* BrainDumpRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDumpRecorder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -311,6 +313,7 @@
 			isa = PBXGroup;
 			children = (
 				DE0001000000000000000108 /* BrainDumpView.swift */,
+				DE0001000000000000000110 /* BrainDumpRecorder.swift */,
 			);
 			path = BrainDump;
 			sourceTree = "<group>";
@@ -483,6 +486,7 @@
 				DE0002000000000000000105 /* ActivityView.swift in Sources */,
 				DE0002000000000000000107 /* PlanExtras.swift in Sources */,
 				DE0002000000000000000108 /* BrainDumpView.swift in Sources */,
+				DE0002000000000000000110 /* BrainDumpRecorder.swift in Sources */,
 				DE0002000000000000000100 /* Atoms.swift in Sources */,
 				DE0002000000000000000101 /* DefernoIcons.swift in Sources */,
 				DE0002000000000000000102 /* TreeFiligree.swift in Sources */,
