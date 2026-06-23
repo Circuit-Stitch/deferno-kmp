@@ -9,11 +9,21 @@ import SwiftUI
 /// `AVAudioSession` (the View no longer runs its own meter). Privacy (ADR-0009/0018): the audio is written
 /// only to the on-device WAV the pipeline consumes; nothing here is logged.
 final class BrainDumpRecorder: ObservableObject, NativeAudioRecorder {
-    @Published var levels: [CGFloat] = Array(repeating: 0.05, count: 28)
+    /// Per-bar `0…1` levels — low frequencies on the left, high on the right. Computed by the shared,
+    /// cross-platform `AudioSpectrum` (core/speech) — the same call Android makes — so the two platforms render
+    /// identically; this class only owns the iOS mic and the 16 kHz downsample that spectrum expects.
+    @Published var levels: [CGFloat] = Array(repeating: 0.05, count: BrainDumpRecorder.barCount)
+
+    private static let barCount = 16
+    // `AudioSpectrum` analyses 16 kHz mono PCM (matches its `SAMPLE_RATE`); we downsample the mic to feed it.
+    private static let spectrumRate = 16_000.0
+    private static let window = 1024  // ~64 ms at 16 kHz — the rolling DFT window AudioSpectrum reads (its WINDOW)
 
     private let engine = AVAudioEngine()
     private var file: AVAudioFile?
     private var running = false
+    private var converter: AVAudioConverter?  // mic-rate → 16 kHz mono, spectrum (display) only — NOT the WAV
+    private var ring = [Float](repeating: 0, count: BrainDumpRecorder.window)  // rolling 16 kHz analysis window
 
     /// Open the mic and stream 16-bit PCM to the WAV at `filePath`. `AVAudioEngine` setup MUST run on the
     /// main thread (configuring it off-main raises an NSException → a Kotlin/Native abort), so hop there
@@ -26,12 +36,18 @@ final class BrainDumpRecorder: ObservableObject, NativeAudioRecorder {
             let session = AVAudioSession.sharedInstance()
             // `.allowBluetooth` lets the input route use a connected Bluetooth (AirPods) mic over HFP — without
             // it the session can't open an input while AirPods are connected (e.g. right after a call), which
-            // is exactly the "Couldn't record" the user hit. `.default` mode is the most route-compatible for
-            // voice capture (`.measurement` is finicky over Bluetooth HFP). Built-in mic still works unchanged.
-            try? session.setCategory(.record, mode: .default, options: [.allowBluetooth])
+            // is exactly the "Couldn't record" the user hit. `.playAndRecord` + `.voiceChat` is what Apple's
+            // Voice Processing I/O (below) needs, and `.voiceChat` is Bluetooth-HFP-friendly (unlike `.measurement`).
+            try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth])
             try? session.setActive(true, options: [])
 
             let input = engine.inputNode
+            // Apple's Voice Processing I/O: the OS DSP does mic-array noise suppression + echo cancellation,
+            // stripping steady background (an AC hum, a fan) before we ever see the samples — no custom filtering,
+            // and it engages the system Voice Isolation mic mode. AGC off so it denoises without pumping the
+            // recording's levels. `try?`: if VPIO can't enable (route/HW), fall back to raw input, don't fail.
+            try? input.setVoiceProcessingEnabled(true)
+            input.isVoiceProcessingAGCEnabled = false
             let format = input.outputFormat(forBus: 0)
             // The mic can be unavailable even with permission — an active phone/VoIP call owns the input route,
             // or no input route resolves. Then this format collapses to 0 Hz / 0 channels, and installing a tap
@@ -43,6 +59,10 @@ final class BrainDumpRecorder: ObservableObject, NativeAudioRecorder {
                 onFailed()
                 return
             }
+            // A throwaway mic-rate → 16 kHz mono converter feeding ONLY the spectrum (display); the WAV below
+            // keeps the mic's native rate. nil-safe — if it can't build, the bars just stay idle.
+            converter = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Self.spectrumRate,
+                                      channels: 1, interleaved: false).flatMap { AVAudioConverter(from: format, to: $0) }
             // A standard PCM16 WAV at the mic's native rate/channels; AVAudioFile converts the float32 tap
             // buffers to 16-bit on write. (#269 resamples to the transcriber's format; #267 only needs a
             // durable, retainable recording.)
@@ -83,26 +103,49 @@ final class BrainDumpRecorder: ObservableObject, NativeAudioRecorder {
             file = nil // closing the AVAudioFile finalizes the WAV header
             try? AVAudioSession.sharedInstance().setActive(false, options: [])
             running = false
-            levels = Array(repeating: 0.05, count: 28)
+            levels = Array(repeating: 0.05, count: Self.barCount)
+            converter = nil
+            ring = [Float](repeating: 0, count: Self.window)
         }
         if Thread.isMainThread { teardown() } else { DispatchQueue.main.sync(execute: teardown) }
     }
 
+    /// Downsample the buffer to 16 kHz mono and hand a rolling ~64 ms window to the shared `AudioSpectrum` (the
+    /// same direct-DFT-per-bar + dB-window code Android runs), then publish the resulting `0…1` levels. Display
+    /// only — the WAV keeps the mic's native rate.
     private func publishLevel(_ buffer: AVAudioPCMBuffer) {
-        guard let channel = buffer.floatChannelData?[0] else { return }
-        let count = Int(buffer.frameLength)
-        guard count > 0 else { return }
-        var sum: Float = 0
-        for i in 0..<count { let s = channel[i]; sum += s * s }
-        let rms = sqrt(sum / Float(count))
-        // Mic input is quiet — scale + clamp to a lively 0…1 bar height (the old meter's mapping).
-        let level = CGFloat(min(1, max(0.05, CGFloat(rms) * 14)))
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            var next = self.levels
-            next.removeFirst()
-            next.append(level)
-            self.levels = next
+        guard let converter else { return }
+        // Resample this buffer to 16 kHz mono. The streaming `.noDataNow` block keeps the converter's filter
+        // state across buffers (no per-buffer discontinuity); output frame count ≈ input × 16k/micRate.
+        let cap = AVAudioFrameCount(Double(buffer.frameLength) * Self.spectrumRate / buffer.format.sampleRate) + 16
+        guard let out = AVAudioPCMBuffer(pcmFormat: converter.outputFormat, frameCapacity: cap) else { return }
+        var consumed = false
+        var err: NSError?
+        converter.convert(to: out, error: &err) { _, status in
+            if consumed { status.pointee = .noDataNow; return nil }
+            consumed = true
+            status.pointee = .haveData
+            return buffer
         }
+        guard err == nil, let src = out.floatChannelData?[0], out.frameLength > 0 else { return }
+
+        // Slide the new 16 kHz samples into the rolling window (oldest out, newest in) so AudioSpectrum always
+        // sees a full, stable window regardless of how many frames each convert() yields.
+        let w = ring.count, m = Int(out.frameLength)
+        if m >= w {
+            for i in 0..<w { ring[i] = src[m - w + i] }
+        } else {
+            for i in 0..<(w - m) { ring[i] = ring[i + m] }
+            for i in 0..<m { ring[w - m + i] = src[i] }
+        }
+
+        // Shared, cross-platform spectrum: direct DFT at each bar's centre frequency + dB-window mapping → 0…1.
+        let samples = KotlinFloatArray(size: Int32(w))
+        for i in 0..<w { samples.set(index: Int32(i), value: ring[i]) }
+        let mags = AudioSpectrum.shared.magnitudes(samples: samples, bands: Int32(Self.barCount))
+        var bars = [CGFloat](repeating: 0, count: Self.barCount)
+        for i in 0..<Self.barCount { bars[i] = CGFloat(mags.get(index: Int32(i))) }
+
+        DispatchQueue.main.async { [weak self] in self?.levels = bars }
     }
 }
