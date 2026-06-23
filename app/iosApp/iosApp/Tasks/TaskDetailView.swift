@@ -1,3 +1,4 @@
+import AVFoundation
 import Deferno
 import SwiftUI
 import UniformTypeIdentifiers
@@ -21,6 +22,8 @@ struct TaskDetailView: View {
     @State private var showingAddSubtask = false
     @State private var kebabSubtask = ""
     @State private var confirmingDelete = false
+    // Plays on-device brain-dump recordings (#272) over the bytes the bridge hands back — no network, no signed URL.
+    @StateObject private var audioPlayer = OnDeviceAudioPlayer()
     @Environment(\.defernoColors) private var colors
 
     init(component: TaskDetailComponent, showsHeader: Bool = true) {
@@ -327,11 +330,12 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func attachmentsSection(_ value: TaskDetailState) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionTitle("Attachments", trailing: "\(value.attachments.count)")
+            // The count is synced + on-device combined (the brain-dump recording is on-device only — #272).
+            SectionTitle("Attachments", trailing: "\(value.attachments.count + value.onDeviceAttachments.count)")
             Button(value.isUploadingAttachment ? "Uploading…" : "Add file") { importing = true }
                 .font(.subheadline)
                 .disabled(value.isUploadingAttachment)
-            if value.attachments.isEmpty {
+            if value.attachments.isEmpty && value.onDeviceAttachments.isEmpty {
                 Text("No attachments.").font(.subheadline).foregroundStyle(.secondary)
             } else {
                 ForEach(value.attachments, id: \.id) { attachment in
@@ -341,6 +345,31 @@ struct TaskDetailView: View {
                         onSetCaption: { component.onSetAttachmentCaption(attachmentId: $0, caption: $1) }
                     )
                 }
+                // On-device rows (the retained brain-dump recording, #272): play/pause over local bytes + delete.
+                // No signed-URL open and no caption editor — these never leave the device.
+                ForEach(value.onDeviceAttachments, id: \.id) { attachment in
+                    OnDeviceAttachmentRow(
+                        attachment: attachment,
+                        player: audioPlayer,
+                        onPlayToggle: { togglePlay($0) },
+                        onDelete: { id in
+                            if audioPlayer.activeId == id { audioPlayer.stop() } // don't keep playing a deleted clip
+                            component.onDeleteOnDeviceAttachment(attachmentId: id)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    /// Play/pause an on-device recording (#272). Same row already loaded → toggle pause/resume without re-reading
+    /// bytes; a different row → fetch its bytes through the bridge and start it (which stops any current clip).
+    private func togglePlay(_ attachment: OnDeviceAttachment) {
+        if audioPlayer.activeId == attachment.id {
+            audioPlayer.toggle()
+        } else {
+            BridgeKt.onDeviceAttachmentData(component: component, attachmentId: attachment.id) { data in
+                if let data = data { audioPlayer.play(data as Data, id: attachment.id) }
             }
         }
     }
@@ -508,6 +537,84 @@ private struct AttachmentRow: View {
     /// A friendly file size — the native `ByteCountFormatter`, the iOS counterpart to Android's `formatBytes`.
     private func byteLabel(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+}
+
+/// One **on-device** attachment row (#272): the retained brain-dump recording, mirroring `AttachmentRow` minus
+/// the signed-URL open + caption editor (these bytes never leave the device). A " · On device" marker sets it
+/// apart from synced rows; **Play** shows only for audio, **Delete** removes the row + bytes.
+private struct OnDeviceAttachmentRow: View {
+    let attachment: OnDeviceAttachment
+    @ObservedObject var player: OnDeviceAudioPlayer
+    let onPlayToggle: (OnDeviceAttachment) -> Void
+    let onDelete: (String) -> Void
+
+    var body: some View {
+        let isPlayingThis = player.activeId == attachment.id && player.isPlaying
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(attachment.filename).font(.body).lineLimit(1).truncationMode(.middle)
+                Text("\(byteLabel(attachment.size)) · \(attachment.mime) · On device")
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if let caption = attachment.caption, !caption.isEmpty {
+                    Text(caption).font(.subheadline)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if attachment.isAudio {
+                Button(isPlayingThis ? "Pause" : "Play") { onPlayToggle(attachment) }
+                    .font(.subheadline)
+                    .accessibilityLabel("\(isPlayingThis ? "Pause" : "Play") \(attachment.filename)")
+            }
+            Button("Delete") { onDelete(attachment.id) }
+                .font(.subheadline)
+                .accessibilityLabel("Delete \(attachment.filename)")
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func byteLabel(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+}
+
+/// Plays one on-device brain-dump recording (#272) from in-memory bytes via `AVAudioPlayer`, retained here so it
+/// isn't deallocated mid-clip. `activeId`/`isPlaying` drive the row's Play/Pause label; the delegate resets them
+/// when the clip ends. Sets the session to `.playback` (the brain-dump recorder leaves it on `.record`).
+final class OnDeviceAudioPlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
+    /// The id of the clip currently loaded (playing or paused), or nil when nothing is loaded.
+    @Published private(set) var activeId: String?
+    @Published private(set) var isPlaying = false
+    private var player: AVAudioPlayer?
+
+    /// Load + start a clip (replacing any current one).
+    func play(_ data: Data, id: String) {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        player = try? AVAudioPlayer(data: data)
+        player?.delegate = self
+        activeId = id
+        player?.play()
+        isPlaying = player?.isPlaying ?? false
+    }
+
+    /// Pause if playing / resume if paused — same loaded clip, no re-read.
+    func toggle() {
+        guard let player else { return }
+        if player.isPlaying { player.pause(); isPlaying = false } else { player.play(); isPlaying = true }
+    }
+
+    /// Stop + unload (e.g. the playing row was deleted).
+    func stop() {
+        player?.stop()
+        player = nil
+        isPlaying = false
+        activeId = nil
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        isPlaying = false
+        activeId = nil
     }
 }
 
