@@ -311,14 +311,28 @@ review problem, not a reason to silently trash generated work; a missing parent 
 saving the draft at the root/top level, while a missing child relation can be removed.
 _Avoid_: silently dropping drafts, auto-committing a guessed replacement.
 
+**Salvage draft** *(client)*:
+The single fallback [[Brain dump]] draft the client creates when a recording **can't** be turned into task
+drafts — no on-device [[Inference engine]] is available, transcription failed, or the [[Extractor]] yielded
+nothing — so a spoken take is **never lost**. It carries the source recording and a short note of *why*,
+lands in the [[Inbox]] like any draft for the person to finish by hand, and on accept becomes a [[Task]]
+with the audio attached. A salvage is the one case that keeps the recording even when the keep-recordings
+preference is off (the audio is the only artifact left). One per take; every platform behaves the same —
+the embodiment of "never waste a recording."
+_Avoid_: error toast (a salvage is a recoverable artifact, not a dismissed failure), dropped/discarded
+recording, [[Proposal recovery]] (that repairs a *broken reference* inside an existing proposal; a salvage
+stands in for a take that produced *no* proposal at all).
+
 **Inference engine** *(client)*:
 The backend the [[Agent]] runs against, chosen from a **catalog** of two-or-more options on the
-Settings [[Destination]]: **Off** (the **default** — the Agent stands down; AI is never forced on, and
-a later onboarding step asks whether to use AI at all), one or more **on-device engines** (available to
-**everyone**, ungated), and **Deferno relay** cloud engine(s) (Deferno-operated, gated by per-[[Account]]
-**entitlement**). The choice is an [[App setting]] (device-local, like the speech-engine choice).
-On-device inference is ungated; an off-device (relay) engine is **explicit opt-in** — *selecting* it is
-the consent — and **never silent**. An engine *hosts* a **model** (the relay exposes the models an
+Settings [[Destination]]: **Off** (the Agent stands down — no inference of any kind), one or more
+**on-device engines** (available to **everyone**, ungated — and now the **default**: where the device can
+run one it is selected out of the box, since on-device inference is private, free, and never leaves the
+device; onboarding later confirms or disables it), and **Deferno relay** cloud engine(s) (Deferno-operated,
+gated by per-[[Account]] **entitlement**). The choice is an [[App setting]] (device-local, like the
+speech-engine choice). On-device inference is ungated and **on by default**; an off-device (relay) engine is
+**explicit opt-in** — *selecting* it is the consent — and **never silent** (the privacy invariant: nothing
+off-device happens without the person choosing it — ADR-0027, amended). An engine *hosts* a **model** (the relay exposes the models an
 entitlement covers); picking a specific model is a sub-choice **within** the chosen engine, and gating is
 **per-origin** (every cloud model needs entitlement; every on-device model is free), never per-model.
 Distinct from the [[Dictation]] speech engine — speech recognition never has a cloud tier.
@@ -363,12 +377,12 @@ states) never crosses it. Distinct from **readiness**, the introspect-only signa
 _Avoid_: permission check (ambiguous between this and readiness introspection), TCC (the macOS
 implementation detail behind the seam).
 
-**Brain dump** *(deferred)*:
+**Brain dump** *(client)*:
 Free-form spoken capture whose [[Transcript]] the [[Extractor]] turns into **several draft
-[[Task]]s** the person reviews before anything is created — Stage 2, **not built in v1**. Unlike
-[[Dictation]] (which fills one field and infers nothing), a brain dump is inference-heavy and will
-relax ADR-0015's "kind is explicit, never inferred." The drafts are exactly that: *drafts*, never
-auto-committed. The extractor **never runs silently**: an off-device model only by the person's
+[[Task]]s** the person reviews before anything is created. Unlike
+[[Dictation]] (which fills one field and infers nothing), a brain dump is inference-heavy and relaxes
+ADR-0015's "kind is explicit, never inferred." The drafts are exactly that: *drafts*, never
+auto-committed. A take that can't be turned into drafts is never lost — it becomes a [[Salvage draft]] instead. The extractor **never runs silently**: an off-device model only by the person's
 **explicit opt-in**, and when a local engine is available it is preferred by default (the audio
 itself never leaves the device — that boundary is [[Transcript]]'s and stays absolute). The source
 **recording** is transient by default, but the person can opt to **keep it on-device** (a device-local
