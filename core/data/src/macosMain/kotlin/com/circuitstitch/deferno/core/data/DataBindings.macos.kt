@@ -7,6 +7,10 @@ import com.circuitstitch.deferno.core.data.account.NoOpAccountDataStore
 import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.InMemoryAttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpSalvageCounter
+import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpSalvageCounter
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
@@ -80,6 +84,16 @@ interface MacosDataBindings {
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
         InMemoryKeepBrainDumpRecordingsPreference()
+
+    /** Salvage-draft `Brain dump #n` counter (#265, [[App setting]]). macOS doesn't capture brain dumps — in-memory placeholder. */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun brainDumpSalvageCounter(): BrainDumpSalvageCounter = InMemoryBrainDumpSalvageCounter()
+
+    /** "Brain dump notifications" opt-in (#266, [[App setting]], default off). macOS doesn't capture brain dumps — in-memory placeholder. */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun brainDumpNotificationPreference(): BrainDumpNotificationPreference = InMemoryBrainDumpNotificationPreference()
 
     /** "Shake to undo" [[App setting]] (ADR-0034 decision 8, #230). macOS has no accelerometer path — in-memory placeholder. */
     @Provides

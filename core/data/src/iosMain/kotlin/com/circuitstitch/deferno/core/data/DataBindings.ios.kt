@@ -7,6 +7,10 @@ import com.circuitstitch.deferno.core.data.account.NoOpAccountDataStore
 import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.InMemoryAttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpSalvageCounter
+import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpSalvageCounter
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
@@ -83,6 +87,23 @@ interface IosDataBindings {
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
         InMemoryKeepBrainDumpRecordingsPreference()
+
+    /**
+     * The Salvage-draft `Brain dump #n` counter (#265, [[App setting]]). In-memory placeholder until iOS captures
+     * brain dumps — #267 swaps this (and keep-recordings + the byte store) for an `NSUserDefaults`-backed one.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun brainDumpSalvageCounter(): BrainDumpSalvageCounter = InMemoryBrainDumpSalvageCounter()
+
+    /**
+     * The "Brain dump notifications" opt-in (#266, [[App setting]], **default off**). In-memory placeholder
+     * until iOS surfaces the toggle — #271 swaps this for an `NSUserDefaults`-backed one (the consent point
+     * that also requests notification authorization).
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun brainDumpNotificationPreference(): BrainDumpNotificationPreference = InMemoryBrainDumpNotificationPreference()
 
     /** "Shake to undo" [[App setting]] (ADR-0034 decision 8, #230). iOS has no accelerometer path yet — in-memory placeholder. */
     @Provides

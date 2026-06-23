@@ -8,7 +8,11 @@ import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.FileAttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.SettingsStorageProviderPreference
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpSalvageCounter
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpSalvageCounter
 import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.SettingsItemFoldStore
@@ -99,6 +103,28 @@ interface JvmDataBindings {
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
         SettingsKeepBrainDumpRecordingsPreference(
+            PreferencesSettings(Preferences.userRoot().node("com/circuitstitch/deferno/storage")),
+        )
+
+    /**
+     * The Salvage-draft `Brain dump #n` counter (#265, [[App setting]]), `java.util.prefs`-backed. Desktop
+     * doesn't capture brain dumps yet, so it's inert here; the binding keeps the graph complete.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun brainDumpSalvageCounter(): BrainDumpSalvageCounter =
+        SettingsBrainDumpSalvageCounter(
+            PreferencesSettings(Preferences.userRoot().node("com/circuitstitch/deferno/storage")),
+        )
+
+    /**
+     * The "Brain dump notifications" opt-in (#266, [[App setting]], **default off**), `java.util.prefs`-backed.
+     * Desktop doesn't capture brain dumps yet, so it's inert here; the binding keeps the graph complete.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun brainDumpNotificationPreference(): BrainDumpNotificationPreference =
+        SettingsBrainDumpNotificationPreference(
             PreferencesSettings(Preferences.userRoot().node("com/circuitstitch/deferno/storage")),
         )
 
