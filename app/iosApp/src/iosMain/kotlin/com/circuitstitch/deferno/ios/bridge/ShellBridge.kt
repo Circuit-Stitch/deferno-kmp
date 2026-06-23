@@ -228,6 +228,13 @@ fun settingsStateBridge(component: SettingsComponent): StateFlowBridge<UserSetti
 fun speechEngineBridge(component: SettingsComponent): StateFlowBridge<SpeechEngineSettings> = StateFlowBridge(component.speechEngine)
 fun inferenceEngineBridge(component: SettingsComponent): StateFlowBridge<InferenceEngineSettings> = StateFlowBridge(component.inferenceEngine)
 
+/** The current "Brain dump notifications" opt-in (#271), as a snapshot Bool for the Settings toggle. */
+fun brainDumpNotificationsEnabled(component: SettingsComponent): Boolean = component.brainDumpNotificationsEnabled.value
+
+/** Persist the "Brain dump notifications" opt-in (#271). The View requests OS auth on enable (the consent). */
+fun setBrainDumpNotificationsEnabled(component: SettingsComponent, enabled: Boolean) =
+    component.onBrainDumpNotificationsChanged(enabled)
+
 fun searchStateBridge(component: SearchComponent): StateFlowBridge<SearchState> = StateFlowBridge(component.state)
 fun newStateBridge(component: NewComponent): StateFlowBridge<NewState> = StateFlowBridge(component.state)
 
@@ -585,3 +592,21 @@ fun newDictationFieldIsTitle(state: NewState): Boolean = state.dictationField ==
 fun startNewDictationTitle(component: NewComponent) = component.startDictation(DictationField.Title)
 fun startNewDictationNotes(component: NewComponent) = component.startDictation(DictationField.Notes)
 fun stopNewDictation(component: NewComponent) = component.stopDictation()
+
+/** Whether [field]'s mic is currently capturing (the View shows it active). */
+fun newDictationListeningField(state: NewState, field: DictationField): Boolean =
+    state.dictation is DictationStatus.Listening && state.dictationField == field
+
+/**
+ * A gentle, non-PII message for a settled dictation problem (permission/engine), or `null` when idle /
+ * listening — so the View shows it only when there's something honest to say (never a silent failure).
+ */
+fun newDictationMessage(state: NewState): String? = when (state.dictation) {
+    is DictationStatus.PermissionDenied ->
+        "Microphone access is needed to dictate."
+    is DictationStatus.PermissionPermanentlyDenied ->
+        "Microphone access is off — enable it in Settings › Privacy & Security › Microphone."
+    is DictationStatus.Error ->
+        "Couldn't transcribe just now. Try again."
+    else -> null
+}

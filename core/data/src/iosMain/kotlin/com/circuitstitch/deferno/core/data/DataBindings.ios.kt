@@ -4,11 +4,15 @@ import com.circuitstitch.deferno.core.data.account.AccountDataStore
 import com.circuitstitch.deferno.core.data.account.AccountRegistry
 import com.circuitstitch.deferno.core.data.account.FileAccountRegistry
 import com.circuitstitch.deferno.core.data.account.NoOpAccountDataStore
+import com.circuitstitch.deferno.core.data.attachment.AppleFileAttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
-import com.circuitstitch.deferno.core.data.attachment.InMemoryAttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
-import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpSalvageCounter
+import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpSalvageCounter
+import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
@@ -21,6 +25,7 @@ import com.circuitstitch.deferno.core.data.auth.IosBrowserAuthenticator
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.connectivity.PathMonitorConnectivity
 import com.circuitstitch.deferno.core.scopes.AppScope
+import com.russhwolf.settings.NSUserDefaultsSettings
 import me.tatarka.inject.annotations.Provides
 import platform.UIKit.UIDevice
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
@@ -66,23 +71,51 @@ interface IosDataBindings {
     fun connectivity(): Connectivity = PathMonitorConnectivity()
 
     /**
-     * Storage-provider [[App setting]] + on-device byte store (#210). iOS placeholders for now — the real
-     * NSUserDefaults preference + NSFileManager byte store are an iOS follow-up (Android-first); these keep
-     * the graph complete and the iOS klib compiling. The selectable provider's iOS surface is SwiftUI.
+     * The storage-provider [[App setting]] — iOS placeholder still (the selectable provider's iOS surface is a
+     * follow-up); the on-device byte store below is now real so a Brain dump's retained recording survives.
      */
     @Provides
     @SingleIn(AppScope::class)
     fun storageProviderPreference(): StorageProviderPreference = InMemoryStorageProviderPreference()
 
+    /**
+     * The on-device attachment byte store (#210/#267): real now — `NSFileManager`-backed, so a Brain dump's
+     * Salvage recording persists across relaunch and attaches when accepted in the Inbox (was a lossy in-memory
+     * placeholder before iOS captured brain dumps).
+     */
     @Provides
     @SingleIn(AppScope::class)
-    fun attachmentBytesStore(): AttachmentBytesStore = InMemoryAttachmentBytesStore()
+    fun attachmentBytesStore(): AttachmentBytesStore = AppleFileAttachmentBytesStore()
 
-    /** "Keep brain-dump recordings" [[App setting]] (#211). iOS doesn't capture brain dumps — in-memory placeholder. */
+    /**
+     * "Keep brain-dump recordings" [[App setting]] (#211/#267) — `NSUserDefaults`-backed now that iOS captures
+     * brain dumps (sharing the device-local `deferno_storage` bag with the salvage counter). A salvage retains
+     * the recording regardless; this gates retention for *normal* takes.
+     */
     @Provides
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
-        InMemoryKeepBrainDumpRecordingsPreference()
+        SettingsKeepBrainDumpRecordingsPreference(NSUserDefaultsSettings.Factory().create("deferno_storage"))
+
+    /**
+     * The Salvage-draft `Brain dump #n` counter (#265/#267, [[App setting]]) — `NSUserDefaults`-backed so the
+     * numbering survives relaunch.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun brainDumpSalvageCounter(): BrainDumpSalvageCounter =
+        SettingsBrainDumpSalvageCounter(NSUserDefaultsSettings.Factory().create("deferno_storage"))
+
+    /**
+     * The "Brain dump notifications" opt-in (#266/#271, [[App setting]], **default off**) — `NSUserDefaults`-backed
+     * now that iOS surfaces the toggle (the Settings consent point requests notification authorization), sharing
+     * the device-local `deferno_storage` bag with keep-recordings + the salvage counter. The pipeline's notifier
+     * and the Settings toggle both read this one binding, so they agree.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun brainDumpNotificationPreference(): BrainDumpNotificationPreference =
+        SettingsBrainDumpNotificationPreference(NSUserDefaultsSettings.Factory().create("deferno_storage"))
 
     /** "Shake to undo" [[App setting]] (ADR-0034 decision 8, #230). iOS has no accelerometer path yet — in-memory placeholder. */
     @Provides

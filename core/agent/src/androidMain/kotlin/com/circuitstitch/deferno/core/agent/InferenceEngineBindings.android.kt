@@ -25,6 +25,9 @@ interface AndroidInferenceEngineBindings {
     fun inferenceEnginePreference(context: Context): InferenceEnginePreference =
         SettingsInferenceEnginePreference(
             SharedPreferencesSettings(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)),
+            // On-device defaults ON (ADR-0027 amendment / #266): the ungated shacl floor is selected out of
+            // the box, so Brain dump produces drafts with no manual engine pick. Cloud stays explicit opt-in.
+            default = InferenceEngineId.OnDeviceFloor,
         )
 
     /** The deterministic floor as a selectable engine in the Settings catalog — OnDevice, so ungated. */

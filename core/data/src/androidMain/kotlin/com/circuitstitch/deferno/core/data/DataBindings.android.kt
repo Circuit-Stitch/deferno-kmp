@@ -7,7 +7,11 @@ import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.FileAttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.SettingsStorageProviderPreference
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpSalvageCounter
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpSalvageCounter
 import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.SettingsItemFoldStore
@@ -98,6 +102,28 @@ interface AndroidDataBindings {
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(context: Context): KeepBrainDumpRecordingsPreference =
         SettingsKeepBrainDumpRecordingsPreference(
+            SharedPreferencesSettings(context.getSharedPreferences(STORAGE_PREFS_NAME, Context.MODE_PRIVATE)),
+        )
+
+    /**
+     * The device-local monotonic counter behind a Salvage draft's `Brain dump #n` title (#265, [[App setting]]).
+     * SharedPreferences-backed, sharing the device-local app-settings bag (a distinct, namespaced key).
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun brainDumpSalvageCounter(context: Context): BrainDumpSalvageCounter =
+        SettingsBrainDumpSalvageCounter(
+            SharedPreferencesSettings(context.getSharedPreferences(STORAGE_PREFS_NAME, Context.MODE_PRIVATE)),
+        )
+
+    /**
+     * The device-local "Brain dump notifications" opt-in (#266, [[App setting]], **default off**) — gates the
+     * completion notification. SharedPreferences-backed, sharing the device-local app-settings bag.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun brainDumpNotificationPreference(context: Context): BrainDumpNotificationPreference =
+        SettingsBrainDumpNotificationPreference(
             SharedPreferencesSettings(context.getSharedPreferences(STORAGE_PREFS_NAME, Context.MODE_PRIVATE)),
         )
 

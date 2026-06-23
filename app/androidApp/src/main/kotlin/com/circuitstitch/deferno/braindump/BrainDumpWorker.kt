@@ -17,43 +17,41 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.circuitstitch.deferno.DefernoApplication
-import com.circuitstitch.deferno.core.agent.DraftTask
 import com.circuitstitch.deferno.core.agent.Extractor
-import com.circuitstitch.deferno.core.agent.InferenceResult
-import com.circuitstitch.deferno.core.agent.Transcript
-import com.circuitstitch.deferno.core.data.braindump.brainDumpRecordingPlaceholderId
 import com.circuitstitch.deferno.core.di.createAccountComponent
-import com.circuitstitch.deferno.core.model.BrainDumpDraft
-import com.circuitstitch.deferno.core.model.BrainDumpDraftId
-import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
 import com.circuitstitch.deferno.core.speech.BrainDumpTranscriber
+import com.circuitstitch.deferno.feature.braindumps.BrainDumpNotifier
+import com.circuitstitch.deferno.feature.braindumps.BrainDumpOutcome
+import com.circuitstitch.deferno.feature.braindumps.BrainDumpPipeline
+import com.circuitstitch.deferno.feature.braindumps.BrainDumpTake
 import kotlinx.datetime.LocalDate
 import software.amazon.app.kmplogger.logger
 import java.io.File
 import kotlin.time.Instant
 
 /**
- * The async Brain dump worker (#150, ADR-0027). Recording is foreground (the overlay holds the mic and
+ * The async Brain dump worker (#150, ADR-0027/0037). Recording is foreground (the overlay holds the mic and
  * writes a WAV via `AudioFileRecorder`); this worker runs the **slow** part — on-device transcription +
  * extraction + draft persistence — so it survives the overlay closing. It is enqueued by [enqueueBrainDump]
- * with the WAV path and the date context captured at Stop (so extraction's relative-date resolution and
- * the draft timestamps never read a clock in here — ADR `feedback-no-real-clock-dates`).
+ * with the WAV path and the date context captured at Stop (so extraction's relative-date resolution and the
+ * draft timestamps never read a clock in here — ADR `feedback-no-real-clock-dates`).
+ *
+ * The orchestration itself lives in the shared [BrainDumpPipeline] (commonMain, reused by iOS — ADR-0037):
+ * `transcribe → extract → (persist drafts | Salvage draft)`, with transcription, audio retention and the
+ * completion notification injected as Android seams below. This worker is the thin WorkManager host adapter:
+ * input parsing, building the DI collaborators, and deleting the temp WAV in `finally`.
  *
  * DI: WorkManager's default reflective factory builds this; it reaches the held DI graph off
- * `(applicationContext as DefernoApplication).appComponent` — the AppScope `inferenceEngine`, and the
- * active Account's `brainDumpDraftRepository` via `createAccountComponent` (the same recipe the shell's
- * AccountSession uses). Privacy (ADR-0009/0018): the temp WAV is deleted right after transcription and no
- * audio or transcript text is logged. When the "keep brain-dump recordings" App setting is on (#211), a
- * COPY of the recording is retained as an on-device attachment placeholder (recognition still never leaves
- * the device — this is storage of the user's own content, not transcription) for the Inbox accept to attach
- * to the created Task; an empty extraction retains nothing.
+ * `(applicationContext as DefernoApplication).appComponent` — the AppScope `inferenceEngine` /
+ * `keepBrainDumpRecordingsPreference` / `brainDumpSalvageCounter`, and the active Account's repositories via
+ * `createAccountComponent` (the same recipe the shell's AccountSession uses). Privacy (ADR-0009/0018): the
+ * temp WAV is deleted right after processing and no audio or transcript text is logged.
  *
  * **Draft visibility (Stage 3 note):** this builds its OWN AccountComponent, so its SQLDelight driver is
- * distinct from the UI's — its `upsert`s don't fire the UI driver's live `asFlow()` listeners. That's
- * fine for the real flow (background worker → notification → the user opens the Brain dumps Destination
- * *after*, and that fresh collection's initial `selectAll()` reads the rows). The only gap is live
- * auto-refresh while the drafts screen is already open during a write — so the Stage 3 Destination should
- * re-query on resume (or observe this work's completion), not rely on a live cross-driver notification.
+ * distinct from the UI's — its `upsert`s don't fire the UI driver's live `asFlow()` listeners. That's fine
+ * for the real flow (background worker → the user opens the Inbox *after*, whose fresh collection's initial
+ * `selectAll()` reads the rows). The Inbox Destination re-queries on resume rather than relying on a live
+ * cross-driver notification.
  */
 class BrainDumpWorker(
     context: Context,
@@ -72,44 +70,34 @@ class BrainDumpWorker(
             ?: return done(wav) // signed out — nothing to persist into
 
         return try {
-            val text = BrainDumpTranscriber(applicationContext).transcribe(wav)
-            if (text.isBlank()) {
-                logger.i { "BrainDumpWorker: empty transcript, no drafts" }
-                notifyDraftsReady(applicationContext, 0)
-                return Result.success()
-            }
-            val proposal = when (val r = Extractor(appComponent.inferenceEngine).extract(Transcript(text), today, timeZone)) {
-                is InferenceResult.Success -> r.value
-                is InferenceResult.Failure -> {
-                    logger.w { "BrainDumpWorker: extraction failed" }
-                    return Result.success()
-                }
-            }
             val accountComponent = createAccountComponent(appComponent, account)
-            val repo = accountComponent.brainDumpDraftRepository
-            proposal.drafts.forEach { repo.upsert(it.toDraft(createdAt)) }
-            logger.i { "BrainDumpWorker: persisted ${proposal.drafts.size} draft(s)" }
-            // #211: retain the source recording as an on-device attachment placeholder (keyed by [createdAt],
-            // the shared per-recording key) so the Inbox accept can attach it to the created Task — gated on
-            // the device-local "keep recordings" App setting (default on) and only when there are drafts to
-            // triage (an empty extraction has nothing to accept, so retaining would orphan). Best-effort: a
-            // failed save must never lose the drafts. Recognition still never leaves the device.
-            if (proposal.drafts.isNotEmpty() && appComponent.keepBrainDumpRecordingsPreference.enabled()) {
-                runCatching {
+            val pipeline = BrainDumpPipeline(
+                extractor = Extractor(appComponent.inferenceEngine),
+                drafts = accountComponent.brainDumpDraftRepository::upsert,
+                recordings = { id, bytes, ts ->
                     accountComponent.localAttachmentRepository.save(
-                        id = brainDumpRecordingPlaceholderId(createdAt),
+                        id = id,
                         taskId = null,
-                        filename = "brain-dump-${createdAt.toEpochMilliseconds()}.wav",
+                        filename = "brain-dump-${ts.toEpochMilliseconds()}.wav",
                         mime = "audio/wav",
-                        bytes = wav.readBytes(),
-                        createdAt = createdAt,
+                        bytes = bytes,
+                        createdAt = ts,
                     )
-                }
-            }
-            notifyDraftsReady(applicationContext, proposal.drafts.size)
+                },
+                keepRecordings = appComponent.keepBrainDumpRecordingsPreference,
+                salvageCounter = appComponent.brainDumpSalvageCounter,
+                notifications = appComponent.brainDumpNotificationPreference,
+                notifier = AndroidBrainDumpNotifier(applicationContext),
+            )
+            pipeline.process(
+                take = AndroidBrainDumpTake(wav, BrainDumpTranscriber(applicationContext)),
+                today = today,
+                timeZone = timeZone,
+                createdAt = createdAt,
+            )
             Result.success()
         } catch (e: Exception) {
-            logger.w { "BrainDumpWorker: transcription/extraction error (${e::class.simpleName})" }
+            logger.w { "BrainDumpWorker: pipeline error (${e::class.simpleName})" }
             Result.success() // best-effort; the audio is consumed, retrying can't help
         } finally {
             wav.delete()
@@ -123,15 +111,19 @@ class BrainDumpWorker(
     }
 }
 
-private fun DraftTask.toDraft(createdAt: Instant): BrainDumpDraft = BrainDumpDraft(
-    id = BrainDumpDraftId(id),
-    title = title,
-    notes = description,
-    completeBy = completeBy,
-    deadlineTimeOfDay = deadlineTimeOfDay,
-    status = BrainDumpDraftStatus.Ready,
-    createdAt = createdAt,
-)
+/** The transcription seam: whole-file on-device transcription via [BrainDumpTranscriber] (returns "" on failure). */
+private class AndroidBrainDumpTake(
+    private val wav: File,
+    private val transcriber: BrainDumpTranscriber,
+) : BrainDumpTake {
+    override suspend fun transcribe(): String = transcriber.transcribe(wav)
+    override suspend fun readBytes(): ByteArray = wav.readBytes()
+}
+
+/** The notification seam: posts the local "drafts ready" / "recording saved" notification (permission-gated). */
+private class AndroidBrainDumpNotifier(private val context: Context) : BrainDumpNotifier {
+    override fun completed(outcome: BrainDumpOutcome) = notifyDraftsReady(context, outcome)
+}
 
 private const val KEY_WAV_PATH = "wav_path"
 private const val KEY_TODAY = "today"
@@ -139,9 +131,9 @@ private const val KEY_TIME_ZONE = "time_zone"
 private const val KEY_ENQUEUED_AT = "enqueued_at"
 
 /**
- * Enqueue an on-device Brain dump for [wav] (already recorded by the overlay). [today] and [timeZone] are
- * the threaded UI date context (NOT recomputed here); the enqueue instant is captured at this real user
- * action (the app entry, like `MainActivity` captures `today`) so the worker stays clock-free.
+ * Enqueue an on-device Brain dump for [wav] (already recorded by the overlay). [today] and [timeZone] are the
+ * threaded UI date context (NOT recomputed here); the enqueue instant is captured at this real user action (the
+ * app entry, like `MainActivity` captures `today`) so the worker stays clock-free.
  */
 fun enqueueBrainDump(context: Context, wav: File, today: LocalDate, timeZone: String) {
     val request = OneTimeWorkRequestBuilder<BrainDumpWorker>()
@@ -160,16 +152,19 @@ fun enqueueBrainDump(context: Context, wav: File, today: LocalDate, timeZone: St
 private const val CHANNEL_ID = "brain_dump"
 private const val NOTIFICATION_ID = 4150
 
-private fun notifyDraftsReady(context: Context, count: Int) {
+private fun notifyDraftsReady(context: Context, outcome: BrainDumpOutcome) {
     val manager = context.getSystemService(NotificationManager::class.java) ?: return
     // minSdk 27 ≥ 26, so the channel always exists; creating it is idempotent.
     manager.createNotificationChannel(
         NotificationChannel(CHANNEL_ID, "Brain dumps", NotificationManager.IMPORTANCE_DEFAULT),
     )
-    val text = when (count) {
-        0 -> "No tasks found in that brain dump"
-        1 -> "1 draft ready to review"
-        else -> "$count drafts ready to review"
+    val text = when (outcome) {
+        is BrainDumpOutcome.Drafts -> when (outcome.count) {
+            1 -> "1 draft ready to review"
+            else -> "${outcome.count} drafts ready to review"
+        }
+        // Salvage: the take couldn't become tasks, but the recording is kept for the user to review.
+        BrainDumpOutcome.Salvaged -> "Recording saved to review"
     }
     // Tapping the notification opens the app on the Inbox, where the drafts are reviewed (#150 Stage 4).
     // MainActivity is singleTop, so a running instance is reused (onNewIntent) rather than stacked.

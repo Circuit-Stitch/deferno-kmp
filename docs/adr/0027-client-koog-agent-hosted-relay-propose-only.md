@@ -72,6 +72,30 @@ binary; and the backend owns the domain language and already auto-seeds the dail
   > Optionally retaining the recording as a Task attachment is #211 (on pluggable offline-first attachment
   > storage #210).
 
+> **Amendment (on-device default ON; cross-platform brain-dump parity).** Three refinements, landing with
+> the iOS brain-dump app (**ADR-0037**), supersede parts of the decision above:
+>
+> - **On-device engines now default ON; cloud stays explicit opt-in.** The blanket "**defaulting to Off** /
+>   AI is never forced on" is narrowed to its privacy core — *nothing off-device happens silently.*
+>   On-device inference is ungated, private, and free, so the inference-engine App setting now defaults to
+>   the **best available on-device engine** on every platform (Android shacl floor, iOS Apple Foundation
+>   Models) where the device can run one. A **cloud** engine is still never selected without explicit
+>   opt-in + per-Account entitlement. First-run consent moves to **onboarding** (which can confirm or
+>   disable on-device AI) — there is no per-feature prompt. Where no on-device engine is available the
+>   choice resolves unavailable and the Salvage draft covers it. (The default was `Off` on every platform,
+>   so Brain dump silently produced nothing by default even on Android — this closes that gap.)
+> - **A take is never wasted (every platform).** When a recording can't become drafts — no engine,
+>   transcription failed, or empty extraction — the worker writes one **Salvage draft** (CONTEXT.md) to the
+>   Inbox carrying the audio and a one-sentence reason (or the raw Transcript when it transcribed but found
+>   no tasks), instead of discarding the take. This replaces Android's prior "notify 0 and discard"; the
+>   recording is kept even when the keep-recordings preference is off (it is the only artifact left).
+> - **Brain-dump completion notifications are opt-in.** A device-local App setting (default **off**, both
+>   platforms) gates the local notification; with it off, drafts simply appear in the Inbox. This
+>   supersedes Android's prior best-effort auto-notify.
+>
+> iOS on-device inference is therefore **no longer "deferred with its app"** — it ships now via Apple
+> Foundation Models; the iOS engine + runtime specifics are **ADR-0037**.
+
 **Considered and rejected.** *BYO user API key* (not in v1 — remains additive later as another
 engine-catalog entry). *Backend agent endpoints* (duplicates agent
 logic in two languages the moment a local tier exists). *Server-fetched prompts* (a versioned

@@ -6,6 +6,8 @@ import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpSalvageCounter
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
@@ -141,6 +143,21 @@ abstract class AppComponent(
      * every target. Defaults to on.
      */
     abstract val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference
+
+    /**
+     * The device-local monotonic counter behind a **[[Salvage draft]]**'s `Brain dump #n` title (#265, ADR-0037).
+     * An AppScope [[App setting]] — device-local, never synced, survives relaunch. Read by the shared brain-dump
+     * pipeline when it writes a salvage draft; surfaced here to compile-validate the binding on every target.
+     */
+    abstract val brainDumpSalvageCounter: BrainDumpSalvageCounter
+
+    /**
+     * The device-local **"Brain dump notifications"** opt-in (#266, ADR-0037): whether a completion notification
+     * fires when a Brain dump finishes. An AppScope [[App setting]] — device-local, never synced, **default off**.
+     * Read by the shared brain-dump pipeline to gate the notifier; surfaced here to compile-validate the binding
+     * on every target.
+     */
+    abstract val brainDumpNotificationPreference: BrainDumpNotificationPreference
 
     /**
      * The device-local **"shake to undo"** choice the Tasks tree + Settings render (ADR-0034 decision 8,

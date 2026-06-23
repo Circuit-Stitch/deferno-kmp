@@ -11,6 +11,8 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":core:common")) // componentScope() (#174)
             implementation(project(":core:model")) // BrainDumpDraft
+            implementation(project(":core:agent")) // Extractor + InferenceResult — the shared brain-dump pipeline (#265)
+            implementation(project(":core:data")) // draft/recording persistence seams + keep-recordings + salvage counter (#265)
             // `api`, not `implementation`: `InboxComponent`/`DefaultInboxComponent` expose Decompose
             // (`ComponentContext`) and coroutines `StateFlow` in their public API, so View consumers
             // (`:feature:braindumps:ui`) and the shell must see them.

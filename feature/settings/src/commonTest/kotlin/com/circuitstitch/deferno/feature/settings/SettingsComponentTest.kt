@@ -8,6 +8,8 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
 import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
@@ -50,6 +52,8 @@ class SettingsComponentTest {
         storageProviderCatalog: StorageProviderCatalog = StorageProviderCatalog.Inert,
         keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
             InMemoryKeepBrainDumpRecordingsPreference(),
+        brainDumpNotificationPreference: BrainDumpNotificationPreference =
+            InMemoryBrainDumpNotificationPreference(),
         shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
     ): Triple<DefaultSettingsComponent, FakeSettingsRepository, FakeSettingsEditor> {
         val repo = FakeSettingsRepository(initial)
@@ -63,6 +67,7 @@ class SettingsComponentTest {
             inferenceEngineCatalog = inferenceEngineCatalog,
             storageProviderCatalog = storageProviderCatalog,
             keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
+            brainDumpNotificationPreference = brainDumpNotificationPreference,
             shakeToUndoPreference = shakeToUndoPreference,
             coroutineContext = Dispatchers.Unconfined,
         )
@@ -107,6 +112,23 @@ class SettingsComponentTest {
         component.onKeepBrainDumpRecordingsChanged(true)
         assertEquals(true, component.keepBrainDumpRecordings.value)
         assertEquals(true, preference.enabled())
+    }
+
+    @Test
+    fun brainDumpNotifications_defaultsOff_andTogglePersistsThroughThePreference() {
+        val preference = InMemoryBrainDumpNotificationPreference()
+        val (component, _, _) = component(brainDumpNotificationPreference = preference)
+
+        // Default off (#266/#271): drafts simply appear in the Inbox; opting in is the consent.
+        assertEquals(false, component.brainDumpNotificationsEnabled.value)
+
+        component.onBrainDumpNotificationsChanged(true)
+        assertEquals(true, component.brainDumpNotificationsEnabled.value)
+        assertEquals(true, preference.enabled(), "device-local — persisted through the preference")
+
+        component.onBrainDumpNotificationsChanged(false)
+        assertEquals(false, component.brainDumpNotificationsEnabled.value)
+        assertEquals(false, preference.enabled())
     }
 
     @Test

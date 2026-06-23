@@ -12,10 +12,13 @@ import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
 import com.circuitstitch.deferno.feature.tasks.ItemTreeState
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
+import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.reinterpret
+import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -24,6 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import platform.Foundation.NSData
+import platform.Foundation.create
 import kotlin.time.Instant
 
 /**
@@ -156,4 +160,22 @@ fun commentDateLabel(comment: Comment): String =
 fun addTaskAttachment(component: TaskDetailComponent, filename: String, contentType: String, data: NSData) {
     val bytes = data.bytes?.reinterpret<ByteVar>()?.readBytes(data.length.toInt()) ?: ByteArray(0)
     component.onAddAttachments(listOf(AttachmentUpload(filename = filename, contentType = contentType, bytes = bytes)))
+}
+
+/** The reverse of `addTaskAttachment`'s `NSData`→`ByteArray`: copy a Kotlin [ByteArray] into an `NSData` for Swift. */
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
+private fun ByteArray.toNSData(): NSData =
+    if (isEmpty()) NSData() else usePinned { NSData.create(bytes = it.addressOf(0), length = size.toULong()) }
+
+/**
+ * Read an **on-device** attachment's bytes for playback (#272) — the retained brain-dump recording the synced
+ * `attachments` path never has. The repository read is local + quick, so it runs in a one-shot
+ * [Dispatchers.Main] coroutine (matching [StateFlowBridge]); [onData] then gets the bytes as `NSData` for
+ * `AVAudioPlayer`, or `null` if the row was already deleted. `TaskDetailState.onDeviceAttachments` and
+ * `TaskDetailComponent.onDeleteOnDeviceAttachment` are plain enough that Swift reads/calls them directly.
+ */
+fun onDeviceAttachmentData(component: TaskDetailComponent, attachmentId: String, onData: (NSData?) -> Unit) {
+    CoroutineScope(Dispatchers.Main).launch {
+        onData(component.onDeviceAttachmentBytes(attachmentId)?.toNSData())
+    }
 }

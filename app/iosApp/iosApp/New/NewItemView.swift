@@ -4,8 +4,9 @@ import SwiftUI
 /// The New create overlay (#71) — a thin renderer of `NewComponent`. An **explicit** Task/Habit/Chore/
 /// Event kind picker (never inferred, ADR-0015) over a per-kind form, dispatched through the shell's
 /// **online-only** create seam (ADR-0016): on success the shell dismisses; offline shows a gentle
-/// "reconnect to save"; a server error shows a gentle message — never a silent failure. Dictation is
-/// omitted here (no iOS speech engine ships yet — `dictationAvailable` is false, the mic stays hidden).
+/// "reconnect to save"; a server error shows a gentle message — never a silent failure. Dictation (#92/#268,
+/// ADR-0018) fills the title/notes on-device via `IosDictation` (SFSpeech): the mic shows when the engine is
+/// available, fills text only (never the kind, ADR-0015), and surfaces permission/engine problems gently.
 struct NewItemView: View {
     let component: NewComponent
     @StateObject private var state: StateFlowObserver<NewState>
@@ -42,6 +43,7 @@ struct NewItemView: View {
                         dateField
                         deadlineTimeField(value)
                     }
+                    dictationMessage(value)
                     statusMessage(value)
                     createButton(value)
                 }
@@ -74,16 +76,49 @@ struct NewItemView: View {
     }
 
     private func titleField(_ value: NewState) -> some View {
-        TextField("Title", text: Binding(get: { state.value.title }, set: { component.setTitle(title: $0) }))
-            .textFieldStyle(.roundedBorder)
-            .accessibilityLabel("Title")
+        HStack(spacing: 8) {
+            TextField("Title", text: Binding(get: { state.value.title }, set: { component.setTitle(title: $0) }))
+                .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("Title")
+            micButton(.title, value)
+        }
     }
 
     private func notesField(_ value: NewState) -> some View {
-        TextField("Notes", text: Binding(get: { state.value.notes }, set: { component.setNotes(notes: $0) }), axis: .vertical)
-            .lineLimit(2...5)
-            .textFieldStyle(.roundedBorder)
-            .accessibilityLabel("Notes")
+        HStack(alignment: .top, spacing: 8) {
+            TextField("Notes", text: Binding(get: { state.value.notes }, set: { component.setNotes(notes: $0) }), axis: .vertical)
+                .lineLimit(2...5)
+                .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("Notes")
+            micButton(.notes, value)
+        }
+    }
+
+    /// The per-field dictation mic (#92/#268, ADR-0018), shown only when the on-device engine is available.
+    /// Tapping toggles capture on that field; a tap while listening stops, keeping the streamed text (it's
+    /// ordinary editable text from there, ADR-0018).
+    @ViewBuilder
+    private func micButton(_ field: DictationField, _ value: NewState) -> some View {
+        if value.dictationAvailable {
+            let listening = ShellBridgeKt.doNewDictationListeningField(state: value, field: field)
+            Button {
+                if listening { component.stopDictation() } else { component.startDictation(field: field) }
+            } label: {
+                Image(systemName: listening ? "mic.fill" : "mic")
+                    .foregroundStyle(listening ? colors.primary : colors.inkMuted)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(listening ? "Stop dictation" : "Dictate")
+        }
+    }
+
+    /// A gentle, honest line for a settled dictation problem (permission/engine) — never a silent failure.
+    @ViewBuilder
+    private func dictationMessage(_ value: NewState) -> some View {
+        if let message = ShellBridgeKt.doNewDictationMessage(state: value) {
+            Text(message).font(.footnote).foregroundStyle(colors.inkMuted)
+                .accessibilityLabel(message)
+        }
     }
 
     private var dateField: some View {

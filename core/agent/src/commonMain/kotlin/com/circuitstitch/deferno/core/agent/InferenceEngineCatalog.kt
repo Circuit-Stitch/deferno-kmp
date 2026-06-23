@@ -25,6 +25,15 @@ value class InferenceEngineId(val value: String) {
          * id alongside this one — origin stays OnDevice, so neither needs entitlement.
          */
         val OnDeviceFloor: InferenceEngineId = InferenceEngineId("on-device-floor")
+
+        /**
+         * The on-device **Apple Foundation Models** engine (iOS 26 + Apple-Intelligence hardware, ADR-0037):
+         * transcript → draft Tasks via the system language model, validated against the Kotlin schema
+         * (propose-only). [InferenceEngineOrigin.OnDevice] → ungated. The iOS default; the actual engine
+         * registers under this id from the app layer (#269) — until then a selection routes to NotConfigured
+         * (and the Salvage draft covers it).
+         */
+        val OnDeviceFoundationModels: InferenceEngineId = InferenceEngineId("on-device-foundation-models")
     }
 }
 

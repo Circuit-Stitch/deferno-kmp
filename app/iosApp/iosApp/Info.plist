@@ -26,5 +26,15 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Brain dump background durability (#270): the BGProcessingTask backstop that finishes a take whose
+	     in-app grace window expired while backgrounded. The id must match BRAIN_DUMP_BG_TASK_ID. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.circuitstitch.deferno.braindump.process</string>
+	</array>
 </dict>
 </plist>

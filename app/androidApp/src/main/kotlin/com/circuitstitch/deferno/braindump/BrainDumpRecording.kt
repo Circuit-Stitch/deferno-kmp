@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.braindump
 
 import android.content.Context
 import com.circuitstitch.deferno.core.speech.AudioFileRecorder
+import com.circuitstitch.deferno.feature.braindumps.isTrivialRecording
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
@@ -36,7 +37,7 @@ suspend fun recordBrainDumpAudio(
             // Stop instead of freezing on the last frame / leaking into the next recording.
             onPcm(FloatArray(0))
             try {
-                if (wav.length() > WAV_HEADER_BYTES) {
+                if (!isTrivialRecording(wav.length())) {
                     enqueueBrainDump(context, wav, today, timeZone)
                 } else {
                     wav.delete() // nothing was captured — don't spin up a worker for silence
@@ -51,7 +52,3 @@ suspend fun recordBrainDumpAudio(
         }
     }
 }
-
-// A PCM16 WAV with zero samples is just the 44-byte RIFF/fmt/data header (what WavCodec writes); anything
-// larger carries audio. Guards the tap-and-immediately-stop / mic-never-opened case.
-private const val WAV_HEADER_BYTES = 44L
