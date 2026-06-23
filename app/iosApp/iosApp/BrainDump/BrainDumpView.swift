@@ -54,8 +54,8 @@ struct BrainDumpView: View {
         switch phase {
         case "Recording":
             VStack(spacing: 28) {
-                SpectrumBars(levels: recorder.levels, color: colors.primary)
-                    .frame(height: 96).padding(.horizontal, 32)
+                SpectrumBars(levels: recorder.levels)
+                    .frame(width: 50, height: 30)
                 MonoMeta(text: timeLabel(elapsed))
                 stopButton
                 Text("Listening…").font(.subheadline).foregroundStyle(colors.inkMuted)
@@ -158,18 +158,30 @@ struct BrainDumpView: View {
     }
 }
 
-/// A live VU spectrum (iOS twin of `SpectrumBars.kt`): a row of capsules whose heights track a rolling
-/// window of mic levels, newest on the right.
+/// A live frequency spectrum (iOS twin of `SpectrumBars.kt`): a fixed row of capsules whose heights track the
+/// mic's FFT bands — low frequencies on the left, high on the right. Each capsule is also tinted by its level
+/// off a green→red ramp (green at rest, red at peak).
 struct SpectrumBars: View {
     let levels: [CGFloat]
-    let color: Color
+
+    /// Pre-rendered 16-step green→red ramp, hue-interpolated (green 120° → red 0°) so the steps read as a smooth
+    /// green→yellow→orange→red heat gradient. Brightness stays at 1.0 so the mid-ramp yellow never dims toward
+    /// olive/brown; saturation is eased to soften the green end. Indexed by level: 0% → green, 100% → red.
+    private static let palette: [Color] = (0..<16).map { i in
+        let hue = (1 - Double(i) / 15) / 3 // 1/3 (green) → 0 (red)
+        return Color(hue: hue, saturation: 0.8, brightness: 1.0)
+    }
+
+    private static func color(for level: CGFloat) -> Color {
+        palette[min(15, max(0, Int((level * 15).rounded())))]
+    }
 
     var body: some View {
         GeometryReader { geo in
-            HStack(alignment: .center, spacing: 4) {
+            HStack(alignment: .center, spacing: 1) {
                 ForEach(levels.indices, id: \.self) { i in
                     Capsule()
-                        .fill(color.opacity(0.55 + 0.45 * levels[i]))
+                        .fill(Self.color(for: levels[i]))
                         .frame(height: max(4, levels[i] * geo.size.height))
                         .frame(maxHeight: .infinity, alignment: .center)
                 }
