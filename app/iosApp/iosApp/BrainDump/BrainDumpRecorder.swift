@@ -24,11 +24,25 @@ final class BrainDumpRecorder: ObservableObject, NativeAudioRecorder {
         DispatchQueue.main.async { [self] in
             guard !running else { return }
             let session = AVAudioSession.sharedInstance()
-            try? session.setCategory(.record, mode: .measurement, options: [])
+            // `.allowBluetooth` lets the input route use a connected Bluetooth (AirPods) mic over HFP — without
+            // it the session can't open an input while AirPods are connected (e.g. right after a call), which
+            // is exactly the "Couldn't record" the user hit. `.default` mode is the most route-compatible for
+            // voice capture (`.measurement` is finicky over Bluetooth HFP). Built-in mic still works unchanged.
+            try? session.setCategory(.record, mode: .default, options: [.allowBluetooth])
             try? session.setActive(true, options: [])
 
             let input = engine.inputNode
             let format = input.outputFormat(forBus: 0)
+            // The mic can be unavailable even with permission — an active phone/VoIP call owns the input route,
+            // or no input route resolves. Then this format collapses to 0 Hz / 0 channels, and installing a tap
+            // (or opening an AVAudioFile) with it raises an AVFoundation NSException: an uncatchable abort, not a
+            // Swift throw `try?` can swallow. Treat it as a failed start so the Kotlin seam surfaces the shared
+            // Failed state (the salvage path) instead of crashing.
+            guard format.sampleRate > 0, format.channelCount > 0 else {
+                try? session.setActive(false, options: [])
+                onFailed()
+                return
+            }
             // A standard PCM16 WAV at the mic's native rate/channels; AVAudioFile converts the float32 tap
             // buffers to 16-bit on write. (#269 resamples to the transcriber's format; #267 only needs a
             // durable, retainable recording.)
