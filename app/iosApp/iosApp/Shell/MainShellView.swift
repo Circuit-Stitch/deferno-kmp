@@ -64,10 +64,11 @@ struct MainShellView: View {
                     .overlay {
                         if fraction > 0 {
                             // Transparent — the revealed card is NOT dimmed; this layer exists only as the
-                            // dismiss target (contentShape makes Color.clear hit-testable).
+                            // dismiss target (contentShape makes Color.clear hit-testable). One recognizer
+                            // only: a tap-to-dismiss is folded into the drag's release (a near-stationary
+                            // gesture), so there's no tap-vs-drag arbitration to stall the 0-distance drag.
                             Color.clear
                                 .contentShape(Rectangle())
-                                .onTapGesture { setDrawer(false) }
                                 .gesture(drawerDrag(drawerWidth))
                                 .allowsHitTesting(drawerOpen)
                         }
@@ -271,12 +272,20 @@ struct MainShellView: View {
     /// (momentum). `dragX` is raw translation; `openFraction` clamps it against the current open base, so
     /// the one gesture serves both directions (open from 0, close from 1).
     private func drawerDrag(_ drawerWidth: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 10)
+        // Global coordinate space, not the default .local: the close-drag overlay rides *inside* the
+        // `.offset`-ed content, so a local-space translation would be re-measured in a frame the offset
+        // itself moves each tick — a feedback loop that jitters the card ~40px every other frame. Global
+        // space is stationary, breaking the loop. (Opening is unaffected: its edge handle never moves.)
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { dragX = $0.translation.width }
             .onEnded { value in
+                // A near-stationary press is a tap, not a drag: on the open scrim it dismisses, on the
+                // closed edge handle it's a no-op (stays closed). A real drag settles to the nearer end,
+                // folding fling velocity in via predictedEndTranslation so a short flick still commits.
+                let moved = abs(value.translation.width) + abs(value.translation.height)
                 let predicted = (drawerOpen ? 1 : 0) + value.predictedEndTranslation.width / drawerWidth
                 withAnimation(Self.drawerAnimation) {
-                    drawerOpen = predicted >= 0.5
+                    drawerOpen = moved < 10 ? false : predicted >= 0.5
                     dragX = nil
                 }
             }
