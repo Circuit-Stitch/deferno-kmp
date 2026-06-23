@@ -10,6 +10,9 @@ import com.circuitstitch.deferno.core.di.createAccountComponent
 import com.circuitstitch.deferno.core.di.createAppComponent
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.PlatformContext
+import com.circuitstitch.deferno.core.speech.SpeechToText
+import com.circuitstitch.deferno.ios.speech.NativeDictation
+import com.circuitstitch.deferno.ios.speech.NativeSpeechToText
 import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.RootComponent
@@ -53,9 +56,14 @@ import software.amazon.app.kmplogger.logger
  * the AppScope network client + the Keychain vault, so first-run login works regardless.
  *
  * [recorder] is the injected Swift mic recorder (#267, ADR-0037) the Brain dump `record` seam drives; `null`
- * (e.g. a unit host) leaves that seam the inert no-op default.
+ * (e.g. a unit host) leaves that seam the inert no-op default. [dictation] is the injected Swift on-device
+ * `SFSpeechRecognizer` engine (#268, ADR-0018) the New surface's mic drives; `null` leaves the AppScope
+ * Unavailable floor (so the mic stays hidden).
  */
-class DefernoRoot(private val recorder: NativeAudioRecorder? = null) {
+class DefernoRoot(
+    private val recorder: NativeAudioRecorder? = null,
+    dictation: NativeDictation? = null,
+) {
 
     init {
         // Configure the shared logger ONCE per process, before the DI graph builds or anything logs
@@ -84,6 +92,11 @@ class DefernoRoot(private val recorder: NativeAudioRecorder? = null) {
     // Startup work (roster hydration + dev seeding) runs off the main thread; the AccountManager's
     // StateFlows then drive the reactive shell. SupervisorJob so one failure doesn't cancel the rest.
     private val bootstrapScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    // Dictation (#268, ADR-0018): wrap the injected Swift SFSpeech engine, else the AppScope selector
+    // (which resolves to the Unavailable floor until an iOS engine is bound — the New mic stays hidden).
+    private val speechToText: SpeechToText =
+        dictation?.let { NativeSpeechToText(it) } ?: appComponent.speechToText
 
     // Brain dump's record→Inbox seam (#267, ADR-0037): records the mic to a durable WAV, then on Stop hands
     // the take to the shared pipeline on an app-scope coroutine — the WorkManager-less iOS twin of Android's
@@ -127,10 +140,10 @@ class DefernoRoot(private val recorder: NativeAudioRecorder? = null) {
             feedbackRepository = appComponent.feedbackRepository,
             // Settings → Security & 2FA: open the Active Account's Zitadel console URL in Safari.
             onOpenConsoleUrl = { url -> openExternalUrl(url) },
-            // Dictation (#92, ADR-0018): the AppScope speech engine + the device locale it recognizes.
-            // No iOS engine ships yet (#94/#95) → the selector resolves to the Unavailable floor, so the
-            // New surface's mic simply stays hidden (dictationAvailable = false).
-            speechToText = appComponent.speechToText,
+            // Dictation (#92/#268, ADR-0018): the injected on-device SFSpeech engine (or the AppScope
+            // Unavailable floor when none is injected — the mic stays hidden) + the device locale it
+            // recognizes. The New surface's per-field mic drives listen() through this seam.
+            speechToText = speechToText,
             locale = currentLocaleTag(),
             speechEngineCatalog = appComponent.speechEngineCatalog,
             // Agent inference-engine choice + entitlement gate (#150): threaded from the AppScope graph; iOS

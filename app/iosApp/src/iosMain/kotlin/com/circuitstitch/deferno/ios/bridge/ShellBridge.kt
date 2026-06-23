@@ -585,3 +585,21 @@ fun newDictationFieldIsTitle(state: NewState): Boolean = state.dictationField ==
 fun startNewDictationTitle(component: NewComponent) = component.startDictation(DictationField.Title)
 fun startNewDictationNotes(component: NewComponent) = component.startDictation(DictationField.Notes)
 fun stopNewDictation(component: NewComponent) = component.stopDictation()
+
+/** Whether [field]'s mic is currently capturing (the View shows it active). */
+fun newDictationListeningField(state: NewState, field: DictationField): Boolean =
+    state.dictation is DictationStatus.Listening && state.dictationField == field
+
+/**
+ * A gentle, non-PII message for a settled dictation problem (permission/engine), or `null` when idle /
+ * listening — so the View shows it only when there's something honest to say (never a silent failure).
+ */
+fun newDictationMessage(state: NewState): String? = when (state.dictation) {
+    is DictationStatus.PermissionDenied ->
+        "Microphone access is needed to dictate."
+    is DictationStatus.PermissionPermanentlyDenied ->
+        "Microphone access is off — enable it in Settings › Privacy & Security › Microphone."
+    is DictationStatus.Error ->
+        "Couldn't transcribe just now. Try again."
+    else -> null
+}

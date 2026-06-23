@@ -41,6 +41,7 @@
 		DE0002000000000000000107 /* PlanExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000107 /* PlanExtras.swift */; };
 		DE0002000000000000000108 /* BrainDumpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000108 /* BrainDumpView.swift */; };
 		DE0002000000000000000110 /* BrainDumpRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000110 /* BrainDumpRecorder.swift */; };
+		DE0002000000000000000120 /* IosDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000120 /* IosDictation.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -93,6 +94,7 @@
 		DE0001000000000000000107 /* PlanExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanExtras.swift; sourceTree = "<group>"; };
 		DE0001000000000000000108 /* BrainDumpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDumpView.swift; sourceTree = "<group>"; };
 		DE0001000000000000000110 /* BrainDumpRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDumpRecorder.swift; sourceTree = "<group>"; };
+		DE0001000000000000000120 /* IosDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosDictation.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -148,6 +150,7 @@
 				DE0003000000000000000104 /* Inbox */,
 				DE0003000000000000000106 /* Activity */,
 				DE0003000000000000000109 /* BrainDump */,
+				DE0003000000000000000120 /* Speech */,
 				DE0001000000000000000001 /* DefernoApp.swift */,
 				DE000100000000000000043 /* RootView.swift */,
 				DE000300000000000000040 /* Auth */,
@@ -316,6 +319,14 @@
 				DE0001000000000000000110 /* BrainDumpRecorder.swift */,
 			);
 			path = BrainDump;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000120 /* Speech */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000120 /* IosDictation.swift */,
+			);
+			path = Speech;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -487,6 +498,7 @@
 				DE0002000000000000000107 /* PlanExtras.swift in Sources */,
 				DE0002000000000000000108 /* BrainDumpView.swift in Sources */,
 				DE0002000000000000000110 /* BrainDumpRecorder.swift in Sources */,
+				DE0002000000000000000120 /* IosDictation.swift in Sources */,
 				DE0002000000000000000100 /* Atoms.swift in Sources */,
 				DE0002000000000000000101 /* DefernoIcons.swift in Sources */,
 				DE0002000000000000000102 /* TreeFiligree.swift in Sources */,
