@@ -16,6 +16,11 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
+import platform.BackgroundTasks.BGProcessingTaskRequest
+import platform.BackgroundTasks.BGTaskScheduler
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSData
 import platform.Foundation.NSFileManager
@@ -75,12 +80,17 @@ suspend fun processBrainDumpTake(
         return
     }
     val account = appComponent.accountManager.activeAccount.value ?: run {
-        deleteFile(wavPath) // signed out — nothing to persist into
+        // No Active Account yet (the roster may still be loading, or the person genuinely signed out): LEAVE
+        // the claimed WAV in place rather than deleting it, so a sweep that raced the roster load (#270) — or a
+        // later sign-in — recovers the take instead of losing it. The .processing orphan is reprocessed by a
+        // later sweep; the take is never wasted (ADR-0037).
         return
     }
 
-    // Keep the app alive briefly if the overlay closed / it backgrounded while we transcribe + persist.
-    val grace = BackgroundGrace("brain-dump").also { it.begin() }
+    // Keep the app alive briefly if the overlay closed / it backgrounded while we transcribe + persist. If the
+    // grace runs out mid-flight (still backgrounded), schedule the BGProcessingTask backstop so iOS can wake us
+    // to finish later (#270); the durable claimed WAV + idempotent ids make that re-run safe.
+    val grace = BackgroundGrace("brain-dump", onExpired = ::scheduleBrainDumpBackstop).also { it.begin() }
     try {
         val accountComponent = createAccountComponent(appComponent, account)
         val pipeline = BrainDumpPipeline(
@@ -124,11 +134,16 @@ suspend fun processBrainDumpTake(
  * a fatal programmer error. [begin]/[end] must be called from off the main thread (they are — from the
  * Default-dispatched pipeline).
  */
-private class BackgroundGrace(private val name: String) {
+private class BackgroundGrace(private val name: String, private val onExpired: () -> Unit = {}) {
     private var id: UIBackgroundTaskIdentifier = UIBackgroundTaskInvalid
 
     fun begin() = onMainSync {
-        id = UIApplication.sharedApplication.beginBackgroundTaskWithName(name) { endNow() }
+        id = UIApplication.sharedApplication.beginBackgroundTaskWithName(name) {
+            // The OS grace ran out while we were still working (app backgrounded): hand off to the
+            // BGProcessingTask backstop before releasing the expired id (#270). Fires at most once.
+            onExpired()
+            endNow()
+        }
     }
 
     fun end() = onMainSync { endNow() }
@@ -207,6 +222,96 @@ fun ensureBrainDumpPendingDir() {
         attributes = null,
         error = null,
     )
+}
+
+// ---------------------------------------------------------------------------------------------------
+// #270 — background durability: idempotent per-WAV claim + relaunch sweep + BGProcessingTask backstop.
+// Coordination is purely through the durable pending dir: a take is a `.wav` until claimed (atomic rename
+// to `.processing`), then processed and deleted. Every draft/attachment/salvage id is keyed off the take's
+// createdAt (parsed from the filename), so a re-run is idempotent — a take is never lost or duplicated.
+// ---------------------------------------------------------------------------------------------------
+
+private const val WAV_SUFFIX = ".wav"
+private const val PROCESSING_SUFFIX = ".processing"
+
+/** The BGProcessingTask identifier — must match Info.plist `BGTaskSchedulerPermittedIdentifiers` (#270). */
+const val BRAIN_DUMP_BG_TASK_ID: String = "com.circuitstitch.deferno.braindump.process"
+
+/**
+ * Atomically claim a pending take by renaming its WAV to the `.processing` extension; returns the claimed
+ * path, or `null` if the claim was lost (another runner already moved/finished it). The atomic rename **is**
+ * the per-WAV idempotent claim: only the runner that wins the rename gets a path to process, so the
+ * in-process run, the relaunch sweep, and the BGProcessingTask backstop never grab the same fresh take.
+ */
+internal fun claimPendingTake(wavPath: String): String? {
+    val claimedPath = wavPath.removeSuffix(WAV_SUFFIX) + PROCESSING_SUFFIX
+    val moved = NSFileManager.defaultManager.moveItemAtPath(wavPath, toPath = claimedPath, error = null)
+    return if (moved) claimedPath else null
+}
+
+/**
+ * Recover every leftover take in the pending dir (#270) — called by the relaunch sweep (after the account
+ * roster loads, so [processBrainDumpTake] sees the Active Account) and by the BGProcessingTask backstop. A
+ * fresh `.wav` is claimed then processed; a `.processing` left by a run that died mid-flight is reprocessed
+ * directly. Reprocessing is idempotent (ids key off the take's createdAt parsed from the filename), so even
+ * a rare double-run never duplicates a draft. Each take's date context is reconstructed from its createdAt.
+ */
+internal suspend fun sweepPendingBrainDumps(
+    appComponent: AppComponent,
+    locale: String,
+    transcriber: NativeFileTranscriber?,
+    timeZone: String,
+) {
+    val zone = TimeZone.of(timeZone)
+    for (path in listPendingTakes()) {
+        val claimed = when {
+            path.endsWith(PROCESSING_SUFFIX) -> path                  // orphan from a dead run — reprocess
+            path.endsWith(WAV_SUFFIX) -> claimPendingTake(path) ?: continue  // lost the claim → skip
+            else -> continue
+        }
+        val createdAt = parsePendingCreatedAt(claimed) ?: Clock.System.now()
+        processBrainDumpTake(
+            appComponent = appComponent,
+            wavPath = claimed,
+            locale = locale,
+            transcriber = transcriber,
+            today = createdAt.toLocalDateTime(zone).date,
+            timeZone = timeZone,
+            createdAt = createdAt,
+        )
+    }
+}
+
+/**
+ * Schedule the BGProcessingTask backstop (#270): submitted when the in-app grace window expires while the app
+ * is backgrounded, so iOS can wake the app later to finish the take in the background (the take stays a
+ * durable claimed `.processing` until then, recovered by the sweep). Best-effort — a submit failure (e.g. the
+ * identifier isn't permitted, or the system declines) just leaves the relaunch sweep to recover it.
+ */
+internal fun scheduleBrainDumpBackstop() {
+    runCatching {
+        val request = BGProcessingTaskRequest(BRAIN_DUMP_BG_TASK_ID).apply {
+            requiresNetworkConnectivity = false
+            requiresExternalPower = false
+        }
+        BGTaskScheduler.sharedScheduler.submitTaskRequest(request, error = null)
+    }
+}
+
+/** All pending take files (`braindump-<epochMs>.{wav,processing}`) under the pending dir, as absolute paths. */
+private fun listPendingTakes(): List<String> {
+    val dir = brainDumpPendingDir()
+    val names = NSFileManager.defaultManager.contentsOfDirectoryAtPath(dir, error = null) ?: return emptyList()
+    return names.mapNotNull { it as? String }
+        .filter { it.startsWith("braindump-") && (it.endsWith(WAV_SUFFIX) || it.endsWith(PROCESSING_SUFFIX)) }
+        .map { "$dir/$it" }
+}
+
+/** Parse the take's createdAt from its pending filename `braindump-<epochMs>.{wav,processing}`. */
+private fun parsePendingCreatedAt(path: String): Instant? {
+    val name = path.substringAfterLast('/')
+    val ms = name.removePrefix("braindump-").substringBeforeLast('.').toLongOrNull() ?: return null
+    return Instant.fromEpochMilliseconds(ms)
 }
 
 private fun fileSize(path: String): Long {

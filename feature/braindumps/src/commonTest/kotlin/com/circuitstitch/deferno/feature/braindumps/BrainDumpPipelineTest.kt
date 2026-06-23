@@ -183,6 +183,24 @@ class BrainDumpPipelineTest {
     }
 
     @Test
+    fun extractedDraftIdsAreKeyedOffTheTakeInstantSoReprocessingReplacesNotDuplicates() = runTest {
+        // The on-device LLM emits non-deterministic ids per run, so reprocessing a take (the #270 relaunch
+        // sweep / BGProcessingTask backstop, after an app death between the draft upsert and the WAV delete)
+        // must land on the SAME draft rows — else insertOrReplace inserts a duplicate set. The persisted id is
+        // (createdAt, index)-derived, so even with different model ids the two runs upsert identical row ids.
+        val first = Harness(success(DraftTask(id = "abc", title = "Buy milk"), DraftTask(id = "xyz", title = "Call Sam")))
+        first.pipeline.process(FakeTake("same take"), TODAY, TZ, CREATED)
+        val second = Harness(success(DraftTask(id = "p99", title = "Buy milk"), DraftTask(id = "q42", title = "Call Sam")))
+        second.pipeline.process(FakeTake("same take"), TODAY, TZ, CREATED)
+
+        assertEquals(
+            first.drafts.upserted.map { it.id },
+            second.drafts.upserted.map { it.id },
+            "reprocessing must reuse the same per-take draft ids so insertOrReplace dedups, not duplicates",
+        )
+    }
+
+    @Test
     fun completionNotificationFiresOnlyWhenTheOptInIsEnabled() = runTest {
         // Default off (#266): drafts simply appear in the Inbox, nothing interrupts.
         val off = Harness(success(DraftTask(id = "1", title = "Buy milk")), notify = false)

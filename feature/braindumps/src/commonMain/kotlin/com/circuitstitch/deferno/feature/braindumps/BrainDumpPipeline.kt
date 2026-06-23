@@ -52,7 +52,7 @@ class BrainDumpPipeline(
             emptyList() // never heard / couldn't transcribe — salvage with a reason, don't consult the engine
         } else {
             when (val result = extractor.extract(Transcript(transcript), today, timeZone)) {
-                is InferenceResult.Success -> result.value.drafts.map { it.toDraft(createdAt) }
+                is InferenceResult.Success -> result.value.drafts.mapIndexed { index, draft -> draft.toDraft(createdAt, index) }
                 // No engine, transport, or malformed output — salvage with the transcript (the useful artifact).
                 is InferenceResult.Failure -> emptyList()
             }
@@ -158,8 +158,16 @@ private fun salvageDraft(number: Int, notes: String, createdAt: Instant): BrainD
 
 // The Extractor's draft → the persisted draft. Flat: BrainDumpDraft drops desire/productive/parent/sequence
 // (the Inbox commits a flat Task; relations are a follow-up).
-private fun DraftTask.toDraft(createdAt: Instant): BrainDumpDraft = BrainDumpDraft(
-    id = BrainDumpDraftId(id),
+//
+// The persisted id is keyed off the take's instant + the draft's [index], NOT the model-authored DraftTask.id
+// (a non-deterministic LLM emits fresh ids each run). So reprocessing the same take — the #270 relaunch sweep
+// or BGProcessingTask backstop re-running after an app death between the upsert and the WAV delete — upserts
+// the SAME rows (insertOrReplace replaces, never duplicates), matching the salvage path's idempotency. The
+// model id isn't load-bearing downstream (relations are dropped here). ponytail: a re-run that extracts a
+// DIFFERENT count could leave a trailing stale draft (rare model non-determinism); a take-scoped delete is the
+// follow-up if that ever bites.
+private fun DraftTask.toDraft(createdAt: Instant, index: Int): BrainDumpDraft = BrainDumpDraft(
+    id = BrainDumpDraftId("draft-${createdAt.toEpochMilliseconds()}-$index"),
     title = title,
     notes = description,
     completeBy = completeBy,

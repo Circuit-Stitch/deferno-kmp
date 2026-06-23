@@ -22,7 +22,9 @@ import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.RootComponent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -33,6 +35,8 @@ import kotlinx.datetime.todayIn
 import kotlin.experimental.ExperimentalNativeApi
 import kotlin.native.Platform
 import kotlin.time.Clock
+import platform.BackgroundTasks.BGTask
+import platform.BackgroundTasks.BGTaskScheduler
 import platform.Foundation.NSBundle
 import platform.Foundation.NSLocale
 import platform.Foundation.NSURL
@@ -102,6 +106,19 @@ class DefernoRoot(
     // StateFlows then drive the reactive shell. SupervisorJob so one failure doesn't cancel the rest.
     private val bootstrapScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    // The device time zone the shell + the #270 sweep/backstop reconstruct each take's date context from.
+    private val systemTimeZone = TimeZone.currentSystemDefault()
+
+    // One-time startup hydration — the account roster load + dev seeding (#270). A memoized [Deferred] so the
+    // single [DefaultAccountManager.load] (not thread-safe across concurrent callers) runs exactly once, and
+    // EVERY brain-dump sweep path (the relaunch sweep + the BGProcessingTask backstop) awaits the same result
+    // before touching the pipeline — so a sweep never races the load and sees a null Active Account (which
+    // would otherwise strand the take). Eager (async starts now); failures surface on await, caught there.
+    private val bootstrapped: Deferred<Unit> = bootstrapScope.async {
+        appComponent.accountManager.load()
+        seedDevAccounts()
+    }
+
     // Dictation (#268, ADR-0018): wrap the injected Swift SFSpeech engine, else the AppScope selector
     // (which resolves to the Unavailable floor until an iOS engine is bound — the New mic stays hidden).
     private val speechToText: SpeechToText =
@@ -128,12 +145,17 @@ class DefernoRoot(
     val root: RootComponent
 
     init {
+        // #270 relaunch sweep: after the roster has hydrated (so processBrainDumpTake sees the Active Account),
+        // recover any take whose processing was killed mid-flight — its drafts or salvage land now.
         bootstrapScope.launch {
-            appComponent.accountManager.load()
-            seedDevAccounts()
+            runCatching { bootstrapped.await() }
+            sweepPendingBrainDumps(appComponent, currentLocaleTag(), fileTranscriber, systemTimeZone.id)
         }
+        // #270 backstop: register the BGProcessingTask launch handler before the app finishes launching, so a
+        // take whose grace window expired while backgrounded can be finished when iOS later wakes the app.
+        registerBrainDumpBackstop()
 
-        val timeZone = TimeZone.currentSystemDefault()
+        val timeZone = systemTimeZone
         root = DefaultRootComponent(
             componentContext = DefaultComponentContext(lifecycle),
             accountManager = appComponent.accountManager,
@@ -183,6 +205,33 @@ class DefernoRoot(
     }
 
     /**
+     * Register the #270 BGProcessingTask launch handler. When iOS later runs the task (a grace-expired take
+     * scheduled it via [scheduleBrainDumpBackstop]), sweep the durable pending dir to finish any leftover
+     * take, then mark the task complete; the expiration handler cancels the sweep if the OS reclaims the
+     * time. Best-effort (runCatching) — registration only throws if called after the app finishes launching,
+     * in which case the relaunch sweep still recovers every take on the next cold start.
+     */
+    private fun registerBrainDumpBackstop() {
+        runCatching {
+            BGTaskScheduler.sharedScheduler.registerForTaskWithIdentifier(
+                identifier = BRAIN_DUMP_BG_TASK_ID,
+                usingQueue = null,
+            ) { task: BGTask? ->
+                val bgTask = task ?: return@registerForTaskWithIdentifier
+                val job = bootstrapScope.launch {
+                    // Await the same one-time hydration the relaunch sweep does: on a cold BACKGROUND launch
+                    // for this task, the roster may not be loaded yet, and sweeping with a null Active Account
+                    // would strand the take. Then finish any leftover take and mark the task complete.
+                    runCatching { bootstrapped.await() }
+                    sweepPendingBrainDumps(appComponent, currentLocaleTag(), fileTranscriber, systemTimeZone.id)
+                    bgTask.setTaskCompletedWithSuccess(true)
+                }
+                bgTask.expirationHandler = { job.cancel() }
+            }
+        }
+    }
+
+    /**
      * The iOS recorder seam (#267, ADR-0037): start the mic, suspend until either the overlay's Stop cancels
      * this job **or** the mic engine fails to open, then — under [NonCancellable] so a closing overlay never
      * half-writes — finalize the WAV and, on a real Stop, launch the shared pipeline on the app-lifetime
@@ -217,9 +266,13 @@ class DefernoRoot(
                     deleteFile(wavPath) // mic never opened — nothing captured; the rethrow flips Phase.Failed
                 } else {
                     bootstrapScope.launch {
+                        // #270: atomically claim the finalized WAV (rename to .processing) so the relaunch
+                        // sweep / BGProcessingTask backstop can't also grab it; if the claim is lost (a sweep
+                        // already took it), this in-process run stands down.
+                        val claimed = claimPendingTake(wavPath) ?: return@launch
                         processBrainDumpTake(
                             appComponent = appComponent,
-                            wavPath = wavPath,
+                            wavPath = claimed,
                             locale = currentLocaleTag(),
                             transcriber = fileTranscriber,
                             today = today,
