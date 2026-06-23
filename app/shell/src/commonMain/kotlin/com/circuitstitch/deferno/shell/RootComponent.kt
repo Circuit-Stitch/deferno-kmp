@@ -22,6 +22,8 @@ import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
@@ -159,6 +161,11 @@ class DefaultRootComponent(
     // build without it; production passes the AppComponent's.
     private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
         InMemoryKeepBrainDumpRecordingsPreference(),
+    // The device-local "Brain dump notifications" opt-in (#266/#271): the AppScope preference the Settings
+    // Destination reads. Threaded down to the Main shell. Defaulted to an in-memory (off) preference so tests
+    // build without it; production passes the AppComponent's.
+    private val brainDumpNotificationPreference: BrainDumpNotificationPreference =
+        InMemoryBrainDumpNotificationPreference(),
     // The device-local "shake to undo" choice (#230): the AppScope preference the Tasks tree + Settings read.
     // Threaded down to the Main shell. Defaulted to an in-memory (on) preference so tests build without it;
     // production passes the AppComponent's.
@@ -390,6 +397,8 @@ class DefaultRootComponent(
                         storageProviderCatalog = storageProviderCatalog,
                         // The device-local "keep brain-dump recordings" choice (#211) the Settings reads.
                         keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
+                        // The device-local "Brain dump notifications" opt-in (#266/#271) the Settings reads.
+                        brainDumpNotificationPreference = brainDumpNotificationPreference,
                         shakeToUndoPreference = shakeToUndoPreference,
                         // The Brain dump's record-to-file seam (ADR-0027/#150, Stage 4) the voice_chat overlay drives.
                         recordBrainDump = recordBrainDump,

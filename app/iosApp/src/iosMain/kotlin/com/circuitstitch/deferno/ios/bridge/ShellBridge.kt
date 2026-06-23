@@ -228,6 +228,13 @@ fun settingsStateBridge(component: SettingsComponent): StateFlowBridge<UserSetti
 fun speechEngineBridge(component: SettingsComponent): StateFlowBridge<SpeechEngineSettings> = StateFlowBridge(component.speechEngine)
 fun inferenceEngineBridge(component: SettingsComponent): StateFlowBridge<InferenceEngineSettings> = StateFlowBridge(component.inferenceEngine)
 
+/** The current "Brain dump notifications" opt-in (#271), as a snapshot Bool for the Settings toggle. */
+fun brainDumpNotificationsEnabled(component: SettingsComponent): Boolean = component.brainDumpNotificationsEnabled.value
+
+/** Persist the "Brain dump notifications" opt-in (#271). The View requests OS auth on enable (the consent). */
+fun setBrainDumpNotificationsEnabled(component: SettingsComponent, enabled: Boolean) =
+    component.onBrainDumpNotificationsChanged(enabled)
+
 fun searchStateBridge(component: SearchComponent): StateFlowBridge<SearchState> = StateFlowBridge(component.state)
 fun newStateBridge(component: NewComponent): StateFlowBridge<NewState> = StateFlowBridge(component.state)
 

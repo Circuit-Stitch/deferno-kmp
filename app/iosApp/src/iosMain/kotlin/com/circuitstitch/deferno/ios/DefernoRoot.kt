@@ -188,6 +188,9 @@ class DefernoRoot(
             // Agent inference-engine choice + entitlement gate (#150): threaded from the AppScope graph; iOS
             // has no Agent Settings surface yet, but the gate exists app-wide (the selection defaults to Off).
             inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
+            // The device-local "Brain dump notifications" opt-in (#266/#271): the SAME NSUserDefaults-backed
+            // preference the pipeline's notifier reads, so the Settings toggle and the notifier agree.
+            brainDumpNotificationPreference = appComponent.brainDumpNotificationPreference,
             // Brain dump's record→Inbox seam (#267, ADR-0037): records the mic to a durable WAV and hands
             // the take to the shared pipeline on Stop (salvage-only until #269 wires the file transcriber).
             recordBrainDump = recordBrainDump,
@@ -203,6 +206,13 @@ class DefernoRoot(
     fun destroy() {
         lifecycle.destroy()
     }
+
+    /**
+     * Open the Inbox in the Main shell (#271) — the target of the Brain dump completion notification's tap.
+     * The Swift `UNUserNotificationCenterDelegate` calls this on a `didReceive` for the brain-dump category;
+     * [RootComponent.openInbox] switches the shell to the Inbox now, or defers if the Auth shell is up.
+     */
+    fun forwardOpenInbox() = root.openInbox()
 
     /**
      * Register the #270 BGProcessingTask launch handler. When iOS later runs the task (a grace-expired take

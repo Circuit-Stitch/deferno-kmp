@@ -5,6 +5,8 @@ package com.circuitstitch.deferno.ios
 import com.circuitstitch.deferno.core.agent.Extractor
 import com.circuitstitch.deferno.core.di.AppComponent
 import com.circuitstitch.deferno.core.di.createAccountComponent
+import com.circuitstitch.deferno.feature.braindumps.BrainDumpOutcome
+import com.circuitstitch.deferno.feature.braindumps.BrainDumpNotifier
 import com.circuitstitch.deferno.feature.braindumps.BrainDumpPipeline
 import com.circuitstitch.deferno.feature.braindumps.BrainDumpTake
 import com.circuitstitch.deferno.feature.braindumps.isTrivialRecording
@@ -33,6 +35,10 @@ import platform.Foundation.dataWithContentsOfFile
 import platform.UIKit.UIApplication
 import platform.UIKit.UIBackgroundTaskIdentifier
 import platform.UIKit.UIBackgroundTaskInvalid
+import platform.UserNotifications.UNMutableNotificationContent
+import platform.UserNotifications.UNNotificationRequest
+import platform.UserNotifications.UNNotificationSound
+import platform.UserNotifications.UNUserNotificationCenter
 import platform.darwin.dispatch_get_main_queue
 import platform.darwin.dispatch_sync
 import platform.posix.memcpy
@@ -109,8 +115,10 @@ suspend fun processBrainDumpTake(
             keepRecordings = appComponent.keepBrainDumpRecordingsPreference,
             salvageCounter = appComponent.brainDumpSalvageCounter,
             notifications = appComponent.brainDumpNotificationPreference,
-            // The opt-in completion notification is #271; the pref defaults off so this never fires yet.
-            notifier = { },
+            // Opt-in completion notification (#271): the pipeline only calls this when notifications.enabled()
+            // (the NSUserDefaults pref), so it posts a local notification only when the person opted in. The
+            // request id keys off createdAt so a re-processed take replaces rather than stacks.
+            notifier = BrainDumpNotifier { outcome -> postBrainDumpCompletionNotification(outcome, createdAt) },
         )
         pipeline.process(
             take = IosBrainDumpTake(wavPath, locale, transcriber),
@@ -161,6 +169,36 @@ private class BackgroundGrace(private val name: String, private val onExpired: (
 // Run [block] synchronously on the main queue. Callers are always off-main (the Default pipeline scope), so
 // the dispatch_sync never deadlocks; the OS expiration handler runs on main and calls endNow() directly.
 private fun onMainSync(block: () -> Unit) = dispatch_sync(dispatch_get_main_queue(), block)
+
+/** The notification category the Swift `UNUserNotificationCenterDelegate` recognizes to route a tap to the Inbox (#271). */
+const val BRAIN_DUMP_NOTIFICATION_CATEGORY: String = "brain-dump-complete"
+
+/**
+ * Post the opt-in Brain dump completion notification (#271) — a local notification whose tap the Swift
+ * delegate routes to the Inbox. The pipeline calls this only when the person opted in (it gates on the
+ * notifications pref); if OS authorization was denied, iOS simply drops the request (no crash — the take
+ * still landed in the Inbox). Content mirrors Android's `notifyDraftsReady`. The request id keys off
+ * [createdAt] so a re-processed take replaces rather than stacks a duplicate banner.
+ */
+private fun postBrainDumpCompletionNotification(outcome: BrainDumpOutcome, createdAt: Instant) {
+    val body = when (outcome) {
+        is BrainDumpOutcome.Drafts ->
+            if (outcome.count == 1) "1 draft ready to review" else "${outcome.count} drafts ready to review"
+        BrainDumpOutcome.Salvaged -> "Recording saved to review"
+    }
+    val content = UNMutableNotificationContent().apply {
+        setTitle("Brain dump")
+        setBody(body)
+        setCategoryIdentifier(BRAIN_DUMP_NOTIFICATION_CATEGORY)
+        setSound(UNNotificationSound.defaultSound())
+    }
+    val request = UNNotificationRequest.requestWithIdentifier(
+        identifier = "brain-dump-${createdAt.toEpochMilliseconds()}",
+        content = content,
+        trigger = null,
+    )
+    UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest(request, withCompletionHandler = null)
+}
 
 // kmp-logger's `logger` is an Any-receiver extension; a tag object gives these top-level fns one ("BrainDump").
 private object BrainDumpLog

@@ -40,6 +40,8 @@ import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.model.OccurrenceAction
@@ -380,6 +382,11 @@ class DefaultMainShellComponent(
     // the real preference from the AppComponent (like storageProviderCatalog).
     private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
         InMemoryKeepBrainDumpRecordingsPreference(),
+    // The device-local "Brain dump notifications" opt-in (#266/#271) the Settings Destination renders.
+    // Defaulted to an in-memory (off) preference so the many shell tests build without it; production threads
+    // the real preference from the AppComponent (like keepBrainDumpRecordingsPreference).
+    private val brainDumpNotificationPreference: BrainDumpNotificationPreference =
+        InMemoryBrainDumpNotificationPreference(),
     // The device-local shake-to-undo App setting (#230) the Tasks tree + Settings render. Defaulted to an
     // in-memory (on) preference so the many shell tests build without it; production threads the real
     // preference from the AppComponent (like keepBrainDumpRecordingsPreference).
@@ -687,6 +694,8 @@ class DefaultMainShellComponent(
                         storageProviderCatalog = storageProviderCatalog,
                         // The device-local "keep brain-dump recordings" choice (#211) — AppScope, never synced.
                         keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
+                        // The device-local "Brain dump notifications" opt-in (#266/#271) — AppScope, never synced.
+                        brainDumpNotificationPreference = brainDumpNotificationPreference,
                         // The device-local shake-to-undo choice (#230) — AppScope, never synced.
                         shakeToUndoPreference = shakeToUndoPreference,
                         coroutineContext = coroutineContext,

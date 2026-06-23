@@ -9,7 +9,7 @@ import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpSalvageCounter
-import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpSalvageCounter
 import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
@@ -107,13 +107,15 @@ interface IosDataBindings {
         SettingsBrainDumpSalvageCounter(NSUserDefaultsSettings.Factory().create("deferno_storage"))
 
     /**
-     * The "Brain dump notifications" opt-in (#266, [[App setting]], **default off**). In-memory placeholder
-     * until iOS surfaces the toggle — #271 swaps this for an `NSUserDefaults`-backed one (the consent point
-     * that also requests notification authorization).
+     * The "Brain dump notifications" opt-in (#266/#271, [[App setting]], **default off**) — `NSUserDefaults`-backed
+     * now that iOS surfaces the toggle (the Settings consent point requests notification authorization), sharing
+     * the device-local `deferno_storage` bag with keep-recordings + the salvage counter. The pipeline's notifier
+     * and the Settings toggle both read this one binding, so they agree.
      */
     @Provides
     @SingleIn(AppScope::class)
-    fun brainDumpNotificationPreference(): BrainDumpNotificationPreference = InMemoryBrainDumpNotificationPreference()
+    fun brainDumpNotificationPreference(): BrainDumpNotificationPreference =
+        SettingsBrainDumpNotificationPreference(NSUserDefaultsSettings.Factory().create("deferno_storage"))
 
     /** "Shake to undo" [[App setting]] (ADR-0034 decision 8, #230). iOS has no accelerometer path yet — in-memory placeholder. */
     @Provides

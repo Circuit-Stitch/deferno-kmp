@@ -1,5 +1,6 @@
 import Deferno
 import SwiftUI
+import UserNotifications
 
 /// The Settings Destination (#72) — a **tier-3 drill-down** (`SettingsChild`: List ↔ Detail(category))
 /// rendered from the shared component's stack, so the single adaptive shell bar (`MainShellView`) titles
@@ -16,6 +17,10 @@ struct SettingsView: View {
     @StateObject private var speech: StateFlowObserver<SpeechEngineSettings>
     @StateObject private var inference: StateFlowObserver<InferenceEngineSettings>
     @Environment(\.defernoColors) private var colors
+    // The "Brain dump notifications" opt-in (#271): device-local, seeded once from the AppScope preference;
+    // the toggle persists through the component and requests OS authorization on enable.
+    @State private var brainDumpNotifications = false
+    @State private var brainDumpNotificationsSeeded = false
 
     init(component: SettingsComponent) {
         self.component = component
@@ -168,6 +173,37 @@ struct SettingsView: View {
             } footer: {
                 Text("The agent can turn a brain dump into draft tasks and suggest changes to your plan. Choose where it runs — or keep it off.")
             }
+            Section {
+                Toggle(isOn: Binding(get: { brainDumpNotifications }, set: { setBrainDumpNotifications($0) })) {
+                    Text("Notify me when a brain dump is ready").foregroundStyle(colors.onSurface)
+                }
+                .listRowBackground(colors.surfaceCard)
+            } header: {
+                Text("Notifications")
+            } footer: {
+                Text("Get a notification when your drafts are ready to review — tapping it opens the Inbox.")
+            }
+        }
+        .onAppear {
+            guard !brainDumpNotificationsSeeded else { return }
+            brainDumpNotificationsSeeded = true
+            brainDumpNotifications = ShellBridgeKt.brainDumpNotificationsEnabled(component: component)
+        }
+    }
+
+    /// Persist the Brain dump notifications opt-in (#271). Enabling requests OS authorization (the consent);
+    /// a denial reverts the toggle so it reflects reality (notifications won't fire) — handled gracefully.
+    private func setBrainDumpNotifications(_ on: Bool) {
+        if on {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                DispatchQueue.main.async {
+                    brainDumpNotifications = granted
+                    ShellBridgeKt.setBrainDumpNotificationsEnabled(component: component, enabled: granted)
+                }
+            }
+        } else {
+            brainDumpNotifications = false
+            ShellBridgeKt.setBrainDumpNotificationsEnabled(component: component, enabled: false)
         }
     }
 

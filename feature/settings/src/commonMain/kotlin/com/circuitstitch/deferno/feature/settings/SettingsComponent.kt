@@ -15,6 +15,8 @@ import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderOption
+import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
@@ -181,6 +183,15 @@ interface SettingsComponent {
     val keepBrainDumpRecordings: StateFlow<Boolean>
 
     /**
+     * The device-local **"Brain dump notifications"** opt-in (#266/#271) — whether a completion notification
+     * fires when a Brain dump finishes (drafts ready, or a recording saved to review). An **[[App setting]]**,
+     * sourced from the AppScope preference, **not** the synced [settings]; never syncs, never changes on an
+     * Account switch. Defaults to **off** (drafts simply appear in the [[Inbox]]); enabling it is the consent,
+     * and on iOS the point notification authorization is requested. The iOS View renders the toggle.
+     */
+    val brainDumpNotificationsEnabled: StateFlow<Boolean>
+
+    /**
      * The device-local **"shake to undo"** choice ([SettingsCategory.TaskBehavior], ADR-0034 decision 8,
      * #230) — whether a phone shake on the Tasks tree raises the "Undo [operation]?" confirm that reverts the
      * last Move. An **[[App setting]]**, sourced from the AppScope preference, **not** the synced [settings];
@@ -246,6 +257,13 @@ interface SettingsComponent {
      * via the preference, **never** synced. When off, a brain dump's recording is not retained on accept.
      */
     fun onKeepBrainDumpRecordingsChanged(enabled: Boolean)
+
+    /**
+     * Brain dump: toggle whether a completion notification fires (#266/#271) — persists device-locally via
+     * the preference, **never** synced. The View requests OS notification authorization when turning it on
+     * (the opt-in is the consent); a denial is handled there and leaves the setting reflecting reality.
+     */
+    fun onBrainDumpNotificationsChanged(enabled: Boolean)
 
     // --- host-routed intents (Output up to the shell) ---
 
@@ -324,6 +342,10 @@ class DefaultSettingsComponent(
     // preference so existing Settings tests build without supplying it (like the storage-catalog default).
     private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
         InMemoryKeepBrainDumpRecordingsPreference(),
+    // The device-local "Brain dump notifications" opt-in (#266/#271). Defaulted to an in-memory (off)
+    // preference so existing Settings tests build without supplying it (like the keep-recordings default).
+    private val brainDumpNotificationPreference: BrainDumpNotificationPreference =
+        InMemoryBrainDumpNotificationPreference(),
     // The device-local shake-to-undo preference (#230). Defaulted to an in-memory (on) preference so existing
     // Settings tests build without supplying it (like the keep-recordings default).
     private val shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
@@ -379,6 +401,11 @@ class DefaultSettingsComponent(
     // device-local — sourced from the AppScope preference, never the synced settings.
     private val _keepBrainDumpRecordings = MutableStateFlow(keepBrainDumpRecordingsPreference.enabled())
     override val keepBrainDumpRecordings: StateFlow<Boolean> = _keepBrainDumpRecordings.asStateFlow()
+
+    // The device-local "Brain dump notifications" opt-in (#266/#271). Seeded synchronously from the
+    // preference; device-local — sourced from the AppScope preference, never the synced settings.
+    private val _brainDumpNotificationsEnabled = MutableStateFlow(brainDumpNotificationPreference.enabled())
+    override val brainDumpNotificationsEnabled: StateFlow<Boolean> = _brainDumpNotificationsEnabled.asStateFlow()
 
     // The device-local shake-to-undo choice (#230). Seeded synchronously from the preference; device-local —
     // sourced from the AppScope preference, never the synced settings.
@@ -467,6 +494,13 @@ class DefaultSettingsComponent(
         // Device-local persist (App setting, #211) — not the synced SettingsEditor.
         keepBrainDumpRecordingsPreference.setEnabled(enabled)
         _keepBrainDumpRecordings.value = enabled
+    }
+
+    override fun onBrainDumpNotificationsChanged(enabled: Boolean) {
+        // Device-local persist (App setting, #266/#271) — not the synced SettingsEditor. The View owns the
+        // OS authorization request on enable; persisting the choice here is independent of that grant.
+        brainDumpNotificationPreference.setEnabled(enabled)
+        _brainDumpNotificationsEnabled.value = enabled
     }
 
     override fun onOpenDataExportImport() = output(SettingsComponent.Output.OpenDataExportImport)
