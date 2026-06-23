@@ -16,8 +16,14 @@ struct DefernoApp: App {
     init() {
         let recorder = BrainDumpRecorder()
         _recorder = StateObject(wrappedValue: recorder)
-        // On-device dictation (#268): the New surface's per-field mic streams SFSpeech text into the field.
-        _host = State(initialValue: DefernoRoot(recorder: recorder, dictation: IosDictation()))
+        // On-device capabilities: dictation (#268, SFSpeech mic), and the Brain dump's on-device extraction
+        // (#269) — the SpeechTranscriber file transcriber + the Apple Foundation Models inference engine.
+        _host = State(initialValue: DefernoRoot(
+            recorder: recorder,
+            dictation: IosDictation(),
+            inference: IosInference(),
+            fileTranscriber: IosFileTranscriber()
+        ))
     }
 
     var body: some Scene {

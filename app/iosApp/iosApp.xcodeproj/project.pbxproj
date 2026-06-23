@@ -42,6 +42,8 @@
 		DE0002000000000000000108 /* BrainDumpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000108 /* BrainDumpView.swift */; };
 		DE0002000000000000000110 /* BrainDumpRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000110 /* BrainDumpRecorder.swift */; };
 		DE0002000000000000000120 /* IosDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000120 /* IosDictation.swift */; };
+		DE0002000000000000000130 /* IosInference.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000130 /* IosInference.swift */; };
+		DE0002000000000000000140 /* IosFileTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000140 /* IosFileTranscriber.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -95,6 +97,8 @@
 		DE0001000000000000000108 /* BrainDumpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDumpView.swift; sourceTree = "<group>"; };
 		DE0001000000000000000110 /* BrainDumpRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDumpRecorder.swift; sourceTree = "<group>"; };
 		DE0001000000000000000120 /* IosDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosDictation.swift; sourceTree = "<group>"; };
+		DE0001000000000000000130 /* IosInference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosInference.swift; sourceTree = "<group>"; };
+		DE0001000000000000000140 /* IosFileTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosFileTranscriber.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -151,6 +155,7 @@
 				DE0003000000000000000106 /* Activity */,
 				DE0003000000000000000109 /* BrainDump */,
 				DE0003000000000000000120 /* Speech */,
+				DE0003000000000000000130 /* AI */,
 				DE0001000000000000000001 /* DefernoApp.swift */,
 				DE000100000000000000043 /* RootView.swift */,
 				DE000300000000000000040 /* Auth */,
@@ -317,8 +322,17 @@
 			children = (
 				DE0001000000000000000108 /* BrainDumpView.swift */,
 				DE0001000000000000000110 /* BrainDumpRecorder.swift */,
+				DE0001000000000000000140 /* IosFileTranscriber.swift */,
 			);
 			path = BrainDump;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000130 /* AI */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000130 /* IosInference.swift */,
+			);
+			path = AI;
 			sourceTree = "<group>";
 		};
 		DE0003000000000000000120 /* Speech */ = {
@@ -499,6 +513,8 @@
 				DE0002000000000000000108 /* BrainDumpView.swift in Sources */,
 				DE0002000000000000000110 /* BrainDumpRecorder.swift in Sources */,
 				DE0002000000000000000120 /* IosDictation.swift in Sources */,
+				DE0002000000000000000130 /* IosInference.swift in Sources */,
+				DE0002000000000000000140 /* IosFileTranscriber.swift in Sources */,
 				DE0002000000000000000100 /* Atoms.swift in Sources */,
 				DE0002000000000000000101 /* DefernoIcons.swift in Sources */,
 				DE0002000000000000000102 /* TreeFiligree.swift in Sources */,
@@ -621,6 +637,8 @@
 					"$(inherited)",
 					"-framework",
 					Deferno,
+					"-weak_framework",
+					FoundationModels,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.circuitstitch.deferno;
 				PRODUCT_MODULE_NAME = iosApp;
@@ -660,6 +678,8 @@
 					"$(inherited)",
 					"-framework",
 					Deferno,
+					"-weak_framework",
+					FoundationModels,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.circuitstitch.deferno;
 				PRODUCT_MODULE_NAME = iosApp;

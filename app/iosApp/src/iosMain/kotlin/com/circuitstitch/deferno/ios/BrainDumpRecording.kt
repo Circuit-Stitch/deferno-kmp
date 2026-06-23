@@ -8,7 +8,11 @@ import com.circuitstitch.deferno.core.di.createAccountComponent
 import com.circuitstitch.deferno.feature.braindumps.BrainDumpPipeline
 import com.circuitstitch.deferno.feature.braindumps.BrainDumpTake
 import com.circuitstitch.deferno.feature.braindumps.isTrivialRecording
+import com.circuitstitch.deferno.ios.speech.NativeFileTranscriber
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
 import kotlinx.datetime.LocalDate
@@ -60,6 +64,8 @@ interface NativeAudioRecorder {
 suspend fun processBrainDumpTake(
     appComponent: AppComponent,
     wavPath: String,
+    locale: String,
+    transcriber: NativeFileTranscriber?,
     today: LocalDate,
     timeZone: String,
     createdAt: Instant,
@@ -97,7 +103,7 @@ suspend fun processBrainDumpTake(
             notifier = { },
         )
         pipeline.process(
-            take = IosBrainDumpTake(wavPath),
+            take = IosBrainDumpTake(wavPath, locale, transcriber),
             today = today,
             timeZone = timeZone,
             createdAt = createdAt,
@@ -144,11 +150,40 @@ private fun onMainSync(block: () -> Unit) = dispatch_sync(dispatch_get_main_queu
 // kmp-logger's `logger` is an Any-receiver extension; a tag object gives these top-level fns one ("BrainDump").
 private object BrainDumpLog
 
-/** The transcription seam: blank until #269 wires the Apple `SpeechTranscriber`, so every take salvages. */
-private class IosBrainDumpTake(private val wavPath: String) : BrainDumpTake {
-    override suspend fun transcribe(): String = ""
+/**
+ * The take the pipeline consumes (#269): [transcribe] runs the Apple `SpeechTranscriber` over the finalized
+ * WAV on-device, [readBytes] reads it for the retained recording. A blank transcript — no transcriber wired
+ * (a unit host), an unsupported OS/locale, or a recognition error — flows through as `""`, which the pipeline
+ * turns into a Salvage draft (the audio is never wasted, ADR-0037). The Swift one-shot callback is bridged to
+ * this suspend seam via a [CompletableDeferred].
+ */
+private class IosBrainDumpTake(
+    private val wavPath: String,
+    private val locale: String,
+    private val transcriber: NativeFileTranscriber?,
+) : BrainDumpTake {
+    override suspend fun transcribe(): String {
+        val transcriber = transcriber ?: return ""
+        val result = CompletableDeferred<String>()
+        transcriber.transcribe(
+            wavPath = wavPath,
+            locale = locale,
+            onResult = { result.complete(it) },
+            onError = { result.complete("") },
+        )
+        // Bound the wait so an unresponsive transcriber (e.g. a stalled first-use locale-model download)
+        // falls through to a blank transcript → Salvage, never hanging the take (the never-waste-input
+        // invariant, ADR-0037). The Swift CallbackOnce de-dupes, so a late callback after the timeout is
+        // harmless (it completes an already-orphaned Deferred).
+        return withTimeoutOrNull(TRANSCRIBE_TIMEOUT) { result.await() } ?: ""
+    }
+
     override suspend fun readBytes(): ByteArray = readFileBytes(wavPath)
 }
+
+/** A generous upper bound on one on-device file transcription — long-form recognition plus a possible
+ *  one-time locale-model download — past which the take salvages rather than hangs (#269). */
+private val TRANSCRIBE_TIMEOUT = 120.seconds
 
 /**
  * In-flight Brain dump WAVs live under Application Support (durable, so #270's relaunch sweep can recover a

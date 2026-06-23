@@ -8,10 +8,14 @@ import com.circuitstitch.deferno.DevAccounts
 import com.circuitstitch.deferno.core.di.AppComponent
 import com.circuitstitch.deferno.core.di.createAccountComponent
 import com.circuitstitch.deferno.core.di.createAppComponent
+import com.circuitstitch.deferno.core.agent.IosOnDeviceInference
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.PlatformContext
 import com.circuitstitch.deferno.core.speech.SpeechToText
+import com.circuitstitch.deferno.ios.agent.NativeInference
+import com.circuitstitch.deferno.ios.agent.NativeInferenceEngine
 import com.circuitstitch.deferno.ios.speech.NativeDictation
+import com.circuitstitch.deferno.ios.speech.NativeFileTranscriber
 import com.circuitstitch.deferno.ios.speech.NativeSpeechToText
 import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
@@ -58,11 +62,16 @@ import software.amazon.app.kmplogger.logger
  * [recorder] is the injected Swift mic recorder (#267, ADR-0037) the Brain dump `record` seam drives; `null`
  * (e.g. a unit host) leaves that seam the inert no-op default. [dictation] is the injected Swift on-device
  * `SFSpeechRecognizer` engine (#268, ADR-0018) the New surface's mic drives; `null` leaves the AppScope
- * Unavailable floor (so the mic stays hidden).
+ * Unavailable floor (so the mic stays hidden). [inference] is the injected Swift Apple Foundation Models
+ * engine (#269, ADR-0037) installed into the DI graph's on-device forwarder; [fileTranscriber] is the
+ * injected Swift `SpeechTranscriber` the Brain dump pipeline transcribes the WAV with. Both `null` (a unit
+ * host, or a device without Apple Intelligence) leave the take to salvage — input is never wasted.
  */
 class DefernoRoot(
     private val recorder: NativeAudioRecorder? = null,
     dictation: NativeDictation? = null,
+    inference: NativeInference? = null,
+    private val fileTranscriber: NativeFileTranscriber? = null,
 ) {
 
     init {
@@ -97,6 +106,14 @@ class DefernoRoot(
     // (which resolves to the Unavailable floor until an iOS engine is bound — the New mic stays hidden).
     private val speechToText: SpeechToText =
         dictation?.let { NativeSpeechToText(it) } ?: appComponent.speechToText
+
+    init {
+        // On-device inference (#269, ADR-0037): install the Swift Foundation Models engine into the DI graph's
+        // OnDeviceFoundationModels forwarder, so the routed appComponent.inferenceEngine (the iOS default)
+        // reaches it. A null engine (a unit host) or a non-Apple-Intelligence device leaves the NotConfigured
+        // floor, so the Brain dump pipeline salvages rather than silently producing nothing.
+        inference?.let { IosOnDeviceInference.install(NativeInferenceEngine(it)) }
+    }
 
     // Brain dump's record→Inbox seam (#267, ADR-0037): records the mic to a durable WAV, then on Stop hands
     // the take to the shared pipeline on an app-scope coroutine — the WorkManager-less iOS twin of Android's
@@ -200,7 +217,15 @@ class DefernoRoot(
                     deleteFile(wavPath) // mic never opened — nothing captured; the rethrow flips Phase.Failed
                 } else {
                     bootstrapScope.launch {
-                        processBrainDumpTake(appComponent, wavPath, today, timeZone, createdAt)
+                        processBrainDumpTake(
+                            appComponent = appComponent,
+                            wavPath = wavPath,
+                            locale = currentLocaleTag(),
+                            transcriber = fileTranscriber,
+                            today = today,
+                            timeZone = timeZone,
+                            createdAt = createdAt,
+                        )
                     }
                 }
             }
