@@ -18,7 +18,7 @@ struct NewItemView: View {
 
     init(component: NewComponent) {
         self.component = component
-        _state = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.doNewStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     var body: some View {

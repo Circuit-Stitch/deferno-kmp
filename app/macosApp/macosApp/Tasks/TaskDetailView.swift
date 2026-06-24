@@ -24,7 +24,7 @@ struct TaskDetailView: View {
         self.component = component
         self.hidesBackControl = hidesBackControl
         self.showsHeader = showsHeader
-        _state = StateObject(wrappedValue: StateFlowObserver(BridgeKt.taskDetailStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     var body: some View {

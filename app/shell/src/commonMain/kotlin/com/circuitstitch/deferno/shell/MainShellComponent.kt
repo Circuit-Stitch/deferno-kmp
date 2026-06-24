@@ -15,6 +15,8 @@ import com.arkivanov.decompose.router.stack.pop
 import com.arkivanov.decompose.value.Value
 import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.arkivanov.essenty.lifecycle.doOnResume
+import com.circuitstitch.deferno.core.common.asStateFlow
+import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.common.log.Logger
 import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
@@ -130,6 +132,14 @@ interface MainShellComponent {
      */
     val overlay: Value<ChildSlot<*, OverlayChild>>
 
+    /**
+     * The active Destination + open overlay, mirrored as [StateFlow]s for the SwiftUI Views to observe
+     * via SKIE (which bridges `StateFlow` + the sealed children → Swift enums, but not Decompose's
+     * [Value]/[ChildStack]/[ChildSlot]). The Compose/Android side keeps observing [stack]/[overlay].
+     */
+    val activeDestination: StateFlow<DestinationChild>
+    val activeOverlay: StateFlow<OverlayChild?>
+
     /** Switch foreground Destination laterally, preserving every Destination's retained state. */
     fun selectDestination(destination: Destination)
 
@@ -188,6 +198,8 @@ interface MainShellComponent {
          */
         class Plan(
             val stack: Value<ChildStack<*, PlanChild>>,
+            /** [stack]'s active child mirrored for SwiftUI to observe via SKIE (see [activeDestination]). */
+            val activeChild: StateFlow<PlanChild>,
             val onBack: () -> Boolean,
         ) : DestinationChild {
             override val destination: Destination = Destination.Plan
@@ -597,6 +609,10 @@ class DefaultMainShellComponent(
                 )
                 MainShellComponent.DestinationChild.Plan(
                     stack = planStack,
+                    // SKIE-facing mirror, tied to this Plan child's lifecycle (cancels on its destroy).
+                    activeChild = planStack.asStateFlow(childContext.componentScope(coroutineContext)) {
+                        it.active.instance
+                    },
                     // Pop a drilled detail back toward the dashboard; not consumed at the dashboard base.
                     onBack = {
                         if (planStack.value.backStack.isNotEmpty()) {
@@ -706,6 +722,13 @@ class DefaultMainShellComponent(
     // Scope for the shell-owned overlay work (the New create dispatch, #71). Tied to the injected
     // coroutineContext so a test drives it on its own scheduler.
     private val overlayScope = kotlinx.coroutines.CoroutineScope(coroutineContext + kotlinx.coroutines.SupervisorJob())
+
+    // SKIE-facing mirrors of the navigation Values (see the interface). overlayScope outlives the shell,
+    // and the source Values are shell-owned, so the subscriptions need no separate teardown.
+    override val activeDestination: StateFlow<MainShellComponent.DestinationChild> =
+        stack.asStateFlow(overlayScope) { it.active.instance }
+    override val activeOverlay: StateFlow<MainShellComponent.OverlayChild?> =
+        overlay.asStateFlow(overlayScope) { it.child?.instance }
 
     // Bumped on each shell resume to re-read the drafts (cross-driver: the brain-dump worker writes Ready
     // drafts via its OWN SQLDelight driver, so the UI driver's live query doesn't see them — a fresh

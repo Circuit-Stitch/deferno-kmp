@@ -24,7 +24,7 @@ struct SignInView: View {
 
     init(component: SignInComponent) {
         self.component = component
-        _state = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.signInStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     var body: some View {

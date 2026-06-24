@@ -7,11 +7,14 @@ import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.router.stack.navigate
 import com.arkivanov.decompose.router.stack.pop
 import com.arkivanov.decompose.value.Value
+import com.circuitstitch.deferno.core.common.asStateFlow
+import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 
@@ -26,6 +29,14 @@ import kotlin.time.Instant
  */
 interface TaskDetailStackComponent {
     val stack: Value<ChildStack<*, TaskDetailComponent>>
+
+    /**
+     * [stack]'s foreground detail + whether a level can be popped, mirrored as [StateFlow]s for the
+     * SwiftUI detail window to observe via SKIE (which bridges `StateFlow` but not Decompose's
+     * [Value]/[ChildStack]). The Compose/Android side, if any, keeps observing [stack] directly.
+     */
+    val activeDetail: StateFlow<TaskDetailComponent>
+    val canGoBack: StateFlow<Boolean>
 
     /** Pop one drilled level; returns false at the root (depth 1) so the window host can decide. */
     fun onBack(): Boolean
@@ -53,6 +64,8 @@ class DefaultTaskDetailStackComponent(
 
     private val navigation = StackNavigation<DetailConfig>()
 
+    private val scope = componentScope(coroutineContext)
+
     override val stack: Value<ChildStack<*, TaskDetailComponent>> =
         childStack(
             source = navigation,
@@ -77,6 +90,11 @@ class DefaultTaskDetailStackComponent(
                 )
             },
         )
+
+    override val activeDetail: StateFlow<TaskDetailComponent> =
+        stack.asStateFlow(scope) { it.active.instance }
+    override val canGoBack: StateFlow<Boolean> =
+        stack.asStateFlow(scope) { it.backStack.isNotEmpty() }
 
     override fun onBack(): Boolean =
         if (stack.value.backStack.isNotEmpty()) {

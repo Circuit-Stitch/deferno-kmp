@@ -16,8 +16,8 @@ struct MainShellView: View {
     let onBrainDump: () -> Void
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.defernoColors) private var colors
-    @StateObject private var destinations: DestinationStackObserver
-    @StateObject private var overlay: OverlaySlotObserver
+    @StateObject private var destinations: StateFlowObserver<MainShellComponentDestinationChild>
+    @StateObject private var overlay: OptionalStateFlowObserver<MainShellComponentOverlayChild>
     @StateObject private var accounts: AccountsObserver
     @StateObject private var chrome: StateFlowObserver<ChromeSpec>
     @State private var showMore = false
@@ -26,13 +26,13 @@ struct MainShellView: View {
     init(component: MainShellComponent, onBrainDump: @escaping () -> Void) {
         self.component = component
         self.onBrainDump = onBrainDump
-        _destinations = StateObject(wrappedValue: DestinationStackObserver(ShellBridgeKt.destinationStackBridge(component: component)))
-        _overlay = StateObject(wrappedValue: OverlaySlotObserver(ShellBridgeKt.overlaySlotBridge(component: component)))
-        _accounts = StateObject(wrappedValue: AccountsObserver(ShellBridgeKt.accountSwitcherBridge(component: component)))
-        _chrome = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.chromeBridge(component: component)))
+        _destinations = StateObject(wrappedValue: StateFlowObserver(component.activeDestination))
+        _overlay = StateObject(wrappedValue: OptionalStateFlowObserver(component.activeOverlay))
+        _accounts = StateObject(wrappedValue: AccountsObserver(accounts: component.accounts, active: component.activeAccount))
+        _chrome = StateObject(wrappedValue: StateFlowObserver(component.chrome))
     }
 
-    private var active: MainShellComponentDestinationChild { destinations.active }
+    private var active: MainShellComponentDestinationChild { destinations.value }
     private var activeName: String { ShellBridgeKt.destinationName(destination: ShellBridgeKt.destinationOf(child: active)) }
 
     // The single adaptive chrome (Cand 1), computed in the shell. `drilled` swaps the leading affordance
@@ -307,15 +307,15 @@ struct MainShellView: View {
     // MARK: Overlay (Search / New) as a sheet
 
     private var overlaySearchComponent: SearchComponent? {
-        overlay.current.flatMap { ShellBridgeKt.overlaySearch(child: $0) }
+        overlay.value.flatMap { ShellBridgeKt.overlaySearch(child: $0) }
     }
 
     private var overlayNewComponent: NewComponent? {
-        overlay.current.flatMap { ShellBridgeKt.overlayNew(child: $0) }
+        overlay.value.flatMap { ShellBridgeKt.overlayNew(child: $0) }
     }
 
     private var overlayFeedbackComponent: FeedbackComponent? {
-        overlay.current.flatMap { ShellBridgeKt.overlayFeedback(child: $0) }
+        overlay.value.flatMap { ShellBridgeKt.overlayFeedback(child: $0) }
     }
 
     private var overlayPresented: Binding<Bool> {

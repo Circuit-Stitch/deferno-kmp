@@ -30,7 +30,7 @@ struct TasksScreen: View {
     /// drive the trailing toolbar items via `ChromeToolbar`).
     var chromeSpec: ChromeSpec
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @StateObject private var detail: DetailSlotObserver
+    @StateObject private var detail: OptionalStateFlowObserver<TaskDetailComponent>
     /// The native search text — inline-filters the loaded forest (#263). Lives here so it sits on the
     /// nav bar that owns the tree; passed down to `ItemTreeView` for the actual filtering.
     @State private var query = ""
@@ -51,7 +51,7 @@ struct TasksScreen: View {
         self.onAdd = onAdd
         self.onMenu = onMenu
         self.chromeSpec = chromeSpec
-        _detail = StateObject(wrappedValue: DetailSlotObserver(root.detail))
+        _detail = StateObject(wrappedValue: OptionalStateFlowObserver(root.activeDetail))
     }
 
     var body: some View {
@@ -100,7 +100,7 @@ struct TasksScreen: View {
                 guard popped.count < derived.count else { return }
                 for route in derived.suffix(from: popped.count).reversed() {
                     switch route {
-                    case .detail: detail.current?.onCloseClicked()
+                    case .detail: detail.value?.onCloseClicked()
                     }
                 }
             }
@@ -128,7 +128,7 @@ struct TasksScreen: View {
     }
 
     private var currentPath: [TaskRoute] {
-        tasksNavPath(hasDetail: detail.current != nil)
+        tasksNavPath(hasDetail: detail.value != nil)
     }
 
     /// A pushed secondary pane on compact width: the detail's View with its in-pane `PaneHeader` suppressed,
@@ -137,7 +137,7 @@ struct TasksScreen: View {
     private func pushedPane(_ route: TaskRoute) -> some View {
         switch route {
         case .detail:
-            if let detail = detail.current {
+            if let detail = detail.value {
                 TaskDetailView(component: detail, showsHeader: false).id(BridgeKt.detailKey(component: detail))
             }
         }
@@ -147,7 +147,7 @@ struct TasksScreen: View {
     /// placeholder when nothing is open.
     @ViewBuilder
     private func secondaryPane() -> some View {
-        if let detail = detail.current {
+        if let detail = detail.value {
             TaskDetailView(component: detail).id(BridgeKt.detailKey(component: detail))
         } else {
             EmptyStateView(

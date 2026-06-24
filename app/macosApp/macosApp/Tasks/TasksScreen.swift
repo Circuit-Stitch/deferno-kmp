@@ -12,15 +12,15 @@ import SwiftUI
 /// a co-resident slot — so this View holds no foreground state of its own.
 struct TasksScreen: View {
     let root: TasksRoot
-    @StateObject private var detail: DetailSlotObserver
+    @StateObject private var detail: OptionalStateFlowObserver<TaskDetailComponent>
 
     init(root: TasksRoot) {
         self.root = root
-        _detail = StateObject(wrappedValue: DetailSlotObserver(root.detail))
+        _detail = StateObject(wrappedValue: OptionalStateFlowObserver(root.activeDetail))
     }
 
     var body: some View {
-        if let detail = detail.current {
+        if let detail = detail.value {
             HStack(spacing: 0) {
                 ItemTreeView(component: root.tree)
                     .frame(minWidth: 280, idealWidth: 340)

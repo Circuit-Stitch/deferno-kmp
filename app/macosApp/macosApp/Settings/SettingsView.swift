@@ -9,23 +9,23 @@ import SwiftUI
 /// until a real iOS engine ships (#95).
 struct SettingsView: View {
     let component: SettingsComponent
-    @StateObject private var stack: SettingsStackObserver
+    @StateObject private var stack: StateFlowObserver<SettingsComponentSettingsChild>
     @StateObject private var settings: StateFlowObserver<UserSettings>
     @StateObject private var speech: StateFlowObserver<SpeechEngineSettings>
     @Environment(\.defernoColors) private var colors
 
     init(component: SettingsComponent) {
         self.component = component
-        _stack = StateObject(wrappedValue: SettingsStackObserver(ShellBridgeKt.settingsStackBridge(component: component)))
-        _settings = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.settingsStateBridge(component: component)))
-        _speech = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.speechEngineBridge(component: component)))
+        _stack = StateObject(wrappedValue: StateFlowObserver(component.activeChild))
+        _settings = StateObject(wrappedValue: StateFlowObserver(component.settings))
+        _speech = StateObject(wrappedValue: StateFlowObserver(component.speechEngine))
     }
 
     // No PaneHeader: the single adaptive shell bar (MainShellView) titles "Settings" / the category and
     // drives ← back (via the shell's onBack) — the chrome reflects this stack's foreground child.
     var body: some View {
         VStack(spacing: 0) {
-            if let category = ShellBridgeKt.settingsChildCategory(child: stack.active) {
+            if let category = ShellBridgeKt.settingsChildCategory(child: stack.value) {
                 ScrollView { detail(category).padding(Layout.gutter) }
             } else {
                 categoryList

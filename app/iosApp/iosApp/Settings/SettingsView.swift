@@ -12,7 +12,7 @@ import UserNotifications
 /// macOS's `SettingsView`.
 struct SettingsView: View {
     let component: SettingsComponent
-    @StateObject private var stack: SettingsStackObserver
+    @StateObject private var stack: StateFlowObserver<SettingsComponentSettingsChild>
     @StateObject private var settings: StateFlowObserver<UserSettings>
     @StateObject private var speech: StateFlowObserver<SpeechEngineSettings>
     @StateObject private var inference: StateFlowObserver<InferenceEngineSettings>
@@ -24,7 +24,7 @@ struct SettingsView: View {
 
     init(component: SettingsComponent) {
         self.component = component
-        _stack = StateObject(wrappedValue: SettingsStackObserver(ShellBridgeKt.settingsStackBridge(component: component)))
+        _stack = StateObject(wrappedValue: StateFlowObserver(component.activeChild))
         _settings = StateObject(wrappedValue: StateFlowObserver(component.settings))
         _speech = StateObject(wrappedValue: StateFlowObserver(component.speechEngine))
         _inference = StateObject(wrappedValue: StateFlowObserver(component.inferenceEngine))
@@ -35,7 +35,7 @@ struct SettingsView: View {
     // back when drilled. Drilling is `openCategory`; back routes through the shell's `onBack`.
     var body: some View {
         Group {
-            if let category = ShellBridgeKt.settingsChildCategory(child: stack.active) {
+            if let category = ShellBridgeKt.settingsChildCategory(child: stack.value) {
                 detail(category)
                     .scrollContentBackground(.hidden)
             } else {

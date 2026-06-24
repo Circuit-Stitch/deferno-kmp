@@ -1,7 +1,5 @@
 package com.circuitstitch.deferno.ios.bridge
 
-import com.arkivanov.decompose.router.slot.ChildSlot
-import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -25,48 +23,13 @@ import platform.Foundation.create
 import kotlin.time.Instant
 
 /**
- * The **Decompose half of the bridge** the SwiftUI Views observe (#51). SKIE (ADR-0003) now bridges
- * each component's `StateFlow`/sealed/enum types into idiomatic Swift, so the Views observe those
- * directly (`SkieSwiftStateFlow` → `StateFlowObserver`, `ObservableState.swift`). SKIE does **not**
- * bridge the Decompose reactive types (`Value`/`ChildSlot`/`ChildStack`), so these small **concrete**
- * wrappers keep doing that job by hand: they keep the Decompose generics out of the Swift-facing
- * surface, exposing only a `current`/`active` snapshot and a callback-based `subscribe` that returns a
- * [Subscription] Swift cancels in `deinit`. (The shell's navigation containers live in `ShellBridge.kt`.)
+ * The **Decompose half of the bridge** the SwiftUI Views observe (#51). SKIE (ADR-0003) bridges each
+ * component's `StateFlow`/sealed/enum types into idiomatic Swift, so the Views observe those directly
+ * (`SkieSwiftStateFlow` → `StateFlowObserver`, `ObservableState.swift`) — including navigation, now that
+ * the components expose their Decompose `Value`/`ChildStack`/`ChildSlot` as `StateFlow` mirrors
+ * (`Value.asStateFlow`). What remains here is the non-reactive seam SKIE can't synthesize: value-class
+ * unwraps, sealed `as?` discriminators, and `NSData`/`Instant` codecs. (Shell seams live in `ShellBridge.kt`.)
  */
-
-/** A handle Swift holds and [cancel]s in `deinit` to stop observing a Decompose [Value]. */
-class Subscription internal constructor(private val onCancel: () -> Unit) {
-    fun cancel() {
-        onCancel()
-    }
-}
-
-/**
- * Observes a Decompose [Value] (e.g. the Tasks `activePane`) from Swift. Decompose's `subscribe`
- * fires synchronously with the current value, so no coroutine is involved — the [Subscription] just
- * cancels the Decompose subscription.
- */
-class ValueBridge<T : Any> internal constructor(private val delegate: Value<T>) {
-    val current: T get() = delegate.value
-
-    fun subscribe(onEach: (T) -> Unit): Subscription {
-        val cancellation = delegate.subscribe { onEach(it) }
-        return Subscription { cancellation.cancel() }
-    }
-}
-
-/**
- * The Tasks **detail** co-resident slot, flattened to its (nullable) child component so Swift never
- * touches the `Value<ChildSlot<*, …>>` generics. [current] is the open detail component, or `null`.
- */
-class DetailSlot internal constructor(private val slot: Value<ChildSlot<*, TaskDetailComponent>>) {
-    val current: TaskDetailComponent? get() = slot.value.child?.instance
-
-    fun subscribe(onEach: (TaskDetailComponent?) -> Unit): Subscription {
-        val cancellation = slot.subscribe { onEach(it.child?.instance) }
-        return Subscription { cancellation.cancel() }
-    }
-}
 
 /** True when [kind] is the Task kind — Swift can't reliably `==` a bridged Kotlin enum in a static framework. */
 fun itemKindIsTask(kind: ItemKind): Boolean = kind == ItemKind.Task
@@ -136,7 +99,7 @@ private fun ByteArray.toNSData(): NSData =
 /**
  * Read an **on-device** attachment's bytes for playback (#272) — the retained brain-dump recording the synced
  * `attachments` path never has. The repository read is local + quick, so it runs in a one-shot
- * [Dispatchers.Main] coroutine (matching [StateFlowBridge]); [onData] then gets the bytes as `NSData` for
+ * [Dispatchers.Main] coroutine; [onData] then gets the bytes as `NSData` for
  * `AVAudioPlayer`, or `null` if the row was already deleted. `TaskDetailState.onDeviceAttachments` and
  * `TaskDetailComponent.onDeleteOnDeviceAttachment` are plain enough that Swift reads/calls them directly.
  */

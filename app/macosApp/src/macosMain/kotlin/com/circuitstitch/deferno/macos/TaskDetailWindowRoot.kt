@@ -6,15 +6,17 @@ import com.arkivanov.essenty.lifecycle.destroy
 import com.arkivanov.essenty.lifecycle.resume
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.feature.tasks.DefaultTaskDetailStackComponent
+import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailStackComponent
-import com.circuitstitch.deferno.macos.bridge.DetailStackBridge
 import com.circuitstitch.deferno.shell.RootComponent
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * The Swift-facing handle for one **detached Task detail window** (#196, ADR-0033). It owns the window's
  * own Essenty [LifecycleRegistry] (resumed at open, [destroy]ed when SwiftUI tears the scene down — the
  * per-window lifecycle, mirroring [DefernoRoot]) and exposes the [TaskDetailStackComponent]'s push/pop
- * stack flattened through the SKIE-free [DetailStackBridge] so SwiftUI never touches Decompose generics.
+ * stack as SKIE-bridged `StateFlow` mirrors ([activeDetail] + [canGoBack]) so SwiftUI never touches
+ * Decompose generics.
  *
  * It is built from the **live** [com.circuitstitch.deferno.shell.AccountSession] the main shell already
  * holds (via [openTaskDetailWindow]), not a fresh `AccountComponent` — so the window and the main shell
@@ -27,7 +29,9 @@ class TaskDetailWindowRoot internal constructor(
     val rootTaskId: String,
     private val component: TaskDetailStackComponent,
 ) {
-    val stack: DetailStackBridge = DetailStackBridge(component.stack)
+    /** The window's foreground detail page + whether a level can be popped (the Back control's gate). */
+    val activeDetail: StateFlow<TaskDetailComponent> = component.activeDetail
+    val canGoBack: StateFlow<Boolean> = component.canGoBack
 
     /** Pop one drilled level (the Back control); false at the root, where the window's chrome closes it. */
     fun onBack(): Boolean = component.onBack()

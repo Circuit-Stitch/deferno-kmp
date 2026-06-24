@@ -11,6 +11,7 @@ import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
 import com.circuitstitch.deferno.core.agent.InferenceEngineOption
+import com.circuitstitch.deferno.core.common.asStateFlow
 import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
@@ -146,6 +147,12 @@ data class StorageProviderSettings(
 interface SettingsComponent {
     /** The tier-3 drill-down: the category list at the root, a category detail pushed above it. */
     val stack: Value<ChildStack<*, SettingsChild>>
+
+    /**
+     * [stack]'s active child mirrored as a [StateFlow] for the SwiftUI Views to observe via SKIE (which
+     * bridges `StateFlow` + the sealed [SettingsChild] → a Swift enum, but not Decompose's [Value]).
+     */
+    val activeChild: StateFlow<SettingsChild>
 
     /** The Active Account's settings — drives every backed category and the app-wide live theme. */
     val settings: StateFlow<UserSettings>
@@ -372,6 +379,9 @@ class DefaultSettingsComponent(
             handleBackButton = false, // tier-3 back is routed via onBack(), not a global stack pop
             childFactory = ::createChild,
         )
+
+    override val activeChild: StateFlow<SettingsComponent.SettingsChild> =
+        stack.asStateFlow(scope) { it.active.instance }
 
     override val settings: StateFlow<UserSettings> =
         settingsRepository.observeSettings()

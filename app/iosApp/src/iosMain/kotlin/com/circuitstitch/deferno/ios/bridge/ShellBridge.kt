@@ -1,8 +1,5 @@
 package com.circuitstitch.deferno.ios.bridge
 
-import com.arkivanov.decompose.router.slot.ChildSlot
-import com.arkivanov.decompose.router.stack.ChildStack
-import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.feature.calendar.CalendarState
 import com.circuitstitch.deferno.feature.profile.ProfileState
 import com.circuitstitch.deferno.feature.settings.InferenceEngineSettings
@@ -64,88 +61,14 @@ import com.circuitstitch.deferno.feature.tasks.ShakeOutcome
 /**
  * The **shell half of the bridge** (#35) — the navigation frame + the Destinations the SwiftUI Views
  * render over the shared shell ([RootComponent] → Auth/Main → the Destinations + the Search/New
- * overlays, ADR-0013/0017). It extends the Tasks/Plan-only [Bridge.kt] with:
- *  - flattened, **concrete** wrappers for the Decompose `Value<ChildStack<*, C>>` / `Value<ChildSlot<*, C>>`
- *    navigation containers (Root Auth↔Main, the Destination stack, the overlay slot, the Settings/Plan
- *    drill-downs) — concrete (not generic) because every child type is a Kotlin **sealed interface**, which
- *    Obj-C lightweight generics can't carry as a type argument (it would erase to `id`). SKIE bridges
- *    `StateFlow`/sealed/enum but **not** these Decompose types (ADR-0003), so they keep their hand-written
- *    `subscribe`/[Subscription] wrappers; the Views observe each component's `StateFlow` state via SKIE;
- *  - `as?`-cascade accessors + value-class `.value` unwrap seams + `LocalDate`/`Instant` parse/format
- *    helpers, so Swift never names a sealed subclass, a star-projected generic, or an opaque date type.
+ * overlays, ADR-0013/0017). The navigation containers (Root Auth↔Main, the Destination stack, the
+ * overlay slot, the Settings/Plan drill-downs) are no longer wrapped here: each component exposes its
+ * Decompose `Value`/`ChildStack`/`ChildSlot` as a `StateFlow` of the active sealed child
+ * (`Value.asStateFlow`), which SKIE bridges to Swift (sealed → enum) and the Views observe via
+ * `StateFlowObserver`. What stays here is the non-reactive seam SKIE can't synthesize: `as?`-cascade
+ * accessors + value-class `.value` unwraps + `LocalDate`/`Instant` codecs, so Swift never names a sealed
+ * subclass, a star-projected generic, or an opaque date type.
  */
-
-// ---------------------------------------------------------------------------------------------------
-// Decompose container wrappers — concrete (sealed child types can't be Obj-C generic args)
-// ---------------------------------------------------------------------------------------------------
-
-/** Flattens the root Auth↔Main stack to its single active [RootComponent.Child]. */
-class RootStackBridge internal constructor(private val delegate: Value<ChildStack<*, RootComponent.Child>>) {
-    val active: RootComponent.Child get() = delegate.value.active.instance
-
-    fun subscribe(onEach: (RootComponent.Child) -> Unit): Subscription {
-        val cancellation = delegate.subscribe { onEach(it.active.instance) }
-        return Subscription { cancellation.cancel() }
-    }
-}
-
-/** Flattens the Main Destination stack to the foreground [MainShellComponent.DestinationChild]. */
-class DestinationStackBridge internal constructor(
-    private val delegate: Value<ChildStack<*, MainShellComponent.DestinationChild>>,
-) {
-    val active: MainShellComponent.DestinationChild get() = delegate.value.active.instance
-
-    fun subscribe(onEach: (MainShellComponent.DestinationChild) -> Unit): Subscription {
-        val cancellation = delegate.subscribe { onEach(it.active.instance) }
-        return Subscription { cancellation.cancel() }
-    }
-}
-
-/** Flattens the shell overlay slot to its (nullable) open [MainShellComponent.OverlayChild]. */
-class OverlaySlotBridge internal constructor(
-    private val delegate: Value<ChildSlot<*, MainShellComponent.OverlayChild>>,
-) {
-    val current: MainShellComponent.OverlayChild? get() = delegate.value.child?.instance
-
-    fun subscribe(onEach: (MainShellComponent.OverlayChild?) -> Unit): Subscription {
-        val cancellation = delegate.subscribe { onEach(it.child?.instance) }
-        return Subscription { cancellation.cancel() }
-    }
-}
-
-/** Flattens the Settings tier-3 drill-down stack to the active [SettingsComponent.SettingsChild]. */
-class SettingsStackBridge internal constructor(
-    private val delegate: Value<ChildStack<*, SettingsComponent.SettingsChild>>,
-) {
-    val active: SettingsComponent.SettingsChild get() = delegate.value.active.instance
-
-    fun subscribe(onEach: (SettingsComponent.SettingsChild) -> Unit): Subscription {
-        val cancellation = delegate.subscribe { onEach(it.active.instance) }
-        return Subscription { cancellation.cancel() }
-    }
-}
-
-/** Flattens the Plan Destination's tier-3 stack (#51) to the active [MainShellComponent.PlanChild]. */
-class PlanStackBridge internal constructor(
-    private val delegate: Value<ChildStack<*, MainShellComponent.PlanChild>>,
-) {
-    val active: MainShellComponent.PlanChild get() = delegate.value.active.instance
-
-    fun subscribe(onEach: (MainShellComponent.PlanChild) -> Unit): Subscription {
-        val cancellation = delegate.subscribe { onEach(it.active.instance) }
-        return Subscription { cancellation.cancel() }
-    }
-}
-
-// ---------------------------------------------------------------------------------------------------
-// Bridge factories — wrap each Decompose container so Swift never names the navigation generics.
-// (The components' `StateFlow`/sealed states are bridged by SKIE; Swift observes them directly.)
-// ---------------------------------------------------------------------------------------------------
-
-fun rootStackBridge(component: RootComponent): RootStackBridge = RootStackBridge(component.stack)
-
-fun destinationStackBridge(component: MainShellComponent): DestinationStackBridge = DestinationStackBridge(component.stack)
-fun overlaySlotBridge(component: MainShellComponent): OverlaySlotBridge = OverlaySlotBridge(component.overlay)
 
 // ---------------------------------------------------------------------------------------------------
 // Adaptive top-bar chrome (Cand 1) — Swift renders the shell-computed ChromeSpec as the one shell bar
@@ -170,8 +93,6 @@ fun chromeActionKind(spec: ChromeSpec, index: Int): String = when (spec.actions[
 /** Run the trailing action at [index] (a shell/component handler — e.g. New opens the create overlay). */
 fun chromeInvoke(spec: ChromeSpec, index: Int) = spec.actions[index].onInvoke()
 
-fun settingsStackBridge(component: SettingsComponent): SettingsStackBridge = SettingsStackBridge(component.stack)
-
 /** The current "Brain dump notifications" opt-in (#271), as a snapshot Bool for the Settings toggle. */
 fun brainDumpNotificationsEnabled(component: SettingsComponent): Boolean = component.brainDumpNotificationsEnabled.value
 
@@ -193,22 +114,19 @@ fun rootChildMain(child: RootComponent.Child): MainShellComponent? =
 fun destinationOf(child: MainShellComponent.DestinationChild): Destination = child.destination
 
 /**
- * Wrap a [TasksComponent] into the Swift-facing [TasksRoot] handle (flattened list/detail/tree slots +
- * `activePane` recency) the existing `TasksScreen` renders. [TasksRoot]'s constructor is `internal`
+ * Wrap a [TasksComponent] into the Swift-facing [TasksRoot] handle (the tree component + the detail
+ * slot as an `activeDetail` `StateFlow`) the existing `TasksScreen` renders. [TasksRoot]'s constructor is `internal`
  * (the demo builds it directly), so the shell obtains one through this same-module factory.
  */
 fun tasksRoot(component: TasksComponent): TasksRoot = TasksRoot(component)
 
 /**
- * The Plan Destination child — now a tier-3 host (#51): Swift reads its [stack][planStackBridge]
+ * The Plan Destination child — now a tier-3 host (#51): Swift observes its `activeChild` `StateFlow`
  * (Dashboard base + drilled Task detail) and routes inner back through [planBack]. Returns the child
  * itself (not a single component), so the View can reach both.
  */
 fun destPlan(child: MainShellComponent.DestinationChild) =
     child as? MainShellComponent.DestinationChild.Plan
-
-/** The Plan Destination's tier-3 stack (Dashboard → drilled Task detail), for the SwiftUI NavigationStack. */
-fun planStackBridge(plan: MainShellComponent.DestinationChild.Plan): PlanStackBridge = PlanStackBridge(plan.stack)
 
 /** Pop an open Plan detail toward the dashboard (system back / nav-bar back); false at the dashboard base. */
 fun planBack(plan: MainShellComponent.DestinationChild.Plan): Boolean = plan.onBack()

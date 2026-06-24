@@ -9,6 +9,8 @@ import com.arkivanov.decompose.router.slot.childSlot
 import com.arkivanov.decompose.router.slot.dismiss
 import com.arkivanov.decompose.value.MutableValue
 import com.arkivanov.decompose.value.Value
+import com.circuitstitch.deferno.core.common.asStateFlow
+import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
@@ -18,6 +20,7 @@ import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 
@@ -41,6 +44,13 @@ interface TasksComponent {
 
     /** The most-recently-foregrounded pane (see [TaskPane]); updated as the detail slot activates/dismisses. */
     val activePane: Value<TaskPane>
+
+    /**
+     * [detail], flattened to its nullable open [TaskDetailComponent] and mirrored as a [StateFlow] for
+     * the SwiftUI Views to observe via SKIE (which bridges `StateFlow` but not Decompose's
+     * [Value]/[ChildSlot]). The Compose/Android side keeps observing [detail] directly.
+     */
+    val activeDetail: StateFlow<TaskDetailComponent?>
 
     sealed interface Output {
         data class AddToPlanRequested(val id: TaskId) : Output
@@ -88,6 +98,8 @@ class DefaultTasksComponent(
 
     private val detailNavigation = SlotNavigation<DetailConfig>()
 
+    private val scope = componentScope(coroutineContext)
+
     private val _activePane = MutableValue(TaskPane.Tree)
     override val activePane: Value<TaskPane> = _activePane
 
@@ -126,6 +138,9 @@ class DefaultTasksComponent(
                 coroutineContext = coroutineContext,
             )
         }
+
+    override val activeDetail: StateFlow<TaskDetailComponent?> =
+        detail.asStateFlow(scope) { it.child?.instance }
 
     private fun onTreeOutput(output: ItemTreeComponent.Output) {
         when (output) {

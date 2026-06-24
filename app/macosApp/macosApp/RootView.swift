@@ -9,14 +9,14 @@ import SwiftUI
 struct RootView: View {
     let root: RootComponent
     let onBrainDump: () -> Void
-    @StateObject private var stack: RootStackObserver
+    @StateObject private var stack: StateFlowObserver<RootComponentChild>
     @StateObject private var theme: StateFlowObserver<UserSettings>
 
     init(root: RootComponent, onBrainDump: @escaping () -> Void) {
         self.root = root
         self.onBrainDump = onBrainDump
-        _stack = StateObject(wrappedValue: RootStackObserver(ShellBridgeKt.rootStackBridge(component: root)))
-        _theme = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.themeSettingsBridge(component: root)))
+        _stack = StateObject(wrappedValue: StateFlowObserver(root.activeChild))
+        _theme = StateObject(wrappedValue: StateFlowObserver(root.themeSettings))
     }
 
     var body: some View {
@@ -26,7 +26,7 @@ struct RootView: View {
 
     @ViewBuilder
     private var content: some View {
-        let child = stack.active
+        let child = stack.value
         if let main = ShellBridgeKt.rootChildMain(child: child) {
             MainShellView(component: main, onBrainDump: onBrainDump)
         } else if let auth = ShellBridgeKt.rootChildAuth(child: child) {

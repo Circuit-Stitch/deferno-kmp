@@ -10,15 +10,14 @@ import com.circuitstitch.deferno.feature.plan.DefaultPlanComponent
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
-import com.circuitstitch.deferno.feature.tasks.TaskPane
+import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
-import com.circuitstitch.deferno.ios.bridge.DetailSlot
-import com.circuitstitch.deferno.ios.bridge.ValueBridge
 import com.circuitstitch.deferno.ios.demo.DemoPlanRepository
 import com.circuitstitch.deferno.ios.demo.DemoTaskRepository
 import com.circuitstitch.deferno.ios.demo.SampleData
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.LocalDate
 
 /**
@@ -97,14 +96,13 @@ class DefernoDemo {
 
 /**
  * The Swift-facing handle for the Tasks Destination. Exposes the always-present Item [tree] component
- * (the primary pane), the co-resident [detail] slot, and [activePane] recency (ADR-0007). The detail
- * slot is flattened through the SKIE-free bridge so SwiftUI never touches the Decompose `Value`/
- * `ChildSlot` generics; the tree is a plain component its `state` is observed via `itemTreeStateBridge`.
+ * (the primary pane) and the co-resident detail slot — flattened to its nullable open
+ * [TaskDetailComponent] as a SKIE-bridged [activeDetail] `StateFlow` (the component's `Value.asStateFlow`
+ * mirror), so SwiftUI never touches the Decompose `Value`/`ChildSlot` generics.
  */
 class TasksRoot internal constructor(private val component: TasksComponent) {
     val tree: ItemTreeComponent get() = component.tree
-    val detail: DetailSlot = DetailSlot(component.detail)
-    val activePane: ValueBridge<TaskPane> = ValueBridge(component.activePane)
+    val activeDetail: StateFlow<TaskDetailComponent?> = component.activeDetail
 }
 
 /**
