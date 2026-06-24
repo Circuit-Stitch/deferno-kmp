@@ -10,13 +10,13 @@ struct RootView: View {
     let root: RootComponent
     /// Threaded down to the Brain dump overlay's spectrum (#267) — RootView only forwards it.
     let recorder: BrainDumpRecorder
-    @StateObject private var stack: RootStackObserver
+    @StateObject private var stack: StateFlowObserver<RootComponentChild>
     @StateObject private var theme: StateFlowObserver<UserSettings>
 
     init(root: RootComponent, recorder: BrainDumpRecorder) {
         self.root = root
         self.recorder = recorder
-        _stack = StateObject(wrappedValue: RootStackObserver(ShellBridgeKt.rootStackBridge(component: root)))
+        _stack = StateObject(wrappedValue: StateFlowObserver(root.activeChild))
         _theme = StateObject(wrappedValue: StateFlowObserver(root.themeSettings))
     }
 
@@ -27,7 +27,7 @@ struct RootView: View {
 
     @ViewBuilder
     private var content: some View {
-        let child = stack.active
+        let child = stack.value
         if let main = ShellBridgeKt.rootChildMain(child: child) {
             MainShellView(component: main, recorder: recorder)
         } else if let auth = ShellBridgeKt.rootChildAuth(child: child) {

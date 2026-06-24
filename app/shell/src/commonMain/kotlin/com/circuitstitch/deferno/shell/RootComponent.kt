@@ -6,6 +6,7 @@ import com.arkivanov.decompose.router.stack.StackNavigation
 import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.router.stack.replaceAll
 import com.arkivanov.decompose.value.Value
+import com.circuitstitch.deferno.core.common.asStateFlow
 import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
@@ -64,6 +65,13 @@ import kotlin.time.Instant
 interface RootComponent {
     /** The active shell (exactly one of [Child.Auth] / [Child.Main]). */
     val stack: Value<ChildStack<*, Child>>
+
+    /**
+     * The active shell child, mirrored as a [StateFlow] for the SwiftUI Views to observe via SKIE
+     * (which bridges `StateFlow` + the sealed [Child] → a Swift enum, but not Decompose's [Value]).
+     * The Compose/Android side keeps observing [stack] directly.
+     */
+    val activeChild: StateFlow<Child>
 
     /**
      * The **live** per-Account session backing the active Main shell, or `null` on the Auth shell
@@ -243,6 +251,9 @@ class DefaultRootComponent(
             handleBackButton = false, // back is routed via onBackClicked(), not a stack pop
             childFactory = ::createChild,
         )
+
+    override val activeChild: StateFlow<RootComponent.Child> =
+        stack.asStateFlow(scope) { it.active.instance }
 
     init {
         // Follow the Active Account: swap shells (and re-key the Main child per Account) as it changes.

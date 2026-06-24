@@ -4,12 +4,13 @@ import Deferno
 @testable import iosApp
 
 /// Smoke coverage for the state-observation path (#28 / #51): how a shared Decompose component's
-/// `StateFlow` / co-resident slot reaches a SwiftUI `ObservableObject`. The `StateFlow` half now goes
-/// through SKIE (ADR-0003): `component.state: SkieSwiftStateFlow` → `StateFlowObserver`. The Decompose
-/// co-resident slot is **not** bridged by SKIE, so it keeps the hand-written `DetailSlot` →
-/// `DetailSlotObserver` wrapper (`Bridge/ObservableState.swift` + `…/ios/bridge/Bridge.kt`). These
-/// tests prove both deliver the real component state on the main thread, driving the genuine shared
-/// components through the same `DefernoDemo` harness the simulator app runs — only the data is a fixture.
+/// `StateFlow` / co-resident slot reaches a SwiftUI `ObservableObject`, all through SKIE (ADR-0003).
+/// Component state is `component.state: SkieSwiftStateFlow` → `StateFlowObserver`. The Decompose
+/// co-resident detail slot is now exposed as a `StateFlow` mirror of the active child
+/// (`TasksComponent.activeDetail`, via `Value.asStateFlow`), so SKIE bridges it like any other flow —
+/// `SkieSwiftOptionalStateFlow` → `OptionalStateFlowObserver`. These tests prove both deliver the real
+/// component state on the main thread, driving the genuine shared components through the same
+/// `DefernoDemo` harness the simulator app runs — only the data is a fixture.
 @MainActor
 final class StateBridgeTests: XCTestCase {
 
@@ -67,11 +68,11 @@ final class StateBridgeTests: XCTestCase {
         guard let target else { return XCTFail("the demo tree never delivered \"Water the plants\"") }
 
         // 2) The detail slot is empty until a selection; opening the row's detail opens it on that Task.
-        let detail = DetailSlotObserver(demo.tasks.detail)
-        XCTAssertNil(detail.current, "no detail pane is open before a selection")
+        let detail = OptionalStateFlowObserver(demo.tasks.activeDetail)
+        XCTAssertNil(detail.value, "no detail pane is open before a selection")
 
         let opened = expectation(description: "opening a row's detail opens its detail slot")
-        detail.$current
+        detail.$value
             .compactMap { $0 }
             .sink { component in
                 XCTAssertEqual(

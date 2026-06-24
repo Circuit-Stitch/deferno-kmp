@@ -11,7 +11,7 @@ struct ItemTreeView: View {
 
     init(component: ItemTreeComponent) {
         self.component = component
-        _state = StateObject(wrappedValue: StateFlowObserver(BridgeKt.itemTreeStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     var body: some View {

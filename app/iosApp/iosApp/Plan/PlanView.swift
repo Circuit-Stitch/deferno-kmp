@@ -8,15 +8,15 @@ import SwiftUI
 /// drives back, so the detail is hosted header-less; mirrors macOS's `PlanHostView`.
 struct PlanHostView: View {
     let plan: MainShellComponentDestinationChildPlan
-    @StateObject private var stack: PlanStackObserver
+    @StateObject private var stack: StateFlowObserver<MainShellComponentPlanChild>
 
     init(plan: MainShellComponentDestinationChildPlan) {
         self.plan = plan
-        _stack = StateObject(wrappedValue: PlanStackObserver(ShellBridgeKt.planStackBridge(plan: plan)))
+        _stack = StateObject(wrappedValue: StateFlowObserver(plan.activeChild))
     }
 
     var body: some View {
-        let child = stack.active
+        let child = stack.value
         if let dashboard = ShellBridgeKt.planChildDashboard(child: child) {
             PlanView(component: dashboard)
         } else if let detail = ShellBridgeKt.planChildDetail(child: child) {

@@ -18,8 +18,8 @@ struct MainShellView: View {
     /// The shared Brain dump recorder (#267) — forwarded to the overlay's spectrum.
     let recorder: BrainDumpRecorder
     @Environment(\.defernoColors) private var colors
-    @StateObject private var destinations: DestinationStackObserver
-    @StateObject private var overlay: OverlaySlotObserver
+    @StateObject private var destinations: StateFlowObserver<MainShellComponentDestinationChild>
+    @StateObject private var overlay: OptionalStateFlowObserver<MainShellComponentOverlayChild>
     @StateObject private var accounts: AccountsObserver
     @StateObject private var chrome: StateFlowObserver<ChromeSpec>
     /// The live count of Ready brain-dump drafts — the Inbox drawer-row badge (shell-level, so it shows
@@ -33,14 +33,14 @@ struct MainShellView: View {
     init(component: MainShellComponent, recorder: BrainDumpRecorder) {
         self.component = component
         self.recorder = recorder
-        _destinations = StateObject(wrappedValue: DestinationStackObserver(ShellBridgeKt.destinationStackBridge(component: component)))
-        _overlay = StateObject(wrappedValue: OverlaySlotObserver(ShellBridgeKt.overlaySlotBridge(component: component)))
+        _destinations = StateObject(wrappedValue: StateFlowObserver(component.activeDestination))
+        _overlay = StateObject(wrappedValue: OptionalStateFlowObserver(component.activeOverlay))
         _accounts = StateObject(wrappedValue: AccountsObserver(accounts: component.accounts, active: component.activeAccount))
         _chrome = StateObject(wrappedValue: StateFlowObserver(component.chrome))
         _inboxBadge = StateObject(wrappedValue: StateFlowObserver(component.inboxReadyCount))
     }
 
-    private var active: MainShellComponentDestinationChild { destinations.active }
+    private var active: MainShellComponentDestinationChild { destinations.value }
     private var activeName: String { ShellBridgeKt.destinationName(destination: ShellBridgeKt.destinationOf(child: active)) }
 
     var body: some View {
@@ -297,19 +297,19 @@ struct MainShellView: View {
     // tier-3 stack (PlanHostView), rendered inside the chrome so the drawer stays live.
 
     private var overlaySearchComponent: SearchComponent? {
-        overlay.current.flatMap { ShellBridgeKt.overlaySearch(child: $0) }
+        overlay.value.flatMap { ShellBridgeKt.overlaySearch(child: $0) }
     }
 
     private var overlayNewComponent: NewComponent? {
-        overlay.current.flatMap { ShellBridgeKt.overlayNew(child: $0) }
+        overlay.value.flatMap { ShellBridgeKt.overlayNew(child: $0) }
     }
 
     private var overlayFeedbackComponent: FeedbackComponent? {
-        overlay.current.flatMap { ShellBridgeKt.overlayFeedback(child: $0) }
+        overlay.value.flatMap { ShellBridgeKt.overlayFeedback(child: $0) }
     }
 
     private var overlayBrainDumpComponent: BrainDumpComponent? {
-        overlay.current.flatMap { ShellBridgeKt.overlayBrainDump(child: $0) }
+        overlay.value.flatMap { ShellBridgeKt.overlayBrainDump(child: $0) }
     }
 
     private var overlayPresented: Binding<Bool> {

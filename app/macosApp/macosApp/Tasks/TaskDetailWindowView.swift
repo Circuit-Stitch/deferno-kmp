@@ -12,13 +12,13 @@ import SwiftUI
 /// on sign-out / account switch while open (account isolation — never leave another account's task up).
 struct TaskDetailWindowView: View {
     @StateObject private var model: TaskDetailWindowModel
-    @StateObject private var rootStack: RootStackObserver
+    @StateObject private var rootStack: StateFlowObserver<RootComponentChild>
     @Environment(\.dismiss) private var dismiss
     @State private var boundChild: RootComponentChild?
 
     init(host: DefernoRoot, rawId: String) {
         _model = StateObject(wrappedValue: TaskDetailWindowModel(host: host, rawId: rawId))
-        _rootStack = StateObject(wrappedValue: RootStackObserver(ShellBridgeKt.rootStackBridge(component: host.root)))
+        _rootStack = StateObject(wrappedValue: StateFlowObserver(host.root.activeChild))
     }
 
     var body: some View {
@@ -37,7 +37,7 @@ struct TaskDetailWindowView: View {
         // Title the window with the task's ref (e.g. "u-e4h2qk-1") so multiple detail windows are
         // distinguishable in the title bar / Window menu / Mission Control (#196).
         .navigationTitle(model.title)
-        .onReceive(rootStack.$active) { child in
+        .onReceive(rootStack.$value) { child in
             // Account isolation (ADR-0033): the root swaps its active child on sign-out (→ Auth) and on
             // account switch (→ a re-keyed Main for the new account). Either way this window's captured
             // session is no longer active, so close it. The first value binds; only a *change* dismisses.
@@ -53,7 +53,8 @@ struct TaskDetailWindowView: View {
 /// Builds and OWNS one detached window's `TaskDetailWindowRoot` for the lifetime of its SwiftUI scene:
 /// constructed at init (over the active session — `nil` when signed out), torn down in `deinit`
 /// (`destroy()` → `lifecycle.destroy()`, so the window's component tree leaks nothing across open/close).
-/// Republishes the stack's foreground detail + whether a level can be popped, on the Kotlin main thread.
+/// Republishes the stack's foreground detail + whether a level can be popped, on the main actor (the
+/// component's `StateFlow` mirrors are bridged by SKIE, whose iterators run off the main thread).
 final class TaskDetailWindowModel: ObservableObject {
     @Published private(set) var active: TaskDetailComponent?
     @Published private(set) var canGoBack = false
@@ -62,32 +63,45 @@ final class TaskDetailWindowModel: ObservableObject {
     @Published private(set) var title = ""
 
     private let windowRoot: TaskDetailWindowRoot?
-    private var subscription: Deferno.Subscription?
-    private var titleSubscription: Deferno.Subscription?
+    // `_Concurrency.Task`: `Deferno.Task` (the Kotlin model) shadows Swift's concurrency `Task` here.
+    private var activeTask: _Concurrency.Task<Void, Never>?
+    private var backTask: _Concurrency.Task<Void, Never>?
+    private var titleTask: _Concurrency.Task<Void, Never>?
 
     init(host: DefernoRoot, rawId: String) {
         let root = TaskDetailWindowRootKt.openTaskDetailWindow(root: host.root, idValue: rawId)
         windowRoot = root
         if let root {
-            active = root.stack.active
-            canGoBack = root.stack.canGoBack
-            bindTitle(to: root.stack.active)
-            subscription = root.stack.subscribe(onEach: { [weak self] component in
-                self?.active = component
-                self?.canGoBack = root.stack.canGoBack
-                self?.bindTitle(to: component)
-            })
+            active = root.activeDetail.value
+            canGoBack = root.canGoBack.value.boolValue
+            bindTitle(to: root.activeDetail.value)
+            activeTask = _Concurrency.Task { @MainActor [weak self] in
+                for await component in root.activeDetail {
+                    guard !_Concurrency.Task.isCancelled, let self else { return }
+                    self.active = component
+                    self.bindTitle(to: component)
+                }
+            }
+            backTask = _Concurrency.Task { @MainActor [weak self] in
+                for await value in root.canGoBack {
+                    guard !_Concurrency.Task.isCancelled, let self else { return }
+                    self.canGoBack = value.boolValue
+                }
+            }
         }
     }
 
     // Track the foreground detail's ref for the window title; re-subscribes on each push/pop.
     private func bindTitle(to component: TaskDetailComponent) {
-        titleSubscription?.cancel()
-        let bridge = BridgeKt.taskDetailStateBridge(component: component)
-        title = Self.titleFor(bridge.value)
-        titleSubscription = bridge.subscribe(onEach: { [weak self] state in
-            self?.title = Self.titleFor(state)
-        })
+        titleTask?.cancel()
+        let flow = component.state
+        title = Self.titleFor(flow.value)
+        titleTask = _Concurrency.Task { @MainActor [weak self] in
+            for await state in flow {
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.title = Self.titleFor(state)
+            }
+        }
     }
 
     private static func titleFor(_ state: TaskDetailState) -> String {
@@ -95,8 +109,9 @@ final class TaskDetailWindowModel: ObservableObject {
     }
 
     deinit {
-        subscription?.cancel()
-        titleSubscription?.cancel()
+        activeTask?.cancel()
+        backTask?.cancel()
+        titleTask?.cancel()
         windowRoot?.destroy()
     }
 }

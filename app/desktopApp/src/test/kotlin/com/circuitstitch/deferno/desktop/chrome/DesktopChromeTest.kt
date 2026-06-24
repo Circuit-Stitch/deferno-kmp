@@ -77,6 +77,7 @@ class DesktopChromeTest {
 private class FakeRoot(child: RootComponent.Child) : RootComponent {
     override val stack: Value<ChildStack<*, RootComponent.Child>> =
         MutableValue(ChildStack(configuration = "single", instance = child))
+    override val activeChild: StateFlow<RootComponent.Child> = MutableStateFlow(child)
     override val themeSettings: StateFlow<UserSettings> = MutableStateFlow(UserSettings.Default)
     override val activeAccountSession: AccountSession? = null
     override fun onBackClicked(): Boolean = false
@@ -96,7 +97,11 @@ private class FakeMainShell : MainShellComponent {
     override val destinations: List<Destination> = Destination.entries
     override val stack: Value<ChildStack<*, MainShellComponent.DestinationChild>>
         get() = error("unused by the chrome routing")
+    override val activeDestination: StateFlow<MainShellComponent.DestinationChild>
+        get() = error("unused by the chrome routing")
     override val overlay: Value<ChildSlot<*, MainShellComponent.OverlayChild>>
+        get() = error("unused by the chrome routing")
+    override val activeOverlay: StateFlow<MainShellComponent.OverlayChild?>
         get() = error("unused by the chrome routing")
     override val accounts: StateFlow<List<Account>> = MutableStateFlow(emptyList())
     override val activeAccount: StateFlow<Account?> = MutableStateFlow(null)

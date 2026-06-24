@@ -1,55 +1,52 @@
 import Combine
 import Deferno
 
-// Observe shared Kotlin state from SwiftUI **without SKIE** (#51). SKIE (ADR-0003) would expose the
-// components' `StateFlow`/`Value` as idiomatic Swift, but no released SKIE supports Kotlin 2.4.0 yet
-// (see ../README.md). Until it ships, the Kotlin side hands us small callback-based bridges
-// (`StateFlowBridge`/`ValueBridge`/`DetailSlot` in `…/macos/bridge/Bridge.kt`); these
-// `ObservableObject` wrappers turn each into a SwiftUI-observable value. The bridges publish on the
-// Kotlin main dispatcher (the iOS main thread), so `@Published` mutations happen on the main thread.
-// When SKIE lands, this file and the Kotlin bridge can both be deleted.
+// Observe shared Kotlin state from SwiftUI through SKIE (ADR-0003): SKIE bridges each component's
+// `StateFlow<T>` into an idiomatic Swift `SkieSwiftStateFlow<T>` (a synchronous `.value` + an
+// `AsyncSequence`), so the observers below consume it directly — no hand-written Kotlin wrapper. This
+// includes **navigation**: the components expose their Decompose `Value`/`ChildStack`/`ChildSlot` as
+// `StateFlow` mirrors of the active sealed child (`Value.asStateFlow`), which SKIE bridges like any
+// other flow (sealed → Swift enum). The `@Published` mutation is hopped to the main actor (SKIE's flow
+// iterator runs off the main thread), matching the prior main-thread invariant.
 
-/// Observes a component's `StateFlow` (its pane state) as published SwiftUI state.
+/// Observes a component's `StateFlow` as published SwiftUI state, via SKIE's `SkieSwiftStateFlow`.
+/// Seeds synchronously from `.value`, then republishes each emission on the main actor; the collecting
+/// `Task` is cancelled in `deinit`.
 final class StateFlowObserver<T: AnyObject>: ObservableObject {
     @Published private(set) var value: T
-    private var subscription: Deferno.Subscription?
+    // `_Concurrency.Task`: the framework exports `Deferno.Task` (the Kotlin model), which would
+    // otherwise shadow Swift's concurrency `Task` here.
+    private var task: _Concurrency.Task<Void, Never>?
 
-    init(_ bridge: StateFlowBridge<T>) {
-        value = bridge.value
-        subscription = bridge.subscribe(onEach: { [weak self] next in
-            self?.value = next
-        })
+    init(_ flow: SkieSwiftStateFlow<T>) {
+        value = flow.value
+        task = _Concurrency.Task { @MainActor [weak self] in
+            for await next in flow {
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.value = next
+            }
+        }
     }
 
-    deinit { subscription?.cancel() }
+    deinit { task?.cancel() }
 }
 
-/// Observes a Decompose `Value` (e.g. the Tasks `activePane`) as published SwiftUI state.
-final class ValueObserver<T: AnyObject>: ObservableObject {
-    @Published private(set) var value: T
-    private var subscription: Deferno.Subscription?
+/// Observes a component's **nullable** `StateFlow` (e.g. the Tasks detail slot, or the shell overlay)
+/// via SKIE's `SkieSwiftOptionalStateFlow`. Mirrors `StateFlowObserver` with an optional `value`.
+final class OptionalStateFlowObserver<T: AnyObject>: ObservableObject {
+    @Published private(set) var value: T?
+    // `_Concurrency.Task`: `Deferno.Task` (the Kotlin model) shadows Swift's concurrency `Task` here.
+    private var task: _Concurrency.Task<Void, Never>?
 
-    init(_ bridge: ValueBridge<T>) {
-        value = bridge.current
-        subscription = bridge.subscribe(onEach: { [weak self] next in
-            self?.value = next
-        })
+    init(_ flow: SkieSwiftOptionalStateFlow<T>) {
+        value = flow.value
+        task = _Concurrency.Task { @MainActor [weak self] in
+            for await next in flow {
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.value = next
+            }
+        }
     }
 
-    deinit { subscription?.cancel() }
-}
-
-/// Observes the Tasks **detail** co-resident slot: the open detail component, or `nil`.
-final class DetailSlotObserver: ObservableObject {
-    @Published private(set) var current: TaskDetailComponent?
-    private var subscription: Deferno.Subscription?
-
-    init(_ slot: DetailSlot) {
-        current = slot.current
-        subscription = slot.subscribe(onEach: { [weak self] component in
-            self?.current = component
-        })
-    }
-
-    deinit { subscription?.cancel() }
+    deinit { task?.cancel() }
 }

@@ -15,7 +15,7 @@ struct SearchView: View {
 
     init(component: SearchComponent) {
         self.component = component
-        _state = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.searchStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     var body: some View {
