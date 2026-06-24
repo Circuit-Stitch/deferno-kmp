@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
@@ -43,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
@@ -69,6 +71,7 @@ import com.circuitstitch.deferno.core.designsystem.component.SearchBarDisplay
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.feature.tasks.ItemRow
 import com.circuitstitch.deferno.feature.tasks.MoveMode
 
@@ -446,6 +449,12 @@ private fun ItemTreeRow(
                         }
                     }
                 }
+                // A small external-provenance mark when the item was synced/created from GitHub or
+                // Google Calendar (else absent — a native Deferno item). It rides ahead of the chevron,
+                // inheriting the row's dim in move mode (the Row carries the alpha).
+                item.source?.let { source ->
+                    SourceIndicator(source, modifier = Modifier.padding(horizontal = 4.dp))
+                }
                 // The lone open-detail affordance: a fixed target, immune to title length (ADR-0034 dec. 7).
                 // Inert in move mode (the list is calm). An icon-only control, so it carries its own
                 // contentDescription for TalkBack; the glyph's own semantics are cleared so it isn't read twice.
@@ -489,6 +498,46 @@ private fun ItemTreeRow(
         }
     }
 }
+
+/** ~16dp glyph for a small source mark. */
+private val SourceMarkSize = 16.dp
+
+/**
+ * The small external-provenance mark for a tree row: GitHub or Google Calendar. GitHub's monochrome
+ * Invertocat is tinted to the calm row ink (it reads as filigree, like the other glyphs); Google's "G"
+ * keeps its four brand colours (rendered untinted via [Image] — the colour *is* the signal). It carries
+ * its own TalkBack label since it's the sole cue of where the item came from. The brand drawable is
+ * resolved per platform by [sourceMarkPainter].
+ */
+@Composable
+internal fun SourceIndicator(source: ItemSource, modifier: Modifier = Modifier) {
+    val painter = sourceMarkPainter(source)
+    when (source) {
+        ItemSource.GitHub ->
+            Icon(
+                painter = painter,
+                contentDescription = "From GitHub",
+                tint = MaterialTheme.defernoColors.inkMuted,
+                modifier = modifier.size(SourceMarkSize),
+            )
+        ItemSource.GoogleCalendar ->
+            Image(
+                painter = painter,
+                contentDescription = "From Google Calendar",
+                modifier = modifier.size(SourceMarkSize),
+            )
+    }
+}
+
+/**
+ * The brand drawable for a source mark, resolved from each platform's native resource system: Android
+ * loads its vector drawable via `R.drawable` (the Robolectric screenshot harness isn't served a
+ * dependency module's Compose resources), desktop/JVM loads the design-system Compose resource via
+ * `Res.drawable`. Same artwork, packaged once per target (this module's `androidMain/res` and
+ * `core:designsystem`'s `composeResources`).
+ */
+@Composable
+internal expect fun sourceMarkPainter(source: ItemSource): Painter
 
 /**
  * The contextual move-mode control (ADR-0034 decision 6, #228): **↑ ↓** reorder among siblings and

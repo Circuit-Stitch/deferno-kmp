@@ -9,6 +9,10 @@ plugins {
 kotlin {
     android {
         namespace = "com.circuitstitch.deferno.feature.tasks.ui"
+        // KMP Android-library targets default androidResources off (no R class). The source-mark tree
+        // row resolves its GitHub/Google vector drawables via this module's R on Android (androidMain/res)
+        // — Robolectric isn't served a dependency module's composeResources, so the native res is needed.
+        androidResources.enable = true
     }
 
     sourceSets {
@@ -63,6 +67,11 @@ kotlin {
             // mirroring androidMain (the Android SearchScreen needs the same types).
             implementation(project(":core:data"))
             implementation(libs.decompose.extensions.compose)
+            // The desktop source-mark painter loads core:designsystem's Compose resource via its public
+            // Res (Res.drawable.ic_source_*); painterResource(DrawableResource) lives in this artifact,
+            // which designsystem only `implementation`s (not exposed transitively). Android needs nothing
+            // extra — it uses androidx.compose.ui.res.painterResource(R.drawable.*) from libs.compose.ui.
+            implementation(libs.compose.components.resources)
         }
         // The desktop render/screenshot test (#86, cf. #39): a Compose-Multiplatform UI test on the
         // JVM-fast path (no device) exercising the desktop Search View's empty/results/no-matches states
