@@ -44,10 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
@@ -509,56 +506,38 @@ private val SourceMarkSize = 16.dp
  * The small external-provenance mark for a tree row: GitHub or Google Calendar. GitHub's monochrome
  * Invertocat is tinted to the calm row ink (it reads as filigree, like the other glyphs); Google's "G"
  * keeps its four brand colours (rendered untinted via [Image] — the colour *is* the signal). It carries
- * its own TalkBack label since it's the sole cue of where the item came from.
+ * its own TalkBack label since it's the sole cue of where the item came from. The brand drawable is
+ * resolved per platform by [sourceMarkPainter].
  */
 @Composable
 internal fun SourceIndicator(source: ItemSource, modifier: Modifier = Modifier) {
+    val painter = sourceMarkPainter(source)
     when (source) {
         ItemSource.GitHub ->
             Icon(
-                imageVector = GitHubMark,
+                painter = painter,
                 contentDescription = "From GitHub",
                 tint = MaterialTheme.defernoColors.inkMuted,
                 modifier = modifier.size(SourceMarkSize),
             )
         ItemSource.GoogleCalendar ->
             Image(
-                imageVector = GoogleMark,
+                painter = painter,
                 contentDescription = "From Google Calendar",
                 modifier = modifier.size(SourceMarkSize),
             )
     }
 }
 
-// Brand marks built as in-code [ImageVector]s (like `DefernoIcons`) rather than packaged drawables:
-// Compose-Resources' painterResource can't load under the Robolectric screenshot harness (no Android
-// context), and ImageVectors render on every target. The SVG path strings are fed verbatim through
-// [PathParser] so there's nothing to hand-transcribe.
-
-/** GitHub Invertocat (GitHub_Invertocat_Black.svg, 98×96), one black path — tinted by the Icon. The
- *  original's ~0 (e-07) coordinates are flattened to 0. */
-private val GitHubMark: ImageVector by lazy {
-    svgMark("GitHub", 98f, 96f,
-        "M41.4395 69.3848C28.8066 67.8535 19.9062 58.7617 19.9062 46.9902C19.9062 42.2051 21.6289 37.0371 24.5 33.5918C23.2559 30.4336 23.4473 23.7344 24.8828 20.959C28.7109 20.4805 33.8789 22.4902 36.9414 25.2656C40.5781 24.1172 44.4062 23.543 49.0957 23.543C53.7852 23.543 57.6133 24.1172 61.0586 25.1699C64.0254 22.4902 69.2891 20.4805 73.1172 20.959C74.457 23.543 74.6484 30.2422 73.4043 33.4961C76.4668 37.1328 78.0937 42.0137 78.0937 46.9902C78.0937 58.7617 69.1934 67.6621 56.3691 69.2891C59.623 71.3945 61.8242 75.9883 61.8242 81.252L61.8242 91.2051C61.8242 94.0762 64.2168 95.7031 67.0879 94.5547C84.4102 87.9512 98 70.6289 98 49.1914C98 22.1074 75.9883 0 48.9043 0C21.8203 0 0 22.1074 0 49.1914C0 70.4375 13.4941 88.0469 31.6777 94.6504C34.2617 95.6074 36.75 93.8848 36.75 91.3008L36.75 83.6445C35.4102 84.2188 33.6875 84.6016 32.1562 84.6016C25.8398 84.6016 22.1074 81.1563 19.4277 74.7441C18.375 72.1602 17.2266 70.6289 15.0254 70.3418C13.877 70.2461 13.4941 69.7676 13.4941 69.1934C13.4941 68.0449 15.4082 67.1836 17.3223 67.1836C20.0977 67.1836 22.4902 68.9063 24.9785 72.4473C26.8926 75.2227 28.9023 76.4668 31.2949 76.4668C33.6875 76.4668 35.2187 75.6055 37.4199 73.4043C39.0469 71.7773 40.291 70.3418 41.4395 69.3848Z" to Color.Black,
-    )
-}
-
-/** The Google "G" (canonical four-colour mark, 48×48) — rendered untinted, the colours are the signal. */
-private val GoogleMark: ImageVector by lazy {
-    svgMark("Google", 48f, 48f,
-        "M43.611 20.083L42 20.083L42 20L24 20L24 28L35.303 28C33.654 32.657 29.223 36 24 36C17.373 36 12 30.627 12 24C12 17.373 17.373 12 24 12C27.059 12 29.842 13.154 31.961 15.039L37.618 9.382C34.046 6.053 29.268 4 24 4C12.955 4 4 12.955 4 24C4 35.045 12.955 44 24 44C35.045 44 44 35.045 44 24C44 22.659 43.862 21.35 43.611 20.083Z" to Color(0xFFFFC107),
-        "M6.306 14.691L12.877 19.51C14.655 15.108 18.961 12 24 12C27.059 12 29.842 13.154 31.961 15.039L37.618 9.382C34.046 6.053 29.268 4 24 4C16.318 4 9.656 8.337 6.306 14.691Z" to Color(0xFFFF3D00),
-        "M24 44C29.166 44 33.86 42.023 37.409 38.808L31.219 33.57C29.211 35.091 26.715 36 24 36C18.798 36 14.381 32.683 12.717 28.054L6.195 33.079C9.505 39.556 16.227 44 24 44Z" to Color(0xFF4CAF50),
-        "M43.611 20.083L42 20.083L42 20L24 20L24 28L35.303 28C34.511 30.237 33.072 32.166 31.216 33.571L31.219 33.569L37.409 38.807C36.971 39.205 44 34 44 24C44 22.659 43.862 21.35 43.611 20.083Z" to Color(0xFF1976D2),
-    )
-}
-
-/** Builds an [ImageVector] from raw SVG `pathData` strings (parsed via [PathParser]), each filled with
- *  its colour, at the `(width, height)` viewport drawn into a 24dp box. */
-private fun svgMark(name: String, width: Float, height: Float, vararg paths: Pair<String, Color>): ImageVector =
-    ImageVector.Builder(name, 24.dp, 24.dp, width, height).apply {
-        paths.forEach { (d, color) -> addPath(PathParser().parsePathString(d).toNodes(), fill = SolidColor(color)) }
-    }.build()
+/**
+ * The brand drawable for a source mark, resolved from each platform's native resource system: Android
+ * loads its vector drawable via `R.drawable` (the Robolectric screenshot harness isn't served a
+ * dependency module's Compose resources), desktop/JVM loads the design-system Compose resource via
+ * `Res.drawable`. Same artwork, packaged once per target (this module's `androidMain/res` and
+ * `core:designsystem`'s `composeResources`).
+ */
+@Composable
+internal expect fun sourceMarkPainter(source: ItemSource): Painter
 
 /**
  * The contextual move-mode control (ADR-0034 decision 6, #228): **↑ ↓** reorder among siblings and
