@@ -115,6 +115,11 @@ object CoverageConfig {
         // (same rationale as SettingsStorageProviderPreference). The interface, InMemory impl, and the
         // brainDumpRecordingPlaceholderId helper ARE measured (commonMain/commonTest).
         "com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference*",
+        // Same rationale (#265/#266): the salvage-counter and completion-notification [[App setting]] store
+        // adapters are thin multiplatform-settings wrappers exercised through the platform store, not the
+        // headless gate. Their interfaces + InMemory impls ARE measured (commonTest).
+        "com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpSalvageCounter*",
+        "com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpNotificationPreference*",
         // The device-local Item-tree fold-override store adapter (ADR-0034, #227): multiplatform-settings-backed,
         // exercised through the platform store on a real device/desktop, not the headless gate (same rationale as
         // SettingsKeepBrainDumpRecordingsPreference). The ItemFoldStore interface and InMemoryItemFoldStore ARE
@@ -169,6 +174,7 @@ object CoverageConfig {
         // (same rationale as the designsystem theme above, ADR-0006). The shared Decompose components
         // driving them ARE measured (feature commonTest, #25/#20).
         "com.circuitstitch.deferno.feature.auth.ui",
+        "com.circuitstitch.deferno.feature.braindumps.ui",
         "com.circuitstitch.deferno.feature.signin.ui",
         "com.circuitstitch.deferno.feature.tasks.ui",
         "com.circuitstitch.deferno.feature.plan.ui",
