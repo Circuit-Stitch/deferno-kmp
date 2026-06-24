@@ -10,6 +10,7 @@ import com.circuitstitch.deferno.core.model.BrainDumpDraftId
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
@@ -116,8 +117,8 @@ internal object SampleTasks {
         Item("1", ItemKind.Task, "Plan the spring launch", sequence = 0, descendantDone = 1, descendantTotal = 2),
         Item("1a", ItemKind.Task, "Draft the announcement", parentId = "1", sequence = 1),
         Item("1b", ItemKind.Task, "Schedule the post", parentId = "1", sequence = 2, isTerminal = true),
-        Item("2", ItemKind.Task, "Water the plants", sequence = 3),
-        Item("3", ItemKind.Task, "Reply to Sam", sequence = 4),
+        Item("2", ItemKind.Task, "Water the plants", sequence = 3, source = ItemSource.GitHub),
+        Item("3", ItemKind.Task, "Reply to Sam", sequence = 4, source = ItemSource.GoogleCalendar),
         Item("4", ItemKind.Task, "Old idea worth revisiting", sequence = 5, isTerminal = true),
     )
 }

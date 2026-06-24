@@ -17,6 +17,10 @@ package com.circuitstitch.deferno.core.model
  * Archived recurring definition. [descendantDone]/[descendantTotal] are the server-computed subtree
  * counts for a collapsed node's progress badge; the `/items` snapshot computes them on Tasks only, so
  * they are `null` for the recurring kinds.
+ *
+ * [source] is the item's external provenance for a small row indicator: `null` = a native Deferno item
+ * (the common case), else the external system it was synced/created from. The tree row renders the
+ * matching brand mark when non-null.
  */
 data class Item(
     val id: String,
@@ -27,4 +31,8 @@ data class Item(
     val isTerminal: Boolean = false,
     val descendantDone: Long? = null,
     val descendantTotal: Long? = null,
+    val source: ItemSource? = null,
 )
+
+/** An item's external provenance — the system it was synced/created from (drives the row's source mark). */
+enum class ItemSource { GitHub, GoogleCalendar }
