@@ -123,8 +123,12 @@ struct SearchView: View {
     private func results(_ value: SearchState) -> some View {
         if !value.results.isEmpty {
             VStack(spacing: 0) {
-                ForEach(value.results, id: \.stableKey) { task in
-                    TaskRow(task: task) { component.onResultClicked(id: task.id) }
+                // `results` is now a list of `SearchHit` (a lightweight kind/title/ref projection), not
+                // full `Task`s (the search pull no longer hydrates the whole record). Render the hit
+                // directly and forward it to `onResultClicked` (the component resolves it to the Tasks
+                // Destination). Mirrors app/iosApp's SearchHitRow.
+                ForEach(value.results, id: \.id) { hit in
+                    SearchHitRow(hit: hit) { component.onResultClicked(hit: hit) }
                     Divider().background(colors.outlineVariant)
                 }
             }
@@ -171,5 +175,44 @@ struct SearchView: View {
         case "DeadlineAsc": return "Soonest due"
         default: return key
         }
+    }
+}
+
+/// A single global-search result. `SearchHit` is a lightweight, kind-agnostic projection (title · kind ·
+/// optional human `ref`), so the row renders it directly rather than a full `Task` (the search pull no
+/// longer hydrates the whole record). A terminal hit (Done/Dropped/…) is de-emphasized, mirroring the
+/// Item-tree row and app/iosApp's SearchHitRow.
+private struct SearchHitRow: View {
+    let hit: SearchHit
+    let onTap: () -> Void
+    @Environment(\.defernoColors) private var colors
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(hit.title)
+                        .font(.headline)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    if let ref = hit.ref {
+                        Text(ref)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 12)
+                Text("›").font(.title3).foregroundStyle(.secondary)
+            }
+            .frame(minHeight: Layout.rowMinHeight)
+            .padding(.horizontal, Layout.gutter)
+            .padding(.vertical, Layout.rowVerticalPadding)
+            .contentShape(Rectangle())
+            .opacity(hit.isTerminal ? 0.5 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(hit.title)
+        .accessibilityHint("Open")
     }
 }

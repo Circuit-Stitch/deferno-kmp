@@ -238,7 +238,7 @@ private struct SubtaskOutlineRow: View {
 
     var body: some View {
         let task = row.task
-        let done = task.workingState === WorkingState.done
+        let done = task.workingState == WorkingState.done
         HStack(spacing: 6) {
             if row.hasChildren {
                 Button { onToggleExpand(task.stableKey, row.isExpanded) } label: {
@@ -311,7 +311,7 @@ private struct WorkingStateEditorView: View {
 
     @ViewBuilder
     private func chip(_ state: WorkingState) -> some View {
-        let selected = state === current
+        let selected = state == current
         SelectableChip(
             label: state.label,
             selected: selected,
