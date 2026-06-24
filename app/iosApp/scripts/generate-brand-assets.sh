@@ -85,3 +85,62 @@ mkdir -p "$(dirname "$icon")" "$(dirname "$flame")"
 swift "$tmp/render.swift" "$svg" "$icon" "$flame"
 echo "Wrote $icon"
 echo "Wrote $flame"
+
+# ---- External-provenance source marks (#280) -------------------------------------------------------
+# The small GitHub / Google "G" the Item tree row renders ahead of the open-detail chevron — the
+# iOS/macOS twin of the Android per-row source indicator (PR #279). Rasterized from the brand SVGs into
+# an imageset in BOTH asset catalogs (iOS + macOS); Xcode catalogs take PNG, not SVG. GitHub is a
+# monochrome silhouette flagged template (the row tints it to the calm ink); Google keeps its four brand
+# colours (original — the colour is the signal). Rendered at the SVG's own aspect, no trim, so the glyph
+# carries the same intrinsic padding it has on Android (both fit a 16pt box on the row).
+mac_assets="$repo/app/macosApp/macosApp/Assets.xcassets"
+
+cat > "$tmp/rendermark.swift" <<'SWIFT'
+import AppKit
+// rendermark <in.svg> <out.png> <longer-side-px>
+let svgPath = CommandLine.arguments[1], out = CommandLine.arguments[2]
+let n = CGFloat(Int(CommandLine.arguments[3])!)
+guard let svg = NSImage(contentsOfFile: svgPath) else { fputs("cannot load \(svgPath)\n", stderr); exit(1) }
+let s = svg.size, scale = n / max(s.width, s.height)
+let w = Int((s.width * scale).rounded()), h = Int((s.height * scale).rounded())
+let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+ctx.interpolationQuality = .high
+let g = NSGraphicsContext(cgContext: ctx, flipped: false)
+NSGraphicsContext.current = g
+svg.draw(in: NSRect(x: 0, y: 0, width: w, height: h), from: .zero, operation: .sourceOver, fraction: 1)
+NSGraphicsContext.current = nil
+let data = NSBitmapImageRep(cgImage: ctx.makeImage()!).representation(using: .png, properties: [:])!
+try! data.write(to: URL(fileURLWithPath: out))
+SWIFT
+
+# emit_mark <name> <source-svg> <template-rendering-intent>
+emit_mark() {
+    name=$1 src=$2 intent=$3
+    for cat in "$assets" "$mac_assets"; do
+        set="$cat/$name.imageset"
+        mkdir -p "$set"
+        swift "$tmp/rendermark.swift" "$repo/core/designsystem/brand/$src" "$set/$name.png" 128
+        cat > "$set/Contents.json" <<JSON
+{
+  "images" : [
+    {
+      "filename" : "$name.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "template-rendering-intent" : "$intent"
+  }
+}
+JSON
+        echo "Wrote $set/$name.png"
+    done
+}
+
+emit_mark ic_source_github ic_source_github.svg template
+emit_mark ic_source_google ic_source_google.svg original

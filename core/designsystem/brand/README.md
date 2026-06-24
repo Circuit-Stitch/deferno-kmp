@@ -10,6 +10,12 @@ is the product (the flame mark).
 | `deferno-wordmark.svg` | "Deferno" wordmark | Login / settings headers |
 | `circuit-stitch.svg` | Circuit Stitch company logo | Login & settings ("a Circuit Stitch product") |
 | `circuit-stitch-bare.svg` | Circuit Stitch mark without wordmark | Compact / footer placements |
+| `ic_source_github.svg` | GitHub Invertocat (third-party, *not* Deferno brand) — the external-provenance mark on a tree row synced from GitHub. Monochrome; tinted to the row ink at render | iOS/macOS `SourceMark` (#280) ↔ Android `SourceIndicator` (#279) |
+| `ic_source_google.svg` | Google four-colour "G" (third-party) — the external-provenance mark for a Google Calendar item. Rendered untinted (the colour is the signal) | iOS/macOS `SourceMark` (#280) ↔ Android `SourceIndicator` (#279) |
+
+The two `ic_source_*` marks are rasterized into asset-catalog imagesets (Xcode catalogs take PNG, not
+SVG) in both `app/iosApp` and `app/macosApp` by `app/iosApp/scripts/generate-brand-assets.sh`. The
+Android twin uses in-code `ImageVector`s built from the same paths (PR #279).
 
 ## Status
 

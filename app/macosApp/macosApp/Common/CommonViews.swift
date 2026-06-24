@@ -123,6 +123,12 @@ struct ItemRowView: View {
             .contentShape(Rectangle())
             .onTapGesture { if row.hasChildren { onToggleExpand(row.item.id, row.isExpanded) } }
 
+            // External-provenance mark (GitHub / Google), ahead of the chevron — the mirror of the Android
+            // placement (#279/#280). Absent for a native Deferno item (`source == nil`, the common case).
+            if let source = row.item.source {
+                SourceMark(source: source)
+            }
+
             // Trailing › — opens detail; Task kind only (the other kinds have no detail surface yet).
             if isTask {
                 Button {
@@ -138,6 +144,37 @@ struct ItemRowView: View {
         .padding(.horizontal, Layout.gutter)
         .padding(.vertical, Layout.rowVerticalPadding)
         .opacity(row.item.isTerminal ? 0.5 : 1.0)
+    }
+}
+
+/// The external-provenance mark on a tree row (#280) — the iOS/macOS twin of the Android `SourceIndicator`
+/// (PR #279). A small brand glyph just before the open-detail ›, the sole cue of where an item came from,
+/// so it carries its own VoiceOver label. GitHub is the Invertocat tinted to the calm row ink (`.template`
+/// — it reads as filigree like the other row glyphs); Google is the canonical four-colour "G" rendered
+/// untinted (the colour *is* the signal). The brand PNGs are rasterized from
+/// core/designsystem/brand/ic_source_{github,google}.svg by `scripts/generate-brand-assets.sh`.
+struct SourceMark: View {
+    let source: ItemSource
+    @Environment(\.defernoColors) private var colors
+
+    private static let size: CGFloat = 16
+
+    var body: some View {
+        if source == ItemSource.gitHub {
+            Image("ic_source_github")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: Self.size, height: Self.size)
+                .foregroundStyle(colors.inkMuted)
+                .accessibilityLabel("From GitHub")
+        } else {
+            Image("ic_source_google")
+                .resizable()
+                .scaledToFit()
+                .frame(width: Self.size, height: Self.size)
+                .accessibilityLabel("From Google Calendar")
+        }
     }
 }
 
