@@ -20,10 +20,10 @@ final class StateFlowObserver<T: AnyObject>: ObservableObject {
 
     init(_ flow: SkieSwiftStateFlow<T>) {
         value = flow.value
-        task = _Concurrency.Task { [weak self] in
+        task = _Concurrency.Task { @MainActor [weak self] in
             for await next in flow {
-                guard !_Concurrency.Task.isCancelled else { return }
-                await MainActor.run { self?.value = next }
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.value = next
             }
         }
     }
@@ -40,10 +40,10 @@ final class OptionalStateFlowObserver<T: AnyObject>: ObservableObject {
 
     init(_ flow: SkieSwiftOptionalStateFlow<T>) {
         value = flow.value
-        task = _Concurrency.Task { [weak self] in
+        task = _Concurrency.Task { @MainActor [weak self] in
             for await next in flow {
-                guard !_Concurrency.Task.isCancelled else { return }
-                await MainActor.run { self?.value = next }
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.value = next
             }
         }
     }

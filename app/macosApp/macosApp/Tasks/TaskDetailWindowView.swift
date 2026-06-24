@@ -75,19 +75,17 @@ final class TaskDetailWindowModel: ObservableObject {
             active = root.activeDetail.value
             canGoBack = root.canGoBack.value.boolValue
             bindTitle(to: root.activeDetail.value)
-            activeTask = _Concurrency.Task { [weak self] in
+            activeTask = _Concurrency.Task { @MainActor [weak self] in
                 for await component in root.activeDetail {
-                    guard !_Concurrency.Task.isCancelled else { return }
-                    await MainActor.run {
-                        self?.active = component
-                        self?.bindTitle(to: component)
-                    }
+                    guard !_Concurrency.Task.isCancelled, let self else { return }
+                    self.active = component
+                    self.bindTitle(to: component)
                 }
             }
-            backTask = _Concurrency.Task { [weak self] in
+            backTask = _Concurrency.Task { @MainActor [weak self] in
                 for await value in root.canGoBack {
-                    guard !_Concurrency.Task.isCancelled else { return }
-                    await MainActor.run { self?.canGoBack = value.boolValue }
+                    guard !_Concurrency.Task.isCancelled, let self else { return }
+                    self.canGoBack = value.boolValue
                 }
             }
         }
@@ -98,10 +96,10 @@ final class TaskDetailWindowModel: ObservableObject {
         titleTask?.cancel()
         let flow = component.state
         title = Self.titleFor(flow.value)
-        titleTask = _Concurrency.Task { [weak self] in
+        titleTask = _Concurrency.Task { @MainActor [weak self] in
             for await state in flow {
-                guard !_Concurrency.Task.isCancelled else { return }
-                await MainActor.run { self?.title = Self.titleFor(state) }
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.title = Self.titleFor(state)
             }
         }
     }

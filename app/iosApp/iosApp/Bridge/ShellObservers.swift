@@ -18,10 +18,10 @@ final class ProfileStateObserver: ObservableObject {
 
     init(_ flow: SkieSwiftStateFlow<ProfileState>) {
         value = flow.value
-        task = _Concurrency.Task { [weak self] in
+        task = _Concurrency.Task { @MainActor [weak self] in
             for await next in flow {
-                guard !_Concurrency.Task.isCancelled else { return }
-                await MainActor.run { self?.value = next }
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.value = next
             }
         }
     }
@@ -41,16 +41,16 @@ final class AccountsObserver: ObservableObject {
     init(accounts accountsFlow: SkieSwiftStateFlow<[Account]>, active activeFlow: SkieSwiftOptionalStateFlow<Account>) {
         accounts = accountsFlow.value
         active = activeFlow.value
-        accountsTask = _Concurrency.Task { [weak self] in
+        accountsTask = _Concurrency.Task { @MainActor [weak self] in
             for await next in accountsFlow {
-                guard !_Concurrency.Task.isCancelled else { return }
-                await MainActor.run { self?.accounts = next }
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.accounts = next
             }
         }
-        activeTask = _Concurrency.Task { [weak self] in
+        activeTask = _Concurrency.Task { @MainActor [weak self] in
             for await next in activeFlow {
-                guard !_Concurrency.Task.isCancelled else { return }
-                await MainActor.run { self?.active = next }
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.active = next
             }
         }
     }
