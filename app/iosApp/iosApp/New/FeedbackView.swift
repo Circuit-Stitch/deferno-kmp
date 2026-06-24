@@ -19,7 +19,7 @@ struct FeedbackView: View {
 
     init(component: FeedbackComponent) {
         self.component = component
-        _state = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.feedbackStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     var body: some View {

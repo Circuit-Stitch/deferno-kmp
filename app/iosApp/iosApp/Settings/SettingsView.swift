@@ -25,9 +25,9 @@ struct SettingsView: View {
     init(component: SettingsComponent) {
         self.component = component
         _stack = StateObject(wrappedValue: SettingsStackObserver(ShellBridgeKt.settingsStackBridge(component: component)))
-        _settings = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.settingsStateBridge(component: component)))
-        _speech = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.speechEngineBridge(component: component)))
-        _inference = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.inferenceEngineBridge(component: component)))
+        _settings = StateObject(wrappedValue: StateFlowObserver(component.settings))
+        _speech = StateObject(wrappedValue: StateFlowObserver(component.speechEngine))
+        _inference = StateObject(wrappedValue: StateFlowObserver(component.inferenceEngine))
     }
 
     // Stack-driven (the component's List↔Detail stack, mirroring macOS) so the single adaptive shell bar
@@ -104,13 +104,13 @@ struct SettingsView: View {
         let value = settings.value
         return List {
             Section("Theme") {
-                checkRow("Deferno", selected: value.themeFamily === ThemeFamily.deferno) { component.onThemeFamilyChanged(family: ThemeFamily.deferno) }
-                checkRow("Mono", selected: value.themeFamily === ThemeFamily.mono) { component.onThemeFamilyChanged(family: ThemeFamily.mono) }
+                checkRow("Deferno", selected: value.themeFamily == ThemeFamily.deferno) { component.onThemeFamilyChanged(family: ThemeFamily.deferno) }
+                checkRow("Mono", selected: value.themeFamily == ThemeFamily.mono) { component.onThemeFamilyChanged(family: ThemeFamily.mono) }
             }
             Section("Mode") {
-                checkRow("Light", selected: value.themeMode === ThemeMode.light) { component.onThemeModeChanged(mode: ThemeMode.light) }
-                checkRow("Dark", selected: value.themeMode === ThemeMode.dark) { component.onThemeModeChanged(mode: ThemeMode.dark) }
-                checkRow("Follow system", selected: value.themeMode === ThemeMode.auto_) { component.onThemeModeChanged(mode: ThemeMode.auto_) }
+                checkRow("Light", selected: value.themeMode == ThemeMode.light) { component.onThemeModeChanged(mode: ThemeMode.light) }
+                checkRow("Dark", selected: value.themeMode == ThemeMode.dark) { component.onThemeModeChanged(mode: ThemeMode.dark) }
+                checkRow("Follow system", selected: value.themeMode == ThemeMode.auto) { component.onThemeModeChanged(mode: ThemeMode.auto) }
             }
         }
     }

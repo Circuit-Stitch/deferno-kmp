@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.skie)
 }
 
 // The iOS entry point: bundles the shared app shell + feature slices into a single `Deferno`
@@ -32,11 +33,10 @@ kotlin {
             // layers the Kotlin `iosMain` bootstrap wires (DefernoRoot.kt) are `api`-but-not-export
             // (Swift never names AppComponent/AccountManager/repositories — only the bootstrap does).
             //
-            // SKIE (ADR-0003) — which bridges Flow/suspend/sealed into idiomatic Swift — is
-            // still NOT applied (no released SKIE supports Kotlin 2.4.0 as of 2026-06; see
-            // gradle/libs.versions.toml + ./README.md). Until it ships, the SwiftUI Views
-            // observe `StateFlow`/`Value`/`ChildStack`/`ChildSlot` through the hand-written,
-            // SKIE-free bridge in `src/iosMain/.../ios/bridge` (ObservableState.swift wraps it).
+            // SKIE (ADR-0003, plugin applied above, libs.plugins.skie 0.10.13) bridges
+            // Flow/suspend/sealed into idiomatic Swift. The hand-written SKIE-free bridge in
+            // `src/iosMain/.../ios/bridge` (wrapped by ObservableState.swift) is being retired
+            // onto SKIE's generated async/Flow/sealed types — see ./README.md.
             export(project(":app:shell"))
             export(project(":feature:tasks"))
             export(project(":feature:plan"))

@@ -37,7 +37,7 @@ struct DefernoColors {
 
     /// Resolve the scheme for a theme family + dark flag (the analogue of `DefernoTheme(palette,darkTheme)`).
     static func resolve(family: ThemeFamily, dark: Bool) -> DefernoColors {
-        if family === ThemeFamily.mono { return dark ? .monoDark : .monoLight }
+        if family == ThemeFamily.mono { return dark ? .monoDark : .monoLight }
         return dark ? .defernoDark : .defernoLight
     }
 

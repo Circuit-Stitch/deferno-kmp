@@ -24,7 +24,7 @@ struct BrainDumpView: View {
     init(component: BrainDumpComponent, recorder: BrainDumpRecorder) {
         self.component = component
         self.recorder = recorder
-        _state = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.brainDumpStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     private var phase: String { ShellBridgeKt.brainDumpPhaseName(state: state.value) }

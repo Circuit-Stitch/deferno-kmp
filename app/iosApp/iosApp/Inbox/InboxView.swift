@@ -17,7 +17,7 @@ struct InboxView: View {
 
     init(component: InboxComponent) {
         self.component = component
-        _state = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.inboxStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     var body: some View {

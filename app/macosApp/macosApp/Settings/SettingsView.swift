@@ -82,13 +82,13 @@ struct SettingsView: View {
         let value = settings.value
         return VStack(alignment: .leading, spacing: 16) {
             section("Theme") {
-                radioRow("Deferno", selected: value.themeFamily === ThemeFamily.deferno) { component.onThemeFamilyChanged(family: ThemeFamily.deferno) }
-                radioRow("Mono", selected: value.themeFamily === ThemeFamily.mono) { component.onThemeFamilyChanged(family: ThemeFamily.mono) }
+                radioRow("Deferno", selected: value.themeFamily == ThemeFamily.deferno) { component.onThemeFamilyChanged(family: ThemeFamily.deferno) }
+                radioRow("Mono", selected: value.themeFamily == ThemeFamily.mono) { component.onThemeFamilyChanged(family: ThemeFamily.mono) }
             }
             section("Mode") {
-                radioRow("Light", selected: value.themeMode === ThemeMode.light) { component.onThemeModeChanged(mode: ThemeMode.light) }
-                radioRow("Dark", selected: value.themeMode === ThemeMode.dark) { component.onThemeModeChanged(mode: ThemeMode.dark) }
-                radioRow("Follow system", selected: value.themeMode === ThemeMode.auto_) { component.onThemeModeChanged(mode: ThemeMode.auto_) }
+                radioRow("Light", selected: value.themeMode == ThemeMode.light) { component.onThemeModeChanged(mode: ThemeMode.light) }
+                radioRow("Dark", selected: value.themeMode == ThemeMode.dark) { component.onThemeModeChanged(mode: ThemeMode.dark) }
+                radioRow("Follow system", selected: value.themeMode == ThemeMode.auto) { component.onThemeModeChanged(mode: ThemeMode.auto) }
             }
         }
     }

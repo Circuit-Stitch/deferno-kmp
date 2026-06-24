@@ -29,7 +29,7 @@ struct TaskDetailView: View {
     init(component: TaskDetailComponent, showsHeader: Bool = true) {
         self.component = component
         self.showsHeader = showsHeader
-        _state = StateObject(wrappedValue: StateFlowObserver(BridgeKt.taskDetailStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     var body: some View {
@@ -293,7 +293,7 @@ struct TaskDetailView: View {
     /// so checkboxes align.
     private func subtaskRow(_ row: SubtaskRow) -> some View {
         let task = row.task
-        let done = task.workingState === WorkingState.done
+        let done = task.workingState == WorkingState.done
         return HStack(spacing: 8) {
             if row.hasChildren {
                 Button { component.onToggleSubtaskExpand(id: task.stableKey, currentlyExpanded: row.isExpanded) } label: {
@@ -690,7 +690,7 @@ private struct WorkingStateEditorView: View {
 
     @ViewBuilder
     private func chip(_ state: WorkingState) -> some View {
-        let selected = state === current
+        let selected = state == current
         Button { onSet(state) } label: {
             Text(state.label)
                 .font(.subheadline)

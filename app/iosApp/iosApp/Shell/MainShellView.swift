@@ -35,9 +35,9 @@ struct MainShellView: View {
         self.recorder = recorder
         _destinations = StateObject(wrappedValue: DestinationStackObserver(ShellBridgeKt.destinationStackBridge(component: component)))
         _overlay = StateObject(wrappedValue: OverlaySlotObserver(ShellBridgeKt.overlaySlotBridge(component: component)))
-        _accounts = StateObject(wrappedValue: AccountsObserver(ShellBridgeKt.accountSwitcherBridge(component: component)))
-        _chrome = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.chromeBridge(component: component)))
-        _inboxBadge = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.inboxReadyCountBridge(component: component)))
+        _accounts = StateObject(wrappedValue: AccountsObserver(accounts: component.accounts, active: component.activeAccount))
+        _chrome = StateObject(wrappedValue: StateFlowObserver(component.chrome))
+        _inboxBadge = StateObject(wrappedValue: StateFlowObserver(component.inboxReadyCount))
     }
 
     private var active: MainShellComponentDestinationChild { destinations.active }

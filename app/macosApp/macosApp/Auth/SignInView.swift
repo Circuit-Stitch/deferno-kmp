@@ -145,7 +145,7 @@ struct SignInView: View {
 
     @ViewBuilder
     private func errorText(_ error: SignInError) -> some View {
-        Text(error === SignInError.invalidtoken
+        Text(error == SignInError.invalidToken
              ? "That token isn't valid. Check it and try again."
              : "Couldn't reach Deferno. Check your connection and try again.")
             .font(.footnote)

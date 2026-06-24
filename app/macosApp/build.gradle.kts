@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.skie)
 }
 
 // The macOS entry point (ADR-0029): bundles the shared app shell + feature slices into a single
@@ -28,9 +29,10 @@ kotlin {
         // Decompose/coroutines/datetime types those APIs expose must land in the generated
         // `Deferno.framework` header. `export(...)` requires the matching `api(project(...))` below.
         //
-        // SKIE (ADR-0003) is still NOT applied (no released SKIE supports Kotlin 2.4.0 — see
-        // app/iosApp/README.md). The SwiftUI Views observe StateFlow/Value/ChildStack/ChildSlot via the
-        // same hand-written SKIE-free bridge as iOS (src/macosMain/.../bridge).
+        // SKIE (ADR-0003, plugin applied above, libs.plugins.skie 0.10.13 — the first SKIE release to
+        // support Kotlin 2.4.0) bridges Flow/suspend/sealed/enum into idiomatic Swift, mirroring
+        // app/iosApp. The SwiftUI Views still observe Decompose Value/ChildStack/ChildSlot via the
+        // hand-written SKIE-free bridge (src/macosMain/.../bridge) — SKIE doesn't bridge Decompose types.
         export(project(":app:shell"))
         export(project(":feature:tasks"))
         export(project(":feature:plan"))

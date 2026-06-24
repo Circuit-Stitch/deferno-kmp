@@ -19,6 +19,6 @@ final class DefernoThemeTests: XCTestCase {
 
     /// The regression: Auto must not pin a concrete scheme — `nil` keeps the scene on the OS appearance.
     func testAutoModeDoesNotPinTheScene() {
-        XCTAssertNil(ThemeMode.auto_.preferredColorScheme)
+        XCTAssertNil(ThemeMode.auto.preferredColorScheme)
     }
 }

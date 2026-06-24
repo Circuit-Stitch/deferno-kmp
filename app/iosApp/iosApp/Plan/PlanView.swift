@@ -56,7 +56,7 @@ struct PlanView: View {
 
     init(component: PlanComponent) {
         self.component = component
-        _state = StateObject(wrappedValue: StateFlowObserver(BridgeKt.planStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     /// The task we gently suggest starting with: the first pinned one, else the first non-terminal,
@@ -214,13 +214,13 @@ struct PlanView: View {
     /// A single "Your day" row. The suggested one is a highlighted card with a ✦ before the title; the
     /// rest are flat (the list draws the dividers).
     ///
-    /// The leading `CheckDot` shows the task's done-ness (`workingState === WorkingState.done`). There is
+    /// The leading `CheckDot` shows the task's done-ness (`workingState == WorkingState.done`). There is
     /// **no plan-completion intent** on `PlanComponent`, so tapping the dot does not toggle — it opens the
     /// task (where the working state can actually be changed). Mirrors the Android note that completion
     /// needs a future `onToggleDone` intent.
     @ViewBuilder
     private func dayRow(task: Task, highlighted: Bool) -> some View {
-        let done = task.workingState === WorkingState.done
+        let done = task.workingState == WorkingState.done
 
         HStack(alignment: .center, spacing: 8) {
             CheckDot(checked: done) {

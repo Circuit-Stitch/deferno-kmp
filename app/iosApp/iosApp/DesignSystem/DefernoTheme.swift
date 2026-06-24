@@ -37,7 +37,7 @@ struct DefernoColors {
 
     /// Resolve the scheme for a theme family + dark flag (the analogue of `DefernoTheme(palette,darkTheme)`).
     static func resolve(family: ThemeFamily, dark: Bool) -> DefernoColors {
-        if family === ThemeFamily.mono { return dark ? .monoDark : .monoLight }
+        if family == ThemeFamily.mono { return dark ? .monoDark : .monoLight }
         return dark ? .defernoDark : .defernoLight
     }
 
@@ -121,8 +121,8 @@ extension ThemeMode {
     /// `\.colorScheme` environment value the modifier reads, so a concrete value here latches the
     /// launch-time appearance and "Follow system" never sees an OS appearance change again.
     var preferredColorScheme: ColorScheme? {
-        if self === ThemeMode.light { return .light }
-        if self === ThemeMode.dark { return .dark }
+        if self == ThemeMode.light { return .light }
+        if self == ThemeMode.dark { return .dark }
         return nil
     }
 }

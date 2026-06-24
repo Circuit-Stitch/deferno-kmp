@@ -13,7 +13,7 @@ struct ProfileView: View {
 
     init(component: ProfileComponent) {
         self.component = component
-        _state = StateObject(wrappedValue: ProfileStateObserver(ShellBridgeKt.profileStateBridge(component: component)))
+        _state = StateObject(wrappedValue: ProfileStateObserver(component.state))
     }
 
     var body: some View {

@@ -3,16 +3,12 @@ package com.circuitstitch.deferno.ios.bridge
 import com.arkivanov.decompose.router.slot.ChildSlot
 import com.arkivanov.decompose.router.stack.ChildStack
 import com.arkivanov.decompose.value.Value
-import com.circuitstitch.deferno.feature.calendar.CalendarComponent
 import com.circuitstitch.deferno.feature.calendar.CalendarState
-import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileState
 import com.circuitstitch.deferno.feature.settings.InferenceEngineSettings
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
-import com.circuitstitch.deferno.feature.signin.SignInComponent
-import com.circuitstitch.deferno.feature.signin.SignInState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
 import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
@@ -46,11 +42,6 @@ import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.reinterpret
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 import platform.Foundation.NSData
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -61,35 +52,27 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
-import com.circuitstitch.deferno.shell.ActivityComponent
 import com.circuitstitch.deferno.shell.ActivityFeedRow
-import com.circuitstitch.deferno.shell.ActivityFeedState
-import com.circuitstitch.deferno.shell.BrainDumpComponent
 import com.circuitstitch.deferno.shell.BrainDumpState
 import com.circuitstitch.deferno.shell.DictationField
 import com.circuitstitch.deferno.shell.DictationStatus
 import com.circuitstitch.deferno.shell.Phase
 import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.feature.braindumps.InboxComponent
-import com.circuitstitch.deferno.feature.braindumps.InboxState
 import com.circuitstitch.deferno.feature.tasks.ShakeOutcome
 
 /**
- * The **shell half of the SKIE-free bridge** (#35) — the navigation frame + the new Destinations the
- * SwiftUI Views render over the shared shell ([RootComponent] → Auth/Main → the five Destinations + the
- * Search/New overlays, ADR-0013/0017). It extends the Tasks/Plan-only [Bridge.kt] with:
+ * The **shell half of the bridge** (#35) — the navigation frame + the Destinations the SwiftUI Views
+ * render over the shared shell ([RootComponent] → Auth/Main → the Destinations + the Search/New
+ * overlays, ADR-0013/0017). It extends the Tasks/Plan-only [Bridge.kt] with:
  *  - flattened, **concrete** wrappers for the Decompose `Value<ChildStack<*, C>>` / `Value<ChildSlot<*, C>>`
- *    navigation containers (Root Auth↔Main, the Destination stack, the overlay slot, the Settings
- *    drill-down) — concrete (not generic) because every child type is a Kotlin **sealed interface**, which
- *    Obj-C lightweight generics can't carry as a type argument (it would erase to `id`);
- *  - `*StateBridge` factories for the new leaf states (SignIn / Calendar / Search / New / Settings) that
- *    pin each `StateFlow`'s element so Swift gets a strongly-typed [StateFlowBridge] (same rule as
- *    `planStateBridge`); [ProfileState] is sealed so it gets a concrete bridge too;
+ *    navigation containers (Root Auth↔Main, the Destination stack, the overlay slot, the Settings/Plan
+ *    drill-downs) — concrete (not generic) because every child type is a Kotlin **sealed interface**, which
+ *    Obj-C lightweight generics can't carry as a type argument (it would erase to `id`). SKIE bridges
+ *    `StateFlow`/sealed/enum but **not** these Decompose types (ADR-0003), so they keep their hand-written
+ *    `subscribe`/[Subscription] wrappers; the Views observe each component's `StateFlow` state via SKIE;
  *  - `as?`-cascade accessors + value-class `.value` unwrap seams + `LocalDate`/`Instant` parse/format
  *    helpers, so Swift never names a sealed subclass, a star-projected generic, or an opaque date type.
- *
- * When SKIE supports Kotlin 2.4.0 (ADR-0003) this whole package can be deleted and the Views can observe
- * the components' `StateFlow`/`Value`/sealed types directly.
  */
 
 // ---------------------------------------------------------------------------------------------------
@@ -154,41 +137,12 @@ class PlanStackBridge internal constructor(
     }
 }
 
-/** Observes the [ProfileComponent]'s sealed [ProfileState] (concrete — a sealed type, not a data class). */
-class ProfileStateBridge internal constructor(private val flow: StateFlow<ProfileState>) {
-    val value: ProfileState get() = flow.value
-
-    fun subscribe(onEach: (ProfileState) -> Unit): Subscription {
-        val scope = CoroutineScope(Dispatchers.Main)
-        scope.launch { flow.collect { onEach(it) } }
-        return Subscription { scope.cancel() }
-    }
-}
-
-/** The in-shell account switcher (ADR-0014): the roster + the Active Account, re-read on either change. */
-class AccountSwitcherBridge internal constructor(
-    private val accountsFlow: StateFlow<List<Account>>,
-    private val activeFlow: StateFlow<Account?>,
-) {
-    val accounts: List<Account> get() = accountsFlow.value
-    val active: Account? get() = activeFlow.value
-
-    fun subscribe(onChange: () -> Unit): Subscription {
-        val scope = CoroutineScope(Dispatchers.Main)
-        scope.launch { accountsFlow.collect { onChange() } }
-        scope.launch { activeFlow.collect { onChange() } }
-        return Subscription { scope.cancel() }
-    }
-}
-
 // ---------------------------------------------------------------------------------------------------
-// Bridge factories — pin each generic / wrap each component so Swift never names the reactive type
+// Bridge factories — wrap each Decompose container so Swift never names the navigation generics.
+// (The components' `StateFlow`/sealed states are bridged by SKIE; Swift observes them directly.)
 // ---------------------------------------------------------------------------------------------------
 
 fun rootStackBridge(component: RootComponent): RootStackBridge = RootStackBridge(component.stack)
-fun themeSettingsBridge(component: RootComponent): StateFlowBridge<UserSettings> = StateFlowBridge(component.themeSettings)
-
-fun signInStateBridge(component: SignInComponent): StateFlowBridge<SignInState> = StateFlowBridge(component.state)
 
 fun destinationStackBridge(component: MainShellComponent): DestinationStackBridge = DestinationStackBridge(component.stack)
 fun overlaySlotBridge(component: MainShellComponent): OverlaySlotBridge = OverlaySlotBridge(component.overlay)
@@ -199,8 +153,6 @@ fun overlaySlotBridge(component: MainShellComponent): OverlaySlotBridge = Overla
 // these mirror the index-based accessor pattern (see inference options) so Swift never names a sealed
 // type or invokes a Kotlin lambda property directly.
 // ---------------------------------------------------------------------------------------------------
-
-fun chromeBridge(component: MainShellComponent): StateFlowBridge<ChromeSpec> = StateFlowBridge(component.chrome)
 
 /** An empty chrome spec (no actions) for demo / preview call sites — the live shell supplies a real one. */
 fun emptyChrome(): ChromeSpec = ChromeSpec(title = "Everything")
@@ -217,16 +169,8 @@ fun chromeActionKind(spec: ChromeSpec, index: Int): String = when (spec.actions[
 
 /** Run the trailing action at [index] (a shell/component handler — e.g. New opens the create overlay). */
 fun chromeInvoke(spec: ChromeSpec, index: Int) = spec.actions[index].onInvoke()
-fun accountSwitcherBridge(component: MainShellComponent): AccountSwitcherBridge =
-    AccountSwitcherBridge(component.accounts, component.activeAccount)
-
-fun calendarStateBridge(component: CalendarComponent): StateFlowBridge<CalendarState> = StateFlowBridge(component.state)
-fun profileStateBridge(component: ProfileComponent): ProfileStateBridge = ProfileStateBridge(component.state)
 
 fun settingsStackBridge(component: SettingsComponent): SettingsStackBridge = SettingsStackBridge(component.stack)
-fun settingsStateBridge(component: SettingsComponent): StateFlowBridge<UserSettings> = StateFlowBridge(component.settings)
-fun speechEngineBridge(component: SettingsComponent): StateFlowBridge<SpeechEngineSettings> = StateFlowBridge(component.speechEngine)
-fun inferenceEngineBridge(component: SettingsComponent): StateFlowBridge<InferenceEngineSettings> = StateFlowBridge(component.inferenceEngine)
 
 /** The current "Brain dump notifications" opt-in (#271), as a snapshot Bool for the Settings toggle. */
 fun brainDumpNotificationsEnabled(component: SettingsComponent): Boolean = component.brainDumpNotificationsEnabled.value
@@ -234,9 +178,6 @@ fun brainDumpNotificationsEnabled(component: SettingsComponent): Boolean = compo
 /** Persist the "Brain dump notifications" opt-in (#271). The View requests OS auth on enable (the consent). */
 fun setBrainDumpNotificationsEnabled(component: SettingsComponent, enabled: Boolean) =
     component.onBrainDumpNotificationsChanged(enabled)
-
-fun searchStateBridge(component: SearchComponent): StateFlowBridge<SearchState> = StateFlowBridge(component.state)
-fun newStateBridge(component: NewComponent): StateFlowBridge<NewState> = StateFlowBridge(component.state)
 
 // ---------------------------------------------------------------------------------------------------
 // Sealed discriminators — Swift reads these instead of casting Kotlin/Native flattened class names
@@ -304,8 +245,6 @@ fun overlayNew(child: MainShellComponent.OverlayChild) =
 // + ContentResolver read); category/subject/body + the send lifecycle bind to the component directly.
 fun overlayFeedback(child: MainShellComponent.OverlayChild) =
     (child as? MainShellComponent.OverlayChild.Feedback)?.component
-
-fun feedbackStateBridge(component: FeedbackComponent): StateFlowBridge<FeedbackState> = StateFlowBridge(component.state)
 
 /**
  * Add a file the iOS picker resolved (#375). Swift can't build a [FeedbackFile] (its `bytes` is a
@@ -512,8 +451,6 @@ fun destInbox(child: MainShellComponent.DestinationChild) =
 fun destActivity(child: MainShellComponent.DestinationChild) =
     (child as? MainShellComponent.DestinationChild.Activity)?.component
 
-fun inboxStateBridge(component: InboxComponent): StateFlowBridge<InboxState> = StateFlowBridge(component.state)
-
 /** Stable identity of a draft for SwiftUI list diffing (BrainDumpDraftId value class is header-erased). */
 fun inboxDraftKey(draft: BrainDumpDraft): String = draft.id.value
 
@@ -529,9 +466,6 @@ fun inboxDraftDeadlineLabel(draft: BrainDumpDraft): String {
     return date + time
 }
 
-fun activityStateBridge(component: ActivityComponent): StateFlowBridge<ActivityFeedState> =
-    StateFlowBridge(component.state)
-
 /** A render-ready "when" label for an Activity row (Instant → local "yyyy-MM-dd HH:mm"). */
 fun activityWhenLabel(row: ActivityFeedRow): String {
     val dt = row.recordedAt.toLocalDateTime(TimeZone.currentSystemDefault())
@@ -540,19 +474,12 @@ fun activityWhenLabel(row: ActivityFeedRow): String {
     return "${dt.date} $hh:$mm"
 }
 
-/** The Inbox nav badge — the live count of Ready drafts (shown even before the Inbox is first visited). */
-fun inboxReadyCountBridge(component: MainShellComponent): StateFlowBridge<Int> =
-    StateFlowBridge(component.inboxReadyCount)
-
 // ---------------------------------------------------------------------------------------------------
 // Brain dump overlay (ADR-0027) — the recorder surface; Phase is sealed, so Swift reads its name.
 // ---------------------------------------------------------------------------------------------------
 
 fun overlayBrainDump(child: MainShellComponent.OverlayChild) =
     (child as? MainShellComponent.OverlayChild.BrainDump)?.component
-
-fun brainDumpStateBridge(component: BrainDumpComponent): StateFlowBridge<BrainDumpState> =
-    StateFlowBridge(component.state)
 
 /** The active recorder phase as a stable String the View maps to its UI. */
 fun brainDumpPhaseName(state: BrainDumpState): String = when (state.phase) {
