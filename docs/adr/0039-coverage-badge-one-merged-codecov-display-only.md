@@ -15,19 +15,22 @@ rationale — "the report is already public; Codecov's per-file drill-down *is* 
 
 **Decision.**
 
-- **One merged coverage badge, rendered by shields.io from Codecov.** The badge reflects the same
-  single number `:koverVerify` gates — the merged shared-core report (`core/* + feature/*`, boilerplate
-  excluded by `CoverageConfig`). CI runs the root `:koverXmlReport` and uploads
-  `build/reports/kover/report.xml` to Codecov. A second **CI status** badge (GitHub Actions) sits beside
-  it; the repo had no badges at all before.
+- **One merged coverage badge, rendered by shields.io from Codecov.** CI runs the root
+  `:koverXmlReport` and uploads the merged shared-core report (`core/* + feature/*`, boilerplate excluded
+  by `CoverageConfig`) — `build/reports/kover/report.xml` — to Codecov. Codecov re-parses the XML
+  per-line and computes its *own* number; by its default a partially-branched line counts as a miss, so
+  the badge reads a few points **below** the LINE-based `:koverVerify` gate (≈84% vs ≈88%). That gap is
+  kept on purpose (`partials_as_hits` left off): the badge is the stricter, branch-aware public signal,
+  `:koverVerify` is the enforced line contract — they intentionally measure slightly differently. A
+  second **CI status** badge (GitHub Actions) sits beside it; the repo had no badges at all before.
 
 - **One badge, *not* per-module — deliberately diverging from Janitor's ADR-0016.** Janitor chose
   per-crate badges and explicitly rejected a single workspace badge because it had real testing
   asymmetry (a proven `core` vs a shell-bearing `aws` vs a logic-free `gui`). Here the **merged report
-  is the designed unit**: the gate is one aggregate by construction, most of the ~13 shared modules are
-  still scaffolds, and a single aggregate number reads straight off the report's top-level `LINE`
-  counter — which also sidesteps Codecov's brittle per-file path resolution on KMP source roots
-  (`core/x/src/commonMain/kotlin/...`) that per-flag scoping would require. If a genuine
+  is the designed unit**: the gate is one aggregate by construction, and most of the ~13 shared modules
+  are still scaffolds. One flagless badge also needs no per-flag *path scoping*, which would force
+  Codecov to attribute KMP source roots (`core/x/src/commonMain/kotlin/...`) into separate core/feature
+  buckets — brittle and pointless when the enforced unit is the merged whole. If a genuine
   foundations-vs-slices asymmetry emerges later, split then (modules "earn" splitting, ADR-0004) — KISS
   until it doesn't.
 
