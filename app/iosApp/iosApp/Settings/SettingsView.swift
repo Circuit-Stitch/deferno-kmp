@@ -25,9 +25,9 @@ struct SettingsView: View {
     init(component: SettingsComponent) {
         self.component = component
         _stack = StateObject(wrappedValue: SettingsStackObserver(ShellBridgeKt.settingsStackBridge(component: component)))
-        _settings = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.settingsStateBridge(component: component)))
-        _speech = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.speechEngineBridge(component: component)))
-        _inference = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.inferenceEngineBridge(component: component)))
+        _settings = StateObject(wrappedValue: StateFlowObserver(component.settings))
+        _speech = StateObject(wrappedValue: StateFlowObserver(component.speechEngine))
+        _inference = StateObject(wrappedValue: StateFlowObserver(component.inferenceEngine))
     }
 
     // Stack-driven (the component's List↔Detail stack, mirroring macOS) so the single adaptive shell bar

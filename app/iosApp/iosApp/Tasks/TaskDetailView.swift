@@ -29,7 +29,7 @@ struct TaskDetailView: View {
     init(component: TaskDetailComponent, showsHeader: Bool = true) {
         self.component = component
         self.showsHeader = showsHeader
-        _state = StateObject(wrappedValue: StateFlowObserver(BridgeKt.taskDetailStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     var body: some View {

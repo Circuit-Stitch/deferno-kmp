@@ -3,13 +3,13 @@ import XCTest
 import Deferno
 @testable import iosApp
 
-/// Smoke coverage for the **SKIE-free state bridge** (#28 / #51): the path that carries a shared
-/// Decompose component's `StateFlow` / co-resident slot to a SwiftUI `ObservableObject`. No released
-/// SKIE supports Kotlin 2.4.0 yet, so the Views observe through hand-written `StateFlowBridge` /
-/// `DetailSlot` → `StateFlowObserver` / `DetailSlotObserver` wrappers (`Bridge/ObservableState.swift`
-/// + `…/ios/bridge/Bridge.kt`). These tests prove that path actually delivers the real component
-/// state on the main thread, driving the genuine shared components through the same `DefernoDemo`
-/// harness the simulator app runs — only the data source is a fixture.
+/// Smoke coverage for the state-observation path (#28 / #51): how a shared Decompose component's
+/// `StateFlow` / co-resident slot reaches a SwiftUI `ObservableObject`. The `StateFlow` half now goes
+/// through SKIE (ADR-0003): `component.state: SkieSwiftStateFlow` → `StateFlowObserver`. The Decompose
+/// co-resident slot is **not** bridged by SKIE, so it keeps the hand-written `DetailSlot` →
+/// `DetailSlotObserver` wrapper (`Bridge/ObservableState.swift` + `…/ios/bridge/Bridge.kt`). These
+/// tests prove both deliver the real component state on the main thread, driving the genuine shared
+/// components through the same `DefernoDemo` harness the simulator app runs — only the data is a fixture.
 @MainActor
 final class StateBridgeTests: XCTestCase {
 
@@ -28,10 +28,10 @@ final class StateBridgeTests: XCTestCase {
         super.tearDown()
     }
 
-    /// The tree bridge starts at the `stateIn` seed (empty); once the observer subscribes, the demo
-    /// repository's items flow through `itemTreeStateBridge` to a published update on the main thread.
+    /// The tree state starts at the `stateIn` seed (empty); once the observer subscribes, the demo
+    /// repository's items flow through SKIE's `SkieSwiftStateFlow` to a published update on the main thread.
     func testItemTreeStateReachesObserver() {
-        let observer = StateFlowObserver(BridgeKt.itemTreeStateBridge(component: demo.tasks.tree))
+        let observer = StateFlowObserver(demo.tasks.tree.state)
 
         let loaded = expectation(description: "the tree bridge delivers the demo items")
         observer.$value
@@ -52,7 +52,7 @@ final class StateBridgeTests: XCTestCase {
     /// intent, the shared component owns the navigation, and the slot bridge publishes the result.
     func testItemSelectionOpensDetailSlot() {
         // 1) Let the tree load so we can open a real row by the same id + kind the View forwards.
-        let treeObserver = StateFlowObserver(BridgeKt.itemTreeStateBridge(component: demo.tasks.tree))
+        let treeObserver = StateFlowObserver(demo.tasks.tree.state)
         var target: ItemRow?
         let listed = expectation(description: "the tree loads the demo items")
         treeObserver.$value

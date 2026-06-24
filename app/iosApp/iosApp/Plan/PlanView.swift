@@ -56,7 +56,7 @@ struct PlanView: View {
 
     init(component: PlanComponent) {
         self.component = component
-        _state = StateObject(wrappedValue: StateFlowObserver(BridgeKt.planStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     /// The task we gently suggest starting with: the first pinned one, else the first non-terminal,

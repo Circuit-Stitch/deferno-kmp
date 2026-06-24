@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The **Activity** Destination View — a calm, read-only, reverse-chronological feed of every change
 /// the app has recorded in the offline-first ledger (mirrors the Android `ActivityScreen`). A thin
-/// render of `ActivityComponent` via `ShellBridgeKt.activityStateBridge`: each row shows what changed,
+/// render of `ActivityComponent` (its `state` observed via SKIE): each row shows what changed,
 /// a small source chip, and when it was applied. Rows arrive newest-first; there are no row actions.
 /// Server-sourced rows ("via Website" / "via MCP") land here too once the reconcile seam tags them,
 /// with no View change.
@@ -14,7 +14,7 @@ struct ActivityView: View {
 
     init(component: ActivityComponent) {
         self.component = component
-        _state = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.activityStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     var body: some View {

@@ -52,7 +52,7 @@ struct ItemTreeView: View {
         self.onAdd = onAdd
         self.query = query
         self.showsColumnTitle = showsColumnTitle
-        _state = StateObject(wrappedValue: StateFlowObserver(BridgeKt.itemTreeStateBridge(component: component)))
+        _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     var body: some View {

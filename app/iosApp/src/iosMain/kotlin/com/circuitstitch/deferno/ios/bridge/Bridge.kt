@@ -6,10 +6,6 @@ import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
-import com.circuitstitch.deferno.feature.plan.PlanComponent
-import com.circuitstitch.deferno.feature.plan.PlanState
-import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
-import com.circuitstitch.deferno.feature.tasks.ItemTreeState
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import kotlinx.cinterop.BetaInteropApi
@@ -21,8 +17,6 @@ import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -31,35 +25,19 @@ import platform.Foundation.create
 import kotlin.time.Instant
 
 /**
- * The **SKIE-free bridge** the SwiftUI Views observe (#51). ADR-0003 calls for SKIE to turn
- * `StateFlow`/`Value`/sealed types into idiomatic Swift, but no released SKIE supports Kotlin 2.4.0
- * yet (see `app/iosApp/README.md`). Until it ships, these small **concrete** wrappers do that job by
- * hand: they keep `kotlinx.coroutines.StateFlow` and the Decompose `Value`/`ChildSlot` generics out
- * of the Swift-facing surface entirely, exposing only `value`/`current` snapshots and a
- * callback-based `subscribe` that returns a [Subscription] Swift cancels in `deinit`
- * (see `iosApp/Bridge/ObservableState.swift`). When SKIE lands, this whole package can be deleted and
- * the Views can observe the components' `StateFlow`/`Value` directly.
+ * The **Decompose half of the bridge** the SwiftUI Views observe (#51). SKIE (ADR-0003) now bridges
+ * each component's `StateFlow`/sealed/enum types into idiomatic Swift, so the Views observe those
+ * directly (`SkieSwiftStateFlow` → `StateFlowObserver`, `ObservableState.swift`). SKIE does **not**
+ * bridge the Decompose reactive types (`Value`/`ChildSlot`/`ChildStack`), so these small **concrete**
+ * wrappers keep doing that job by hand: they keep the Decompose generics out of the Swift-facing
+ * surface, exposing only a `current`/`active` snapshot and a callback-based `subscribe` that returns a
+ * [Subscription] Swift cancels in `deinit`. (The shell's navigation containers live in `ShellBridge.kt`.)
  */
 
-/** A handle Swift holds and [cancel]s in `deinit` to stop observing. */
+/** A handle Swift holds and [cancel]s in `deinit` to stop observing a Decompose [Value]. */
 class Subscription internal constructor(private val onCancel: () -> Unit) {
     fun cancel() {
         onCancel()
-    }
-}
-
-/**
- * Observes a component's `StateFlow` from Swift without SKIE. Each [subscribe] collects on
- * [Dispatchers.Main] (so the View updates on the main thread) in its own scope, cancelled when the
- * returned [Subscription] is. The current value is always available synchronously via [value].
- */
-class StateFlowBridge<T : Any> internal constructor(private val flow: StateFlow<T>) {
-    val value: T get() = flow.value
-
-    fun subscribe(onEach: (T) -> Unit): Subscription {
-        val scope = CoroutineScope(Dispatchers.Main)
-        scope.launch { flow.collect { onEach(it) } }
-        return Subscription { scope.cancel() }
     }
 }
 
@@ -89,18 +67,6 @@ class DetailSlot internal constructor(private val slot: Value<ChildSlot<*, TaskD
         return Subscription { cancellation.cancel() }
     }
 }
-
-// Concrete factories that pin each StateFlow's element type, so Swift gets a strongly-typed
-// StateFlowBridge<…> (the generic is resolved here) without ever naming `StateFlow`. They also keep
-// StateFlowBridge's constructor internal — Swift can only obtain a bridge through these.
-fun itemTreeStateBridge(component: ItemTreeComponent): StateFlowBridge<ItemTreeState> =
-    StateFlowBridge(component.state)
-
-fun taskDetailStateBridge(component: TaskDetailComponent): StateFlowBridge<TaskDetailState> =
-    StateFlowBridge(component.state)
-
-fun planStateBridge(component: PlanComponent): StateFlowBridge<PlanState> =
-    StateFlowBridge(component.state)
 
 /** True when [kind] is the Task kind — Swift can't reliably `==` a bridged Kotlin enum in a static framework. */
 fun itemKindIsTask(kind: ItemKind): Boolean = kind == ItemKind.Task

@@ -17,7 +17,7 @@ struct RootView: View {
         self.root = root
         self.recorder = recorder
         _stack = StateObject(wrappedValue: RootStackObserver(ShellBridgeKt.rootStackBridge(component: root)))
-        _theme = StateObject(wrappedValue: StateFlowObserver(ShellBridgeKt.themeSettingsBridge(component: root)))
+        _theme = StateObject(wrappedValue: StateFlowObserver(root.themeSettings))
     }
 
     var body: some View {
