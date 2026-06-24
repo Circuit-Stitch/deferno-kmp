@@ -30,9 +30,9 @@ extension Font {
 /// The grove/kind accent for an Item (Compose `TreeAtoms.kindColor`): Task→primary, Habit→success,
 /// Event→secondary, Chore→tertiary. `ItemKind` bridges as a singleton class, so match by identity.
 func kindColor(_ kind: ItemKind, _ colors: DefernoColors) -> Color {
-    if kind === ItemKind.habit { return colors.success }
-    if kind === ItemKind.event { return colors.secondary }
-    if kind === ItemKind.chore { return colors.tertiary }
+    if kind == ItemKind.habit { return colors.success }
+    if kind == ItemKind.event { return colors.secondary }
+    if kind == ItemKind.chore { return colors.tertiary }
     return colors.primary // Task (+ any future kind)
 }
 

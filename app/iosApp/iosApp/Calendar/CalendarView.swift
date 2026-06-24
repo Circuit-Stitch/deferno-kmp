@@ -205,18 +205,18 @@ struct CalendarView: View {
             .font(.caption.weight(.medium))
             .padding(.horizontal, 8)
             .padding(.vertical, 2)
-            .background(status === WorkingState.done ? colors.successContainer : colors.surfaceVariant, in: Capsule())
+            .background(status == WorkingState.done ? colors.successContainer : colors.surfaceVariant, in: Capsule())
             .foregroundStyle(colors.onSurface)
     }
 
     // MARK: Labels (gentle vocabulary)
 
     private func agendaStatusLabel(_ status: WorkingState) -> String {
-        if status === WorkingState.open { return "Scheduled" }
-        if status === WorkingState.inprogress { return "In progress" }
-        if status === WorkingState.inreview { return "In review" }
-        if status === WorkingState.done { return "Done" }
-        if status === WorkingState.dropped { return "Skipped" }
+        if status == WorkingState.open { return "Scheduled" }
+        if status == WorkingState.inProgress { return "In progress" }
+        if status == WorkingState.inReview { return "In review" }
+        if status == WorkingState.done { return "Done" }
+        if status == WorkingState.dropped { return "Skipped" }
         return status.label
     }
 
