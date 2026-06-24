@@ -113,11 +113,25 @@ jobs:
       - name: Build, test & verify coverage
         run: ./gradlew check :koverVerify --stacktrace
 
-      # Generate the merged HTML report even when the gate fails, so a coverage drop is
-      # easy to diagnose from the uploaded artifact.
-      - name: Generate Kover coverage report
+      # Generate the merged reports even when the gate fails: the HTML is uploaded as an
+      # artifact so a coverage drop is easy to diagnose, and the XML feeds the Codecov badge
+      # (ADR-0039). Both cover the same merged shared-core report :koverVerify gates.
+      - name: Generate Kover coverage reports
         if: ${{ !cancelled() }}
-        run: ./gradlew :koverHtmlReport --stacktrace
+        run: ./gradlew :koverHtmlReport :koverXmlReport --stacktrace
+
+      # Display-only coverage badge (ADR-0039): upload the merged shared-core XML so shields.io
+      # renders the README badge. Codecov is NOT a gate (codecov.yml pins project/patch/comment
+      # off) — the real gate is :koverVerify above. fail_ci_if_error:false so a missing token or
+      # a Codecov outage leaves the badge stale but never fails the build. Needs the CODECOV_TOKEN
+      # secret + the Codecov app enabled on the repo; until then the badge just reads "unknown".
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build/reports/kover/report.xml
+          fail_ci_if_error: false
 
       # Pinned to v7 (#37) for the Node 24 runtime — note upload-artifact v5 still defaults
       # to Node 20; v6 was the first to default to node24 and v7 is the latest MIT major.

@@ -1,5 +1,8 @@
 # Deferno Client
 
+[![CI](https://github.com/Circuit-Stitch/deferno-kmp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Circuit-Stitch/deferno-kmp/actions/workflows/ci.yml)
+[![coverage](https://img.shields.io/codecov/c/github/Circuit-Stitch/deferno-kmp?label=coverage)](https://codecov.io/gh/Circuit-Stitch/deferno-kmp)
+
 The native Deferno client — **Android first**, with iOS and desktop to follow over a shared
 Kotlin Multiplatform core. The UI is genuinely native per platform (Jetpack Compose on Android,
 SwiftUI on iOS, Compose Desktop on desktop); everything down through presentation and navigation

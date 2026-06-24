@@ -1,0 +1,10 @@
+# Codecov is display-only for this repo (ADR-0039) — the ~85–90% line gate is enforced
+# in CI by `:koverVerify` over the merged shared-core report (deferno.coverage.aggregation,
+# ADR-0006). Turn off Codecov's own status checks and PR comments so it can never become a
+# second, externally-hosted gate. The README badge just renders Codecov's hosted number.
+coverage:
+  status:
+    project: false
+    patch: false
+
+comment: false
