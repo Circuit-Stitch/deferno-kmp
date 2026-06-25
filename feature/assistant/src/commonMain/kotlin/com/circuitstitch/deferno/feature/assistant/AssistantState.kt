@@ -37,18 +37,11 @@ data class AssistantState(
     /** Entitled but the Owner hasn't enabled it — render the enable + egress-consent CTA. */
     val needsEnable: Boolean get() = availability?.let { it.entitled && !it.enabled } == true
 
-    /** The consent text to show on the enable CTA (the API's string, or a built-in fallback). */
-    val disclosure: String get() = availability?.disclosure ?: DEFAULT_DISCLOSURE
+    /** The consent text to show on the enable CTA (the API's string, or [AssistantAvailability]'s fallback). */
+    val disclosure: String get() = availability?.disclosureOrDefault ?: AssistantAvailability.DEFAULT_DISCLOSURE
 
     /** Whether a typed message can be sent right now (the composer's enabled guard). */
     val canSend: Boolean
         get() = available && online && !streaming && !usageExhausted &&
             pendingProposal == null && composer.isNotBlank()
-
-    companion object {
-        /** Shown only if the backend omits its own disclosure — the egress consent must never be silent. */
-        const val DEFAULT_DISCLOSURE: String =
-            "Enabling the Assistant sends your decrypted item content to a third-party AI sub-processor " +
-                "so it can read and act on your tasks. You can turn it off at any time."
-    }
 }

@@ -102,6 +102,8 @@ private val DesktopCategories: List<SettingsCategory> =
     SettingsCategory.entries.filter {
         it != SettingsCategory.AppPermissions &&
             it != SettingsCategory.Agent &&
+            // The Assistant (#282, ADR-0040) is iOS-only in v1; the desktop View is deferred.
+            it != SettingsCategory.Assistant &&
             // Storage (#210) ships its Settings surface on Android first; the desktop row lands with the
             // desktop attach UI (on-device storage already works on desktop — only the selector is deferred).
             it != SettingsCategory.Storage
@@ -200,6 +202,9 @@ private fun CategoryDetail(
 
             // Agent (#150) is Android-only for now; filtered from DesktopCategories, never opened here.
             SettingsCategory.Agent -> Unit
+
+            // The Assistant (#282) is iOS-only in v1; filtered from DesktopCategories, never opened here.
+            SettingsCategory.Assistant -> Unit
 
             // Storage (#210) is Android-first; filtered from DesktopCategories, never opened here.
             SettingsCategory.Storage -> Unit
@@ -495,6 +500,7 @@ private val SettingsCategory.title: String
         SettingsCategory.TaskBehavior -> "Task behavior"
         SettingsCategory.SpeechEngine -> "Speech engine"
         SettingsCategory.Agent -> "Agent"
+        SettingsCategory.Assistant -> "Assistant"
         SettingsCategory.Storage -> "Storage"
         SettingsCategory.DataPrivacy -> "Data & Privacy"
         SettingsCategory.HelpFeedback -> "Help & Feedback"

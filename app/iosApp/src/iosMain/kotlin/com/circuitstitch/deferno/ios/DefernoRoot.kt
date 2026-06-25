@@ -197,6 +197,12 @@ class DefernoRoot(
             // The AppScope connectivity monitor (#158): the outbox driver flushes on the
             // offline→online edge and skips passes while known-offline.
             connectivity = appComponent.connectivity,
+            // The server-mediated Assistant (ADR-0040, #282): the AppScope request/response client gates the
+            // entitled-only Destination and drives availability / enable+consent / apply / conversations —
+            // all live the moment the Org is entitled. The SSE turn-stream transport is wired separately once
+            // its live wire format is reconciled (Deferno#485); until then `assistantStream` stays the
+            // graceful NONE, so a turn says "not available here" rather than hanging.
+            assistantClient = appComponent.assistantClient,
         )
 
         lifecycle.resume()

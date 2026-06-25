@@ -92,6 +92,16 @@ data class AssistantAvailability(
     val disclosure: String? = null,
 ) {
     val available: Boolean get() = entitled && enabled
+
+    /** The egress-consent text to show on any enable surface — the server's string, or [DEFAULT_DISCLOSURE]. */
+    val disclosureOrDefault: String get() = disclosure ?: DEFAULT_DISCLOSURE
+
+    companion object {
+        /** Shown only if the backend omits its own disclosure — the egress consent must never be silent. */
+        const val DEFAULT_DISCLOSURE: String =
+            "Enabling the Assistant sends your decrypted item content to a third-party AI sub-processor " +
+                "so it can read and act on your tasks. You can turn it off at any time."
+    }
 }
 
 /**

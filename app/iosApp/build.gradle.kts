@@ -46,6 +46,9 @@ kotlin {
             export(project(":feature:signin"))
             // The Inbox Destination renders feature:braindumps' InboxComponent/InboxState (#260 iOS parity).
             export(project(":feature:braindumps"))
+            // The Assistant Destination renders feature:assistant's AssistantComponent/AssistantState, and
+            // the iOS SSE transport bridges into its AssistantStream seam (ADR-0040, #282).
+            export(project(":feature:assistant"))
             export(project(":core:model"))
             export(project(":core:speech"))
             export(libs.decompose)
@@ -68,6 +71,7 @@ kotlin {
             api(project(":feature:settings"))
             api(project(":feature:signin"))
             api(project(":feature:braindumps"))
+            api(project(":feature:assistant"))
             api(project(":core:model"))
             api(project(":core:speech"))
             api(libs.decompose)

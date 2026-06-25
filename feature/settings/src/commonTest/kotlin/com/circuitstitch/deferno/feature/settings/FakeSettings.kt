@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.feature.settings
 
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.model.AssistantAvailability
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
@@ -78,5 +79,30 @@ class FakeSpeechEngineCatalog(
     override fun select(id: SpeechEngineId) {
         selects += id
         current = id
+    }
+}
+
+/**
+ * In-memory [AssistantEnablement] for the [SettingsComponent] Assistant-enablement tests (#282, ADR-0040).
+ * [loaded] is the gate [load] reports; [setEnabled] flips the in-memory `enabled` (preserving entitlement +
+ * disclosure) and records each call, unless [failSet] forces a `null` failure so a server error can be
+ * exercised. A `null` [loaded] models the inert / not-applicable case (the row hides).
+ */
+class FakeAssistantEnablement(
+    initial: AssistantAvailability? = null,
+    private val failSet: Boolean = false,
+) : AssistantEnablement {
+    var loaded: AssistantAvailability? = initial
+        private set
+    val setCalls = mutableListOf<Boolean>()
+
+    override suspend fun load(): AssistantAvailability? = loaded
+
+    override suspend fun setEnabled(enabled: Boolean): AssistantAvailability? {
+        setCalls += enabled
+        if (failSet) return null
+        val base = loaded ?: AssistantAvailability(entitled = true, enabled = enabled)
+        loaded = base.copy(enabled = enabled)
+        return loaded
     }
 }

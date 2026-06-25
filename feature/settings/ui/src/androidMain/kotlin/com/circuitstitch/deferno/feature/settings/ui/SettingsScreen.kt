@@ -130,6 +130,9 @@ internal fun SettingsListContent(
             // The Agent row shows only when this device has an inference engine to offer (#150); the
             // cloud option itself reflects not-entitled, so it stays visible when entitlement is absent (AC2).
             if (category == SettingsCategory.Agent && !inferenceEngine.available) return@forEach
+            // The Assistant enablement row is iOS-only in v1 (ADR-0040 defers the Android/desktop Views);
+            // skip it here so the deferred surface never shows a non-functional row.
+            if (category == SettingsCategory.Assistant) return@forEach
             CategoryRow(
                 label = category.title,
                 summary = category.rowSummary(speechEngine, inferenceEngine, storageProvider),
@@ -192,6 +195,11 @@ private fun CategoryDetail(
             SettingsCategory.TaskBehavior -> TaskBehaviorDetail(settings, component)
             SettingsCategory.SpeechEngine -> SpeechEngineDetail(speechEngine, component::onSpeechEngineSelected)
             SettingsCategory.Agent -> AgentDetail(inferenceEngine, component::onInferenceEngineSelected)
+            // The Assistant enablement surface is iOS-only in v1 (ADR-0040); the row is skipped on Android,
+            // so this detail is never reached — kept only to keep the `when` total.
+            SettingsCategory.Assistant -> ComingSoonDetail(
+                body = "The Assistant is available on iPhone for now. It’s coming to Android soon.",
+            )
             SettingsCategory.Storage -> {
                 // The brain-dump retention toggle (#211) lives under Storage — recordings are on-device
                 // attachments. Collected here so only the Storage detail subscribes.
@@ -614,6 +622,7 @@ private val SettingsCategory.title: String
         SettingsCategory.TaskBehavior -> "Task behavior"
         SettingsCategory.SpeechEngine -> "Speech engine"
         SettingsCategory.Agent -> "Agent"
+        SettingsCategory.Assistant -> "Assistant"
         SettingsCategory.Storage -> "Storage"
         SettingsCategory.DataPrivacy -> "Data & Privacy"
         SettingsCategory.HelpFeedback -> "Help & Feedback"

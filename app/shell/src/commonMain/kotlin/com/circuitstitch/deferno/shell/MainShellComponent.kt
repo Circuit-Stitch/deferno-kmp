@@ -43,6 +43,7 @@ import com.circuitstitch.deferno.core.domain.command.CreateItem
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.core.model.AssistantAvailability
 import com.circuitstitch.deferno.core.model.AssistantProposal
 import com.circuitstitch.deferno.core.model.ChatMessage
 import com.circuitstitch.deferno.core.model.Conversation
@@ -67,6 +68,7 @@ import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
 import com.circuitstitch.deferno.feature.assistant.AssistantComponent
 import com.circuitstitch.deferno.feature.assistant.AssistantStream
 import com.circuitstitch.deferno.feature.assistant.DefaultAssistantComponent
+import com.circuitstitch.deferno.feature.settings.AssistantEnablement
 import com.circuitstitch.deferno.feature.braindumps.AcceptResult
 import com.circuitstitch.deferno.feature.braindumps.DefaultInboxComponent
 import com.circuitstitch.deferno.feature.braindumps.InboxComponent
@@ -527,6 +529,27 @@ class DefaultMainShellComponent(
     // (the row only appears once availability — which needs this id — has resolved to entitled).
     private var assistantOrgId: OrgId? = null
 
+    /** The active User's personal org (ADR-0040), resolved once + cached; null only when unauthenticated. */
+    private suspend fun resolveAssistantOrgId(): OrgId? =
+        assistantOrgId ?: (authRepository.loadMe() as? MeResult.Authenticated)?.user?.personalOrgId
+            ?.also { assistantOrgId = it }
+
+    // The Settings Assistant-enablement seam (ADR-0040, #282): the AppScope request/response client + the
+    // resolved personal org, gated server-side on entitlement. Threaded into the Settings Destination. Reads
+    // the org lazily (resolving it if init's gate fetch hasn't yet), so the Settings row works even if opened
+    // early; on the Android/desktop hosts the inert client makes every call Unavailable → the row stays hidden.
+    private val assistantEnablement = object : AssistantEnablement {
+        override suspend fun load(): AssistantAvailability? {
+            val org = resolveAssistantOrgId() ?: return null
+            return (assistantClient.availability(org) as? RemoteSnapshot.Available)?.value
+        }
+
+        override suspend fun setEnabled(enabled: Boolean): AssistantAvailability? {
+            val org = resolveAssistantOrgId() ?: return null
+            return (assistantClient.setEnablement(org, enabled) as? RemoteSnapshot.Available)?.value
+        }
+    }
+
     override fun switchAccount(id: AccountId) = onSwitchAccount(id)
 
     override fun signOut() = output(MainShellComponent.Output.SignOutRequested)
@@ -780,6 +803,9 @@ class DefaultMainShellComponent(
                         // The Agent inference-engine choice + entitlement gate (#150) — sourced from
                         // AppScope, device-local selection + per-Account entitlement, not synced settings.
                         inferenceEngineCatalog = inferenceEngineCatalog,
+                        // The server-mediated Assistant enablement (#282, ADR-0040) — the Owner's persistent
+                        // disable/withdraw-consent row, over the AppScope client + resolved org (iOS-only in v1).
+                        assistantEnablement = assistantEnablement,
                         // The device-local storage-provider choice (#210) — sourced from AppScope, never synced.
                         storageProviderCatalog = storageProviderCatalog,
                         // The device-local "keep brain-dump recordings" choice (#211) — AppScope, never synced.
@@ -826,8 +852,7 @@ class DefaultMainShellComponent(
         // Offline / failed / no real client (Android/desktop/tests) leaves the row absent — the Assistant is
         // online-only anyway. The Destination's own component re-checks availability for its enable/consent gate.
         overlayScope.launch {
-            val orgId = (authRepository.loadMe() as? MeResult.Authenticated)?.user?.personalOrgId ?: return@launch
-            assistantOrgId = orgId
+            val orgId = resolveAssistantOrgId() ?: return@launch
             when (val availability = assistantClient.availability(orgId)) {
                 is RemoteSnapshot.Available ->
                     if (availability.value.entitled) _destinations.value = Destination.entries
@@ -927,6 +952,7 @@ class DefaultMainShellComponent(
         SettingsCategory.TaskBehavior -> "Task behavior"
         SettingsCategory.SpeechEngine -> "Speech engine"
         SettingsCategory.Agent -> "Agent"
+        SettingsCategory.Assistant -> "Assistant"
         SettingsCategory.Storage -> "Storage"
         SettingsCategory.DataPrivacy -> "Data & Privacy"
         SettingsCategory.HelpFeedback -> "Help & Feedback"
