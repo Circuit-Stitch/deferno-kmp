@@ -623,22 +623,9 @@ internal class FakeAccountSession(
             override suspend fun reconcile() {}
         }
 
+    // Reuse the shell's shared empty store (#284) instead of re-implementing it inline here.
     override val conversationStore: com.circuitstitch.deferno.core.data.assistant.ConversationStore =
-        object : com.circuitstitch.deferno.core.data.assistant.ConversationStore {
-            override fun observeConversations() =
-                kotlinx.coroutines.flow.flowOf<List<com.circuitstitch.deferno.core.model.Conversation>>(emptyList())
-            override fun observeMessages(id: com.circuitstitch.deferno.core.model.ConversationId) =
-                kotlinx.coroutines.flow.flowOf<List<com.circuitstitch.deferno.core.model.ChatMessage>>(emptyList())
-            override suspend fun upsertConversation(conversation: com.circuitstitch.deferno.core.model.Conversation) {}
-            override suspend fun upsertMessage(
-                conversationId: com.circuitstitch.deferno.core.model.ConversationId,
-                message: com.circuitstitch.deferno.core.model.ChatMessage,
-            ) {}
-            override suspend fun upsertMessages(
-                conversationId: com.circuitstitch.deferno.core.model.ConversationId,
-                messages: List<com.circuitstitch.deferno.core.model.ChatMessage>,
-            ) {}
-        }
+        InertConversationStore
 
     override val occurrenceEditor: com.circuitstitch.deferno.feature.calendar.OccurrenceEditor =
         object : com.circuitstitch.deferno.feature.calendar.OccurrenceEditor {
