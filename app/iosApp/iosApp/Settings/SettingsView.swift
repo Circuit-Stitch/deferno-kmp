@@ -1,6 +1,7 @@
 import Deferno
 import SwiftUI
 import UserNotifications
+import WebKit
 
 /// The Settings Destination (#72) — a **tier-3 drill-down** (`SettingsChild`: List ↔ Detail(category))
 /// rendered from the shared component's stack, so the single adaptive shell bar (`MainShellView`) titles
@@ -20,10 +21,15 @@ struct SettingsView: View {
     // withdraw-consent row, shown only when the Org is entitled (iOS-only in v1).
     @StateObject private var assistant: StateFlowObserver<AssistantSettings>
     @Environment(\.defernoColors) private var colors
+    @Environment(\.openURL) private var openURL
     // The "Brain dump notifications" opt-in (#271): device-local, seeded once from the AppScope preference;
     // the toggle persists through the component and requests OS authorization on enable.
     @State private var brainDumpNotifications = false
     @State private var brainDumpNotificationsSeeded = false
+    // The legal page presented in-app via a WKWebView that hides the site nav/footer (nil = none).
+    // Compliant in-app presentation of our hosted Terms/Privacy — no link-stripping needed (Apple
+    // 3.1.1 is about external purchase flows, not legal text).
+    @State private var legalPage: LegalPage?
 
     init(component: SettingsComponent) {
         self.component = component
@@ -255,13 +261,37 @@ struct SettingsView: View {
     private var legalDetail: some View {
         List {
             Section {
-                Text("Terms of Service").foregroundStyle(colors.onSurface).listRowBackground(colors.surfaceCard)
-                Text("Privacy Policy").foregroundStyle(colors.onSurface).listRowBackground(colors.surfaceCard)
+                Button("Terms of Service") { legalPage = LegalPage(title: "Terms of Service", url: Self.termsURL) }
+                    .foregroundStyle(colors.onSurface).listRowBackground(colors.surfaceCard)
+                Button("Privacy Policy") { legalPage = LegalPage(title: "Privacy Policy", url: Self.privacyURL) }
+                    .foregroundStyle(colors.onSurface).listRowBackground(colors.surfaceCard)
             } footer: {
                 Text("Deferno is open source under the Apache 2.0 license.")
             }
         }
+        .sheet(item: $legalPage) { page in
+            NavigationStack {
+                LegalWebView(
+                    url: page.url,
+                    onContact: {
+                        legalPage = nil
+                        component.onOpenSubmitFeedback()
+                    },
+                    onAccountRemoval: { if let url = accountRemovalMailtoURL() { openURL(url) } })
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle(page.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { legalPage = nil }
+                    }
+                }
+            }
+        }
     }
+
+    private static let termsURL = URL(string: "https://www.defernowork.com/terms")!
+    private static let privacyURL = URL(string: "https://www.defernowork.com/privacy")!
 
     private var accountDetail: some View {
         let value = settings.value
@@ -374,4 +404,101 @@ struct SettingsView: View {
         default: return ShellBridgeKt.settingsCategoryName(category: category)
         }
     }
+}
+
+/// A legal page to present in-app. Identifiable so it can drive `.sheet(item:)` (URL isn't).
+private struct LegalPage: Identifiable {
+    let title: String
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+/// Our hosted Terms/Privacy with the site chrome removed, shown in-app. The pages are server-rendered
+/// with exactly one `<nav>` (header) and one `<footer>`; a document-start user script hides both
+/// *before first paint*, so only the `<main>` content renders — no full-site flash (which Safari
+/// Reader couldn't avoid). ponytail: tag selectors `nav,footer`; revisit only if the site adds chrome
+/// outside those tags.
+///
+/// Tapped in-content links are inert (cancelled in the nav delegate) and visually flattened to plain
+/// text (CSS above) — except the two email links, which stay styled. `accounts@` (account removal)
+/// opens the mail app with a prefilled template (`onAccountRemoval`); any other `mailto:` (i.e.
+/// `support@`) routes to the in-app feedback form (`onContact`). The links are Cloudflare-obfuscated:
+/// they decode to `mailto:` once their script runs (almost always before a tap), or stay a
+/// `/cdn-cgi/l/email-protection` URL if not — the CSS matches both; the delegate keys off the decoded
+/// address, falling back to feedback for the rare un-decoded tap.
+private struct LegalWebView: UIViewRepresentable {
+    let url: URL
+    let onContact: () -> Void
+    let onAccountRemoval: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onContact: onContact, onAccountRemoval: onAccountRemoval) }
+
+    func makeUIView(context: Context) -> WKWebView {
+        // Hide site chrome (nav/footer) and flatten every link *except* the contact email into plain
+        // text — no color/underline/tap — so the email is the only thing that reads as clickable.
+        let hideChrome = WKUserScript(
+            source: """
+            var s = document.createElement('style');
+            s.textContent = 'nav,footer{display:none!important} a:not([href^="mailto:"]):not([href*="email-protection"]){color:inherit!important;text-decoration:none!important;pointer-events:none!important}';
+            document.documentElement.appendChild(s);
+            """,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true)
+        let controller = WKUserContentController()
+        controller.addUserScript(hideChrome)
+        let config = WKWebViewConfiguration()
+        config.userContentController = controller
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        webView.load(URLRequest(url: url))
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {}
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        let onContact: () -> Void
+        let onAccountRemoval: () -> Void
+        init(onContact: @escaping () -> Void, onAccountRemoval: @escaping () -> Void) {
+            self.onContact = onContact
+            self.onAccountRemoval = onAccountRemoval
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            // Only intercept what the user taps; let the page's own load (and decode scripts) through.
+            guard navigationAction.navigationType == .linkActivated,
+                  let target = navigationAction.request.url else {
+                decisionHandler(.allow)
+                return
+            }
+            decisionHandler(.cancel) // every tapped link is inert; the email links are handed off below
+            let address = target.scheme == "mailto" ? target.absoluteString.dropFirst("mailto:".count) : ""
+            if address.lowercased().hasPrefix("accounts@defernowork.com") {
+                onAccountRemoval()
+            } else if target.scheme == "mailto" || target.absoluteString.contains("email-protection") {
+                onContact()
+            }
+        }
+    }
+}
+
+/// The prefilled account-removal email for the `accounts@` link — opened via the system mail app.
+private func accountRemovalMailtoURL() -> URL? {
+    var components = URLComponents()
+    components.scheme = "mailto"
+    components.path = "accounts@defernowork.com"
+    components.queryItems = [
+        URLQueryItem(name: "subject", value: "Account removal request"),
+        URLQueryItem(name: "body", value: """
+            Hello,
+
+            I'd like to request removal of my Deferno account and its associated data.
+
+            Account email:
+
+            Thank you.
+            """),
+    ]
+    return components.url
 }
