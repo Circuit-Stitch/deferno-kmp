@@ -9,15 +9,14 @@ kotlin {
 
     sourceSets {
         // The public `com.circuitstitch.deferno.core.common.log.Logger` facade is the one logging
-        // API every module uses (issue: native macOS app). Its kmp-logger-backed actual is the same
-        // ~25 lines on the three targets amzn/kmp-logger publishes a klib for, so it's duplicated in
-        // each rather than threaded through a custom intermediate source set (that fights KMP's
-        // default hierarchy template). macOS carries its own os_log actual in `macosMain` — kmp-logger
-        // 0.0.1 ships no macosArm64 klib. `implementation` (internal to this module), never `api`.
-        // ponytail: 3 tiny copies of trivial glue, not a hand-wired source-set graph.
+        // API every module uses. Backed by amzn/kmp-logger, which now ships a klib for every target
+        // this module builds — including macosArm64 — so a single delegating actual in `appleMain`
+        // covers iOS + macOS (the old bespoke macOS os_log copy is gone). Android/JVM keep their own
+        // ~25-line delegating actuals: there's no shared JVM source set, and a top-level native facade
+        // would clash with commonMain's `LoggerKt`. `implementation` (internal to this module), never `api`.
         androidMain.dependencies { implementation(libs.kmp.logger.log) }
         jvmMain.dependencies { implementation(libs.kmp.logger.log) }
-        iosMain.dependencies { implementation(libs.kmp.logger.log) }
+        appleMain.dependencies { implementation(libs.kmp.logger.log) }
 
         commonMain.dependencies {
             // For componentScope() (#174). `implementation`, not `api`: its callers (the feature

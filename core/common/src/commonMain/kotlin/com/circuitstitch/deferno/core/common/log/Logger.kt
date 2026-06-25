@@ -3,10 +3,9 @@ package com.circuitstitch.deferno.core.common.log
 /**
  * The project's **one uniform logging facade**, identical on every target.
  *
- * Backed by amzn/kmp-logger on Android/JVM/iOS; on macOS it writes to `os_log` directly, because
- * kmp-logger 0.0.1 publishes no `macosArm64` klib (its sole platform seam is an `internal expect
- * writeLog`, which a consumer can't supply). Call sites are byte-identical across platforms, so the
- * macOS app logs exactly like Android/iOS/desktop.
+ * Backed by amzn/kmp-logger on every target (Logcat on Android, `os_log` on iOS + macOS, `println`
+ * on JVM). iOS and macOS share one delegating actual in `appleMain`. Call sites are byte-identical
+ * across platforms, so the macOS app logs exactly like Android/iOS/desktop.
  *
  * Configure once at process start, before anything logs:
  * ```
@@ -15,10 +14,6 @@ package com.circuitstitch.deferno.core.common.log
  * Then log via an explicit tag — `Logger("DesktopMain").i { "…" }` — or, inside a class, via the
  * [Any.logger] extension whose tag is the class's simple name: `logger.i { "…" }`. The message
  * lambda is only evaluated when the level passes the configured minimum (zero cost when disabled).
- *
- * ponytail: thin facade only because kmp-logger ships no macosArm64 klib (its writeLog is identical
- * to what we do here). When upstream publishes the target, collapse the macOS actual + drop this in
- * favour of the library directly.
  */
 expect class Logger(tag: String) {
     /** Verbose — lowest priority, detailed tracing. */

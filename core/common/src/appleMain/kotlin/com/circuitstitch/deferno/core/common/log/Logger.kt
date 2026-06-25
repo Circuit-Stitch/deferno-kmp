@@ -4,8 +4,10 @@ import software.amazon.app.kmplogger.LogLevel as KmpLogLevel
 import software.amazon.app.kmplogger.Logger as KmpLogger
 
 /**
- * Android/JVM/iOS actual: delegate straight to amzn/kmp-logger (the targets it publishes a klib
- * for). The macOS actual lives in `macosMain` and writes to `os_log` directly (no published klib).
+ * Apple actual (iOS + macOS): delegate straight to amzn/kmp-logger, which now ships a klib for every
+ * Apple target this module builds (iosArm64, iosSimulatorArm64, macosArm64). kmp-logger's own
+ * `os_log` writer lives in its shared `appleMain`, so one delegate here covers the whole Apple fleet
+ * — no bespoke per-OS copy.
  */
 actual class Logger actual constructor(tag: String) {
     private val delegate = KmpLogger(tag)
@@ -22,8 +24,8 @@ actual class Logger actual constructor(tag: String) {
         actual fun configure(minLogLevel: LogLevel, prefix: String?) =
             KmpLogger.configure(minLogLevel = minLogLevel.toKmp(), prefix = prefix)
 
-        // Nested (not top-level) so this file emits no `LoggerKt` JVM facade that would clash with
-        // commonMain's `Logger.kt` (`Any.logger`) in the JVM/Android compilations.
+        // Nested (not top-level) so this file emits no `LoggerKt` facade clashing with commonMain's
+        // `Logger.kt` (`Any.logger`) — harmless on native, kept identical to the former iosMain copy.
         private fun LogLevel.toKmp(): KmpLogLevel = when (this) {
             LogLevel.VERBOSE -> KmpLogLevel.VERBOSE
             LogLevel.DEBUG -> KmpLogLevel.DEBUG
