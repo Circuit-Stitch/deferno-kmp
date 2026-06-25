@@ -139,6 +139,12 @@ fun main() {
     // origin for the Settings deep-links. A real environment selector is a follow-up.
     val environment = DefernoEnvironment.Staging
 
+    // The desktop "debug build" signal (mirrors Android's BuildConfig.DEBUG): an unpackaged dev `run`,
+    // where Conveyor's controller is null (the same signal startupLogLevel uses). It reveals the sign-in
+    // "Use a token instead" paste-PAT fallback (ADR-0023) so a Sign Out is recoverable on dev — the
+    // system-browser OAuth leg (ADR-0026) isn't wired against staging yet. A packaged build keeps it off.
+    val developerOptions = SoftwareUpdateController.getInstance() == null
+
     // Configure the shared logger ONCE per process, before the DI graph builds or anything logs
     // (amzn/kmp-logger). The `prefix` makes tags "Deferno: <Tag>"; the default strategy prints to
     // stdout. A shipped (Conveyor-packaged) build emits only WARN + ERROR; a dev `./gradlew run`
@@ -355,7 +361,7 @@ fun main() {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
                         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                            RootShell(root)
+                            RootShell(root, developerOptions = developerOptions)
                         }
                     }
                 }
