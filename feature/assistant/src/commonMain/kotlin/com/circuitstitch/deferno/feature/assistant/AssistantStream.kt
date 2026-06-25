@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.feature.assistant
 
 import com.circuitstitch.deferno.core.model.AssistantProposal
 import com.circuitstitch.deferno.core.model.ConversationId
+import com.circuitstitch.deferno.core.model.OrgId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
@@ -30,11 +31,13 @@ interface AssistantStream {
 }
 
 /**
- * One turn request: which [[Conversation]] it extends and the person's message. The client mints the
- * [conversationId] for a brand-new chat (client-supplied ids, like offline creates — #185), so the id is
- * always known before the turn streams; the iOS transport pairs it with auth + base URL.
+ * One turn request: the [[Org]] it runs in, which [[Conversation]] it extends, and the person's message.
+ * The client mints the [conversationId] for a brand-new chat (client-supplied ids, like offline creates —
+ * #185), so the id is always known before the turn streams; [orgId] scopes the `/orgs/{org}/assistant…`
+ * endpoint, and the iOS transport pairs both with auth + base URL.
  */
 data class AssistantTurnRequest(
+    val orgId: OrgId,
     val conversationId: ConversationId,
     val message: String,
 )

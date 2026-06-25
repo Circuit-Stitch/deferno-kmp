@@ -133,7 +133,7 @@ class DefaultAssistantComponent(
 
             var buffer = ""
             try {
-                stream.streamTurn(AssistantTurnRequest(conversationId, text)).collect { event ->
+                stream.streamTurn(AssistantTurnRequest(orgId, conversationId, text)).collect { event ->
                     when (event) {
                         is AssistantEvent.TextDelta -> {
                             buffer += event.text

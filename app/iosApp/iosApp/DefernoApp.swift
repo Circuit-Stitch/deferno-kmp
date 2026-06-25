@@ -25,7 +25,10 @@ struct DefernoApp: App {
             recorder: recorder,
             dictation: IosDictation(),
             inference: IosInference(),
-            fileTranscriber: IosFileTranscriber()
+            fileTranscriber: IosFileTranscriber(),
+            // The server-mediated Assistant SSE turn-stream (#282, ADR-0040): a raw URLSession SSE reader
+            // bridged into the shared AssistantStream seam (Kotlin owns auth + base URL + parsing).
+            transport: IosAssistantTransport()
         )
         _host = State(initialValue: host)
         // Brain dump completion notification (#271): a tap routes to the Inbox through the shared shell.

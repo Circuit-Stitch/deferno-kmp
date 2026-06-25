@@ -44,6 +44,7 @@
 		DE0002000000000000000120 /* IosDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000120 /* IosDictation.swift */; };
 		DE0002000000000000000130 /* IosInference.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000130 /* IosInference.swift */; };
 		DE0002000000000000000282 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000282 /* AssistantView.swift */; };
+		DE0002000000000000000283 /* IosAssistantTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000283 /* IosAssistantTransport.swift */; };
 		DE0002000000000000000140 /* IosFileTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000140 /* IosFileTranscriber.swift */; };
 /* End PBXBuildFile section */
 
@@ -100,6 +101,7 @@
 		DE0001000000000000000120 /* IosDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosDictation.swift; sourceTree = "<group>"; };
 		DE0001000000000000000130 /* IosInference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosInference.swift; sourceTree = "<group>"; };
 		DE0001000000000000000282 /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
+		DE0001000000000000000283 /* IosAssistantTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosAssistantTransport.swift; sourceTree = "<group>"; };
 		DE0001000000000000000140 /* IosFileTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosFileTranscriber.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -334,6 +336,7 @@
 			children = (
 				DE0001000000000000000130 /* IosInference.swift */,
 				DE0001000000000000000282 /* AssistantView.swift */,
+				DE0001000000000000000283 /* IosAssistantTransport.swift */,
 			);
 			path = AI;
 			sourceTree = "<group>";
@@ -518,6 +521,7 @@
 				DE0002000000000000000120 /* IosDictation.swift in Sources */,
 				DE0002000000000000000130 /* IosInference.swift in Sources */,
 				DE0002000000000000000282 /* AssistantView.swift in Sources */,
+				DE0002000000000000000283 /* IosAssistantTransport.swift in Sources */,
 				DE0002000000000000000140 /* IosFileTranscriber.swift in Sources */,
 				DE0002000000000000000100 /* Atoms.swift in Sources */,
 				DE0002000000000000000101 /* DefernoIcons.swift in Sources */,

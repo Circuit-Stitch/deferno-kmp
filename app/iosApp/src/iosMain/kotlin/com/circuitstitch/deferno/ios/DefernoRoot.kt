@@ -12,7 +12,10 @@ import com.circuitstitch.deferno.core.agent.IosOnDeviceInference
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.PlatformContext
 import com.circuitstitch.deferno.core.speech.SpeechToText
+import com.circuitstitch.deferno.feature.assistant.AssistantStream
 import com.circuitstitch.deferno.ios.agent.NativeInference
+import com.circuitstitch.deferno.ios.assistant.NativeAssistantStream
+import com.circuitstitch.deferno.ios.assistant.NativeAssistantTransport
 import com.circuitstitch.deferno.ios.agent.NativeInferenceEngine
 import com.circuitstitch.deferno.ios.speech.NativeDictation
 import com.circuitstitch.deferno.ios.speech.NativeFileTranscriber
@@ -76,6 +79,9 @@ class DefernoRoot(
     dictation: NativeDictation? = null,
     inference: NativeInference? = null,
     private val fileTranscriber: NativeFileTranscriber? = null,
+    // The injected Swift SSE turn-stream transport (#282, ADR-0040). `null` (a unit host) leaves the
+    // graceful no-op AssistantStream.NONE, so a turn says "not available here" rather than hanging.
+    transport: NativeAssistantTransport? = null,
 ) {
 
     init {
@@ -123,6 +129,13 @@ class DefernoRoot(
     // (which resolves to the Unavailable floor until an iOS engine is bound — the New mic stays hidden).
     private val speechToText: SpeechToText =
         dictation?.let { NativeSpeechToText(it) } ?: appComponent.speechToText
+
+    // The Assistant SSE turn-stream (#282, ADR-0040): wrap the injected Swift transport with Kotlin-owned
+    // base URL + the Active-Account Bearer PAT (read fresh per turn); a null transport leaves the graceful
+    // NONE. Paired with the live appComponent.assistantClient passed below.
+    private val assistantStream: AssistantStream =
+        transport?.let { NativeAssistantStream(it, environment.baseUrl, appComponent.bearerTokenProvider::currentToken) }
+            ?: AssistantStream.NONE
 
     init {
         // On-device inference (#269, ADR-0037): install the Swift Foundation Models engine into the DI graph's
@@ -199,10 +212,11 @@ class DefernoRoot(
             connectivity = appComponent.connectivity,
             // The server-mediated Assistant (ADR-0040, #282): the AppScope request/response client gates the
             // entitled-only Destination and drives availability / enable+consent / apply / conversations —
-            // all live the moment the Org is entitled. The SSE turn-stream transport is wired separately once
-            // its live wire format is reconciled (Deferno#485); until then `assistantStream` stays the
-            // graceful NONE, so a turn says "not available here" rather than hanging.
+            // all live the moment the Org is entitled. The SSE turn stream rides the injected Swift
+            // URLSession transport (Deferno#485), wrapped as [assistantStream] above; a unit host with no
+            // transport leaves the graceful NONE, so a turn says "not available here" rather than hanging.
             assistantClient = appComponent.assistantClient,
+            assistantStream = assistantStream,
         )
 
         lifecycle.resume()
