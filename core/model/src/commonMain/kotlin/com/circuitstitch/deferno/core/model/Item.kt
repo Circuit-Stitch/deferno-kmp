@@ -21,6 +21,13 @@ package com.circuitstitch.deferno.core.model
  * [source] is the item's external provenance for a small row indicator: `null` = a native Deferno item
  * (the common case), else the external system it was synced/created from. The tree row renders the
  * matching brand mark when non-null.
+ *
+ * [blocked]/[isBlocker] are **server-derived** dependency flags (ADR-0034, #289), treated as read-only
+ * truth — the client never re-derives the readiness rules. [blocked] is `true` when this item has an
+ * unresolved blocker *or* an ancestor is blocked (the flag inherits down the tree); [isBlocker] is
+ * `true` when this item currently gates at least one other (a reverse-index flag). Both default `false`
+ * so a payload omitting them decodes cleanly. The ordered `blockedBy` edge list lives on the full
+ * single-item record (the per-kind detail model), not this collapsed-row projection.
  */
 data class Item(
     val id: String,
@@ -32,6 +39,8 @@ data class Item(
     val descendantDone: Long? = null,
     val descendantTotal: Long? = null,
     val source: ItemSource? = null,
+    val blocked: Boolean = false,
+    val isBlocker: Boolean = false,
 )
 
 /** An item's external provenance — the system it was synced/created from (drives the row's source mark). */

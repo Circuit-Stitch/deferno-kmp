@@ -37,6 +37,11 @@ data class Chore(
     val ownerOrgId: OrgId? = null,
     val description: String? = null,
     val seriesId: String? = null,
+    // Server-derived dependency flags (ADR-0034, #289), read-only truth: [blocked] when an ancestor is
+    // blocked (the flag inherits down the tree across kinds); [isBlocker] when this gates another. Both
+    // default `false` so a payload omitting them decodes cleanly. Edges (`blockedBy`) are Task-only.
+    val blocked: Boolean = false,
+    val isBlocker: Boolean = false,
 ) {
     /** Whether this row is a soft-delete tombstone (`deleted_at` present). */
     val isDeleted: Boolean get() = deletedAt != null

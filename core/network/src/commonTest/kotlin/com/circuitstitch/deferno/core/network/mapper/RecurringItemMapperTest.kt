@@ -41,6 +41,9 @@ class RecurringItemMapperTest {
         assertEquals(RecurrenceFrequency.Daily, habit.recurrence?.frequency)
         assertEquals("b7c21959-c5f6-4087-8ab2-7690c81e463a", habit.seriesId)
         assertEquals(HydrationState.Full, habit.hydration)
+        // #289: the recurring mapper forwards the server-derived isBlocker flag (the fixture habit gates a task).
+        assertEquals(true, habit.isBlocker)
+        assertEquals(false, habit.blocked)
         // A habit element never maps to a chore/event.
         assertNull(items.firstOrNull { it.asHabitOrNull() != null }?.asChoreOrNull())
     }

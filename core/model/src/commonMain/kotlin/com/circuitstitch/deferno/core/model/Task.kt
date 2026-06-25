@@ -51,6 +51,13 @@ data class Task(
     // (e.g. a `/tasks/{id}` detail). Not re-derived client-side — the server windows the snapshot.
     val descendantDone: Long? = null,
     val descendantTotal: Long? = null,
+    // Server-derived dependency state (ADR-0034, #289), read-only truth — never re-derived client-side.
+    // [blocked]: an unresolved blocker or a blocked ancestor (inherits down the tree). [isBlocker]: this
+    // Task gates at least one other. [blockedBy]: the ordered edges on the full record (empty on a
+    // summary/cached row). Both flags default `false` so a payload omitting them decodes cleanly.
+    val blocked: Boolean = false,
+    val isBlocker: Boolean = false,
+    val blockedBy: List<BlockedByRef> = emptyList(),
 ) {
     /** Whether this row is a soft-delete tombstone (`deleted_at` present). */
     val isDeleted: Boolean get() = deletedAt != null

@@ -45,6 +45,8 @@ class OfflineItemRepositoryTest {
         sequence: Long? = null,
         descendantDone: Long? = null,
         descendantTotal: Long? = null,
+        blocked: Boolean = false,
+        isBlocker: Boolean = false,
     ) = Task(
         id = TaskId(id),
         orgSlug = "u-e4h2qk",
@@ -56,6 +58,8 @@ class OfflineItemRepositoryTest {
         hydration = HydrationState.Full,
         descendantDone = descendantDone,
         descendantTotal = descendantTotal,
+        blocked = blocked,
+        isBlocker = isBlocker,
     )
 
     private fun habit(
@@ -63,6 +67,8 @@ class OfflineItemRepositoryTest {
         state: DefinitionState = DefinitionState.Active,
         parentId: String? = null,
         sequence: Long? = null,
+        blocked: Boolean = false,
+        isBlocker: Boolean = false,
     ) = Habit(
         id = HabitId(id),
         orgSlug = "u-e4h2qk",
@@ -72,6 +78,8 @@ class OfflineItemRepositoryTest {
         sequence = sequence,
         dateCreated = created,
         hydration = HydrationState.Full,
+        blocked = blocked,
+        isBlocker = isBlocker,
     )
 
     private fun chore(id: String, sequence: Long? = null) = Chore(
@@ -147,6 +155,25 @@ class OfflineItemRepositoryTest {
             assertEquals(false, item.isTerminal)
             assertNull(item.descendantDone)
             assertNull(item.descendantTotal)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun projectsServerDerivedBlockedAndBlockerFlagsAcrossKinds() = runTest {
+        // #289: blocked/isBlocker are server-derived per item; the projection forwards them unchanged
+        // for a Task and for a recurring kind (a habit can inherit `blocked` from a blocked ancestor).
+        val f = Fixture(
+            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t", blocked = true, isBlocker = false))),
+            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", blocked = false, isBlocker = true))),
+        )
+
+        f.repository.observeItems().test {
+            val byId = awaitItem().associateBy { it.id }
+            assertEquals(true, byId.getValue("t").blocked)
+            assertEquals(false, byId.getValue("t").isBlocker)
+            assertEquals(false, byId.getValue("h").blocked)
+            assertEquals(true, byId.getValue("h").isBlocker)
             cancelAndIgnoreRemainingEvents()
         }
     }
