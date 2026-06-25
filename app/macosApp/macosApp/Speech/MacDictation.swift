@@ -60,7 +60,7 @@ final class MacDictation: NativeDictation {
                         }, onEnd: {})
                     }
                 } catch {
-                    NSLog("[Deferno] dictation audio setup raised: %@", error.localizedDescription)
+                    // Kotlin owns diagnostics — the seam logs the reason (NativeSpeechToText.onError).
                     handle.stop()
                     onError("audio-setup-failed")
                 }
