@@ -1,0 +1,58 @@
+-- The on-device Assistant [[Conversation]] cache (issue #282, ADR-0040). The server-mediated Assistant
+-- streams replies and the client persists each Conversation + its messages AS THEY STREAM, so past
+-- chats read offline and the multi-conversation switcher lists them with no network round-trip. The
+-- local cache is the source of truth for readable history; cross-device hydration backfills any messages
+-- GET …/assistant/conversations/{id} returns that the cache is missing (Deferno#485). Everything is a
+-- primitive SQL type so the generated database needs no column adapters; the role enum + Instant
+-- conversion is done in Kotlin (core:data).
+--
+-- Online-only to EXTEND a Conversation (a new turn needs a live connection — a deliberate, scoped
+-- exception to offline-first, ADR-0040): turns are never outbox-queued, so unlike taskEntity there is no
+-- reconcile key or tombstone here. Keep this file in sync with the `8.sqm` migration (ADR-0022 runbook).
+
+CREATE TABLE conversationEntity (
+    id         TEXT NOT NULL PRIMARY KEY,
+    title      TEXT,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE conversationMessageEntity (
+    id              TEXT NOT NULL PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    role            TEXT NOT NULL,
+    text            TEXT NOT NULL,
+    created_at      TEXT NOT NULL
+);
+
+-- The per-conversation message read filters by conversation_id and orders by created_at.
+CREATE INDEX conversationMessageEntity_conversation
+    ON conversationMessageEntity(conversation_id, created_at);
+
+-- Switcher list: most-recently-touched Conversation first.
+selectAllConversations:
+SELECT * FROM conversationEntity ORDER BY updated_at DESC;
+
+upsertConversation:
+INSERT OR REPLACE INTO conversationEntity(id, title, updated_at) VALUES (?, ?, ?);
+
+deleteConversation:
+DELETE FROM conversationEntity WHERE id = ?;
+
+deleteAllConversations:
+DELETE FROM conversationEntity;
+
+-- One Conversation's ordered message log. created_at is ISO-8601 (lexicographically sortable); id is the
+-- stable tiebreaker. A streaming reply is one row whose text accrues (upsert by id), so ordering is
+-- stable as it grows.
+selectMessages:
+SELECT * FROM conversationMessageEntity WHERE conversation_id = ? ORDER BY created_at ASC, id ASC;
+
+upsertMessage:
+INSERT OR REPLACE INTO conversationMessageEntity(id, conversation_id, role, text, created_at)
+VALUES (?, ?, ?, ?, ?);
+
+deleteMessagesForConversation:
+DELETE FROM conversationMessageEntity WHERE conversation_id = ?;
+
+deleteAllMessages:
+DELETE FROM conversationMessageEntity;

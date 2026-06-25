@@ -22,6 +22,8 @@ import com.circuitstitch.deferno.core.data.auth.KtorNativeAuthRemoteSource
 import com.circuitstitch.deferno.core.data.auth.NativeAuthRemoteSource
 import com.circuitstitch.deferno.core.data.auth.OAuthClientStore
 import com.circuitstitch.deferno.core.data.auth.SignInService
+import com.circuitstitch.deferno.core.data.assistant.AssistantClient
+import com.circuitstitch.deferno.core.data.assistant.KtorAssistantClient
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
@@ -198,6 +200,15 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun settingsRemoteSource(client: HttpClient): SettingsRemoteSource = KtorSettingsRemoteSource(client)
+
+    /**
+     * The server-mediated [[Assistant]] request/response client (#282, ADR-0040) over the shared client —
+     * availability / enablement / apply / conversations. AppScope like the other Ktor sources (the client
+     * follows the Active Account per request); the SSE turn stream is a separate, per-platform seam.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun assistantClient(client: HttpClient): AssistantClient = KtorAssistantClient(client)
 
     @Provides
     @SingleIn(AppScope::class)

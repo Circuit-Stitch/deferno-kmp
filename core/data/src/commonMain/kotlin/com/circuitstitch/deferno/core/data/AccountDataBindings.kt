@@ -9,6 +9,8 @@ import com.circuitstitch.deferno.core.data.calendar.OutboxOccurrenceWriter
 import com.circuitstitch.deferno.core.data.calendar.LocalStoreSeriesKindSource
 import com.circuitstitch.deferno.core.data.calendar.SeriesKindSource
 import com.circuitstitch.deferno.core.data.calendar.SqlDelightCalendarLocalStore
+import com.circuitstitch.deferno.core.data.assistant.ConversationStore
+import com.circuitstitch.deferno.core.data.assistant.SqlDelightConversationStore
 import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
@@ -122,6 +124,13 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun brainDumpDraftRepository(db: DefernoDatabase): BrainDumpDraftRepository =
         BrainDumpDraftRepository(db)
+
+    // The on-device Assistant Conversation cache (#282, ADR-0040): local-only, no remote/reconcile — the
+    // source of truth for readable chat history (offline-readable, switcher list). The component persists
+    // each Conversation as it streams and the cross-device hydration backfill writes through it.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun conversationStore(db: DefernoDatabase): ConversationStore = SqlDelightConversationStore(db)
 
     // The on-device attachment store (#210): per-Account records over the Account DB + bytes via the
     // AppScope AttachmentBytesStore (re-exposed by AppComponent). Local-only, no remote/reconcile — the

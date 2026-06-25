@@ -1,0 +1,21 @@
+-- Migration 8 -> 9: add the on-device Assistant Conversation cache (issue #282, ADR-0040).
+--
+-- New, additive tables only — no existing table changes — so existing installs simply gain an empty
+-- Assistant cache that fills from the first streamed turn onward. The tables mirror
+-- `ConversationEntity.sq`; keep the two in sync. Never edit a released migration or snapshot — ADR-0022.
+CREATE TABLE conversationEntity (
+    id         TEXT NOT NULL PRIMARY KEY,
+    title      TEXT,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE conversationMessageEntity (
+    id              TEXT NOT NULL PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    role            TEXT NOT NULL,
+    text            TEXT NOT NULL,
+    created_at      TEXT NOT NULL
+);
+
+CREATE INDEX conversationMessageEntity_conversation
+    ON conversationMessageEntity(conversation_id, created_at);
