@@ -2,8 +2,14 @@ package com.circuitstitch.deferno.shell
 
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
+import com.circuitstitch.deferno.core.data.assistant.AssistantClient
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.model.AssistantAvailability
+import com.circuitstitch.deferno.core.model.AssistantProposal
+import com.circuitstitch.deferno.core.model.ConversationId
+import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.core.model.BrainDumpDraftId
 import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
@@ -59,6 +65,9 @@ class MainShellComponentTest {
         observeBrainDumpDrafts: () -> Flow<List<BrainDumpDraft>> = { flowOf(emptyList()) },
         upsertBrainDumpDraft: suspend (BrainDumpDraft) -> Unit = {},
         attachBrainDumpRecording: suspend (String, BrainDumpDraft) -> Unit = { _, _ -> },
+        // The Assistant availability client (ADR-0040): the inert default leaves the Org not-entitled, so the
+        // Assistant Destination is absent — the entitled-gating tests pass an entitled client.
+        assistantClient: AssistantClient = InertAssistantClient,
     ) = DefaultMainShellComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         itemRepository = DemoItemRepository(SampleData.tasks.toDemoItems()),
@@ -77,6 +86,7 @@ class MainShellComponentTest {
         observeBrainDumpDrafts = observeBrainDumpDrafts,
         upsertBrainDumpDraft = upsertBrainDumpDraft,
         attachBrainDumpRecording = attachBrainDumpRecording,
+        assistantClient = assistantClient,
     )
 
     private fun MainShellComponent.settings(): SettingsComponent =
@@ -98,8 +108,12 @@ class MainShellComponentTest {
 
     @Test
     fun registryListsEveryDestination_notAHardcodedCount() {
-        // The nav suite renders this; it must be the whole ordered registry, not a fixed two-way switch.
-        assertEquals(Destination.entries, shell().destinations)
+        // The nav suite renders this; it must be the whole ordered registry (minus the conditionally-present
+        // Assistant, absent when not entitled — ADR-0040), not a fixed two-way switch.
+        assertEquals(
+            Destination.entries.filterNot { it == Destination.Assistant },
+            shell().destinations.value,
+        )
     }
 
     @Test
@@ -247,8 +261,59 @@ class MainShellComponentTest {
                 Destination.Profile,
                 Destination.Settings,
             ),
-            shell().destinations,
+            shell().destinations.value,
         )
+    }
+
+    // --- Assistant Destination gating (#282, ADR-0040) ---
+
+    /** An availability client that reports the Org `entitled` (the only field that gates the row). */
+    private fun entitledAssistantClient(entitled: Boolean = true) = object : AssistantClient {
+        override suspend fun availability(orgId: OrgId) =
+            RemoteSnapshot.Available(AssistantAvailability(entitled = entitled, enabled = false))
+        override suspend fun setEnablement(orgId: OrgId, enabled: Boolean) = RemoteSnapshot.Unavailable
+        override suspend fun apply(orgId: OrgId, proposal: AssistantProposal) = RemoteSnapshot.Unavailable
+        override suspend fun conversations(orgId: OrgId) = RemoteSnapshot.Unavailable
+        override suspend fun conversation(orgId: OrgId, id: ConversationId) = RemoteSnapshot.Unavailable
+    }
+
+    @Test
+    fun assistant_absentFromTheRegistry_whenNotEntitled() {
+        // The default inert client reports Unavailable → the Org is not entitled → the Assistant row is hidden.
+        assertFalse(Destination.Assistant in shell().destinations.value)
+    }
+
+    @Test
+    fun assistant_presentRightAfterTasks_whenEntitled() {
+        // An entitled client (resolved synchronously under Unconfined) reveals the Assistant row, ordered
+        // immediately after Tasks per ADR-0040 (Plan·Calendar·Tasks·Assistant·Inbox·Activity·Profile·Settings).
+        val dests = shell(assistantClient = entitledAssistantClient()).destinations.value
+        assertEquals(Destination.entries, dests)
+        assertEquals(Destination.Assistant, dests[dests.indexOf(Destination.Tasks) + 1])
+    }
+
+    @Test
+    fun selectingAssistant_whenEntitled_opensTheAssistantDestination() {
+        val shell = shell(assistantClient = entitledAssistantClient())
+        shell.selectDestination(Destination.Assistant)
+        val active = shell.stack.value.active.instance
+        assertTrue(active is MainShellComponent.DestinationChild.Assistant)
+        assertEquals(Destination.Assistant, active.destination)
+    }
+
+    @Test
+    fun selectingAssistant_whenNotEntitled_isTotal_andBackReturnsToPlan() {
+        // U2 totality: even though the Assistant row is filtered out of the rendered registry, a stray/restored
+        // select must not crash — every when() over Destination/Config/DestinationChild stays exhaustive. The
+        // org id still resolves (the gate only hides the row), so a real, empty Assistant child is built.
+        val shell = shell() // inert client → not entitled, Assistant absent from `destinations`
+        assertFalse(Destination.Assistant in shell.destinations.value)
+
+        shell.selectDestination(Destination.Assistant)
+        assertEquals(Destination.Assistant, shell.activeDestination())
+
+        assertTrue(shell.onBack(), "back falls from the non-home Assistant to the Plan home")
+        assertEquals(Destination.Plan, shell.activeDestination())
     }
 
     @Test

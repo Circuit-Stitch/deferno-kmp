@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.SignInService
+import com.circuitstitch.deferno.core.data.assistant.AssistantClient
 import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
@@ -210,6 +211,15 @@ abstract class AppComponent(
      * per-Account wiring.
      */
     abstract val feedbackRepository: FeedbackRepository
+
+    /**
+     * The server-mediated [[Assistant]] request/response client (#282, ADR-0040): availability /
+     * enablement / apply / conversations over the shared authed client (the SSE turn stream is a separate
+     * per-platform seam). An AppScope service like [feedbackRepository] — the bearer plugin attaches the
+     * Active Account's PAT per request. Surfaced here so the shell can gate the Assistant Destination on
+     * availability and build the chat component, and to compile-validate the binding on every target.
+     */
+    abstract val assistantClient: AssistantClient
 
     // --- Bindings re-exposed for the child AccountScope (ADR-0014) ---
     // kotlin-inject-anvil does not auto-propagate a parent's contributed @Provides into a child merge;

@@ -9,6 +9,7 @@ import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.common.asStateFlow
 import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.account.AccountManager
+import com.circuitstitch.deferno.core.data.assistant.AssistantClient
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.SignInService
 import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
@@ -33,6 +34,7 @@ import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
+import com.circuitstitch.deferno.feature.assistant.AssistantStream
 import com.circuitstitch.deferno.feature.signin.DefaultSignInComponent
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import kotlinx.coroutines.Dispatchers
@@ -206,6 +208,18 @@ class DefaultRootComponent(
      * without a monitor are unchanged; production passes the AppComponent's platform monitor.
      */
     private val connectivity: Connectivity = AssumeOnlineConnectivity(),
+    /**
+     * The server-mediated Assistant request/response client (#282, ADR-0040) the Main shell gates the
+     * Assistant Destination on and builds the chat component over. Threaded down to the Main shell.
+     * Defaulted to the inert client (every call Unavailable → the Assistant Destination stays absent) so
+     * tests / the Android+desktop hosts build unchanged; only the iOS host passes the AppComponent's real one.
+     */
+    private val assistantClient: AssistantClient = InertAssistantClient,
+    /**
+     * The Assistant SSE turn-stream transport (#282, ADR-0040): the iOS host bridges a Swift URLSession SSE
+     * transport in; every other host leaves it the graceful no-op NONE. Threaded down to the Main shell.
+     */
+    private val assistantStream: AssistantStream = AssistantStream.NONE,
     coroutineContext: CoroutineContext = Dispatchers.Main,
 ) : RootComponent, ComponentContext by componentContext {
 
@@ -424,6 +438,13 @@ class DefaultRootComponent(
                         attachBrainDumpRecording = session::attachBrainDumpRecording,
                         // The Activity Destination's reverse-chron ledger feed (#260).
                         observeActivity = session::observeActivity,
+                        // The server-mediated Assistant Destination (#282, ADR-0040): the request client (gates
+                        // the Destination on availability + applies proposals), this Account's Conversation
+                        // cache, the SSE turn-stream transport, and the connectivity signal the composer reads.
+                        assistantClient = assistantClient,
+                        conversationStore = session.conversationStore,
+                        assistantStream = assistantStream,
+                        connectivity = connectivity,
                     )
                 // A pending Inbox deep-link (the Brain dump notification tapped on a cold start into the
                 // Auth shell, ADR-0027 Stage 4): now that the Main shell exists, apply it, then consume it.

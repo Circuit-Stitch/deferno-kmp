@@ -25,6 +25,10 @@ kotlin {
             implementation(project(":feature:signin"))
             implementation(project(":feature:tasks"))
             implementation(project(":feature:plan"))
+            // The server-mediated Assistant chat slice (ADR-0040, #282): the shell composes its
+            // DefaultAssistantComponent into a conditionally-present Destination. Its Compose Views are
+            // deferred (iOS SwiftUI ships first), so there is no :feature:assistant:ui peer yet.
+            implementation(project(":feature:assistant"))
             // The Inbox Destination's logic (ADR-0015 Inbox amendment) — its Compose View lives in
             // :feature:braindumps:ui, consumed by the app entry points.
             implementation(project(":feature:braindumps"))

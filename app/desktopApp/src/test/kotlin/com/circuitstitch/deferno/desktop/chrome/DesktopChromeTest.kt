@@ -94,7 +94,7 @@ private class FakeMainShell : MainShellComponent {
         selected = destination
     }
 
-    override val destinations: List<Destination> = Destination.entries
+    override val destinations: StateFlow<List<Destination>> = MutableStateFlow(Destination.entries)
     override val stack: Value<ChildStack<*, MainShellComponent.DestinationChild>>
         get() = error("unused by the chrome routing")
     override val activeDestination: StateFlow<MainShellComponent.DestinationChild>

@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
+import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
@@ -130,6 +131,14 @@ abstract class AccountComponent(
      * validation of its AccountScope chain (store → DB) and gives the shell its read accessor.
      */
     abstract val activityLedgerStore: ActivityLedgerStore
+
+    /**
+     * The on-device [[Assistant]] Conversation cache (#282, ADR-0040): local-only persisted chat history
+     * the component writes as a turn streams and reads back offline (the switcher list + message log).
+     * Exposing it anchors anvil's compile-time validation of its AccountScope chain (store → DB) and gives
+     * the shell its read/write accessor (the SSE turn stream + request client live elsewhere).
+     */
+    abstract val conversationStore: ConversationStore
 }
 
 @CreateComponent

@@ -18,8 +18,14 @@ import com.arkivanov.essenty.lifecycle.doOnResume
 import com.circuitstitch.deferno.core.common.asStateFlow
 import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.common.log.Logger
+import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.data.activity.ActivityEntry
+import com.circuitstitch.deferno.core.data.assistant.AssistantClient
+import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
+import com.circuitstitch.deferno.core.data.auth.MeResult
+import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
+import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.feedback.FeedbackResult
@@ -37,6 +43,10 @@ import com.circuitstitch.deferno.core.domain.command.CreateItem
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.core.model.AssistantProposal
+import com.circuitstitch.deferno.core.model.ChatMessage
+import com.circuitstitch.deferno.core.model.Conversation
+import com.circuitstitch.deferno.core.model.ConversationId
 import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
 import com.circuitstitch.deferno.core.model.CalendarItem
@@ -48,11 +58,15 @@ import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecord
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.speech.UnavailableSpeechToText
+import com.circuitstitch.deferno.feature.assistant.AssistantComponent
+import com.circuitstitch.deferno.feature.assistant.AssistantStream
+import com.circuitstitch.deferno.feature.assistant.DefaultAssistantComponent
 import com.circuitstitch.deferno.feature.braindumps.AcceptResult
 import com.circuitstitch.deferno.feature.braindumps.DefaultInboxComponent
 import com.circuitstitch.deferno.feature.braindumps.InboxComponent
@@ -120,8 +134,12 @@ import kotlin.coroutines.CoroutineContext
  * for the host to apply against the Active Account — the same Output-up routing the demo host owned).
  */
 interface MainShellComponent {
-    /** The ordered Destination registry the nav suite renders — not a fixed count. */
-    val destinations: List<Destination>
+    /**
+     * The ordered Destination registry the nav suite renders — not a fixed count, and **not constant**:
+     * the conditionally-present [Destination.Assistant] is omitted until the Org is `entitled` (ADR-0040),
+     * so this is a [StateFlow] the View observes (the Assistant row appears once availability resolves).
+     */
+    val destinations: StateFlow<List<Destination>>
 
     /** The foreground Destination + the retained, state-preserving back stack of visited Destinations. */
     val stack: Value<ChildStack<*, DestinationChild>>
@@ -212,6 +230,16 @@ interface MainShellComponent {
 
         class Tasks(val component: TasksComponent) : DestinationChild {
             override val destination: Destination = Destination.Tasks
+        }
+
+        /**
+         * The Assistant Destination (ADR-0040, #282): the server-mediated conversational AI chat. Holds
+         * the shared [AssistantComponent] state machine; the iOS SwiftUI View renders it (the
+         * Android/desktop Compose Views are deferred — they show a placeholder body). Only built when the
+         * Org is `entitled`, so it is reached only on iOS in v1, where the client is wired.
+         */
+        class Assistant(val component: AssistantComponent) : DestinationChild {
+            override val destination: Destination = Destination.Assistant
         }
 
         /** The Inbox Destination (ADR-0015 amendment): the triage queue for persisted Brain dump drafts. */
@@ -425,6 +453,21 @@ class DefaultMainShellComponent(
     // The Activity Destination's reverse-chron ledger feed (#260). Wired from this Account's session;
     // defaulted to "no activity" so the many shell tests build without supplying it.
     private val observeActivity: () -> Flow<List<ActivityEntry>> = { flowOf(emptyList()) },
+    // --- The server-mediated Assistant Destination (ADR-0040, #282) ---
+    // The request/response client (availability / enablement / apply / conversations). AppScope, threaded
+    // from the AppComponent. Defaulted to an INERT client (every call Unavailable) so the many shell tests
+    // — and the Android/desktop hosts, whose Assistant Views are deferred — build without wiring it; only
+    // the iOS host passes the real client, so the Assistant Destination appears only there in v1.
+    private val assistantClient: AssistantClient = InertAssistantClient,
+    // The per-Account on-device Conversation cache (the chat history source of truth). Defaulted to an inert
+    // empty store so shell tests / non-iOS hosts build without it; the iOS host threads this Account's store.
+    private val conversationStore: ConversationStore = InertConversationStore,
+    // The SSE turn-stream seam — the iOS host bridges a Swift URLSession transport in; every other host (and
+    // every test) leaves it the graceful no-op NONE (a turn surfaces "not available here", never hangs).
+    private val assistantStream: AssistantStream = AssistantStream.NONE,
+    // The AppScope connectivity signal the Assistant composer reads (online-only to extend a chat, ADR-0040).
+    // Defaulted to assume-online so tests build unchanged; production threads the AppComponent's monitor.
+    private val connectivity: Connectivity = AssumeOnlineConnectivity(),
 ) : MainShellComponent, ComponentContext by componentContext {
 
     // "Add subtask" on the Task detail: an online-only create of a child Task, derived from the same
@@ -472,7 +515,17 @@ class DefaultMainShellComponent(
         }
     }
 
-    override val destinations: List<Destination> = Destination.entries
+    // The rendered registry (ADR-0040): the conditionally-present Assistant row is omitted until the Org
+    // resolves to `entitled` (the availability fetch in init flips it on). Enum order is preserved, so the
+    // entitled list is exactly Plan·Calendar·Tasks·Assistant·Inbox·Activity·Profile·Settings.
+    private val destinationsWithoutAssistant = Destination.entries.filterNot { it == Destination.Assistant }
+    private val _destinations = MutableStateFlow(destinationsWithoutAssistant)
+    override val destinations: StateFlow<List<Destination>> = _destinations
+
+    // The Org the Assistant client + component are scoped to (the active User's personal org in v1, ADR-0040).
+    // Resolved async in init alongside the availability gate; non-null by the time the Assistant row is shown
+    // (the row only appears once availability — which needs this id — has resolved to entitled).
+    private var assistantOrgId: OrgId? = null
 
     override fun switchAccount(id: AccountId) = onSwitchAccount(id)
 
@@ -484,6 +537,7 @@ class DefaultMainShellComponent(
         data object Plan : Config
         data object Calendar : Config
         data object Tasks : Config
+        data object Assistant : Config
         data object Inbox : Config
         // The Activity ledger is a placeholder Destination for now (no slice yet) — see createChild.
         data object Activity : Config
@@ -659,6 +713,26 @@ class DefaultMainShellComponent(
                     ),
                 )
 
+            // The Assistant Destination (ADR-0040, #282): the server-mediated chat. Built lazily on first
+            // visit — by which point availability has resolved [assistantOrgId] (the row is hidden until
+            // entitled). The defensive null branch keeps createChild total on a stray select without an NPE.
+            Config.Assistant -> assistantOrgId?.let { orgId ->
+                MainShellComponent.DestinationChild.Assistant(
+                    DefaultAssistantComponent(
+                        componentContext = childContext,
+                        orgId = orgId,
+                        client = assistantClient,
+                        store = conversationStore,
+                        stream = assistantStream,
+                        connectivity = connectivity,
+                        // After a confirmed proposal applies server-side, re-sync the affected items through
+                        // the normal pull — NOT the outbox; here the server is the writer (ADR-0040).
+                        resyncAfterApply = { taskRepository.refresh() },
+                        coroutineContext = coroutineContext,
+                    ),
+                )
+            } ?: MainShellComponent.DestinationChild.Placeholder(Destination.Assistant)
+
             Config.Inbox ->
                 MainShellComponent.DestinationChild.Inbox(
                     DefaultInboxComponent(
@@ -747,6 +821,19 @@ class DefaultMainShellComponent(
 
     init {
         lifecycle.doOnResume { badgeResume.value++ }
+        // Resolve the active Org + the Assistant availability gate (ADR-0040) before the nav suite settles:
+        // the conditionally-present Assistant row is revealed only once availability resolves to `entitled`.
+        // Offline / failed / no real client (Android/desktop/tests) leaves the row absent — the Assistant is
+        // online-only anyway. The Destination's own component re-checks availability for its enable/consent gate.
+        overlayScope.launch {
+            val orgId = (authRepository.loadMe() as? MeResult.Authenticated)?.user?.personalOrgId ?: return@launch
+            assistantOrgId = orgId
+            when (val availability = assistantClient.availability(orgId)) {
+                is RemoteSnapshot.Available ->
+                    if (availability.value.entitled) _destinations.value = Destination.entries
+                is RemoteSnapshot.Unavailable -> Unit
+            }
+        }
     }
 
     // ----- Adaptive top-bar chrome (Cand 1): one bar for every in-chrome surface, computed here so the
@@ -801,6 +888,9 @@ class DefaultMainShellComponent(
             is MainShellComponent.DestinationChild.Calendar ->
                 flowOf(rootChrome("Calendar", onNew = active.component::onNewForSelectedDay))
 
+            // The Assistant chat (ADR-0040): on iOS the SwiftUI View owns its own chrome; the shared bar is
+            // only rendered on the deferred Android/desktop Views, so a plain titled root bar suffices.
+            is MainShellComponent.DestinationChild.Assistant -> flowOf(rootChrome("Assistant"))
             is MainShellComponent.DestinationChild.Inbox -> flowOf(rootChrome("Inbox"))
             is MainShellComponent.DestinationChild.Profile -> flowOf(rootChrome("Profile"))
             is MainShellComponent.DestinationChild.Activity -> flowOf(rootChrome("Activity"))
@@ -991,6 +1081,7 @@ class DefaultMainShellComponent(
             Destination.Plan -> Config.Plan
             Destination.Calendar -> Config.Calendar
             Destination.Tasks -> Config.Tasks
+            Destination.Assistant -> Config.Assistant
             Destination.Inbox -> Config.Inbox
             Destination.Activity -> Config.Activity
             Destination.Profile -> Config.Profile
@@ -1007,6 +1098,9 @@ class DefaultMainShellComponent(
             // Calendar is single-pane (no tier-2/tier-3): nothing to dismiss inside it.
             is MainShellComponent.DestinationChild.Calendar -> false
             is MainShellComponent.DestinationChild.Tasks -> component.dismissForegroundPane()
+            // The Assistant chat's switcher / new-conversation are component-internal state, not shell-poppable
+            // Decompose nav — there is nothing for the shell's back to dismiss inside it.
+            is MainShellComponent.DestinationChild.Assistant -> false
             // The Inbox is a single-pane list (no tier-2/tier-3): nothing to dismiss inside it.
             is MainShellComponent.DestinationChild.Inbox -> false
             is MainShellComponent.DestinationChild.Profile -> false
@@ -1062,6 +1156,30 @@ private val NoopOccurrenceEditor = object : OccurrenceEditor {
     override suspend fun mark(itemId: String, action: OccurrenceAction) {}
     override suspend fun clear(itemId: String) {}
     override suspend fun reschedule(itemId: String, newDate: LocalDate) {}
+}
+
+/**
+ * Inert Assistant client (ADR-0040) — the shell's default when no host wires the real one: every call is
+ * Unavailable, so the availability gate stays `entitled = false` and the Assistant Destination stays absent.
+ * Used by the Android/desktop hosts (their Assistant Views are deferred) and the shell component tests; only
+ * the iOS host passes the real client, so the Destination appears only there in v1.
+ */
+internal val InertAssistantClient = object : AssistantClient {
+    override suspend fun availability(orgId: OrgId) = RemoteSnapshot.Unavailable
+    override suspend fun setEnablement(orgId: OrgId, enabled: Boolean) = RemoteSnapshot.Unavailable
+    override suspend fun apply(orgId: OrgId, proposal: AssistantProposal) = RemoteSnapshot.Unavailable
+    override suspend fun conversations(orgId: OrgId) = RemoteSnapshot.Unavailable
+    override suspend fun conversation(orgId: OrgId, id: ConversationId) = RemoteSnapshot.Unavailable
+}
+
+/** Inert Conversation cache (ADR-0040) — the shell's default when no Account session supplies one: empty,
+ *  read-only. Paired with [InertAssistantClient] so a never-shown Assistant Destination needs no real store. */
+private val InertConversationStore = object : ConversationStore {
+    override fun observeConversations() = flowOf(emptyList<Conversation>())
+    override fun observeMessages(id: ConversationId) = flowOf(emptyList<ChatMessage>())
+    override suspend fun upsertConversation(conversation: Conversation) {}
+    override suspend fun upsertMessage(conversationId: ConversationId, message: ChatMessage) {}
+    override suspend fun upsertMessages(conversationId: ConversationId, messages: List<ChatMessage>) {}
 }
 
 /** No-op feedback service — the shell's test default when no AppComponent supplies one (#375). */

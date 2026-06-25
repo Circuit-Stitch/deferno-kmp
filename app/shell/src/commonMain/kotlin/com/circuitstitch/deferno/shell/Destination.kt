@@ -11,8 +11,10 @@ package com.circuitstitch.deferno.shell
  * nav-suite order; [Plan] is the home Destination (design-principles.md: "open into the Plan"). The
  * human label + icon are a View concern and live in the Compose layer, not here.
  *
- * **v1 set (ADR-0015 + Inbox amendment):** [Plan] · [Calendar] · [Tasks] · [Inbox] · [Profile] ·
- * [Settings]. Each carries a
+ * **v1 set (ADR-0015 + Inbox amendment + ADR-0040 Assistant):** [Plan] · [Calendar] · [Tasks] ·
+ * [Assistant] · [Inbox] · [Profile] · [Settings]. [Assistant] is the one **conditionally-present**
+ * Destination — the shell omits it from the rendered registry unless the Org is `entitled` (ADR-0040), so
+ * a `when` over this enum stays total but the nav suite varies. Each carries a
  * [slot] that drives the adaptive nav suite: on a **compact** window the bottom bar shows the
  * [NavSlot.Primary] Destinations plus a **"More"** overflow onto the [NavSlot.Secondary] ones; on
  * **medium/expanded** the rail/drawer lists every Destination directly and "More" disappears. "More"
@@ -23,6 +25,10 @@ enum class Destination(val slot: NavSlot) {
     Plan(NavSlot.Primary),
     Calendar(NavSlot.Primary),
     Tasks(NavSlot.Primary),
+    // The Assistant: the server-mediated conversational AI Destination (ADR-0040, #282), ordered right
+    // after Tasks. CONDITIONALLY PRESENT — rendered only when the Org is `entitled`; the shell's
+    // `destinations` filters it out otherwise (every `when` over Destination stays total regardless).
+    Assistant(NavSlot.Secondary),
     // The Inbox: the triage queue for persisted Brain dump draft Tasks (ADR-0015 Inbox amendment). A
     // Secondary peer (reached via "More" on compact), ordered first among the secondaries.
     Inbox(NavSlot.Secondary),
