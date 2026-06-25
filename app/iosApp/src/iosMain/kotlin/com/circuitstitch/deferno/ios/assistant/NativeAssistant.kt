@@ -15,6 +15,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
+import software.amazon.app.kmplogger.logger
 
 /**
  * The iOS SSE turn-stream transport port the Swift app implements (#282, ADR-0040) — the iOS twin of the
@@ -72,11 +73,19 @@ class NativeAssistantStream(
             }
         }
 
+        val url = turnUrl(baseUrl, request)
+        val authToken = token()
+        // Diagnostics route through the shared kmp-logger → os_log (DEBUG, so Release filters them out).
+        // Non-PII only: the URL/event-name/frame length, never the Bearer token or the reply/message text.
+        AssistantStreamLog.logger.d { "turn POST $url (auth=${if (authToken == null) "none" else "yes"})" }
+
         val handle = transport.stream(
-            url = turnUrl(baseUrl, request),
-            authToken = token(),
+            url = url,
+            authToken = authToken,
             body = turnBody(request),
             onEvent = { type, data ->
+                // Per-frame trace — the diagnostic that surfaced the CRLF frame-merge bug (event + length).
+                AssistantStreamLog.logger.d { "frame event='$type' dataLen=${data.length}" }
                 val event = toAssistantEvent(type, data)
                 when {
                     event == null -> Unit // unknown/heartbeat frame — ignore
@@ -85,13 +94,23 @@ class NativeAssistantStream(
                     else -> trySend(event)
                 }
             },
-            onDone = { complete(AssistantEvent.Done) },
-            onError = { message -> complete(AssistantEvent.Error(message)) },
+            onDone = {
+                AssistantStreamLog.logger.d { "stream closed" }
+                complete(AssistantEvent.Done)
+            },
+            onError = { message ->
+                AssistantStreamLog.logger.w { "stream error: $message" }
+                complete(AssistantEvent.Error(message))
+            },
         )
 
         awaitClose { handle.cancel() }
     }
 }
+
+// kmp-logger's `logger` is an Any-receiver extension; a tag object gives the stream's `callbackFlow`
+// (whose receiver is ProducerScope, not the class) a stable tag ("Deferno: AssistantStreamLog").
+private object AssistantStreamLog
 
 // --- WIRE-DEPENDENT (Deferno#485): isolated top-level so a backend change is a contained edit (ADR-0040). ---
 

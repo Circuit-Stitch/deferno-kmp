@@ -4,8 +4,9 @@ import Foundation
 /// The iOS SSE turn-stream transport (#282, ADR-0040): implements the shared Kotlin `NativeAssistantTransport`
 /// over a raw `URLSession` byte stream. NSURLSession streams Server-Sent Events without the buffering the Ktor
 /// Darwin engine imposes, so the chat reply arrives token-by-token (ADR-0040's reason for a native seam).
-/// Kotlin owns the request (URL, Bearer PAT, JSON body) and the parsing; this only POSTs, reads SSE frames
-/// line-by-line, and hands each frame's `(event, data)` back, then signals completion/failure exactly once.
+/// Kotlin owns the request (URL, Bearer PAT, JSON body), the parsing, and the diagnostics (the shared
+/// kmp-logger, in `NativeAssistantStream`); this only POSTs, reads SSE frames line-by-line, and hands each
+/// frame's `(event, data)` back, then signals completion/failure exactly once.
 final class IosAssistantTransport: NativeAssistantTransport {
 
     func stream(
@@ -28,11 +29,8 @@ final class IosAssistantTransport: NativeAssistantTransport {
             request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
             if let authToken { request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization") }
 
-            Self.debugLog("POST \(url) (auth=\(authToken == nil ? "none" : "yes"))")
             do {
                 let (bytes, response) = try await URLSession.shared.bytes(for: request)
-                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-                Self.debugLog("status=\(status)")
                 if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                     once.run { onError("http-\(http.statusCode)") }
                     return
@@ -44,7 +42,6 @@ final class IosAssistantTransport: NativeAssistantTransport {
                 func dispatch() {
                     guard !eventType.isEmpty || !dataLines.isEmpty else { return }
                     let data = dataLines.joined(separator: "\n")
-                    Self.debugLog("frame event='\(eventType)' dataLen=\(data.count)")
                     onEvent(eventType, data)
                     eventType = ""
                     dataLines = []
@@ -69,12 +66,10 @@ final class IosAssistantTransport: NativeAssistantTransport {
                     // Other SSE fields (id:, retry:) are not used by this client.
                 }
                 dispatch() // flush a trailing frame with no terminating blank line
-                Self.debugLog("stream closed")
                 once.run { onDone() }
             } catch {
                 // A cancellation (the collector went away — onCancelTurn / awaitClose) is not an error; the
                 // Kotlin flow is already closing, so just stand down quietly.
-                Self.debugLog("catch cancelled=\(_Concurrency.Task.isCancelled) err=\(error)")
                 if _Concurrency.Task.isCancelled || error is CancellationError {
                     once.run { onDone() }
                 } else {
@@ -83,16 +78,6 @@ final class IosAssistantTransport: NativeAssistantTransport {
             }
         }
         return SSEHandle(task: task)
-    }
-
-    /// Debug-only stream diagnostics (compiled out of Release) — non-PII (status, event name + length, never
-    /// the reply content or the token). via `NSLog` (unbuffered → os_log), capturable with
-    /// `xcrun simctl spawn booted log show --predicate 'process == "Deferno"'`. Earned its keep finding the
-    /// CRLF frame-split bug.
-    private static func debugLog(_ message: @autoclosure () -> String) {
-        #if DEBUG
-        NSLog("[AssistantSSE] %@", message())
-        #endif
     }
 
     /// The value of an SSE field line, dropping the field name and the single optional leading space (spec).
