@@ -40,7 +40,8 @@ class KtorItemSnapshotSourceTest {
         {"version":"0.1","data":[
             {"type":"task","kind":"task","id":"t","org_slug":"u-e4h2qk","title":"a task",
              "status":"done","sequence":1,"parent_id":"p","date_created":"2026-05-20T16:11:42Z",
-             "descendant_done":2,"descendant_total":5},
+             "descendant_done":2,"descendant_total":5,
+             "blocked":true,"is_blocker":false,"blocked_by":[{"item":"h","occurrence":null}]},
             {"type":"habit","kind":"habit","id":"h","org_slug":"u-e4h2qk","title":"a habit",
              "status":"active","date_created":"2026-05-04T01:53:05Z","recurrence":{"type":"daily"},
              "series_id":"s-h"},
@@ -79,6 +80,25 @@ class KtorItemSnapshotSourceTest {
         assertEquals(1L, taskRow.sequence)
         assertEquals(2L, taskRow.descendantDone)
         assertEquals(5L, taskRow.descendantTotal)
+    }
+
+    @Test
+    fun fetchAllDecodesServerDerivedDependencyState() = runTest {
+        // #289: the snapshot decode populates blocked/isBlocker + the ordered blockedBy edges on the
+        // Task, and defaults the flags false on a row (the habit) whose payload omits them.
+        val source = KtorItemSnapshotSource(client { respondJson(itemsEnvelope) })
+
+        val snapshot = (source.fetchAll() as RemoteSnapshot.Available).value
+
+        val taskRow = snapshot.tasks.single()
+        assertTrue(taskRow.blocked)
+        assertEquals(false, taskRow.isBlocker)
+        assertEquals("h", taskRow.blockedBy.single().item)
+        assertEquals(null, taskRow.blockedBy.single().occurrence)
+
+        val habitRow = snapshot.habits.single()
+        assertEquals(false, habitRow.blocked)
+        assertEquals(false, habitRow.isBlocker)
     }
 
     @Test

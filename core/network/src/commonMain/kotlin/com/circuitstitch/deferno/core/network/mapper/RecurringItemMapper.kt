@@ -69,6 +69,8 @@ fun HabitDetailDto.toDomain(): Habit = Habit(
     ownerOrgId = ownerOrgId?.let(::OrgId),
     description = description,
     seriesId = seriesId,
+    blocked = blocked,
+    isBlocker = isBlocker,
 )
 
 /** Extracts a domain [Habit] from the `habit` variant of an [ItemView]; `null` for the other kinds. */
@@ -92,6 +94,8 @@ fun ItemView.asHabitOrNull(): Habit? = (this as? ItemView.Habit)?.let { v ->
         ownerOrgId = v.ownerOrgId?.let(::OrgId),
         description = v.description,
         seriesId = v.seriesId,
+        blocked = v.blocked,
+        isBlocker = v.isBlocker,
     )
 }
 
@@ -117,6 +121,8 @@ fun ChoreDetailDto.toDomain(): Chore = Chore(
     ownerOrgId = ownerOrgId?.let(::OrgId),
     description = description,
     seriesId = seriesId,
+    blocked = blocked,
+    isBlocker = isBlocker,
 )
 
 /** Extracts a domain [Chore] from the `chore` variant of an [ItemView]; `null` for the other kinds. */
@@ -141,6 +147,8 @@ fun ItemView.asChoreOrNull(): Chore? = (this as? ItemView.Chore)?.let { v ->
         ownerOrgId = v.ownerOrgId?.let(::OrgId),
         description = v.description,
         seriesId = v.seriesId,
+        blocked = v.blocked,
+        isBlocker = v.isBlocker,
     )
 }
 
@@ -168,6 +176,8 @@ fun EventDetailDto.toDomain(): Event = Event(
     ownerOrgId = ownerOrgId?.let(::OrgId),
     description = description,
     seriesId = seriesId,
+    blocked = blocked,
+    isBlocker = isBlocker,
 )
 
 /** Extracts a domain [Event] from the `event` variant of an [ItemView]; `null` for the other kinds. */
@@ -194,6 +204,8 @@ fun ItemView.asEventOrNull(): Event? = (this as? ItemView.Event)?.let { v ->
         ownerOrgId = v.ownerOrgId?.let(::OrgId),
         description = v.description,
         seriesId = v.seriesId,
+        blocked = v.blocked,
+        isBlocker = v.isBlocker,
     )
 }
 

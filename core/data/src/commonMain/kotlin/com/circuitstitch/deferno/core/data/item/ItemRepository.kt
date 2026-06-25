@@ -79,14 +79,34 @@ private fun Task.toItem() = Item(
     isTerminal = workingState.isTerminal,
     descendantDone = descendantDone,
     descendantTotal = descendantTotal,
+    blocked = blocked,
+    isBlocker = isBlocker,
 )
 
 // ponytail: a recurring definition is "terminal" (de-emphasized) when Archived — the recurring analog
 // of a Done/Dropped Task. Recurring kinds carry no subtree counts (the /items snapshot computes them on
-// Tasks only), so the badge fields stay null.
-private fun Habit.toItem() = recurringItem(id.value, ItemKind.Habit, title, parentId?.value, sequence, definitionState)
-private fun Chore.toItem() = recurringItem(id.value, ItemKind.Chore, title, parentId?.value, sequence, definitionState)
-private fun Event.toItem() = recurringItem(id.value, ItemKind.Event, title, parentId?.value, sequence, definitionState)
+// Tasks only), so the badge fields stay null. The blocked/isBlocker flags are server-derived per item
+// (a recurring row inherits `blocked` from a blocked ancestor), so they project through unchanged (#289).
+private fun Habit.toItem() = recurringItem(id.value, ItemKind.Habit, title, parentId?.value, sequence, definitionState, blocked, isBlocker)
+private fun Chore.toItem() = recurringItem(id.value, ItemKind.Chore, title, parentId?.value, sequence, definitionState, blocked, isBlocker)
+private fun Event.toItem() = recurringItem(id.value, ItemKind.Event, title, parentId?.value, sequence, definitionState, blocked, isBlocker)
 
-private fun recurringItem(id: String, kind: ItemKind, title: String, parentId: String?, sequence: Long?, state: DefinitionState) =
-    Item(id = id, kind = kind, title = title, parentId = parentId, sequence = sequence, isTerminal = state == DefinitionState.Archived)
+private fun recurringItem(
+    id: String,
+    kind: ItemKind,
+    title: String,
+    parentId: String?,
+    sequence: Long?,
+    state: DefinitionState,
+    blocked: Boolean,
+    isBlocker: Boolean,
+) = Item(
+    id = id,
+    kind = kind,
+    title = title,
+    parentId = parentId,
+    sequence = sequence,
+    isTerminal = state == DefinitionState.Archived,
+    blocked = blocked,
+    isBlocker = isBlocker,
+)

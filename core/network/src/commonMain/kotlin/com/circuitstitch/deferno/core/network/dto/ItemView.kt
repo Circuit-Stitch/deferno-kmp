@@ -54,6 +54,11 @@ sealed interface ItemView {
         // on a freshly-created row → null; `ignoreUnknownKeys` lets older payloads omit them.
         @SerialName("descendant_done") val descendantDone: Long? = null,
         @SerialName("descendant_total") val descendantTotal: Long? = null,
+        // Server-derived dependency state (ADR-0034, #289); both booleans default false so a payload
+        // omitting them decodes cleanly. `blocked_by` is the ordered edge list on the full record.
+        val blocked: Boolean = false,
+        @SerialName("is_blocker") val isBlocker: Boolean = false,
+        @SerialName("blocked_by") val blockedBy: List<BlockedByRefDto> = emptyList(),
     ) : ItemView
 
     /** The `habit` variant — a recurring definition with no extra kind-specific fields. */
@@ -78,6 +83,9 @@ sealed interface ItemView {
         val recurrence: RecurrenceDto? = null,
         @SerialName("series_id") val seriesId: String? = null,
         @SerialName("subtask_template") val subtaskTemplate: List<String> = emptyList(),
+        // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
+        val blocked: Boolean = false,
+        @SerialName("is_blocker") val isBlocker: Boolean = false,
     ) : ItemView
 
     /** The `chore` variant — adds `cadence_mode` over the shared recurring base. */
@@ -103,6 +111,9 @@ sealed interface ItemView {
         @SerialName("series_id") val seriesId: String? = null,
         @SerialName("subtask_template") val subtaskTemplate: List<String> = emptyList(),
         @SerialName("cadence_mode") val cadenceMode: String? = null,
+        // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
+        val blocked: Boolean = false,
+        @SerialName("is_blocker") val isBlocker: Boolean = false,
     ) : ItemView
 
     /** The `event` variant — adds `all_day` + `end_time` + start/end time-of-day over the recurring base. */
@@ -130,8 +141,22 @@ sealed interface ItemView {
         @SerialName("end_time") val endTime: String? = null,
         @SerialName("start_time_of_day") val startTimeOfDay: String? = null,
         @SerialName("end_time_of_day") val endTimeOfDay: String? = null,
+        // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
+        val blocked: Boolean = false,
+        @SerialName("is_blocker") val isBlocker: Boolean = false,
     ) : ItemView
 }
+
+/**
+ * One edge of a Task's wire `blocked_by` array (ADR-0034, #289) → domain
+ * [com.circuitstitch.deferno.core.model.BlockedByRef]. [item] is the blocker's id; [occurrence] is an
+ * optional dated-firing ref — a later follow-up, so it is decoded tolerantly and defaults `null`.
+ */
+@Serializable
+data class BlockedByRefDto(
+    val item: String,
+    val occurrence: String? = null,
+)
 
 /**
  * The recurrence rule carried by Habit/Chore/Event (CONTRACT-NOTES → "Items"). Modelled tolerantly:

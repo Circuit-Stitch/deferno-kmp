@@ -156,22 +156,35 @@ class ContractFixtureParseTest {
         assertEquals("948bcfab-063d-4499-b2de-f21801bc6f9c", task.id)
         assertEquals(TaskStatusWire.Open, task.status)
         assertTrue(task.pinned)
+        // Server-derived dependency state (#289): the task is blocked, by one edge (occurrence absent).
+        assertTrue(task.blocked)
+        assertEquals(false, task.isBlocker)
+        assertEquals("77dd6a6e-b936-4f61-9807-c3a6b647f9f1", task.blockedBy.single().item)
+        assertNull(task.blockedBy.single().occurrence)
 
         val habit = assertIs<ItemView.Habit>(items[1])
         assertEquals("77dd6a6e-b936-4f61-9807-c3a6b647f9f1", habit.id)
         assertEquals(DefStatusWire.Active, habit.status)
         assertEquals("b7c21959-c5f6-4087-8ab2-7690c81e463a", habit.seriesId)
         assertEquals("daily", habit.recurrence?.type)
+        // A recurring kind decodes isBlocker too (it gates the task above).
+        assertTrue(habit.isBlocker)
+        assertEquals(false, habit.blocked)
 
         val chore = assertIs<ItemView.Chore>(items[2])
         assertEquals("47338a14-a07f-4ddf-ad73-f5edc977dab0", chore.id)
         assertEquals("rolling", chore.cadenceMode)
         assertEquals(listOf("Tue"), chore.recurrence?.days)
+        // The chore/event elements omit the dependency fields → they default false (absent case).
+        assertEquals(false, chore.blocked)
+        assertEquals(false, chore.isBlocker)
 
         val event = assertIs<ItemView.Event>(items[3])
         assertEquals("d4f26212-07ac-4ebc-b5d9-fe4649a69a3e", event.id)
         assertEquals(false, event.allDay)
         assertEquals("2026-04-18T17:30:00Z", event.endTime)
+        assertEquals(false, event.blocked)
+        assertEquals(false, event.isBlocker)
     }
 
     // --- items-sample.json: the captured `task` element is also the faithful /tasks/{id} detail ---
@@ -201,6 +214,10 @@ class ContractFixtureParseTest {
         assertNull(detail.finishedAt)
         assertNull(detail.deletedAt)
         assertEquals("task", detail.type)
+        // The full single-item record carries the ordered blockedBy edge list (#289).
+        assertTrue(detail.blocked)
+        assertEquals(false, detail.isBlocker)
+        assertEquals("77dd6a6e-b936-4f61-9807-c3a6b647f9f1", detail.blockedBy.single().item)
     }
 
     // --- error-404.json → ApiError.Endpoint via the shipping error path ---

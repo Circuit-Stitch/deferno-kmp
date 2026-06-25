@@ -87,6 +87,11 @@ data class TaskDetailDto(
     val description: String? = null,
     @SerialName("next_task_id") val nextTaskId: String? = null,
     val type: String? = null,
+    // Server-derived dependency state (ADR-0034, #289). The full single-item record carries the ordered
+    // [blockedBy] edge list the detail/edit surfaces read; both flags default false when omitted.
+    val blocked: Boolean = false,
+    @SerialName("is_blocker") val isBlocker: Boolean = false,
+    @SerialName("blocked_by") val blockedBy: List<BlockedByRefDto> = emptyList(),
 )
 
 /**

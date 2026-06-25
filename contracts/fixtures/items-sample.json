@@ -51,6 +51,14 @@
       "finished_at": null,
       "group_id": null,
       "id": "948bcfab-063d-4499-b2de-f21801bc6f9c",
+      "blocked": true,
+      "blocked_by": [
+        {
+          "item": "77dd6a6e-b936-4f61-9807-c3a6b647f9f1",
+          "occurrence": null
+        }
+      ],
+      "is_blocker": false,
       "kind": "task",
       "labels": [],
       "mood_finish": null,
@@ -78,6 +86,8 @@
       "desire": null,
       "group_id": null,
       "id": "77dd6a6e-b936-4f61-9807-c3a6b647f9f1",
+      "blocked": false,
+      "is_blocker": true,
       "kind": "habit",
       "labels": [],
       "mood_finish": null,

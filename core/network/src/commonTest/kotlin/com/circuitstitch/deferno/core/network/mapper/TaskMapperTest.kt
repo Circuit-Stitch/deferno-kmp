@@ -5,6 +5,7 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.network.dto.BlockedByRefDto
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
 import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
@@ -184,10 +185,18 @@ class TaskMapperTest {
             deletedAt = null,
             description = "<description>",
             nextTaskId = null,
+            blocked = true,
+            isBlocker = false,
+            blockedBy = listOf(BlockedByRefDto(item = "b1", occurrence = "2026-07-01")),
         )
         val mapped = taskView.asTaskOrNull()
         assertEquals(TaskId("948bcfab-063d-4499-b2de-f21801bc6f9c"), mapped?.id)
         assertEquals(HydrationState.Full, mapped?.hydration)
+        // #289: the mapper forwards the server-derived dependency state (incl. occurrence pass-through).
+        assertEquals(true, mapped?.blocked)
+        assertEquals(false, mapped?.isBlocker)
+        assertEquals("b1", mapped?.blockedBy?.single()?.item)
+        assertEquals("2026-07-01", mapped?.blockedBy?.single()?.occurrence)
 
         val habitView = ItemView.Habit(
             id = "77dd6a6e-b936-4f61-9807-c3a6b647f9f1",

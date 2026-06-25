@@ -37,6 +37,9 @@ data class HabitDetailDto(
     val description: String? = null,
     val recurrence: RecurrenceDto? = null,
     @SerialName("series_id") val seriesId: String? = null,
+    // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
+    val blocked: Boolean = false,
+    @SerialName("is_blocker") val isBlocker: Boolean = false,
 )
 
 /** The full `chore` payload (`POST /chores`, `GET /chores/{id}`) — same fields as [ItemView.Chore]. */
@@ -60,6 +63,9 @@ data class ChoreDetailDto(
     val recurrence: RecurrenceDto? = null,
     @SerialName("series_id") val seriesId: String? = null,
     @SerialName("cadence_mode") val cadenceMode: String? = null,
+    // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
+    val blocked: Boolean = false,
+    @SerialName("is_blocker") val isBlocker: Boolean = false,
 )
 
 /** The full `event` payload (`POST /events`, `GET /events/{id}`) — same fields as [ItemView.Event]. */
@@ -85,4 +91,7 @@ data class EventDetailDto(
     @SerialName("end_time") val endTime: String? = null,
     @SerialName("start_time_of_day") val startTimeOfDay: String? = null,
     @SerialName("end_time_of_day") val endTimeOfDay: String? = null,
+    // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
+    val blocked: Boolean = false,
+    @SerialName("is_blocker") val isBlocker: Boolean = false,
 )
