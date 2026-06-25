@@ -139,12 +139,18 @@ struct AssistantView: View {
                             messageBubble(message).id(message.id)
                         }
                     }
+                    // The tool actions the Assistant took this turn — so each move/read is visible, not just
+                    // the final text. Enumerated id: the same tool can be called twice (duplicate strings).
+                    ForEach(Array(s.actions.enumerated()), id: \.offset) { _, action in
+                        actionRow(action)
+                    }
                     if s.streaming { typingIndicator }
                 }
                 .padding(.horizontal, Layout.gutter).padding(.vertical, 12)
             }
             // Keep the latest line in view as the reply streams in / a turn is sent.
             .onChange(of: s.messages.count) { _ in scrollToEnd(proxy) }
+            .onChange(of: s.actions.count) { _ in scrollToEnd(proxy) }
             .onChange(of: s.streaming) { _ in scrollToEnd(proxy) }
         }
     }
@@ -166,6 +172,7 @@ struct AssistantView: View {
             Text(message.text)
                 .font(.body)
                 .foregroundStyle(isUser ? colors.onPrimary : colors.onSurface)
+                .textSelection(.enabled) // long-press to select/copy any bubble (sent or reply)
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(
                     isUser ? colors.primary : colors.surfaceVariant,
@@ -174,6 +181,18 @@ struct AssistantView: View {
             if !isUser { Spacer(minLength: 40) }
         }
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+    }
+
+    /// One autonomous tool action the Assistant took (e.g. `list_items`) — a muted activity line, not a
+    /// chat bubble, so the transcript reads as "what it did" without competing with the reply text.
+    private func actionRow(_ action: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "wrench.and.screwdriver").font(.caption2)
+            Text(action).font(.footnote.monospaced())
+            Spacer()
+        }
+        .foregroundStyle(colors.inkMuted)
+        .padding(.vertical, 2)
     }
 
     private var typingIndicator: some View {
