@@ -49,6 +49,7 @@ import com.circuitstitch.deferno.feature.settings.ui.SettingsScreen
 import com.circuitstitch.deferno.feature.tasks.ui.SearchScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksScreen
+import com.circuitstitch.deferno.shell.ui.ActivityScreen
 import com.circuitstitch.deferno.shell.ui.ShellChrome
 import com.circuitstitch.deferno.shell.ui.label
 

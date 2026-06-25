@@ -34,6 +34,7 @@ import com.circuitstitch.deferno.feature.tasks.ui.TasksDesktopScreen
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.MainShellComponent
 import com.circuitstitch.deferno.shell.OverlayRoute
+import com.circuitstitch.deferno.shell.ui.ActivityScreen
 import com.circuitstitch.deferno.shell.ui.BrainDumpPlaceholder
 import com.circuitstitch.deferno.shell.ui.ShellChrome
 import com.circuitstitch.deferno.shell.ui.label
@@ -71,7 +72,7 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
             // Desktop loads the shared composeResources glyphs off the JVM classpath (see ShellChrome KDoc).
             brainDumpIcon = painterResource(Res.drawable.ic_voice_chat),
             newIcon = painterResource(Res.drawable.ic_add_task),
-            body = { DestinationContent(active) },
+            body = { DestinationContent(active, onSearch = { component.openOverlay(OverlayRoute.Search) }) },
         )
 
         // The shell-level overlay route sits above the whole chrome (ADR-0015); shell back (Esc)
@@ -89,13 +90,13 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
  * a native desktop View (ADR-0017).
  */
 @Composable
-private fun DestinationContent(active: MainShellComponent.DestinationChild) {
+private fun DestinationContent(active: MainShellComponent.DestinationChild, onSearch: () -> Unit) {
     when (active) {
         is MainShellComponent.DestinationChild.Plan ->
             PlanDesktopBody(active)
 
         is MainShellComponent.DestinationChild.Tasks ->
-            TasksDesktopScreen(active.component, Modifier.fillMaxSize())
+            TasksDesktopScreen(active.component, Modifier.fillMaxSize(), onSearch = onSearch)
 
         // The Assistant chat ships first as iOS SwiftUI (ADR-0040); the desktop Compose View is deferred (the
         // desktop client is a stub, ADR-0003). The Destination row is also hidden on desktop (inert client →
@@ -117,10 +118,10 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
         is MainShellComponent.DestinationChild.Settings ->
             SettingsDesktopScreen(active.component, Modifier.fillMaxSize())
 
-        // The Activity ledger feed has an Android View only for now; desktop renders the calm stand-in
-        // (the desktop client is a stub, ADR-0003). The component still records — the feed View is a follow-up.
+        // The Activity ledger feed (#260): the same shared View the Android shell renders (app/shell:ui),
+        // over the desktop-side component, which already records changes through the offline-first ledger.
         is MainShellComponent.DestinationChild.Activity ->
-            ComingSoon(active.destination)
+            ActivityScreen(active.component, Modifier.fillMaxSize())
 
         is MainShellComponent.DestinationChild.Placeholder ->
             ComingSoon(active.destination)

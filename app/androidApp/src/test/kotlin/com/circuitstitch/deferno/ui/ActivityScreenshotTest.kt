@@ -12,7 +12,7 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.shell.ActivityComponent
 import com.circuitstitch.deferno.shell.ActivityFeedRow
 import com.circuitstitch.deferno.shell.ActivityFeedState
-import com.circuitstitch.deferno.shell.ActivityScreen
+import com.circuitstitch.deferno.shell.ui.ActivityScreen
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

@@ -35,6 +35,13 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
+import com.circuitstitch.deferno.core.agent.InferenceEngineId
+import com.circuitstitch.deferno.core.agent.InferenceEngineOption
+import com.circuitstitch.deferno.core.agent.InferenceEngineOrigin
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderAvailability
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderOption
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -43,9 +50,11 @@ import com.circuitstitch.deferno.core.speech.SpeechAvailability
 import com.circuitstitch.deferno.core.speech.SpeechEngineId
 import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import com.circuitstitch.deferno.core.speech.UnavailableReason
+import com.circuitstitch.deferno.feature.settings.InferenceEngineSettings
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
+import com.circuitstitch.deferno.feature.settings.StorageProviderSettings
 
 /** Minimum height for a clickable row/control — design-principles.md "≥44–48dp" targets. */
 private val MinTouchTarget = 48.dp
@@ -74,12 +83,16 @@ fun SettingsDesktopScreen(component: SettingsComponent, modifier: Modifier = Mod
     val stack by component.stack.subscribeAsState()
     val settings by component.settings.collectAsState()
     val speechEngine by component.speechEngine.collectAsState()
+    val inferenceEngine by component.inferenceEngine.collectAsState()
+    val storageProvider by component.storageProvider.collectAsState()
 
     when (val child = stack.active.instance) {
         SettingsComponent.SettingsChild.List ->
             SettingsListContent(
                 onOpenCategory = component::openCategory,
                 speechEngine = speechEngine,
+                inferenceEngine = inferenceEngine,
+                storageProvider = storageProvider,
                 modifier = modifier,
             )
 
@@ -88,6 +101,8 @@ fun SettingsDesktopScreen(component: SettingsComponent, modifier: Modifier = Mod
                 category = child.category,
                 settings = settings,
                 speechEngine = speechEngine,
+                inferenceEngine = inferenceEngine,
+                storageProvider = storageProvider,
                 component = component,
                 modifier = modifier,
             )
@@ -96,17 +111,16 @@ fun SettingsDesktopScreen(component: SettingsComponent, modifier: Modifier = Mod
 
 /**
  * The desktop category list omits App Permissions (no per-app OS settings screen, ADR-0017) and the
- * Agent row (#150 ships the Agent surface on Android only; desktop gets it when a desktop engine lands).
+ * Assistant row (#282/ADR-0040: the chat surface is iOS-only in v1). The **Agent** (cloud inference
+ * selector — needs no on-device ML) and **Storage** (on-device storage already works on desktop) rows
+ * are shown, at parity with Android; the Agent row self-hides via the `available` guard below when the
+ * inference catalog is empty.
  */
 private val DesktopCategories: List<SettingsCategory> =
     SettingsCategory.entries.filter {
         it != SettingsCategory.AppPermissions &&
-            it != SettingsCategory.Agent &&
-            // The Assistant (#282, ADR-0040) is iOS-only in v1; the desktop View is deferred.
-            it != SettingsCategory.Assistant &&
-            // Storage (#210) ships its Settings surface on Android first; the desktop row lands with the
-            // desktop attach UI (on-device storage already works on desktop — only the selector is deferred).
-            it != SettingsCategory.Storage
+            // The Assistant (#282, ADR-0040) is iOS-only in v1; the desktop chat View is deferred.
+            it != SettingsCategory.Assistant
     }
 
 // --- category list (root) ---
@@ -115,6 +129,8 @@ private val DesktopCategories: List<SettingsCategory> =
 internal fun SettingsListContent(
     onOpenCategory: (SettingsCategory) -> Unit,
     speechEngine: SpeechEngineSettings,
+    inferenceEngine: InferenceEngineSettings,
+    storageProvider: StorageProviderSettings,
     modifier: Modifier = Modifier,
 ) {
     // The "Settings" title now lives in the shell's single top bar (Cand 1); this pane is just the list.
@@ -125,9 +141,12 @@ internal fun SettingsListContent(
             // The device-local Speech engine row shows only when this device has a real engine (#93) —
             // hidden on desktop until a desktop engine lands (#94); shown automatically once it does.
             if (category == SettingsCategory.SpeechEngine && !speechEngine.available) return@forEach
+            // The Agent row shows only when the inference catalog has options (the cloud engine registers
+            // regardless of platform, so it shows on desktop too) — parity with Android (#150).
+            if (category == SettingsCategory.Agent && !inferenceEngine.available) return@forEach
             CategoryRow(
                 label = category.title,
-                summary = category.rowSummary(speechEngine),
+                summary = category.rowSummary(speechEngine, inferenceEngine, storageProvider),
                 onClick = { onOpenCategory(category) },
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -166,6 +185,8 @@ private fun CategoryDetail(
     category: SettingsCategory,
     settings: UserSettings,
     speechEngine: SpeechEngineSettings,
+    inferenceEngine: InferenceEngineSettings,
+    storageProvider: StorageProviderSettings,
     component: SettingsComponent,
     modifier: Modifier = Modifier,
 ) {
@@ -196,18 +217,29 @@ private fun CategoryDetail(
                 body = "Connect Deferno with the other tools you use. Integrations are on the way.",
             )
 
+            // The Agent inference-engine selector (#150): the cloud engine needs no on-device ML, so the
+            // row is live on desktop. Picking the cloud engine is the explicit opt-in; an unentitled cloud
+            // engine renders disabled ("Premium"), never selectable.
+            SettingsCategory.Agent -> AgentDetail(inferenceEngine, component::onInferenceEngineSelected)
+
+            // The Storage provider selector (#210) — on-device storage already works on desktop. The
+            // brain-dump-retention toggle lives here too (recordings are on-device attachments).
+            SettingsCategory.Storage -> {
+                val keepRecordings by component.keepBrainDumpRecordings.collectAsState()
+                StorageProviderDetail(
+                    storageProvider,
+                    component::onStorageProviderSelected,
+                    keepRecordings,
+                    component::onKeepBrainDumpRecordingsChanged,
+                )
+            }
+
             // App Permissions is omitted from the desktop list (no per-app OS settings screen,
             // ADR-0017), so this branch is unreachable on desktop — kept only to stay exhaustive.
             SettingsCategory.AppPermissions -> Unit
 
-            // Agent (#150) is Android-only for now; filtered from DesktopCategories, never opened here.
-            SettingsCategory.Agent -> Unit
-
             // The Assistant (#282) is iOS-only in v1; filtered from DesktopCategories, never opened here.
             SettingsCategory.Assistant -> Unit
-
-            // Storage (#210) is Android-first; filtered from DesktopCategories, never opened here.
-            SettingsCategory.Storage -> Unit
         }
     }
 }
@@ -250,6 +282,79 @@ private fun SpeechEngineDetail(state: SpeechEngineSettings, onSelect: (SpeechEng
             onSelect = { onSelect(option.id) },
         )
     }
+}
+
+@Composable
+private fun AgentDetail(state: InferenceEngineSettings, onSelect: (InferenceEngineId) -> Unit) {
+    // The App-setting nature + the AI consent, stated plainly (AC1): device-local, never synced; an
+    // on-device engine keeps your text local, the cloud engine sends it off-device, and "Off" runs nothing.
+    // Picking the cloud engine is the explicit opt-in — it still needs your account to be entitled (AC2).
+    Text(
+        text = "The Agent can turn a brain dump into draft tasks and suggest changes to your plan. Choose " +
+            "which engine it uses — or turn it off. An on-device engine keeps your text on this device; " +
+            "Deferno’s cloud AI sends it off your device to generate proposals (you always review before " +
+            "anything is saved). It’s off by default, and this choice stays on this device, not synced to " +
+            "your account.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.defernoColors.inkMuted,
+    )
+    // "Off" is always offered first (the default); then each engine registered on this device. A cloud
+    // engine the Account isn't entitled to is shown **disabled** ("Premium"), never selectable (AC2).
+    EngineChoiceRow(
+        label = "Off",
+        note = "The Agent stays off. Nothing is sent anywhere.",
+        selected = state.selected == InferenceEngineId.Off,
+        onSelect = { onSelect(InferenceEngineId.Off) },
+    )
+    state.options.forEach { option ->
+        val locked = option.availability is InferenceEngineAvailability.RequiresPremium
+        EngineChoiceRow(
+            label = inferenceEngineLabel(option.id),
+            note = inferenceEngineNote(option),
+            selected = state.selected == option.id,
+            onSelect = { onSelect(option.id) },
+            enabled = !locked,
+        )
+    }
+}
+
+@Composable
+private fun StorageProviderDetail(
+    state: StorageProviderSettings,
+    onSelect: (StorageProviderId) -> Unit,
+    keepRecordings: Boolean,
+    onKeepRecordingsChange: (Boolean) -> Unit,
+) {
+    // The App-setting nature, stated plainly (#210): device-local, never synced. On-device keeps attachment
+    // bytes on this device; the user-owned cloud providers are coming later. Feedback attachments are
+    // separate — they always go to Deferno so the team can see what you send.
+    Text(
+        text = "Choose where your attachments are stored. On-device keeps the files on this device and " +
+            "works offline. This choice stays on this device and isn’t synced to your account. (Feedback " +
+            "you send the team is always uploaded to Deferno so we can see it.)",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.defernoColors.inkMuted,
+    )
+    state.options.forEach { option ->
+        val locked = option.availability is StorageProviderAvailability.ComingLater
+        EngineChoiceRow(
+            label = storageProviderLabel(option.id),
+            note = storageProviderNote(option),
+            selected = state.selected == option.id,
+            onSelect = { onSelect(option.id) },
+            enabled = !locked,
+        )
+    }
+    // Brain-dump recording retention (#211): keep the source voice recording as an on-device attachment when
+    // a draft is accepted, so the person can revisit what they said. Device-local, default on; recognition
+    // still never leaves the device.
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    ToggleRow(
+        label = "Keep brain dump recordings",
+        description = "Save the original voice recording on this device when you accept a brain dump, so you can listen back later.",
+        checked = keepRecordings,
+        onCheckedChange = onKeepRecordingsChange,
+    )
 }
 
 @Composable
@@ -396,17 +501,24 @@ private fun ChoiceRow(label: String, selected: Boolean, onSelect: () -> Unit) {
     }
 }
 
-/** A radio row that, unlike [ChoiceRow], carries an optional [note] subtitle (the engine availability). */
+/** A radio row that, unlike [ChoiceRow], carries an optional [note] subtitle (the engine availability).
+ *  [enabled] = false (e.g. an unentitled cloud engine, or a coming-later provider) makes the row inert. */
 @Composable
-private fun EngineChoiceRow(label: String, note: String?, selected: Boolean, onSelect: () -> Unit) {
+private fun EngineChoiceRow(
+    label: String,
+    note: String?,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    enabled: Boolean = true,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
-            .selectable(selected = selected, onClick = onSelect),
+            .selectable(selected = selected, enabled = enabled, onClick = onSelect),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(selected = selected, onClick = null)
+        RadioButton(selected = selected, onClick = null, enabled = enabled)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
@@ -515,7 +627,11 @@ private val SettingsCategory.title: String
  * The category-row summary line: the Speech engine row shows the current choice (and flags it when the
  * chosen engine isn't usable yet — AC #3); the unbacked categories show "Coming soon"; the rest show none.
  */
-private fun SettingsCategory.rowSummary(speechEngine: SpeechEngineSettings): String? = when {
+private fun SettingsCategory.rowSummary(
+    speechEngine: SpeechEngineSettings,
+    inferenceEngine: InferenceEngineSettings,
+    storageProvider: StorageProviderSettings,
+): String? = when {
     this == SettingsCategory.SpeechEngine -> {
         val selectedOption = speechEngine.options.firstOrNull { it.id == speechEngine.selected }
         val label = speechEngineLabel(speechEngine.selected)
@@ -524,6 +640,12 @@ private fun SettingsCategory.rowSummary(speechEngine: SpeechEngineSettings): Str
         val unavailable = selectedOption == null || selectedOption.availability is SpeechAvailability.Unavailable
         if (unavailable) "$label · unavailable" else label
     }
+    // The Agent row reflects the chosen engine ("Off" when off); the Storage row names the provider (#150/#210).
+    this == SettingsCategory.Agent -> when (inferenceEngine.selected) {
+        InferenceEngineId.Off -> "Off"
+        else -> inferenceEngineLabel(inferenceEngine.selected)
+    }
+    this == SettingsCategory.Storage -> storageProviderLabel(storageProvider.selected)
     !backed -> "Coming soon"
     else -> null
 }
@@ -553,6 +675,45 @@ private fun speechEngineNote(option: SpeechEngineOption): String? = when (option
             // so it must never read as the transient "Preparing…".
             UnavailableReason.NotInstalled -> "Not available on this device"
         }
+    }
+}
+
+/** The human label for an inference-engine id (View concern, like the speech-engine labels). */
+private fun inferenceEngineLabel(id: InferenceEngineId): String = when (id) {
+    InferenceEngineId.Off -> "Off"
+    InferenceEngineId.DefernoCloud -> "Deferno cloud AI"
+    // The zero-ML deterministic floor — distinct from the planned on-device-LLM hybrid (ADR-0027).
+    InferenceEngineId.OnDeviceFloor -> "On-device basics"
+    // Further on-device runtimes + a future BYO engine get explicit labels as they land; fall back to a humanised id.
+    else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+}
+
+/** The per-engine subtitle: where it runs, or *why* it isn't selectable yet (the premium upsell, AC2). */
+private fun inferenceEngineNote(option: InferenceEngineOption): String? = when (option.availability) {
+    InferenceEngineAvailability.RequiresPremium -> "Premium — not available for your account yet"
+    InferenceEngineAvailability.Available -> when (option.origin) {
+        InferenceEngineOrigin.OnDevice -> "Runs on this device"
+        InferenceEngineOrigin.DefernoCloud -> "Sends your text off-device to Deferno’s hosted AI"
+    }
+}
+
+/** The human label for a storage-provider id (View concern, like the engine labels). */
+private fun storageProviderLabel(id: StorageProviderId): String = when (id) {
+    StorageProviderId.OnDevice -> "On-device"
+    StorageProviderId.DefernoBackend -> "Deferno backend"
+    StorageProviderId.Dropbox -> "Dropbox"
+    StorageProviderId.GoogleDrive -> "Google Drive"
+    // Future user-owned providers get explicit labels as they land; fall back to a humanised id.
+    else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+}
+
+/** The per-provider subtitle: where the bytes live, or that the provider is coming later (#210). */
+private fun storageProviderNote(option: StorageProviderOption): String? = when (option.availability) {
+    StorageProviderAvailability.ComingLater -> "Coming later"
+    StorageProviderAvailability.Available -> when (option.id) {
+        StorageProviderId.OnDevice -> "Keeps files on this device; works offline"
+        StorageProviderId.DefernoBackend -> "Stores files on Deferno’s servers"
+        else -> null
     }
 }
 
