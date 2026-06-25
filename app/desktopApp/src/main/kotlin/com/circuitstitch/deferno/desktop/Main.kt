@@ -416,7 +416,7 @@ private fun handleRootKey(event: KeyEvent, root: RootComponent, onQuit: () -> Un
             main != null
         }
         else -> {
-            val destination = digitIndex(event.key)?.let { main?.destinations?.getOrNull(it) } ?: return false
+            val destination = digitIndex(event.key)?.let { main?.destinations?.value?.getOrNull(it) } ?: return false
             main?.selectDestination(destination)
             true
         }
@@ -458,6 +458,8 @@ private fun DefernoMenuBar(
 ) {
     val mainStack by main.stack.subscribeAsState()
     val activeDestination = mainStack.active.instance.destination
+    // The rendered registry (ADR-0040): the conditionally-present Assistant row appears once entitled.
+    val destinations by main.destinations.collectAsState()
     val update = presentUpdate(updateState)
     Surface(color = MaterialTheme.colorScheme.surface, modifier = modifier.fillMaxWidth()) {
         Row(
@@ -468,7 +470,7 @@ private fun DefernoMenuBar(
                 MenuRow(text = "Quit", shortcut = "Ctrl+Q") { dismiss(); onQuit() }
             }
             MenuBarMenu(label = "View") { dismiss ->
-                main.destinations.forEachIndexed { index, destination ->
+                destinations.forEachIndexed { index, destination ->
                     MenuRow(
                         text = destination.label,
                         shortcut = "Ctrl+${index + 1}",
@@ -645,6 +647,9 @@ private fun MainShellComponent.refreshActiveDestination() {
         is MainShellComponent.DestinationChild.Profile,
         is MainShellComponent.DestinationChild.Settings,
         is MainShellComponent.DestinationChild.Activity,
+        // The Assistant chat is a live stream with its own chrome; the desktop View is deferred + the row
+        // hidden, so the shell's generic Refresh is a no-op here.
+        is MainShellComponent.DestinationChild.Assistant,
         is MainShellComponent.DestinationChild.Placeholder,
         -> Unit
     }

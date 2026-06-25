@@ -17,6 +17,7 @@ import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderAvailability
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
+import com.circuitstitch.deferno.core.model.AssistantAvailability
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
@@ -49,6 +50,7 @@ class SettingsComponentTest {
         output: (SettingsComponent.Output) -> Unit = {},
         speechEngineCatalog: SpeechEngineCatalog = FakeSpeechEngineCatalog(),
         inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
+        assistantEnablement: AssistantEnablement = AssistantEnablement.Inert,
         storageProviderCatalog: StorageProviderCatalog = StorageProviderCatalog.Inert,
         keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
             InMemoryKeepBrainDumpRecordingsPreference(),
@@ -65,6 +67,7 @@ class SettingsComponentTest {
             output = output,
             speechEngineCatalog = speechEngineCatalog,
             inferenceEngineCatalog = inferenceEngineCatalog,
+            assistantEnablement = assistantEnablement,
             storageProviderCatalog = storageProviderCatalog,
             keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
             brainDumpNotificationPreference = brainDumpNotificationPreference,
@@ -316,9 +319,10 @@ class SettingsComponentTest {
 
     @Test
     fun everyWireframeCategoryIsListed_backedAndUnbacked() {
-        // The catalog must render ALL categories (#72): ten backed (incl. the device-local Speech engine
-        // #93 + the Agent opt-in #150 + the Storage provider #210) + two coming-soon stubs.
-        assertEquals(10, SettingsCategory.entries.count { it.backed })
+        // The catalog must render ALL categories (#72): eleven backed (incl. the device-local Speech engine
+        // #93 + the Agent opt-in #150 + the Storage provider #210 + the server Assistant #282) + two
+        // coming-soon stubs.
+        assertEquals(11, SettingsCategory.entries.count { it.backed })
         assertEquals(
             listOf(SettingsCategory.Security2FA, SettingsCategory.Integrations),
             SettingsCategory.entries.filterNot { it.backed },
@@ -446,5 +450,90 @@ class SettingsComponentTest {
         assertEquals(SettingsCategory.Agent, detail.category)
 
         assertTrue(component.onBack(), "back pops the Agent detail to the list")
+    }
+
+    // --- Assistant: the server-mediated enablement gate (#282, ADR-0040) ---
+
+    @Test
+    fun assistant_inertEnablement_isUnavailable_soTheRowHides() = runTest {
+        // The default inert seam (non-iOS hosts / tests): load() yields null → the Assistant row hides.
+        val (component, _, _) = component()
+        assertFalse(component.assistant.value.available, "no gate from the inert seam → Assistant row hidden")
+        assertFalse(component.assistant.value.enabled)
+    }
+
+    @Test
+    fun assistant_entitled_showsTheRow_reflectingEnabledState() = runTest {
+        val (component, _, _) = component(
+            assistantEnablement = FakeAssistantEnablement(
+                AssistantAvailability(entitled = true, enabled = false, disclosure = "Heads up."),
+            ),
+        )
+        val state = component.assistant.value
+        assertTrue(state.available, "an entitled gate → the Assistant row shows")
+        assertFalse(state.enabled, "not enabled yet")
+        assertEquals("Heads up.", state.disclosure, "the server disclosure is surfaced for the consent")
+    }
+
+    @Test
+    fun assistant_notEntitled_keepsTheRowHidden() = runTest {
+        val (component, _, _) = component(
+            assistantEnablement = FakeAssistantEnablement(
+                AssistantAvailability(entitled = false, enabled = false),
+            ),
+        )
+        assertFalse(component.assistant.value.available, "entitled=false → the row stays hidden")
+    }
+
+    @Test
+    fun enablingTheAssistant_callsTheSeam_andAdoptsTheNewGate() = runTest {
+        val seam = FakeAssistantEnablement(AssistantAvailability(entitled = true, enabled = false))
+        val (component, _, _) = component(assistantEnablement = seam)
+
+        component.onAssistantEnablementChanged(true)
+
+        assertEquals(listOf(true), seam.setCalls, "the enable flip went through the server seam")
+        assertTrue(component.assistant.value.enabled, "the new enabled gate is adopted")
+        assertFalse(component.assistant.value.busy, "the in-flight guard cleared")
+    }
+
+    @Test
+    fun disablingTheAssistant_withdraws_throughTheSeam() = runTest {
+        val seam = FakeAssistantEnablement(AssistantAvailability(entitled = true, enabled = true))
+        val (component, _, _) = component(assistantEnablement = seam)
+
+        component.onAssistantEnablementChanged(false)
+
+        assertEquals(listOf(false), seam.setCalls)
+        assertFalse(component.assistant.value.enabled, "the Assistant is now off")
+        assertTrue(component.assistant.value.available, "still entitled, so the row remains")
+    }
+
+    @Test
+    fun enableFailure_keepsThePriorGate_soTheToggleRevertsToReality() = runTest {
+        val seam = FakeAssistantEnablement(
+            AssistantAvailability(entitled = true, enabled = false),
+            failSet = true,
+        )
+        val (component, _, _) = component(assistantEnablement = seam)
+
+        component.onAssistantEnablementChanged(true)
+
+        assertEquals(listOf(true), seam.setCalls)
+        assertFalse(component.assistant.value.enabled, "the failed flip leaves the Assistant off (no silent flip)")
+        assertFalse(component.assistant.value.busy)
+    }
+
+    @Test
+    fun assistantCategory_drillsDownAndBacksOut_likeAnyCategory() {
+        val (component, _, _) = component(
+            assistantEnablement = FakeAssistantEnablement(AssistantAvailability(entitled = true, enabled = true)),
+        )
+
+        component.openCategory(SettingsCategory.Assistant)
+        val detail = assertIs<SettingsComponent.SettingsChild.Detail>(component.stack.value.active.instance)
+        assertEquals(SettingsCategory.Assistant, detail.category)
+
+        assertTrue(component.onBack(), "back pops the Assistant detail to the list")
     }
 }

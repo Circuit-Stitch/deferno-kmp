@@ -120,6 +120,10 @@ fun destCalendar(child: MainShellComponent.DestinationChild) =
 fun destTasks(child: MainShellComponent.DestinationChild) =
     (child as? MainShellComponent.DestinationChild.Tasks)?.component
 
+/** The Assistant Destination's chat component (ADR-0040, #282) — the SwiftUI `AssistantView` renders it. */
+fun destAssistant(child: MainShellComponent.DestinationChild) =
+    (child as? MainShellComponent.DestinationChild.Assistant)?.component
+
 fun destProfile(child: MainShellComponent.DestinationChild) =
     (child as? MainShellComponent.DestinationChild.Profile)?.component
 

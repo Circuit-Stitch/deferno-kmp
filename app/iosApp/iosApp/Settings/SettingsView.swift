@@ -16,6 +16,9 @@ struct SettingsView: View {
     @StateObject private var settings: StateFlowObserver<UserSettings>
     @StateObject private var speech: StateFlowObserver<SpeechEngineSettings>
     @StateObject private var inference: StateFlowObserver<InferenceEngineSettings>
+    // The server-mediated Assistant enablement (#282, ADR-0040): the Owner's persistent disable /
+    // withdraw-consent row, shown only when the Org is entitled (iOS-only in v1).
+    @StateObject private var assistant: StateFlowObserver<AssistantSettings>
     @Environment(\.defernoColors) private var colors
     // The "Brain dump notifications" opt-in (#271): device-local, seeded once from the AppScope preference;
     // the toggle persists through the component and requests OS authorization on enable.
@@ -28,6 +31,7 @@ struct SettingsView: View {
         _settings = StateObject(wrappedValue: StateFlowObserver(component.settings))
         _speech = StateObject(wrappedValue: StateFlowObserver(component.speechEngine))
         _inference = StateObject(wrappedValue: StateFlowObserver(component.inferenceEngine))
+        _assistant = StateObject(wrappedValue: StateFlowObserver(component.assistant))
     }
 
     // Stack-driven (the component's List↔Detail stack, mirroring macOS) so the single adaptive shell bar
@@ -76,6 +80,9 @@ struct SettingsView: View {
             switch ShellBridgeKt.settingsCategoryName(category: category) {
             case "SpeechEngine": return speech.value.available
             case "Agent": return inference.value.available
+            // The Assistant row shows only once the Org is entitled (ADR-0040); hidden otherwise (the
+            // inert seam on a non-entitled account / non-iOS host yields not-available).
+            case "Assistant": return assistant.value.available
             default: return true
             }
         }
@@ -90,6 +97,7 @@ struct SettingsView: View {
         case "TaskBehavior": taskBehaviorDetail
         case "SpeechEngine": speechDetail
         case "Agent": agentDetail
+        case "Assistant": assistantDetail
         case "DataPrivacy": dataPrivacyDetail
         case "HelpFeedback": linkDetail(text: "Tell us what's working and what isn't.", action: "Send feedback") { component.onOpenSubmitFeedback() }
         case "AppPermissions": linkDetail(text: "Manage microphone and notification access in iOS Settings.", action: "Open app settings") { component.onOpenAppPermissions() }
@@ -182,6 +190,25 @@ struct SettingsView: View {
                 Text("Notifications")
             } footer: {
                 Text("Get a notification when your drafts are ready to review — tapping it opens the Inbox.")
+            }
+        }
+    }
+
+    /// The Assistant enablement detail (#282, ADR-0040): the Owner's persistent disable / withdraw-consent
+    /// row. The toggle calls the server seam; enabling carries the egress consent shown in the footer.
+    private var assistantDetail: some View {
+        let value = assistant.value
+        return List {
+            Section {
+                Toggle(isOn: Binding(get: { value.enabled }, set: { component.onAssistantEnablementChanged(enabled: $0) })) {
+                    Text("Enable the Assistant").foregroundStyle(colors.onSurface)
+                }
+                .listRowBackground(colors.surfaceCard)
+                .disabled(value.busy)
+            } header: {
+                Text("Assistant")
+            } footer: {
+                Text(value.disclosure)
             }
         }
         .onAppear {
@@ -336,6 +363,7 @@ struct SettingsView: View {
         case "TaskBehavior": return "Task behavior"
         case "SpeechEngine": return "Speech engine"
         case "Agent": return "Agent"
+        case "Assistant": return "Assistant"
         case "DataPrivacy": return "Data & Privacy"
         case "HelpFeedback": return "Help & Feedback"
         case "AppPermissions": return "App Permissions"

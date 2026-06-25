@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.SignInService
+import com.circuitstitch.deferno.core.data.assistant.AssistantClient
 import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
@@ -24,6 +25,7 @@ import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.agent.InferenceEngine
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.database.AccountDatabaseFactory
+import com.circuitstitch.deferno.core.network.BearerTokenProvider
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.AppScope
 import com.circuitstitch.deferno.core.speech.DictationPermissionSettings
@@ -210,6 +212,23 @@ abstract class AppComponent(
      * per-Account wiring.
      */
     abstract val feedbackRepository: FeedbackRepository
+
+    /**
+     * The server-mediated [[Assistant]] request/response client (#282, ADR-0040): availability /
+     * enablement / apply / conversations over the shared authed client (the SSE turn stream is a separate
+     * per-platform seam). An AppScope service like [feedbackRepository] — the bearer plugin attaches the
+     * Active Account's PAT per request. Surfaced here so the shell can gate the Assistant Destination on
+     * availability and build the chat component, and to compile-validate the binding on every target.
+     */
+    abstract val assistantClient: AssistantClient
+
+    /**
+     * The [BearerTokenProvider] port (#282, ADR-0040): the Active Account's PAT, resolved fresh per call.
+     * Surfaced here so the iOS SSE turn-stream transport — which streams over a raw Swift `URLSession`
+     * outside the shared Ktor client (NSURLSession SSE buffering, ADR-0040) — can attach the same bearer
+     * the request/response client does. Never logged (ADR-0009).
+     */
+    abstract val bearerTokenProvider: BearerTokenProvider
 
     // --- Bindings re-exposed for the child AccountScope (ADR-0014) ---
     // kotlin-inject-anvil does not auto-propagate a parent's contributed @Provides into a child merge;

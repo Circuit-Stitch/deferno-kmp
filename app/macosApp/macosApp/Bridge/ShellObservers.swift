@@ -29,6 +29,28 @@ final class ProfileStateObserver: ObservableObject {
     deinit { task?.cancel() }
 }
 
+/// Observes the **dynamic Destination registry** (`MainShellComponent.destinations`, ADR-0040, #282): a
+/// `StateFlow<[Destination]>` (via SKIE), because the conditionally-present Assistant row appears only once
+/// availability resolves to `entitled`. A Swift array isn't `AnyObject`, so the generic `StateFlowObserver`
+/// (class-bound) can't carry it — this mirrors `AccountsObserver`'s single-flow shape instead.
+final class DestinationsObserver: ObservableObject {
+    @Published private(set) var destinations: [Destination]
+    // `_Concurrency.Task`: `Deferno.Task` (the Kotlin model) shadows Swift's concurrency `Task` here.
+    private var task: _Concurrency.Task<Void, Never>?
+
+    init(_ flow: SkieSwiftStateFlow<[Destination]>) {
+        destinations = flow.value
+        task = _Concurrency.Task { @MainActor [weak self] in
+            for await next in flow {
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.destinations = next
+            }
+        }
+    }
+
+    deinit { task?.cancel() }
+}
+
 /// Observes the in-shell account switcher: the roster + the Active Account (each a `StateFlow`, via
 /// SKIE). Two collecting tasks — one per flow — both republished on the main actor.
 final class AccountsObserver: ObservableObject {

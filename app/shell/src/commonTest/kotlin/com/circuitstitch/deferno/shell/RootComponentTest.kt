@@ -623,6 +623,23 @@ internal class FakeAccountSession(
             override suspend fun reconcile() {}
         }
 
+    override val conversationStore: com.circuitstitch.deferno.core.data.assistant.ConversationStore =
+        object : com.circuitstitch.deferno.core.data.assistant.ConversationStore {
+            override fun observeConversations() =
+                kotlinx.coroutines.flow.flowOf<List<com.circuitstitch.deferno.core.model.Conversation>>(emptyList())
+            override fun observeMessages(id: com.circuitstitch.deferno.core.model.ConversationId) =
+                kotlinx.coroutines.flow.flowOf<List<com.circuitstitch.deferno.core.model.ChatMessage>>(emptyList())
+            override suspend fun upsertConversation(conversation: com.circuitstitch.deferno.core.model.Conversation) {}
+            override suspend fun upsertMessage(
+                conversationId: com.circuitstitch.deferno.core.model.ConversationId,
+                message: com.circuitstitch.deferno.core.model.ChatMessage,
+            ) {}
+            override suspend fun upsertMessages(
+                conversationId: com.circuitstitch.deferno.core.model.ConversationId,
+                messages: List<com.circuitstitch.deferno.core.model.ChatMessage>,
+            ) {}
+        }
+
     override val occurrenceEditor: com.circuitstitch.deferno.feature.calendar.OccurrenceEditor =
         object : com.circuitstitch.deferno.feature.calendar.OccurrenceEditor {
             override suspend fun mark(itemId: String, action: com.circuitstitch.deferno.core.model.OccurrenceAction) {}

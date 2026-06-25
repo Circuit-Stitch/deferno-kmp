@@ -140,7 +140,11 @@ _Avoid_: using "view" for a navigable place (that is a [[Destination]]) or for t
 
 **Destination**:
 A **top-level navigable place** in the [[Main shell]], switched laterally via the nav suite. The
-**v1 set is Plan, Calendar, Tasks, [[Inbox]], Profile, Settings** (Plan is the home Destination). **Workspaces,
+**v1 set is Plan, Calendar, Tasks, [[Inbox]], Profile, Settings** (Plan is the home Destination), plus
+the **[[Assistant]]** Destination — the one **conditionally-present** Destination, included in the nav
+suite only when the active [[Org]] is `entitled` (its [[Availability]] must be fetched *before* the nav
+suite is built); when entitled-but-not-enabled it renders an in-place enable + egress-consent state,
+and chat once `available`. Its addition amends ADR-0015's frozen set. **Workspaces,
 [[Group]]s, Permissions, Agenda, and [[Dashboard]] are reserved for later** — kept in this glossary
 but not built in v1: Workspaces/Groups/Permissions are blocked on the backend's future **Groups
 subsystem ("Spec 2")** — there is no Workspace, org-listing, or permissions API today, and a user has
@@ -278,6 +282,56 @@ _Avoid_: [[Agent]] (Deferno's own propose-only inference — an OS intent's cate
 Commands), App Action / App Intent / Siri shortcut / Alexa skill (the per-platform *mechanisms* that
 deliver an OS intent, not the concept).
 
+### Assistant (server-mediated)
+
+**Assistant** *(client; backend-mediated)*:
+Deferno's **server-side conversational AI** — a multi-turn chat, scoped to one [[Org]], that the
+**backend** runs end-to-end: it streams the assistant's reply token-by-token, reads the person's items
+server-side, and **applies** changes itself (tagging them `actor = assistant`), gated by a per-Org
+**[[Availability]]** check (`entitled && enabled`) and a shared monthly token pool. Distinct from the
+[[Agent]]: the Agent is **client-side, propose-only, on-device-first** and commits through the
+person's offline outbox; the Assistant is **backend-mediated** — decrypted item content egresses to a
+third-party AI sub-processor, so enabling it is the Owner's explicit egress consent. The iOS client is
+a **thin chat surface** over the backend's turn stream; it owns no inference. The two capabilities
+**share only the propose-then-accept review pattern** (see [[Proposal]]).
+_Avoid_: [[Agent]] (the client-side propose-only capability — a different trust and transport model),
+copilot, bot, "the AI", chat (the *surface* the Assistant is rendered in, not the capability).
+
+**Availability** *(client; Assistant)*:
+The single per-[[Org]] gate every Assistant surface checks: `available = entitled && enabled` —
+`entitled` is whether the Org may have the Assistant (billing/staff-set), `enabled` is whether the
+Org **Owner turned it on** (which carries the egress consent). When not `available` the chat surface
+is hidden, not merely disabled.
+_Avoid_: entitlement (only one half), feature flag, the inference-engine [[App setting]] (that gates the
+[[Agent]], a different capability).
+
+**Assistant proposal** *(client; Assistant)*:
+A **gated change** the [[Assistant]] surfaces mid-turn for the person's explicit yes/no —
+`{tool, input, summary}`, where `summary` is the human-legible "exactly what this will do." Only
+**destructive, bulk, or cross-[[Org]]** changes become proposals; ordinary writes the Assistant simply
+performs itself (tagged `actor = assistant`). Confirming **applies it server-side**
+(`POST …/assistant/apply`, re-checked against the same gate); rejecting is purely client-side (discard).
+Reviewed on an **inline confirm card in the chat** — the single piece of UX it shares with the
+[[Agent]]'s propose-then-accept flow — never routed to the [[Inbox]].
+_Avoid_: [[Plan proposal]] (the Agent's client-side plan delta — a different capability and commit
+path), draft (an [[Inbox]] brain-dump draft, committed client-side via `CreateItem`; an Assistant
+proposal applies server-side), [[Command]] (the offline-first client write seam — a proposal bypasses
+it: the server writes).
+
+**Conversation** *(client; Assistant)*:
+One persisted [[Assistant]] chat thread — a server-assigned id plus its ordered messages (the person's
+prompts, the assistant's streamed replies, and any [[Assistant proposal]]s and their outcomes). The
+client **caches each Conversation locally as it streams**, so past chats are readable offline and
+resumable; the server keeps its own copy ~30 days (`GET …/assistant/conversations` lists recent ids,
+most-recent first; `GET …/assistant/conversations/{id}` returns one Conversation's full message log).
+The iOS client treats its **local cache as the source of truth** for readable history and surfaces a
+**multi-conversation switcher**; opening a Conversation is **local-truth + server backfill** (the cache
+renders immediately, then the server copy merges in any missing messages — e.g. a turn started on web).
+Online-only to *extend* (a new turn needs a live connection); readable offline.
+_Avoid_: transcript (reserved for a [[Dictation]] result — the server/wire calls a Conversation's log a
+"transcript", but in this client that word is already taken), thread, session, history (that is the
+*log* of messages, not the thread itself).
+
 ### Agent
 
 **Agent** *(client)*:
@@ -287,7 +341,8 @@ the configured [[Inference engine]], with read-only [[Reference lookup]] tools w
 existing [[Item]]s. It holds no write access and **never commits anything**: the person accepts a
 proposal, and that acceptance commits through the ordinary write path. Reserved to grow into the
 Command-issuing agent the [[Command registry]] anticipates.
-_Avoid_: assistant, copilot, bot, "the AI" (name the capability or the specific service).
+_Avoid_: copilot, bot, "the AI" (name the capability or the specific service); the [[Assistant]] (the
+backend-mediated conversational AI — a genuinely distinct capability, no longer just a word to avoid).
 
 **Extractor** *(client)*:
 The propose-only [[Agent]] service that turns a [[Brain dump]] [[Transcript]] into **draft

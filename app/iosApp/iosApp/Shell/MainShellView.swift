@@ -19,6 +19,9 @@ struct MainShellView: View {
     let recorder: BrainDumpRecorder
     @Environment(\.defernoColors) private var colors
     @StateObject private var destinations: StateFlowObserver<MainShellComponentDestinationChild>
+    /// The dynamic nav registry — the conditionally-present Assistant row (ADR-0040) appears once the Org
+    /// resolves to `entitled`, so the drawer observes it reactively rather than reading a fixed array.
+    @StateObject private var navDestinations: DestinationsObserver
     @StateObject private var overlay: OptionalStateFlowObserver<MainShellComponentOverlayChild>
     @StateObject private var accounts: AccountsObserver
     @StateObject private var chrome: StateFlowObserver<ChromeSpec>
@@ -34,6 +37,7 @@ struct MainShellView: View {
         self.component = component
         self.recorder = recorder
         _destinations = StateObject(wrappedValue: StateFlowObserver(component.activeDestination))
+        _navDestinations = StateObject(wrappedValue: DestinationsObserver(component.destinations))
         _overlay = StateObject(wrappedValue: OptionalStateFlowObserver(component.activeOverlay))
         _accounts = StateObject(wrappedValue: AccountsObserver(accounts: component.accounts, active: component.activeAccount))
         _chrome = StateObject(wrappedValue: StateFlowObserver(component.chrome))
@@ -118,6 +122,10 @@ struct MainShellView: View {
                     onMenu: { setDrawer(true) },
                     chromeSpec: chrome.value
                 )
+            } else if let assistant = ShellBridgeKt.destAssistant(child: child) {
+                // The Assistant owns its own native chat chrome (ADR-0040 iOS carve-out, like Tasks): its
+                // own nav bar (☰ + conversation switcher + new chat), not the shared ChromeToolbar.
+                AssistantView(component: assistant, onMenu: { setDrawer(true) })
             } else {
                 NavigationStack {
                     destinationBody
@@ -186,7 +194,7 @@ struct MainShellView: View {
                     setDrawer(false)
                     ShellBridgeKt.openSearchOverlay(component: component)
                 }
-                ForEach(component.destinations) { dest in
+                ForEach(navDestinations.destinations) { dest in
                     let name = ShellBridgeKt.destinationName(destination: dest)
                     let badge: String? = name == "Inbox"
                         ? (inboxBadge.value.intValue > 0 ? "\(inboxBadge.value.intValue)" : "empty")
@@ -342,6 +350,7 @@ struct MainShellView: View {
         case "Plan": return "house.fill"
         case "Calendar": return "calendar"
         case "Tasks": return "list.bullet"
+        case "Assistant": return "sparkles"
         case "Inbox": return "tray"
         case "Activity": return "bell"
         case "Profile": return "person.fill"

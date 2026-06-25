@@ -17,6 +17,9 @@ struct MainShellView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.defernoColors) private var colors
     @StateObject private var destinations: StateFlowObserver<MainShellComponentDestinationChild>
+    /// The dynamic nav registry (ADR-0040): the conditionally-present Assistant row appears once the Org is
+    /// `entitled`, so observe it reactively rather than reading a fixed array.
+    @StateObject private var navDestinations: DestinationsObserver
     @StateObject private var overlay: OptionalStateFlowObserver<MainShellComponentOverlayChild>
     @StateObject private var accounts: AccountsObserver
     @StateObject private var chrome: StateFlowObserver<ChromeSpec>
@@ -27,6 +30,7 @@ struct MainShellView: View {
         self.component = component
         self.onBrainDump = onBrainDump
         _destinations = StateObject(wrappedValue: StateFlowObserver(component.activeDestination))
+        _navDestinations = StateObject(wrappedValue: DestinationsObserver(component.destinations))
         _overlay = StateObject(wrappedValue: OptionalStateFlowObserver(component.activeOverlay))
         _accounts = StateObject(wrappedValue: AccountsObserver(accounts: component.accounts, active: component.activeAccount))
         _chrome = StateObject(wrappedValue: StateFlowObserver(component.chrome))
@@ -338,12 +342,12 @@ struct MainShellView: View {
 
     // MARK: Destination registry helpers
 
-    private var allDestinations: [Destination] { component.destinations }
+    private var allDestinations: [Destination] { navDestinations.destinations }
     private var primaryDestinations: [Destination] {
-        component.destinations.filter { ShellBridgeKt.destinationIsPrimary(destination: $0) }
+        navDestinations.destinations.filter { ShellBridgeKt.destinationIsPrimary(destination: $0) }
     }
     private var secondaryDestinations: [Destination] {
-        component.destinations.filter { !ShellBridgeKt.destinationIsPrimary(destination: $0) }
+        navDestinations.destinations.filter { !ShellBridgeKt.destinationIsPrimary(destination: $0) }
     }
 
     private func icon(_ name: String) -> String {
@@ -351,6 +355,7 @@ struct MainShellView: View {
         case "Plan": return "house.fill"
         case "Calendar": return "calendar"
         case "Tasks": return "list.bullet"
+        case "Assistant": return "sparkles"
         case "Profile": return "person.fill"
         case "Settings": return "gearshape.fill"
         default: return "circle"

@@ -167,6 +167,12 @@ private fun DestinationBody(
         is MainShellComponent.DestinationChild.Tasks ->
             TasksScreen(active.component, modifier, onSearch = onSearch)
 
+        // The Assistant chat ships first as iOS SwiftUI (ADR-0040); the Android Compose View is deferred, so
+        // this is a placeholder. The Destination's row is also hidden on Android (the inert client → not
+        // entitled), so this arm is reached only if that gating changes — kept for `when` totality.
+        is MainShellComponent.DestinationChild.Assistant ->
+            ComingSoon(active.destination, modifier)
+
         is MainShellComponent.DestinationChild.Inbox ->
             InboxScreen(active.component, modifier)
 

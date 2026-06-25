@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.shell
 
 import com.circuitstitch.deferno.core.data.activity.ActivityEntry
+import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
@@ -131,6 +132,13 @@ interface AccountSession {
     val calendarRepository: CalendarRepository
 
     /**
+     * The Assistant Destination's on-device Conversation cache (ADR-0040, #282): the source of truth for
+     * readable chat history — the component persists each turn as it streams and reads it back offline.
+     * Local-only, never synced (turns are never outbox-queued — online-only to extend, ADR-0040).
+     */
+    val conversationStore: ConversationStore
+
+    /**
      * The Inbox Destination's local Brain dump drafts (ADR-0015 Inbox amendment): the on-device worker
      * writes Ready drafts, and the Inbox observes them (list + nav badge). A function seam (not the
      * concrete repository) so the shell stays testable on fakes. Local-only, never synced.
@@ -205,6 +213,7 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     }
     override val settingsRepository: SettingsRepository get() = component.settingsRepository
     override val calendarRepository: CalendarRepository get() = component.calendarRepository
+    override val conversationStore: ConversationStore get() = component.conversationStore
 
     override fun observeBrainDumpDrafts() = component.brainDumpDraftRepository.observeDrafts()
 

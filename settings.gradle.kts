@@ -73,6 +73,9 @@ include(":feature:braindumps") // the Inbox Destination — Brain dump draft rev
 include(":feature:calendar")
 include(":feature:profile")
 include(":feature:settings")
+// The server-mediated Assistant chat (#282, ADR-0040). Logic-only for now — iOS ships SwiftUI first, so
+// the sibling :feature:assistant:ui Compose module is deferred until Android/desktop adopt it.
+include(":feature:assistant")
 
 // Per-slice Compose Views (#27): a UI submodule on the Compose platforms only (Android + desktop,
 // no iOS — iOS is SwiftUI). Kept separate from the slice's logic module because the Compose compiler

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Menu
@@ -442,6 +443,8 @@ private fun ShellDrawer(
     val activeAccount by component.activeAccount.collectAsState()
     // The Inbox nav badge (ADR-0015 Inbox amendment): always declares state — "empty" or the Ready count.
     val inboxCount by component.inboxReadyCount.collectAsState()
+    // The rendered registry (ADR-0040): the conditionally-present Assistant row appears once entitled.
+    val destinations by component.destinations.collectAsState()
     Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column(
             modifier = Modifier
@@ -483,7 +486,7 @@ private fun ShellDrawer(
                 selected = false,
                 onClick = onSearch,
             )
-            component.destinations.forEach { destination ->
+            destinations.forEach { destination ->
                 DrawerRow(
                     label = destination.label,
                     icon = destination.icon,
@@ -748,6 +751,7 @@ val Destination.label: String
         Destination.Plan -> "Plan"
         Destination.Calendar -> "Calendar"
         Destination.Tasks -> "Tasks"
+        Destination.Assistant -> "Assistant"
         Destination.Inbox -> "Inbox"
         Destination.Activity -> "Activity"
         Destination.Profile -> "Profile"
@@ -760,6 +764,7 @@ private val Destination.icon: ImageVector
         Destination.Plan -> Icons.Filled.Home
         Destination.Calendar -> Icons.Filled.DateRange
         Destination.Tasks -> Icons.AutoMirrored.Filled.List
+        Destination.Assistant -> Icons.Filled.Face
         Destination.Inbox -> Icons.Filled.MailOutline
         Destination.Activity -> Icons.Filled.Notifications
         Destination.Profile -> Icons.Filled.Person

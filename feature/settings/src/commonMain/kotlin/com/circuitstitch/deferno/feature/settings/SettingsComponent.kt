@@ -61,6 +61,11 @@ enum class SettingsCategory(val backed: Boolean) {
     // the [SettingsComponent.inferenceEngine] read model, not `UserSettings`. Row shown only when this
     // device has an inference engine; the cloud option is gated on the Account's relay entitlement.
     Agent(backed = true),
+    // The server-mediated Assistant enablement (ADR-0040, #282) — the Owner's persistent disable /
+    // withdraw-consent entry point. Unlike the device-local rows above this is a **server** call gated on
+    // the Org being `entitled`; the View shows the row only when [SettingsComponent.assistant] is available
+    // (iOS-only in v1), so the row is absent on platforms / accounts where the Assistant doesn't apply.
+    Assistant(backed = true),
     // The on-device storage-provider choice (#210) — like [SpeechEngine]/[Agent] a device-local
     // [[App setting]] over the [SettingsComponent.storageProvider] read model, not `UserSettings`. Governs
     // where *user/task* attachments are stored (feedback always uses the backend); always shown (on-device
@@ -173,6 +178,14 @@ interface SettingsComponent {
     val inferenceEngine: StateFlow<InferenceEngineSettings>
 
     /**
+     * The server-mediated **Assistant enablement** ([SettingsCategory.Assistant], ADR-0040) — the gate
+     * over the Owner's enable/disable (egress consent), sourced from the [AssistantEnablement] seam (the
+     * AppScope `AssistantClient` + the personal org), **not** the synced [settings]. The View shows the
+     * row only when [AssistantSettings.available] (the Org is `entitled`, iOS-only in v1).
+     */
+    val assistant: StateFlow<AssistantSettings>
+
+    /**
      * The device-local storage-provider choice ([SettingsCategory.Storage], #210) — where new *user/task*
      * attachments are stored (on-device default / Deferno backend / user-owned cloud coming-later), sourced
      * from the AppScope [StorageProviderCatalog], **not** the synced [settings]. It never syncs and never
@@ -251,6 +264,13 @@ interface SettingsComponent {
      * on-device engine is ungated; [InferenceEngineId.Off] stands the Agent fully down.
      */
     fun onInferenceEngineSelected(id: InferenceEngineId)
+
+    /**
+     * Assistant: enable or disable the server-mediated Assistant for the Org (ADR-0040) — a **server** call
+     * through the [AssistantEnablement] seam (re-checked against entitlement server-side). Enabling carries
+     * the egress consent (the View shows [AssistantSettings.disclosure] first); disabling withdraws it.
+     */
+    fun onAssistantEnablementChanged(enabled: Boolean)
 
     /**
      * Storage provider: set the device-local choice (#210) — persists device-locally via the
@@ -341,6 +361,10 @@ class DefaultSettingsComponent(
     // [InferenceEngineCatalog.Inert] (no engine → row hidden) so existing Settings tests build without
     // supplying it (like the speech default).
     private val inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
+    // The server-mediated Assistant enablement seam (ADR-0040, #282): the AppScope `AssistantClient` + the
+    // resolved personal org, gated on entitlement. Defaulted to [AssistantEnablement.Inert] (every call
+    // null → the Assistant row hides) so existing Settings tests / non-iOS hosts build without supplying it.
+    private val assistantEnablement: AssistantEnablement = AssistantEnablement.Inert,
     // The device-local storage-provider choice (#210): the AppScope catalog over the device-local
     // preference. Defaulted to the inert [StorageProviderCatalog.Inert] (in-memory selection) so existing
     // Settings tests build without supplying it; on-device is always available, so the Storage row always shows.
@@ -399,6 +423,13 @@ class DefaultSettingsComponent(
     private val _inferenceEngine = MutableStateFlow(InferenceEngineSettings.seed(inferenceEngineCatalog.selected()))
     override val inferenceEngine: StateFlow<InferenceEngineSettings> = _inferenceEngine.asStateFlow()
 
+    // The server-mediated Assistant enablement (ADR-0040). Seeded empty (availability null → row hidden); the
+    // init below observes the shared [AssistantEnablement.availability] flow (the same source the Destination
+    // reads). Server-sourced via the seam — never synced settings, hidden unless the Org is entitled (so
+    // absent on non-iOS hosts / accounts in v1).
+    private val _assistant = MutableStateFlow(AssistantSettings())
+    override val assistant: StateFlow<AssistantSettings> = _assistant.asStateFlow()
+
     // The device-local storage-provider choice (#210). Seeded synchronously with the full static option list
     // + the persisted selection — on-device is always available, so no suspend availability query and the
     // Storage row always shows. Device-local — sourced from the AppScope catalog, never the synced settings.
@@ -434,6 +465,15 @@ class DefaultSettingsComponent(
                 options = inferenceEngineCatalog.options(),
                 selected = inferenceEngineCatalog.selected(),
             )
+        }
+        // The Assistant gate is a shared, observable source — the shell feeds the SAME flow to the Assistant
+        // Destination — so a flip from either surface reflects here. [refresh] kicks the (server) fetch; the
+        // collect republishes it. A null gate (not entitled / offline / non-iOS) leaves the row hidden.
+        scope.launch { assistantEnablement.refresh() }
+        scope.launch {
+            assistantEnablement.availability.collect { gate ->
+                _assistant.value = _assistant.value.copy(availability = gate)
+            }
         }
     }
 
@@ -491,6 +531,18 @@ class DefaultSettingsComponent(
         // change availability/entitlement, so reflect the new choice in place rather than re-querying.
         inferenceEngineCatalog.select(id)
         _inferenceEngine.value = _inferenceEngine.value.copy(selected = id)
+    }
+
+    override fun onAssistantEnablementChanged(enabled: Boolean) {
+        // Server call (ADR-0040) — guard against a concurrent in-flight flip. The result lands in the shared
+        // [AssistantEnablement.availability] flow (so the Destination reflects it too); on failure the flow is
+        // unchanged, so the toggle reverts to reality (never a silent flip). We just clear the in-flight guard.
+        if (_assistant.value.busy) return
+        _assistant.value = _assistant.value.copy(busy = true)
+        scope.launch {
+            assistantEnablement.setEnabled(enabled)
+            _assistant.value = _assistant.value.copy(busy = false)
+        }
     }
 
     override fun onStorageProviderSelected(id: StorageProviderId) {

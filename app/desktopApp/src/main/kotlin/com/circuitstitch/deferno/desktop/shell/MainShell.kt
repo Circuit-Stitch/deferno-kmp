@@ -97,6 +97,12 @@ private fun DestinationContent(active: MainShellComponent.DestinationChild) {
         is MainShellComponent.DestinationChild.Tasks ->
             TasksDesktopScreen(active.component, Modifier.fillMaxSize())
 
+        // The Assistant chat ships first as iOS SwiftUI (ADR-0040); the desktop Compose View is deferred (the
+        // desktop client is a stub, ADR-0003). The Destination row is also hidden on desktop (inert client →
+        // not entitled), so this is reached only if that changes — kept for `when` totality.
+        is MainShellComponent.DestinationChild.Assistant ->
+            ComingSoon(active.destination)
+
         // The Inbox Destination's desktop View (ADR-0015 Inbox amendment): the Brain dump draft review queue.
         is MainShellComponent.DestinationChild.Inbox ->
             InboxDesktopScreen(active.component, Modifier.fillMaxSize())

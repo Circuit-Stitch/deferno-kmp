@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.feature.settings
 
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.model.AssistantAvailability
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
@@ -78,5 +79,29 @@ class FakeSpeechEngineCatalog(
     override fun select(id: SpeechEngineId) {
         selects += id
         current = id
+    }
+}
+
+/**
+ * In-memory [AssistantEnablement] for the [SettingsComponent] Assistant-enablement tests (#282, ADR-0040).
+ * [availability] is the shared observable gate (seeded from `initial`); [setEnabled] flips its `enabled`
+ * (preserving entitlement + disclosure) and records each call, unless [failSet] forces a no-op failure (the
+ * gate is left unchanged) so a server error can be exercised. A `null` gate models the inert / not-applicable
+ * case (the row hides).
+ */
+class FakeAssistantEnablement(
+    initial: AssistantAvailability? = null,
+    private val failSet: Boolean = false,
+) : AssistantEnablement {
+    override val availability = MutableStateFlow(initial)
+    val setCalls = mutableListOf<Boolean>()
+
+    override suspend fun refresh() { /* the gate is seeded; nothing to fetch */ }
+
+    override suspend fun setEnabled(enabled: Boolean) {
+        setCalls += enabled
+        if (failSet) return
+        val base = availability.value ?: AssistantAvailability(entitled = true, enabled = enabled)
+        availability.value = base.copy(enabled = enabled)
     }
 }

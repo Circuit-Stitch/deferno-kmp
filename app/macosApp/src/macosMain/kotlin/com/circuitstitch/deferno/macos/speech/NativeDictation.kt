@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.macos.speech
 
+import com.circuitstitch.deferno.core.common.log.Logger
 import com.circuitstitch.deferno.core.speech.ContinuityHint
 import com.circuitstitch.deferno.core.speech.SpeechAvailability
 import com.circuitstitch.deferno.core.speech.SpeechEngineId
@@ -73,6 +74,9 @@ class NativeSpeechToText(private val native: NativeDictation) : SpeechToText {
                 close()
             },
             onError = {
+                // Kotlin owns diagnostics (the Swift side is a dumb mic reader). Non-PII: the stable reason
+                // code, never the audio/transcript. os_log-backed here via the core.common facade (ADR-0029).
+                Logger("MacDictation").w { "dictation error: $it" }
                 trySend(TranscriptEvent.Error(it.toSpeechError()))
                 close()
             },
