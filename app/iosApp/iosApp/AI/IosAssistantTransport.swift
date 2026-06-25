@@ -24,6 +24,10 @@ final class IosAssistantTransport: NativeAssistantTransport {
             guard let endpoint = URL(string: url) else { once.run { onError("invalid-url") }; return }
             var request = URLRequest(url: endpoint)
             request.httpMethod = "POST"
+            // SSE idle budget (resets per byte). Default 60s guillotines a large-input turn: the server must
+            // process the whole prompt before the first token streams, and a 310k-token input can sit silent
+            // longer than 60s. ponytail: 300s ceiling; the proper fix is server SSE heartbeats (Deferno#485).
+            request.timeoutInterval = 300
             request.httpBody = body.data(using: .utf8)
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
@@ -73,11 +77,27 @@ final class IosAssistantTransport: NativeAssistantTransport {
                 if _Concurrency.Task.isCancelled || error is CancellationError {
                     once.run { onDone() }
                 } else {
-                    once.run { onError("transport-error") }
+                    once.run { onError(Self.describe(error)) }
                 }
             }
         }
         return SSEHandle(task: task)
+    }
+
+    /// A stream failure as a short, specific reason (not the old catch-all "transport-error"), so the chat
+    /// banner — and the kmp-logger trace — names which URLSession failure hit. Timeout vs. dropped connection
+    /// is the tell for the two upstream causes: a 60s+ silent prompt-processing gap vs. the server closing.
+    private static func describe(_ error: Error) -> String {
+        let ns = error as NSError
+        guard ns.domain == NSURLErrorDomain else { return ns.localizedDescription }
+        switch ns.code {
+        case NSURLErrorTimedOut:
+            return "The reply timed out — it was taking too long to respond."
+        case NSURLErrorNetworkConnectionLost, NSURLErrorCannotConnectToHost, NSURLErrorNotConnectedToInternet:
+            return "The connection dropped before the reply finished."
+        default:
+            return ns.localizedDescription
+        }
     }
 
     /// The value of an SSE field line, dropping the field name and the single optional leading space (spec).

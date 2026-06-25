@@ -21,6 +21,9 @@ data class AssistantState(
     val conversations: List<Conversation> = emptyList(),
     val activeConversationId: ConversationId? = null,
     val messages: List<ChatMessage> = emptyList(),
+    // The autonomous tool actions the Assistant took this turn (e.g. "list_items"), surfaced as visible
+    // activity. Transient live state — like a proposal, not a persisted message — cleared at the next turn.
+    val actions: List<String> = emptyList(),
     val composer: String = "",
     val streaming: Boolean = false,
     val online: Boolean = true,

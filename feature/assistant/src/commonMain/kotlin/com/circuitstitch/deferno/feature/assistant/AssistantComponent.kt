@@ -132,7 +132,7 @@ class DefaultAssistantComponent(
         val userMessage = ChatMessage(id = newId(), role = ChatRole.User, text = text, createdAt = startedAt)
         val assistantMessageId = newId()
 
-        _state.update { it.copy(composer = "", streaming = true, error = null) }
+        _state.update { it.copy(composer = "", streaming = true, error = null, actions = emptyList()) }
 
         turnJob = scope.launch {
             // Preserve an existing Conversation's title; only a brand-new chat gets one from its first line.
@@ -156,8 +156,12 @@ class DefaultAssistantComponent(
                         // Symmetric: a later usage frame after a reset clears the hard-stop, never just sets it.
                         is AssistantEvent.Usage -> _state.update { it.copy(usageExhausted = event.exhausted) }
                         is AssistantEvent.Error -> _state.update { it.copy(error = event.message) }
-                        // Ordinary tool activity isn't a confirmation surface in v1 (a later activity feed).
-                        is AssistantEvent.ToolCall, is AssistantEvent.ToolResult -> Unit
+                        // Each autonomous tool action shows as transient activity (cleared next turn) — the
+                        // person sees what the Assistant did, not just its final text. A result completes a
+                        // call it already named, so it adds no new line.
+                        is AssistantEvent.ToolCall ->
+                            _state.update { it.copy(actions = it.actions + event.tool.ifBlank { "Working…" }) }
+                        is AssistantEvent.ToolResult -> Unit
                         AssistantEvent.Done -> store.upsertConversation(Conversation(conversationId, title, now()))
                     }
                 }
@@ -178,12 +182,12 @@ class DefaultAssistantComponent(
 
     override fun onNewConversation() {
         activeId.value = null
-        _state.update { it.copy(activeConversationId = null, pendingProposal = null, error = null) }
+        _state.update { it.copy(activeConversationId = null, pendingProposal = null, error = null, actions = emptyList()) }
     }
 
     override fun onSelectConversation(id: ConversationId) {
         activeId.value = id
-        _state.update { it.copy(activeConversationId = id, pendingProposal = null, error = null) }
+        _state.update { it.copy(activeConversationId = id, pendingProposal = null, error = null, actions = emptyList()) }
         scope.launch { hydrate(id) }
     }
 

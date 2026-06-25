@@ -93,6 +93,27 @@ class DefaultAssistantComponentTest {
     }
 
     @Test
+    fun eachToolCallSurfacesAsTransientActivityClearedOnTheNextTurn() = runTest {
+        val stream = FakeAssistantStream().apply {
+            script(
+                AssistantEvent.ToolCall(tool = "list_items", input = ""),
+                AssistantEvent.TextDelta("Here's a plan"),
+                AssistantEvent.Done,
+            )
+        }
+        val component = assistantComponent(stream = stream)
+        advanceUntilIdle()
+        component.onComposerChanged("organize my issues")
+        component.onSend()
+        advanceUntilIdle()
+        assertEquals(listOf("list_items"), component.state.value.actions)
+
+        // A fresh conversation drops the prior turn's activity (transient, not part of the transcript).
+        component.onNewConversation()
+        assertEquals(emptyList(), component.state.value.actions)
+    }
+
+    @Test
     fun confirmingAProposalAppliesServerSideAndTriggersResync() = runTest {
         var resynced = false
         val client = FakeAssistantClient().apply { applyResult = RemoteSnapshot.Available(true) }
