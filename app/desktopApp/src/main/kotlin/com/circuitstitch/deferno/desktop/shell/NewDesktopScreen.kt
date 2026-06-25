@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -26,6 +28,8 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.shell.DictationField
 import com.circuitstitch.deferno.shell.DictationStatus
 import com.circuitstitch.deferno.shell.NewComponent
+import com.circuitstitch.deferno.shell.ui.NewDateField
+import com.circuitstitch.deferno.shell.ui.NewDeadlineTimeField
 import com.circuitstitch.deferno.shell.ui.NewDictationMessage
 import com.circuitstitch.deferno.shell.ui.NewEventEndField
 import com.circuitstitch.deferno.shell.ui.NewEventStartField
@@ -70,7 +74,11 @@ fun NewDesktopScreen(component: NewComponent, modifier: Modifier = Modifier) {
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
-                modifier = Modifier.widthIn(max = NewFormWidth).fillMaxWidth().padding(24.dp),
+                modifier = Modifier
+                    .widthIn(max = NewFormWidth)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(
@@ -105,11 +113,18 @@ fun NewDesktopScreen(component: NewComponent, modifier: Modifier = Modifier) {
                     onOpenSettings = component::openDictationPermissionSettings,
                 )
 
-                // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2): a required start +
-                // optional end so a real Event create succeeds.
                 if (state.selectedKind == ItemKind.Event) {
+                    // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2): a required start +
+                    // optional end so a real Event create succeeds.
                     NewEventStartField(value = state.start, onValueChange = component::setStart)
                     NewEventEndField(value = state.end, onValueChange = component::setEnd)
+                } else {
+                    // The non-Event kinds (Task/Habit/Chore) carry an optional Date anchor (#74 → complete_by,
+                    // what the Calendar reads) and a deadline time-of-day (#348). Both default to null (undated /
+                    // all-day); the shared atoms parse-or-clear so a half-typed value never POSTs (parity with
+                    // the Android NewScreen WHEN card, which desktop keeps un-carded for now — #175 is Tier C).
+                    NewDateField(value = state.date, onValueChange = component::setDate)
+                    NewDeadlineTimeField(value = state.deadlineTime, onValueChange = component::setDeadlineTime)
                 }
 
                 // The gentle online-only feedback (ADR-0016).

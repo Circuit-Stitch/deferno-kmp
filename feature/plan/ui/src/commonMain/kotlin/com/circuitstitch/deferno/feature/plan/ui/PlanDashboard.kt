@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -77,8 +78,11 @@ import kotlinx.datetime.atStartOfDayIn
  *
  * On top of that it hosts three **local** sub-screens with no shell ripple (no Decompose, no
  * navigation): Today → What's next? (a decision helper) → Focus (a single-task surface). Mode lives
- * in plain Compose state here; Start/exit just flip it. The public signature is unchanged so the
- * shell keeps calling `PlanScreen(component, modifier)`.
+ * in plain Compose state here; Start/exit just flip it.
+ *
+ * Shared between the Android shell and the desktop shell (ADR-0004 #27): the body uses only
+ * cross-platform Compose + the shared designsystem atoms, so one dashboard serves both platforms — the
+ * desktop wrapper ([PlanDesktopScreen]) only centres it at a reading width.
  */
 @Composable
 fun PlanScreen(component: PlanComponent, modifier: Modifier = Modifier) {
@@ -136,13 +140,7 @@ private fun List<Task>.suggested(): Task? = firstOrNull { it.pinned } ?: firstOr
 // 1. "Today" — the hero
 // ───────────────────────────────────────────────────────────────────────────────────────────────
 
-/**
- * Stateless Today body — rendered directly by screenshot/UI tests with fixed inputs.
- *
- * **Signature changed** (integrator note): gained `today: LocalDate`, `onStartFocus: (TaskId) -> Unit`,
- * `onWhatsNext: () -> Unit`, `onAddFromForest: () -> Unit = {}`, `onSeeEverything: () -> Unit = {}`.
- * The old 4-arg `PlanContent(tasks, isRefreshing, onTaskClick, modifier)` is now this.
- */
+/** Stateless Today body — rendered directly by screenshot/UI tests with fixed inputs. */
 @Composable
 internal fun PlanContent(
     tasks: List<Task>,
@@ -170,7 +168,7 @@ internal fun PlanContent(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            // Edge-to-edge (ADR-0035 #2): pad the last row clear of the system nav bar.
+            // Edge-to-edge (ADR-0035 #2): pad the last row clear of the system nav bar (empty on desktop).
             contentPadding = WindowInsets.systemBars.only(WindowInsetsSides.Bottom).asPaddingValues(),
         ) {
             // Header: title + date + gentle subtitle.
@@ -454,7 +452,6 @@ internal fun ChoiceCard(
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val brand = MaterialTheme.defernoColors
     val border = if (selected) scheme.primary else scheme.outlineVariant
 
     Row(
@@ -465,7 +462,7 @@ internal fun ChoiceCard(
             .heightIn(min = MinTouchTarget)
             .clickable(
                 onClickLabel = "Choose ${task.title}",
-                role = androidx.compose.ui.semantics.Role.RadioButton,
+                role = Role.RadioButton,
                 onClick = onSelect,
             )
             .padding(16.dp),

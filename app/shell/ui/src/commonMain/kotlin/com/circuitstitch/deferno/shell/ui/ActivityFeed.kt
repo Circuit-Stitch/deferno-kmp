@@ -1,4 +1,4 @@
-package com.circuitstitch.deferno.shell
+package com.circuitstitch.deferno.shell.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import com.circuitstitch.deferno.shell.ActivityComponent
+import com.circuitstitch.deferno.shell.ActivityFeedRow
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
@@ -38,6 +40,9 @@ import kotlin.time.Instant
  * has recorded in the offline-first ledger. A thin render of [ActivityComponent.state] — each row shows
  * what changed, who made it (a source chip), and when. Server-sourced ("via Website" / "via MCP") rows
  * land here too once the reconcile seam tags them, with no View change.
+ *
+ * Shared between the Android shell and the desktop shell (ADR-0004 #27): the component is Compose-free in
+ * `:app:shell`, the atoms are cross-platform, so one View serves both platforms (no per-platform drift).
  */
 @Composable
 fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) {
@@ -61,6 +66,7 @@ fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) 
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
+                // Empty inset on desktop; clears the nav bar on Android.
                 contentPadding = WindowInsets.systemBars.only(WindowInsetsSides.Bottom).asPaddingValues(),
             ) {
                 items(state.rows, key = { it.seq }) { row ->

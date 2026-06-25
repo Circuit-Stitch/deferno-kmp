@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
@@ -32,10 +34,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
+import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -292,7 +301,7 @@ private fun SearchResults(state: SearchState, onResultClicked: (SearchHit) -> Un
     when {
         state.results.isNotEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
             items(state.results, key = { it.id }) { hit ->
-                SearchHitRow(hit = hit, onClick = { onResultClicked(hit) })
+                SearchHitRow(hit = hit, query = state.query, onClick = { onResultClicked(hit) })
                 HorizontalDivider()
             }
         }
@@ -313,25 +322,69 @@ private fun SearchResults(state: SearchState, onResultClicked: (SearchHit) -> Un
     }
 }
 
-/** A kind-aware desktop search row (#231): a kind dot in the hit's real colour + its title (muted/struck
- *  when terminal). Desktop keeps the existing filter controls; only the result rendering goes kind-agnostic. */
+/**
+ * A kind-aware desktop search row (#231) — at parity with the Android [SearchResultRow]: a leading
+ * [KindDot] in the hit's real kind colour, the title with the matched [query] highlighted (struck + muted
+ * when terminal), a calm mono meta line (kind label + ref), and a trailing due date on non-terminal hits.
+ */
 @Composable
-private fun SearchHitRow(hit: SearchHit, onClick: () -> Unit) {
+private fun SearchHitRow(hit: SearchHit, query: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = 64.dp)
             .clickable(onClickLabel = "Open ${hit.title}", onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         KindDot(color = kindColor(hit.kind), modifier = Modifier.semantics { contentDescription = hit.kind.name.lowercase() })
-        Text(
-            text = hit.title,
-            style = MaterialTheme.typography.titleMedium,
-            color = if (hit.isTerminal) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f).padding(start = 12.dp),
-        )
+        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+            Text(
+                text = highlightedTitle(hit.title, query),
+                style = MaterialTheme.typography.titleMedium,
+                color = if (hit.isTerminal) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
+                textDecoration = if (hit.isTerminal) TextDecoration.LineThrough else TextDecoration.None,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val meta = buildList {
+                add(kindLabel(hit.kind))
+                hit.ref?.let { add(it) }
+            }
+            MonoMeta(text = meta.joinToString("  ·  "))
+        }
+        if (!hit.isTerminal) {
+            hit.completeBy?.let { due ->
+                Spacer(Modifier.width(10.dp))
+                MonoMeta(text = due.toDisplayDate())
+            }
+        }
+    }
+}
+
+/** The hit title with case-insensitive matches of [query] highlighted in the accent container colour. */
+@Composable
+private fun highlightedTitle(title: String, query: String): AnnotatedString {
+    val q = query.trim()
+    if (q.isEmpty()) return AnnotatedString(title)
+    val hl = SpanStyle(
+        background = MaterialTheme.colorScheme.primaryContainer,
+        color = MaterialTheme.defernoColors.amberDeep,
+    )
+    return buildAnnotatedString {
+        val lcTitle = title.lowercase()
+        val lcQuery = q.lowercase()
+        var start = 0
+        while (true) {
+            val idx = lcTitle.indexOf(lcQuery, start)
+            if (idx < 0) {
+                append(title.substring(start))
+                break
+            }
+            append(title.substring(start, idx))
+            withStyle(hl) { append(title.substring(idx, idx + q.length)) }
+            start = idx + q.length
+        }
     }
 }
 
@@ -342,11 +395,4 @@ private fun sortLabel(sort: SearchSort): String = when (sort) {
     SearchSort.DeadlineAsc -> "Soonest due"
 }
 
-/** The plain status label for a [WorkingState] filter chip (a View concern, kept local). */
-private fun workingStateLabel(state: WorkingState): String = when (state) {
-    WorkingState.Open -> "Open"
-    WorkingState.InProgress -> "In progress"
-    WorkingState.InReview -> "In review"
-    WorkingState.Done -> "Done"
-    WorkingState.Dropped -> "Set aside"
-}
+// [workingStateLabel] is the shared commonMain label (lifted with WorkingStateEditor, see TaskDetailContent).

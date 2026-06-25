@@ -54,6 +54,11 @@ kotlin {
             // The Speech engine row renders core:speech types directly (#93) — though desktop hides the row
             // until a desktop engine lands (#94), the shared screen still references these types.
             implementation(project(":core:speech"))
+            // The Agent row renders core:agent's inference-engine types (#150) and the Storage row renders
+            // core:data's StorageProviderId/Option/Availability (#210) — both are live on desktop now (the
+            // cloud Agent needs no on-device ML; on-device storage already works), mirroring androidMain.
+            implementation(project(":core:agent"))
+            implementation(project(":core:data"))
 
             implementation(libs.decompose)
             implementation(libs.decompose.extensions.compose)
