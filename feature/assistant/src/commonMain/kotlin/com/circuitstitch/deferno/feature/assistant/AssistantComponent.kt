@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.data.assistant.AssistantClient
 import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
+import com.circuitstitch.deferno.core.model.AssistantAvailability
 import com.circuitstitch.deferno.core.model.ChatMessage
 import com.circuitstitch.deferno.core.model.ChatRole
 import com.circuitstitch.deferno.core.model.Conversation
@@ -55,13 +56,11 @@ interface AssistantComponent {
     fun onEnableRequested()
     fun onConsentAccepted()
     fun onConsentDeclined()
-    fun onDisable()
 
     fun onConfirmProposal()
     fun onRejectProposal()
 
     fun onDismissError()
-    fun onRefresh()
 }
 
 @OptIn(ExperimentalCoroutinesApi::class, ExperimentalUuidApi::class)
@@ -72,6 +71,13 @@ class DefaultAssistantComponent(
     private val store: ConversationStore,
     private val stream: AssistantStream,
     private val connectivity: Connectivity,
+    // The per-Org availability gate (ADR-0040, #282) — a SHARED source the shell also feeds the Settings
+    // enablement row, so the two surfaces never diverge (enable here ⇒ Settings reflects it, and vice
+    // versa). Observed into state; `null` while loading / when the Assistant doesn't apply.
+    private val availability: StateFlow<AssistantAvailability?> = MutableStateFlow(null),
+    // Flip enablement server-side (the egress consent on enable); the result lands in [availability], so the
+    // component only owns the enabling/disclosure UI state. The shell write-through returns null on failure.
+    private val setEnabled: suspend (Boolean) -> AssistantAvailability? = { null },
     // After a confirmed proposal applies server-side, re-sync the affected items through the normal sync
     // path (NOT the outbox — the server is the writer here, ADR-0040). The shell wires the real trigger.
     private val resyncAfterApply: suspend () -> Unit = {},
@@ -105,7 +111,11 @@ class DefaultAssistantComponent(
         scope.launch {
             connectivity.online.collect { online -> _state.update { it.copy(online = online) } }
         }
-        scope.launch { loadAvailability() }
+        // The availability gate is a shared StateFlow (the shell also feeds it to the Settings row), so the
+        // chat reflects an enable/disable made from either surface — offline/failed simply leaves it null.
+        scope.launch {
+            availability.collect { gate -> _state.update { it.copy(availability = gate) } }
+        }
         scope.launch { syncConversationList() }
     }
 
@@ -143,9 +153,8 @@ class DefaultAssistantComponent(
                             )
                         }
                         is AssistantEvent.Proposal -> _state.update { it.copy(pendingProposal = event.proposal) }
-                        is AssistantEvent.Usage -> if (event.exhausted) {
-                            _state.update { it.copy(usageExhausted = true) }
-                        }
+                        // Symmetric: a later usage frame after a reset clears the hard-stop, never just sets it.
+                        is AssistantEvent.Usage -> _state.update { it.copy(usageExhausted = event.exhausted) }
                         is AssistantEvent.Error -> _state.update { it.copy(error = event.message) }
                         // Ordinary tool activity isn't a confirmation surface in v1 (a later activity feed).
                         is AssistantEvent.ToolCall, is AssistantEvent.ToolResult -> Unit
@@ -190,20 +199,12 @@ class DefaultAssistantComponent(
         if (_state.value.enabling) return
         _state.update { it.copy(enabling = true, error = null) }
         scope.launch {
-            when (val result = client.setEnablement(orgId, enabled = true)) {
-                is RemoteSnapshot.Available ->
-                    _state.update { it.copy(availability = result.value, enabling = false, showingDisclosure = false) }
-                is RemoteSnapshot.Unavailable ->
-                    _state.update { it.copy(enabling = false, error = "Couldn't enable the Assistant. Try again.") }
-            }
-        }
-    }
-
-    override fun onDisable() {
-        scope.launch {
-            when (val result = client.setEnablement(orgId, enabled = false)) {
-                is RemoteSnapshot.Available -> _state.update { it.copy(availability = result.value) }
-                is RemoteSnapshot.Unavailable -> _state.update { it.copy(error = "Couldn't disable the Assistant. Try again.") }
+            // The write-through updates the shared [availability] flow on success (so the gate reflects
+            // everywhere at once); we only own the enabling/disclosure UI state + the failure message.
+            val updated = setEnabled(true)
+            _state.update {
+                if (updated != null) it.copy(enabling = false, showingDisclosure = false)
+                else it.copy(enabling = false, error = "Couldn't enable the Assistant. Try again.")
             }
         }
     }
@@ -239,24 +240,11 @@ class DefaultAssistantComponent(
         _state.update { it.copy(error = null) }
     }
 
-    override fun onRefresh() {
-        scope.launch { loadAvailability() }
-        scope.launch { syncConversationList() }
-    }
-
     private fun newConversation(): ConversationId {
         val id = ConversationId(newId())
         activeId.value = id
         _state.update { it.copy(activeConversationId = id) }
         return id
-    }
-
-    private suspend fun loadAvailability() {
-        when (val result = client.availability(orgId)) {
-            is RemoteSnapshot.Available -> _state.update { it.copy(availability = result.value) }
-            // Offline/failed: leave the gate unknown; the cached chat still reads (composer stays disabled).
-            is RemoteSnapshot.Unavailable -> Unit
-        }
     }
 
     /** Cross-device: make server-listed Conversations (incl. web-started) selectable by seeding placeholders. */

@@ -84,25 +84,24 @@ class FakeSpeechEngineCatalog(
 
 /**
  * In-memory [AssistantEnablement] for the [SettingsComponent] Assistant-enablement tests (#282, ADR-0040).
- * [loaded] is the gate [load] reports; [setEnabled] flips the in-memory `enabled` (preserving entitlement +
- * disclosure) and records each call, unless [failSet] forces a `null` failure so a server error can be
- * exercised. A `null` [loaded] models the inert / not-applicable case (the row hides).
+ * [availability] is the shared observable gate (seeded from `initial`); [setEnabled] flips its `enabled`
+ * (preserving entitlement + disclosure) and records each call, unless [failSet] forces a no-op failure (the
+ * gate is left unchanged) so a server error can be exercised. A `null` gate models the inert / not-applicable
+ * case (the row hides).
  */
 class FakeAssistantEnablement(
     initial: AssistantAvailability? = null,
     private val failSet: Boolean = false,
 ) : AssistantEnablement {
-    var loaded: AssistantAvailability? = initial
-        private set
+    override val availability = MutableStateFlow(initial)
     val setCalls = mutableListOf<Boolean>()
 
-    override suspend fun load(): AssistantAvailability? = loaded
+    override suspend fun refresh() { /* the gate is seeded; nothing to fetch */ }
 
-    override suspend fun setEnabled(enabled: Boolean): AssistantAvailability? {
+    override suspend fun setEnabled(enabled: Boolean) {
         setCalls += enabled
-        if (failSet) return null
-        val base = loaded ?: AssistantAvailability(entitled = true, enabled = enabled)
-        loaded = base.copy(enabled = enabled)
-        return loaded
+        if (failSet) return
+        val base = availability.value ?: AssistantAvailability(entitled = true, enabled = enabled)
+        availability.value = base.copy(enabled = enabled)
     }
 }

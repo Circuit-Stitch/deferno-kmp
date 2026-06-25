@@ -12,6 +12,9 @@ kotlin {
             implementation(project(":core:common")) // componentScope()
             implementation(project(":core:model"))
             implementation(project(":core:data")) // AssistantClient, ConversationStore, Connectivity seams
+            // The SSE turn-stream wire format (AssistantWireFormat) maps frames to typed events via
+            // kotlinx-serialization-json's JsonElement API — runtime-only, no @Serializable, so no compiler plugin.
+            implementation(libs.kotlinx.serialization.json)
             // `api`, not `implementation`: `AssistantComponent`/`DefaultAssistantComponent` expose Decompose
             // (`ComponentContext`) and coroutines `StateFlow`/`Flow` in their public API, so View consumers
             // (the iOS framework + a later `:feature:assistant:ui`) must see them.

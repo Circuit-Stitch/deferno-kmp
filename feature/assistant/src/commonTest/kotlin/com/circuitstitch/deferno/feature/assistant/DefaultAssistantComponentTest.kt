@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.core.model.ConversationDetail
 import com.circuitstitch.deferno.core.model.ConversationId
 import com.circuitstitch.deferno.core.model.OrgId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -131,10 +132,9 @@ class DefaultAssistantComponentTest {
 
     @Test
     fun anUnentitledOrgIsNeitherAvailableNorEnableable() = runTest {
-        val client = FakeAssistantClient().apply {
-            availability = RemoteSnapshot.Available(AssistantAvailability(entitled = false, enabled = false))
-        }
-        val component = assistantComponent(client = client)
+        val component = assistantComponent(
+            enablement = FakeEnablement(MutableStateFlow(AssistantAvailability(entitled = false, enabled = false))),
+        )
         advanceUntilIdle()
 
         val s = component.state.value
@@ -144,10 +144,11 @@ class DefaultAssistantComponentTest {
 
     @Test
     fun anEntitledButNotEnabledOrgShowsTheEnableCtaWithDisclosure() = runTest {
-        val client = FakeAssistantClient().apply {
-            availability = RemoteSnapshot.Available(AssistantAvailability(entitled = true, enabled = false, disclosure = "we egress your data"))
-        }
-        val component = assistantComponent(client = client)
+        val component = assistantComponent(
+            enablement = FakeEnablement(
+                MutableStateFlow(AssistantAvailability(entitled = true, enabled = false, disclosure = "we egress your data")),
+            ),
+        )
         advanceUntilIdle()
 
         val s = component.state.value
@@ -158,11 +159,10 @@ class DefaultAssistantComponentTest {
 
     @Test
     fun enablingShowsTheDisclosureThenConsentEnablesIt() = runTest {
-        val client = FakeAssistantClient().apply {
-            availability = RemoteSnapshot.Available(AssistantAvailability(entitled = true, enabled = false, disclosure = "consent"))
-            enablementResult = RemoteSnapshot.Available(AssistantAvailability(entitled = true, enabled = true, disclosure = "consent"))
-        }
-        val component = assistantComponent(client = client)
+        val enablement = FakeEnablement(
+            MutableStateFlow(AssistantAvailability(entitled = true, enabled = false, disclosure = "consent")),
+        )
+        val component = assistantComponent(enablement = enablement)
         advanceUntilIdle()
 
         component.onEnableRequested()
@@ -171,25 +171,26 @@ class DefaultAssistantComponentTest {
         component.onConsentAccepted()
         advanceUntilIdle()
 
-        assertEquals(listOf(true), client.enablementCalls)
+        assertEquals(listOf(true), enablement.calls)
         val s = component.state.value
-        assertTrue(s.available)
+        assertTrue(s.available, "the shared gate, flipped through the write-through, makes the chat available")
         assertFalse(s.showingDisclosure)
     }
 
     @Test
-    fun disablingWithdrawsConsentImmediately() = runTest {
-        val client = FakeAssistantClient().apply {
-            enablementResult = RemoteSnapshot.Available(AssistantAvailability(entitled = true, enabled = false))
-        }
-        val component = assistantComponent(client = client)
+    fun aSurfaceFlipReflectsThroughTheSharedAvailabilitySource() = runTest {
+        // The Destination + the Settings row observe the SAME availability flow, so a flip from either is seen
+        // by both (no within-session divergence). Here a Settings-side disable lands on the chat's gate.
+        val enablement = FakeEnablement(MutableStateFlow(AssistantAvailability(entitled = true, enabled = true)))
+        val component = assistantComponent(enablement = enablement)
+        advanceUntilIdle()
+        assertTrue(component.state.value.available)
+
+        enablement.availability.value = AssistantAvailability(entitled = true, enabled = false)
         advanceUntilIdle()
 
-        component.onDisable()
-        advanceUntilIdle()
-
-        assertEquals(listOf(false), client.enablementCalls)
-        assertFalse(component.state.value.available)
+        assertFalse(component.state.value.available, "the chat reflects an enablement change made elsewhere")
+        assertTrue(component.state.value.needsEnable)
     }
 
     // --- offline / exhaustion / errors / cancel ---
@@ -218,6 +219,24 @@ class DefaultAssistantComponentTest {
         val s = component.state.value
         assertTrue(s.usageExhausted)
         assertFalse(s.canSend)
+    }
+
+    @Test
+    fun aUsageResetClearsTheExhaustedHardStop() = runTest {
+        // The hard-stop is symmetric: a later non-exhausted usage frame (e.g. after the monthly reset) clears
+        // it, rather than sticking until the app restarts.
+        val stream = FakeAssistantStream().apply {
+            script(
+                AssistantEvent.Usage(exhausted = true),
+                AssistantEvent.Usage(exhausted = false),
+                AssistantEvent.Done,
+            )
+        }
+        val component = assistantComponent(stream = stream)
+        advanceUntilIdle()
+        component.onComposerChanged("go"); component.onSend(); advanceUntilIdle()
+
+        assertFalse(component.state.value.usageExhausted, "a non-exhausted usage frame clears the hard-stop")
     }
 
     @Test
@@ -294,10 +313,12 @@ class DefaultAssistantComponentTest {
     private var clockSeconds = 0L
 
     private fun TestScope.assistantComponent(
-        client: FakeAssistantClient = FakeAssistantClient().apply { availability = RemoteSnapshot.Available(available) },
+        client: FakeAssistantClient = FakeAssistantClient(),
         store: FakeConversationStore = FakeConversationStore(),
         stream: FakeAssistantStream = FakeAssistantStream(),
         connectivity: FakeConnectivity = FakeConnectivity(initial = true),
+        // The shared availability source + enablement write-through the shell owns (defaults to entitled+enabled).
+        enablement: FakeEnablement = FakeEnablement(),
         resync: suspend () -> Unit = {},
     ) = DefaultAssistantComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
@@ -306,6 +327,8 @@ class DefaultAssistantComponentTest {
         store = store,
         stream = stream,
         connectivity = connectivity,
+        availability = enablement.availability,
+        setEnabled = enablement::setEnabled,
         resyncAfterApply = resync,
         newId = { "id-${idCounter++}" },
         now = { Instant.fromEpochSeconds(1_750_000_000L + clockSeconds++) },

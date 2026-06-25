@@ -40,8 +40,13 @@ data class AssistantState(
     /** The consent text to show on the enable CTA (the API's string, or [AssistantAvailability]'s fallback). */
     val disclosure: String get() = availability?.disclosureOrDefault ?: AssistantAvailability.DEFAULT_DISCLOSURE
 
-    /** Whether a typed message can be sent right now (the composer's enabled guard). */
-    val canSend: Boolean
-        get() = available && online && !streaming && !usageExhausted &&
-            pendingProposal == null && composer.isNotBlank()
+    /**
+     * Whether the composer accepts input right now — the shared enabled guard the chat View reads (online,
+     * enabled, not mid-turn / exhausted / awaiting a proposal). Lives here, not re-derived per platform.
+     */
+    val composerEnabled: Boolean
+        get() = available && online && !streaming && !usageExhausted && pendingProposal == null
+
+    /** Whether a typed message can be sent right now (the composer guard plus a non-blank message). */
+    val canSend: Boolean get() = composerEnabled && composer.isNotBlank()
 }

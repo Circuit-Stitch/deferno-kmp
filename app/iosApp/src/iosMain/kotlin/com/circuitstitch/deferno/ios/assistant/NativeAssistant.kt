@@ -1,20 +1,12 @@
 package com.circuitstitch.deferno.ios.assistant
 
-import com.circuitstitch.deferno.core.model.AssistantProposal
-import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.feature.assistant.AssistantEvent
 import com.circuitstitch.deferno.feature.assistant.AssistantStream
 import com.circuitstitch.deferno.feature.assistant.AssistantTurnRequest
+import com.circuitstitch.deferno.feature.assistant.AssistantWireFormat
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.put
 import software.amazon.app.kmplogger.logger
 
 /**
@@ -23,7 +15,8 @@ import software.amazon.app.kmplogger.logger
  * and the **parsing**; Swift only opens a raw `URLSession` byte stream (NSURLSession SSE doesn't buffer like
  * Ktor's Darwin engine, ADR-0040), reads SSE frames, and hands each frame's `(eventType, data)` back as
  * plain Strings, then signals completion or failure exactly once. So a backend wire-format change is
- * contained to [turnUrl], [turnBody], and [toAssistantEvent] here (the ADR's "isolate the wire" guarantee).
+ * contained to [AssistantWireFormat] (URL/body/frame mapping) — pure, common, unit-tested (the ADR's
+ * "isolate the wire" guarantee); this file is just the Swift-bridged byte plumbing.
  */
 interface NativeAssistantTransport {
     /**
@@ -73,7 +66,7 @@ class NativeAssistantStream(
             }
         }
 
-        val url = turnUrl(baseUrl, request)
+        val url = AssistantWireFormat.turnUrl(baseUrl, request)
         val authToken = token()
         // Diagnostics route through the shared kmp-logger → os_log (DEBUG, so Release filters them out).
         // Non-PII only: the URL/event-name/frame length, never the Bearer token or the reply/message text.
@@ -82,11 +75,11 @@ class NativeAssistantStream(
         val handle = transport.stream(
             url = url,
             authToken = authToken,
-            body = turnBody(request),
+            body = AssistantWireFormat.turnBody(request),
             onEvent = { type, data ->
                 // Per-frame trace — the diagnostic that surfaced the CRLF frame-merge bug (event + length).
                 AssistantStreamLog.logger.d { "frame event='$type' dataLen=${data.length}" }
-                val event = toAssistantEvent(type, data)
+                val event = AssistantWireFormat.toEvent(type, data)
                 when {
                     event == null -> Unit // unknown/heartbeat frame — ignore
                     event == AssistantEvent.Done -> complete(AssistantEvent.Done)
@@ -111,70 +104,3 @@ class NativeAssistantStream(
 // kmp-logger's `logger` is an Any-receiver extension; a tag object gives the stream's `callbackFlow`
 // (whose receiver is ProducerScope, not the class) a stable tag ("Deferno: AssistantStreamLog").
 private object AssistantStreamLog
-
-// --- WIRE-DEPENDENT (Deferno#485): isolated top-level so a backend change is a contained edit (ADR-0040). ---
-
-/** The turn endpoint (verified against staging: `POST /orgs/{org}/assistant/messages` streams the reply). */
-private fun turnUrl(baseUrl: String, request: AssistantTurnRequest): String =
-    "${baseUrl.trimEnd('/')}/orgs/${request.orgId.value}/assistant/messages"
-
-/** The turn request body — snake_case per the DTO convention; the client mints `conversation_id` (#185). */
-private fun turnBody(request: AssistantTurnRequest): String =
-    buildJsonObject {
-        put("conversation_id", request.conversationId.value)
-        put("message", request.message)
-    }.toString()
-
-/**
- * Map one SSE frame to a typed [AssistantEvent], or `null` to ignore (heartbeat / unknown). Reconciled
- * against the live staging stream (2026-06-25): the frame format is **mixed** — `text`'s `data:` is the raw
- * reply chunk (NOT JSON), `done`'s is the `[DONE]` sentinel, and the structured frames (`conversation`,
- * `proposal`, `usage`, `error`) carry a JSON object. `tool-call`/`tool-result`/`proposal`/`usage` weren't
- * exercised by the simple turn, so they stay tolerant/provisional until a richer turn confirms them.
- */
-private fun toAssistantEvent(eventType: String, data: String): AssistantEvent? {
-    val type = eventType.trim().lowercase().replace('_', '-')
-
-    // `text`: the data is the raw reply delta (accrued by the component), not a JSON envelope.
-    if (type in TEXT_EVENTS) return data.takeIf { it.isNotEmpty() }?.let { AssistantEvent.TextDelta(it) }
-    // `done`: the data is the `[DONE]` sentinel — the event alone is the signal.
-    if (type in DONE_EVENTS) return AssistantEvent.Done
-
-    val json = runCatching { DefernoJson.parseToJsonElement(data) }.getOrNull() as? JsonObject
-    return when (type) {
-        // The server echoes the conversation id; the client already keys on the id it sent, so this is
-        // confirmatory and ignored (validated: the sent id is honored — see the turn body's conversation_id).
-        "conversation" -> null
-        "tool-call", "tool-use" ->
-            AssistantEvent.ToolCall(json.str("tool") ?: json.str("name") ?: "", json.str("input") ?: "")
-        "tool-result" ->
-            AssistantEvent.ToolResult(
-                json.str("tool") ?: json.str("name") ?: "",
-                json.str("output") ?: json.str("result") ?: "",
-            )
-        "proposal" -> json?.let {
-            AssistantEvent.Proposal(
-                AssistantProposal(
-                    tool = it.str("tool") ?: it.str("name") ?: "",
-                    input = it["input"]?.toString() ?: "",
-                    summary = it.str("summary") ?: it.str("description") ?: "",
-                ),
-            )
-        }
-        "usage" -> AssistantEvent.Usage(
-            remaining = (json?.get("remaining") as? JsonPrimitive)?.intOrNull,
-            exhausted = (json?.get("exhausted") as? JsonPrimitive)?.booleanOrNull ?: false,
-        )
-        // `error` may arrive as a JSON object or a raw string — handle both.
-        "error" -> AssistantEvent.Error(json.str("message") ?: json.str("error") ?: data.ifBlank { "The turn failed. Try again." })
-        else -> null
-    }
-}
-
-/** `event:` names whose `data:` is the raw reply text (a streamed delta), not a JSON envelope. */
-private val TEXT_EVENTS = setOf("text", "text-delta", "delta", "content", "content-delta", "message-delta")
-
-/** `event:` names that signal the turn finished cleanly (the `data:` payload — e.g. `[DONE]` — is ignored). */
-private val DONE_EVENTS = setOf("done", "end", "complete", "stop")
-
-private fun JsonObject?.str(key: String): String? = (this?.get(key) as? JsonPrimitive)?.contentOrNull

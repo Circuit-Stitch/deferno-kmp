@@ -219,7 +219,7 @@ struct AssistantView: View {
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(colors.surfaceVariant, in: RoundedRectangle(cornerRadius: 20))
-                .disabled(!canType)
+                .disabled(!s.composerEnabled)
             if s.streaming {
                 Button { component.onCancelTurn() } label: {
                     Image(systemName: "stop.circle.fill").font(.system(size: 30))
@@ -285,10 +285,6 @@ struct AssistantView: View {
     }
 
     // MARK: Bits
-
-    private var canType: Bool {
-        s.available && s.online && !s.streaming && !s.usageExhausted && s.pendingProposal == nil
-    }
 
     private var composerText: Binding<String> {
         Binding(get: { s.composer }, set: { component.onComposerChanged(text: $0) })

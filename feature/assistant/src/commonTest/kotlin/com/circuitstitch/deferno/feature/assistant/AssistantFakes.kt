@@ -43,25 +43,22 @@ class FakeAssistantStream : AssistantStream {
     }
 }
 
-/** A programmable [AssistantClient]: set each endpoint's [RemoteSnapshot]; recorders capture the calls. */
+/**
+ * A programmable [AssistantClient]: set each endpoint's [RemoteSnapshot]; recorders capture the calls.
+ * Availability + enablement are owned by the shared source + write-through (the [FakeEnablement] seam) now,
+ * not this client, so the component never calls those two — they stay benign stubs to satisfy the interface.
+ */
 class FakeAssistantClient : AssistantClient {
-    var availability: RemoteSnapshot<AssistantAvailability> =
-        RemoteSnapshot.Available(AssistantAvailability(entitled = true, enabled = true))
-    var enablementResult: RemoteSnapshot<AssistantAvailability> =
-        RemoteSnapshot.Available(AssistantAvailability(entitled = true, enabled = true))
     var applyResult: RemoteSnapshot<Boolean> = RemoteSnapshot.Available(true)
     var conversationsResult: RemoteSnapshot<List<ConversationId>> = RemoteSnapshot.Available(emptyList())
     var conversationDetail: (ConversationId) -> RemoteSnapshot<ConversationDetail> = { RemoteSnapshot.Unavailable }
 
-    val enablementCalls = mutableListOf<Boolean>()
     val appliedProposals = mutableListOf<AssistantProposal>()
 
-    override suspend fun availability(orgId: OrgId) = availability
+    override suspend fun availability(orgId: OrgId): RemoteSnapshot<AssistantAvailability> = RemoteSnapshot.Unavailable
 
-    override suspend fun setEnablement(orgId: OrgId, enabled: Boolean): RemoteSnapshot<AssistantAvailability> {
-        enablementCalls += enabled
-        return enablementResult
-    }
+    override suspend fun setEnablement(orgId: OrgId, enabled: Boolean): RemoteSnapshot<AssistantAvailability> =
+        RemoteSnapshot.Unavailable
 
     override suspend fun apply(orgId: OrgId, proposal: AssistantProposal): RemoteSnapshot<Boolean> {
         appliedProposals += proposal
@@ -109,4 +106,24 @@ class FakeConnectivity(initial: Boolean = true) : Connectivity {
     private val _online = MutableStateFlow(initial)
     override val online: StateFlow<Boolean> get() = _online
     fun setOnline(value: Boolean) { _online.value = value }
+}
+
+/**
+ * The shell's shared availability source + enablement write-through (ADR-0040), faked: [availability] is the
+ * flow the component observes, [setEnabled] records each flip and writes the new gate back into it (so the
+ * observe loop adopts it) — unless [fail] forces a no-op failure (the gate is left unchanged).
+ */
+class FakeEnablement(
+    val availability: MutableStateFlow<AssistantAvailability?> =
+        MutableStateFlow(AssistantAvailability(entitled = true, enabled = true)),
+    private val fail: Boolean = false,
+) {
+    val calls = mutableListOf<Boolean>()
+
+    suspend fun setEnabled(enabled: Boolean): AssistantAvailability? {
+        calls += enabled
+        if (fail) return null
+        val base = availability.value ?: AssistantAvailability(entitled = true, enabled = enabled)
+        return base.copy(enabled = enabled).also { availability.value = it }
+    }
 }

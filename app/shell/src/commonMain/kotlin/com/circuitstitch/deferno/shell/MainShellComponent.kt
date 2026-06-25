@@ -534,20 +534,32 @@ class DefaultMainShellComponent(
         assistantOrgId ?: (authRepository.loadMe() as? MeResult.Authenticated)?.user?.personalOrgId
             ?.also { assistantOrgId = it }
 
-    // The Settings Assistant-enablement seam (ADR-0040, #282): the AppScope request/response client + the
-    // resolved personal org, gated server-side on entitlement. Threaded into the Settings Destination. Reads
-    // the org lazily (resolving it if init's gate fetch hasn't yet), so the Settings row works even if opened
-    // early; on the Android/desktop hosts the inert client makes every call Unavailable → the row stays hidden.
-    private val assistantEnablement = object : AssistantEnablement {
-        override suspend fun load(): AssistantAvailability? {
-            val org = resolveAssistantOrgId() ?: return null
-            return (assistantClient.availability(org) as? RemoteSnapshot.Available)?.value
-        }
+    // The SINGLE per-Org availability gate (ADR-0040, #282) — the shared source both the Assistant Destination
+    // and the Settings enablement row observe, so a flip from either reflects in both (no within-session
+    // divergence). The init gate fetch + every enablement write land here; the inert client leaves it null.
+    private val assistantAvailability = MutableStateFlow<AssistantAvailability?>(null)
 
-        override suspend fun setEnabled(enabled: Boolean): AssistantAvailability? {
-            val org = resolveAssistantOrgId() ?: return null
-            return (assistantClient.setEnablement(org, enabled) as? RemoteSnapshot.Available)?.value
-        }
+    /** (Re)fetch the gate into [assistantAvailability]; the inert client (non-iOS/tests) leaves it null. */
+    private suspend fun refreshAssistantAvailability() {
+        val org = resolveAssistantOrgId() ?: return
+        (assistantClient.availability(org) as? RemoteSnapshot.Available)?.let { assistantAvailability.value = it.value }
+    }
+
+    /** Flip enablement server-side; the new gate lands in [assistantAvailability] (so both surfaces see it). */
+    private suspend fun setAssistantEnabled(enabled: Boolean): AssistantAvailability? {
+        val org = resolveAssistantOrgId() ?: return null
+        val updated = (assistantClient.setEnablement(org, enabled) as? RemoteSnapshot.Available)?.value
+        if (updated != null) assistantAvailability.value = updated
+        return updated
+    }
+
+    // The Settings Assistant-enablement seam (ADR-0040, #282): backed by the shared [assistantAvailability]
+    // source + the write-through above, so the Settings row and the Destination can't diverge. On the
+    // Android/desktop hosts the inert client makes every call Unavailable → the gate stays null → the row hides.
+    private val assistantEnablement = object : AssistantEnablement {
+        override val availability: StateFlow<AssistantAvailability?> = assistantAvailability
+        override suspend fun refresh() = refreshAssistantAvailability()
+        override suspend fun setEnabled(enabled: Boolean) { setAssistantEnabled(enabled) }
     }
 
     override fun switchAccount(id: AccountId) = onSwitchAccount(id)
@@ -748,6 +760,10 @@ class DefaultMainShellComponent(
                         store = conversationStore,
                         stream = assistantStream,
                         connectivity = connectivity,
+                        // The SHARED availability gate + enablement write-through — the same source the Settings
+                        // row reads, so enabling/disabling from either surface reflects in both (ADR-0040).
+                        availability = assistantAvailability,
+                        setEnabled = ::setAssistantEnabled,
                         // After a confirmed proposal applies server-side, re-sync the affected items through
                         // the normal pull — NOT the outbox; here the server is the writer (ADR-0040).
                         resyncAfterApply = { taskRepository.refresh() },
@@ -850,14 +866,10 @@ class DefaultMainShellComponent(
         // Resolve the active Org + the Assistant availability gate (ADR-0040) before the nav suite settles:
         // the conditionally-present Assistant row is revealed only once availability resolves to `entitled`.
         // Offline / failed / no real client (Android/desktop/tests) leaves the row absent — the Assistant is
-        // online-only anyway. The Destination's own component re-checks availability for its enable/consent gate.
+        // online-only anyway. The one fetch fills the SHARED [assistantAvailability] both surfaces observe.
         overlayScope.launch {
-            val orgId = resolveAssistantOrgId() ?: return@launch
-            when (val availability = assistantClient.availability(orgId)) {
-                is RemoteSnapshot.Available ->
-                    if (availability.value.entitled) _destinations.value = Destination.entries
-                is RemoteSnapshot.Unavailable -> Unit
-            }
+            refreshAssistantAvailability()
+            if (assistantAvailability.value?.entitled == true) _destinations.value = Destination.entries
         }
     }
 

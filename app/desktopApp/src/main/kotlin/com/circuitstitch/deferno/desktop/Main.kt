@@ -647,8 +647,8 @@ private fun MainShellComponent.refreshActiveDestination() {
         is MainShellComponent.DestinationChild.Profile,
         is MainShellComponent.DestinationChild.Settings,
         is MainShellComponent.DestinationChild.Activity,
-        // The Assistant chat manages its own streaming refresh (onRefresh re-checks availability); the desktop
-        // View is deferred + the row hidden, so the shell's generic Refresh is a no-op here.
+        // The Assistant chat is a live stream with its own chrome; the desktop View is deferred + the row
+        // hidden, so the shell's generic Refresh is a no-op here.
         is MainShellComponent.DestinationChild.Assistant,
         is MainShellComponent.DestinationChild.Placeholder,
         -> Unit

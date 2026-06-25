@@ -424,8 +424,9 @@ class DefaultSettingsComponent(
     override val inferenceEngine: StateFlow<InferenceEngineSettings> = _inferenceEngine.asStateFlow()
 
     // The server-mediated Assistant enablement (ADR-0040). Seeded empty (availability null → row hidden); the
-    // init below fills it once the suspend availability fetch resolves. Server-sourced via the seam — never
-    // synced settings, and hidden unless the Org is entitled (so absent on non-iOS hosts / accounts in v1).
+    // init below observes the shared [AssistantEnablement.availability] flow (the same source the Destination
+    // reads). Server-sourced via the seam — never synced settings, hidden unless the Org is entitled (so
+    // absent on non-iOS hosts / accounts in v1).
     private val _assistant = MutableStateFlow(AssistantSettings())
     override val assistant: StateFlow<AssistantSettings> = _assistant.asStateFlow()
 
@@ -465,10 +466,14 @@ class DefaultSettingsComponent(
                 selected = inferenceEngineCatalog.selected(),
             )
         }
+        // The Assistant gate is a shared, observable source — the shell feeds the SAME flow to the Assistant
+        // Destination — so a flip from either surface reflects here. [refresh] kicks the (server) fetch; the
+        // collect republishes it. A null gate (not entitled / offline / non-iOS) leaves the row hidden.
+        scope.launch { assistantEnablement.refresh() }
         scope.launch {
-            // Fetch the Assistant gate (server call); a null result (not entitled / offline / non-iOS)
-            // leaves availability null → the row stays hidden.
-            _assistant.value = AssistantSettings(availability = assistantEnablement.load())
+            assistantEnablement.availability.collect { gate ->
+                _assistant.value = _assistant.value.copy(availability = gate)
+            }
         }
     }
 
@@ -529,15 +534,14 @@ class DefaultSettingsComponent(
     }
 
     override fun onAssistantEnablementChanged(enabled: Boolean) {
-        // Server call (ADR-0040) — guard against a concurrent in-flight flip. On success adopt the new gate;
-        // on failure keep the prior availability so the toggle reverts to reality (never a silent flip).
+        // Server call (ADR-0040) — guard against a concurrent in-flight flip. The result lands in the shared
+        // [AssistantEnablement.availability] flow (so the Destination reflects it too); on failure the flow is
+        // unchanged, so the toggle reverts to reality (never a silent flip). We just clear the in-flight guard.
         if (_assistant.value.busy) return
         _assistant.value = _assistant.value.copy(busy = true)
         scope.launch {
-            val updated = assistantEnablement.setEnabled(enabled)
-            _assistant.value =
-                if (updated != null) AssistantSettings(availability = updated, busy = false)
-                else _assistant.value.copy(busy = false)
+            assistantEnablement.setEnabled(enabled)
+            _assistant.value = _assistant.value.copy(busy = false)
         }
     }
 
