@@ -151,7 +151,7 @@ koog = "1.0.0"
 # stale and 404s on Maven Central. 0.0.1 (published 2026-06-10) is the only release and ships no
 # iosX64 variant — which is why `deferno.kmp` drops the iosX64 target (a commonMain dep must
 # resolve a variant for every target, and none exists for iosX64). Pre-1.0: expect API churn.
-kmpLogger = "0.0.1"
+kmpLogger = "0.0.1-SNAPSHOT" # TEMP: local build adding macosArm64/macosX64 klibs (mavenLocal). Revert to "0.0.1" once republished.
 # WorkManager (#150 Brain dump async redesign, ADR-0027): the on-device brain-dump transcription runs in
 # a CoroutineWorker so it survives the overlay closing. Android-only — declared in app/androidApp.
 androidxWork = "2.10.0"

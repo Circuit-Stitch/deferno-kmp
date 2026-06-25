@@ -24,6 +24,7 @@ plugins {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        mavenLocal() // TEMP (kmp-logger 0.0.1-SNAPSHOT verify): consume the local macOS-klib build. Revert with the catalog bump.
         google()
         mavenCentral()
     }
