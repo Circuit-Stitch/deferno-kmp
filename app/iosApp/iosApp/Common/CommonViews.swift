@@ -5,6 +5,30 @@ import SwiftUI
 // the Android `TaskUi`/`PlanUi` atoms. Calm flat lists over dense cards, plain labels, large touch
 // targets, and VoiceOver semantics on every interactive element (design-principles.md).
 
+/// The shared "Session expired — sign in again" banner (#297) — the SwiftUI counterpart of the design
+/// system's `SessionExpiredBanner`, the same affordance Profile shows. The read surfaces render it when
+/// an authenticated request `401`s, so a dead token can't masquerade as a stale cache; `onSignIn` routes
+/// toward re-auth (Profile), and the next successful sync clears the flag.
+struct SessionExpiredBanner: View {
+    var message: String = "Session expired — sign in again to refresh."
+    var action: String = "Sign in again"
+    let onSignIn: () -> Void
+    @Environment(\.defernoColors) private var colors
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(message).font(.subheadline).foregroundStyle(colors.onSurface)
+            Spacer(minLength: 8)
+            Button(action, action: onSignIn).buttonStyle(.bordered)
+        }
+        .padding(.horizontal, Layout.gutter)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(colors.errorContainer)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// A small, readable badge for a Task's working state. The label is plain text so it reads correctly
 /// under VoiceOver; colour is reinforcement, never the sole signal (WCAG).
 struct WorkingStateBadge: View {

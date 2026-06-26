@@ -157,6 +157,8 @@ class MainActivity : ComponentActivity() {
                 // The AppScope connectivity monitor (#158): the outbox driver flushes on the
                 // offline→online edge and skips passes while known-offline.
                 connectivity = appComponent.connectivity,
+                // The read-surface session-expiry banner flag (#297): the shared client sets it on a 401.
+                reauthRequests = appComponent.reauthRequests,
             )
         }
 

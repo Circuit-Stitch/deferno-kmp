@@ -236,6 +236,10 @@ class DefaultMainShellComponent(
     // The AppScope connectivity signal the Assistant composer reads (online-only to extend a chat, ADR-0040).
     // Defaulted to assume-online so tests build unchanged; production threads the AppComponent's monitor.
     private val connectivity: Connectivity = AssumeOnlineConnectivity(),
+    // The process-wide "Active Account's session is expired" flag (#297) the read surfaces banner off.
+    // Defaulted to "not expired" so the many shell tests build without it; production threads the
+    // AppComponent's `reauthRequests.sessionExpired` (set on a 401, cleared on the next 2xx).
+    override val sessionExpired: StateFlow<Boolean> = MutableStateFlow(false),
 ) : MainShellComponent, ComponentContext by componentContext {
 
     // "Add subtask" on the Task detail: an online-only create of a child Task, derived from the same
@@ -722,6 +726,10 @@ class DefaultMainShellComponent(
                         componentContext = childContext,
                         searchTasks = searchTasks,
                         output = ::onSearchOutput,
+                        // The Search overlay sits above the chrome, so the shell-level banner can't show
+                        // over it — feed the same flag in so a 401'd search shows "Session expired" rather
+                        // than the generic "couldn't reach the server" (#297).
+                        sessionExpired = sessionExpired,
                         coroutineContext = coroutineContext,
                     ),
                 )

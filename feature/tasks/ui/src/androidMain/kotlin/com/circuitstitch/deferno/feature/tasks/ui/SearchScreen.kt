@@ -63,6 +63,7 @@ import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
+import com.circuitstitch.deferno.core.designsystem.component.SessionExpiredBanner
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.SearchHit
@@ -122,6 +123,10 @@ internal fun SearchContent(
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
             SearchHeader(query = state.query, onQueryChanged = onQueryChanged, onSubmit = onSubmit, onBack = onDismiss)
+            // Search is online-only and sits above the chrome, so it can't rely on the shell banner — a
+            // 401'd search shows the re-auth prompt here too (#297). "Sign in again" closes the overlay,
+            // returning to the surface where account controls live.
+            if (state.sessionExpired) SessionExpiredBanner(onSignIn = onDismiss)
             FilterBar(
                 state = state,
                 onOpenFilters = { showFilters = true },
@@ -432,6 +437,8 @@ private fun SearchResults(
             }
         }
         state.isSearching -> LoadingStrip(label = "Searching…")
+        // An expired session is shown by the banner above, not as a "couldn't reach the server" state (#297).
+        state.sessionExpired -> Unit
         // A failed pull (offline / server error) is NOT "no matches" — say so (#73 follow-up).
         state.searchFailed -> EmptyState(
             title = "Search is unavailable",

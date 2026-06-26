@@ -13,9 +13,11 @@ import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.URLProtocol
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.util.AttributeKey
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -43,7 +45,8 @@ class CleartextNotPermittedException(host: String) : Exception(
 fun DefernoHttpClient(
     environment: DefernoEnvironment,
     tokenProvider: BearerTokenProvider,
-): HttpClient = defernoHttpClient(platformHttpClientEngine(), environment, tokenProvider)
+    sessionListener: AuthSessionListener = AuthSessionListener.Noop,
+): HttpClient = defernoHttpClient(platformHttpClientEngine(), environment, tokenProvider, sessionListener)
 
 /**
  * The engine-injectable client builder shared by production ([DefernoHttpClient], real engine)
@@ -54,6 +57,7 @@ internal fun defernoHttpClient(
     engine: HttpClientEngine,
     environment: DefernoEnvironment,
     tokenProvider: BearerTokenProvider,
+    sessionListener: AuthSessionListener = AuthSessionListener.Noop,
 ): HttpClient = HttpClient(engine) {
     // We map every HTTP status ourselves into ApiResult (including non-2xx → ApiError); never
     // let Ktor throw on status. `false` is also Ktor's default — set explicitly for intent.
@@ -69,8 +73,16 @@ internal fun defernoHttpClient(
     }
 
     install(CleartextGuard)
-    install(bearerAuthPlugin(tokenProvider))
+    install(bearerAuthPlugin(tokenProvider, sessionListener))
 }
+
+/**
+ * Marks a request as carrying the **Active Account's** bearer (the plugin attached it). Only such
+ * requests report their `401`/`2xx` to the [AuthSessionListener] (#297) — so a candidate-token
+ * sign-in validation (explicit `Authorization`) or an unauthenticated bootstrap call can't flip the
+ * session-expired state for the Active Account.
+ */
+private val ActiveBearerAttribute = AttributeKey<Unit>("DefernoActiveBearer")
 
 /**
  * Attaches `Authorization: Bearer <pat>` from [tokenProvider], read **fresh on every request**
@@ -82,15 +94,32 @@ internal fun defernoHttpClient(
  * *candidate* PAT with `GET /auth/me` carrying that token as an explicit bearer (#15, ADR-0023),
  * which must not be overridden by the Active Account's PAT (the precedence that also makes
  * add-account work while another Account is active).
+ *
+ * For the requests it *does* authenticate, it reports the response to [sessionListener] (#297): a
+ * `401` means the Active Account's session is dead, a `2xx` means it's healthy. Transport failures
+ * never produce a response here, so a network blip is never mistaken for an expired session.
  */
-private fun bearerAuthPlugin(tokenProvider: BearerTokenProvider) =
-    createClientPlugin("DefernoBearerAuth") {
-        onRequest { request, _ ->
-            if (request.headers[HttpHeaders.Authorization] == null) {
-                tokenProvider.currentToken()?.let { token -> request.bearerAuth(token) }
+private fun bearerAuthPlugin(
+    tokenProvider: BearerTokenProvider,
+    sessionListener: AuthSessionListener,
+) = createClientPlugin("DefernoBearerAuth") {
+    onRequest { request, _ ->
+        if (request.headers[HttpHeaders.Authorization] == null) {
+            tokenProvider.currentToken()?.let { token ->
+                request.bearerAuth(token)
+                request.attributes.put(ActiveBearerAttribute, Unit)
             }
         }
     }
+    onResponse { response ->
+        if (response.call.request.attributes.contains(ActiveBearerAttribute)) {
+            when {
+                response.status == HttpStatusCode.Unauthorized -> sessionListener.onActiveSessionUnauthorized()
+                response.status.isSuccess() -> sessionListener.onActiveSessionAuthorized()
+            }
+        }
+    }
+}
 
 /**
  * Rejects cleartext (non-HTTPS) traffic to any non-loopback host before it is sent — TLS

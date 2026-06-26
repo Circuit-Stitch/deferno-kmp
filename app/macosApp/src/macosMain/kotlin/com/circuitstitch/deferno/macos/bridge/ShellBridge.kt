@@ -228,6 +228,10 @@ fun destinationName(destination: Destination): String = destination.name
 fun destinationIsPrimary(destination: Destination): Boolean = destination.slot == NavSlot.Primary
 fun destinationsEqual(a: Destination, b: Destination): Boolean = a == b
 
+/** "Sign in again" from a read-surface session-expired banner (#297): route to Profile, where the
+ *  account controls (sign out → re-auth) live. The next successful sync self-clears the flag. */
+fun shellSignInAgain(component: MainShellComponent) = component.selectDestination(Destination.Profile)
+
 // ---------------------------------------------------------------------------------------------------
 // Value-class unwrap + intent seams — Swift holds opaque ids; Kotlin reads/builds the underlying value
 // ---------------------------------------------------------------------------------------------------

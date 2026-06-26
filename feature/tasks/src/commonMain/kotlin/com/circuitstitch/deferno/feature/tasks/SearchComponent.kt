@@ -41,6 +41,9 @@ data class SearchState(
     val isSearching: Boolean = false,
     val hasSearched: Boolean = false,
     val searchFailed: Boolean = false,
+    // The Active Account's session has expired (#297). When set, a failed search is the dead token, not a
+    // network blip — the View shows "Session expired — sign in again" instead of the generic failure copy.
+    val sessionExpired: Boolean = false,
 ) {
     /** Whether the current query meets the backend's 2-char minimum (#73). */
     val canSearch: Boolean get() = query.trim().length >= MIN_SEARCH_QUERY_LENGTH
@@ -88,12 +91,21 @@ class DefaultSearchComponent(
     componentContext: ComponentContext,
     private val searchTasks: SearchTasks,
     private val output: (SearchComponent.Output) -> Unit,
+    // The process-wide session-expiry flag (#297), folded into the state so a 401'd search shows the
+    // re-auth prompt. Defaulted to "not expired" so existing tests build without supplying it.
+    sessionExpired: StateFlow<Boolean> = MutableStateFlow(false),
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : SearchComponent, ComponentContext by componentContext {
 
     private val scope = componentScope(coroutineContext)
     private val _state = MutableStateFlow(SearchState())
     override val state: StateFlow<SearchState> = _state.asStateFlow()
+
+    init {
+        // Mirror the process-wide session-expiry flag into the state so a 401'd search shows the
+        // re-auth prompt (#297). Folding it in here keeps `state.value` a synchronous read of `_state`.
+        scope.launch { sessionExpired.collect { expired -> _state.update { it.copy(sessionExpired = expired) } } }
+    }
 
     override fun onQueryChanged(query: String) {
         _state.update { it.copy(query = query) }

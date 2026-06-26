@@ -31,6 +31,8 @@ import com.circuitstitch.deferno.ui.FakeSettingsRepository
 import com.circuitstitch.deferno.ui.sampleAccount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
@@ -68,6 +70,8 @@ class MainShellComponentTest {
         // The Assistant availability client (ADR-0040): the inert default leaves the Org not-entitled, so the
         // Assistant Destination is absent — the entitled-gating tests pass an entitled client.
         assistantClient: AssistantClient = InertAssistantClient,
+        // The process-wide session-expiry flag (#297): defaulted to "not expired"; the banner tests flip it.
+        sessionExpired: StateFlow<Boolean> = MutableStateFlow(false),
     ) = DefaultMainShellComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         itemRepository = DemoItemRepository(SampleData.tasks.toDemoItems()),
@@ -87,6 +91,7 @@ class MainShellComponentTest {
         upsertBrainDumpDraft = upsertBrainDumpDraft,
         attachBrainDumpRecording = attachBrainDumpRecording,
         assistantClient = assistantClient,
+        sessionExpired = sessionExpired,
     )
 
     private fun MainShellComponent.settings(): SettingsComponent =
@@ -632,6 +637,24 @@ class MainShellComponentTest {
 
         shell.dismissOverlay()
         assertNull(shell.overlay.value.child, "overlay dismissed back to origin")
+    }
+
+    // --- Session expiry banner flag (#297) ---
+
+    @Test
+    fun sessionExpired_isReExposedAndFlowsIntoTheSearchOverlay() {
+        // The shell re-exposes the AppScope flag for the chrome banner, and feeds it to the Search overlay
+        // (which sits above the chrome, so it can't show the shell banner) so a 401'd search re-auths too.
+        val expired = MutableStateFlow(false)
+        val shell = shell(sessionExpired = expired)
+        assertEquals(false, shell.sessionExpired.value)
+
+        expired.value = true
+        assertEquals(true, shell.sessionExpired.value)
+
+        shell.openOverlay(OverlayRoute.Search)
+        val search = shell.overlay.value.child?.instance as MainShellComponent.OverlayChild.Search
+        assertTrue(search.component.state.value.sessionExpired, "the Search overlay reflects the expired session")
     }
 
     // --- New overlay route (#71, ADR-0015/0016) ---

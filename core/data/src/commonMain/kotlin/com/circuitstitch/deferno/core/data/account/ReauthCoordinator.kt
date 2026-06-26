@@ -1,9 +1,13 @@
 package com.circuitstitch.deferno.core.data.account
 
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.core.network.AuthSessionListener
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Raises a re-auth request: the Active Account's credential is no longer valid and it must sign in
@@ -29,6 +33,17 @@ interface ReauthRequester {
 interface ReauthRequests {
     /** Each emission is one Account ([AccountId]) that needs re-authentication, in request order. */
     val events: SharedFlow<AccountId>
+
+    /**
+     * Whether the **Active Account's** session is currently expired (#297) — the retained,
+     * late-subscriber-friendly companion to the [events] stream. Set when an Active-Account request
+     * `401`s (via [ReauthRequester.requestReauth] or the network [AuthSessionListener]); cleared when
+     * an Active-Account request next succeeds (`2xx`). The read surfaces (Tasks / Search / Plan) render
+     * a "Session expired — sign in again" banner off this so a dead token can't masquerade as a stale
+     * cache. A `StateFlow` (not an event) precisely because a surface mounted *after* the 401 must still
+     * see the banner — unlike [events], which the Auth shell consumes once.
+     */
+    val sessionExpired: StateFlow<Boolean>
 }
 
 /**
@@ -39,11 +54,28 @@ interface ReauthRequests {
  * prompt. The buffer + `tryEmit` keep [requestReauth] non-suspending so it is callable from any
  * call site (e.g. inside a repository's request handling) without blocking.
  */
-class DefaultReauthCoordinator : ReauthRequester, ReauthRequests {
+class DefaultReauthCoordinator : ReauthRequester, ReauthRequests, AuthSessionListener {
     private val _events = MutableSharedFlow<AccountId>(extraBufferCapacity = 16)
     override val events: SharedFlow<AccountId> = _events.asSharedFlow()
 
+    private val _sessionExpired = MutableStateFlow(false)
+    override val sessionExpired: StateFlow<Boolean> = _sessionExpired.asStateFlow()
+
     override fun requestReauth(account: AccountId) {
         _events.tryEmit(account)
+        // An explicit re-auth request (the /auth/me 401 path) implies the session is dead — keep the
+        // retained flag in step with the one-shot event so a read surface mounted later still banners.
+        _sessionExpired.value = true
+    }
+
+    // The network sink (#297): the shared client reports every Active-Account request here.
+    override fun onActiveSessionUnauthorized() {
+        _sessionExpired.value = true
+    }
+
+    override fun onActiveSessionAuthorized() {
+        // A successful Active-Account request clears the banner — so signing back in self-heals on the
+        // first fresh sync, with no explicit "I signed in" wiring (AC #4).
+        _sessionExpired.value = false
     }
 }

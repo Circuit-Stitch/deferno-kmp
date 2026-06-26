@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.data.account.AccountManager
+import com.circuitstitch.deferno.core.data.account.ReauthRequests
 import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.SignInService
@@ -256,6 +257,10 @@ abstract class AppComponent(
     // outbox driver observes for the reconnect-triggered flush (#158).
     abstract val itemRemoteSource: ItemRemoteSource
     abstract val connectivity: Connectivity
+
+    // The process-wide re-auth signal (#20/#297): the shell folds its `sessionExpired` flag into the
+    // read-surface "Session expired — sign in again" banner. AppScope, set/cleared by the shared client.
+    abstract val reauthRequests: ReauthRequests
 }
 
 // Creation from common code (KMP); anvil generates the per-platform `actual`. One

@@ -44,6 +44,7 @@ import com.circuitstitch.deferno.core.data.item.KtorItemSnapshotSource
 import com.circuitstitch.deferno.core.data.task.KtorTaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
+import com.circuitstitch.deferno.core.network.AuthSessionListener
 import com.circuitstitch.deferno.core.network.BearerTokenProvider
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.network.UploadHttpClient
@@ -102,6 +103,14 @@ interface DataBindings {
 
     @Provides
     fun reauthRequests(coordinator: DefaultReauthCoordinator): ReauthRequests = coordinator
+
+    /**
+     * The session-expiry sink (#297, core:network port) the shared HttpClient reports each
+     * Active-Account 401/2xx to — the same coordinator instance, so a 401 flips [ReauthRequests.sessionExpired]
+     * the read surfaces banner off, and the next 2xx clears it.
+     */
+    @Provides
+    fun authSessionListener(coordinator: DefaultReauthCoordinator): AuthSessionListener = coordinator
 
     /**
      * The [BearerTokenProvider] (core:network port) — resolves the Active Account's PAT fresh per
