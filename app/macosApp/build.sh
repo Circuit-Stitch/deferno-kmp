@@ -27,7 +27,7 @@ DESTINATION='platform=macOS,arch=arm64'
 # Dev account, exactly as before. An existing Local.xcconfig is never touched.
 if [ ! -f Local.xcconfig ]; then
   echo "==> seeding ad-hoc Local.xcconfig (no Dev account; edit it to sign with a stable identity)"
-  printf '// Auto-seeded ad-hoc signing. Edit to a stable identity so the Keychain ACL survives rebuilds:\n//   security find-identity -v -p codesigning   # lists yours\n// e.g. CODE_SIGN_IDENTITY = Apple Development: You (XXXXXXXXXX)\nCODE_SIGN_STYLE = Manual\nCODE_SIGN_IDENTITY = -\nPROVISIONING_PROFILE_SPECIFIER =\n' > Local.xcconfig
+  printf '// Auto-seeded ad-hoc signing. Edit to a stable identity so the Keychain ACL survives rebuilds:\n//   security find-identity -v -p codesigning   # lists yours\n// e.g. CODE_SIGN_IDENTITY = Apple Development: You (XXXXXXXXXX)\nCODE_SIGN_STYLE = Manual\nCODE_SIGN_IDENTITY = -\nPROVISIONING_PROFILE_SPECIFIER =\n// Dev-only staging PAT (#282): empty default; create a git-ignored Secrets.xcconfig with DEV_STAGING_TOKEN = <PAT> to skip sign-in.\nDEV_STAGING_TOKEN =\n#include? "Secrets.xcconfig"\n' > Local.xcconfig
 fi
 
 echo "==> xcodegen generate"

@@ -13,8 +13,11 @@ import com.circuitstitch.deferno.core.di.createAppComponent
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.scopes.PlatformContext
 import com.circuitstitch.deferno.core.speech.SpeechToText
+import com.circuitstitch.deferno.feature.assistant.AssistantStream
 import com.circuitstitch.deferno.macos.agent.DraftTasksBridge
 import com.circuitstitch.deferno.macos.agent.NativeInference
+import com.circuitstitch.deferno.macos.assistant.NativeAssistantStream
+import com.circuitstitch.deferno.macos.assistant.NativeAssistantTransport
 import com.circuitstitch.deferno.macos.speech.NativeDictation
 import com.circuitstitch.deferno.macos.speech.NativeSpeechToText
 import com.circuitstitch.deferno.shell.AccountComponentSession
@@ -60,6 +63,9 @@ import platform.Foundation.preferredLanguages
 class DefernoRoot(
     dictation: NativeDictation? = null,
     inference: NativeInference? = null,
+    // The injected Swift SSE turn-stream transport (#282, ADR-0040). `null` (a unit host) leaves the
+    // graceful no-op AssistantStream.NONE, so a turn says "not available here" rather than hanging.
+    transport: NativeAssistantTransport? = null,
 ) {
 
     init {
@@ -95,6 +101,13 @@ class DefernoRoot(
     // (which resolves to the Unavailable floor until a macOS engine is bound — the mic stays hidden).
     private val speechToText: SpeechToText =
         dictation?.let { NativeSpeechToText(it) } ?: appComponent.speechToText
+
+    // The Assistant SSE turn-stream (#282, ADR-0040): wrap the injected Swift transport with Kotlin-owned
+    // base URL + the Active-Account Bearer PAT (read fresh per turn); a null transport leaves the graceful
+    // NONE. Paired with the live appComponent.assistantClient passed below.
+    private val assistantStream: AssistantStream =
+        transport?.let { NativeAssistantStream(it, environment.baseUrl, appComponent.bearerTokenProvider::currentToken) }
+            ?: AssistantStream.NONE
 
     /**
      * In-process inference (Phase 3): the on-device Brain-dump Extractor over the injected Foundation
@@ -147,6 +160,12 @@ class DefernoRoot(
             // The AppScope connectivity monitor (#158): the outbox driver flushes on the
             // offline→online edge and skips passes while known-offline.
             connectivity = appComponent.connectivity,
+            // The server-mediated Assistant (ADR-0040, #282): the AppScope request/response client gates the
+            // entitled-only Destination and drives availability / enable+consent / apply / conversations. The
+            // SSE turn stream rides the injected Swift URLSession transport (wrapped as [assistantStream]
+            // above); a unit host with no transport leaves the graceful NONE.
+            assistantClient = appComponent.assistantClient,
+            assistantStream = assistantStream,
             // The read-surface session-expiry banner flag (#297): the shared client sets it on a 401.
             reauthRequests = appComponent.reauthRequests,
         )

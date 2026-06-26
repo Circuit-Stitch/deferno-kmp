@@ -97,6 +97,13 @@ settings:
       # and gate on `SystemLanguageModel.availability` at runtime (MacInference.swift).
       - "-weak_framework"
       - "FoundationModels"
+  configs:
+    # Never seed the dev staging PAT into a Release (Production) build — empty DEV_STAGING_TOKEN regardless of
+    # any local Secrets.xcconfig, so DefernoRoot.seedDevAccounts() seeds nothing in Release (mirrors iosApp).
+    # A build setting here outranks the project base config (Local.xcconfig ← Secrets); Debug has no override
+    # and falls through to the real token. (#282, ADR-0012)
+    Release:
+      DEV_STAGING_TOKEN: ""
 
 # The macOS Sidecar Helper's Swift package, linked as a LOCAL SwiftPM dependency (ADR-0029 Phase 2) so
 # the app reuses SpeechTranscriber / SidecarPermissions in-process. Path is relative to this spec.

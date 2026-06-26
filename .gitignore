@@ -29,6 +29,9 @@ app/iosApp/Secrets.xcconfig
 # macOS machine-local signing override (stable Apple Development identity + team) — never commit
 app/macosApp/Local.xcconfig
 
+# macOS machine-local dev secrets (e.g. DEV_STAGING_TOKEN) — never commit
+app/macosApp/Secrets.xcconfig
+
 # Log/OS files
 *.log
 .DS_Store

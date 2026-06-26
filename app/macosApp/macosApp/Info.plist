@@ -15,5 +15,10 @@
 	</array>
 	<key>LSMultipleInstancesProhibited</key>
 	<true/>
+	<!-- Dev-only: substituted from the DEV_STAGING_TOKEN build setting (Local.xcconfig ← Secrets.xcconfig,
+	     emptied for Release in project.yml). DefernoRoot.seedDevAccounts() seeds a "Dev (staging)" account
+	     from it on a Debug build; blank in any committed/Release build so no PAT ships. Mirrors app/iosApp. -->
+	<key>DevStagingToken</key>
+	<string>$(DEV_STAGING_TOKEN)</string>
 </dict>
 </plist>

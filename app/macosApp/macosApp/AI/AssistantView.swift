@@ -5,53 +5,49 @@ import SwiftUI
 /// state machine: the entitled-gated enable + egress-consent flow, the streamed conversation, the inline
 /// proposal confirm card (never routed to the Inbox), and the multi-conversation switcher. It is a thin
 /// view over `AssistantState`; all logic (availability, streaming, apply + re-sync, hydration) lives in the
-/// shared component. Owns its own native nav chrome (the design's iOS carve-out), so the shell renders it
-/// outside the shared `ChromeToolbar` (like `TasksScreen`), threading only the drawer `onMenu` in.
+/// shared component. The macOS twin of iosApp's `AssistantView` — rendered in the shell's detail pane, so
+/// the window title/sidebar come from the shell; the chat-specific actions (new chat, conversations) sit in
+/// a small in-view header rather than the shared window toolbar.
 ///
-/// The turn streaming itself rides the `AssistantStream` seam wired in `DefernoRoot`; until the live SSE
-/// transport is reconciled the seam is the graceful `NONE`, so a send surfaces a gentle error rather than
-/// hanging — every other path (enable, consent, switcher, hydration, proposal apply) is already live.
+/// The turn streaming rides the `AssistantStream` seam wired in `DefernoRoot` (the Swift `MacAssistantTransport`
+/// URLSession SSE reader); a unit host with no transport leaves the graceful `NONE`, so a send surfaces a
+/// gentle error rather than hanging.
 struct AssistantView: View {
     let component: AssistantComponent
-    /// Opens the shell's reveal drawer (the leading ☰), threaded from `MainShellView` like `TasksScreen`.
-    var onMenu: () -> Void = {}
     @StateObject private var state: StateFlowObserver<AssistantState>
     @Environment(\.defernoColors) private var colors
     @State private var showSwitcher = false
 
-    init(component: AssistantComponent, onMenu: @escaping () -> Void = {}) {
+    init(component: AssistantComponent) {
         self.component = component
-        self.onMenu = onMenu
         _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
     private var s: AssistantState { state.value }
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            if s.available { header }
             content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(colors.background)
-                .navigationTitle("Assistant")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button { onMenu() } label: { Image(systemName: "line.3.horizontal") }
-                            .accessibilityLabel("Menu")
-                    }
-                    // The chat affordances only make sense once the Assistant is on.
-                    if s.available {
-                        ToolbarItemGroup(placement: .navigationBarTrailing) {
-                            Button { showSwitcher = true } label: { Image(systemName: "clock.arrow.circlepath") }
-                                .accessibilityLabel("Conversations")
-                            Button { component.onNewConversation() } label: { Image(systemName: "square.and.pencil") }
-                                .accessibilityLabel("New chat")
-                        }
-                    }
-                }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(colors.background)
         .sheet(isPresented: disclosurePresented) { consentSheet }
         .sheet(isPresented: $showSwitcher) { switcherSheet }
+    }
+
+    /// The chat affordances only make sense once the Assistant is on: a new chat + the conversation switcher.
+    private var header: some View {
+        HStack(spacing: 8) {
+            Spacer()
+            Button { showSwitcher = true } label: { Image(systemName: "clock.arrow.circlepath") }
+                .help("Conversations").accessibilityLabel("Conversations")
+            Button { component.onNewConversation() } label: { Image(systemName: "square.and.pencil") }
+                .help("New chat").accessibilityLabel("New chat")
+        }
+        .buttonStyle(.borderless)
+        .padding(.horizontal, Layout.gutter).padding(.vertical, 8)
+        .background(colors.surface)
     }
 
     // MARK: Top-level state routing
@@ -78,9 +74,12 @@ struct AssistantView: View {
             Text(s.disclosure)
                 .font(.subheadline).foregroundStyle(colors.inkMuted)
                 .multilineTextAlignment(.center).padding(.horizontal, 24)
-            PrimaryActionButton(title: "Enable Assistant", icon: .check) { component.onEnableRequested() }
-                .padding(.horizontal, 48).padding(.top, 8)
-                .disabled(s.enabling)
+            Button { component.onEnableRequested() } label: {
+                Label("Enable Assistant", systemImage: "checkmark")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(s.enabling)
+            .padding(.top, 8)
             if s.enabling { ProgressView() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -91,24 +90,22 @@ struct AssistantView: View {
     /// performs the server enablement; dismissing declines.
     private var consentSheet: some View {
         VStack(spacing: 20) {
-            Capsule().fill(colors.outlineVariant).frame(width: 36, height: 5).padding(.top, 10)
             Image(systemName: "lock.shield").font(.system(size: 36)).foregroundStyle(colors.primary)
             Text("Before you enable").font(.title3.weight(.semibold)).foregroundStyle(colors.onSurface)
             Text(s.disclosure)
                 .font(.subheadline).foregroundStyle(colors.inkMuted)
                 .multilineTextAlignment(.center).padding(.horizontal, 24)
-            Spacer()
-            VStack(spacing: 10) {
-                PrimaryActionButton(title: "I understand — enable", icon: .check) { component.onConsentAccepted() }
-                    .disabled(s.enabling)
+            HStack(spacing: 10) {
                 Button("Not now") { component.onConsentDeclined() }
-                    .foregroundStyle(colors.inkMuted)
+                Button { component.onConsentAccepted() } label: { Text("I understand — enable") }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(s.enabling)
             }
-            .padding(.horizontal, 24).padding(.bottom, 24)
+            .padding(.top, 8)
         }
-        .frame(maxWidth: .infinity)
-        .background(colors.background.ignoresSafeArea())
-        .presentationDetents([.medium])
+        .padding(28)
+        .frame(minWidth: 360)
+        .background(colors.background)
     }
 
     // MARK: Chat (available)
@@ -172,7 +169,7 @@ struct AssistantView: View {
             markdownText(message.text)
                 .font(.body)
                 .foregroundStyle(isUser ? colors.onPrimary : colors.onSurface)
-                .textSelection(.enabled) // long-press to select/copy any bubble (sent or reply)
+                .textSelection(.enabled) // select/copy any bubble (sent or reply)
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(
                     isUser ? colors.primary : colors.surfaceVariant,
@@ -256,19 +253,20 @@ struct AssistantView: View {
                 .disabled(!s.composerEnabled)
             if s.streaming {
                 Button { component.onCancelTurn() } label: {
-                    Image(systemName: "stop.circle.fill").font(.system(size: 30))
+                    Image(systemName: "stop.circle.fill").font(.system(size: 28))
                 }
                 .accessibilityLabel("Stop")
                 .foregroundStyle(colors.error)
             } else {
                 Button { component.onSend() } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 30))
+                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 28))
                 }
                 .accessibilityLabel("Send")
                 .foregroundStyle(s.canSend ? colors.primary : colors.inkMuted)
                 .disabled(!s.canSend)
             }
         }
+        .buttonStyle(.borderless)
         .padding(.horizontal, Layout.gutter).padding(.vertical, 8)
         .background(colors.background)
     }
@@ -276,7 +274,13 @@ struct AssistantView: View {
     // MARK: Conversation switcher
 
     private var switcherSheet: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Conversations").font(.headline).foregroundStyle(colors.onSurface)
+                Spacer()
+                Button("Done") { showSwitcher = false }
+            }
+            .padding(Layout.gutter)
             List {
                 Button {
                     component.onNewConversation(); showSwitcher = false
@@ -291,15 +295,9 @@ struct AssistantView: View {
                     }
                 }
             }
-            .navigationTitle("Conversations")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { showSwitcher = false }
-                }
-            }
         }
-        .presentationDetents([.medium, .large])
+        .frame(minWidth: 360, minHeight: 360)
+        .background(colors.background)
     }
 
     private func conversationRow(_ conversation: Conversation) -> some View {
@@ -315,7 +313,9 @@ struct AssistantView: View {
                 Spacer()
                 if isActive { Image(systemName: "checkmark").foregroundStyle(colors.primary) }
             }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     // MARK: Bits
@@ -334,6 +334,7 @@ struct AssistantView: View {
             Spacer()
             if let onDismiss {
                 Button { onDismiss() } label: { Image(systemName: "xmark").font(.caption) }
+                    .buttonStyle(.borderless)
                     .foregroundStyle(tint).accessibilityLabel("Dismiss")
             }
         }

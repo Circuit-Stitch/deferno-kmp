@@ -157,6 +157,8 @@ struct MainShellView: View {
                 CalendarView(component: calendar)
             } else if let tasks = ShellBridgeKt.destTasks(child: child) {
                 TasksScreen(root: ShellBridgeKt.tasksRoot(component: tasks))
+            } else if let assistant = ShellBridgeKt.destAssistant(child: child) {
+                AssistantView(component: assistant)
             } else if let profile = ShellBridgeKt.destProfile(child: child) {
                 ProfileView(component: profile)
             } else if let settings = ShellBridgeKt.destSettings(child: child) {
