@@ -81,6 +81,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.component.SessionExpiredBanner
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
@@ -136,6 +137,9 @@ fun ShellChrome(
     body: @Composable () -> Unit,
 ) {
     val chrome by component.chrome.collectAsState()
+    // The Active Account's session has expired (#297): every in-chrome read surface banners it. Profile
+    // is excluded — it renders the same prompt inside its own card, so a chrome banner there would double.
+    val sessionExpired by component.sessionExpired.collectAsState()
     BoxWithConstraints(modifier.fillMaxSize()) {
         // Wide enough to read as a drawer, but always leaving a peek of content on the largest phones;
         // capped so a desktop window doesn't get an absurdly wide menu.
@@ -248,6 +252,11 @@ fun ShellChrome(
                         onBack = { component.onBack() },
                         topBarCenter = topBarCenter,
                     )
+                    if (sessionExpired && activeDestination != Destination.Profile) {
+                        // "Sign in again" routes to Profile — where the account controls (sign out → re-auth)
+                        // live; the next successful sync clears this flag automatically (#297, AC #4).
+                        SessionExpiredBanner(onSignIn = { component.selectDestination(Destination.Profile) })
+                    }
                     Box(Modifier.weight(1f).fillMaxWidth()) { body() }
                 }
                 // The capture FAB pair floats bottom-centre, clear of the nav bar — the native thumb-reach

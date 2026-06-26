@@ -217,6 +217,8 @@ class DefernoRoot(
             // transport leaves the graceful NONE, so a turn says "not available here" rather than hanging.
             assistantClient = appComponent.assistantClient,
             assistantStream = assistantStream,
+            // The read-surface session-expiry banner flag (#297): the shared client sets it on a 401.
+            reauthRequests = appComponent.reauthRequests,
         )
 
         lifecycle.resume()

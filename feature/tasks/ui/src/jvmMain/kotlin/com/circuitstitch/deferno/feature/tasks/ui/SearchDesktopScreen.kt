@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
+import com.circuitstitch.deferno.core.designsystem.component.SessionExpiredBanner
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -113,6 +114,10 @@ internal fun SearchDesktopContent(
                 )
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
+
+            // Search is online-only and above the chrome, so it can't rely on the shell banner — a 401'd
+            // search shows the re-auth prompt here too (#297). "Sign in again" closes the overlay.
+            if (state.sessionExpired) SessionExpiredBanner(onSignIn = onDismiss)
 
             Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -306,6 +311,8 @@ private fun SearchResults(state: SearchState, onResultClicked: (SearchHit) -> Un
             }
         }
         state.isSearching -> LoadingStrip(label = "Searching…")
+        // An expired session is shown by the banner above, not as a "couldn't reach the server" state (#297).
+        state.sessionExpired -> Unit
         // A failed pull (offline / server error) is NOT "no matches" — say so (#73 follow-up).
         state.searchFailed -> EmptyState(
             title = "Search is unavailable",

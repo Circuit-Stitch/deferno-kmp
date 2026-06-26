@@ -101,6 +101,15 @@ interface MainShellComponent {
      */
     val chrome: StateFlow<ChromeSpec>
 
+    /**
+     * Whether the Active Account's session has expired (#297) — a `401` on an authenticated request the
+     * shared client surfaced (vs. a transient network blip, which stays silent). The read surfaces
+     * (Tasks / Plan / …) render a "Session expired — sign in again" banner off this so a dead token can't
+     * masquerade as a stale cache; signing back in clears it on the next successful sync. A process-wide
+     * `StateFlow` so the banner shows even on a surface mounted *after* the session died.
+     */
+    val sessionExpired: StateFlow<Boolean>
+
     /** Switch the Active Account — re-keys the shell for the new Account, no re-auth (ADR-0002/0012). */
     fun switchAccount(id: AccountId)
 

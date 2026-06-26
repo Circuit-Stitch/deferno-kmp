@@ -28,6 +28,8 @@ struct MainShellView: View {
     /// The live count of Ready brain-dump drafts — the Inbox drawer-row badge (shell-level, so it shows
     /// even before the Inbox Destination is first visited).
     @StateObject private var inboxBadge: StateFlowObserver<KotlinInt>
+    /// The Active Account's session-expired flag (#297) — drives the read-surface "Session expired" banner.
+    @StateObject private var sessionExpired: StateFlowObserver<KotlinBoolean>
     @State private var drawerOpen = false
     /// Non-nil only while a finger is dragging the open content back toward the edge — makes the drawer
     /// track the finger 1:1. The effective open fraction is `dragX != nil ? base + dragX/width : base`.
@@ -42,6 +44,7 @@ struct MainShellView: View {
         _accounts = StateObject(wrappedValue: AccountsObserver(accounts: component.accounts, active: component.activeAccount))
         _chrome = StateObject(wrappedValue: StateFlowObserver(component.chrome))
         _inboxBadge = StateObject(wrappedValue: StateFlowObserver(component.inboxReadyCount))
+        _sessionExpired = StateObject(wrappedValue: StateFlowObserver(component.sessionExpired))
     }
 
     private var active: MainShellComponentDestinationChild { destinations.value }
@@ -143,6 +146,14 @@ struct MainShellView: View {
             }
         }
         .background(colors.background)
+        // The Active Account's session has expired (#297): every in-chrome read surface banners it (a top
+        // safe-area inset, so it rides below the status bar). Profile is excluded — it shows the same prompt
+        // inside its own card. Tasks (its own stack, above) gets the banner here too.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if sessionExpired.value.boolValue && ShellBridgeKt.destProfile(child: child) == nil {
+                SessionExpiredBanner { ShellBridgeKt.shellSignInAgain(component: component) }
+            }
+        }
     }
 
     @ViewBuilder

@@ -191,6 +191,31 @@ class SearchComponentTest {
     }
 
     @Test
+    fun foldsTheProcessWideSessionExpiredFlagIntoTheState() = runTest {
+        // #297: a 401'd search is a dead token, not a network blip — the overlay (which sits above the
+        // shell banner) reads sessionExpired off its own state so it can show the re-auth prompt.
+        val expired = kotlinx.coroutines.flow.MutableStateFlow(false)
+        val component = DefaultSearchComponent(
+            componentContext = DefaultComponentContext(LifecycleRegistry()),
+            searchTasks = RecordingSearch(),
+            output = {},
+            sessionExpired = expired,
+            coroutineContext = StandardTestDispatcher(testScheduler),
+        )
+
+        advanceUntilIdle()
+        assertFalse(component.state.value.sessionExpired)
+
+        expired.value = true
+        advanceUntilIdle()
+        assertTrue(component.state.value.sessionExpired, "an expired session propagates into the state")
+
+        expired.value = false
+        advanceUntilIdle()
+        assertFalse(component.state.value.sessionExpired, "signing back in clears it")
+    }
+
+    @Test
     fun changingTheSortReRunsAnAlreadyCompletedSearch() = runTest {
         val search = RecordingSearch(results = listOf(hit("a")))
         val component = component(search)

@@ -30,6 +30,31 @@ class ReauthCoordinatorTest {
     }
 
     @Test
+    fun sessionExpiredIsSetByA401AndClearedByTheNext2xx() = runTest {
+        val coordinator = DefaultReauthCoordinator()
+        assertEquals(false, coordinator.sessionExpired.value)
+
+        // The network sink reports an Active-Account 401 → the read surfaces should banner.
+        coordinator.onActiveSessionUnauthorized()
+        assertEquals(true, coordinator.sessionExpired.value)
+
+        // A later successful Active-Account request (e.g. after signing back in) self-clears it (AC #4).
+        coordinator.onActiveSessionAuthorized()
+        assertEquals(false, coordinator.sessionExpired.value)
+    }
+
+    @Test
+    fun requestReauthAlsoRaisesTheRetainedSessionExpiredFlag() = runTest {
+        // The /auth/me 401 path raises an explicit re-auth request; the retained flag must agree so a
+        // surface mounted after the prompt still sees the banner (unlike the one-shot `events`).
+        val coordinator = DefaultReauthCoordinator()
+
+        coordinator.requestReauth(AccountId("acc-1"))
+
+        assertEquals(true, coordinator.sessionExpired.value)
+    }
+
+    @Test
     fun doesNotReplayAFlagRaisedBeforeAnyoneSubscribed() = runTest {
         val coordinator = DefaultReauthCoordinator()
 

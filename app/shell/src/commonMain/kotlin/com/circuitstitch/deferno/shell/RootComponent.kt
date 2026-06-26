@@ -9,6 +9,8 @@ import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.common.asStateFlow
 import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.account.AccountManager
+import com.circuitstitch.deferno.core.data.account.DefaultReauthCoordinator
+import com.circuitstitch.deferno.core.data.account.ReauthRequests
 import com.circuitstitch.deferno.core.data.assistant.AssistantClient
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.SignInService
@@ -220,6 +222,13 @@ class DefaultRootComponent(
      * transport in; every other host leaves it the graceful no-op NONE. Threaded down to the Main shell.
      */
     private val assistantStream: AssistantStream = AssistantStream.NONE,
+    /**
+     * The process-wide re-auth signal (#297): its `sessionExpired` flag drives the read-surface
+     * "Session expired — sign in again" banner the Main shell renders. Defaulted to a fresh, never-flagged
+     * coordinator so tests build unchanged; production passes the AppComponent's instance (the one the
+     * shared HttpClient sets on a 401 / clears on the next 2xx).
+     */
+    private val reauthRequests: ReauthRequests = DefaultReauthCoordinator(),
     coroutineContext: CoroutineContext = Dispatchers.Main,
 ) : RootComponent, ComponentContext by componentContext {
 
@@ -445,6 +454,8 @@ class DefaultRootComponent(
                         conversationStore = session.conversationStore,
                         assistantStream = assistantStream,
                         connectivity = connectivity,
+                        // The read-surface session-expiry banner flag (#297), AppScope (set on a 401).
+                        sessionExpired = reauthRequests.sessionExpired,
                     )
                 // A pending Inbox deep-link (the Brain dump notification tapped on a cold start into the
                 // Auth shell, ADR-0027 Stage 4): now that the Main shell exists, apply it, then consume it.
