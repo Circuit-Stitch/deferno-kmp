@@ -143,6 +143,13 @@ internal class FakeItemTreeComponent(initial: ItemTreeState = ItemTreeState()) :
     var shakeOutcome: ShakeOutcome = ShakeOutcome.Nothing
     val showBlockedSet = mutableListOf<Boolean>()
 
+    // Kind-aware command menu intents (#231).
+    val subtasksAdded = mutableListOf<Pair<String, String>>()
+    val pinnedSet = mutableListOf<Pair<String, Boolean>>()
+    val inPlanSet = mutableListOf<Pair<String, Boolean>>()
+    val workingStatesSet = mutableListOf<Pair<String, WorkingState>>()
+    val deleted = mutableListOf<String>()
+
     override fun onToggleExpand(id: String, currentlyExpanded: Boolean) { toggled += id to currentlyExpanded }
     override fun onOpenDetail(id: String, kind: ItemKind) { opened += id to kind }
     override fun onRefresh() { refreshCount++ }
@@ -155,6 +162,11 @@ internal class FakeItemTreeComponent(initial: ItemTreeState = ItemTreeState()) :
     override fun onOutdent() { movesApplied += "outdent" }
     override fun undoLastMove() { undoCount++ }
     override fun onShake(): ShakeOutcome = shakeOutcome
+    override fun onAddSubtask(parentId: String, title: String) { subtasksAdded += parentId to title }
+    override fun onSetPinned(id: String, pinned: Boolean) { pinnedSet += id to pinned }
+    override fun onSetInPlan(id: String, inPlan: Boolean) { inPlanSet += id to inPlan }
+    override fun onSetWorkingState(id: String, target: WorkingState) { workingStatesSet += id to target }
+    override fun onDelete(id: String) { deleted += id }
 }
 
 /** Builds an [ItemRow] for the tree screenshot fixtures (the View renders rows verbatim, no re-flatten). */

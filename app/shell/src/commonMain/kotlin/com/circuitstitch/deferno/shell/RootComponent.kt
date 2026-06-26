@@ -404,8 +404,13 @@ class DefaultRootComponent(
                         setDeadline = session.setDeadline,
                         setLabels = session.setLabels,
                         // The detail's destructive Delete seam (kebab → confirm), routed through this
-                        // Account's command executor (DeleteTask).
+                        // Account's command executor (DeleteTask). The Item-tree command menu (#231) reuses it.
                         deleteTask = session.deleteTask,
+                        // The Item-tree command menu's Task-only Pin + plan-toggle writes (#231), routed
+                        // through this Account's command executor; add/remove pre-bind today's (date, tz).
+                        setPinned = session.setPinned,
+                        addToPlan = { session.addToPlan(it, today, timeZone) },
+                        removeFromPlan = { session.removeFromPlan(it, today, timeZone) },
                         // On-device attachments (#211): the detail shows + plays this Account's retained recordings.
                         onDeviceAttachments = session.onDeviceAttachments,
                         searchTasks = SearchTasks.of(session.taskRepository),

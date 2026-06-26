@@ -8,7 +8,10 @@ import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -34,6 +37,13 @@ class ItemTreeComponentTest {
         moveEditor: MoveEditor = MoveEditor.NONE,
         shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
         trackEvent: (String) -> Unit = {},
+        menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
+        workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+        setPinned: suspend (TaskId, Boolean) -> Unit = { _, _ -> },
+        createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
+        deleteTask: suspend (TaskId) -> Unit = { _ -> },
+        addToPlan: suspend (TaskId) -> Unit = { _ -> },
+        removeFromPlan: suspend (TaskId) -> Unit = { _ -> },
     ) = DefaultItemTreeComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         itemRepository = items,
@@ -42,6 +52,13 @@ class ItemTreeComponentTest {
         moveEditor = moveEditor,
         shakeToUndoPreference = shakeToUndoPreference,
         trackEvent = trackEvent,
+        menuStates = menuStates,
+        workingStateEditor = workingStateEditor,
+        setPinned = setPinned,
+        createSubtask = createSubtask,
+        deleteTask = deleteTask,
+        addToPlan = addToPlan,
+        removeFromPlan = removeFromPlan,
         coroutineContext = StandardTestDispatcher(testScheduler),
     )
 
@@ -310,5 +327,93 @@ class ItemTreeComponentTest {
         assertEquals(ShakeOutcome.Nothing, c.onShake(), "toggle off → a shake does nothing")
         assertTrue(events.isEmpty(), "off is not an 'unsupported context' — it emits no tracking event")
         assertTrue(c.state.value.lastMove != null, "the snackbar + menu undo paths remain when shake is off")
+    }
+
+    // --- kind-aware command menu (ADR-0034 decision 7, #231) ---
+
+    @Test
+    fun menuStatesAreSurfacedOnTheStateForTheView() = runTest {
+        val states = mapOf("root" to TaskMenuState(WorkingState.InProgress, pinned = true, inPlan = false))
+        val c = component(rootAndChild(), menuStates = flowOf(states))
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(states, c.state.value.menuStates, "the per-row Task menu state reaches the View")
+    }
+
+    @Test
+    fun addSubtaskCreatesATaskChildUnderTheRowAndTrimsTheTitle() = runTest {
+        val created = mutableListOf<Pair<TaskId, String>>()
+        val c = component(rootAndChild(), createSubtask = { parent, title -> created += parent to title })
+
+        c.onAddSubtask("root", "  buy milk  ")
+        advanceUntilIdle()
+
+        assertEquals(listOf(TaskId("root") to "buy milk"), created, "the child is created under the row, trimmed")
+    }
+
+    @Test
+    fun addSubtaskWithABlankTitleIsANoOp() = runTest {
+        val created = mutableListOf<Pair<TaskId, String>>()
+        val c = component(rootAndChild(), createSubtask = { parent, title -> created += parent to title })
+
+        c.onAddSubtask("root", "   ")
+        advanceUntilIdle()
+
+        assertTrue(created.isEmpty(), "a blank subtask title writes nothing")
+    }
+
+    @Test
+    fun setPinnedDispatchesThePinWriteWithTheTargetValue() = runTest {
+        val pins = mutableListOf<Pair<TaskId, Boolean>>()
+        val c = component(rootAndChild(), setPinned = { id, pinned -> pins += id to pinned })
+
+        c.onSetPinned("root", pinned = true)
+        advanceUntilIdle()
+
+        assertEquals(listOf(TaskId("root") to true), pins)
+    }
+
+    @Test
+    fun setInPlanRoutesToAddOrRemoveByTheTargetValue() = runTest {
+        val added = mutableListOf<TaskId>()
+        val removed = mutableListOf<TaskId>()
+        val c = component(
+            rootAndChild(),
+            addToPlan = { added += it },
+            removeFromPlan = { removed += it },
+        )
+
+        c.onSetInPlan("root", inPlan = true)
+        c.onSetInPlan("child", inPlan = false)
+        advanceUntilIdle()
+
+        assertEquals(listOf(TaskId("root")), added, "in-plan=true adds to today's plan")
+        assertEquals(listOf(TaskId("child")), removed, "in-plan=false removes from today's plan")
+    }
+
+    @Test
+    fun setWorkingStateDispatchesTheStatusWrite() = runTest {
+        val sets = mutableListOf<Pair<TaskId, WorkingState>>()
+        val c = component(
+            rootAndChild(),
+            workingStateEditor = WorkingStateEditor { id, target, _ -> sets += id to target },
+        )
+
+        c.onSetWorkingState("root", WorkingState.Done)
+        advanceUntilIdle()
+
+        assertEquals(listOf(TaskId("root") to WorkingState.Done), sets)
+    }
+
+    @Test
+    fun deleteDispatchesTheDestructiveWrite() = runTest {
+        val deleted = mutableListOf<TaskId>()
+        val c = component(rootAndChild(), deleteTask = { deleted += it })
+
+        c.onDelete("root")
+        advanceUntilIdle()
+
+        assertEquals(listOf(TaskId("root")), deleted)
     }
 }

@@ -26,12 +26,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,6 +65,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -74,8 +79,10 @@ import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.ItemSource
+import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.ItemRow
 import com.circuitstitch.deferno.feature.tasks.MoveMode
+import com.circuitstitch.deferno.feature.tasks.TaskMenuState
 
 // The Tasks Item-tree renderer (ADR-0034, #227/#228) restyled to the "See the trees" direction (#231):
 // the cross-kind forest ("Everything") flattened to depth-indented rows in one LazyColumn, shared by the
@@ -150,6 +157,16 @@ internal fun ItemTreeContent(
     // non-transient path. [canUndo] gates it; defaulted off so read-only callers (desktop/tests) omit it.
     canUndo: Boolean = false,
     onUndoMove: () -> Unit = {},
+    // The kind-aware command menu (ADR-0034 decision 7, #231). [menuStates] carries each Task row's
+    // working-state/pinned/in-plan (keyed by item id) so the menu labels Pin↔Unpin / Add↔Remove and swaps
+    // the status block; a non-Task row has no entry and gets the cross-kind subset (Add subtask · Move).
+    // All defaulted inert so read-only callers / tests render without wiring the menu writes.
+    menuStates: Map<String, TaskMenuState> = emptyMap(),
+    onAddSubtask: (parentId: String, title: String) -> Unit = { _, _ -> },
+    onSetPinned: (id: String, pinned: Boolean) -> Unit = { _, _ -> },
+    onSetInPlan: (id: String, inPlan: Boolean) -> Unit = { _, _ -> },
+    onSetWorkingState: (id: String, target: WorkingState) -> Unit = { _, _ -> },
+    onDelete: (id: String) -> Unit = {},
 ) {
     // Route the move keystrokes (Alt+↑/↓, Tab/Shift-Tab) to the column while an item is lifted: focus it on
     // entry so its onPreviewKeyEvent sees them before focus traversal would consume Tab (#228). The column is
@@ -261,11 +278,17 @@ internal fun ItemTreeContent(
                         row = row,
                         inMoveMode = moveMode != null,
                         isLifted = moveMode?.liftedId == row.item.id,
+                        menuState = menuStates[row.item.id],
                         onToggleExpand = onToggleExpand,
                         onOpenDetail = onOpenDetail,
                         onEnterMoveMode = onEnterMoveMode,
                         canUndo = canUndo,
                         onUndoMove = onUndoMove,
+                        onAddSubtask = onAddSubtask,
+                        onSetPinned = onSetPinned,
+                        onSetInPlan = onSetInPlan,
+                        onSetWorkingState = onSetWorkingState,
+                        onDelete = onDelete,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
@@ -378,11 +401,19 @@ private fun ItemTreeRow(
     row: ItemRow,
     inMoveMode: Boolean,
     isLifted: Boolean,
+    // Non-null only for a Task row (#231): its working-state/pinned/in-plan, so the menu labels the toggles
+    // and swaps the status block. A null [menuState] is a non-Task row → the cross-kind menu subset.
+    menuState: TaskMenuState?,
     onToggleExpand: (String, Boolean) -> Unit,
     onOpenDetail: (String, ItemKind) -> Unit,
     onEnterMoveMode: (String) -> Unit,
     canUndo: Boolean,
     onUndoMove: () -> Unit,
+    onAddSubtask: (parentId: String, title: String) -> Unit,
+    onSetPinned: (id: String, pinned: Boolean) -> Unit,
+    onSetInPlan: (id: String, inPlan: Boolean) -> Unit,
+    onSetWorkingState: (id: String, target: WorkingState) -> Unit,
+    onDelete: (id: String) -> Unit,
 ) {
     val item = row.item
     // Three distinct row states (#290): a terminal (Done/Dropped/Archived) item strikes + mutes the title;
@@ -392,6 +423,9 @@ private fun ItemTreeRow(
     val titleColor =
         if (item.isTerminal || item.blocked) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface
     var menuOpen by remember { mutableStateOf(false) }
+    // The two menu-spawned dialogs (#231): the destructive-Delete confirm and the Add-subtask title prompt.
+    var confirmDelete by remember { mutableStateOf(false) }
+    var addSubtaskOpen by remember { mutableStateOf(false) }
 
     // The lifted row is highlighted; the rest of the list calms (dimmed) while a move is in progress.
     val rowColor =
@@ -410,7 +444,7 @@ private fun ItemTreeRow(
                     row.isExpanded -> "Collapse ${item.title}"
                     else -> "Expand ${item.title}"
                 },
-                onLongClickLabel = "Move ${item.title}",
+                onLongClickLabel = "Actions for ${item.title}",
                 onLongClick = { menuOpen = true },
                 onClick = { if (row.hasChildren) onToggleExpand(item.id, row.isExpanded) },
             )
@@ -522,29 +556,137 @@ private fun ItemTreeRow(
                 }
             }
 
-            // The minimal long-press menu (#228): "Move", plus "Undo move" when a Move is undoable (#230) —
-            // the persistent, non-shake undo path (snackbar is transient, shake is optional/off-able). The
-            // full kind-aware menu (Open · Pin · Move to… · Add to plan) is a deferred ADR-0034 fast-follow.
+            // The kind-aware long-press command menu (ADR-0034 decision 7, #231) — mirrors the web submenu
+            // plus the native Move action. The status block, Pin, Add-to-plan and Delete are Task-only
+            // writes (the native command layer is Task-centric — MoveItem is the lone cross-kind write), so a
+            // non-Task row ([menuState] null) gets only the cross-kind subset: Add subtask · Move (Open routes
+            // to the Task-only detail). "Set aside"/"Delete" are destructive (error-tinted; the word, not just
+            // colour, carries the signal — a11y). The arbitrary-parent "Move to…" entry + picker land together
+            // in #229; the menu opens by long-press (a TalkBack custom action) — a keyboard/right-click open-path is #300.
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                if (menuState != null) {
+                    DropdownMenuItem(
+                        text = { Text("Open") },
+                        onClick = { menuOpen = false; onOpenDetail(item.id, item.kind) },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Add subtask") },
+                    onClick = { menuOpen = false; addSubtaskOpen = true },
+                )
                 DropdownMenuItem(
                     text = { Text("Move") },
-                    onClick = {
-                        menuOpen = false
-                        onEnterMoveMode(item.id)
-                    },
+                    onClick = { menuOpen = false; onEnterMoveMode(item.id) },
                 )
                 if (canUndo) {
                     DropdownMenuItem(
                         text = { Text("Undo move") },
-                        onClick = {
-                            menuOpen = false
-                            onUndoMove()
-                        },
+                        onClick = { menuOpen = false; onUndoMove() },
+                    )
+                }
+                if (menuState != null) {
+                    DropdownMenuItem(
+                        text = { Text(if (menuState.pinned) "Unpin" else "Pin") },
+                        onClick = { menuOpen = false; onSetPinned(item.id, !menuState.pinned) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (menuState.inPlan) "Remove from today's plan" else "Add to today's plan") },
+                        onClick = { menuOpen = false; onSetInPlan(item.id, !menuState.inPlan) },
+                    )
+                    HorizontalDivider()
+                    // Kind-aware status block: the Task working-state verbs, hiding the one it's already in so
+                    // no redundant transition is offered (Habit/Chore/Event status verbs await their write seam, #299).
+                    if (menuState.workingState != WorkingState.InProgress) {
+                        DropdownMenuItem(
+                            text = { Text("Start working") },
+                            onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.InProgress) },
+                        )
+                    }
+                    if (menuState.workingState != WorkingState.Done) {
+                        DropdownMenuItem(
+                            text = { Text("Mark done") },
+                            onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.Done) },
+                        )
+                    }
+                    if (menuState.workingState != WorkingState.Dropped) {
+                        DropdownMenuItem(
+                            text = { Text("Set aside", color = MaterialTheme.colorScheme.error) },
+                            onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.Dropped) },
+                        )
+                    }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("Delete (Permanent!)", color = MaterialTheme.colorScheme.error) },
+                        onClick = { menuOpen = false; confirmDelete = true },
                     )
                 }
             }
         }
     }
+
+    // Delete confirm (destructive, #231) — mirrors the Task-detail kebab's confirm (TaskDetailContent).
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete “${item.title}”?") },
+            text = { Text("This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; onDelete(item.id) }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    // Add subtask (#231): a title prompt — the tree has no inline add field (that's the detail's). A blank
+    // title is gated out (Add disabled). The child is always a Task (only Tasks carry a parent).
+    if (addSubtaskOpen) {
+        AddSubtaskDialog(
+            parentTitle = item.title,
+            onAdd = { title -> addSubtaskOpen = false; onAddSubtask(item.id, title) },
+            onDismiss = { addSubtaskOpen = false },
+        )
+    }
+}
+
+/**
+ * The menu's "Add subtask" title prompt (#231): a single-line field + Add/Cancel. IME "Done" or the Add
+ * button submits a non-blank, trimmed title; the field is the sole input, so it carries no extra label.
+ */
+@Composable
+private fun AddSubtaskDialog(
+    parentTitle: String,
+    onAdd: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    fun submit() {
+        val trimmed = text.trim()
+        if (trimmed.isNotEmpty()) onAdd(trimmed)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add a subtask") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = true,
+                placeholder = { Text("Subtask of $parentTitle") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = ::submit, enabled = text.isNotBlank()) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 /** ~16dp glyph for a small source mark. */

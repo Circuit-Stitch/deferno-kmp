@@ -9,12 +9,15 @@ import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
@@ -34,6 +37,10 @@ data class ItemTreeState(
     // The readiness axis (#290): false (the resting default — ready-only) prunes `blocked` items and their
     // subtrees from [rows]; the View's "show blocked" affordance flips it true to reveal them (still marked).
     val showBlocked: Boolean = false,
+    // The kind-aware command menu's per-row Task state (#231), keyed by item id — only **Task** rows have an
+    // entry (the write layer is Task-centric). The View reads it to label Pin↔Unpin / Add↔Remove-from-plan
+    // and to swap the status block; a non-Task row (no entry) gets the cross-kind subset (Add subtask · Move).
+    val menuStates: Map<String, TaskMenuState> = emptyMap(),
 )
 
 /**
@@ -142,6 +149,29 @@ interface ItemTreeComponent {
      */
     fun onShake(): ShakeOutcome
 
+    // --- Kind-aware command menu (ADR-0034 decision 7, #231): the long-press row menu's write intents.
+    // Each carries the row's current value (the "args from the row" rule — the component's StateFlow is
+    // WhileSubscribed). The status/Pin/plan/Delete writes are Task-only (the native command layer is
+    // Task-centric); the View only surfaces them for a Task row (one with a [ItemTreeState.menuStates] entry). ---
+
+    /**
+     * Create a Task child under [parentId] (any kind — only Tasks carry a parent, so a "subtask" is always a
+     * Task) titled [title], through the injected create seam. A blank title is a no-op.
+     */
+    fun onAddSubtask(parentId: String, title: String)
+
+    /** Set Task [id]'s pinned flag to [pinned] (the menu's Pin ↔ Unpin toggle, #231) — Task-only `SetTaskPinned`. */
+    fun onSetPinned(id: String, pinned: Boolean)
+
+    /** Add ([inPlan] = true) or remove Task [id] from today's plan (the menu's Add ↔ Remove toggle, #231). */
+    fun onSetInPlan(id: String, inPlan: Boolean)
+
+    /** Move Task [id] to [target] working state — the kind-aware status block (Start working / Mark done / Set aside). */
+    fun onSetWorkingState(id: String, target: WorkingState)
+
+    /** Delete Task [id] permanently (the menu's destructive Delete — the View confirms first, #231). */
+    fun onDelete(id: String)
+
     sealed interface Output {
         data class ItemSelected(val id: TaskId) : Output
     }
@@ -161,6 +191,19 @@ class DefaultItemTreeComponent(
     // The tracking-event sink (#230): stubbed to the kmp-logger until the telemetry seam lands (ADR-0034).
     // A seam (not a direct log call) so a shake-with-nothing-to-undo is assertable in commonTest.
     private val trackEvent: (String) -> Unit = ::logTrackingEvent,
+    // The kind-aware command menu's per-row Task state (#231): the Task working-state/pinned/in-plan join
+    // the shell builds off the Task list + today's plan, surfaced on [ItemTreeState.menuStates]. Defaulted
+    // empty so the read/move-only tests build without it (like [moveEditor]); a non-Task row has no entry.
+    private val menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
+    // The kind-aware menu's Task-only write seams (#231), threaded from the shell over CommandExecutor.
+    // All default to no-ops so the existing read/move/navigation tests construct the component without them.
+    private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    private val setPinned: suspend (TaskId, Boolean) -> Unit = { _, _ -> },
+    // The "Add subtask" create seam: [TaskId] is the parent's raw id (any kind — the child is always a Task).
+    private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
+    private val deleteTask: suspend (TaskId) -> Unit = { _ -> },
+    private val addToPlan: suspend (TaskId) -> Unit = { _ -> },
+    private val removeFromPlan: suspend (TaskId) -> Unit = { _ -> },
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : ItemTreeComponent, ComponentContext by componentContext {
 
@@ -198,8 +241,12 @@ class DefaultItemTreeComponent(
                 )
             },
             lastUndoable.current,
-        ) { core, undoable ->
-            core.copy(lastMove = undoable?.let { MoveUndo(it.id, it.operation, it.structural) })
+            menuStates,
+        ) { core, undoable, menus ->
+            core.copy(
+                lastMove = undoable?.let { MoveUndo(it.id, it.operation, it.structural) },
+                menuStates = menus,
+            )
         }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ItemTreeState())
 
     // Persisting through the shared store re-flattens this tree AND the detail subtask outline live —
@@ -277,6 +324,34 @@ class DefaultItemTreeComponent(
         val entry = lastUndoable.current.value
             ?: return ShakeOutcome.Nothing.also { trackEvent("shake_undo_no_target") }
         return ShakeOutcome.Confirm(entry.operation)
+    }
+
+    // --- Kind-aware command menu writes (ADR-0034 decision 7, #231). Each is a thin dispatch to its
+    // Task-only seam; the View gates which entries it shows by kind + the row's [TaskMenuState]. ---
+
+    override fun onAddSubtask(parentId: String, title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return
+        scope.launch { createSubtask(TaskId(parentId), trimmed) }
+    }
+
+    override fun onSetPinned(id: String, pinned: Boolean) {
+        scope.launch { setPinned(TaskId(id), pinned) }
+    }
+
+    override fun onSetInPlan(id: String, inPlan: Boolean) {
+        scope.launch { if (inPlan) addToPlan(TaskId(id)) else removeFromPlan(TaskId(id)) }
+    }
+
+    override fun onSetWorkingState(id: String, target: WorkingState) {
+        // No cached row to gate on (the tree row is the cross-kind Item projection, not a full Task); a null
+        // `current` is the executor's "uncached → never blocked" path. The View already hides the verb the
+        // Task is in, so no redundant transition is offered.
+        scope.launch { workingStateEditor.setWorkingState(TaskId(id), target, current = null) }
+    }
+
+    override fun onDelete(id: String) {
+        scope.launch { deleteTask(TaskId(id)) }
     }
 }
 
