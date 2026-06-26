@@ -19,11 +19,13 @@ import com.circuitstitch.deferno.core.domain.command.CreateItem
 import com.circuitstitch.deferno.core.domain.command.DeleteTask
 import com.circuitstitch.deferno.core.domain.command.MarkOccurrence
 import com.circuitstitch.deferno.core.domain.command.MoveItem
+import com.circuitstitch.deferno.core.domain.command.RemoveFromPlan
 import com.circuitstitch.deferno.core.domain.command.RescheduleOccurrence
 import com.circuitstitch.deferno.core.domain.command.SetDoneVisibility
 import com.circuitstitch.deferno.core.domain.command.SetDragAndDrop
 import com.circuitstitch.deferno.core.domain.command.SetTaskDeadline
 import com.circuitstitch.deferno.core.domain.command.SetTaskLabels
+import com.circuitstitch.deferno.core.domain.command.SetTaskPinned
 import com.circuitstitch.deferno.core.domain.command.SetTheme
 import com.circuitstitch.deferno.core.domain.command.SetTracking
 import com.circuitstitch.deferno.core.domain.command.taskCommandFor
@@ -95,6 +97,16 @@ interface AccountSession {
 
     /** Add [taskId] to the ([date], [tz]) plan — optimistic apply + outbox enqueue (ADR-0001/0007). */
     suspend fun addToPlan(taskId: TaskId, date: LocalDate, tz: String)
+
+    /** Remove [taskId] from the ([date], [tz]) plan — the Item tree menu's plan toggle off-direction (#231). */
+    suspend fun removeFromPlan(taskId: TaskId, date: LocalDate, tz: String)
+
+    /**
+     * The Item tree command menu's **Pin** write seam (#231): maps a [TaskId] + target flag to the
+     * `SetTaskPinned` Command and dispatches it through the command executor (optimistic apply + outbox
+     * enqueue), so the feature layer never touches the registry directly (mirrors [deleteTask]).
+     */
+    val setPinned: suspend (TaskId, Boolean) -> Unit
 
     /**
      * The working-state write seam the Tasks detail drives (#73). Maps a target [WorkingState] to its
@@ -256,6 +268,13 @@ class AccountComponentSession(private val component: AccountComponent) : Account
         component.commandExecutor.execute(AddToPlan(taskId, date, tz))
     }
 
+    override suspend fun removeFromPlan(taskId: TaskId, date: LocalDate, tz: String) {
+        component.commandExecutor.execute(RemoveFromPlan(taskId, date, tz))
+    }
+
+    override val setPinned: suspend (TaskId, Boolean) -> Unit =
+        commandSetPinned(component.commandExecutor)
+
     override val workingStateEditor: WorkingStateEditor =
         commandWorkingStateEditor(component.commandExecutor)
 
@@ -323,6 +342,14 @@ internal fun commandSetLabels(executor: CommandExecutor): suspend (TaskId, List<
  */
 internal fun commandDeleteTask(executor: CommandExecutor): suspend (TaskId) -> Unit =
     { id -> executor.execute(DeleteTask(id)) }
+
+/**
+ * The Pin write seam backed by a [CommandExecutor] (#231): dispatches [SetTaskPinned] with the target flag
+ * (a single boolean toggle — the menu picks Pin/Unpin from the current value). No `current` row — pinning
+ * has no stale-transition gate. Mirrors the other `command*` seam factories above.
+ */
+internal fun commandSetPinned(executor: CommandExecutor): suspend (TaskId, Boolean) -> Unit =
+    { id, pinned -> executor.execute(SetTaskPinned(id, pinned)) }
 
 /**
  * The Tasks Item-tree move seam backed by a [CommandExecutor] (ADR-0034 #228): dispatches a [MoveItem]

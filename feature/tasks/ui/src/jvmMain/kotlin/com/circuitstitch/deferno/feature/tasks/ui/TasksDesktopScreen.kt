@@ -141,6 +141,12 @@ private fun TreePane(
             onExitMoveMode = component::onExitMoveMode,
             canUndo = state.lastMove != null,
             onUndoMove = component::undoLastMove,
+            menuStates = state.menuStates,
+            onAddSubtask = component::onAddSubtask,
+            onSetPinned = component::onSetPinned,
+            onSetInPlan = component::onSetInPlan,
+            onSetWorkingState = component::onSetWorkingState,
+            onDelete = component::onDelete,
         )
         // Top-anchored, out of the way (ADR-0034 decision 8: the Material default is bottom, so align top).
         SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.TopCenter))

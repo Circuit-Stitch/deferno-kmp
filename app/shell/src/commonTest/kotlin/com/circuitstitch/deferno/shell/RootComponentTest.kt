@@ -587,6 +587,17 @@ internal class FakeAccountSession(
         addedToPlan += taskId
     }
 
+    val removedFromPlan = mutableListOf<TaskId>()
+    val pinnedSet = mutableListOf<Pair<TaskId, Boolean>>()
+
+    override suspend fun removeFromPlan(taskId: TaskId, date: LocalDate, tz: String) {
+        removedFromPlan += taskId
+    }
+
+    override val setPinned: suspend (TaskId, Boolean) -> Unit = { id, pinned ->
+        pinnedSet += id to pinned
+    }
+
     override val workingStateEditor: com.circuitstitch.deferno.feature.tasks.WorkingStateEditor =
         com.circuitstitch.deferno.feature.tasks.WorkingStateEditor { id, target, _ ->
             workingStateSets += id to target

@@ -90,6 +90,7 @@ import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
+import com.circuitstitch.deferno.feature.tasks.TaskMenuState
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.feature.tasks.MoveEditor
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
@@ -101,6 +102,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -147,6 +149,13 @@ class DefaultMainShellComponent(
     // The Task detail's destructive Delete seam (kebab → confirm), threaded into the detail (overlay +
     // Tasks Destination). Defaults to a no-op so the many shell tests build without it.
     private val deleteTask: suspend (TaskId) -> Unit = { _ -> },
+    // The Item-tree command menu's Task-only Pin + plan-toggle seams (#231), threaded into the Tasks
+    // Destination. [addToPlan]/[removeFromPlan] are pre-bound to (today, timeZone) by the RootComponent; the
+    // per-row Task state (status/Pin/plan labels) is joined below off the Task list + today's plan. All
+    // default to no-ops so the many shell tests build without supplying them.
+    private val setPinned: suspend (TaskId, Boolean) -> Unit = { _, _ -> },
+    private val addToPlan: suspend (TaskId) -> Unit = { _ -> },
+    private val removeFromPlan: suspend (TaskId) -> Unit = { _ -> },
     // The Task detail's on-device attachment seam (#211), threaded into the Tasks destination + the
     // TaskDetail overlay. Defaults to the empty NONE so the many shell tests build without it; production
     // threads this Account's seam from the session.
@@ -251,6 +260,16 @@ class DefaultMainShellComponent(
             ),
         )
     }
+
+    // The Item-tree command menu's per-row Task state (#231): join each Task's working-state + pinned flag
+    // with whether it's in today's plan (keyed by id) so the menu can label Pin↔Unpin / Add↔Remove-from-plan
+    // and swap the kind-aware status block. Only Tasks appear (the status/Pin/plan writes are Task-only);
+    // a non-Task tree row simply has no entry. Cold + offline-first (both reads are local Flows, ADR-0001).
+    private val treeMenuStates: Flow<Map<String, TaskMenuState>> =
+        combine(taskRepository.observeTasks(), planRepository.observePlan(today, timeZone)) { tasks, plan ->
+            val planIds = plan.mapTo(HashSet(plan.size)) { it.id.value }
+            tasks.associate { it.id.value to TaskMenuState(it.workingState, it.pinned, it.id.value in planIds) }
+        }
 
     // The Inbox "accept" seam (ADR-0015 Inbox amendment): commit a draft as a real Task through the same
     // online-only create path the New surface uses (ADR-0016), then mark it Accepted so it leaves the
@@ -480,6 +499,10 @@ class DefaultMainShellComponent(
                         setLabels = setLabels,
                         deleteTask = deleteTask,
                         onDeviceAttachments = onDeviceAttachments,
+                        menuStates = treeMenuStates,
+                        setPinned = setPinned,
+                        addToPlan = addToPlan,
+                        removeFromPlan = removeFromPlan,
                         coroutineContext = coroutineContext,
                     ),
                 )

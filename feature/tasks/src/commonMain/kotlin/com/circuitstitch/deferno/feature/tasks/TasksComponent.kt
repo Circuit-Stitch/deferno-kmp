@@ -20,7 +20,9 @@ import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 
@@ -83,8 +85,16 @@ class DefaultTasksComponent(
     private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     // The detail's destructive Delete seam (kebab → confirm), threaded down into the detail slot. Defaults
-    // to a no-op so existing tests/callers build without supplying it.
+    // to a no-op so existing tests/callers build without supplying it. The Item tree's command menu (#231)
+    // reuses it (and [workingStateEditor] / [createSubtask]) for a Task row's Delete / status / Add subtask.
     private val deleteTask: suspend (TaskId) -> Unit = { _ -> },
+    // The kind-aware tree command menu's remaining Task-only seams (#231), threaded into the tree pane:
+    // its per-row Task state (Pin/plan/status labels) joined off the Task list + today's plan by the shell,
+    // the pin toggle, and the add/remove-from-plan toggle. All default to inert so existing tests build.
+    private val menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
+    private val setPinned: suspend (TaskId, Boolean) -> Unit = { _, _ -> },
+    private val addToPlan: suspend (TaskId) -> Unit = { _ -> },
+    private val removeFromPlan: suspend (TaskId) -> Unit = { _ -> },
     // The detail's on-device attachment seam (#211), threaded down into the detail slot. Defaults to the
     // empty NONE so existing tests/callers build without it.
     private val onDeviceAttachments: OnDeviceAttachments = OnDeviceAttachments.NONE,
@@ -111,6 +121,13 @@ class DefaultTasksComponent(
             output = ::onTreeOutput,
             moveEditor = moveEditor,
             shakeToUndoPreference = shakeToUndoPreference,
+            menuStates = menuStates,
+            workingStateEditor = workingStateEditor,
+            setPinned = setPinned,
+            createSubtask = createSubtask,
+            deleteTask = deleteTask,
+            addToPlan = addToPlan,
+            removeFromPlan = removeFromPlan,
             coroutineContext = coroutineContext,
         )
 
