@@ -120,6 +120,9 @@ struct ItemRowView: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .strikethrough(row.item.isTerminal)
+                    // Terminal strikes + mutes; a `blocked` row mutes WITHOUT the strike — a distinct
+                    // "blocked, not finished" read (mirrors Compose `ItemTreeRow`, #290).
+                    .foregroundStyle((row.item.isTerminal || row.item.blocked) ? colors.inkMuted : colors.onSurface)
                 if let progress {
                     MonoMeta("\(progress.done) of \(progress.total)")
                         .padding(.top, 2)
@@ -134,6 +137,21 @@ struct ItemRowView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture { if row.hasChildren { onToggleExpand(row.item.id, row.isExpanded) } }
+
+            // Dependency badges (#290), ahead of the source mark: a quiet "Blocked" pill (the de-emphasis
+            // state's at-a-glance + VoiceOver carrier — blocked rows only reach here when "Show blocked" is
+            // on, else they're pruned in the shared flatten) and an amber "Blocker" badge marking a row that
+            // gates ≥1 other. Each clears its own label so VoiceOver reads one phrase, not the uppercased text.
+            if row.item.blocked {
+                TreeChip(text: "Blocked", tone: .neutral)
+                    .padding(.horizontal, 4)
+                    .accessibilityLabel("Blocked")
+            }
+            if row.item.isBlocker {
+                TreeChip(text: "Blocker", tone: .accent)
+                    .padding(.horizontal, 4)
+                    .accessibilityLabel("Blocks other items")
+            }
 
             // External-provenance mark (GitHub / Google), ahead of the chevron — the mirror of the Android
             // placement (#279/#280). Absent for a native Deferno item (`source == nil`, the common case).

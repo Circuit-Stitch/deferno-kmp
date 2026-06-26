@@ -22,6 +22,32 @@ struct WorkingStateBadge: View {
     }
 }
 
+/// A small mono dependency badge on a tree row (#290) — the macOS twin of the iOS `TreeChip` (which
+/// macOS lacks). `.neutral` is the quiet "Blocked" pill (muted ink); `.accent` is the amber "Blocker"
+/// badge. `semanticLabel` is spoken in place of the uppercased glyphs.
+struct DependencyBadge: View {
+    enum Tone { case neutral, accent }
+
+    let text: String
+    var tone: Tone = .neutral
+    let semanticLabel: String
+    @Environment(\.defernoColors) private var colors
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.defernoMono(10, weight: .semibold))
+            .tracking(0.6)
+            .foregroundStyle(tone == .accent ? colors.amberDeep : colors.inkMuted)
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(
+                tone == .accent ? colors.primaryContainer : colors.surfaceVariant,
+                in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+            )
+            .accessibilityElement()
+            .accessibilityLabel(semanticLabel)
+    }
+}
+
 /// A tappable Task row: title, optional human `ref` in a monospaced font, a pinned marker, and the
 /// working-state badge. Flat (the list supplies the divider), one large touch target, spoken as
 /// "<title>, <status>". Shared by the Task list, the tree, and (without the pin) the Plan.
@@ -119,6 +145,9 @@ struct ItemRowView: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .strikethrough(row.item.isTerminal)
+                    // Terminal strikes + mutes; a `blocked` row mutes WITHOUT the strike — a distinct
+                    // "blocked, not finished" read (mirrors Compose `ItemTreeRow`, #290).
+                    .foregroundStyle((row.item.isTerminal || row.item.blocked) ? colors.inkMuted : colors.onSurface)
                 if let progress {
                     MonoMeta("\(progress.done) of \(progress.total)")
                         .padding(.top, 2)
@@ -133,6 +162,18 @@ struct ItemRowView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture { if row.hasChildren { onToggleExpand(row.item.id, row.isExpanded) } }
+
+            // Dependency badges (#290), ahead of the source mark: a quiet "Blocked" pill (blocked rows only
+            // reach here when "Show blocked" is on, else they're pruned in the shared flatten) and an amber
+            // "Blocker" badge marking a row that gates ≥1 other. Each carries its own VoiceOver label.
+            if row.item.blocked {
+                DependencyBadge(text: "Blocked", tone: .neutral, semanticLabel: "Blocked")
+                    .padding(.horizontal, 4)
+            }
+            if row.item.isBlocker {
+                DependencyBadge(text: "Blocker", tone: .accent, semanticLabel: "Blocks other items")
+                    .padding(.horizontal, 4)
+            }
 
             // External-provenance mark (GitHub / Google), ahead of the chevron — the mirror of the Android
             // placement (#279/#280). Absent for a native Deferno item (`source == nil`, the common case).

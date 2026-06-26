@@ -67,7 +67,7 @@ struct ItemTreeView: View {
                     // A slim count + the local filter as the first row; scrolls away with the list, hidden in
                     // move mode (the lifted-row focus owns the surface). The title + search are the native bar.
                     if !inMoveMode {
-                        metaFilterBar(treeCount: treeCount)
+                        metaFilterBar(treeCount: treeCount, showBlocked: value.showBlocked)
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
@@ -149,7 +149,7 @@ struct ItemTreeView: View {
     /// The `{n} trees` count + the local In today / Active / All filter — the first list row. The
     /// "Everything" title, search field, and create actions are the native nav bar (`TasksScreen`).
     @ViewBuilder
-    private func metaFilterBar(treeCount: Int) -> some View {
+    private func metaFilterBar(treeCount: Int, showBlocked: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             // iPad column identity — compact gets this from the large nav title instead.
             if showsColumnTitle {
@@ -158,11 +158,28 @@ struct ItemTreeView: View {
                     .foregroundStyle(colors.onSurface)
             }
             MonoMeta(treeCount == 1 ? "1 tree" : "\(treeCount) trees")
-            SegmentedFilter(
-                options: Self.filters,
-                selectedIndex: filterIndex,
-                onSelect: { filterIndex = $0 }
-            )
+            HStack(spacing: 10) {
+                SegmentedFilter(
+                    options: Self.filters,
+                    selectedIndex: filterIndex,
+                    onSelect: { filterIndex = $0 }
+                )
+                Spacer(minLength: 8)
+                // The readiness axis (#290), distinct from the In-today/Active/All segment: ready-only by
+                // default (rows arrive pre-pruned of `blocked` items + their subtrees); toggled on to reveal
+                // them (still marked). Flips `showBlocked` on the shared component, never a client-side filter
+                // (that would dangle the filigree rails). Same capsule language as the segment pills.
+                Button { component.onSetShowBlocked(show: !showBlocked) } label: {
+                    Text("Show blocked")
+                        .font(.footnote.weight(showBlocked ? .semibold : .regular))
+                        .foregroundStyle(showBlocked ? colors.onPrimary : colors.inkMuted)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(showBlocked ? colors.primary : colors.surfaceVariant, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show blocked")
+                .accessibilityAddTraits(showBlocked ? [.isButton, .isSelected] : .isButton)
+            }
         }
         .padding(.horizontal, Layout.gutter)
         .padding(.top, 8)

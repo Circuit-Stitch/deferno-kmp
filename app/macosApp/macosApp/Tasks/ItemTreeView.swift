@@ -44,7 +44,7 @@ struct ItemTreeView: View {
                     // A slim count + the local filter as the first row; hidden in move mode (the lifted-row
                     // focus owns the surface).
                     if !inMoveMode {
-                        metaFilterBar(treeCount: treeCount)
+                        metaFilterBar(treeCount: treeCount, showBlocked: value.showBlocked)
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
@@ -112,7 +112,7 @@ struct ItemTreeView: View {
     // MARK: - In-list header (count + filter)
 
     @ViewBuilder
-    private func metaFilterBar(treeCount: Int) -> some View {
+    private func metaFilterBar(treeCount: Int, showBlocked: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             MonoMeta(treeCount == 1 ? "1 tree" : "\(treeCount) trees")
             HStack(spacing: 6) {
@@ -124,6 +124,17 @@ struct ItemTreeView: View {
                         compact: true
                     ) { filterIndex = i }
                 }
+                Spacer(minLength: 8)
+                // The readiness axis (#290), distinct from the In-today/Active/All segment: ready-only by
+                // default (rows arrive pre-pruned of `blocked` items + their subtrees); toggled on to reveal
+                // them (still marked). Flips `showBlocked` on the shared component, never a client-side filter
+                // (that would dangle the filigree rails).
+                SelectableChip(
+                    label: "Show blocked",
+                    selected: showBlocked,
+                    prominence: .low,
+                    compact: true
+                ) { component.onSetShowBlocked(show: !showBlocked) }
             }
         }
         .padding(.horizontal, Layout.gutter)
