@@ -130,6 +130,8 @@ private fun TreePane(
             onOpenDetail = component::onOpenDetail,
             onRefresh = component::onRefresh,
             onSearch = onSearch,
+            showBlocked = state.showBlocked,
+            onSetShowBlocked = component::onSetShowBlocked,
             moveMode = state.moveMode,
             onEnterMoveMode = component::onEnterMoveMode,
             onMoveUp = component::onMoveUp,

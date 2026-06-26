@@ -65,6 +65,9 @@ class SqlDelightTaskLocalStoreTest {
         pinned = true,
         descendantDone = 1,
         descendantTotal = 2,
+        // Server-derived dependency flags must survive the real-SQLite round-trip (#290).
+        blocked = true,
+        isBlocker = true,
     )
 
     @Test
@@ -152,6 +155,9 @@ class SqlDelightTaskLocalStoreTest {
         // the Full row's server-computed subtree counts round-trip through real SQLite (#226).
         assertEquals(1L, keep?.descendantDone)
         assertEquals(2L, keep?.descendantTotal)
+        // and the server-derived dependency flags round-trip too (#290).
+        assertTrue(keep?.blocked == true)
+        assertTrue(keep?.isBlocker == true)
         assertEquals(WorkingState.Open, store.get(TaskId("fresh"))?.workingState)
         assertNull(store.get(TaskId("vanished")))
         // tombstone present + isDeleted, excluded from active.

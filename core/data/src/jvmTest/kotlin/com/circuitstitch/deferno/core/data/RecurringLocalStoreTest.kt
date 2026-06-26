@@ -58,6 +58,10 @@ class RecurringLocalStoreTest {
             ownerOrgId = OrgId("org-1"),
             description = "body",
             seriesId = "s-1",
+            // Server-derived dependency flags must survive the real-SQLite round-trip for recurring kinds
+            // too (#290): a recurring row inherits `blocked` from a blocked ancestor.
+            blocked = true,
+            isBlocker = true,
         )
 
         store.observeActive().test {

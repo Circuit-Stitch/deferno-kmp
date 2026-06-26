@@ -1,0 +1,20 @@
+-- Migration 9 -> 10: add the server-derived dependency flags to every Item kind (issue #290).
+--
+-- The `/items` snapshot carries `blocked` / `is_blocker` per item (ADR-0034, #289) — `blocked` is true
+-- when an item has an unresolved blocker or a blocked ancestor (the flag inherits down the tree), and
+-- `is_blocker` is true when it gates at least one other. The Tasks tree's ready-only filter (#290) reads
+-- them off the cached row, so they must round-trip the DB. Plain ADD COLUMN appends nullable columns;
+-- existing rows get NULL (decoded as false) and are repopulated on the next refresh. They land on all
+-- four kinds because `blocked` inherits across kinds. Never edit a released migration or snapshot —
+-- ADR-0022 runbook.
+ALTER TABLE taskEntity ADD COLUMN blocked INTEGER;
+ALTER TABLE taskEntity ADD COLUMN is_blocker INTEGER;
+
+ALTER TABLE choreEntity ADD COLUMN blocked INTEGER;
+ALTER TABLE choreEntity ADD COLUMN is_blocker INTEGER;
+
+ALTER TABLE habitEntity ADD COLUMN blocked INTEGER;
+ALTER TABLE habitEntity ADD COLUMN is_blocker INTEGER;
+
+ALTER TABLE eventEntity ADD COLUMN blocked INTEGER;
+ALTER TABLE eventEntity ADD COLUMN is_blocker INTEGER;

@@ -29,6 +29,8 @@ class TaskEntityQueriesTest {
         ownerOrgId: String? = null,
         descendantDone: Long? = null,
         descendantTotal: Long? = null,
+        blocked: Long? = null,
+        isBlocker: Long? = null,
     ) = taskEntityQueries.insertOrReplace(
         id = id,
         org_slug = "u-e4h2qk",
@@ -53,12 +55,14 @@ class TaskEntityQueriesTest {
         next_task_id = null,
         descendant_done = descendantDone,
         descendant_total = descendantTotal,
+        blocked = blocked,
+        is_blocker = isBlocker,
     )
 
     @Test
     fun insertAndSelectByIdRoundTrips() {
         val db = inMemoryDefernoDatabase()
-        db.insert(id = "a", title = "first", ownerOrgId = "org-1", hydration = "Full", descendantDone = 2, descendantTotal = 5)
+        db.insert(id = "a", title = "first", ownerOrgId = "org-1", hydration = "Full", descendantDone = 2, descendantTotal = 5, blocked = 1, isBlocker = 1)
 
         val row: TaskEntity? = db.taskEntityQueries.selectById("a").executeAsOneOrNull()
         assertEquals("a", row?.id)
@@ -69,6 +73,9 @@ class TaskEntityQueriesTest {
         // Server-computed subtree progress columns round-trip (#226, schema v7).
         assertEquals(2L, row?.descendant_done)
         assertEquals(5L, row?.descendant_total)
+        // Server-derived dependency flags round-trip (#290, schema v10).
+        assertEquals(1L, row?.blocked)
+        assertEquals(1L, row?.is_blocker)
     }
 
     @Test

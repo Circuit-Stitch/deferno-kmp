@@ -20,6 +20,8 @@ class ItemTreeTest {
         sequence: Long? = null,
         descendantDone: Long? = null,
         descendantTotal: Long? = null,
+        blocked: Boolean = false,
+        isBlocker: Boolean = false,
     ) = Item(
         id = id,
         kind = kind,
@@ -28,6 +30,8 @@ class ItemTreeTest {
         sequence = sequence,
         descendantDone = descendantDone,
         descendantTotal = descendantTotal,
+        blocked = blocked,
+        isBlocker = isBlocker,
     )
 
     /** id -> row, for terse assertions on a flattened forest. */
@@ -138,6 +142,70 @@ class ItemTreeTest {
         assertEquals(listOf(false), byId.getValue("b").spine) // b is last → its rail stops at the elbow
         // a1's ancestor column (a) continues past it to reach b; a1's own column is last → no continuation.
         assertEquals(listOf(true, false), byId.getValue("a1").spine)
+    }
+
+    // --- readiness pruning (#290): ready-only hides blocked items + their whole subtree; rails stay clean ---
+
+    @Test
+    fun readyOnlyPrunesABlockedNodeAndItsWholeSubtree() {
+        // root → [a, blockedParent → grandchild]. `blocked` inherits down the tree server-side, so the
+        // whole blocked branch drops as a unit under ready-only (showBlocked = false); `a` is untouched.
+        val rows = buildItemTree(
+            listOf(
+                item("root", sequence = 0),
+                item("a", parentId = "root", sequence = 0),
+                item("blockedParent", parentId = "root", sequence = 1, blocked = true),
+                item("grandchild", parentId = "blockedParent", sequence = 0, blocked = true),
+            ),
+            showBlocked = false,
+        )
+
+        assertEquals(listOf("root", "a"), rows.map { it.item.id })
+    }
+
+    @Test
+    fun showBlockedRevealsTheBlockedItemsAgain() {
+        val items = listOf(
+            item("root", sequence = 0),
+            item("a", parentId = "root", sequence = 0),
+            item("blockedParent", parentId = "root", sequence = 1, blocked = true),
+            item("grandchild", parentId = "blockedParent", sequence = 0, blocked = true),
+        )
+
+        val ids = buildItemTree(items, showBlocked = true).map { it.item.id }.toSet()
+        assertEquals(setOf("root", "a", "blockedParent", "grandchild"), ids)
+    }
+
+    @Test
+    fun pruningABlockedSubtreeDropsAChildEvenWhenTheChildIsNotItselfMarked() {
+        // Defensive: pruning is by subtree, not a per-row post-filter — a blocked parent hides a child the
+        // server didn't (re)mark, rather than re-rooting it as a visible orphan.
+        val rows = buildItemTree(
+            listOf(
+                item("blockedParent", sequence = 0, blocked = true),
+                item("child", parentId = "blockedParent", sequence = 0, blocked = false),
+            ),
+            showBlocked = false,
+        )
+
+        assertTrue(rows.isEmpty())
+    }
+
+    @Test
+    fun pruningABlockedLastSiblingLeavesNoDanglingRail() {
+        // root → [a, b(blocked)]; ready-only drops b. `a` is now the last visible child, so its rail must
+        // STOP at its elbow (spine == [false]) — not continue toward a row that no longer renders. This is
+        // the reason the prune happens *inside* the flatten (before sibling rails are computed), #290.
+        val rows = buildItemTree(
+            listOf(
+                item("root", sequence = 0),
+                item("a", parentId = "root", sequence = 0),
+                item("b", parentId = "root", sequence = 1, blocked = true),
+            ),
+            showBlocked = false,
+        )
+
+        assertEquals(listOf(false), rows.byId().getValue("a").spine)
     }
 
     /** A parent→child chain (each links to the next via parentId), for depth-fold assertions. */

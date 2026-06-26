@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +70,7 @@ import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SearchBarDisplay
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
+import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.ItemSource
@@ -122,6 +124,11 @@ internal fun ItemTreeContent(
     // without wiring them; the integrator threads the real Search / new-tree intents.
     onSearch: () -> Unit = {},
     onAdd: () -> Unit = {},
+    // The readiness axis (#290): [showBlocked] is the component's resting-off (ready-only) flag — the rows
+    // arrive already pruned of `blocked` items; this only drives the "Show blocked" chip's selected state.
+    // [onSetShowBlocked] flips it. Defaulted so read-only callers / tests render without wiring readiness.
+    showBlocked: Boolean = false,
+    onSetShowBlocked: (Boolean) -> Unit = {},
     // Hoisted so the host can read the scroll position (Android docks a compact search into the shell top
     // bar once the inline header scrolls off — see MainShell). [pinSearch] keeps the inline search/filter
     // band pinned (a stickyHeader) for hosts with no dock (desktop); Android sets it false so the band
@@ -217,6 +224,8 @@ internal fun ItemTreeContent(
                             showSearch = searchInList,
                             filterIndex = filterIndex,
                             onFilterSelect = { filterIndex = it },
+                            showBlocked = showBlocked,
+                            onSetShowBlocked = onSetShowBlocked,
                         )
                     }
                 } else {
@@ -226,6 +235,8 @@ internal fun ItemTreeContent(
                             showSearch = searchInList,
                             filterIndex = filterIndex,
                             onFilterSelect = { filterIndex = it },
+                            showBlocked = showBlocked,
+                            onSetShowBlocked = onSetShowBlocked,
                         )
                     }
                 }
@@ -326,6 +337,8 @@ private fun EverythingSearchFilter(
     showSearch: Boolean,
     filterIndex: Int,
     onFilterSelect: (Int) -> Unit,
+    showBlocked: Boolean,
+    onSetShowBlocked: (Boolean) -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.surface) {
         Column(
@@ -334,7 +347,18 @@ private fun EverythingSearchFilter(
         ) {
             // Hosts with a top-bar search (Android) omit the inline bar; desktop keeps it (no top-bar dock).
             if (showSearch) SearchBarDisplay(placeholder = "Search all your trees…", onClick = onSearch)
-            SegmentedFilter(options = TreeFilters, selectedIndex = filterIndex, onSelect = onFilterSelect)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SegmentedFilter(options = TreeFilters, selectedIndex = filterIndex, onSelect = onFilterSelect)
+                Spacer(Modifier.weight(1f))
+                // The readiness axis (#290), distinct from the In-today/Active/All segment: ready-only by
+                // default (off → blocked items + their subtrees pruned), toggled on to reveal them. A
+                // FilterChip carries its own selected/role semantics for TalkBack.
+                FilterChip(
+                    selected = showBlocked,
+                    onClick = { onSetShowBlocked(!showBlocked) },
+                    label = { Text("Show blocked") },
+                )
+            }
         }
     }
 }
@@ -361,8 +385,12 @@ private fun ItemTreeRow(
     onUndoMove: () -> Unit,
 ) {
     val item = row.item
+    // Three distinct row states (#290): a terminal (Done/Dropped/Archived) item strikes + mutes the title;
+    // a `blocked` item mutes it too but WITHOUT the strike — a distinct "blocked, not finished" read —
+    // and wears a "Blocked" pill; an `isBlocker` item gates others and wears a "Blocker" badge. Blocked
+    // rows only reach here when "show blocked" is on (else they're pruned at the flatten, ItemTree.kt).
     val titleColor =
-        if (item.isTerminal) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface
+        if (item.isTerminal || item.blocked) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface
     var menuOpen by remember { mutableStateOf(false) }
 
     // The lifted row is highlighted; the rest of the list calms (dimmed) while a move is in progress.
@@ -448,6 +476,26 @@ private fun ItemTreeRow(
                             )
                         }
                     }
+                }
+                // Dependency badges (#290), within the row's existing trailing badge budget. "Blocked" is a
+                // quiet outlined pill (the de-emphasis state's at-a-glance + TalkBack carrier); "Blocker" is
+                // an amber accent badge marking a row that gates ≥1 other. Each clears its own semantics so
+                // TalkBack reads one label, not the inner text twice.
+                if (item.blocked) {
+                    TreeChip(
+                        text = "Blocked",
+                        filled = false,
+                        content = MaterialTheme.defernoColors.inkMuted,
+                        semanticLabel = "Blocked",
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    )
+                }
+                if (item.isBlocker) {
+                    TreeChip(
+                        text = "Blocker",
+                        semanticLabel = "Blocks other items",
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    )
                 }
                 // A small external-provenance mark when the item was synced/created from GitHub or
                 // Google Calendar (else absent — a native Deferno item). It rides ahead of the chevron,

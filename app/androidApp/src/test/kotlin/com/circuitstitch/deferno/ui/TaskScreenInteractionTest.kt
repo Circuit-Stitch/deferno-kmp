@@ -88,6 +88,17 @@ class TaskScreenInteractionTest {
     }
 
     @Test
+    fun itemTree_showBlockedChip_forwardsTheReadinessToggle() {
+        // #290: the "Show blocked" chip (resting off — ready-only) forwards a flip to the component.
+        val component = FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(SampleTasks.items)))
+        setContent { TaskListScreen(component) }
+
+        composeRule.onNodeWithText("Show blocked").performClick()
+
+        assertEquals(listOf(true), component.showBlockedSet)
+    }
+
+    @Test
     fun itemTree_empty_showsGentleCopy() {
         val component = FakeItemTreeComponent(ItemTreeState(rows = emptyList()))
         setContent { TaskListScreen(component) }

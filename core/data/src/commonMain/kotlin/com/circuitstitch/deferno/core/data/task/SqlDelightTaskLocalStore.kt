@@ -69,6 +69,8 @@ class SqlDelightTaskLocalStore(
             next_task_id = e.next_task_id,
             descendant_done = e.descendant_done,
             descendant_total = e.descendant_total,
+            blocked = e.blocked,
+            is_blocker = e.is_blocker,
         )
     }
 

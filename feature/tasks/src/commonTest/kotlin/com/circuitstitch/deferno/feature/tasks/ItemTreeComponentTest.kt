@@ -61,6 +61,15 @@ class ItemTreeComponentTest {
         ),
     )
 
+    /** root → a, plus a blocked sibling `bad` — for the readiness-axis tests (#290). */
+    private fun withBlocked() = FakeItemRepository(
+        listOf(
+            Item(id = "root", kind = ItemKind.Task, title = "root", sequence = 0),
+            Item(id = "a", kind = ItemKind.Task, title = "a", parentId = "root", sequence = 0),
+            Item(id = "bad", kind = ItemKind.Task, title = "bad", parentId = "root", sequence = 1, blocked = true),
+        ),
+    )
+
     @Test
     fun stateFlattensTheCrossKindForest() = runTest {
         val c = component(rootAndChild())
@@ -95,6 +104,31 @@ class ItemTreeComponentTest {
 
         assertEquals(listOf("root"), c.state.value.rows.map { it.item.id })
         assertFalse(c.state.value.rows.single().isExpanded)
+    }
+
+    // --- readiness axis (#290): ready-only by default, "show blocked" reveals ---
+
+    @Test
+    fun readyOnlyIsTheRestingDefaultAndPrunesBlockedItems() = runTest {
+        val c = component(withBlocked())
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        assertFalse(c.state.value.showBlocked, "ready-only is the resting default (#290)")
+        assertEquals(listOf("root", "a"), c.state.value.rows.map { it.item.id }, "the blocked item is pruned by default")
+    }
+
+    @Test
+    fun showingBlockedRevealsThemAndReFlattensLive() = runTest {
+        val c = component(withBlocked())
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onSetShowBlocked(true)
+        advanceUntilIdle()
+
+        assertTrue(c.state.value.showBlocked)
+        assertEquals(setOf("root", "a", "bad"), c.state.value.rows.map { it.item.id }.toSet(), "blocked items revealed live")
     }
 
     @Test

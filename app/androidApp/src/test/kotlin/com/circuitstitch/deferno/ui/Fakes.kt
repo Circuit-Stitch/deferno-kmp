@@ -141,10 +141,12 @@ internal class FakeItemTreeComponent(initial: ItemTreeState = ItemTreeState()) :
     var undoCount = 0
         private set
     var shakeOutcome: ShakeOutcome = ShakeOutcome.Nothing
+    val showBlockedSet = mutableListOf<Boolean>()
 
     override fun onToggleExpand(id: String, currentlyExpanded: Boolean) { toggled += id to currentlyExpanded }
     override fun onOpenDetail(id: String, kind: ItemKind) { opened += id to kind }
     override fun onRefresh() { refreshCount++ }
+    override fun onSetShowBlocked(show: Boolean) { showBlockedSet += show }
     override fun onEnterMoveMode(id: String) { moveModeEntered += id }
     override fun onExitMoveMode() { movesApplied += "done" }
     override fun onMoveUp() { movesApplied += "up" }
@@ -166,10 +168,13 @@ internal fun itemRow(
     isTerminal: Boolean = false,
     descendantDone: Long? = null,
     descendantTotal: Long? = null,
+    blocked: Boolean = false,
+    isBlocker: Boolean = false,
 ): ItemRow = ItemRow(
     item = Item(
         id = id, kind = kind, title = title, isTerminal = isTerminal,
         descendantDone = descendantDone, descendantTotal = descendantTotal,
+        blocked = blocked, isBlocker = isBlocker,
     ),
     depth = depth,
     hasChildren = hasChildren,
