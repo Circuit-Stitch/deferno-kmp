@@ -159,7 +159,8 @@ internal fun ItemTreeContent(
     onUndoMove: () -> Unit = {},
     // The kind-aware command menu (ADR-0034 decision 7, #231). [menuStates] carries each Task row's
     // working-state/pinned/in-plan (keyed by item id) so the menu labels Pin↔Unpin / Add↔Remove and swaps
-    // the status block; a non-Task row has no entry and gets the cross-kind subset (Add subtask · Move).
+    // the status block; only Task rows have an entry, but the View reads kind from the row (not from this
+    // map's presence), so a non-Task row gets the cross-kind subset (Add subtask · Move) on kind alone.
     // All defaulted inert so read-only callers / tests render without wiring the menu writes.
     menuStates: Map<String, TaskMenuState> = emptyMap(),
     onAddSubtask: (parentId: String, title: String) -> Unit = { _, _ -> },
@@ -401,8 +402,9 @@ private fun ItemTreeRow(
     row: ItemRow,
     inMoveMode: Boolean,
     isLifted: Boolean,
-    // Non-null only for a Task row (#231): its working-state/pinned/in-plan, so the menu labels the toggles
-    // and swaps the status block. A null [menuState] is a non-Task row → the cross-kind menu subset.
+    // A Task row's joined working-state/pinned/in-plan (#231) — or null for a non-Task row OR a Task whose
+    // state hasn't joined yet. The menu reads kind from [item.kind], never from this; this only labels the
+    // toggles + swaps the status block, so the value-dependent entries render once it's present.
     menuState: TaskMenuState?,
     onToggleExpand: (String, Boolean) -> Unit,
     onOpenDetail: (String, ItemKind) -> Unit,
@@ -557,14 +559,19 @@ private fun ItemTreeRow(
             }
 
             // The kind-aware long-press command menu (ADR-0034 decision 7, #231) — mirrors the web submenu
-            // plus the native Move action. The status block, Pin, Add-to-plan and Delete are Task-only
-            // writes (the native command layer is Task-centric — MoveItem is the lone cross-kind write), so a
-            // non-Task row ([menuState] null) gets only the cross-kind subset: Add subtask · Move (Open routes
-            // to the Task-only detail). "Set aside"/"Delete" are destructive (error-tinted; the word, not just
-            // colour, carries the signal — a11y). The arbitrary-parent "Move to…" entry + picker land together
-            // in #229; the menu opens by long-press (a TalkBack custom action) — a keyboard/right-click open-path is #300.
+            // plus the native Move action. Kind is read straight off the row ([item.kind]), never inferred
+            // from whether the per-row Task state has joined: a Task whose [menuState] hasn't loaded yet (the
+            // tree rows come from the Item repo, [menuState] from the Task+plan repos — independent Flows) is
+            // still a Task. The status block, Pin, Add-to-plan and Delete are Task-only writes (the native
+            // command layer is Task-centric — MoveItem is the lone cross-kind write), so a non-Task row gets
+            // only the cross-kind subset: Add subtask · Move (Open routes to the Task-only detail). Pin/plan/
+            // status need the joined values, so they render once [menuState] is present; Open/Delete need only
+            // the id, so they gate on kind alone. "Set aside"/"Delete" are destructive (error-tinted; the word,
+            // not just colour, carries the signal — a11y). The arbitrary-parent "Move to…" entry + picker land
+            // together in #229; the menu opens by long-press (a TalkBack custom action) — keyboard open is #300.
+            val isTask = item.kind == ItemKind.Task
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                if (menuState != null) {
+                if (isTask) {
                     DropdownMenuItem(
                         text = { Text("Open") },
                         onClick = { menuOpen = false; onOpenDetail(item.id, item.kind) },
@@ -584,35 +591,39 @@ private fun ItemTreeRow(
                         onClick = { menuOpen = false; onUndoMove() },
                     )
                 }
-                if (menuState != null) {
-                    DropdownMenuItem(
-                        text = { Text(if (menuState.pinned) "Unpin" else "Pin") },
-                        onClick = { menuOpen = false; onSetPinned(item.id, !menuState.pinned) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (menuState.inPlan) "Remove from today's plan" else "Add to today's plan") },
-                        onClick = { menuOpen = false; onSetInPlan(item.id, !menuState.inPlan) },
-                    )
-                    HorizontalDivider()
-                    // Kind-aware status block: the Task working-state verbs, hiding the one it's already in so
-                    // no redundant transition is offered (Habit/Chore/Event status verbs await their write seam, #299).
-                    if (menuState.workingState != WorkingState.InProgress) {
+                if (isTask) {
+                    // Pin/plan/status need the joined per-row state (label direction + which verb to hide), so
+                    // they appear once it's present; Delete needs only the id, so it rides the kind gate alone.
+                    if (menuState != null) {
                         DropdownMenuItem(
-                            text = { Text("Start working") },
-                            onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.InProgress) },
+                            text = { Text(if (menuState.pinned) "Unpin" else "Pin") },
+                            onClick = { menuOpen = false; onSetPinned(item.id, !menuState.pinned) },
                         )
-                    }
-                    if (menuState.workingState != WorkingState.Done) {
                         DropdownMenuItem(
-                            text = { Text("Mark done") },
-                            onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.Done) },
+                            text = { Text(if (menuState.inPlan) "Remove from today's plan" else "Add to today's plan") },
+                            onClick = { menuOpen = false; onSetInPlan(item.id, !menuState.inPlan) },
                         )
-                    }
-                    if (menuState.workingState != WorkingState.Dropped) {
-                        DropdownMenuItem(
-                            text = { Text("Set aside", color = MaterialTheme.colorScheme.error) },
-                            onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.Dropped) },
-                        )
+                        HorizontalDivider()
+                        // Status block: the Task working-state verbs, hiding the one it's already in so no
+                        // redundant transition is offered (Habit/Chore/Event status verbs await their seam, #299).
+                        if (menuState.workingState != WorkingState.InProgress) {
+                            DropdownMenuItem(
+                                text = { Text("Start working") },
+                                onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.InProgress) },
+                            )
+                        }
+                        if (menuState.workingState != WorkingState.Done) {
+                            DropdownMenuItem(
+                                text = { Text("Mark done") },
+                                onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.Done) },
+                            )
+                        }
+                        if (menuState.workingState != WorkingState.Dropped) {
+                            DropdownMenuItem(
+                                text = { Text("Set aside", color = MaterialTheme.colorScheme.error) },
+                                onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.Dropped) },
+                            )
+                        }
                     }
                     HorizontalDivider()
                     DropdownMenuItem(
