@@ -23,6 +23,8 @@ struct MainShellView: View {
     @StateObject private var overlay: OptionalStateFlowObserver<MainShellComponentOverlayChild>
     @StateObject private var accounts: AccountsObserver
     @StateObject private var chrome: StateFlowObserver<ChromeSpec>
+    /// The Active Account's session-expired flag (#297) — drives the read-surface "Session expired" banner.
+    @StateObject private var sessionExpired: StateFlowObserver<KotlinBoolean>
     @State private var showMore = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
@@ -34,6 +36,7 @@ struct MainShellView: View {
         _overlay = StateObject(wrappedValue: OptionalStateFlowObserver(component.activeOverlay))
         _accounts = StateObject(wrappedValue: AccountsObserver(accounts: component.accounts, active: component.activeAccount))
         _chrome = StateObject(wrappedValue: StateFlowObserver(component.chrome))
+        _sessionExpired = StateObject(wrappedValue: StateFlowObserver(component.sessionExpired))
     }
 
     private var active: MainShellComponentDestinationChild { destinations.value }
@@ -145,21 +148,29 @@ struct MainShellView: View {
 
     // MARK: Active Destination body
 
-    @ViewBuilder
     private var destinationBody: some View {
         let child = active
-        if let plan = ShellBridgeKt.destPlan(child: child) {
-            PlanHostView(plan: plan)
-        } else if let calendar = ShellBridgeKt.destCalendar(child: child) {
-            CalendarView(component: calendar)
-        } else if let tasks = ShellBridgeKt.destTasks(child: child) {
-            TasksScreen(root: ShellBridgeKt.tasksRoot(component: tasks))
-        } else if let profile = ShellBridgeKt.destProfile(child: child) {
-            ProfileView(component: profile)
-        } else if let settings = ShellBridgeKt.destSettings(child: child) {
-            SettingsView(component: settings)
-        } else {
-            EmptyStateView(title: "\(activeName) is coming soon", message: "This area is on the way.")
+        return Group {
+            if let plan = ShellBridgeKt.destPlan(child: child) {
+                PlanHostView(plan: plan)
+            } else if let calendar = ShellBridgeKt.destCalendar(child: child) {
+                CalendarView(component: calendar)
+            } else if let tasks = ShellBridgeKt.destTasks(child: child) {
+                TasksScreen(root: ShellBridgeKt.tasksRoot(component: tasks))
+            } else if let profile = ShellBridgeKt.destProfile(child: child) {
+                ProfileView(component: profile)
+            } else if let settings = ShellBridgeKt.destSettings(child: child) {
+                SettingsView(component: settings)
+            } else {
+                EmptyStateView(title: "\(activeName) is coming soon", message: "This area is on the way.")
+            }
+        }
+        // The Active Account's session has expired (#297): every read surface banners it. Profile is
+        // excluded — it shows the same prompt inside its own card.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if sessionExpired.value.boolValue && ShellBridgeKt.destProfile(child: child) == nil {
+                SessionExpiredBanner { ShellBridgeKt.shellSignInAgain(component: component) }
+            }
         }
     }
 

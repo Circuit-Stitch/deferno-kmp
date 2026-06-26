@@ -107,6 +107,7 @@ private class FakeMainShell : MainShellComponent {
     override val activeAccount: StateFlow<Account?> = MutableStateFlow(null)
     override val inboxReadyCount: StateFlow<Int> = MutableStateFlow(0)
     override val chrome: StateFlow<ChromeSpec> = MutableStateFlow(ChromeSpec(title = ""))
+    override val sessionExpired: StateFlow<Boolean> = MutableStateFlow(false)
 
     override fun openOverlay(route: OverlayRoute) = Unit
     override fun dismissOverlay() = Unit

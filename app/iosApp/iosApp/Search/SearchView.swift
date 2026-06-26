@@ -29,6 +29,10 @@ struct SearchView: View {
             .padding(.horizontal, Layout.gutter)
             .frame(minHeight: 56)
 
+            // Search is online-only and presented above the chrome, so it can't rely on the shell banner —
+            // a 401'd search shows the re-auth prompt here too (#297). "Sign in again" closes the overlay.
+            if value.sessionExpired { SessionExpiredBanner { component.onDismiss() } }
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     queryField
@@ -133,6 +137,10 @@ struct SearchView: View {
             }
         } else if value.isSearching {
             LoadingStrip(label: "Searching…")
+        } else if value.sessionExpired {
+            // The banner above already explains the expired session — don't also show a "couldn't reach the
+            // server" state (#297).
+            EmptyView()
         } else if value.searchFailed {
             // A failed pull (offline / server error) is NOT "no matches" — say so (#73 follow-up).
             EmptyStateView(title: "Search is unavailable",

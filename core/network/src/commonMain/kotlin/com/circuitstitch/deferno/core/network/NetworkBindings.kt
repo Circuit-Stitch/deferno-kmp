@@ -21,7 +21,10 @@ interface NetworkBindings {
     fun httpClient(
         environment: DefernoEnvironment,
         tokenProvider: BearerTokenProvider,
-    ): HttpClient = DefernoHttpClient(environment, tokenProvider)
+        // The session-expiry sink (#297): the client reports each Active-Account 401/2xx so the read
+        // surfaces can surface a dead session. Bound in core:data over the re-auth coordinator.
+        sessionListener: AuthSessionListener,
+    ): HttpClient = DefernoHttpClient(environment, tokenProvider, sessionListener)
 
     /** The bare upload client for presigned-URL PUTs (#375) — no base URL, no bearer (see [UploadHttpClient]). */
     @Provides

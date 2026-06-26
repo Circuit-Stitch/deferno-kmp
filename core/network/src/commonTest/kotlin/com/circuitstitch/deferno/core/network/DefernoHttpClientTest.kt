@@ -119,6 +119,75 @@ class DefernoHttpClientTest {
         assertNull(captured?.headers?.get(HttpHeaders.Authorization))
     }
 
+    // --- AC (#297): the Active-Account session-expiry sink — 401 surfaces, network blip stays silent ---
+
+    @Test
+    fun reportsActiveAccountUnauthorizedToTheSessionListener() = runTest {
+        val listener = RecordingAuthSessionListener()
+        val client = client(tokenProvider = { "active-token" }, sessionListener = listener) {
+            respond("", HttpStatusCode.Unauthorized)
+        }
+
+        client.requestApi<Probe>()
+
+        assertEquals(listOf(false), listener.authorized) // recorded exactly one "unauthorized"
+    }
+
+    @Test
+    fun reportsActiveAccountSuccessToTheSessionListenerSoSigningBackInClears() = runTest {
+        val listener = RecordingAuthSessionListener()
+        val client = client(tokenProvider = { "active-token" }, sessionListener = listener) {
+            respondJson(okEnvelope)
+        }
+
+        client.requestApi<Probe>()
+
+        assertEquals(listOf(true), listener.authorized) // a 2xx clears any prior expiry
+    }
+
+    @Test
+    fun doesNotFlagSessionWhenACandidateTokenValidationIs401() = runTest {
+        // Sign-in validates a CANDIDATE token with an explicit bearer (#15, ADR-0023). A bad candidate
+        // 401s, but that must NOT flag the Active Account's session as expired (it might be a perfectly
+        // good account while the user fat-fingers an add-account PAT).
+        val listener = RecordingAuthSessionListener()
+        val client = client(tokenProvider = { "active-token" }, sessionListener = listener) {
+            respond("", HttpStatusCode.Unauthorized)
+        }
+
+        client.requestApi<Probe> { bearerAuth("candidate-token") }
+
+        assertTrue(listener.authorized.isEmpty()) // the explicit-bearer request never reports
+    }
+
+    @Test
+    fun doesNotReportATransportFailureAsAnExpiredSession() = runTest {
+        // A blocked cleartext request never reaches the server (no response), so it must not flag the
+        // session — offline-first keeps caching silently (AC #5). Same shape as a timeout/TLS failure.
+        val listener = RecordingAuthSessionListener()
+        val client = client(tokenProvider = { "active-token" }, sessionListener = listener) {
+            respondJson(okEnvelope)
+        }
+
+        client.requestApi<Probe> { url("http://insecure.example.com/probe") }
+
+        assertTrue(listener.authorized.isEmpty())
+    }
+
+    @Test
+    fun doesNotFlagSessionForAnUnauthenticatedRequest() = runTest {
+        // No Active Account (provider → null): the request goes out bare, and a 401 there is "not signed
+        // in", the auth flow's concern — not an expired-session banner on the read surfaces.
+        val listener = RecordingAuthSessionListener()
+        val client = client(tokenProvider = { null }, sessionListener = listener) {
+            respond("", HttpStatusCode.Unauthorized)
+        }
+
+        client.requestApi<Probe>()
+
+        assertTrue(listener.authorized.isEmpty())
+    }
+
     // --- AC: cleartext disabled; HTTPS enforced ---
 
     @Test
@@ -310,8 +379,16 @@ class DefernoHttpClientTest {
     private fun client(
         environment: DefernoEnvironment = DefernoEnvironment.Production,
         tokenProvider: BearerTokenProvider = BearerTokenProvider { null },
+        sessionListener: AuthSessionListener = AuthSessionListener.Noop,
         handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
-    ): HttpClient = defernoHttpClient(MockEngine(handler), environment, tokenProvider)
+    ): HttpClient = defernoHttpClient(MockEngine(handler), environment, tokenProvider, sessionListener)
+
+    /** Records each session-outcome callback as `true` (authorized/2xx) or `false` (unauthorized/401). */
+    private class RecordingAuthSessionListener : AuthSessionListener {
+        val authorized = mutableListOf<Boolean>()
+        override fun onActiveSessionUnauthorized() { authorized += false }
+        override fun onActiveSessionAuthorized() { authorized += true }
+    }
 
     private fun MockRequestHandleScope.respondJson(
         body: String,

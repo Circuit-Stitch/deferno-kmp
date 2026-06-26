@@ -5,6 +5,30 @@ import SwiftUI
 // the Android `TaskUi`/`PlanUi` atoms. Calm flat lists over dense cards, plain labels, large touch
 // targets, and VoiceOver semantics on every interactive element (design-principles.md).
 
+/// The shared "Session expired — sign in again" banner (#297) — the SwiftUI counterpart of the design
+/// system's `SessionExpiredBanner`, the same affordance Profile shows. The read surfaces render it when
+/// an authenticated request `401`s, so a dead token can't masquerade as a stale cache; `onSignIn` routes
+/// toward re-auth (Profile), and the next successful sync clears the flag.
+struct SessionExpiredBanner: View {
+    var message: String = "Session expired — sign in again to refresh."
+    var action: String = "Sign in again"
+    let onSignIn: () -> Void
+    @Environment(\.defernoColors) private var colors
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(message).font(.subheadline).foregroundStyle(colors.onSurface)
+            Spacer(minLength: 8)
+            Button(action, action: onSignIn).buttonStyle(.bordered)
+        }
+        .padding(.horizontal, Layout.gutter)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(colors.errorContainer)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// A small, readable badge for a Task's working state. The label is plain text so it reads correctly
 /// under VoiceOver; colour is reinforcement, never the sole signal (WCAG).
 struct WorkingStateBadge: View {
@@ -120,6 +144,9 @@ struct ItemRowView: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .strikethrough(row.item.isTerminal)
+                    // Terminal strikes + mutes; a `blocked` row mutes WITHOUT the strike — a distinct
+                    // "blocked, not finished" read (mirrors Compose `ItemTreeRow`, #290).
+                    .foregroundStyle((row.item.isTerminal || row.item.blocked) ? colors.inkMuted : colors.onSurface)
                 if let progress {
                     MonoMeta("\(progress.done) of \(progress.total)")
                         .padding(.top, 2)
@@ -134,6 +161,21 @@ struct ItemRowView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture { if row.hasChildren { onToggleExpand(row.item.id, row.isExpanded) } }
+
+            // Dependency badges (#290), ahead of the source mark: a quiet "Blocked" pill (the de-emphasis
+            // state's at-a-glance + VoiceOver carrier — blocked rows only reach here when "Show blocked" is
+            // on, else they're pruned in the shared flatten) and an amber "Blocker" badge marking a row that
+            // gates ≥1 other. Each clears its own label so VoiceOver reads one phrase, not the uppercased text.
+            if row.item.blocked {
+                TreeChip(text: "Blocked", tone: .neutral)
+                    .padding(.horizontal, 4)
+                    .accessibilityLabel("Blocked")
+            }
+            if row.item.isBlocker {
+                TreeChip(text: "Blocker", tone: .accent)
+                    .padding(.horizontal, 4)
+                    .accessibilityLabel("Blocks other items")
+            }
 
             // External-provenance mark (GitHub / Google), ahead of the chevron — the mirror of the Android
             // placement (#279/#280). Absent for a native Deferno item (`source == nil`, the common case).
