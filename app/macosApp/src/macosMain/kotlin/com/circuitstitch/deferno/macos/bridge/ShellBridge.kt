@@ -5,10 +5,15 @@ import com.circuitstitch.deferno.feature.profile.ProfileState
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
+import com.circuitstitch.deferno.feature.assistant.AssistantComponent
+import com.circuitstitch.deferno.feature.assistant.AssistantState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.CalendarItem
+import com.circuitstitch.deferno.core.model.ChatMessage
+import com.circuitstitch.deferno.core.model.ChatRole
+import com.circuitstitch.deferno.core.model.Conversation
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.User
 import com.circuitstitch.deferno.core.model.UserSettings
@@ -123,6 +128,28 @@ fun destTasks(child: MainShellComponent.DestinationChild) =
 /** The Assistant Destination's chat component (ADR-0040, #282) — the SwiftUI `AssistantView` renders it. */
 fun destAssistant(child: MainShellComponent.DestinationChild) =
     (child as? MainShellComponent.DestinationChild.Assistant)?.component
+
+// ---------------------------------------------------------------------------------------------------
+// Assistant chat (ADR-0040, #282) — ConversationId is a header-erased value class and ChatRole is an
+// enum, so Swift reads identity/role + selects a Conversation through these seams (mirrors iosApp).
+// ---------------------------------------------------------------------------------------------------
+
+/** Stable identity of a [Conversation] for SwiftUI list diffing (ConversationId value class is header-erased). */
+fun assistantConversationKey(conversation: Conversation): String = conversation.id.value
+
+/** A human title for a Conversation row — the stored title, or a gentle default for an untitled/streaming one. */
+fun assistantConversationTitle(conversation: Conversation): String =
+    conversation.title?.ifBlank { null } ?: "New chat"
+
+/** Open a Conversation without Swift constructing a [com.circuitstitch.deferno.core.model.ConversationId]. */
+fun assistantSelectConversation(component: AssistantComponent, conversation: Conversation) =
+    component.onSelectConversation(conversation.id)
+
+/** The open Conversation's id as a String (to highlight the active switcher row), or null for a fresh chat. */
+fun assistantActiveConversationKey(state: AssistantState): String? = state.activeConversationId?.value
+
+/** Whether a [ChatMessage] is the person's prompt (the View right-aligns it) vs the Assistant's reply. */
+fun chatMessageIsUser(message: ChatMessage): Boolean = message.role == ChatRole.User
 
 fun destProfile(child: MainShellComponent.DestinationChild) =
     (child as? MainShellComponent.DestinationChild.Profile)?.component

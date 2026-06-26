@@ -13,7 +13,14 @@ struct DefernoApp: App {
     // Phase 2 (ADR-0029): the in-process dictation engine (SidecarKit `SpeechTranscriber`, on-device).
     // Phase 3 (ADR-0029): the in-process inference engine (Foundation Models, on-device). Both run under
     // this app's own identity (no Helper); the inference engine drives `host.draftTasks` (the Extractor).
-    @State private var host = DefernoRoot(dictation: MacDictation(), inference: MacInference())
+    @State private var host = DefernoRoot(
+        dictation: MacDictation(),
+        inference: MacInference(),
+        // The server-mediated Assistant SSE turn-stream (#282, ADR-0040): a raw URLSession reader Kotlin
+        // drives with the Active-Account PAT. The entitled-gated Assistant Destination stays absent until
+        // the Org is entitled, so this is inert for a non-entitled account.
+        transport: MacAssistantTransport(),
+    )
     @State private var showExtractor = false
 
     var body: some Scene {
