@@ -87,9 +87,25 @@ class TaskEntityMappingTest {
             // Server-computed subtree progress from the /items snapshot (#226).
             descendantDone = 3,
             descendantTotal = 8,
+            // Server-derived dependency flags from the /items snapshot (#290).
+            blocked = true,
+            isBlocker = true,
         )
 
         assertEquals(task, task.toEntity().toDomain())
+    }
+
+    @Test
+    fun blockedFlagsRoundTripAndNullColumnDecodesToFalse() {
+        // #290: true round-trips through the row...
+        val blocked = sampleTask(pinned = false).copy(blocked = true, isBlocker = true)
+        assertEquals(blocked, blocked.toEntity().toDomain())
+        assertEquals(1L, blocked.toEntity().blocked)
+        assertEquals(1L, blocked.toEntity().is_blocker)
+        // ...and a pre-migration NULL column (sampleEntity leaves them null) decodes to false, not a crash.
+        val decoded = sampleEntity().toDomain()
+        assertEquals(false, decoded.blocked)
+        assertEquals(false, decoded.isBlocker)
     }
 
     @Test
@@ -195,5 +211,7 @@ class TaskEntityMappingTest {
         deadline_time_of_day = null,
         descendant_done = null,
         descendant_total = null,
+        blocked = null,
+        is_blocker = null,
     )
 }

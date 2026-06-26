@@ -54,6 +54,9 @@ fun TaskEntity.toDomain(): Task = Task(
     nextTaskId = next_task_id?.let(::TaskId),
     descendantDone = descendant_done,
     descendantTotal = descendant_total,
+    // Server-derived dependency flags (#290): NULL (pre-migration / omitted) decodes to false.
+    blocked = blocked == 1L,
+    isBlocker = is_blocker == 1L,
 )
 
 /** Encodes a domain [Task] into a `taskEntity` row, ready for `insertOrReplace`. */
@@ -81,6 +84,8 @@ fun Task.toEntity(): TaskEntity = TaskEntity(
     next_task_id = nextTaskId?.value,
     descendant_done = descendantDone,
     descendant_total = descendantTotal,
+    blocked = if (blocked) 1L else 0L,
+    is_blocker = if (isBlocker) 1L else 0L,
 )
 
 /** `[]` -> `""`, else the elements joined with `\n` (the list columns never contain newlines). */

@@ -31,6 +31,9 @@ data class ItemTreeState(
     // The last undoable Move, or null when nothing is undoable (ADR-0034 decision 8, #230). Drives the
     // top "Moved · Undo" snackbar (only when [MoveUndo.structural]) and gates the menu's Undo entry.
     val lastMove: MoveUndo? = null,
+    // The readiness axis (#290): false (the resting default — ready-only) prunes `blocked` items and their
+    // subtrees from [rows]; the View's "show blocked" affordance flips it true to reveal them (still marked).
+    val showBlocked: Boolean = false,
 )
 
 /**
@@ -93,6 +96,13 @@ interface ItemTreeComponent {
 
     /** Trigger an explicit network pull of the `/items` cold snapshot (offline-first: reads stay local). */
     fun onRefresh()
+
+    /**
+     * Flip the readiness axis (#290) — reveal ([show] = true) or re-hide `blocked` items. Off by default
+     * (ready-only): a blocked parent hides its whole subtree at the flatten point. The View's "show blocked"
+     * affordance calls this; the revealed blocked rows render their distinct blocked marking.
+     */
+    fun onSetShowBlocked(show: Boolean)
 
     // --- Modal move mode (ADR-0034 decision 6, #228): a single lifted item moved live, one press at a time ---
 
@@ -160,14 +170,17 @@ class DefaultItemTreeComponent(
     // Which item is lifted in modal move mode, or null when not in move mode (#228).
     private val liftedId = MutableStateFlow<String?>(null)
 
+    // The readiness axis (#290): false = ready-only (blocked items pruned). Ephemeral view preference.
+    private val showBlocked = MutableStateFlow(false)
+
     // The single-level last-undoable register (ADR-0034 decision 8, #230): each move records its inverse here.
     private val lastUndoable = LastUndoable()
 
     override val state: StateFlow<ItemTreeState> =
         combine(
-            combine(itemRepository.observeItems(), foldStore.overrides, refreshing, liftedId) { items, ov, isRefreshing, lifted ->
+            combine(itemRepository.observeItems(), foldStore.overrides, refreshing, liftedId, showBlocked) { items, ov, isRefreshing, lifted, showBlockedNow ->
                 ItemTreeState(
-                    rows = buildItemTree(items, ov),
+                    rows = buildItemTree(items, ov, showBlocked = showBlockedNow),
                     isRefreshing = isRefreshing,
                     // Re-derive the legal directions whenever the tree changes — an applied move re-emits items,
                     // so the ↑↓‹› greying tracks the lifted item's new position live, with no extra state.
@@ -181,6 +194,7 @@ class DefaultItemTreeComponent(
                             canOutdent = options.outdent != null,
                         )
                     },
+                    showBlocked = showBlockedNow,
                 )
             },
             lastUndoable.current,
@@ -207,6 +221,10 @@ class DefaultItemTreeComponent(
                 refreshing.value = false
             }
         }
+    }
+
+    override fun onSetShowBlocked(show: Boolean) {
+        showBlocked.value = show
     }
 
     override fun onEnterMoveMode(id: String) {

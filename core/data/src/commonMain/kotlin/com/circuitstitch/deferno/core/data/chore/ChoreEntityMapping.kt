@@ -38,6 +38,9 @@ fun ChoreEntity.toDomain(): Chore = Chore(
     ownerOrgId = owner_org_id?.let(::OrgId),
     description = description,
     seriesId = series_id,
+    // Server-derived dependency flags (#290): NULL (pre-migration / omitted) decodes to false.
+    blocked = blocked == 1L,
+    isBlocker = is_blocker == 1L,
 )
 
 fun Chore.toEntity(): ChoreEntity = ChoreEntity(
@@ -61,4 +64,6 @@ fun Chore.toEntity(): ChoreEntity = ChoreEntity(
     hydration_state = hydration.name,
     description = description,
     series_id = seriesId,
+    blocked = if (blocked) 1L else 0L,
+    is_blocker = if (isBlocker) 1L else 0L,
 )

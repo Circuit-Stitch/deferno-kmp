@@ -11,6 +11,8 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.Item
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -118,6 +120,41 @@ class ScreenshotTest {
         itemRow("p2", "Water the plants"),
         itemRow("p3", "Old idea worth revisiting", isTerminal = true),
     )
+
+    // The readiness axis (#290): a normal parent with two children — one a `blocker` (gates a sibling), one
+    // `blocked` — plus a lone leaf. Ready-only (showBlocked = false) prunes the blocked child; "show blocked"
+    // reveals it with its distinct (un-struck, muted + "Blocked" pill) marking. Driven through the real
+    // [buildItemTree] so the goldens prove the prune, the marking, and the "Blocker" badge end-to-end.
+    private val blockedAwareItems = listOf(
+        Item("p1", ItemKind.Task, "Ship the redesign", sequence = 0),
+        Item("c1", ItemKind.Task, "Finalize the palette", parentId = "p1", sequence = 0, isBlocker = true),
+        Item("c2", ItemKind.Task, "Wire up the new screens", parentId = "p1", sequence = 1, blocked = true),
+        Item("p2", ItemKind.Task, "Water the plants", sequence = 1),
+    )
+
+    @Test
+    fun itemTree_readyOnly_default() = capture("item_tree_ready_only_light") {
+        // The resting default: the blocked child is pruned; the blocker still shows its badge; chip is off.
+        TaskListScreen(FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(blockedAwareItems, showBlocked = false))))
+    }
+
+    @Test
+    fun itemTree_blockedRevealed_light() = capture("item_tree_blocked_revealed_light") {
+        TaskListScreen(
+            FakeItemTreeComponent(
+                ItemTreeState(rows = buildItemTree(blockedAwareItems, showBlocked = true), showBlocked = true),
+            ),
+        )
+    }
+
+    @Test
+    fun itemTree_blockedRevealed_dark() = capture("item_tree_blocked_revealed_dark", darkTheme = true) {
+        TaskListScreen(
+            FakeItemTreeComponent(
+                ItemTreeState(rows = buildItemTree(blockedAwareItems, showBlocked = true), showBlocked = true),
+            ),
+        )
+    }
 
     @Test
     fun itemTree_populated_light() = capture("task_list_populated_light") {

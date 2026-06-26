@@ -88,6 +88,8 @@ fun TaskListScreen(
             onRefresh = component::onRefresh,
             onSearch = onSearch,
             onAdd = onAdd,
+            showBlocked = state.showBlocked,
+            onSetShowBlocked = component::onSetShowBlocked,
             listState = listState,
             pinSearch = false,
             // Search lives in the shell's native top bar on Android (the Files-style pill), so the inline

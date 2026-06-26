@@ -41,10 +41,24 @@ internal const val MAX_DEFAULT_EXPANDED_DEPTH = 2
  * - **Sibling order** is by `sequence` (nulls last), then title, then id — a stable order across kinds.
  * - **Fold:** a node is expanded when [expandedOverrides] holds an explicit choice for its id, else by the
  *   depth default ([MAX_DEFAULT_EXPANDED_DEPTH]); only an expanded parent's children are emitted.
+ * - **Readiness (#290):** when [showBlocked] is false (the tree's resting default — ready-only), a `blocked`
+ *   item and its **whole subtree** are pruned as a unit. `blocked` is server-derived and inherits down the
+ *   tree, so a blocked parent's descendants drop with it; pruning happens *inside* the flatten (a blocked
+ *   node is excluded before its siblings' rails are computed) so the connecting rails never dangle.
  */
-fun buildItemTree(items: List<Item>, expandedOverrides: Map<String, Boolean> = emptyMap()): List<ItemRow> =
-    foldFlatten(items, expandedOverrides, id = { it.id }, parentId = { it.parentId }, siblingOrder = SIBLING_ORDER) {
-        node, depth, spine, hasChildren, isExpanded ->
+fun buildItemTree(
+    items: List<Item>,
+    expandedOverrides: Map<String, Boolean> = emptyMap(),
+    showBlocked: Boolean = true,
+): List<ItemRow> =
+    foldFlatten(
+        items,
+        expandedOverrides,
+        id = { it.id },
+        parentId = { it.parentId },
+        siblingOrder = SIBLING_ORDER,
+        include = { showBlocked || !it.blocked },
+    ) { node, depth, spine, hasChildren, isExpanded ->
         ItemRow(node, depth, hasChildren, isExpanded, spine)
     }
 
@@ -157,10 +171,17 @@ internal fun <T, R> foldFlatten(
     id: (T) -> String,
     parentId: (T) -> String?,
     siblingOrder: Comparator<T>,
+    // Per-node visibility gate (#290 readiness pruning). A node failing [include] is dropped *before* the
+    // grouping, so its siblings' rail flags are computed over only the rendered rows (no dangling
+    // connectors) and its own children — left in their parent bucket but never reached from any emitted
+    // node — drop with it (the subtree prunes as a unit). [visibleIds] stays the full set, so a child of an
+    // excluded parent stays nested under it (and thus drops) rather than re-rooting as a visible orphan.
+    include: (T) -> Boolean = { true },
     row: (node: T, depth: Int, spine: List<Boolean>, hasChildren: Boolean, isExpanded: Boolean) -> R,
 ): List<R> {
     val visibleIds = nodes.mapTo(HashSet(nodes.size), id)
     val childrenByParent: Map<String?, List<T>> = nodes
+        .filter(include)
         .groupBy { parentId(it)?.takeIf(visibleIds::contains) } // an absent parent collapses to the null (root) bucket
         .mapValues { (_, kids) -> kids.sortedWith(siblingOrder) }
 

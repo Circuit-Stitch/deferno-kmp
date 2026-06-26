@@ -55,6 +55,8 @@ class SqlDelightChoreLocalStore(
             hydration_state = e.hydration_state,
             description = e.description,
             series_id = e.series_id,
+            blocked = e.blocked,
+            is_blocker = e.is_blocker,
         )
     }
 

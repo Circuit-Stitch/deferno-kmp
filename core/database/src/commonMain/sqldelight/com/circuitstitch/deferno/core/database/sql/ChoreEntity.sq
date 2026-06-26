@@ -22,7 +22,11 @@ CREATE TABLE choreEntity (
     description      TEXT,
     series_id        TEXT,
     -- Appended for migration 2->3 (#348) — ADD COLUMN appends, so it lives at the table's end.
-    deadline_time_of_day TEXT
+    deadline_time_of_day TEXT,
+    -- Appended for migration 9->10 (#290) — server-derived dependency flags (a recurring row inherits
+    -- `blocked` from a blocked ancestor). Nullable so ADD COLUMN leaves pre-migration rows NULL.
+    blocked    INTEGER,
+    is_blocker INTEGER
 );
 
 CREATE INDEX choreEntity_owner_org_id ON choreEntity(owner_org_id);
@@ -42,8 +46,8 @@ insertOrReplace:
 INSERT OR REPLACE INTO choreEntity(
     id, org_slug, owner_org_id, ref, sequence, title, definition_state, recurrence_type,
     recurrence_days, cadence_mode, labels, parent_id, complete_by, deadline_time_of_day, pinned,
-    date_created, deleted_at, hydration_state, description, series_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    date_created, deleted_at, hydration_state, description, series_id, blocked, is_blocker
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteById:
 DELETE FROM choreEntity WHERE id = ?;
