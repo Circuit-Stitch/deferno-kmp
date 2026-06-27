@@ -189,6 +189,28 @@ class OfflineItemRepositoryTest {
     }
 
     @Test
+    fun carriesDefinitionStateOnRecurringRowsAndNullOnTasks() = runTest {
+        // #299: the recurring "light switch" is carried through the projection (for the tree's command menu),
+        // populated per kind; a Task has no definition state, so its row carries null (its lifecycle is
+        // WorkingState). isTerminal is still derived (Archived → terminal) — this is the FULL state alongside it.
+        val f = Fixture(
+            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))),
+            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", state = DefinitionState.InReview))),
+            chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c"))),
+            events = FakeEventLocalStore(mapOf(EventId("e") to event("e"))),
+        )
+
+        f.repository.observeItems().test {
+            val byId = awaitItem().associateBy { it.id }
+            assertNull(byId.getValue("t").definitionState, "a Task carries no definition state")
+            assertEquals(DefinitionState.InReview, byId.getValue("h").definitionState)
+            assertEquals(DefinitionState.Active, byId.getValue("c").definitionState)
+            assertEquals(DefinitionState.Active, byId.getValue("e").definitionState)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun reEmitsWhenAnyKindChanges() = runTest {
         val f = Fixture()
 

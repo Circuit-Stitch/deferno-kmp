@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.BrainDumpDraftId
+import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -148,6 +149,7 @@ internal class FakeItemTreeComponent(initial: ItemTreeState = ItemTreeState()) :
     val pinnedSet = mutableListOf<Pair<String, Boolean>>()
     val inPlanSet = mutableListOf<Pair<String, Boolean>>()
     val workingStatesSet = mutableListOf<Pair<String, WorkingState>>()
+    val definitionStatesSet = mutableListOf<Pair<String, DefinitionState>>()
     val deleted = mutableListOf<String>()
 
     override fun onToggleExpand(id: String, currentlyExpanded: Boolean) { toggled += id to currentlyExpanded }
@@ -166,6 +168,7 @@ internal class FakeItemTreeComponent(initial: ItemTreeState = ItemTreeState()) :
     override fun onSetPinned(id: String, pinned: Boolean) { pinnedSet += id to pinned }
     override fun onSetInPlan(id: String, inPlan: Boolean) { inPlanSet += id to inPlan }
     override fun onSetWorkingState(id: String, target: WorkingState) { workingStatesSet += id to target }
+    override fun onSetDefinitionState(id: String, target: DefinitionState) { definitionStatesSet += id to target }
     override fun onDelete(id: String) { deleted += id }
 }
 

@@ -109,4 +109,7 @@ private fun recurringItem(
     isTerminal = state == DefinitionState.Archived,
     blocked = blocked,
     isBlocker = isBlocker,
+    // Carry the full "light switch" through (#299) so the tree's command menu can set it — Archived stays
+    // the de-emphasis signal ([isTerminal]) AND the value is here for Archive/Restore. Null for a Task above.
+    definitionState = state,
 )

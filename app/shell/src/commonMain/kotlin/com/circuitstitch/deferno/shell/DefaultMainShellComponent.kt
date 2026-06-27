@@ -92,6 +92,7 @@ import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import com.circuitstitch.deferno.feature.tasks.TaskMenuState
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
+import com.circuitstitch.deferno.feature.tasks.DefinitionStateEditor
 import com.circuitstitch.deferno.feature.tasks.MoveEditor
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.coroutines.Dispatchers
@@ -136,6 +137,10 @@ class DefaultMainShellComponent(
     // The Tasks working-state write seam (#73), threaded into the Tasks Destination's component so its
     // detail can issue lifecycle Commands. Defaults to a no-op so the many shell tests build without it.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    // The Tasks Item-tree non-Task status seam (#299), threaded into the Tasks Destination so its command
+    // menu can Archive/Restore a recurring definition. Defaults to a no-op so the many shell tests build
+    // without it (like workingStateEditor).
+    private val definitionStateEditor: DefinitionStateEditor = DefinitionStateEditor.NONE,
     // The Tasks Item-tree move seam (#228), threaded into the Tasks Destination so its modal move mode can
     // issue Move Commands. Defaults to a no-op so the many shell tests build without it.
     private val moveEditor: MoveEditor = MoveEditor.NONE,
@@ -491,6 +496,7 @@ class DefaultMainShellComponent(
                         taskRepository = taskRepository,
                         output = ::onTasksOutput,
                         workingStateEditor = workingStateEditor,
+                        definitionStateEditor = definitionStateEditor,
                         moveEditor = moveEditor,
                         shakeToUndoPreference = shakeToUndoPreference,
                         taskDetailRepository = taskDetailRepository,

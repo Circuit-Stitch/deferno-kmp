@@ -24,6 +24,8 @@ import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.create.OfflineCreateWriter
 import com.circuitstitch.deferno.core.data.create.PendingCreateStore
 import com.circuitstitch.deferno.core.data.create.SqlDelightPendingCreateStore
+import com.circuitstitch.deferno.core.data.definition.DefinitionWriter
+import com.circuitstitch.deferno.core.data.definition.OutboxDefinitionWriter
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
@@ -299,6 +301,18 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun taskWriter(localStore: TaskLocalStore, outbox: OutboxStore): TaskWriter =
         OutboxTaskWriter(localStore, outbox)
+
+    // The recurring-definition write seam (#299): optimistic per-kind apply (Habit/Chore/Event) + outbox
+    // enqueue of `PATCH {kind}/{id} {"status":…}`. Offline-first like the Task writer (it targets an
+    // existing definition — not online-only). Mirrors the taskWriter / itemWriter bindings.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun definitionWriter(
+        habitStore: HabitLocalStore,
+        choreStore: ChoreLocalStore,
+        eventStore: EventLocalStore,
+        outbox: OutboxStore,
+    ): DefinitionWriter = OutboxDefinitionWriter(habitStore, choreStore, eventStore, outbox)
 
     // The cross-kind Item move write seam (ADR-0034 decision 5, #228): optimistic reorder across the four
     // per-kind stores + outbox enqueue of `POST items/{id}/move`. Offline-first like the Task writer.

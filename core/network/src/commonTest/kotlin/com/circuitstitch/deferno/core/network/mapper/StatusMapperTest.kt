@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.OccurrenceState
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.dto.DefStatusWire
 import com.circuitstitch.deferno.core.network.dto.DerivedChoreOccurrenceStatusWire
 import com.circuitstitch.deferno.core.network.dto.OccurrenceStatusWire
@@ -46,6 +47,26 @@ class StatusMapperTest {
         assertEquals(DefinitionState.InReview, DefStatusWire.InReview.toDefinitionState())
         assertEquals(DefinitionState.Archived, DefStatusWire.Archived.toDefinitionState())
         assertEquals(DefinitionState.Active, DefStatusWire.Unknown.toDefinitionState())
+    }
+
+    @Test
+    fun definitionStateMapsToWireToken() {
+        // The write direction (#299): exact wire casing, inverse of toDefinitionState.
+        assertEquals("active", DefinitionState.Active.toWireToken())
+        assertEquals("in-review", DefinitionState.InReview.toWireToken())
+        assertEquals("archived", DefinitionState.Archived.toWireToken())
+    }
+
+    @Test
+    fun definitionStateWireTokenRoundTripsWithTheReadMapper() {
+        // The set-then-read invariant (#299): every DefinitionState's wire token must decode back through
+        // the actual wire enum (DefStatusWire via DefernoJson) to the SAME state — so an optimistic
+        // SetDefinitionState and the server snapshot agree. Decodes the emitted token as the real wire enum.
+        for (state in DefinitionState.entries) {
+            val token = state.toWireToken()
+            val wire = DefernoJson.decodeFromString(DefStatusWire.serializer(), "\"$token\"")
+            assertEquals(state, wire.toDefinitionState(), "round-trip of $state via wire token $token")
+        }
     }
 
     @Test

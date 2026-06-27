@@ -53,6 +53,9 @@ enum class CommandCategory {
 
     /** Cross-kind tree move — reparent + reorder ([CommandKind.MoveItem], ADR-0034 #228). */
     Move,
+
+    /** Recurring-definition state — the Habit/Chore/Event "light switch" ([CommandKind.SetDefinitionState], #299). */
+    Definition,
 }
 
 /**
@@ -140,6 +143,14 @@ enum class CommandKind(
     // reorder/rename existing entries). Offline-first (optimistic apply + enqueue), so NOT onlineOnly;
     // it targets a tree node, not a Task row, so no [enabledFor] rule applies.
     MoveItem(CommandId("item.move"), CommandCategory.Move),
+
+    // The recurring-definition "light switch" (#299): set a Habit/Chore/Event's DefinitionState, routed
+    // through the registry to the `DefinitionWriter` seam. Its own category (not Status — that's the Task
+    // lifecycle): it addresses a raw cross-kind id and routes to a distinct writer, so it stays out of
+    // [taskKinds] (like MoveItem). Appended at the end (CommandIds are a public contract — never
+    // reorder/rename existing entries). Offline-first (optimistic apply + enqueue), so NOT onlineOnly; it
+    // targets a recurring definition, not a Task row, so no [enabledFor] rule applies.
+    SetDefinitionState(CommandId("definition.set-state"), CommandCategory.Definition),
     ;
 
     /**
@@ -177,7 +188,8 @@ enum class CommandKind(
                     it.category != CommandCategory.Create &&
                     it.category != CommandCategory.Occurrence &&
                     it.category != CommandCategory.Settings &&
-                    it.category != CommandCategory.Move
+                    it.category != CommandCategory.Move &&
+                    it.category != CommandCategory.Definition
             }
 
         /** The catalog a Plan view offers. */
@@ -194,5 +206,8 @@ enum class CommandKind(
 
         /** The cross-kind tree-move catalog the modal move mode / keyboard drives (ADR-0034 #228). */
         val moveKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Move }
+
+        /** The recurring-definition state catalog the Item-tree command menu drives (#299). */
+        val definitionKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Definition }
     }
 }

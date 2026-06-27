@@ -5,6 +5,7 @@ import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
+import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
@@ -39,6 +40,7 @@ class ItemTreeComponentTest {
         trackEvent: (String) -> Unit = {},
         menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
         workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+        definitionStateEditor: DefinitionStateEditor = DefinitionStateEditor.NONE,
         setPinned: suspend (TaskId, Boolean) -> Unit = { _, _ -> },
         createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
         deleteTask: suspend (TaskId) -> Unit = { _ -> },
@@ -54,6 +56,7 @@ class ItemTreeComponentTest {
         trackEvent = trackEvent,
         menuStates = menuStates,
         workingStateEditor = workingStateEditor,
+        definitionStateEditor = definitionStateEditor,
         setPinned = setPinned,
         createSubtask = createSubtask,
         deleteTask = deleteTask,
@@ -404,6 +407,47 @@ class ItemTreeComponentTest {
         advanceUntilIdle()
 
         assertEquals(listOf(TaskId("root") to WorkingState.Done), sets)
+    }
+
+    @Test
+    fun setDefinitionStateResolvesTheRowsKindAndDispatchesTheWrite() = runTest {
+        // #299: the tree row is the cross-kind Item projection, so the component resolves the row's kind
+        // from its current state (the writer needs it to route the per-kind PATCH) and forwards id/kind/target.
+        val sets = mutableListOf<Triple<String, ItemKind, DefinitionState>>()
+        val items = FakeItemRepository(
+            listOf(
+                Item(id = "root", kind = ItemKind.Task, title = "root", sequence = 0),
+                Item(id = "hab", kind = ItemKind.Habit, title = "habit", sequence = 1, definitionState = DefinitionState.Active),
+            ),
+        )
+        val c = component(
+            items,
+            definitionStateEditor = { id, kind, target -> sets += Triple(id, kind, target) },
+        )
+        backgroundScope.launch { c.state.collect {} } // populate state.rows so the kind resolves
+        advanceUntilIdle()
+
+        c.onSetDefinitionState("hab", DefinitionState.Archived)
+        advanceUntilIdle()
+
+        assertEquals(listOf(Triple("hab", ItemKind.Habit, DefinitionState.Archived)), sets)
+    }
+
+    @Test
+    fun setDefinitionStateForAnUncachedRowIsANoOp() = runTest {
+        // A row not in the current tree can't be routed (no kind), so it writes nothing rather than guess.
+        val sets = mutableListOf<Triple<String, ItemKind, DefinitionState>>()
+        val c = component(
+            rootAndChild(),
+            definitionStateEditor = { id, kind, target -> sets += Triple(id, kind, target) },
+        )
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onSetDefinitionState("ghost", DefinitionState.Archived)
+        advanceUntilIdle()
+
+        assertTrue(sets.isEmpty(), "an uncached row resolves no kind → no write")
     }
 
     @Test
