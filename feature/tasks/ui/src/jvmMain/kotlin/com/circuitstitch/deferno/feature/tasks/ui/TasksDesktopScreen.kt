@@ -146,6 +146,7 @@ private fun TreePane(
             onSetPinned = component::onSetPinned,
             onSetInPlan = component::onSetInPlan,
             onSetWorkingState = component::onSetWorkingState,
+            onSetDefinitionState = component::onSetDefinitionState,
             onDelete = component::onDelete,
         )
         // Top-anchored, out of the way (ADR-0034 decision 8: the Material default is bottom, so align top).
