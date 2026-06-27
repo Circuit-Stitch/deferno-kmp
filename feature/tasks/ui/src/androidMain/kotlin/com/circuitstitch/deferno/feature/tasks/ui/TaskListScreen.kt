@@ -109,6 +109,7 @@ fun TaskListScreen(
             onSetPinned = component::onSetPinned,
             onSetInPlan = component::onSetInPlan,
             onSetWorkingState = component::onSetWorkingState,
+            onSetDefinitionState = component::onSetDefinitionState,
             onDelete = component::onDelete,
         )
         // Top-anchored, out of thumb reach (ADR-0034 decision 8): the Material default is bottom, so align top.

@@ -20,7 +20,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.core.model.DefinitionState
+import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -96,6 +100,33 @@ class TaskScreenInteractionTest {
         composeRule.onNodeWithText("Show blocked").performClick()
 
         assertEquals(listOf(true), component.showBlockedSet)
+    }
+
+    @Test
+    fun itemTree_nonTaskRow_archiveForwardsDefinitionStateIntent() {
+        // #299: a recurring (non-Task) row's long-press menu shows the kind-aware status block. An active
+        // Habit shows "Archive" (not the Task working-state verbs) → forwards SetDefinitionState(Archived).
+        val habit = Item("h1", ItemKind.Habit, "Stretch daily", sequence = 0)
+        val component = FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(listOf(habit))))
+        setContent { TaskListScreen(component) }
+
+        composeRule.onNodeWithText("Stretch daily").performTouchInput { longClick() }
+        composeRule.onNodeWithText("Archive").performClick()
+
+        assertEquals(listOf("h1" to DefinitionState.Archived), component.definitionStatesSet)
+    }
+
+    @Test
+    fun itemTree_archivedNonTaskRow_activateForwardsDefinitionStateIntent() {
+        // The verb swaps by the row's archived bit (item.isTerminal): an archived Habit shows "Activate".
+        val archived = Item("h1", ItemKind.Habit, "Stretch daily", sequence = 0, isTerminal = true)
+        val component = FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(listOf(archived))))
+        setContent { TaskListScreen(component) }
+
+        composeRule.onNodeWithText("Stretch daily").performTouchInput { longClick() }
+        composeRule.onNodeWithText("Activate").performClick()
+
+        assertEquals(listOf("h1" to DefinitionState.Active), component.definitionStatesSet)
     }
 
     @Test

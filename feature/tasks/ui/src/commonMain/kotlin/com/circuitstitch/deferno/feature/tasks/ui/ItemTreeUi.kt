@@ -77,6 +77,7 @@ import com.circuitstitch.deferno.core.designsystem.component.SearchBarDisplay
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -167,6 +168,9 @@ internal fun ItemTreeContent(
     onSetPinned: (id: String, pinned: Boolean) -> Unit = { _, _ -> },
     onSetInPlan: (id: String, inPlan: Boolean) -> Unit = { _, _ -> },
     onSetWorkingState: (id: String, target: WorkingState) -> Unit = { _, _ -> },
+    // The non-Task status block (#299): a Habit/Chore/Event row's Archive ↔ Activate definition light-switch.
+    // Defaulted inert so read-only callers / tests render without wiring it; the component resolves the kind.
+    onSetDefinitionState: (id: String, target: DefinitionState) -> Unit = { _, _ -> },
     onDelete: (id: String) -> Unit = {},
 ) {
     // Route the move keystrokes (Alt+↑/↓, Tab/Shift-Tab) to the column while an item is lifted: focus it on
@@ -289,6 +293,7 @@ internal fun ItemTreeContent(
                         onSetPinned = onSetPinned,
                         onSetInPlan = onSetInPlan,
                         onSetWorkingState = onSetWorkingState,
+                        onSetDefinitionState = onSetDefinitionState,
                         onDelete = onDelete,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -415,6 +420,7 @@ private fun ItemTreeRow(
     onSetPinned: (id: String, pinned: Boolean) -> Unit,
     onSetInPlan: (id: String, inPlan: Boolean) -> Unit,
     onSetWorkingState: (id: String, target: WorkingState) -> Unit,
+    onSetDefinitionState: (id: String, target: DefinitionState) -> Unit,
     onDelete: (id: String) -> Unit,
 ) {
     val item = row.item
@@ -630,6 +636,25 @@ private fun ItemTreeRow(
                         text = { Text("Delete (Permanent!)", color = MaterialTheme.colorScheme.error) },
                         onClick = { menuOpen = false; confirmDelete = true },
                     )
+                }
+                if (!isTask) {
+                    // Kind-aware status block for a non-Task definition (ADR-0034 decision 7, #299): the
+                    // recurring "light switch" — Archive an active Habit/Chore/Event, or Activate an archived
+                    // one. A non-Task row carries no working state, so [item.isTerminal] IS its archived bit
+                    // (ItemRepository maps DefinitionState.Archived → terminal); the verb needs no joined state.
+                    // Archive is reversible (via Activate), so it isn't error-tinted; the component resolves kind.
+                    HorizontalDivider()
+                    if (item.isTerminal) {
+                        DropdownMenuItem(
+                            text = { Text("Activate") },
+                            onClick = { menuOpen = false; onSetDefinitionState(item.id, DefinitionState.Active) },
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text("Archive") },
+                            onClick = { menuOpen = false; onSetDefinitionState(item.id, DefinitionState.Archived) },
+                        )
+                    }
                 }
             }
         }
