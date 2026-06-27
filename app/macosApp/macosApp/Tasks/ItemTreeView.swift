@@ -178,7 +178,7 @@ struct ItemTreeView: View {
 /// The menu is **kind-aware** (ADR-0034 decision 7): a Task row gets Open · Add subtask · Move · Undo move ·
 /// Pin/Unpin · Add/Remove from plan · the working-state block (Start working / Mark done / Set aside) ·
 /// Delete; a recurring (non-Task) row gets the cross-kind subset Add subtask · Move · Undo move plus the
-/// **definition-state block** Archive/Restore (#299). `Pin`, plan, the working-state block and `Delete` stay
+/// **definition-state block** Activate / Send to review / Archive (#299). `Pin`, plan, the working-state block and `Delete` stay
 /// Task-only (mirrors Android). Each handler computes its target from the row's current value — the
 /// "args from the row" rule — since the tree row is a cross-kind `Item` projection that may have no joined
 /// state. `isTask` is the shared bridge helper (`BridgeKt.itemKindIsTask`); per-row status comes from the
@@ -312,15 +312,21 @@ private struct ItemRowContainer: View {
                     Label("Delete (Permanent!)", systemImage: "trash")
                 }
             } else if let definition = row.item.definitionState {
-                // The non-Task definition-state block (#299): Archive (or Restore when already archived). The
-                // shared component resolves the row's kind itself, so we pass only id + target. InReview is
-                // skipped in the UI entirely.
+                // The non-Task definition-state block (#299): Activate / Send to review / Archive, hiding the
+                // verb for the current state (mirrors the Task working-state block). The shared component
+                // resolves the row's kind itself, so we pass only id + target.
                 Divider()
-                if definition == DefinitionState.archived {
+                if definition != DefinitionState.active {
                     Button { component.onSetDefinitionState(id: row.item.id, target: DefinitionState.active) } label: {
-                        Label("Restore", systemImage: "tray.and.arrow.up")
+                        Label("Activate", systemImage: "tray.and.arrow.up")
                     }
-                } else {
+                }
+                if definition != DefinitionState.inReview {
+                    Button { component.onSetDefinitionState(id: row.item.id, target: DefinitionState.inReview) } label: {
+                        Label("Send to review", systemImage: "eye")
+                    }
+                }
+                if definition != DefinitionState.archived {
                     Button(role: .destructive) {
                         component.onSetDefinitionState(id: row.item.id, target: DefinitionState.archived)
                     } label: {
