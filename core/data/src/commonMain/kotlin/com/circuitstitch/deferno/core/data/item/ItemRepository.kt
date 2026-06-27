@@ -81,6 +81,9 @@ private fun Task.toItem() = Item(
     descendantTotal = descendantTotal,
     blocked = blocked,
     isBlocker = isBlocker,
+    // External provenance for the tree-row mark + `[GitHub#N]` ref prefix; null = native item.
+    source = external?.source,
+    externalRef = external?.id,
 )
 
 // ponytail: a recurring definition is "terminal" (de-emphasized) when Archived — the recurring analog

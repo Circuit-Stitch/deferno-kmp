@@ -494,7 +494,14 @@ private fun ItemTreeRow(
                 )
                 Column(modifier = Modifier.weight(1f).padding(vertical = 10.dp)) {
                     Text(
-                        text = item.title,
+                        // A dimmed `[GitHub#N]` ref prefix for a synced/imported item, alongside the
+                        // SourceIndicator mark; null provenance renders the bare title unchanged.
+                        text = titleWithExternalRef(
+                            title = item.title,
+                            source = item.source,
+                            externalId = item.externalRef,
+                            prefixColor = MaterialTheme.defernoColors.inkMuted,
+                        ),
                         style = MaterialTheme.typography.titleMedium,
                         color = titleColor,
                         textDecoration = if (item.isTerminal) TextDecoration.LineThrough else TextDecoration.None,

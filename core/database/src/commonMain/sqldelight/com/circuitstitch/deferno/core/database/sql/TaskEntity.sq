@@ -39,7 +39,13 @@ CREATE TABLE taskEntity (
     -- (blocked: an unresolved blocker or a blocked ancestor; is_blocker: gates >=1 other). Nullable so
     -- ADD COLUMN leaves pre-migration rows NULL (decoded as false until the next refresh repopulates).
     blocked    INTEGER,
-    is_blocker INTEGER
+    is_blocker INTEGER,
+    -- Appended for migration 10->11 — external provenance for a synced/imported item (e.g. a
+    -- GitHub issue → Task). `external_source` is the ItemSource enum name (null = native Deferno item),
+    -- `external_id` the opaque provider ref (`owner/repo#N`), `external_url` the provider-side link.
+    external_source TEXT,
+    external_id     TEXT,
+    external_url    TEXT
 );
 
 -- Sync/query indexes (issue #21): Org filter (ADR-0002), working-state filtering, the parent_id
@@ -75,8 +81,8 @@ INSERT OR REPLACE INTO taskEntity(
     id, org_slug, owner_org_id, ref, sequence, title, working_state, labels, parent_id, child_ids,
     complete_by, deadline_time_of_day, productive, desire, pinned, date_created, finished_at,
     deleted_at, hydration_state, description, next_task_id, descendant_done, descendant_total,
-    blocked, is_blocker
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    blocked, is_blocker, external_source, external_id, external_url
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteById:
 DELETE FROM taskEntity WHERE id = ?;

@@ -58,6 +58,11 @@ data class Task(
     val blocked: Boolean = false,
     val isBlocker: Boolean = false,
     val blockedBy: List<BlockedByRef> = emptyList(),
+    // External provenance for a GitHub-imported issue (or other synced item): drives the source mark, the
+    // `[GitHub#N]` ref prefix, and the detail Source cell. `null` for a native Deferno Task. Set from the
+    // `/items` snapshot + the `/tasks/{id}` detail (both carry the wire `external` block); like [blocked]
+    // it is not on the list/summary path.
+    val external: ExternalRef? = null,
 ) {
     /** Whether this row is a soft-delete tombstone (`deleted_at` present). */
     val isDeleted: Boolean get() = deletedAt != null

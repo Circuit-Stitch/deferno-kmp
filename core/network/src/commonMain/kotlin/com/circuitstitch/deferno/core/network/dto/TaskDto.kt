@@ -92,6 +92,10 @@ data class TaskDetailDto(
     val blocked: Boolean = false,
     @SerialName("is_blocker") val isBlocker: Boolean = false,
     @SerialName("blocked_by") val blockedBy: List<BlockedByRefDto> = emptyList(),
+    // External provenance for a synced/imported item (e.g. a GitHub issue → Task). Absent on
+    // a native Task. `/tasks/{id}` carries the `external` block but NOT the derived `origin_label` (that's
+    // only on the get_item `/items/{id}` envelope) — the client derives the origin label from `external.id`.
+    val external: ExternalProvenanceDto? = null,
 )
 
 /**

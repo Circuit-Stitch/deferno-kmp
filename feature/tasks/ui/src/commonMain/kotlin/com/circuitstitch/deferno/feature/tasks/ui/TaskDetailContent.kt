@@ -315,7 +315,17 @@ private fun DetailTitleBlock(task: Task, subtaskDone: Int, subtaskTotal: Int) {
             content = MaterialTheme.colorScheme.onPrimary,
             semanticLabel = "Task",
         )
-        Text(text = task.title, style = MaterialTheme.typography.headlineSmall)
+        Text(
+            // A dimmed `[GitHub#N]` ref prefix for a GitHub-imported issue; the tracker owns the title
+            // itself, so the prefix is derived client-side, not stored.
+            text = titleWithExternalRef(
+                title = task.title,
+                source = task.external?.source,
+                externalId = task.external?.id,
+                prefixColor = MaterialTheme.defernoColors.inkMuted,
+            ),
+            style = MaterialTheme.typography.headlineSmall,
+        )
         val meta = buildList {
             task.ref?.let { add(it) }
             task.completeBy?.let { add("Due ${it.toDisplayDate()}") }

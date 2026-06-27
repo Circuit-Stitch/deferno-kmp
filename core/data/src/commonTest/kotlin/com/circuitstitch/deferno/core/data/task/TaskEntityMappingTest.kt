@@ -1,7 +1,9 @@
 package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.database.sql.TaskEntity
+import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -10,6 +12,7 @@ import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /**
  * Proves the row<->domain conversion (#22) is a faithful, total round-trip — the single place the
@@ -109,6 +112,21 @@ class TaskEntityMappingTest {
     }
 
     @Test
+    fun externalProvenanceRoundTripsAndDecodesDefensively() {
+        // A GitHub provenance round-trips through the three columns (the enum name + id + url)...
+        val gh = sampleTask(pinned = false).copy(external = ExternalRef(ItemSource.GitHub, "octo/repo#7", "https://gh/7"))
+        assertEquals(gh, gh.toEntity().toDomain())
+        assertEquals("GitHub", gh.toEntity().external_source)
+        assertEquals("octo/repo#7", gh.toEntity().external_id)
+        // ...a native row (no provenance columns) decodes to null...
+        assertNull(sampleEntity().toDomain().external)
+        // ...an unrecognised source token degrades to null, not a crash (forward-additive safe)...
+        assertNull(sampleEntity(externalSource = "bitbucket", externalId = "x#1").toDomain().external)
+        // ...and a source with no id is malformed → read as native.
+        assertNull(sampleEntity(externalSource = "GitHub", externalId = null).toDomain().external)
+    }
+
+    @Test
     fun tombstonedTaskRoundTripsAndIsDeleted() {
         val task = Task(
             id = TaskId("t-3"),
@@ -187,6 +205,9 @@ class TaskEntityMappingTest {
         childIds: String = "",
         workingState: String = "Open",
         hydrationState: String = "Summary",
+        externalSource: String? = null,
+        externalId: String? = null,
+        externalUrl: String? = null,
     ) = TaskEntity(
         id = "t",
         org_slug = "u",
@@ -213,5 +234,8 @@ class TaskEntityMappingTest {
         descendant_total = null,
         blocked = null,
         is_blocker = null,
+        external_source = externalSource,
+        external_id = externalId,
+        external_url = externalUrl,
     )
 }

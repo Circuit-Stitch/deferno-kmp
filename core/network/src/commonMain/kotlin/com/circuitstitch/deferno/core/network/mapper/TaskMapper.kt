@@ -1,13 +1,16 @@
 package com.circuitstitch.deferno.core.network.mapper
 
 import com.circuitstitch.deferno.core.model.BlockedByRef
+import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.dto.BlockedByRefDto
+import com.circuitstitch.deferno.core.network.dto.ExternalProvenanceDto
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
 import com.circuitstitch.deferno.core.network.dto.TaskSummaryDto
@@ -84,6 +87,7 @@ fun TaskDetailDto.toDomain(): Task = Task(
     blocked = blocked,
     isBlocker = isBlocker,
     blockedBy = blockedBy.toDomain(),
+    external = external?.toDomain(),
 )
 
 /**
@@ -144,8 +148,23 @@ fun ItemView.asTaskOrNull(): Task? = when (this) {
         blocked = blocked,
         isBlocker = isBlocker,
         blockedBy = blockedBy.toDomain(),
+        external = external?.toDomain(),
     )
     is ItemView.Habit, is ItemView.Chore, is ItemView.Event -> null
+}
+
+/**
+ * Condenses the wire `external` block to the domain [ExternalRef], mapping the short source key to an
+ * [ItemSource]. An unrecognised provider (only GitHub + Google Calendar are modelled for v1) yields `null`
+ * — the item then reads as native rather than wearing a mark we can't render.
+ */
+private fun ExternalProvenanceDto.toDomain(): ExternalRef? {
+    val itemSource = when (source.lowercase()) {
+        "github" -> ItemSource.GitHub
+        "google_calendar" -> ItemSource.GoogleCalendar
+        else -> return null
+    }
+    return ExternalRef(source = itemSource, id = id, url = url)
 }
 
 /** Condenses the wire `blocked_by` edge DTOs to domain [BlockedByRef]s, preserving order (#289). */
