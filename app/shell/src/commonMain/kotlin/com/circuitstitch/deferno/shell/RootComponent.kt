@@ -396,6 +396,8 @@ class DefaultRootComponent(
                         calendarRepository = session.calendarRepository,
                         occurrenceEditor = session.occurrenceEditor,
                         workingStateEditor = session.workingStateEditor,
+                        // The Tasks Item-tree non-Task status seam (#299), routed through this Account's executor.
+                        definitionStateEditor = session.definitionStateEditor,
                         // The Tasks Item-tree modal move seam (#228), routed through this Account's executor.
                         moveEditor = session.moveEditor,
                         taskDetailRepository = session.taskDetailRepository,

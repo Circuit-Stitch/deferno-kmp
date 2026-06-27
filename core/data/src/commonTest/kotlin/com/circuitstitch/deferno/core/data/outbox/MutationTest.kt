@@ -1,6 +1,14 @@
 package com.circuitstitch.deferno.core.data.outbox
 
+import com.circuitstitch.deferno.core.model.Chore
+import com.circuitstitch.deferno.core.model.ChoreId
+import com.circuitstitch.deferno.core.model.DefinitionState
+import com.circuitstitch.deferno.core.model.Event
+import com.circuitstitch.deferno.core.model.EventId
+import com.circuitstitch.deferno.core.model.Habit
+import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -34,6 +42,18 @@ class MutationTest {
         workingState = state,
         dateCreated = created,
         hydration = HydrationState.Summary,
+    )
+
+    private fun habit(id: String = "x", state: DefinitionState = DefinitionState.Active) = Habit(
+        id = HabitId(id), orgSlug = "u-test", title = "habit-$id", definitionState = state, dateCreated = created,
+    )
+
+    private fun chore(id: String = "x", state: DefinitionState = DefinitionState.Active) = Chore(
+        id = ChoreId(id), orgSlug = "u-test", title = "chore-$id", definitionState = state, dateCreated = created,
+    )
+
+    private fun event(id: String = "x", state: DefinitionState = DefinitionState.Active) = Event(
+        id = EventId(id), orgSlug = "u-test", title = "event-$id", definitionState = state, dateCreated = created,
     )
 
     // --- the intent → endpoint → minimal-body table ---
@@ -134,6 +154,47 @@ class MutationTest {
     fun moveToRootEmitsExplicitNullParent() {
         // null parent = "detach to root" (ADR-0034), an explicit wire null distinct from omit (ADR-0011).
         assertEquals("""{"new_parent_id":null,"position":0}""", Move(id = "x", newParentId = null, position = 0).toRequest().body)
+    }
+
+    // --- SetDefinitionState (#299): the recurring "light switch" — per-kind PATCH + per-kind apply ---
+
+    @Test
+    fun setDefinitionStateEmitsAStatusPatchPerKind() {
+        // Best-guess endpoint (#299): PATCH {habits|chores|events}/{id} with the wire status token.
+        val habit = SetDefinitionState("h1", ItemKind.Habit, DefinitionState.Archived).toRequest()
+        assertEquals(OutboxMethod.Patch, habit.method)
+        assertEquals(listOf("habits", "h1"), habit.path)
+        assertEquals("""{"status":"archived"}""", habit.body)
+
+        val chore = SetDefinitionState("c1", ItemKind.Chore, DefinitionState.Active).toRequest()
+        assertEquals(listOf("chores", "c1"), chore.path)
+        assertEquals("""{"status":"active"}""", chore.body)
+
+        val event = SetDefinitionState("e1", ItemKind.Event, DefinitionState.InReview).toRequest()
+        assertEquals(listOf("events", "e1"), event.path)
+        assertEquals("""{"status":"in-review"}""", event.body)
+    }
+
+    @Test
+    fun setDefinitionStateTargetsTheRawItemId() {
+        assertEquals("item:h1", SetDefinitionState("h1", ItemKind.Habit, DefinitionState.Archived).target)
+    }
+
+    @Test
+    fun setDefinitionStateAppliesPerKindAndIsIdempotent() {
+        val intent = SetDefinitionState("x", ItemKind.Habit, DefinitionState.Archived)
+
+        val h = habit(state = DefinitionState.Active)
+        assertEquals(DefinitionState.Archived, intent.applyTo(h).definitionState)
+        assertEquals(intent.applyTo(h), intent.applyTo(intent.applyTo(h)), "habit applyTo must be idempotent")
+
+        val c = chore(state = DefinitionState.Active)
+        assertEquals(DefinitionState.Archived, intent.applyTo(c).definitionState)
+        assertEquals(intent.applyTo(c), intent.applyTo(intent.applyTo(c)), "chore applyTo must be idempotent")
+
+        val e = event(state = DefinitionState.Active)
+        assertEquals(DefinitionState.Archived, intent.applyTo(e).definitionState)
+        assertEquals(intent.applyTo(e), intent.applyTo(intent.applyTo(e)), "event applyTo must be idempotent")
     }
 
     @Test

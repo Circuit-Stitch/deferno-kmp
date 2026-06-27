@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.domain.command
 
+import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.TaskId
@@ -246,6 +247,42 @@ data class ConvertItem(
  */
 data class MoveItem(val id: String, val newParentId: String?, val position: Int) : Command {
     override val kind: CommandKind get() = CommandKind.MoveItem
+}
+
+// --- Definition state (OFFLINE-FIRST, recurring Habit/Chore/Event "light switch", #299) ---
+
+/**
+ * A [Command] setting a recurring **definition's** [DefinitionState] (the Habit/Chore/Event light switch),
+ * the recurring-kind sibling of the Task status verbs. Cross-kind, so it addresses the **raw Item id
+ * string** (like [MoveItem] / [ConvertItem]) and carries [itemKind] so the writer/outbox pick the
+ * kind-scoped route. [itemKind] is named for ItemKind (not `kind`) because [Command.kind] is the
+ * [CommandKind] catalog token — the two namespaces can't share the name.
+ */
+sealed interface DefinitionCommand : Command {
+    /** The raw cross-kind Item id of the recurring definition. */
+    val itemId: String
+
+    /** Which recurring kind — selects the per-kind store + `{habits|chores|events}/{id}` endpoint. */
+    val itemKind: ItemKind
+
+    /** The definition state to set. */
+    val target: DefinitionState
+}
+
+/**
+ * Set the recurring definition [itemId] (of [itemKind]) to [target] (`PATCH {kind}/{id} {"status":…}`,
+ * #299). A **single** state-setter — not verb-per-state — because a definition is a simple light switch
+ * (Archive → Archived, Restore → Active); the binding layer picks the verb from the current value, like
+ * [SetTaskPinned]. Offline-first: the
+ * [com.circuitstitch.deferno.core.data.definition.DefinitionWriter] applies it optimistically + enqueues,
+ * so NOT online-only.
+ */
+data class SetDefinitionState(
+    override val itemId: String,
+    override val itemKind: ItemKind,
+    override val target: DefinitionState,
+) : DefinitionCommand {
+    override val kind: CommandKind get() = CommandKind.SetDefinitionState
 }
 
 // --- Occurrence: acting on one dated firing from the Calendar (#74) — OFFLINE-FIRST ---

@@ -70,6 +70,9 @@ class DefaultTasksComponent(
     // The working-state write seam (#73), threaded down into the detail slot so the detail can issue
     // lifecycle Commands. Defaults to a no-op so existing shell/component tests build without it.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    // The non-Task status write seam (#299), threaded into the tree pane so its command menu can set a
+    // recurring definition's state (Archive/Restore). Defaults to a no-op so existing tests build without it.
+    private val definitionStateEditor: DefinitionStateEditor = DefinitionStateEditor.NONE,
     // The cross-kind move write seam (#228), threaded into the tree pane so its modal move mode can issue
     // Move Commands. Defaults to a no-op so existing shell/component tests build without it.
     private val moveEditor: MoveEditor = MoveEditor.NONE,
@@ -123,6 +126,7 @@ class DefaultTasksComponent(
             shakeToUndoPreference = shakeToUndoPreference,
             menuStates = menuStates,
             workingStateEditor = workingStateEditor,
+            definitionStateEditor = definitionStateEditor,
             setPinned = setPinned,
             createSubtask = createSubtask,
             deleteTask = deleteTask,

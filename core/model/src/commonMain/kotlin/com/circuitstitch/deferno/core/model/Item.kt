@@ -14,7 +14,9 @@ package com.circuitstitch.deferno.core.model
  * id type; this projection unwraps it to the string the forest + fold store compare on.)
  *
  * [isTerminal] is the de-emphasis signal — a Done/Dropped [Task] ([WorkingState.isTerminal]) or an
- * Archived recurring definition. [descendantDone]/[descendantTotal] are the server-computed subtree
+ * Archived recurring definition. [definitionState] is the recurring-kind "light switch" carried through
+ * so the tree's command menu can set it (#299): `null` for a [Task] (its lifecycle is [WorkingState], not
+ * a definition state), populated for a Habit/Chore/Event. [descendantDone]/[descendantTotal] are the server-computed subtree
  * counts for a collapsed node's progress badge; the `/items` snapshot computes them on Tasks only, so
  * they are `null` for the recurring kinds.
  *
@@ -41,6 +43,10 @@ data class Item(
     val source: ItemSource? = null,
     val blocked: Boolean = false,
     val isBlocker: Boolean = false,
+    // The recurring-kind "light switch" (#299): `null` for a Task (its lifecycle is [WorkingState]),
+    // populated for a Habit/Chore/Event so the Item-tree command menu can set it (Archive / Restore).
+    // [isTerminal] is still kept (an Archived definition is de-emphasized) — this carries the full state.
+    val definitionState: DefinitionState? = null,
 )
 
 /** An item's external provenance — the system it was synced/created from (drives the row's source mark). */

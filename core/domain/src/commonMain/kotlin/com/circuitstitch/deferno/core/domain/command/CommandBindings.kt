@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.core.domain.command
 
 import com.circuitstitch.deferno.core.data.calendar.OccurrenceWriter
 import com.circuitstitch.deferno.core.data.create.CreateWriter
+import com.circuitstitch.deferno.core.data.definition.DefinitionWriter
 import com.circuitstitch.deferno.core.data.item.ItemWriter
 import com.circuitstitch.deferno.core.data.plan.PlanWriter
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
@@ -28,5 +29,7 @@ interface CommandBindings {
         occurrenceWriter: OccurrenceWriter,
         settingsWriter: SettingsWriter,
         itemWriter: ItemWriter,
-    ): CommandExecutor = CommandExecutor(taskWriter, planWriter, createWriter, occurrenceWriter, settingsWriter, itemWriter)
+        definitionWriter: DefinitionWriter,
+    ): CommandExecutor =
+        CommandExecutor(taskWriter, planWriter, createWriter, occurrenceWriter, settingsWriter, itemWriter, definitionWriter)
 }

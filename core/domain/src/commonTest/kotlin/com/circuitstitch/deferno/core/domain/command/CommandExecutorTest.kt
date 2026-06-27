@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.core.domain.command
 
+import com.circuitstitch.deferno.core.model.DefinitionState
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -26,7 +28,8 @@ class CommandExecutorTest {
         occurrence: FakeOccurrenceWriter = FakeOccurrenceWriter(),
         settings: FakeSettingsWriter = FakeSettingsWriter(),
         item: FakeItemWriter = FakeItemWriter(),
-    ) = CommandExecutor(task, plan, create, occurrence, settings, item)
+        definition: FakeDefinitionWriter = FakeDefinitionWriter(),
+    ) = CommandExecutor(task, plan, create, occurrence, settings, item, definition)
 
     @Test
     fun bindsEveryTaskCommandToTheRightWriterCallAndArgs() = runTest {
@@ -216,8 +219,9 @@ class CommandExecutorTest {
             val ow = FakeOccurrenceWriter()
             val sw = FakeSettingsWriter()
             val iw = FakeItemWriter()
+            val dw = FakeDefinitionWriter()
 
-            val result = executor(tw, pw, cw, ow, sw, iw).execute(sampleCommand(kind)) // null current → gate skipped
+            val result = executor(tw, pw, cw, ow, sw, iw, dw).execute(sampleCommand(kind)) // null current → gate skipped
 
             // Create/convert surface the created id (#211); every other kind has no new id (itemId = null).
             val expectedId = if (kind in CommandKind.createKinds) "server-${kind.name}" else null
@@ -227,9 +231,10 @@ class CommandExecutorTest {
             val isOccurrence = kind in CommandKind.occurrenceKinds
             val isSettings = kind in CommandKind.settingsKinds
             val isMove = kind in CommandKind.moveKinds
+            val isDefinition = kind in CommandKind.definitionKinds
             assertEquals(if (isPlan) 1 else 0, pw.calls.size, "kind $kind plan-writer calls")
             assertEquals(
-                if (isPlan || isCreate || isOccurrence || isSettings || isMove) 0 else 1,
+                if (isPlan || isCreate || isOccurrence || isSettings || isMove || isDefinition) 0 else 1,
                 tw.calls.size,
                 "kind $kind task-writer calls",
             )
@@ -237,6 +242,7 @@ class CommandExecutorTest {
             assertEquals(if (isOccurrence) 1 else 0, ow.calls.size, "kind $kind occurrence-writer calls")
             assertEquals(if (isSettings) 1 else 0, sw.calls.size, "kind $kind settings-writer calls")
             assertEquals(if (isMove) 1 else 0, iw.calls.size, "kind $kind item-writer calls")
+            assertEquals(if (isDefinition) 1 else 0, dw.calls.size, "kind $kind definition-writer calls")
         }
     }
 
@@ -257,6 +263,33 @@ class CommandExecutorTest {
             iw.calls,
         )
         assertTrue(tw.calls.isEmpty(), "a move must not touch the task writer")
+    }
+
+    @Test
+    fun setDefinitionStateRoutesToTheDefinitionWriterWithItsIdKindAndTarget() = runTest {
+        // #299: the recurring "light switch" is offline-first (optimistic apply + enqueue), so it is
+        // Accepted, routes to the DefinitionWriter alone, and forwards the raw id / kind / target.
+        val tw = FakeTaskWriter()
+        val dw = FakeDefinitionWriter()
+        val ex = executor(tw, FakePlanWriter(), definition = dw)
+
+        assertEquals(
+            CommandResult.Accepted(CommandKind.SetDefinitionState),
+            ex.execute(SetDefinitionState("h1", ItemKind.Habit, DefinitionState.Archived)),
+        )
+        assertEquals(
+            CommandResult.Accepted(CommandKind.SetDefinitionState),
+            ex.execute(SetDefinitionState("c2", ItemKind.Chore, DefinitionState.Active)),
+        )
+
+        assertEquals(
+            listOf(
+                FakeDefinitionWriter.Call("h1", ItemKind.Habit, DefinitionState.Archived),
+                FakeDefinitionWriter.Call("c2", ItemKind.Chore, DefinitionState.Active),
+            ),
+            dw.calls,
+        )
+        assertTrue(tw.calls.isEmpty(), "a definition-state set must not touch the task writer")
     }
 
     @Test

@@ -90,9 +90,15 @@ struct ItemTreeView: View {
                             .listRowBackground(Color.clear)
                     } else {
                         ForEach(visibleRows, id: \.item.id) { row in
-                            self.row(row, moveMode: value.moveMode)
-                                .listRowInsets(EdgeInsets())
-                                .listRowBackground(Color.clear)
+                            TreeRow(
+                                component: component,
+                                row: row,
+                                moveMode: value.moveMode,
+                                menuState: value.menuStates[row.item.id],
+                                canUndo: value.lastMove != nil
+                            )
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
                         }
                     }
 
@@ -234,10 +240,38 @@ struct ItemTreeView: View {
         )
     }
 
-    // MARK: - One row (with move-mode lift + highlight)
+}
 
-    @ViewBuilder
-    private func row(_ row: ItemRow, moveMode: MoveMode?) -> some View {
+// MARK: - One row (kind-aware long-press command menu, move-mode lift + highlight)
+
+/// One tree row + its **long-press command menu** (#231/#299) — the iOS twin of the Compose `ItemTreeRow`
+/// menu, mirroring its order exactly. A SwiftUI `.contextMenu` is the native long-press affordance (it
+/// replaces the old long-press-to-move gesture): **Move** now lives *inside* the menu rather than being the
+/// whole gesture. The row owns the `@State` for the menu-spawned dialogs (Add subtask, Delete confirm)
+/// because a `.contextMenu` can't present a sheet/alert directly — the flags flip from a menu item and the
+/// row's own `.alert`/`.confirmationDialog` present off the row.
+///
+/// Kind drives the menu shape, read from the row (never from `menuState`'s presence): a **Task** gets the
+/// full set (Open · Add subtask · Move · [Undo move] · Pin/plan + status block · Delete); a **non-Task**
+/// (Habit/Chore/Event) gets the cross-kind subset (Add subtask · Move · [Undo move]) plus the #299 status
+/// block (Archive ↔ Restore on its `definitionState`). Status/Pin/plan need the joined `menuState`, so they
+/// render once it's present; Open/Delete/Archive gate on kind alone.
+private struct TreeRow: View {
+    let component: ItemTreeComponent
+    let row: ItemRow
+    let moveMode: MoveMode?
+    /// The joined per-row Task state (working state / pinned / in-plan), or nil for a non-Task row OR a Task
+    /// whose state hasn't joined yet. Labels the Pin↔Unpin / plan toggles + swaps the working-state block.
+    let menuState: TaskMenuState?
+    /// Whether a Move is undoable right now (`state.lastMove != nil`) — gates the menu's "Undo move" entry.
+    let canUndo: Bool
+    @Environment(\.defernoColors) private var colors
+    // The two menu-spawned dialogs (#231): the Add-subtask title prompt and the destructive Delete confirm.
+    @State private var showingAddSubtask = false
+    @State private var addSubtaskText = ""
+    @State private var confirmingDelete = false
+
+    var body: some View {
         let inMoveMode = moveMode != nil
         let isLifted = moveMode?.liftedId == row.item.id
 
@@ -257,13 +291,115 @@ struct ItemTreeView: View {
         .background(isLifted ? colors.primaryContainer : Color.clear)
         .opacity(inMoveMode && !isLifted ? 0.38 : 1)
         .contentShape(Rectangle())
-        // A long-press lifts the row into move mode (ADR-0034 decision 6, #228). Disabled while already
-        // in move mode so a stray long-press can't re-lift mid-move.
-        .onLongPressGesture(minimumDuration: 0.4) {
-            guard !inMoveMode else { return }
-            component.onEnterMoveMode(id: row.item.id)
+        // The kind-aware long-press command menu (replaces the old long-press-to-move gesture, matching
+        // Android). Empty in move mode so a mid-move long-press is a no-op (the move bar owns the surface).
+        .contextMenu { if !inMoveMode { rowMenu } }
+        // Add subtask (#231): a calm inline title prompt — Add forwards a trimmed, non-empty title (always a
+        // Task child) and clears. Driven by the menu's `@State` flag (a context menu can't present this itself).
+        .alert("Add a subtask", isPresented: $showingAddSubtask) {
+            TextField("Subtask of \(row.item.title)", text: $addSubtaskText)
+            Button("Cancel", role: .cancel) { addSubtaskText = "" }
+            Button("Add") {
+                let trimmed = addSubtaskText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { component.onAddSubtask(parentId: row.item.id, title: trimmed) }
+                addSubtaskText = ""
+            }
         }
-        .accessibilityHint(inMoveMode ? "" : "Long press to move")
+        // The destructive Delete, gated behind a confirmation (mirrors the Task-detail kebab's confirm).
+        .confirmationDialog(
+            "Delete “\(row.item.title)”?",
+            isPresented: $confirmingDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) { component.onDelete(id: row.item.id) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone.")
+        }
+        .accessibilityHint(inMoveMode ? "" : "Long press for actions")
+    }
+
+    /// The menu body — mirrors the Compose `ItemTreeRow` DropdownMenu order exactly. Destructive entries use
+    /// the native `role: .destructive` (the system renders them red) rather than an explicit error tint.
+    @ViewBuilder
+    private var rowMenu: some View {
+        let item = row.item
+        let isTask = BridgeKt.itemKindIsTask(kind: item.kind)
+
+        // 1. Open — Task only (the other kinds have no detail surface yet).
+        if isTask {
+            Button { component.onOpenDetail(id: item.id, kind: item.kind) } label: {
+                Label("Open", systemImage: "chevron.right")
+            }
+        }
+        // 2. Add subtask (any kind — the child is always a Task).
+        Button { addSubtaskText = ""; showingAddSubtask = true } label: {
+            Label("Add subtask", systemImage: "plus")
+        }
+        // 3. Move (enter modal move mode).
+        Button { component.onEnterMoveMode(id: item.id) } label: {
+            Label("Move", systemImage: "arrow.up.arrow.down")
+        }
+        // 4. Undo move — only when a move is undoable.
+        if canUndo {
+            Button { component.undoLastMove() } label: {
+                Label("Undo move", systemImage: "arrow.uturn.backward")
+            }
+        }
+
+        if isTask {
+            // 5/6. Pin↔Unpin + plan toggle — need the joined values, so they render once menuState is present.
+            if let menuState {
+                Button { component.onSetPinned(id: item.id, pinned: !menuState.pinned) } label: {
+                    Label(menuState.pinned ? "Unpin" : "Pin",
+                          systemImage: menuState.pinned ? "pin.slash" : "pin")
+                }
+                Button { component.onSetInPlan(id: item.id, inPlan: !menuState.inPlan) } label: {
+                    Label(menuState.inPlan ? "Remove from today's plan" : "Add to today's plan",
+                          systemImage: menuState.inPlan ? "calendar.badge.minus" : "calendar.badge.plus")
+                }
+                // 7/8. Status block: the Task working-state verbs, hiding the one it's already in.
+                Divider()
+                if menuState.workingState != WorkingState.inProgress {
+                    Button { component.onSetWorkingState(id: item.id, target: WorkingState.inProgress) } label: {
+                        Label("Start working", systemImage: "play")
+                    }
+                }
+                if menuState.workingState != WorkingState.done {
+                    Button { component.onSetWorkingState(id: item.id, target: WorkingState.done) } label: {
+                        Label("Mark done", systemImage: "checkmark")
+                    }
+                }
+                // The app's word for WorkingState.Dropped is "Set aside" (one term per concept).
+                if menuState.workingState != WorkingState.dropped {
+                    Button(role: .destructive) {
+                        component.onSetWorkingState(id: item.id, target: WorkingState.dropped)
+                    } label: {
+                        Label("Set aside", systemImage: "minus.circle")
+                    }
+                }
+            }
+            // 9/10. Destructive Delete (the row confirms first). Needs only the id, so it rides the kind gate.
+            Divider()
+            Button(role: .destructive) { confirmingDelete = true } label: {
+                Label("Delete (Permanent!)", systemImage: "trash")
+            }
+        } else if let definitionState = item.definitionState {
+            // Non-Task status block (#299): Archive ↔ Restore on the recurring kind's DefinitionState. The
+            // component resolves the row's ItemKind itself, so we pass only id + target. InReview is skipped.
+            Divider()
+            if definitionState == DefinitionState.archived {
+                Button { component.onSetDefinitionState(id: item.id, target: DefinitionState.active) } label: {
+                    Label("Restore", systemImage: "arrow.uturn.up")
+                }
+            } else {
+                Button(role: .destructive) {
+                    component.onSetDefinitionState(id: item.id, target: DefinitionState.archived)
+                } label: {
+                    Label("Archive", systemImage: "archivebox")
+                }
+            }
+        }
     }
 }
 

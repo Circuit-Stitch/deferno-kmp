@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
+import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -169,6 +170,14 @@ interface ItemTreeComponent {
     /** Move Task [id] to [target] working state — the kind-aware status block (Start working / Mark done / Set aside). */
     fun onSetWorkingState(id: String, target: WorkingState)
 
+    /**
+     * Set the recurring definition [id] (a Habit/Chore/Event) to [target] definition state — the non-Task
+     * status block (Archive → Archived, Restore → Active, #299). The component resolves the row's
+     * [ItemKind] from its current tree state (the writer needs it to route the per-kind PATCH), so the
+     * View passes only the id + target. A no-op if the row isn't in the current tree (uncached).
+     */
+    fun onSetDefinitionState(id: String, target: DefinitionState)
+
     /** Delete Task [id] permanently (the menu's destructive Delete — the View confirms first, #231). */
     fun onDelete(id: String)
 
@@ -198,6 +207,9 @@ class DefaultItemTreeComponent(
     // The kind-aware menu's Task-only write seams (#231), threaded from the shell over CommandExecutor.
     // All default to no-ops so the existing read/move/navigation tests construct the component without them.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
+    // The non-Task status seam (#299): set a recurring definition's DefinitionState. Defaults to no-op so the
+    // existing read/move/navigation tests construct the component without it (like [workingStateEditor]).
+    private val definitionStateEditor: DefinitionStateEditor = DefinitionStateEditor.NONE,
     private val setPinned: suspend (TaskId, Boolean) -> Unit = { _, _ -> },
     // The "Add subtask" create seam: [TaskId] is the parent's raw id (any kind — the child is always a Task).
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
@@ -348,6 +360,14 @@ class DefaultItemTreeComponent(
         // `current` is the executor's "uncached → never blocked" path. The View already hides the verb the
         // Task is in, so no redundant transition is offered.
         scope.launch { workingStateEditor.setWorkingState(TaskId(id), target, current = null) }
+    }
+
+    override fun onSetDefinitionState(id: String, target: DefinitionState) {
+        // Resolve the row's kind from the current flattened tree (the writer needs it to route the per-kind
+        // PATCH). The View that calls this is subscribed to [state], so the rows are populated; a row absent
+        // from the current tree (uncached) is a no-op rather than a guessed route.
+        val kind = state.value.rows.firstOrNull { it.item.id == id }?.item?.kind ?: return
+        scope.launch { definitionStateEditor.setDefinitionState(id, kind, target) }
     }
 
     override fun onDelete(id: String) {

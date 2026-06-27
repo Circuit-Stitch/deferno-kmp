@@ -21,6 +21,7 @@ import com.circuitstitch.deferno.core.domain.command.MarkOccurrence
 import com.circuitstitch.deferno.core.domain.command.MoveItem
 import com.circuitstitch.deferno.core.domain.command.RemoveFromPlan
 import com.circuitstitch.deferno.core.domain.command.RescheduleOccurrence
+import com.circuitstitch.deferno.core.domain.command.SetDefinitionState
 import com.circuitstitch.deferno.core.domain.command.SetDoneVisibility
 import com.circuitstitch.deferno.core.domain.command.SetDragAndDrop
 import com.circuitstitch.deferno.core.domain.command.SetTaskDeadline
@@ -34,6 +35,8 @@ import com.circuitstitch.deferno.core.di.AccountComponent
 import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.core.model.BrainDumpDraftStatus
 import kotlinx.coroutines.flow.first
+import com.circuitstitch.deferno.core.model.DefinitionState
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -42,6 +45,7 @@ import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
+import com.circuitstitch.deferno.feature.tasks.DefinitionStateEditor
 import com.circuitstitch.deferno.feature.tasks.MoveEditor
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachments
@@ -115,6 +119,15 @@ interface AccountSession {
      * feature layer touching the command registry directly (mirrors the [addToPlan] wrapper).
      */
     val workingStateEditor: WorkingStateEditor
+
+    /**
+     * The Item tree command menu's **non-Task status** write seam (#299): the recurring-definition "light
+     * switch" (Archive/Restore). Maps an `(id, kind, target)` to the `SetDefinitionState` Command and
+     * dispatches it through the command executor (optimistic per-kind apply + outbox enqueue), so the
+     * feature layer never touches the registry directly — the Habit/Chore/Event mirror of
+     * [workingStateEditor]. Defaulted to the no-op NONE so test fakes build without overriding it.
+     */
+    val definitionStateEditor: DefinitionStateEditor get() = DefinitionStateEditor.NONE
 
     /**
      * The Task detail's editable-PROPERTIES write seams (DUE date + LABELS), each routed through the
@@ -278,6 +291,9 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val workingStateEditor: WorkingStateEditor =
         commandWorkingStateEditor(component.commandExecutor)
 
+    override val definitionStateEditor: DefinitionStateEditor =
+        commandDefinitionStateEditor(component.commandExecutor)
+
     override val setDeadline: suspend (TaskId, Instant?) -> Unit =
         commandSetDeadline(component.commandExecutor)
 
@@ -311,6 +327,18 @@ class AccountComponentSession(private val component: AccountComponent) : Account
 internal fun commandWorkingStateEditor(executor: CommandExecutor): WorkingStateEditor =
     WorkingStateEditor { id: TaskId, target: WorkingState, current: Task? ->
         executor.execute(taskCommandFor(id, target), current = current)
+    }
+
+/**
+ * A [DefinitionStateEditor] backed by a [CommandExecutor] (#299): dispatches the single
+ * [SetDefinitionState] command carrying the resolved [ItemKind] so the writer routes the per-kind PATCH.
+ * No `current` row — a definition state set has no stale-transition gate (the View hides the no-op verb).
+ * Shared by production and tests so the mapping isn't duplicated — the recurring-kind mirror of
+ * [commandWorkingStateEditor].
+ */
+internal fun commandDefinitionStateEditor(executor: CommandExecutor): DefinitionStateEditor =
+    DefinitionStateEditor { id: String, kind: ItemKind, target: DefinitionState ->
+        executor.execute(SetDefinitionState(id, kind, target))
     }
 
 /**

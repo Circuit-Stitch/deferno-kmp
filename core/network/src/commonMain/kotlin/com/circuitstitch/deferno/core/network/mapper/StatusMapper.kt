@@ -58,6 +58,20 @@ fun DefStatusWire.toDefinitionState(): DefinitionState = when (this) {
 }
 
 /**
+ * [DefinitionState] → its wire `DefStatus` token — the **write** direction (ADR-0011, #299), the
+ * recurring-definition mirror of [WorkingState.toWireToken]. The offline outbox's `SetDefinitionState`
+ * intent (`core:data`) emits a minimal `{"status": "<token>"}` PATCH body and must use the exact wire
+ * casing the read mapper round-trips on — `active`/`in-review`/`archived` (the [DefStatusWire]
+ * `@SerialName`s). Total and explicit so a new [DefinitionState] value forces a token decision here.
+ * Inverse of [DefStatusWire.toDefinitionState].
+ */
+fun DefinitionState.toWireToken(): String = when (this) {
+    DefinitionState.Active -> "active"
+    DefinitionState.InReview -> "in-review"
+    DefinitionState.Archived -> "archived"
+}
+
+/**
  * `OccurrenceStatus` → [OccurrenceState]. `dropped` (the event terminal) condenses to
  * [OccurrenceState.Skipped]; [OccurrenceStatusWire.Unknown] degrades to [OccurrenceState.Scheduled]
  * (an unresolved firing) rather than fabricating a resolution.

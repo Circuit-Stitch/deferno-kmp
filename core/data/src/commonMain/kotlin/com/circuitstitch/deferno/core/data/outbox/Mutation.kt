@@ -1,6 +1,10 @@
 package com.circuitstitch.deferno.core.data.outbox
 
 import com.circuitstitch.deferno.core.model.CalendarItem
+import com.circuitstitch.deferno.core.model.Chore
+import com.circuitstitch.deferno.core.model.DefinitionState
+import com.circuitstitch.deferno.core.model.Event
+import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
@@ -253,6 +257,31 @@ data class Move(val id: String, val newParentId: String?, val position: Int) : M
     )
 }
 
+/**
+ * Set a recurring **definition's** [DefinitionState] — the Habit/Chore/Event "light switch" (#299), the
+ * recurring-kind sibling of [SetWorkingState]. Cross-kind like [Move] (it addresses the **raw Item id
+ * string**, not a kind-typed id), so it carries no single-`Task` `applyTo`; instead it exposes a typed
+ * optimistic transform per kind ([applyTo] overloads), and [OutboxDefinitionWriter] dispatches to the
+ * right per-kind store. [kind] selects the kind-scoped endpoint + the wire token round-trips with the read
+ * mapper (`DefStatusWire`). Offline-first (ADR-0001): optimistic apply + enqueue, like the Task edits.
+ *
+ * | Intent | Method + endpoint | Minimal body |
+ * |---|---|---|
+ * | [SetDefinitionState] habit | `PATCH habits/{id}` | `{"status":"<active\|in-review\|archived>"}` |
+ * | [SetDefinitionState] chore | `PATCH chores/{id}` | `{"status":"<active\|in-review\|archived>"}` |
+ * | [SetDefinitionState] event | `PATCH events/{id}` | `{"status":"<active\|in-review\|archived>"}` |
+ */
+data class SetDefinitionState(val id: String, val kind: ItemKind, val state: DefinitionState) : Mutation {
+    override val target: String get() = "item:$id"
+
+    /** The optimistic local effect on a cached Habit/Chore/Event — **pure** and idempotent (replay-safe). */
+    fun applyTo(habit: Habit): Habit = habit.copy(definitionState = state)
+    fun applyTo(chore: Chore): Chore = chore.copy(definitionState = state)
+    fun applyTo(event: Event): Event = event.copy(definitionState = state)
+
+    override fun toRequest(): OutboxRequest = patchRecurring(kind, id) { put("status", state.toWireToken()) }
+}
+
 // --- Settings intents ---
 
 /** Set the appearance: theme family + mode (Appearance category, #72). Applied live + persisted. */
@@ -311,6 +340,14 @@ private fun postPlan(action: String, build: JsonObjectBuilder.() -> Unit): Outbo
 /** A `PATCH auth/me/settings` whose body is exactly the keys [build] sets — nothing absent (ADR-0011). */
 private fun patchSettings(build: JsonObjectBuilder.() -> Unit): OutboxRequest =
     OutboxRequest(OutboxMethod.Patch, listOf("auth", "me", "settings"), buildJsonObject(build).toString())
+
+/**
+ * A `PATCH {kind}/{id}` against a recurring **definition** (#299) whose body is exactly the keys [build]
+ * sets — the recurring-kind mirror of [patchTask]. [kind] selects the kind-scoped prefix
+ * (`habits`/`chores`/`events`); a `Task` is rejected (it has no definition state).
+ */
+private fun patchRecurring(kind: ItemKind, id: String, build: JsonObjectBuilder.() -> Unit): OutboxRequest =
+    OutboxRequest(OutboxMethod.Patch, listOf(kind.recurringPath(), id), buildJsonObject(build).toString())
 
 /**
  * A [Mutation] against one dated firing (an Occurrence) of a recurring definition (#74) — the
@@ -404,7 +441,7 @@ data class ClearOccurrence(
     override fun applyTo(item: CalendarItem): CalendarItem = item.copy(status = WorkingState.Open)
 
     override fun toRequest(): OutboxRequest =
-        OutboxRequest(OutboxMethod.Delete, listOf(kind.occurrencePath(), seriesId, "occurrences", date.toString()))
+        OutboxRequest(OutboxMethod.Delete, listOf(kind.recurringPath(), seriesId, "occurrences", date.toString()))
 }
 
 /**
@@ -425,15 +462,15 @@ data class RescheduleOccurrence(
 
     override fun toRequest(): OutboxRequest = OutboxRequest(
         OutboxMethod.Post,
-        listOf(kind.occurrencePath(), seriesId, "occurrences", date.toString(), "reschedule"),
+        listOf(kind.recurringPath(), seriesId, "occurrences", date.toString(), "reschedule"),
         buildJsonObject { put("new_date", newDate.toString()) }.toString(),
     )
 }
 
-/** The kind-scoped occurrence endpoint prefix (`habits`/`chores`/`events`). */
-private fun ItemKind.occurrencePath(): String = when (this) {
+/** The kind-scoped recurring endpoint prefix (`habits`/`chores`/`events`) — occurrence + definition routes. */
+private fun ItemKind.recurringPath(): String = when (this) {
     ItemKind.Habit -> "habits"
     ItemKind.Chore -> "chores"
     ItemKind.Event -> "events"
-    ItemKind.Task -> error("occurrence endpoints are only for recurring kinds, not Task")
+    ItemKind.Task -> error("recurring endpoints are only for recurring kinds, not Task")
 }

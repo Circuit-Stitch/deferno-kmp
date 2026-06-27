@@ -50,6 +50,7 @@ class CommandKindTest {
                 CommandKind.SetDragAndDrop to "settings.set-drag-and-drop",
                 CommandKind.SetDoneVisibility to "settings.set-done-visibility",
                 CommandKind.MoveItem to "item.move",
+                CommandKind.SetDefinitionState to "definition.set-state",
             ),
             CommandKind.entries.associateWith { it.id.value },
         )
@@ -163,6 +164,7 @@ class CommandKindTest {
             CommandKind.occurrenceKinds,
             CommandKind.settingsKinds,
             CommandKind.moveKinds,
+            CommandKind.definitionKinds,
         )
         assertEquals(CommandKind.entries.toSet(), partitions.flatten().toSet())
         for (i in partitions.indices) {
@@ -176,13 +178,20 @@ class CommandKindTest {
         assertTrue(CommandKind.settingsKinds.all { it.category == CommandCategory.Settings })
         assertTrue(CommandKind.moveKinds.all { it.category == CommandCategory.Move })
         assertEquals(listOf(CommandKind.MoveItem), CommandKind.moveKinds, "the move catalog is the single cross-kind move verb")
+        assertTrue(CommandKind.definitionKinds.all { it.category == CommandCategory.Definition })
+        assertEquals(
+            listOf(CommandKind.SetDefinitionState),
+            CommandKind.definitionKinds,
+            "the definition catalog is the single recurring-definition light-switch verb",
+        )
         assertTrue(
             CommandKind.taskKinds.none {
                 it.category == CommandCategory.Plan ||
                     it.category == CommandCategory.Create ||
                     it.category == CommandCategory.Occurrence ||
                     it.category == CommandCategory.Settings ||
-                    it.category == CommandCategory.Move
+                    it.category == CommandCategory.Move ||
+                    it.category == CommandCategory.Definition
             },
         )
     }

@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.domain.command
 
+import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
@@ -50,6 +51,7 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.SetDragAndDrop -> SetDragAndDrop(enabled = true)
     CommandKind.SetDoneVisibility -> SetDoneVisibility(259200L, 86400L)
     CommandKind.MoveItem -> MoveItem("item-1", newParentId = "p1", position = 2)
+    CommandKind.SetDefinitionState -> SetDefinitionState("h1", ItemKind.Habit, DefinitionState.Archived)
 }
 
 /** Concise [Task] fixture for the enablement tests. */
