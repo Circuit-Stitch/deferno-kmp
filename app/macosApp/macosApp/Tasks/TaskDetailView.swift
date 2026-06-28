@@ -257,12 +257,16 @@ private struct SubtaskOutlineRow: View {
             .accessibilityLabel(done ? "Mark \(task.title) not done" : "Mark \(task.title) done")
             Button { onOpen(task) } label: {
                 Text(task.title)
+                    // Blocked mutes (but doesn't strike) like the tree row — "blocked, not finished" (#290/#292).
                     .strikethrough(done)
-                    .foregroundStyle(done ? .secondary : .primary)
+                    .foregroundStyle((done || task.blocked) ? .secondary : .primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Open \(task.title)")
+            if task.blocked {
+                DependencyBadge(text: "Blocked", tone: .neutral, semanticLabel: "Blocked")
+            }
             WorkingStateBadge(state: task.workingState)
         }
         .frame(minHeight: Layout.minTouchTarget)
