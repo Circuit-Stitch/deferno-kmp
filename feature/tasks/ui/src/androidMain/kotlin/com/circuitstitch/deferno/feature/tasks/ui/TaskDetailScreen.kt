@@ -78,6 +78,8 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
                     playAudioBytes(context, bytes)
                 }
             },
+            // "Break this down" (Deferno#525) → the host opens the on-device impediment overlay.
+            onBreakdown = component::onBreakdownClicked,
         )
     }
 }

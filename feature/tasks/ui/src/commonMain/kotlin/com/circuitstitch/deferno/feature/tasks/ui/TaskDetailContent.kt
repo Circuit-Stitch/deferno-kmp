@@ -84,6 +84,10 @@ internal fun TaskDetailContent(
     onSetAttachmentCaption: (String, String?) -> Unit,
     onDeleteOnDeviceAttachment: (String) -> Unit = {},
     onPlayOnDeviceAttachment: (OnDeviceAttachment) -> Unit = {},
+    // "Break this down" (Deferno#525): start the on-device impediment flow over this Task. Optional — only
+    // the platforms that render the Breakdown surface (Android) pass it; desktop leaves it null (no engine,
+    // so the kebab hides the item rather than opening an empty overlay).
+    onBreakdown: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val task = state.task
@@ -127,6 +131,7 @@ internal fun TaskDetailContent(
                     onSetAttachmentCaption = onSetAttachmentCaption,
                     onDeleteOnDeviceAttachment = onDeleteOnDeviceAttachment,
                     onPlayOnDeviceAttachment = onPlayOnDeviceAttachment,
+                    onBreakdown = onBreakdown,
                 )
             }
         }
@@ -154,6 +159,7 @@ private fun TaskBody(
     onSetAttachmentCaption: (String, String?) -> Unit,
     onDeleteOnDeviceAttachment: (String) -> Unit,
     onPlayOnDeviceAttachment: (OnDeviceAttachment) -> Unit,
+    onBreakdown: (() -> Unit)?,
 ) {
     // Reset the scroll to the top when drilling into a different task (key by id) — the detail composable
     // is reused across the parent→subtask navigation, so an unkeyed scroll state would carry the parent's
@@ -182,6 +188,7 @@ private fun TaskBody(
                 onAddSubtask = { addSubtaskFocus.requestFocus() },
                 onDrop = { onSetWorkingState(WorkingState.Dropped) },
                 onDelete = { confirmDelete = true },
+                onBreakdown = onBreakdown,
             )
         }
         WorkingStateEditor(current = task.workingState, onSetWorkingState = onSetWorkingState)
@@ -273,6 +280,7 @@ private fun TaskOverflowMenu(
     onAddSubtask: () -> Unit,
     onDrop: () -> Unit,
     onDelete: () -> Unit,
+    onBreakdown: (() -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -284,6 +292,14 @@ private fun TaskOverflowMenu(
                 text = { Text("Add subtask") },
                 onClick = { expanded = false; onAddSubtask() },
             )
+            // "Break this down" (Deferno#525) — the on-device impediment flow. Only where a host wired it
+            // (Android); desktop has no engine, so the item is absent rather than opening an empty overlay.
+            if (onBreakdown != null) {
+                DropdownMenuItem(
+                    text = { Text("Break this down") },
+                    onClick = { expanded = false; onBreakdown() },
+                )
+            }
             // The app's vocabulary for WorkingState.Dropped is "Set aside" (the chip below + SearchScreen),
             // so the kebab uses the same word rather than web's "Drop" — one term per concept.
             DropdownMenuItem(
