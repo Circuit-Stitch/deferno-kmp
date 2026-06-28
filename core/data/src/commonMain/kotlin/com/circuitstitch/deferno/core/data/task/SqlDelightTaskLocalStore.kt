@@ -71,6 +71,9 @@ class SqlDelightTaskLocalStore(
             descendant_total = e.descendant_total,
             blocked = e.blocked,
             is_blocker = e.is_blocker,
+            external_source = e.external_source,
+            external_id = e.external_id,
+            external_url = e.external_url,
         )
     }
 

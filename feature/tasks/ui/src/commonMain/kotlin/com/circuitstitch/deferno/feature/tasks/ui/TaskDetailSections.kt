@@ -52,6 +52,7 @@ import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.UserId
@@ -109,6 +110,47 @@ internal fun PropertiesSection(
         PropertyRow(label = "Time", value = task.deadlineTimeOfDay?.toDisplayTime() ?: "—")
         LabelsRow(labels = task.labels, onSetLabels = onSetLabels)
         PropertyRow(label = "Owner", value = task.ownerOrgId?.value ?: "—")
+        // Source cell for a synced/imported item: the provenance mark + origin label, linking to the
+        // provider. Renders only when the item carries external provenance (a native Task shows no row).
+        task.external?.let { SourceRow(it) }
+    }
+}
+
+/**
+ * The detail Source cell: the provider [SourceIndicator] mark + the origin label (the `owner/repo#N` tracker
+ * ref, or the provider label for a non-tracker), opening the provider URL when present. The label underlines
+ * only when it links somewhere. Read-only — provenance, not an editor.
+ */
+@Composable
+private fun SourceRow(external: ExternalRef) {
+    val uriHandler = LocalUriHandler.current
+    val label = sourceOriginLabel(external)
+    val url = external.url
+    val rowSemantics = "Source: ${sourceLabel(external.source)}, $label" +
+        if (url != null) ". Opens in ${sourceLabel(external.source)}." else ""
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTouchTarget)
+            .then(if (url != null) Modifier.clickable(onClickLabel = "Open in ${sourceLabel(external.source)}") { uriHandler.openUri(url) } else Modifier)
+            .clearAndSetSemantics { contentDescription = rowSemantics },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Source",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.defernoColors.inkMuted,
+            modifier = Modifier.width(80.dp),
+        )
+        SourceIndicator(external.source)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            textDecoration = if (url != null) TextDecoration.Underline else TextDecoration.None,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 

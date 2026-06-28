@@ -1,7 +1,9 @@
 package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.database.sql.TaskEntity
+import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -57,6 +59,7 @@ fun TaskEntity.toDomain(): Task = Task(
     // Server-derived dependency flags (#290): NULL (pre-migration / omitted) decodes to false.
     blocked = blocked == 1L,
     isBlocker = is_blocker == 1L,
+    external = decodeExternalRef(external_source, external_id, external_url),
 )
 
 /** Encodes a domain [Task] into a `taskEntity` row, ready for `insertOrReplace`. */
@@ -86,7 +89,23 @@ fun Task.toEntity(): TaskEntity = TaskEntity(
     descendant_total = descendantTotal,
     blocked = if (blocked) 1L else 0L,
     is_blocker = if (isBlocker) 1L else 0L,
+    external_source = external?.source?.name,
+    external_id = external?.id,
+    external_url = external?.url,
 )
+
+/**
+ * Reassembles the domain [ExternalRef] from its three stored columns. `external_source` is the
+ * [ItemSource] enum name; a null (native item) or an unrecognised token degrades to `null` — defensive,
+ * matching the enum columns above, so a forward-additive source written by a newer build never crashes an
+ * older reader. `external_id` is required when a source is present (a row with one but not the other is
+ * malformed and read as native).
+ */
+private fun decodeExternalRef(source: String?, id: String?, url: String?): ExternalRef? {
+    val itemSource = source?.let { s -> ItemSource.entries.firstOrNull { it.name == s } } ?: return null
+    val refId = id ?: return null
+    return ExternalRef(source = itemSource, id = refId, url = url)
+}
 
 /** `[]` -> `""`, else the elements joined with `\n` (the list columns never contain newlines). */
 private fun List<String>.encodeNewlineList(): String = joinToString("\n")

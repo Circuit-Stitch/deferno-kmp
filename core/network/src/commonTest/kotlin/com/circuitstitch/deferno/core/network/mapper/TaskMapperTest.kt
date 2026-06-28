@@ -1,11 +1,14 @@
 package com.circuitstitch.deferno.core.network.mapper
 
+import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.network.dto.BlockedByRefDto
+import com.circuitstitch.deferno.core.network.dto.ExternalProvenanceDto
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
 import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
@@ -164,6 +167,28 @@ class TaskMapperTest {
     }
 
     @Test
+    fun externalProvenanceMapsKnownSourcesAndDropsTheRest() {
+        // The `external` block condenses to a domain ExternalRef, mapping the short source key.
+        fun externalFor(source: String, id: String = "x:y") =
+            detail().copy(external = ExternalProvenanceDto(id = id, source = source)).toDomain().external
+
+        assertEquals(
+            ExternalRef(ItemSource.GitHub, "octo/repo#7", "https://gh/7"),
+            detail().copy(
+                external = ExternalProvenanceDto(id = "octo/repo#7", source = "github", url = "https://gh/7"),
+            ).toDomain().external,
+        )
+        // The source key is case-insensitive and a calendar id (no `#`) still maps its provider.
+        assertEquals(ItemSource.GoogleCalendar, externalFor("google_calendar")?.source)
+        assertEquals(ItemSource.GitHub, externalFor("GitHub", id = "o/r#1")?.source)
+        // An unmodelled provider (v1 = GitHub + Google Calendar) drops to null — the item reads as native
+        // rather than wearing a mark we can't render.
+        assertNull(externalFor("gitlab"))
+        // Absent `external` → null.
+        assertNull(detail().toDomain().external)
+    }
+
+    @Test
     fun itemViewTaskMapsToDomainTaskOthersToNull() {
         val taskView = ItemView.Task(
             id = "948bcfab-063d-4499-b2de-f21801bc6f9c",
@@ -188,6 +213,11 @@ class TaskMapperTest {
             blocked = true,
             isBlocker = false,
             blockedBy = listOf(BlockedByRefDto(item = "b1", occurrence = "2026-07-01")),
+            external = ExternalProvenanceDto(
+                id = "octo/repo#42",
+                source = "github",
+                url = "https://github.com/octo/repo/issues/42",
+            ),
         )
         val mapped = taskView.asTaskOrNull()
         assertEquals(TaskId("948bcfab-063d-4499-b2de-f21801bc6f9c"), mapped?.id)
@@ -197,6 +227,11 @@ class TaskMapperTest {
         assertEquals(false, mapped?.isBlocker)
         assertEquals("b1", mapped?.blockedBy?.single()?.item)
         assertEquals("2026-07-01", mapped?.blockedBy?.single()?.occurrence)
+        // The snapshot's `external` block condenses to the domain ExternalRef.
+        assertEquals(
+            ExternalRef(ItemSource.GitHub, "octo/repo#42", "https://github.com/octo/repo/issues/42"),
+            mapped?.external,
+        )
 
         val habitView = ItemView.Habit(
             id = "77dd6a6e-b936-4f61-9807-c3a6b647f9f1",

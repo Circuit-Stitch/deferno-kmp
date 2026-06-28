@@ -59,6 +59,9 @@ sealed interface ItemView {
         val blocked: Boolean = false,
         @SerialName("is_blocker") val isBlocker: Boolean = false,
         @SerialName("blocked_by") val blockedBy: List<BlockedByRefDto> = emptyList(),
+        // External provenance for a synced/imported item (e.g. a GitHub issue → Task).
+        // Absent on a native item; the tolerant reader ignores its unmodelled fields (write_policy/…).
+        val external: ExternalProvenanceDto? = null,
     ) : ItemView
 
     /** The `habit` variant — a recurring definition with no extra kind-specific fields. */
@@ -156,6 +159,20 @@ sealed interface ItemView {
 data class BlockedByRefDto(
     val item: String,
     val occurrence: String? = null,
+)
+
+/**
+ * The wire `external` provenance block carried on a synced/imported item (the `ExternalProvenance` schema):
+ * the opaque provider [id] (`owner/repo#N` for a GitHub issue), the short [source] key (`github`,
+ * `google_calendar`), and the optional provider-side [url]. The wire also carries `write_policy`,
+ * `updated_at`, and `master_id`; the client doesn't display them, so the tolerant reader drops them. Maps
+ * to the domain [com.circuitstitch.deferno.core.model.ExternalRef] in `TaskMapper.kt`.
+ */
+@Serializable
+data class ExternalProvenanceDto(
+    val id: String,
+    val source: String,
+    val url: String? = null,
 )
 
 /**

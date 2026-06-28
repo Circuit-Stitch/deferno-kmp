@@ -1,0 +1,12 @@
+-- Migration 10 -> 11: add external provenance to the Task cache.
+--
+-- A GitHub-imported issue (or other synced item) carries an `external` block on the `/items` snapshot and
+-- the `/tasks/{id}` detail (ADR-0011) — the source key, the opaque provider ref (`owner/repo#N`), and the
+-- provider-side URL. The detail Source cell, the source mark, and the `[GitHub#N]` ref prefix read these
+-- off the cached row, so they must round-trip the DB. Plain ADD COLUMN appends nullable columns; existing
+-- rows get NULL (decoded as "native item") and are repopulated on the next refresh. Task-only: GitHub
+-- issues import as Tasks, so the recurring kinds don't carry provenance yet. Never edit a released
+-- migration or snapshot — ADR-0022 runbook.
+ALTER TABLE taskEntity ADD COLUMN external_source TEXT;
+ALTER TABLE taskEntity ADD COLUMN external_id TEXT;
+ALTER TABLE taskEntity ADD COLUMN external_url TEXT;

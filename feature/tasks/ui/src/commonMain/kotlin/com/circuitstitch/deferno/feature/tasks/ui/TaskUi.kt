@@ -25,11 +25,18 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.designsystem.theme.plexMono
+import com.circuitstitch.deferno.core.model.ExternalRef
+import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.datetime.LocalTime
@@ -41,6 +48,55 @@ import kotlinx.datetime.LocalTime
 
 /** Minimum height for a tappable row/control — design-principles.md "≥44–48dp" touch targets. */
 internal val MinTouchTarget = 48.dp
+
+// --- External provenance display: the GitHub-import affordances (the source mark, the `[GitHub#N]` ref
+// prefix, the Source cell). Pure helpers so the tree row and the detail render identically. ---
+
+/** Human label for an external provenance [source] — the Source-cell + ref-prefix display name. */
+internal fun sourceLabel(source: ItemSource): String = when (source) {
+    ItemSource.GitHub -> "GitHub"
+    ItemSource.GoogleCalendar -> "Google Calendar"
+}
+
+// A trailing issue/PR number on an opaque provider ref (`owner/repo#42` → `42`). A calendar id
+// (`{calendar_id}:{event_id}`) has no trailing `#N`, so it yields no prefix.
+private val ExternalRefNumber = Regex("#(\\d+)$")
+
+/**
+ * The dimmed `[GitHub#N]` ref prefix for an imported item, or `null` when there's no provenance or no
+ * trailing issue/PR number. Derived from the opaque provider id — no extra round-trip — and it stays out
+ * of the tracker-owned title.
+ */
+internal fun externalRefLabel(source: ItemSource?, externalId: String?): String? {
+    if (source == null || externalId == null) return null
+    val number = ExternalRefNumber.find(externalId)?.groupValues?.get(1) ?: return null
+    return "[${sourceLabel(source)}#$number]"
+}
+
+/**
+ * The detail Source-cell label: the opaque tracker ref (`owner/repo#N`, the client-side "origin label")
+ * when it's a tracker ref, else the provider label as a fallback (for a non-tracker id with no issue
+ * number, e.g. a calendar event).
+ */
+internal fun sourceOriginLabel(external: ExternalRef): String =
+    if (external.id.contains('#')) external.id else sourceLabel(external.source)
+
+/**
+ * A title with the dimmed `[GitHub#N]` ref prefix prepended (a trailing space), or the bare title when the
+ * item has no tracker ref. The prefix wears [prefixColor] (muted); the caller supplies it from the theme.
+ */
+internal fun titleWithExternalRef(
+    title: String,
+    source: ItemSource?,
+    externalId: String?,
+    prefixColor: Color,
+): AnnotatedString = buildAnnotatedString {
+    externalRefLabel(source, externalId)?.let { prefix ->
+        withStyle(SpanStyle(color = prefixColor)) { append(prefix) }
+        append(" ")
+    }
+    append(title)
+}
 
 /** A [LocalTime] as a friendly 12-hour clock, e.g. `14:30` → "2:30 PM" (#348 display). */
 internal fun LocalTime.toDisplayTime(): String {

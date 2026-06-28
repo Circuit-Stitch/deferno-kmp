@@ -22,7 +22,10 @@ package com.circuitstitch.deferno.core.model
  *
  * [source] is the item's external provenance for a small row indicator: `null` = a native Deferno item
  * (the common case), else the external system it was synced/created from. The tree row renders the
- * matching brand mark when non-null.
+ * matching brand mark when non-null. [externalRef] is the opaque provider id (`owner/repo#N`) that the
+ * row's dimmed `[GitHub#N]` ref prefix is derived from — carried alongside [source] rather than the full
+ * [ExternalRef] because the row only shows the mark + the ref number (the detail Source cell owns the URL
+ * link), keeping this projection minimal.
  *
  * [blocked]/[isBlocker] are **server-derived** dependency flags (ADR-0034, #289), treated as read-only
  * truth — the client never re-derives the readiness rules. [blocked] is `true` when this item has an
@@ -41,6 +44,7 @@ data class Item(
     val descendantDone: Long? = null,
     val descendantTotal: Long? = null,
     val source: ItemSource? = null,
+    val externalRef: String? = null,
     val blocked: Boolean = false,
     val isBlocker: Boolean = false,
     // The recurring-kind "light switch" (#299): `null` for a Task (its lifecycle is [WorkingState]),
@@ -51,3 +55,19 @@ data class Item(
 
 /** An item's external provenance — the system it was synced/created from (drives the row's source mark). */
 enum class ItemSource { GitHub, GoogleCalendar }
+
+/**
+ * The full external provenance carried on the single-item record ([Task.external]): the [source], the
+ * opaque provider [id] (`owner/repo#N` for a GitHub-imported issue), and the optional provider-side [url].
+ * It drives three surfaces: the source mark, the dimmed `[GitHub#N]` ref prefix (derived from [id]), and
+ * the detail Source cell (which links to [url]).
+ *
+ * The detail's "origin label" is derived client-side from [id] — for a tracker ref it *is* the id — so no
+ * separate server field is needed. A non-tracker source (e.g. a calendar id with no issue number) falls
+ * back to its provider label until display-name resolution lands.
+ */
+data class ExternalRef(
+    val source: ItemSource,
+    val id: String,
+    val url: String? = null,
+)

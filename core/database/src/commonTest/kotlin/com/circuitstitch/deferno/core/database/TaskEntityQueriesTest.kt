@@ -31,6 +31,9 @@ class TaskEntityQueriesTest {
         descendantTotal: Long? = null,
         blocked: Long? = null,
         isBlocker: Long? = null,
+        externalSource: String? = null,
+        externalId: String? = null,
+        externalUrl: String? = null,
     ) = taskEntityQueries.insertOrReplace(
         id = id,
         org_slug = "u-e4h2qk",
@@ -57,6 +60,9 @@ class TaskEntityQueriesTest {
         descendant_total = descendantTotal,
         blocked = blocked,
         is_blocker = isBlocker,
+        external_source = externalSource,
+        external_id = externalId,
+        external_url = externalUrl,
     )
 
     @Test

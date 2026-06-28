@@ -10,7 +10,9 @@ import com.circuitstitch.deferno.core.data.item.FakeItemSnapshotSource
 import com.circuitstitch.deferno.core.data.item.ItemSnapshot
 import com.circuitstitch.deferno.core.data.item.ItemSync
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
+import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -68,6 +70,8 @@ class SqlDelightTaskLocalStoreTest {
         // Server-derived dependency flags must survive the real-SQLite round-trip (#290).
         blocked = true,
         isBlocker = true,
+        // External provenance must survive the round-trip too; the full-equality assertion proves it.
+        external = ExternalRef(ItemSource.GitHub, "octo/repo#a", "https://github.com/octo/repo/issues/1"),
     )
 
     @Test
