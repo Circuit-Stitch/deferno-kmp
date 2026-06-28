@@ -127,6 +127,13 @@ interface TaskDetailComponent {
     fun onAddToPlanClicked()
 
     /**
+     * Start a **Breakdown** over this Task (Deferno#525) — the impediment-driven "what's stopping you?"
+     * flow. Emits [Output.BreakdownRequested] for the host to open the Breakdown surface; the shell-level
+     * write isn't the detail's job (mirrors [onAddToPlanClicked]).
+     */
+    fun onBreakdownClicked() {}
+
+    /**
      * Move this Task to [target] (#73) — one of the five [WorkingState]s, issued as a Command through
      * the injected [WorkingStateEditor]: optimistic local apply + outbox enqueue (ADR-0001), gated on
      * the current row so a no-op transition writes nothing (ADR-0007). The local DB Flow then re-emits
@@ -209,6 +216,9 @@ interface TaskDetailComponent {
         data object Closed : Output
         data class SubtaskSelected(val id: TaskId) : Output
         data class AddToPlanRequested(val id: TaskId) : Output
+
+        /** "Break this down" (Deferno#525): the host opens the Breakdown surface over this Task. */
+        data class BreakdownRequested(val id: TaskId) : Output
     }
 }
 
@@ -341,6 +351,10 @@ class DefaultTaskDetailComponent(
 
     override fun onAddToPlanClicked() {
         output(TaskDetailComponent.Output.AddToPlanRequested(taskId))
+    }
+
+    override fun onBreakdownClicked() {
+        output(TaskDetailComponent.Output.BreakdownRequested(taskId))
     }
 
     override fun onSetWorkingState(target: WorkingState) {

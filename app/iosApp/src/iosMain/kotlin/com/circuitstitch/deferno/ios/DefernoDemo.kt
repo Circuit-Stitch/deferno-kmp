@@ -61,6 +61,8 @@ class DefernoDemo {
                     // appears in the Plan tab. The real app routes this through the shell to a Command.
                     is TasksComponent.Output.AddToPlanRequested ->
                         planRepository.add(taskRepository.snapshot(output.id))
+                    // Breakdown (Deferno#525) isn't wired in the demo harness — the real shell opens it.
+                    is TasksComponent.Output.BreakdownRequested -> Unit
                 }
             },
             workingStateEditor = workingStateEditor,

@@ -331,10 +331,15 @@ struct MainShellView: View {
         overlay.value.flatMap { ShellBridgeKt.overlayBrainDump(child: $0) }
     }
 
+    private var overlayBreakdownComponent: BreakdownComponent? {
+        overlay.value.flatMap { ShellBridgeKt.overlayBreakdown(child: $0) }
+    }
+
     private var overlayPresented: Binding<Bool> {
         Binding(
             get: { overlaySearchComponent != nil || overlayNewComponent != nil
-                || overlayFeedbackComponent != nil || overlayBrainDumpComponent != nil },
+                || overlayFeedbackComponent != nil || overlayBrainDumpComponent != nil
+                || overlayBreakdownComponent != nil },
             set: { presented in if !presented { component.dismissOverlay() } }
         )
     }
@@ -351,6 +356,9 @@ struct MainShellView: View {
         } else if let brainDump = overlayBrainDumpComponent {
             // The shell top-bar voice action opens the iOS Brain dump recorder (ADR-0027).
             BrainDumpView(component: brainDump, recorder: recorder)
+        } else if let breakdown = overlayBreakdownComponent {
+            // Item detail's "Break this down" opens the on-device impediment flow (Deferno#525).
+            BreakdownView(component: breakdown)
         }
     }
 

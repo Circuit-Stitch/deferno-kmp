@@ -804,6 +804,27 @@ class DefaultMainShellComponent(
                 childContext.lifecycle.doOnDestroy(brainDump::cancelCapture)
                 MainShellComponent.OverlayChild.BrainDump(brainDump)
             }
+
+            // Breakdown (Deferno#525): the impediment "what's stopping you?" flow over one stuck item,
+            // opened from item detail. Orchestration + UI are native Swift; this holder reactively
+            // observes the target and hands the Swift engine the offline-first moves behind
+            // CommandBreakdownActions (reusing the same create / working-state / add-to-plan seams as
+            // every other write — so a captured subtask or a drop rides the outbox like any edit).
+            is OverlayRoute.Breakdown -> {
+                val breakdown = DefaultBreakdownComponent(
+                    componentContext = childContext,
+                    taskId = route.taskId,
+                    taskRepository = taskRepository,
+                    actions = CommandBreakdownActions(
+                        createItem = create,
+                        workingStateEditor = workingStateEditor,
+                        addToPlanFn = addToPlan,
+                    ),
+                    onCloseRequested = ::dismissOverlay,
+                    coroutineContext = coroutineContext,
+                )
+                MainShellComponent.OverlayChild.Breakdown(breakdown)
+            }
         }
 
     private fun onSearchOutput(output: SearchComponent.Output) {
@@ -834,6 +855,9 @@ class DefaultMainShellComponent(
             // Drilling into a subtask pushes one level deeper on Plan's detail stack (back pops it).
             is TaskDetailComponent.Output.SubtaskSelected ->
                 planDetailNav.navigate { it + PlanConfig.Detail(output.id) }
+            // "Break this down" (Deferno#525) opens the Breakdown overlay over the stuck item.
+            is TaskDetailComponent.Output.BreakdownRequested ->
+                openOverlay(OverlayRoute.Breakdown(output.id.value))
         }
     }
 
@@ -849,6 +873,9 @@ class DefaultMainShellComponent(
         when (output) {
             is TasksComponent.Output.AddToPlanRequested ->
                 this.output(MainShellComponent.Output.AddToPlanRequested(output.id))
+            // "Break this down" from the Tasks workspace detail (Deferno#525) opens the Breakdown overlay.
+            is TasksComponent.Output.BreakdownRequested ->
+                openOverlay(OverlayRoute.Breakdown(output.id.value))
         }
     }
 

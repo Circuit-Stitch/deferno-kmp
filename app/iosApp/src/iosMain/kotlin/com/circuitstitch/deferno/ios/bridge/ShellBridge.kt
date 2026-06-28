@@ -434,6 +434,14 @@ fun activityWhenLabel(row: ActivityFeedRow): String {
 fun overlayBrainDump(child: MainShellComponent.OverlayChild) =
     (child as? MainShellComponent.OverlayChild.BrainDump)?.component
 
+// ---------------------------------------------------------------------------------------------------
+// Breakdown overlay (Deferno#525) — the iOS-native "what's stopping you?" flow over one stuck item.
+// ---------------------------------------------------------------------------------------------------
+
+/** The active Breakdown overlay's holder, or null — Swift's BreakdownView renders it when present. */
+fun overlayBreakdown(child: MainShellComponent.OverlayChild) =
+    (child as? MainShellComponent.OverlayChild.Breakdown)?.component
+
 /** The active recorder phase as a stable String the View maps to its UI. */
 fun brainDumpPhaseName(state: BrainDumpState): String = when (state.phase) {
     Phase.Idle -> "Idle"

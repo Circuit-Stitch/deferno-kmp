@@ -115,6 +115,8 @@ class DefaultTaskDetailStackComponent(
             // No add-to-plan affordance inside the window — ignored.
             // ponytail: forward AddToPlanRequested through an output seam if the window ever exposes it.
             is TaskDetailComponent.Output.AddToPlanRequested -> Unit
+            // Breakdown (Deferno#525) is an iOS surface; the macOS detached window doesn't host overlays.
+            is TaskDetailComponent.Output.BreakdownRequested -> Unit
         }
     }
 }

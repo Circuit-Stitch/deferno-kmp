@@ -56,6 +56,9 @@ interface TasksComponent {
 
     sealed interface Output {
         data class AddToPlanRequested(val id: TaskId) : Output
+
+        /** "Break this down" from the workspace detail (Deferno#525) — the host opens the Breakdown surface. */
+        data class BreakdownRequested(val id: TaskId) : Output
     }
 }
 
@@ -189,6 +192,8 @@ class DefaultTasksComponent(
             }
             is TaskDetailComponent.Output.AddToPlanRequested ->
                 this.output(TasksComponent.Output.AddToPlanRequested(output.id))
+            is TaskDetailComponent.Output.BreakdownRequested ->
+                this.output(TasksComponent.Output.BreakdownRequested(output.id))
         }
     }
 }
