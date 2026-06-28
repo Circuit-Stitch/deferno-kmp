@@ -351,12 +351,18 @@ private fun DayRow(task: Task, highlighted: Boolean, onClick: () -> Unit, modifi
                 Text(
                     text = task.title,
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (done) brand.inkMuted else scheme.onSurface,
+                    // A blocked row mutes like a done one but WITHOUT the strike — "blocked, not finished"
+                    // (mirrors the tree's ItemTreeRow, #290/#292). Manually-added blocked items stay on the plan.
+                    color = if (done || task.blocked) brand.inkMuted else scheme.onSurface,
                     textDecoration = if (done) TextDecoration.LineThrough else null,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
+                if (task.blocked) {
+                    Spacer(Modifier.width(6.dp))
+                    TreeChip(text = "Blocked", filled = false, content = brand.inkMuted, semanticLabel = "Blocked")
+                }
             }
             Text(
                 text = task.deadlineLabel(),
