@@ -1,38 +1,26 @@
 package com.circuitstitch.deferno.feature.plan.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
-import com.circuitstitch.deferno.core.designsystem.theme.plexMono
-import com.circuitstitch.deferno.core.model.Task
-import com.circuitstitch.deferno.core.model.WorkingState
 
-// Shared building blocks for the Plan View (#27): thin, stateless Composables that render a [Task].
-// Kept in commonMain (Android + desktop) so a future desktop Plan View can reuse them; the
+// Shared building blocks for the Plan View (#27): thin, stateless Composables (loading + empty
+// states). Kept in commonMain (Android + desktop) so a future desktop Plan View can reuse them; the
 // Android-native screen that arranges them lives in androidMain (PlanScreen.kt).
 
 /** Minimum height for a tappable row/control — design-principles.md "≥44–48dp" touch targets. */

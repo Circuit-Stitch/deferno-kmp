@@ -57,8 +57,8 @@ import kotlinx.datetime.LocalDate
  * The global Search overlay View, desktop edition (#86, ADR-0015/0017) — the desktop counterpart of
  * the Android `SearchScreen`, bringing desktop to parity with the Android Search overlay (#73). It is
  * a thin renderer of the shared, Compose-free [SearchComponent] (ADR-0007: holds no logic): the query
- * field, the status / tags / date-range / sort filter controls, the results list (reusing the slice's
- * shared [TaskRow] atom), and a Close affordance — forwarding every interaction as an intent.
+ * field, the status / tags / date-range / sort filter controls, the results list (kind-aware
+ * [SearchHitRow]s), and a Close affordance — forwarding every interaction as an intent.
  *
  * The whole surface is opaque (a [Surface] over the foreground Destination); the desktop Shell View
  * layers it above the foreground pane and dismisses it on Esc (shell back precedence). Search stays
