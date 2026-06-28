@@ -234,10 +234,15 @@ struct PlanView: View {
                     }
                     Text(task.title)
                         .font(.headline)
-                        .foregroundStyle(done ? colors.inkMuted : colors.onSurface)
+                        // Blocked mutes (but doesn't strike) like the tree row (#290/#292); a blocked
+                        // item manually added to the plan is retained, just flagged.
+                        .foregroundStyle((done || task.blocked) ? colors.inkMuted : colors.onSurface)
                         .strikethrough(done, color: colors.inkMuted)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
+                    if task.blocked {
+                        TreeChip(text: "Blocked", tone: .neutral)
+                    }
                 }
                 MonoMeta(BridgeKt.taskTimeLabel(task: task))
             }
@@ -257,7 +262,7 @@ struct PlanView: View {
         .contentShape(Rectangle())
         .onTapGesture { component.onTaskClicked(id: task.id) }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(task.title), \(task.workingState.label)")
+        .accessibilityLabel(task.blocked ? "\(task.title), blocked, \(task.workingState.label)" : "\(task.title), \(task.workingState.label)")
         .accessibilityHint("Opens this tree")
     }
 }

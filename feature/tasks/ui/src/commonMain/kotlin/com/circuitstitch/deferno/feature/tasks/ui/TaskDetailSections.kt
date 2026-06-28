@@ -49,6 +49,7 @@ import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
@@ -388,12 +389,24 @@ private fun SubtaskRowView(
         Text(
             text = task.title,
             style = MaterialTheme.typography.bodyLarge,
+            // A blocked subtask mutes like a done one but WITHOUT the strike — "blocked, not finished"
+            // (mirrors the tree's ItemTreeRow, #290/#292).
             textDecoration = if (done) TextDecoration.LineThrough else TextDecoration.None,
-            color = if (done) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
+            color = if (done || task.blocked) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .weight(1f)
                 .clickable(onClickLabel = "Open ${task.title}") { onOpen(task) },
         )
+        // The "Blocked" pill carries its own TalkBack label (the row isn't a merged semantics node).
+        if (task.blocked) {
+            TreeChip(
+                text = "Blocked",
+                filled = false,
+                content = MaterialTheme.defernoColors.inkMuted,
+                semanticLabel = "Blocked",
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
         Icon(
             imageVector = DefernoIcons.ChevronRight,
             contentDescription = null,

@@ -315,12 +315,17 @@ struct TaskDetailView: View {
             .accessibilityLabel(done ? "Mark \(task.title) not done" : "Mark \(task.title) done")
             Button { BridgeKt.openSubtask(component: component, subtask: task) } label: {
                 Text(task.title)
+                    // Blocked mutes (but doesn't strike) like the tree row — "blocked, not finished" (#290/#292).
                     .strikethrough(done)
-                    .foregroundStyle(done ? .secondary : .primary)
+                    .foregroundStyle((done || task.blocked) ? .secondary : .primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Open \(task.title)")
+            // The "Blocked" pill is its own VoiceOver element (the row isn't combined).
+            if task.blocked {
+                TreeChip(text: "Blocked", tone: .neutral)
+            }
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
         }
         .padding(.leading, CGFloat(row.depth) * 20)

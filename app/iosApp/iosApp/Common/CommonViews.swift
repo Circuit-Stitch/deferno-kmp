@@ -29,65 +29,6 @@ struct SessionExpiredBanner: View {
     }
 }
 
-/// A small, readable badge for a Task's working state. The label is plain text so it reads correctly
-/// under VoiceOver; colour is reinforcement, never the sole signal (WCAG).
-struct WorkingStateBadge: View {
-    let state: WorkingState
-
-    var body: some View {
-        Text(state.label)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(state.badgeForeground)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .background(state.badgeBackground, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .accessibilityElement()
-            .accessibilityLabel("Status: \(state.label)")
-    }
-}
-
-/// A tappable Task row: title, optional human `ref` in a monospaced font, a pinned marker, and the
-/// working-state badge. Flat (the list supplies the divider), one large touch target, spoken as
-/// "<title>, <status>". Shared by the Task list, the tree, and (without the pin) the Plan.
-struct TaskRow: View {
-    let task: Task
-    var showsPin: Bool = true
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        if showsPin && task.pinned {
-                            Text("★").foregroundStyle(.orange)
-                        }
-                        Text(task.title)
-                            .font(.headline)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                    }
-                    if let ref = task.ref {
-                        Text(ref)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 12)
-                WorkingStateBadge(state: task.workingState)
-            }
-            .frame(minHeight: Layout.rowMinHeight)
-            .padding(.horizontal, Layout.gutter)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(task.title), \(task.workingState.label)")
-        .accessibilityHint(task.pinned && showsPin ? "Pinned" : "")
-    }
-}
-
 /// One node of the Tasks **Item tree** (#227, #231, ADR-0034) — the "See the trees" connected-tree row
 /// (iOS twin of feature/tasks/ui `ItemTreeRow`/`TreeAtoms.kt`). A curvy [TreeRail] hangs each child off
 /// its parent in a calm tint of the row's kind accent and lands its elbow in the kind node; the [TreeNode]

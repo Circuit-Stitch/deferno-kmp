@@ -50,6 +50,10 @@ data class TaskSummaryDto(
     @SerialName("org_slug") val orgSlug: String = "",
     val sequence: Long? = null,
     val type: String? = null,
+    // Server-derived blocked flag on the search/list summary (#289/#292) — defaults false when the
+    // wire omits it. Search carries it through to flag blocked hits; the tree/plan read it off the items
+    // snapshot's full element, not this summary.
+    val blocked: Boolean = false,
     @SerialName("deleted_at") val deletedAt: String? = null,
 )
 

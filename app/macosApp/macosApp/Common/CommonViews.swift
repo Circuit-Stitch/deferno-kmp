@@ -79,6 +79,7 @@ struct TaskRow: View {
     let task: Task
     var showsPin: Bool = true
     let onTap: () -> Void
+    @Environment(\.defernoColors) private var colors
 
     var body: some View {
         Button(action: onTap) {
@@ -90,8 +91,14 @@ struct TaskRow: View {
                         }
                         Text(task.title)
                             .font(.headline)
+                            // Blocked mutes (but doesn't strike) like the tree row (#290/#292); a blocked
+                            // item manually added to the plan is retained, just flagged.
+                            .foregroundStyle(task.blocked ? colors.inkMuted : colors.onSurface)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
+                        if task.blocked {
+                            DependencyBadge(text: "Blocked", tone: .neutral, semanticLabel: "Blocked")
+                        }
                     }
                     if let ref = task.ref {
                         Text(ref)
@@ -109,7 +116,7 @@ struct TaskRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(task.title), \(task.workingState.label)")
+        .accessibilityLabel(task.blocked ? "\(task.title), blocked, \(task.workingState.label)" : "\(task.title), \(task.workingState.label)")
         .accessibilityHint(task.pinned && showsPin ? "Pinned" : "")
     }
 }
