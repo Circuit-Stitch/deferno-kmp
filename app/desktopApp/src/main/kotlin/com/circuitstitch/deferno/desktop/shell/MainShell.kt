@@ -168,6 +168,9 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         is MainShellComponent.OverlayChild.BrainDump ->
             BrainDumpPlaceholder(onDismiss = onDismiss)
 
+        // Breakdown (Deferno#525) is an iOS-native surface; never opened on desktop, so nothing renders.
+        is MainShellComponent.OverlayChild.Breakdown -> Unit
+
         MainShellComponent.OverlayChild.Placeholder ->
             OverlayPlaceholder(onDismiss)
     }

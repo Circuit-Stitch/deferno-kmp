@@ -217,6 +217,13 @@ interface MainShellComponent {
          * proposed drafts land in the [Destination.Inbox] for review (no inline review in the overlay).
          */
         class BrainDump(val component: BrainDumpComponent) : OverlayChild
+
+        /**
+         * The **Breakdown** surface (Deferno#525): the impediment-driven "what's stopping you?" flow over
+         * one stuck item, launched from item detail. iOS-native orchestration (Swift state machine +
+         * Foundation Models classifier); this carries the [BreakdownComponent] holder the View renders.
+         */
+        class Breakdown(val component: BreakdownComponent) : OverlayChild
     }
 
     sealed interface Output {
@@ -259,4 +266,7 @@ sealed interface OverlayRoute {
 
     /** The **Brain dump** surface (ADR-0027), opened from the shell top bar's voice_chat action. */
     data object BrainDump : OverlayRoute
+
+    /** The **Breakdown** surface (Deferno#525), opened from item detail's "Break this down" action over [taskId]. */
+    data class Breakdown(val taskId: String) : OverlayRoute
 }

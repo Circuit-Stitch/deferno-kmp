@@ -281,5 +281,9 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         // Brain dump (ADR-0027/#150): continuous dictation → on-device Extractor → reviewable draft Tasks.
         is MainShellComponent.OverlayChild.BrainDump ->
             BrainDumpScreen(child.component, Modifier.fillMaxSize())
+
+        // Breakdown (Deferno#525) is an iOS-native surface (Swift state machine + Foundation Models); it
+        // is never opened on Android (no "Break this down" affordance here), so there's nothing to render.
+        is MainShellComponent.OverlayChild.Breakdown -> Unit
     }
 }

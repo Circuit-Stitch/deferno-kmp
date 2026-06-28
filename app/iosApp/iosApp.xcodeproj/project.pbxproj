@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1A6655907D3903195FFAE0AC /* BreakdownEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C348C4334E080672AAA79425 /* BreakdownEngineTests.swift */; };
+		2EBFC0B6B0CE77A73AE329BC /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36899BF29966B0651819404F /* BreakdownView.swift */; };
+		35CA9495C06B3D4381617242 /* BreakdownTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46557F6D1755D00F5A110E02 /* BreakdownTypes.swift */; };
+		530046189D973E7DE8121CBC /* BreakdownEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A814CF36BBC8D39E6948A223 /* BreakdownEngine.swift */; };
+		839C4EDD795911E6456D7B69 /* FoundationModelsClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AC37618E2F12545CD35AA88 /* FoundationModelsClassifier.swift */; };
 		DE0002000000000000000001 /* DefernoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000001 /* DefernoApp.swift */; };
 		DE0002000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000002 /* ContentView.swift */; };
 		DE0002000000000000000010 /* ObservableState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000010 /* ObservableState.swift */; };
@@ -16,10 +21,23 @@
 		DE0002000000000000000015 /* ItemTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000015 /* ItemTreeView.swift */; };
 		DE0002000000000000000016 /* TasksScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000016 /* TasksScreen.swift */; };
 		DE0002000000000000000017 /* PlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000017 /* PlanView.swift */; };
-		DE0002000000000000000023 /* DefernoThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000023 /* DefernoThemeTests.swift */; };
 		DE0002000000000000000022 /* StateBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000022 /* StateBridgeTests.swift */; };
+		DE0002000000000000000023 /* DefernoThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000023 /* DefernoThemeTests.swift */; };
 		DE0002000000000000000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000030 /* Assets.xcassets */; };
 		DE0002000000000000000031 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000031 /* LaunchScreen.storyboard */; };
+		DE0002000000000000000100 /* Atoms.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000100 /* Atoms.swift */; };
+		DE0002000000000000000101 /* DefernoIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000101 /* DefernoIcons.swift */; };
+		DE0002000000000000000102 /* TreeFiligree.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000102 /* TreeFiligree.swift */; };
+		DE0002000000000000000103 /* InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000103 /* InboxView.swift */; };
+		DE0002000000000000000105 /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000105 /* ActivityView.swift */; };
+		DE0002000000000000000107 /* PlanExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000107 /* PlanExtras.swift */; };
+		DE0002000000000000000108 /* BrainDumpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000108 /* BrainDumpView.swift */; };
+		DE0002000000000000000110 /* BrainDumpRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000110 /* BrainDumpRecorder.swift */; };
+		DE0002000000000000000120 /* IosDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000120 /* IosDictation.swift */; };
+		DE0002000000000000000130 /* IosInference.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000130 /* IosInference.swift */; };
+		DE0002000000000000000140 /* IosFileTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000140 /* IosFileTranscriber.swift */; };
+		DE0002000000000000000282 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000282 /* AssistantView.swift */; };
+		DE0002000000000000000283 /* IosAssistantTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000283 /* IosAssistantTransport.swift */; };
 		DE000200000000000000040 /* ShellObservers.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000040 /* ShellObservers.swift */; };
 		DE000200000000000000041 /* Identity.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000041 /* Identity.swift */; };
 		DE000200000000000000042 /* DefernoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000042 /* DefernoTheme.swift */; };
@@ -33,19 +51,6 @@
 		DE000200000000000000050 /* NewItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000050 /* NewItemView.swift */; };
 		DE000200000000000000051 /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000051 /* FeedbackView.swift */; };
 		E11CDB876C6BB7C290AD7BBF /* libPods-iosApp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A284BEEB3E5CB9DC5DAA6943 /* libPods-iosApp.a */; };
-		DE0002000000000000000100 /* Atoms.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000100 /* Atoms.swift */; };
-		DE0002000000000000000101 /* DefernoIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000101 /* DefernoIcons.swift */; };
-		DE0002000000000000000102 /* TreeFiligree.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000102 /* TreeFiligree.swift */; };
-		DE0002000000000000000103 /* InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000103 /* InboxView.swift */; };
-		DE0002000000000000000105 /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000105 /* ActivityView.swift */; };
-		DE0002000000000000000107 /* PlanExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000107 /* PlanExtras.swift */; };
-		DE0002000000000000000108 /* BrainDumpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000108 /* BrainDumpView.swift */; };
-		DE0002000000000000000110 /* BrainDumpRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000110 /* BrainDumpRecorder.swift */; };
-		DE0002000000000000000120 /* IosDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000120 /* IosDictation.swift */; };
-		DE0002000000000000000130 /* IosInference.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000130 /* IosInference.swift */; };
-		DE0002000000000000000282 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000282 /* AssistantView.swift */; };
-		DE0002000000000000000283 /* IosAssistantTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000283 /* IosAssistantTransport.swift */; };
-		DE0002000000000000000140 /* IosFileTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000140 /* IosFileTranscriber.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,10 +64,14 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2AC37618E2F12545CD35AA88 /* FoundationModelsClassifier.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FoundationModelsClassifier.swift; sourceTree = "<group>"; };
+		36899BF29966B0651819404F /* BreakdownView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownView.swift; sourceTree = "<group>"; };
+		46557F6D1755D00F5A110E02 /* BreakdownTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownTypes.swift; sourceTree = "<group>"; };
 		85FCC65B3A9A22AD7A207747 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
 		A284BEEB3E5CB9DC5DAA6943 /* libPods-iosApp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-iosApp.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A814CF36BBC8D39E6948A223 /* BreakdownEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownEngine.swift; sourceTree = "<group>"; };
+		C348C4334E080672AAA79425 /* BreakdownEngineTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownEngineTests.swift; sourceTree = "<group>"; };
 		DC7FD732D8796105D096EC7A /* Pods-iosApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.release.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.release.xcconfig"; sourceTree = "<group>"; };
-		DE0009000000000000000001 /* Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig; sourceTree = SOURCE_ROOT; };
 		DE0001000000000000000001 /* DefernoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoApp.swift; sourceTree = "<group>"; };
 		DE0001000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		DE0001000000000000000003 /* Deferno.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Deferno.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -74,10 +83,23 @@
 		DE0001000000000000000016 /* TasksScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksScreen.swift; sourceTree = "<group>"; };
 		DE0001000000000000000017 /* PlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanView.swift; sourceTree = "<group>"; };
 		DE0001000000000000000020 /* iosAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = iosAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		DE0001000000000000000023 /* DefernoThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoThemeTests.swift; sourceTree = "<group>"; };
 		DE0001000000000000000022 /* StateBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateBridgeTests.swift; sourceTree = "<group>"; };
+		DE0001000000000000000023 /* DefernoThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoThemeTests.swift; sourceTree = "<group>"; };
 		DE0001000000000000000030 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DE0001000000000000000031 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		DE0001000000000000000100 /* Atoms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atoms.swift; sourceTree = "<group>"; };
+		DE0001000000000000000101 /* DefernoIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoIcons.swift; sourceTree = "<group>"; };
+		DE0001000000000000000102 /* TreeFiligree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeFiligree.swift; sourceTree = "<group>"; };
+		DE0001000000000000000103 /* InboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxView.swift; sourceTree = "<group>"; };
+		DE0001000000000000000105 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
+		DE0001000000000000000107 /* PlanExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanExtras.swift; sourceTree = "<group>"; };
+		DE0001000000000000000108 /* BrainDumpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDumpView.swift; sourceTree = "<group>"; };
+		DE0001000000000000000110 /* BrainDumpRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDumpRecorder.swift; sourceTree = "<group>"; };
+		DE0001000000000000000120 /* IosDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosDictation.swift; sourceTree = "<group>"; };
+		DE0001000000000000000130 /* IosInference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosInference.swift; sourceTree = "<group>"; };
+		DE0001000000000000000140 /* IosFileTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosFileTranscriber.swift; sourceTree = "<group>"; };
+		DE0001000000000000000282 /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
+		DE0001000000000000000283 /* IosAssistantTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosAssistantTransport.swift; sourceTree = "<group>"; };
 		DE000100000000000000040 /* ShellObservers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellObservers.swift; sourceTree = "<group>"; };
 		DE000100000000000000041 /* Identity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identity.swift; sourceTree = "<group>"; };
 		DE000100000000000000042 /* DefernoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoTheme.swift; sourceTree = "<group>"; };
@@ -90,19 +112,7 @@
 		DE000100000000000000049 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		DE000100000000000000050 /* NewItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewItemView.swift; sourceTree = "<group>"; };
 		DE000100000000000000051 /* FeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackView.swift; sourceTree = "<group>"; };
-		DE0001000000000000000100 /* Atoms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atoms.swift; sourceTree = "<group>"; };
-		DE0001000000000000000101 /* DefernoIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoIcons.swift; sourceTree = "<group>"; };
-		DE0001000000000000000102 /* TreeFiligree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeFiligree.swift; sourceTree = "<group>"; };
-		DE0001000000000000000103 /* InboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxView.swift; sourceTree = "<group>"; };
-		DE0001000000000000000105 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
-		DE0001000000000000000107 /* PlanExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanExtras.swift; sourceTree = "<group>"; };
-		DE0001000000000000000108 /* BrainDumpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDumpView.swift; sourceTree = "<group>"; };
-		DE0001000000000000000110 /* BrainDumpRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDumpRecorder.swift; sourceTree = "<group>"; };
-		DE0001000000000000000120 /* IosDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosDictation.swift; sourceTree = "<group>"; };
-		DE0001000000000000000130 /* IosInference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosInference.swift; sourceTree = "<group>"; };
-		DE0001000000000000000282 /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
-		DE0001000000000000000283 /* IosAssistantTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosAssistantTransport.swift; sourceTree = "<group>"; };
-		DE0001000000000000000140 /* IosFileTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosFileTranscriber.swift; sourceTree = "<group>"; };
+		DE0009000000000000000001 /* Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -131,6 +141,18 @@
 				DC7FD732D8796105D096EC7A /* Pods-iosApp.release.xcconfig */,
 			);
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		700FB7EA2B3E627C037381A3 /* Breakdown */ = {
+			isa = PBXGroup;
+			children = (
+				46557F6D1755D00F5A110E02 /* BreakdownTypes.swift */,
+				A814CF36BBC8D39E6948A223 /* BreakdownEngine.swift */,
+				2AC37618E2F12545CD35AA88 /* FoundationModelsClassifier.swift */,
+				36899BF29966B0651819404F /* BreakdownView.swift */,
+			);
+			name = Breakdown;
+			path = Breakdown;
 			sourceTree = "<group>";
 		};
 		A389F3BE216A58B3EE17079C /* Frameworks */ = {
@@ -177,6 +199,7 @@
 				DE0003000000000000000012 /* Common */,
 				DE0003000000000000000013 /* Tasks */,
 				DE0003000000000000000014 /* Plan */,
+				700FB7EA2B3E627C037381A3 /* Breakdown */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -244,8 +267,53 @@
 			children = (
 				DE0001000000000000000023 /* DefernoThemeTests.swift */,
 				DE0001000000000000000022 /* StateBridgeTests.swift */,
+				C348C4334E080672AAA79425 /* BreakdownEngineTests.swift */,
 			);
 			path = iosAppTests;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000104 /* Inbox */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000103 /* InboxView.swift */,
+			);
+			path = Inbox;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000106 /* Activity */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000105 /* ActivityView.swift */,
+			);
+			path = Activity;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000109 /* BrainDump */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000108 /* BrainDumpView.swift */,
+				DE0001000000000000000110 /* BrainDumpRecorder.swift */,
+				DE0001000000000000000140 /* IosFileTranscriber.swift */,
+			);
+			path = BrainDump;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000120 /* Speech */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000120 /* IosDictation.swift */,
+			);
+			path = Speech;
+			sourceTree = "<group>";
+		};
+		DE0003000000000000000130 /* AI */ = {
+			isa = PBXGroup;
+			children = (
+				DE0001000000000000000130 /* IosInference.swift */,
+				DE0001000000000000000282 /* AssistantView.swift */,
+				DE0001000000000000000283 /* IosAssistantTransport.swift */,
+			);
+			path = AI;
 			sourceTree = "<group>";
 		};
 		DE000300000000000000040 /* Auth */ = {
@@ -303,50 +371,6 @@
 				DE000100000000000000051 /* FeedbackView.swift */,
 			);
 			path = New;
-			sourceTree = "<group>";
-		};
-		DE0003000000000000000104 /* Inbox */ = {
-			isa = PBXGroup;
-			children = (
-				DE0001000000000000000103 /* InboxView.swift */,
-			);
-			path = Inbox;
-			sourceTree = "<group>";
-		};
-		DE0003000000000000000106 /* Activity */ = {
-			isa = PBXGroup;
-			children = (
-				DE0001000000000000000105 /* ActivityView.swift */,
-			);
-			path = Activity;
-			sourceTree = "<group>";
-		};
-		DE0003000000000000000109 /* BrainDump */ = {
-			isa = PBXGroup;
-			children = (
-				DE0001000000000000000108 /* BrainDumpView.swift */,
-				DE0001000000000000000110 /* BrainDumpRecorder.swift */,
-				DE0001000000000000000140 /* IosFileTranscriber.swift */,
-			);
-			path = BrainDump;
-			sourceTree = "<group>";
-		};
-		DE0003000000000000000130 /* AI */ = {
-			isa = PBXGroup;
-			children = (
-				DE0001000000000000000130 /* IosInference.swift */,
-				DE0001000000000000000282 /* AssistantView.swift */,
-				DE0001000000000000000283 /* IosAssistantTransport.swift */,
-			);
-			path = AI;
-			sourceTree = "<group>";
-		};
-		DE0003000000000000000120 /* Speech */ = {
-			isa = PBXGroup;
-			children = (
-				DE0001000000000000000120 /* IosDictation.swift */,
-			);
-			path = Speech;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -547,6 +571,10 @@
 				DE0002000000000000000015 /* ItemTreeView.swift in Sources */,
 				DE0002000000000000000016 /* TasksScreen.swift in Sources */,
 				DE0002000000000000000017 /* PlanView.swift in Sources */,
+				35CA9495C06B3D4381617242 /* BreakdownTypes.swift in Sources */,
+				530046189D973E7DE8121CBC /* BreakdownEngine.swift in Sources */,
+				839C4EDD795911E6456D7B69 /* FoundationModelsClassifier.swift in Sources */,
+				2EBFC0B6B0CE77A73AE329BC /* BreakdownView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -556,6 +584,7 @@
 			files = (
 				DE0002000000000000000023 /* DefernoThemeTests.swift in Sources */,
 				DE0002000000000000000022 /* StateBridgeTests.swift in Sources */,
+				1A6655907D3903195FFAE0AC /* BreakdownEngineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -664,9 +693,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				// Never seed a dev account in Release — keep DevStagingToken empty regardless of any local Secrets.xcconfig.
-				DEV_STAGING_TOKEN = "";
 				DEVELOPMENT_TEAM = GDV76FJJZ5;
+				DEV_STAGING_TOKEN = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",

@@ -167,6 +167,8 @@ struct TaskDetailView: View {
     /// destructive Delete (the caller gates it behind a confirm). Icon-only trigger; self-describing label.
     private var overflowMenu: some View {
         Menu {
+            // The on-device impediment flow (Deferno#525) — "what's stopping you?" over this stuck Task.
+            Button("Break this down") { component.onBreakdownClicked() }
             Button("Add subtask") { kebabSubtask = ""; showingAddSubtask = true }
             // The app's word for WorkingState.Dropped is "Set aside" (the chip editor below), so the kebab
             // uses the same term rather than web's "Drop" — one term per concept.
