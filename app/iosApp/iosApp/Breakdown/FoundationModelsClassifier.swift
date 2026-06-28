@@ -18,9 +18,7 @@ struct FoundationModelsClassifier: ImpedimentClassifier {
     func classify(answer: String, item: ItemContext) async throws -> ImpedimentClassification {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, *) {
-            guard case .available = SystemLanguageModel.default.availability else {
-                throw BreakdownClassifierError.unavailable
-            }
+            guard AppleIntelligence.isAvailable else { throw BreakdownClassifierError.unavailable }
             let session = LanguageModelSession(instructions: Self.instructions)
             do {
                 let response = try await session.respond(to: Self.prompt(answer: answer, item: item),
@@ -59,7 +57,7 @@ enum BreakdownClassifierError: Error { case unavailable, generationFailed }
 /// nothing downstream depends on FoundationModels or iOS 26.
 @available(iOS 26.0, macOS 26.0, *)
 @Generable
-enum GenImpediment {
+enum GenImpediment: String {
     case tooBig
     case waitingOnDependency
     case dontKnowHow
@@ -68,6 +66,11 @@ enum GenImpediment {
     case transientObstacle
     case persistentAvoidance
     case nothingStopping
+
+    /// One-for-one mirror of [ImpedimentClass]: identical cases, so the shared `String` rawValue bridges
+    /// them — no hand-maintained switch to drift out of sync. A case that ever lacks a downstream twin
+    /// degrades to the benign "ready" no-op, never a structural move.
+    func toKind() -> ImpedimentClass { ImpedimentClass(rawValue: rawValue) ?? .nothingStopping }
 }
 
 /// The `@Generable` classification the model fills. Optional args are modeled as an empty list / empty
@@ -90,22 +93,6 @@ struct GenBreakdown {
             subtaskTitles: subtaskTitles,
             prerequisiteTitle: prerequisiteTitle.isEmpty ? nil : prerequisiteTitle
         )
-    }
-}
-
-@available(iOS 26.0, macOS 26.0, *)
-extension GenImpediment {
-    func toKind() -> ImpedimentClass {
-        switch self {
-        case .tooBig: return .tooBig
-        case .waitingOnDependency: return .waitingOnDependency
-        case .dontKnowHow: return .dontKnowHow
-        case .scaredOfDoingItWrong: return .scaredOfDoingItWrong
-        case .somethingMoreUrgent: return .somethingMoreUrgent
-        case .transientObstacle: return .transientObstacle
-        case .persistentAvoidance: return .persistentAvoidance
-        case .nothingStopping: return .nothingStopping
-        }
     }
 }
 

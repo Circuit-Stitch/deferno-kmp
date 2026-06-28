@@ -4,6 +4,21 @@ import Foundation
 import FoundationModels
 #endif
 
+/// The one canonical "can on-device Apple Intelligence actually run here?" gate — the FoundationModels
+/// weak-link (iOS 26+, app deploys to 16), the `#available` guard, and `SystemLanguageModel` availability
+/// in a single place. The inference seam, the Breakdown classifier, and its View all read this, so there's
+/// one answer to keep correct, not three (#525).
+enum AppleIntelligence {
+    static var isAvailable: Bool {
+        #if canImport(FoundationModels)
+        if #available(iOS 26, *) {
+            if case .available = SystemLanguageModel.default.availability { return true }
+        }
+        #endif
+        return false
+    }
+}
+
 /// In-process inference (#269, ADR-0037): implements the shared Kotlin `NativeInference` port over Apple
 /// Intelligence's **Foundation Models** (`LanguageModelSession`). The model runs fully on-device, so the
 /// person's transcript never leaves the phone (ADR-0009/0027). Kotlin owns the schema + validation; this just
@@ -16,14 +31,7 @@ import FoundationModels
 /// `NotConfigured`, so nothing ever runs silently (the Brain dump salvages instead).
 final class IosInference: NativeInference {
 
-    func isAvailable() -> Bool {
-        #if canImport(FoundationModels)
-        if #available(iOS 26, *) {
-            if case .available = SystemLanguageModel.default.availability { return true }
-        }
-        #endif
-        return false
-    }
+    func isAvailable() -> Bool { AppleIntelligence.isAvailable }
 
     func infer(
         instructions: String,

@@ -1,8 +1,5 @@
 import Deferno
 import SwiftUI
-#if canImport(FoundationModels)
-import FoundationModels
-#endif
 
 /// The iOS-native **Breakdown** surface (Deferno#525) — the SwiftUI render of the on-device impediment
 /// flow: *"what's stopping you?"* → the model classifies the answer → the deterministic `BreakdownEngine`
@@ -39,7 +36,7 @@ struct BreakdownView: View {
 
     @ViewBuilder
     private var content: some View {
-        if !breakdownAvailable {
+        if !AppleIntelligence.isAvailable {
             unavailable
         } else if let task = target.value {
             // The engine snapshots the root context at construction (`@StateObject` builds it once); a later
@@ -65,16 +62,6 @@ struct BreakdownView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, Layout.gutter)
-    }
-
-    /// Mirrors `IosInference.isAvailable()` — only offer the chat when on-device generation can actually run.
-    private var breakdownAvailable: Bool {
-        #if canImport(FoundationModels)
-        if #available(iOS 26, *) {
-            if case .available = SystemLanguageModel.default.availability { return true }
-        }
-        #endif
-        return false
     }
 }
 
