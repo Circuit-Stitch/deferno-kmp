@@ -432,3 +432,19 @@ fun TreeChip(
         }
     }
 }
+
+/**
+ * The shared "Blocked" pill (#290) — a quiet outlined [TreeChip] in muted ink that marks a blocked
+ * row. Single source for the string, color, and TalkBack label across every blockable surface
+ * (tree / plan / search / task-detail subtasks), so they can't drift apart.
+ */
+@Composable
+fun BlockedChip(modifier: Modifier = Modifier) {
+    TreeChip(
+        text = "Blocked",
+        modifier = modifier,
+        filled = false,
+        content = MaterialTheme.defernoColors.inkMuted,
+        semanticLabel = "Blocked",
+    )
+}

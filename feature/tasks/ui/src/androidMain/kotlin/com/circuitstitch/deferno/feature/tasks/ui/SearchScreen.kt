@@ -57,13 +57,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.task.SearchSort
+import com.circuitstitch.deferno.core.designsystem.component.BlockedChip
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
-import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.component.SessionExpiredBanner
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -527,7 +527,7 @@ private fun SearchResultRow(hit: SearchHit, query: String, onClick: () -> Unit) 
             }
             if (hit.blocked) {
                 Spacer(Modifier.width(10.dp))
-                TreeChip(text = "Blocked", filled = false, content = MaterialTheme.defernoColors.inkMuted, semanticLabel = "Blocked")
+                BlockedChip()
             }
             if (!hit.isTerminal) {
                 hit.completeBy?.let { due ->

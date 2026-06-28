@@ -52,6 +52,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.component.BlockedChip
 import com.circuitstitch.deferno.core.designsystem.component.CheckDot
 import com.circuitstitch.deferno.core.designsystem.component.DashedAddButton
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
@@ -361,7 +362,7 @@ private fun DayRow(task: Task, highlighted: Boolean, onClick: () -> Unit, modifi
                 )
                 if (task.blocked) {
                     Spacer(Modifier.width(6.dp))
-                    TreeChip(text = "Blocked", filled = false, content = brand.inkMuted, semanticLabel = "Blocked")
+                    BlockedChip()
                 }
             }
             Text(

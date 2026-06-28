@@ -69,6 +69,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.component.BlockedChip
 import com.circuitstitch.deferno.core.designsystem.component.DashedAddButton
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
@@ -531,13 +532,7 @@ private fun ItemTreeRow(
                 // an amber accent badge marking a row that gates ≥1 other. Each clears its own semantics so
                 // TalkBack reads one label, not the inner text twice.
                 if (item.blocked) {
-                    TreeChip(
-                        text = "Blocked",
-                        filled = false,
-                        content = MaterialTheme.defernoColors.inkMuted,
-                        semanticLabel = "Blocked",
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
+                    BlockedChip(modifier = Modifier.padding(horizontal = 4.dp))
                 }
                 if (item.isBlocker) {
                     TreeChip(

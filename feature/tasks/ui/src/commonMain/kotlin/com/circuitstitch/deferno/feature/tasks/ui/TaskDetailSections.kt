@@ -43,13 +43,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.component.BlockedChip
 import com.circuitstitch.deferno.core.designsystem.component.CheckDot
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
-import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
@@ -399,13 +399,7 @@ private fun SubtaskRowView(
         )
         // The "Blocked" pill carries its own TalkBack label (the row isn't a merged semantics node).
         if (task.blocked) {
-            TreeChip(
-                text = "Blocked",
-                filled = false,
-                content = MaterialTheme.defernoColors.inkMuted,
-                semanticLabel = "Blocked",
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
+            BlockedChip(modifier = Modifier.padding(horizontal = 4.dp))
         }
         Icon(
             imageVector = DefernoIcons.ChevronRight,
