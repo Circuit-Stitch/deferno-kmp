@@ -806,10 +806,11 @@ class DefaultMainShellComponent(
             }
 
             // Breakdown (Deferno#525): the impediment "what's stopping you?" flow over one stuck item,
-            // opened from item detail. Orchestration + UI are native Swift; this holder reactively
-            // observes the target and hands the Swift engine the offline-first moves behind
-            // CommandBreakdownActions (reusing the same create / working-state / add-to-plan seams as
-            // every other write — so a captured subtask or a drop rides the outbox like any edit).
+            // opened from item detail. The deterministic engine + classifier are shared Kotlin driving the
+            // Android/desktop Compose chat (iOS renders its SwiftUI twin over the same holder); this holder
+            // observes the target and exposes the offline-first moves behind CommandBreakdownActions
+            // (reusing the same create / working-state / add-to-plan seams as every other write — so a
+            // captured subtask or a drop rides the outbox like any edit).
             is OverlayRoute.Breakdown -> {
                 val breakdown = DefaultBreakdownComponent(
                     componentContext = childContext,

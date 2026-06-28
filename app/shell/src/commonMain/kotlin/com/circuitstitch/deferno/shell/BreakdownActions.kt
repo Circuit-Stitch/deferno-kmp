@@ -8,17 +8,16 @@ import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 
 /**
- * The structural-move seam the iOS-native **Breakdown** state machine drives (Deferno#525). Breakdown's
- * orchestration is native Swift (idiomatic Apple: a deterministic state machine + a Foundation Models
- * answer-classifier), but the *moves it applies* must stay on the shared offline-first write path so they
- * carry the same client-UUID idempotency and outbox replay as every other edit (#185, ADR-0001/0007). So
- * the Swift engine never touches the command registry: it calls these String-typed methods, and
- * [CommandBreakdownActions] maps them onto the existing [com.circuitstitch.deferno.core.domain.command.CommandExecutor]
- * seams behind [AccountSession].
+ * The structural-move seam the **Breakdown** state machine drives (Deferno#525). On Android/desktop the
+ * shared Kotlin [BreakdownEngine] drives it; on iOS a native Swift twin does — either way the *moves it
+ * applies* must stay on the shared offline-first write path so they carry the same client-UUID idempotency
+ * and outbox replay as every other edit (#185, ADR-0001/0007). So the engine never touches the command
+ * registry: it calls these String-typed methods, and [CommandBreakdownActions] maps them onto the existing
+ * [com.circuitstitch.deferno.core.domain.command.CommandExecutor] seams behind [AccountSession].
  *
  * Plain `String`/`String?` operands deliberately — value classes ([TaskId]) and the sealed
- * [CreateItem.Payload] are header-erased across the SKIE bridge, so the boundary speaks ids and ISO dates
- * and the conversion happens here.
+ * [CreateItem.Payload] are header-erased across the SKIE bridge (the iOS engine's boundary), so the seam
+ * speaks ids and ISO dates and the conversion happens here.
  *
  * v1 covers only the moves with a client write path today (capture-as-child, drop, add-to-plan). The
  * blocked moves — `set_blocked_by`, Motivation, lower-priority — are net-new backend modules (Deferno#525

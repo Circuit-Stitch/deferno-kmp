@@ -282,8 +282,10 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
         is MainShellComponent.OverlayChild.BrainDump ->
             BrainDumpScreen(child.component, Modifier.fillMaxSize())
 
-        // Breakdown (Deferno#525) is an iOS-native surface (Swift state machine + Foundation Models); it
-        // is never opened on Android (no "Break this down" affordance here), so there's nothing to render.
-        is MainShellComponent.OverlayChild.Breakdown -> Unit
+        // Breakdown (Deferno#525): the on-device "what's stopping you?" impediment chat over one stuck
+        // item, opened from the Task detail kebab. The Compose render of the deterministic engine + the
+        // on-device classifier (the Android twin of iOS's SwiftUI surface).
+        is MainShellComponent.OverlayChild.Breakdown ->
+            BreakdownScreen(child.component, Modifier.fillMaxSize())
     }
 }

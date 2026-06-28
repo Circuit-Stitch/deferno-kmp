@@ -220,8 +220,9 @@ interface MainShellComponent {
 
         /**
          * The **Breakdown** surface (Deferno#525): the impediment-driven "what's stopping you?" flow over
-         * one stuck item, launched from item detail. iOS-native orchestration (Swift state machine +
-         * Foundation Models classifier); this carries the [BreakdownComponent] holder the View renders.
+         * one stuck item, launched from item detail. A deterministic engine + on-device classifier drive it
+         * — shared Kotlin on the Android/desktop Compose chat, a native Swift twin on iOS — over this
+         * [BreakdownComponent] holder the View renders.
          */
         class Breakdown(val component: BreakdownComponent) : OverlayChild
     }
