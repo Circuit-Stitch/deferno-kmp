@@ -1,7 +1,5 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,17 +10,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.graphics.Color
@@ -34,15 +28,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
-import com.circuitstitch.deferno.core.designsystem.theme.plexMono
 import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.ItemSource
-import com.circuitstitch.deferno.core.model.Task
-import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.datetime.LocalTime
 
 // Shared building blocks for the Tasks Views (#27). These are thin, stateless Composables — they
-// render a [Task] and surface taps via callbacks; all logic stays in the shared components (#25).
+// render a Task and surface taps via callbacks; all logic stays in the shared components (#25).
 // Design-principles.md: calm flat lists over dense cards, large touch targets, plain labels, and
 // TalkBack semantics on every interactive element.
 
@@ -179,91 +170,5 @@ internal fun EmptyState(title: String, body: String, modifier: Modifier = Modifi
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.defernoColors.inkMuted,
         )
-    }
-}
-
-/**
- * A small, readable badge for a Task's [WorkingState]. The label is plain text (no jargon, no
- * shaming — design-principles.md) so it reads correctly under TalkBack; colour is reinforcement,
- * never the sole signal (WCAG: don't rely on colour alone).
- */
-@Composable
-internal fun WorkingStateBadge(state: WorkingState, modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    val brand = MaterialTheme.defernoColors
-    val (label, container, content) = when (state) {
-        WorkingState.Open -> Triple("Open", scheme.surfaceVariant, scheme.onSurfaceVariant)
-        WorkingState.InProgress -> Triple("In progress", scheme.primaryContainer, scheme.onPrimaryContainer)
-        WorkingState.InReview -> Triple("In review", scheme.secondaryContainer, scheme.onSecondaryContainer)
-        WorkingState.Done -> Triple("Done", brand.successContainer, brand.onSuccessContainer)
-        WorkingState.Dropped -> Triple("Set aside", scheme.surfaceVariant, brand.inkMuted)
-    }
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelMedium,
-        color = content,
-        // TalkBack reads the bare label ("In progress") without context; prefix it so the badge is
-        // self-describing as a status (the visible text stays unchanged).
-        modifier = modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(container)
-            .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clearAndSetSemantics { contentDescription = "Status: $label" },
-    )
-}
-
-/**
- * A tappable Task row: title, optional human [Task.ref] in IBM Plex Mono, a pinned marker, and the
- * working-state badge. Flat with the divider supplied by the list (calm, low-overwhelm). The whole
- * row is one large touch target with a spoken "Open <title>" action label.
- */
-@Composable
-internal fun TaskRow(task: Task, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(color = MaterialTheme.colorScheme.surface) {
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .heightIn(min = 64.dp)
-                .clickable(onClickLabel = "Open ${task.title}", onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (task.pinned) {
-                        Text(
-                            text = "★",
-                            color = MaterialTheme.defernoColors.amberDeep,
-                            modifier = Modifier.clearAndSetSemantics { contentDescription = "Pinned" },
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    }
-                    Text(
-                        text = task.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                task.ref?.let { ref ->
-                    Text(
-                        text = ref,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = plexMono(),
-                        color = MaterialTheme.defernoColors.inkMuted,
-                    )
-                }
-                // The deadline clock (#348), shown only when the task carries one (not all-day).
-                task.deadlineTimeOfDay?.let { time ->
-                    Text(
-                        text = "Due ${time.toDisplayTime()}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.defernoColors.inkMuted,
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            WorkingStateBadge(task.workingState)
-        }
     }
 }

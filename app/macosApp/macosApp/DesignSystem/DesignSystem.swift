@@ -19,7 +19,7 @@ enum Layout {
 }
 
 extension WorkingState {
-    /// The plain, non-shaming label (design-principles.md) — matches the Android `WorkingStateBadge`.
+    /// The plain, non-shaming label (design-principles.md).
     /// `WorkingState` bridges (via SKIE) as a Swift value-type enum, so we match the cases by value
     /// equality rather than a `switch`.
     var label: String {
