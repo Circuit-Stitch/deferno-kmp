@@ -390,7 +390,7 @@ internal fun WorkingStateEditor(
     }
 }
 
-/** The plain, non-shaming label for each [WorkingState] (matches [WorkingStateBadge]). */
+/** The plain, non-shaming label for each [WorkingState] (design-principles.md: no jargon, no shaming). */
 internal fun workingStateLabel(state: WorkingState): String = when (state) {
     WorkingState.Open -> "Open"
     WorkingState.InProgress -> "In progress"
