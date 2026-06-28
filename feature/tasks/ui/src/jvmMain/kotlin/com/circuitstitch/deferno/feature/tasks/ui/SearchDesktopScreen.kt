@@ -46,6 +46,7 @@ import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.SessionExpiredBanner
+import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -349,7 +350,8 @@ private fun SearchHitRow(hit: SearchHit, query: String, onClick: () -> Unit) {
             Text(
                 text = highlightedTitle(hit.title, query),
                 style = MaterialTheme.typography.titleMedium,
-                color = if (hit.isTerminal) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
+                // Blocked mutes (but doesn't strike) so it isn't mistaken for actionable (#292).
+                color = if (hit.isTerminal || hit.blocked) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
                 textDecoration = if (hit.isTerminal) TextDecoration.LineThrough else TextDecoration.None,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -359,6 +361,10 @@ private fun SearchHitRow(hit: SearchHit, query: String, onClick: () -> Unit) {
                 hit.ref?.let { add(it) }
             }
             MonoMeta(text = meta.joinToString("  ·  "))
+        }
+        if (hit.blocked) {
+            Spacer(Modifier.width(10.dp))
+            TreeChip(text = "Blocked", filled = false, content = MaterialTheme.defernoColors.inkMuted, semanticLabel = "Blocked")
         }
         if (!hit.isTerminal) {
             hit.completeBy?.let { due ->

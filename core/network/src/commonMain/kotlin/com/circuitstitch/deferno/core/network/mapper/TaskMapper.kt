@@ -102,6 +102,7 @@ fun TaskSummaryDto.toSearchHit(): SearchHit = SearchHit(
     kind = type.toItemKind(),
     title = title,
     isTerminal = status.toWorkingState().isTerminal,
+    blocked = blocked,
     completeBy = completeBy.toInstantOrNull(),
     deadlineTimeOfDay = deadlineTimeOfDay.toLocalTimeOrNull(),
     ref = ref,

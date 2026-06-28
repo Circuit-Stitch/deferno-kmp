@@ -104,6 +104,9 @@ class TaskMapperTest {
         assertEquals(true, hit.isTerminal) // Dropped is terminal
         assertEquals(Instant.parse("2026-04-10T07:45:00Z"), hit.completeBy)
         assertEquals("u-e4h2qk-1", hit.ref)
+        // The server-derived blocked flag rides the hit so Search can flag it (#292); defaults false.
+        assertEquals(false, hit.blocked)
+        assertEquals(true, summary().copy(blocked = true).toSearchHit().blocked)
     }
 
     @Test

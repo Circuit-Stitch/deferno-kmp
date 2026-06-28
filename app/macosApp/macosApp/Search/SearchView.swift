@@ -210,6 +210,11 @@ private struct SearchHitRow: View {
                     }
                 }
                 Spacer(minLength: 12)
+                // Blocked search hits are still returned, just flagged so they aren't mistaken
+                // for actionable — the tree's blocked marking (#290/#292).
+                if hit.blocked {
+                    DependencyBadge(text: "Blocked", tone: .neutral, semanticLabel: "Blocked")
+                }
                 Text("›").font(.title3).foregroundStyle(.secondary)
             }
             .frame(minHeight: Layout.rowMinHeight)
@@ -220,7 +225,7 @@ private struct SearchHitRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(hit.title)
+        .accessibilityLabel(hit.blocked ? "\(hit.title), blocked" : hit.title)
         .accessibilityHint("Open")
     }
 }
