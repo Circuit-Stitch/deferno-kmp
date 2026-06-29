@@ -287,18 +287,19 @@ fun ShellChrome(
             }
         }
 
-        // The left-edge open handle: a freeform swipe inward from the start edge opens the drawer,
-        // tracking the finger. Present only while closed, and while present it reserves this strip from
-        // the OS back gesture (systemGestureExclusionCompat) so the swipe-to-open isn't stolen on Android
-        // gesture-nav. Once the drawer is open this handle is gone, so the system back gesture is allowed
-        // again (e.g. to close the drawer / navigate back). The content (above) handles closing.
-        if (!drawerOpen) {
+        // The left-edge swipe-to-open handle: a freeform swipe inward from the start edge opens the
+        // drawer, tracking the finger. Present only while closed. Desktop-only ([shellEdgeSwipeToOpenEnabled]):
+        // on Android it can't coexist with OS gesture-nav back. Android caps edge gesture-exclusion at
+        // ~200dp, so a full-height exclusion here gets clamped to the BOTTOM, leaving the top-bar ☰/←
+        // controls in the live back-gesture zone where their taps are eaten (intermittently) after a screen
+        // wake. So on Android the drawer opens via the ☰ tap — which reserves its own footprint from the
+        // back gesture instead (see ShellTopBar) — and this swipe affordance is dropped.
+        if (!drawerOpen && shellEdgeSwipeToOpenEnabled) {
             Box(
                 Modifier
                     .align(Alignment.CenterStart)
                     .fillMaxHeight()
                     .width(ShellChromeDefaults.EdgeSwipeWidth)
-                    .systemGestureExclusionCompat()
                     .then(drawerDrag),
             )
         }
@@ -306,12 +307,22 @@ fun ShellChrome(
 }
 
 /**
- * Reserve the receiver's bounds from the OS navigation gestures — on Android gesture-nav, so the
- * swipe-to-open edge zone isn't stolen by the system back gesture. Applied only to the closed-state
- * edge handle, so once the drawer is open (handle gone) the back gesture is allowed again. No-op on
- * desktop (no system gestures). `Modifier.systemGestureExclusion` is Android-only, hence expect/actual.
+ * Reserve the receiver's bounds from the OS navigation gestures — on Android gesture-nav, so the leading
+ * top-bar control (☰ menu / ← back) isn't stolen by the system back gesture at the left edge. Without it
+ * the control sits in the back-gesture zone and its taps get eaten intermittently after a screen wake.
+ * A small per-control rect stays well under Android's ~200dp edge-exclusion cap, so it's honoured (a
+ * full-height strip is not — it clamps to the bottom). No-op on desktop (no system gestures).
+ * `Modifier.systemGestureExclusion` is Android-only, hence expect/actual.
  */
 expect fun Modifier.systemGestureExclusionCompat(): Modifier
+
+/**
+ * Whether the left-edge swipe-to-open drawer affordance is offered. Desktop: yes. Android: no — it can't
+ * coexist with OS gesture-nav back (the ~200dp edge gesture-exclusion cap leaves the top-bar controls
+ * exposed, so their taps are eaten after a screen wake), so Android opens the drawer via the ☰ tap and
+ * reserves that control from the back gesture instead (see [systemGestureExclusionCompat]).
+ */
+expect val shellEdgeSwipeToOpenEnabled: Boolean
 
 /**
  * The slim top bar, driven by the shell-computed [ChromeSpec] (Cand 1): the adaptive leading affordance
@@ -341,7 +352,7 @@ private fun ShellTopBar(
         when {
             // Drilled into a tier-3 detail: ← back + the detail title, regardless of any center slot.
             chrome.drilled -> {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = onBack, modifier = Modifier.systemGestureExclusionCompat()) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
                 Text(
@@ -360,7 +371,7 @@ private fun ShellTopBar(
             // The plain destination root: ☰ menu + (maybe Refresh) + title. The Brain dump + New capture
             // actions are the FAB pair (ShellCaptureFabs) floating at the trailing corner, not bar buttons.
             else -> {
-                IconButton(onClick = onMenu) {
+                IconButton(onClick = onMenu, modifier = Modifier.systemGestureExclusionCompat()) {
                     Icon(Icons.Filled.Menu, contentDescription = "Menu")
                 }
                 chrome.actions.forEach { action ->
