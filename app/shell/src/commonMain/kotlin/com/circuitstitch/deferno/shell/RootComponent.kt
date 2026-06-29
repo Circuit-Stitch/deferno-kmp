@@ -419,6 +419,8 @@ class DefaultRootComponent(
                         onDeviceStorageUsage = session.onDeviceStorageUsage,
                         // On-device Backup export (#313, ADR-0041): the Settings export action builds the zip.
                         buildBackupZip = session::buildBackupZip,
+                        // On-device Backup import (#314, ADR-0041): the Settings import action restores the zip.
+                        importBackup = session::importBackup,
                         searchTasks = SearchTasks.of(session.taskRepository),
                         accounts = accountManager.accounts,
                         activeAccount = accountManager.activeAccount,

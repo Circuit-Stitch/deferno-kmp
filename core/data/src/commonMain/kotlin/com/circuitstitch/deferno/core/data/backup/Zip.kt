@@ -71,6 +71,39 @@ internal fun zipStored(entries: List<Pair<String, ByteArray>>): ByteArray {
     return out.toByteArray()
 }
 
+/**
+ * Reads a STORED-entry zip — the inverse of [zipStored] — into an entry name → bytes map (#314,
+ * ADR-0041). It walks the **local file headers** from the start: [zipStored] writes the sizes in each
+ * local header (general-purpose bit 3 = 0), so the data length is known up front and no
+ * central-directory scan is needed; the walk stops at the first non-local-header signature (the central
+ * directory). A truncated/garbage input simply yields no matching headers (and `copyOfRange` throws on a
+ * lying length) — the caller treats a missing manifest or a thrown read as a malformed Backup file.
+ *
+ * ponytail: STORED only (method 0) — the one format [zipStored] emits. A DEFLATE entry (method 8, e.g. a
+ * backup someone re-zipped with Archive Utility) throws here and surfaces as "malformed"; add an inflate
+ * path when that case is real, alongside the DEFLATE writer the attachment slice will need.
+ */
+internal fun unzipStored(bytes: ByteArray): Map<String, ByteArray> {
+    val entries = LinkedHashMap<String, ByteArray>()
+    var p = 0
+    while (p + 30 <= bytes.size && bytes.readU32(p) == LOCAL_FILE_HEADER) {
+        val method = bytes.readU16(p + 8)
+        val size = bytes.readU32(p + 18) // compressed size == uncompressed for STORED
+        val nameLen = bytes.readU16(p + 26)
+        val extraLen = bytes.readU16(p + 28)
+        val nameStart = p + 30
+        val dataStart = nameStart + nameLen + extraLen
+        require(method == 0) { "unsupported zip compression method: $method" }
+        entries[bytes.decodeToString(nameStart, nameStart + nameLen)] = bytes.copyOfRange(dataStart, dataStart + size)
+        p = dataStart + size
+    }
+    return entries
+}
+
+private fun ByteArray.readU16(i: Int): Int = (this[i].toInt() and 0xFF) or ((this[i + 1].toInt() and 0xFF) shl 8)
+
+private fun ByteArray.readU32(i: Int): Int = readU16(i) or (readU16(i + 2) shl 16)
+
 private class CentralEntry(val nameBytes: ByteArray, val crc: Int, val size: Int, val offset: Int)
 
 private const val LOCAL_FILE_HEADER = 0x04034b50

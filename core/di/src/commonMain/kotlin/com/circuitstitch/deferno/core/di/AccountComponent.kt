@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
 import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.backup.BackupExporter
+import com.circuitstitch.deferno.core.data.backup.BackupImporter
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
@@ -126,6 +127,13 @@ abstract class AccountComponent(
      * and gives the shell its accessor (the AccountComponentSession surfaces buildBackupZip from it).
      */
     abstract val backupExporter: BackupExporter
+
+    /**
+     * The on-device import/restore engine (#314, ADR-0041): replays a Backup zip's items as id-preserving
+     * creates on this Account's outbox. The inverse of [backupExporter]; the AccountComponentSession
+     * surfaces importBackup from it.
+     */
+    abstract val backupImporter: BackupImporter
 
     /** The command-registry dispatch site (ADR-0007) over this Account's write seams. */
     abstract val commandExecutor: CommandExecutor
