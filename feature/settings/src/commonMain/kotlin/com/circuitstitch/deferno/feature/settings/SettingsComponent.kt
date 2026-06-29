@@ -13,6 +13,8 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineId
 import com.circuitstitch.deferno.core.agent.InferenceEngineOption
 import com.circuitstitch.deferno.core.common.asStateFlow
 import com.circuitstitch.deferno.core.common.componentScope
+import com.circuitstitch.deferno.core.data.attachment.LocalAttachment
+import com.circuitstitch.deferno.core.data.attachment.OnDeviceStorageUsage
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderOption
@@ -36,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
@@ -135,6 +138,32 @@ data class StorageProviderSettings(
 )
 
 /**
+ * The Settings Destination's view of **on-device storage usage** (#211) — the [SettingsCategory.Storage]
+ * read-out. Today every on-device attachment is a brain-dump recording, so [recordings] is exactly the kept
+ * recordings (largest first) and [totalBytes] their summed size. Drives the "Brain-dump recordings — N items"
+ * line and the size-sorted list; [Empty] until the first emission (and on hosts that don't wire the seam).
+ */
+data class StorageUsage(
+    val recordings: List<Recording>,
+    val totalBytes: Long,
+) {
+    val count: Int get() = recordings.size
+
+    /** One on-device recording. [createdAtEpochMs] is epoch-millis for a friction-free Swift `Date`. */
+    data class Recording(
+        val id: String,
+        val taskId: String?,
+        val filename: String,
+        val sizeBytes: Long,
+        val createdAtEpochMs: Long,
+    )
+
+    companion object {
+        val Empty = StorageUsage(emptyList(), 0L)
+    }
+}
+
+/**
  * The **Settings** Destination component (#72, ADR-0013 / ADR-0007 tier 3): a **drill-down** modelled
  * as a Decompose [ChildStack] — the category [SettingsChild.List] at the root, and a per-category
  * detail pushed above it ([openCategory]) and popped cleanly back ([onBack]). It is Compose-free and
@@ -192,6 +221,14 @@ interface SettingsComponent {
      * changes on an Account switch. Feedback attachments are unaffected (always backend).
      */
     val storageProvider: StateFlow<StorageProviderSettings>
+
+    /**
+     * On-device storage usage for the [SettingsCategory.Storage] read-out (#211) — the kept brain-dump
+     * recordings (largest first) and their total size, sourced from the AccountScope on-device store via the
+     * [OnDeviceStorageUsage] seam. Read-only and offline-first; [StorageUsage.Empty] until the first emission
+     * (and on hosts that don't wire the seam).
+     */
+    val storageUsage: StateFlow<StorageUsage>
 
     /**
      * The device-local **"keep brain-dump recordings"** choice (#211) — whether a brain-dump's source
@@ -316,6 +353,12 @@ interface SettingsComponent {
     /** Account: ask the host to open the Profile Destination for identity. */
     fun onOpenProfile()
 
+    /**
+     * Storage: open an on-device recording's owning Task (#211) — or the [[Inbox]] when it's an un-triaged
+     * placeholder ([taskId] null, not yet attached to a Task). Host-routed: the shell owns the Destination graph.
+     */
+    fun onOpenRecording(taskId: String?)
+
     /** A live category detail, tagged with which [SettingsCategory] it is (for the unbacked stubs). */
     sealed interface SettingsChild {
         /** The category list root. */
@@ -340,6 +383,12 @@ interface SettingsComponent {
 
         /** Switch to the Profile Destination (Account category links to identity). */
         data object OpenProfile : Output
+
+        /** Open a recording's owning Task in the Tasks Destination (a Storage row tap, #211). */
+        data class OpenTask(val taskId: String) : Output
+
+        /** Open the Inbox for an un-triaged recording placeholder (a Storage row tap, #211). */
+        data object OpenInbox : Output
     }
 }
 
@@ -369,6 +418,10 @@ class DefaultSettingsComponent(
     // preference. Defaulted to the inert [StorageProviderCatalog.Inert] (in-memory selection) so existing
     // Settings tests build without supplying it; on-device is always available, so the Storage row always shows.
     private val storageProviderCatalog: StorageProviderCatalog = StorageProviderCatalog.Inert,
+    // The on-device storage usage read seam (#211): the AccountScope on-device store surfaced for the Storage
+    // read-out. Defaulted to [OnDeviceStorageUsage.Inert] (empty) so existing Settings tests build without
+    // supplying it; the shell backs it with `localAttachmentRepository`.
+    private val onDeviceStorageUsage: OnDeviceStorageUsage = OnDeviceStorageUsage.Inert,
     // The device-local "keep brain-dump recordings" preference (#211). Defaulted to an in-memory (on)
     // preference so existing Settings tests build without supplying it (like the storage-catalog default).
     private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
@@ -437,6 +490,13 @@ class DefaultSettingsComponent(
         StorageProviderSettings(storageProviderCatalog.options(), storageProviderCatalog.selected()),
     )
     override val storageProvider: StateFlow<StorageProviderSettings> = _storageProvider.asStateFlow()
+
+    // On-device storage usage (#211) — observe the seam's recordings Flow (largest first), mapped to the view
+    // model + summed. Offline-first (ADR-0001); inert seam → [StorageUsage.Empty] on unwired hosts.
+    override val storageUsage: StateFlow<StorageUsage> =
+        onDeviceStorageUsage.brainDumpRecordings()
+            .map { rows -> StorageUsage(rows.map { it.toRecording() }, rows.sumOf { it.size }) }
+            .stateIn(scope, SharingStarted.Eagerly, StorageUsage.Empty)
 
     // The device-local "keep brain-dump recordings" choice (#211). Seeded synchronously from the preference;
     // device-local — sourced from the AppScope preference, never the synced settings.
@@ -575,6 +635,9 @@ class DefaultSettingsComponent(
 
     override fun onOpenProfile() = output(SettingsComponent.Output.OpenProfile)
 
+    override fun onOpenRecording(taskId: String?) =
+        output(if (taskId != null) SettingsComponent.Output.OpenTask(taskId) else SettingsComponent.Output.OpenInbox)
+
     private fun createChild(
         config: Config,
         @Suppress("UNUSED_PARAMETER") childContext: ComponentContext,
@@ -584,3 +647,11 @@ class DefaultSettingsComponent(
             is Config.Category -> SettingsComponent.SettingsChild.Detail(config.category)
         }
 }
+
+private fun LocalAttachment.toRecording(): StorageUsage.Recording = StorageUsage.Recording(
+    id = id,
+    taskId = taskId,
+    filename = filename,
+    sizeBytes = size,
+    createdAtEpochMs = createdAt.toEpochMilliseconds(),
+)

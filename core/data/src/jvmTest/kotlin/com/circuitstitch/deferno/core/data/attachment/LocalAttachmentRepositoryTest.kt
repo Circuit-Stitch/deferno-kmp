@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.core.data.attachment
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -84,6 +85,22 @@ class LocalAttachmentRepositoryTest {
     @Test
     fun bytesForUnknownAttachmentIsNull() = runTest {
         assertNull(newRepo().bytes("nope"))
+    }
+
+    @Test
+    fun observeBrainDumpRecordingsReturnsOnlyRecordingsLargestFirst() = runTest {
+        val repo = newRepo()
+        // Two brain-dump recordings (an un-triaged placeholder + one attached to a Task) and one ordinary
+        // on-device attachment — only the `braindump`-prefixed rows are recordings (#211).
+        repo.save("braindump-audio-1", null, "brain-dump-1.wav", "audio/wav", ByteArray(300), created)
+        repo.save("braindump:task-9", "task-9", "brain-dump-2.wav", "audio/wav", ByteArray(900), created)
+        repo.save("att-1", "task-9", "note.txt", "text/plain", ByteArray(50), created)
+
+        val recordings = repo.observeBrainDumpRecordings().first()
+
+        // Recordings only (the text attachment is excluded), largest first.
+        assertEquals(listOf("braindump:task-9", "braindump-audio-1"), recordings.map { it.id })
+        assertEquals(listOf(900L, 300L), recordings.map { it.size })
     }
 
     @Test

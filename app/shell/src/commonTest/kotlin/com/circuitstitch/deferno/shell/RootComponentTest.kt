@@ -657,6 +657,9 @@ internal class FakeAccountSession(
     override val onDeviceAttachments: com.circuitstitch.deferno.feature.tasks.OnDeviceAttachments =
         com.circuitstitch.deferno.feature.tasks.OnDeviceAttachments.NONE
 
+    override val onDeviceStorageUsage: com.circuitstitch.deferno.core.data.attachment.OnDeviceStorageUsage =
+        com.circuitstitch.deferno.core.data.attachment.OnDeviceStorageUsage.Inert
+
     override fun observeBrainDumpDrafts() =
         kotlinx.coroutines.flow.flowOf<List<com.circuitstitch.deferno.core.model.BrainDumpDraft>>(emptyList())
 

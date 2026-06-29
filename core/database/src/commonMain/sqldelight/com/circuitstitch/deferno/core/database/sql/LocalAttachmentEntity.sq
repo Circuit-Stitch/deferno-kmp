@@ -28,6 +28,13 @@ SELECT * FROM localAttachmentEntity WHERE id = ?;
 selectByTask:
 SELECT * FROM localAttachmentEntity WHERE task_id = ? ORDER BY created_at DESC;
 
+-- Brain-dump recordings only (keyed by the `braindump` id prefix: `braindump-audio-<ts>` placeholders and
+-- `braindump:<taskId>` once attached), largest first — the Settings > Storage on-device usage read-out (#211).
+-- ponytail: today every on-device attachment IS a brain-dump recording; the prefix keeps the read-out honest
+-- if a non-recording on-device attachment ever lands. Swap to a provenance column if one does.
+selectBrainDumpBySizeDesc:
+SELECT * FROM localAttachmentEntity WHERE id LIKE 'braindump%' ORDER BY size DESC;
+
 insertOrReplace:
 INSERT OR REPLACE INTO localAttachmentEntity(
     id, task_id, provider, locator, filename, mime, size, caption, created_at
