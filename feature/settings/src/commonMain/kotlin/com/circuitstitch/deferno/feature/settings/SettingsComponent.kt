@@ -353,6 +353,12 @@ interface SettingsComponent {
     /** Account: ask the host to open the Profile Destination for identity. */
     fun onOpenProfile()
 
+    /**
+     * Storage: open an on-device recording's owning Task (#211) — or the [[Inbox]] when it's an un-triaged
+     * placeholder ([taskId] null, not yet attached to a Task). Host-routed: the shell owns the Destination graph.
+     */
+    fun onOpenRecording(taskId: String?)
+
     /** A live category detail, tagged with which [SettingsCategory] it is (for the unbacked stubs). */
     sealed interface SettingsChild {
         /** The category list root. */
@@ -377,6 +383,12 @@ interface SettingsComponent {
 
         /** Switch to the Profile Destination (Account category links to identity). */
         data object OpenProfile : Output
+
+        /** Open a recording's owning Task in the Tasks Destination (a Storage row tap, #211). */
+        data class OpenTask(val taskId: String) : Output
+
+        /** Open the Inbox for an un-triaged recording placeholder (a Storage row tap, #211). */
+        data object OpenInbox : Output
     }
 }
 
@@ -622,6 +634,9 @@ class DefaultSettingsComponent(
     override fun onOpenConsole() = output(SettingsComponent.Output.OpenConsoleUrl)
 
     override fun onOpenProfile() = output(SettingsComponent.Output.OpenProfile)
+
+    override fun onOpenRecording(taskId: String?) =
+        output(if (taskId != null) SettingsComponent.Output.OpenTask(taskId) else SettingsComponent.Output.OpenInbox)
 
     private fun createChild(
         config: Config,

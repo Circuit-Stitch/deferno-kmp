@@ -241,6 +241,25 @@ class SettingsComponentTest {
     }
 
     @Test
+    fun openingARecording_routesToTheOwningTask_orInboxWhenUntriaged() {
+        // Tapping a Storage recording row (#211): an attached recording opens its owning Task; an un-triaged
+        // placeholder (taskId null) opens the Inbox, where triage clears it — never a dead row.
+        val outputs = mutableListOf<SettingsComponent.Output>()
+        val (component, _, _) = component(output = outputs::add)
+
+        component.onOpenRecording(taskId = "task-9")
+        component.onOpenRecording(taskId = null)
+
+        assertEquals(
+            listOf<SettingsComponent.Output>(
+                SettingsComponent.Output.OpenTask("task-9"),
+                SettingsComponent.Output.OpenInbox,
+            ),
+            outputs,
+        )
+    }
+
+    @Test
     fun opensAtTheCategoryList() {
         val (component, _, _) = component()
         assertEquals(SettingsComponent.SettingsChild.List, component.stack.value.active.instance)

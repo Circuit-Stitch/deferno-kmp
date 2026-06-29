@@ -917,6 +917,15 @@ class DefaultMainShellComponent(
                 navigation.bringToFront(Config.Profile)
                 this.output(MainShellComponent.Output.OpenProfile)
             }
+            // A Storage recording tap (#211): open its owning Task in the Tasks Destination — switch laterally,
+            // then route through the tree's public open intent (mirroring onSearchOutput).
+            is SettingsComponent.Output.OpenTask -> {
+                navigation.bringToFront(Config.Tasks)
+                val tasks = stack.value.active.instance as MainShellComponent.DestinationChild.Tasks
+                tasks.component.tree.onOpenDetail(output.taskId, ItemKind.Task)
+            }
+            // An un-triaged recording placeholder has no owning Task yet — go to the Inbox where triage clears it.
+            SettingsComponent.Output.OpenInbox -> navigation.bringToFront(Config.Inbox)
         }
     }
 

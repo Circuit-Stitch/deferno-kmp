@@ -283,20 +283,26 @@ struct SettingsView: View {
                 }
                 .listRowBackground(colors.surfaceCard)
                 ForEach(usage.recordings, id: \.id) { rec in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Recording").foregroundStyle(colors.onSurface)
-                            Text(recordingDate(rec.createdAtEpochMs)).font(.caption).foregroundStyle(colors.inkMuted)
+                    Button {
+                        component.onOpenRecording(taskId: rec.taskId)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Recording").foregroundStyle(colors.onSurface)
+                                Text(recordingDate(rec.createdAtEpochMs)).font(.caption).foregroundStyle(colors.inkMuted)
+                            }
+                            Spacer()
+                            Text(formatBytes(rec.sizeBytes)).foregroundStyle(colors.inkMuted)
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(colors.inkMuted)
                         }
-                        Spacer()
-                        Text(formatBytes(rec.sizeBytes)).foregroundStyle(colors.inkMuted)
+                        .contentShape(Rectangle())
                     }
                     .listRowBackground(colors.surfaceCard)
                 }
             } header: {
                 Text("On this device")
             } footer: {
-                Text("Recordings you kept when accepting a brain dump. Open the task to remove its attachment.")
+                Text("Recordings you kept when accepting a brain dump. Tap one to open its task — or the Inbox if it's still to review.")
             }
 
             Section {
