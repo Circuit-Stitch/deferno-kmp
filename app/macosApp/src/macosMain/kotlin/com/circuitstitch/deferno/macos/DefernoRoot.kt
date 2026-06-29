@@ -168,6 +168,9 @@ class DefernoRoot(
             assistantStream = assistantStream,
             // The read-surface session-expiry banner flag (#297): the shared client sets it on a 401.
             reauthRequests = appComponent.reauthRequests,
+            // The outbox flush does synchronous SQLite I/O — keep it off the Main lifecycle scope.
+            // (Dispatchers.IO is internal on Kotlin/Native in coroutines 1.11; Default is the public off-main pool.)
+            outboxFlushContext = Dispatchers.Default,
         )
 
         lifecycle.resume()

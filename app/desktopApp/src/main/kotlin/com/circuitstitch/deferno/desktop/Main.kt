@@ -259,6 +259,8 @@ fun main() {
             // The read-surface session-expiry banner flag (#297): the shared client sets it on a 401.
             reauthRequests = appComponent.reauthRequests,
             coroutineContext = Dispatchers.Swing,
+            // The outbox flush does synchronous SQLite I/O — keep it off the Swing UI thread.
+            outboxFlushContext = Dispatchers.IO,
         )
     }
 

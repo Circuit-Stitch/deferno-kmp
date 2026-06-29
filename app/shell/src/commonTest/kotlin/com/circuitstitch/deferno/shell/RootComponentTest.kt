@@ -569,8 +569,9 @@ internal class FakeAccountSession(
     override val planRepository: PlanRepository = DemoPlanRepository(emptyList()),
     override val settingsRepository: SettingsRepository = FakeSettingsRepository(),
     override val settingsEditor: com.circuitstitch.deferno.feature.settings.SettingsEditor = FakeSettingsEditor(),
-    /** Hook for the driver-ordering test (#143) — runs inside [flushOutbox] before it returns. */
-    private val onFlush: () -> Unit = {},
+    /** Hook for the driver tests — runs inside [flushOutbox] before it returns (suspend so it can read the
+     *  coroutine context the flush is dispatched on). */
+    private val onFlush: suspend () -> Unit = {},
 ) : AccountSession {
     val addedToPlan = mutableListOf<TaskId>()
     val flushes = mutableListOf<Instant>()
