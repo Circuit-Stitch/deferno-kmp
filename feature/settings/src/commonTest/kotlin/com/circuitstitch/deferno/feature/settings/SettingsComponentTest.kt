@@ -8,6 +8,8 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
 import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
+import com.circuitstitch.deferno.core.data.attachment.LocalAttachment
+import com.circuitstitch.deferno.core.data.attachment.OnDeviceStorageUsage
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
@@ -27,12 +29,14 @@ import com.circuitstitch.deferno.core.speech.SpeechEngineId
 import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import com.circuitstitch.deferno.core.speech.UnavailableReason
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /**
  * [DefaultSettingsComponent] (#72, ADR-0007 tier 3): the tier-3 drill-down — opening a category pushes
@@ -57,6 +61,7 @@ class SettingsComponentTest {
         brainDumpNotificationPreference: BrainDumpNotificationPreference =
             InMemoryBrainDumpNotificationPreference(),
         shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
+        onDeviceStorageUsage: OnDeviceStorageUsage = OnDeviceStorageUsage.Inert,
     ): Triple<DefaultSettingsComponent, FakeSettingsRepository, FakeSettingsEditor> {
         val repo = FakeSettingsRepository(initial)
         val editor = FakeSettingsEditor(repo)
@@ -72,6 +77,7 @@ class SettingsComponentTest {
             keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
             brainDumpNotificationPreference = brainDumpNotificationPreference,
             shakeToUndoPreference = shakeToUndoPreference,
+            onDeviceStorageUsage = onDeviceStorageUsage,
             coroutineContext = Dispatchers.Unconfined,
         )
         return Triple(component, repo, editor)
@@ -99,6 +105,19 @@ class SettingsComponentTest {
     /** A storage-provider catalog over an in-memory preference seeded with [selected]. */
     private fun storageCatalog(selected: StorageProviderId = StorageProviderId.OnDevice) =
         StorageProviderCatalog(InMemoryStorageProviderPreference(selected))
+
+    /** One on-device recording row the [OnDeviceStorageUsage] seam would emit. */
+    private fun localRecording(id: String, taskId: String?, size: Long): LocalAttachment = LocalAttachment(
+        id = id,
+        taskId = taskId,
+        provider = StorageProviderId.OnDevice,
+        locator = id,
+        filename = "brain-dump.wav",
+        mime = "audio/wav",
+        size = size,
+        caption = null,
+        createdAt = Instant.parse("2026-06-15T10:00:00Z"),
+    )
 
     @Test
     fun keepBrainDumpRecordings_defaultsOn_andTogglePersistsThroughThePreference() {
@@ -194,6 +213,31 @@ class SettingsComponentTest {
         // Reflected in the read model AND persisted device-locally (never the synced SettingsEditor).
         assertEquals(StorageProviderId.DefernoBackend, component.storageProvider.value.selected)
         assertEquals(StorageProviderId.DefernoBackend, preference.selectedProvider())
+    }
+
+    @Test
+    fun storageUsage_reflectsTheSeamRecordings_withCountAndTotal() {
+        // The seam yields the on-device recordings largest-first (#211); the component surfaces them + the
+        // summed total for the Storage read-out, carrying each recording's task id (null = un-triaged).
+        val recordings = listOf(
+            localRecording("braindump:task-9", taskId = "task-9", size = 900),
+            localRecording("braindump-audio-1", taskId = null, size = 300),
+        )
+        val (component, _, _) = component(onDeviceStorageUsage = { flowOf(recordings) })
+
+        val usage = component.storageUsage.value
+        assertEquals(2, usage.count)
+        assertEquals(1200L, usage.totalBytes)
+        assertEquals(listOf("braindump:task-9", "braindump-audio-1"), usage.recordings.map { it.id })
+        assertEquals(listOf(900L, 300L), usage.recordings.map { it.sizeBytes })
+        assertEquals(listOf("task-9", null), usage.recordings.map { it.taskId })
+    }
+
+    @Test
+    fun storageUsage_inertSeam_isEmpty() {
+        // The default inert seam (Settings tests / hosts that don't wire it): nothing on device to report.
+        val (component, _, _) = component()
+        assertEquals(StorageUsage.Empty, component.storageUsage.value)
     }
 
     @Test

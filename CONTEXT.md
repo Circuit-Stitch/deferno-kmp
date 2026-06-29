@@ -516,3 +516,24 @@ device capability (an engine available on one device may be absent on another). 
 **Settings** [[Destination]] alongside [[User setting]]s.
 _Avoid_: [[User setting]] (the synced, per-Account kind), system/OS setting (those live in the platform
 Settings app, not Deferno).
+
+### Storage (on-device)
+
+**On-device attachment** *(client)*:
+An attachment whose **bytes physically live on this device** — e.g. a kept [[Brain dump]] recording
+retained as a [[Task]] attachment (the offline-first #210/#211 path). The **only** kind of attachment
+that consumes device storage: a synced/remote attachment is **backend-hosted**, and the client holds
+only a signed `url` for it — zero device bytes, fetched on demand, never cached. Scoped to the
+[[Active Account]]: each Account's on-device attachments live separately. What the Settings **Storage**
+section measures.
+_Avoid_: counting a backend-hosted attachment as device storage; "cache" (these are the person's own
+retained bytes, not re-fetchable — removing them is data loss, not eviction).
+
+**Storage provider** *(client; foundation seam)*:
+The device-local [[App setting]] naming **where an [[On-device attachment]]'s bytes are meant to
+live** — *On-device* (the default, and today the only functional one), *Deferno-hosted*, *Dropbox*,
+*Google Drive*. Today a **label, not a behavior**: the choice is recorded and shown, but bytes are
+stored on-device regardless of the selection. The non-default providers are roadmap; selecting one
+must never imply the bytes leave the device before routing actually exists.
+_Avoid_: presenting a non-On-device provider as functional today; the [[Inference engine]] or
+speech-engine catalogs (different [[App setting]]s).

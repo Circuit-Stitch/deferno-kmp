@@ -20,12 +20,19 @@ struct SettingsView: View {
     // The server-mediated Assistant enablement (#282, ADR-0040): the Owner's persistent disable /
     // withdraw-consent row, shown only when the Org is entitled (iOS-only in v1).
     @StateObject private var assistant: StateFlowObserver<AssistantSettings>
+    // On-device storage usage (#211): the Storage read-out's kept brain-dump recordings + total, and the
+    // active storage-provider read-out.
+    @StateObject private var storage: StateFlowObserver<StorageUsage>
+    @StateObject private var provider: StateFlowObserver<StorageProviderSettings>
     @Environment(\.defernoColors) private var colors
     @Environment(\.openURL) private var openURL
     // The "Brain dump notifications" opt-in (#271): device-local, seeded once from the AppScope preference;
     // the toggle persists through the component and requests OS authorization on enable.
     @State private var brainDumpNotifications = false
     @State private var brainDumpNotificationsSeeded = false
+    // The "keep brain-dump recordings" choice (#211): device-local, seeded once from the component (default on).
+    @State private var keepRecordings = true
+    @State private var keepRecordingsSeeded = false
     // The legal page presented in-app via a WKWebView that hides the site nav/footer (nil = none).
     // Compliant in-app presentation of our hosted Terms/Privacy — no link-stripping needed (Apple
     // 3.1.1 is about external purchase flows, not legal text).
@@ -38,6 +45,8 @@ struct SettingsView: View {
         _speech = StateObject(wrappedValue: StateFlowObserver(component.speechEngine))
         _inference = StateObject(wrappedValue: StateFlowObserver(component.inferenceEngine))
         _assistant = StateObject(wrappedValue: StateFlowObserver(component.assistant))
+        _storage = StateObject(wrappedValue: StateFlowObserver(component.storageUsage))
+        _provider = StateObject(wrappedValue: StateFlowObserver(component.storageProvider))
     }
 
     // Stack-driven (the component's List↔Detail stack, mirroring macOS) so the single adaptive shell bar
@@ -104,6 +113,7 @@ struct SettingsView: View {
         case "SpeechEngine": speechDetail
         case "Agent": agentDetail
         case "Assistant": assistantDetail
+        case "Storage": storageDetail
         case "DataPrivacy": dataPrivacyDetail
         case "HelpFeedback": linkDetail(text: "Tell us what's working and what isn't.", action: "Send feedback") { component.onOpenSubmitFeedback() }
         case "AppPermissions": linkDetail(text: "Manage microphone and notification access in iOS Settings.", action: "Open app settings") { component.onOpenAppPermissions() }
@@ -258,6 +268,72 @@ struct SettingsView: View {
         }
     }
 
+    /// The Storage detail (#211): on-device usage (kept brain-dump recordings + total, largest first), a
+    /// read-only storage-provider read-out (On-device active; the rest coming later), and the keep-recordings
+    /// toggle. Offline-first — every figure comes from the on-device store, never the network.
+    private var storageDetail: some View {
+        let usage = storage.value
+        return List {
+            Section {
+                HStack {
+                    Text("Brain-dump recordings").foregroundStyle(colors.onSurface)
+                    Spacer()
+                    Text(storageSummary(count: Int(usage.count), bytes: usage.totalBytes))
+                        .foregroundStyle(colors.inkMuted)
+                }
+                .listRowBackground(colors.surfaceCard)
+                ForEach(usage.recordings, id: \.id) { rec in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Recording").foregroundStyle(colors.onSurface)
+                            Text(recordingDate(rec.createdAtEpochMs)).font(.caption).foregroundStyle(colors.inkMuted)
+                        }
+                        Spacer()
+                        Text(formatBytes(rec.sizeBytes)).foregroundStyle(colors.inkMuted)
+                    }
+                    .listRowBackground(colors.surfaceCard)
+                }
+            } header: {
+                Text("On this device")
+            } footer: {
+                Text("Recordings you kept when accepting a brain dump. Open the task to remove its attachment.")
+            }
+
+            Section {
+                labeledRow("Storage provider", ShellBridgeKt.storageActiveProviderName(state: provider.value))
+                comingLaterRow("Deferno-hosted")
+                comingLaterRow("Dropbox")
+                comingLaterRow("Google Drive")
+            } header: {
+                Text("Storage provider")
+            } footer: {
+                Text("New attachments are kept on this device. Other providers are coming later.")
+            }
+
+            Section {
+                Toggle(isOn: Binding(get: { keepRecordings }, set: { setKeepRecordings($0) })) {
+                    Text("Keep recordings on this device").foregroundStyle(colors.onSurface)
+                }
+                .listRowBackground(colors.surfaceCard)
+            } header: {
+                Text("Brain dump")
+            } footer: {
+                Text("When you accept a draft, its source recording is kept as a task attachment.")
+            }
+        }
+        .onAppear {
+            guard !keepRecordingsSeeded else { return }
+            keepRecordingsSeeded = true
+            keepRecordings = ShellBridgeKt.keepBrainDumpRecordingsEnabled(component: component)
+        }
+    }
+
+    /// Persist the keep-recordings choice (#211) — device-local, never synced.
+    private func setKeepRecordings(_ on: Bool) {
+        keepRecordings = on
+        ShellBridgeKt.setKeepBrainDumpRecordings(component: component, enabled: on)
+    }
+
     private var legalDetail: some View {
         List {
             Section {
@@ -387,6 +463,31 @@ struct SettingsView: View {
         .listRowBackground(colors.surfaceCard)
     }
 
+    /// A muted, non-tappable provider row marked "Coming later" (the Storage read-out's roadmap, #211).
+    private func comingLaterRow(_ label: String) -> some View {
+        HStack {
+            Text(label).foregroundStyle(colors.inkMuted)
+            Spacer()
+            Text("Coming later").font(.subheadline).foregroundStyle(colors.inkMuted)
+        }
+        .listRowBackground(colors.surfaceCard)
+    }
+
+    /// "3 items · 4.2 MB", or "None" when nothing is on the device.
+    private func storageSummary(count: Int, bytes: Int64) -> String {
+        guard count > 0 else { return "None" }
+        let items = count == 1 ? "1 item" : "\(count) items"
+        return "\(items) · \(formatBytes(bytes))"
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    private func recordingDate(_ epochMs: Int64) -> String {
+        Date(timeIntervalSince1970: Double(epochMs) / 1000).formatted(date: .abbreviated, time: .shortened)
+    }
+
     private func title(_ category: SettingsCategory) -> String {
         switch ShellBridgeKt.settingsCategoryName(category: category) {
         case "Appearance": return "Appearance"
@@ -394,6 +495,7 @@ struct SettingsView: View {
         case "SpeechEngine": return "Speech engine"
         case "Agent": return "Agent"
         case "Assistant": return "Assistant"
+        case "Storage": return "Storage"
         case "DataPrivacy": return "Data & Privacy"
         case "HelpFeedback": return "Help & Feedback"
         case "AppPermissions": return "App Permissions"

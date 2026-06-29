@@ -1,7 +1,13 @@
 package com.circuitstitch.deferno.core.data.attachment
 
+import app.cash.sqldelight.coroutines.asFlow
+import app.cash.sqldelight.coroutines.mapToList
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.database.sql.LocalAttachmentEntity
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlin.time.Instant
 
 /**
@@ -22,8 +28,17 @@ import kotlin.time.Instant
 class LocalAttachmentRepository(
     private val db: DefernoDatabase,
     private val bytesStore: AttachmentBytesStore,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val queries get() = db.localAttachmentEntityQueries
+
+    /**
+     * On-device brain-dump recordings (#211), largest first — drives the Settings > Storage usage read-out.
+     * Observe-via-Flow (ADR-0001). Today these are the only on-device attachments; keyed by the `braindump`
+     * id prefix so the read-out stays honest if a non-recording on-device attachment ever lands.
+     */
+    fun observeBrainDumpRecordings(): Flow<List<LocalAttachment>> =
+        queries.selectBrainDumpBySizeDesc().asFlow().mapToList(dispatcher).map { rows -> rows.map { it.toDomain() } }
 
     /**
      * Store [bytes] on-device and record the attachment, returning the saved record. The bytes are written

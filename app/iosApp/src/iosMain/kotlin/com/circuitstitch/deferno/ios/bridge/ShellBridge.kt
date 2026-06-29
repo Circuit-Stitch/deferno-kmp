@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.feature.settings.InferenceEngineSettings
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
+import com.circuitstitch.deferno.feature.settings.StorageProviderSettings
 import com.circuitstitch.deferno.feature.assistant.AssistantComponent
 import com.circuitstitch.deferno.feature.assistant.AssistantState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
@@ -13,6 +14,7 @@ import com.circuitstitch.deferno.feature.tasks.SearchState
 import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
 import com.circuitstitch.deferno.core.agent.InferenceEngineOrigin
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.ChatMessage
@@ -104,6 +106,22 @@ fun brainDumpNotificationsEnabled(component: SettingsComponent): Boolean = compo
 /** Persist the "Brain dump notifications" opt-in (#271). The View requests OS auth on enable (the consent). */
 fun setBrainDumpNotificationsEnabled(component: SettingsComponent, enabled: Boolean) =
     component.onBrainDumpNotificationsChanged(enabled)
+
+/** The active storage provider's display name for the Settings > Storage read-out (#211). */
+fun storageActiveProviderName(state: StorageProviderSettings): String = when (state.selected) {
+    StorageProviderId.OnDevice -> "On-device"
+    StorageProviderId.DefernoBackend -> "Deferno-hosted"
+    StorageProviderId.Dropbox -> "Dropbox"
+    StorageProviderId.GoogleDrive -> "Google Drive"
+    else -> state.selected.value
+}
+
+/** The current "keep brain-dump recordings" choice (#211), as a snapshot Bool for the Settings toggle. */
+fun keepBrainDumpRecordingsEnabled(component: SettingsComponent): Boolean = component.keepBrainDumpRecordings.value
+
+/** Persist the "keep brain-dump recordings" choice (#211) — device-local, never synced. */
+fun setKeepBrainDumpRecordings(component: SettingsComponent, enabled: Boolean) =
+    component.onKeepBrainDumpRecordingsChanged(enabled)
 
 // ---------------------------------------------------------------------------------------------------
 // Sealed discriminators — Swift reads these instead of casting Kotlin/Native flattened class names

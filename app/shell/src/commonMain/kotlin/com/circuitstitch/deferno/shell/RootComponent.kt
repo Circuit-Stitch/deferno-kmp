@@ -415,6 +415,8 @@ class DefaultRootComponent(
                         removeFromPlan = { session.removeFromPlan(it, today, timeZone) },
                         // On-device attachments (#211): the detail shows + plays this Account's retained recordings.
                         onDeviceAttachments = session.onDeviceAttachments,
+                        // On-device storage usage (#211): the Settings > Storage read-out over those recordings.
+                        onDeviceStorageUsage = session.onDeviceStorageUsage,
                         searchTasks = SearchTasks.of(session.taskRepository),
                         accounts = accountManager.accounts,
                         activeAccount = accountManager.activeAccount,

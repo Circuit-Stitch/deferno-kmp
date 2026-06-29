@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.shell
 
 import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.assistant.ConversationStore
+import com.circuitstitch.deferno.core.data.attachment.OnDeviceStorageUsage
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
@@ -82,6 +83,12 @@ interface AccountSession {
      * synced [taskDetailRepository] attachments. Backed by the Account's `LocalAttachmentRepository`.
      */
     val onDeviceAttachments: OnDeviceAttachments
+
+    /**
+     * On-device storage usage for the Settings > Storage read-out (#211) — this Account's kept brain-dump
+     * recordings (largest first), observed offline-first. Backed by the Account's `LocalAttachmentRepository`.
+     */
+    val onDeviceStorageUsage: OnDeviceStorageUsage
     val planRepository: PlanRepository
 
     /**
@@ -236,6 +243,10 @@ class AccountComponentSession(private val component: AccountComponent) : Account
 
         override suspend fun bytes(id: String): ByteArray? = component.localAttachmentRepository.bytes(id)
     }
+
+    // #211: the Settings > Storage usage read-out over this Account's on-device recordings (largest first).
+    override val onDeviceStorageUsage: OnDeviceStorageUsage =
+        OnDeviceStorageUsage { component.localAttachmentRepository.observeBrainDumpRecordings() }
     override val settingsRepository: SettingsRepository get() = component.settingsRepository
     override val calendarRepository: CalendarRepository get() = component.calendarRepository
     override val conversationStore: ConversationStore get() = component.conversationStore
