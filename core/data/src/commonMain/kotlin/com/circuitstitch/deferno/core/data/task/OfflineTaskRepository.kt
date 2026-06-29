@@ -80,17 +80,12 @@ class OfflineTaskRepository(
      * Results are **not** upserted into the observed list — search is a separate read surface (ADR-0001).
      */
     override suspend fun search(query: TaskSearchQuery): List<SearchHit> {
-        if (query.hasNoConstraint()) return emptyList()
+        if (!query.hasRunnableConstraint()) return emptyList()
         return collectSearchRows()
             .filter { it.matches(query) }
+            .map { it.hit }
             .sortedWith(query.sort.comparator())
-            .map { it.toHit() }
     }
-
-    /** A blank term with no structured filter has nothing to match on — the untouched overlay state. */
-    private fun TaskSearchQuery.hasNoConstraint(): Boolean =
-        query.isBlank() && statuses.isEmpty() && labels.isEmpty() &&
-            fromDate == null && toDate == null && !hasAttachment
 
     /** Snapshot the four caches once and flatten them to the common [SearchRow] shape. */
     private suspend fun collectSearchRows(): List<SearchRow> = buildList {
@@ -103,7 +98,7 @@ class OfflineTaskRepository(
     private fun SearchRow.matches(query: TaskSearchQuery): Boolean {
         val term = query.query.trim()
         if (term.isNotEmpty() &&
-            !title.contains(term, ignoreCase = true) &&
+            !hit.title.contains(term, ignoreCase = true) &&
             description?.contains(term, ignoreCase = true) != true
         ) {
             return false
@@ -113,80 +108,74 @@ class OfflineTaskRepository(
         // Every selected label must be present (AND).
         if (query.labels.isNotEmpty() && !labels.containsAll(query.labels)) return false
         if (query.fromDate != null || query.toDate != null) {
-            val day = completeBy?.toLocalDateTime(timeZone)?.date ?: return false
+            val day = hit.completeBy?.toLocalDateTime(timeZone)?.date ?: return false
             if (query.fromDate != null && day < query.fromDate) return false
             if (query.toDate != null && day > query.toDate) return false
         }
-        if (query.hasAttachment && attachmentCount == 0) return false
+        if (query.hasAttachment && hit.attachmentCount == 0) return false
         return true
     }
 
-    private fun SearchSort.comparator(): Comparator<SearchRow> = when (this) {
+    private fun SearchSort.comparator(): Comparator<SearchHit> = when (this) {
         SearchSort.Relevance -> Comparator { _, _ -> 0 } // keep the cross-kind read order
         SearchSort.TitleAsc -> compareBy { it.title.lowercase() }
-        // Soonest deadline first; rows without a deadline sort last (nulls last).
+        // Soonest deadline first; hits without a deadline sort last (nulls last).
         SearchSort.DeadlineAsc -> compareBy(nullsLast()) { it.completeBy }
-        // Biggest attachments first; rows without attachments (size 0) sort last.
+        // Biggest attachments first; hits without attachments (size 0) sort last.
         SearchSort.AttachmentSizeDesc -> compareByDescending { it.attachmentTotalSize }
     }
 }
 
 /**
- * The common, search-ready projection of any cached item (#311) — the rich fields the filters need
- * (title/description/labels/status/deadline/attachment rollup) that the thin tree-row `Item` lacks.
- * [workingState] is `null` for the recurring kinds (they have no Task working state), which is what makes
- * the status filter Task-scoped.
+ * A cached item projected for search (#311): the [hit] the result row renders, plus the three fields the
+ * filters read but the row never shows — [description] (free-text match), [labels] (label filter), and
+ * [workingState] (`null` for the recurring kinds, which is what makes the status filter Task-scoped). The
+ * sort runs on [hit] alone, so attachment/deadline/title ordering needs nothing beyond the displayed shape.
  */
 private data class SearchRow(
-    val id: String,
-    val kind: ItemKind,
-    val title: String,
+    val hit: SearchHit,
     val description: String?,
     val labels: List<String>,
     val workingState: WorkingState?,
-    val isTerminal: Boolean,
-    val blocked: Boolean,
-    val completeBy: Instant?,
-    val deadlineTimeOfDay: LocalTime?,
-    val ref: String?,
-    val attachmentCount: Int,
-    val attachmentTotalSize: Long,
-) {
-    fun toHit(): SearchHit = SearchHit(
-        id = id,
-        kind = kind,
+)
+
+private fun Task.toSearchRow() = SearchRow(
+    hit = SearchHit(
+        id = id.value,
+        kind = ItemKind.Task,
         title = title,
-        isTerminal = isTerminal,
+        isTerminal = workingState.isTerminal,
         blocked = blocked,
         completeBy = completeBy,
         deadlineTimeOfDay = deadlineTimeOfDay,
         ref = ref,
         attachmentCount = attachmentCount,
         attachmentTotalSize = attachmentTotalSize,
-    )
-}
-
-private fun Task.toSearchRow() = SearchRow(
-    id = id.value,
-    kind = ItemKind.Task,
-    title = title,
+    ),
     description = description,
     labels = labels,
     workingState = workingState,
-    isTerminal = workingState.isTerminal,
-    blocked = blocked,
-    completeBy = completeBy,
-    deadlineTimeOfDay = deadlineTimeOfDay,
-    ref = ref,
-    attachmentCount = attachmentCount,
-    attachmentTotalSize = attachmentTotalSize,
 )
 
 // Recurring kinds: no WorkingState (status filter excludes them), no attachment rollup (#311 is Task-only),
 // terminal == Archived (the recurring analog of a Done/Dropped Task). Event projects its start-of-day clock.
-private fun Habit.toSearchRow() = recurringSearchRow(id.value, ItemKind.Habit, title, description, labels, definitionState, blocked, completeBy, deadlineTimeOfDay, ref)
-private fun Chore.toSearchRow() = recurringSearchRow(id.value, ItemKind.Chore, title, description, labels, definitionState, blocked, completeBy, deadlineTimeOfDay, ref)
-private fun Event.toSearchRow() = recurringSearchRow(id.value, ItemKind.Event, title, description, labels, definitionState, blocked, completeBy, startTimeOfDay, ref)
+private fun Habit.toSearchRow() = recurringSearchRow(
+    id = id.value, kind = ItemKind.Habit, title = title, description = description,
+    labels = labels, state = definitionState, blocked = blocked,
+    completeBy = completeBy, timeOfDay = deadlineTimeOfDay, ref = ref,
+)
+
+private fun Chore.toSearchRow() = recurringSearchRow(
+    id = id.value, kind = ItemKind.Chore, title = title, description = description,
+    labels = labels, state = definitionState, blocked = blocked,
+    completeBy = completeBy, timeOfDay = deadlineTimeOfDay, ref = ref,
+)
+
+private fun Event.toSearchRow() = recurringSearchRow(
+    id = id.value, kind = ItemKind.Event, title = title, description = description,
+    labels = labels, state = definitionState, blocked = blocked,
+    completeBy = completeBy, timeOfDay = startTimeOfDay, ref = ref,
+)
 
 private fun recurringSearchRow(
     id: String,
@@ -200,17 +189,19 @@ private fun recurringSearchRow(
     timeOfDay: LocalTime?,
     ref: String?,
 ) = SearchRow(
-    id = id,
-    kind = kind,
-    title = title,
+    hit = SearchHit(
+        id = id,
+        kind = kind,
+        title = title,
+        isTerminal = state == DefinitionState.Archived,
+        blocked = blocked,
+        completeBy = completeBy,
+        deadlineTimeOfDay = timeOfDay,
+        ref = ref,
+        attachmentCount = 0,
+        attachmentTotalSize = 0,
+    ),
     description = description,
     labels = labels,
     workingState = null,
-    isTerminal = state == DefinitionState.Archived,
-    blocked = blocked,
-    completeBy = completeBy,
-    deadlineTimeOfDay = timeOfDay,
-    ref = ref,
-    attachmentCount = 0,
-    attachmentTotalSize = 0,
 )

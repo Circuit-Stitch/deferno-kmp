@@ -31,6 +31,19 @@ data class TaskSearchQuery(
     val sort: SearchSort = SearchSort.Relevance,
 )
 
+/**
+ * Whether this query has something to run on (#73, #311) — the single source of truth both layers share:
+ * [TaskRepository.search] short-circuits to empty when it's `false`, and the overlay's
+ * [com.circuitstitch.deferno.feature.tasks.SearchState.canSearch] gates the UI on the same predicate, so
+ * the two can't drift. Runnable means a free-text term meeting the [MIN_SEARCH_QUERY_LENGTH] floor, OR any
+ * structured filter (status / label / date range / attachment). A blank-or-too-short term with no filter
+ * has nothing to match — the overlay's untouched "type to search" state.
+ */
+fun TaskSearchQuery.hasRunnableConstraint(): Boolean =
+    query.trim().length >= MIN_SEARCH_QUERY_LENGTH ||
+        statuses.isNotEmpty() || labels.isNotEmpty() ||
+        fromDate != null || toDate != null || hasAttachment
+
 /** The ordering applied to search results (#73, #311). */
 enum class SearchSort {
     /** Insertion order — the local read's natural cross-kind order (no server ranking offline). */

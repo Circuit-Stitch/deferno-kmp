@@ -440,11 +440,6 @@ private fun SearchResults(
         state.isSearching -> LoadingStrip(label = "Searching…")
         // An expired session is shown by the banner above, not as a "couldn't reach the server" state (#297).
         state.sessionExpired -> Unit
-        // A failed pull (offline / server error) is NOT "no matches" — say so (#73 follow-up).
-        state.searchFailed -> EmptyState(
-            title = "Search is unavailable",
-            body = "Something went wrong reaching the server. Check your connection and try again.",
-        )
         state.hasSearched -> EmptyState(
             title = "No matches",
             body = "Nothing matched your search. Try a different word or fewer filters.",

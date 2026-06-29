@@ -2,11 +2,11 @@ package com.circuitstitch.deferno.feature.tasks
 
 import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.common.componentScope
-import com.circuitstitch.deferno.core.data.task.MIN_SEARCH_QUERY_LENGTH
 import com.circuitstitch.deferno.core.data.task.SearchSeed
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
+import com.circuitstitch.deferno.core.data.task.hasRunnableConstraint
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.TaskId
@@ -25,8 +25,7 @@ import kotlin.coroutines.CoroutineContext
  * untouched overlay ("type to search") from a completed search that found nothing ("no matches"), so the
  * View can show the right gentle copy. [results] is the last completed search's rows; [isSearching] is
  * true only while the local read runs. The filters ([statuses]/[labels]/[fromDate]/[toDate]/[hasAttachment])
- * and [sort] mirror [TaskSearchQuery] so the View binds straight to them. [searchFailed] is vestigial now
- * that search is offline (a local read can't fail) — see its field doc.
+ * and [sort] mirror [TaskSearchQuery] so the View binds straight to them.
  */
 data class SearchState(
     val query: String = "",
@@ -40,18 +39,28 @@ data class SearchState(
     val results: List<SearchHit> = emptyList(),
     val isSearching: Boolean = false,
     val hasSearched: Boolean = false,
-    // Search is offline (#311, ADR-0042) — a local read can't fail — so this stays false; kept so the
-    // existing Compose/SwiftUI views compile unchanged (their failure branch is simply never hit now).
-    val searchFailed: Boolean = false,
     // The Active Account's session has expired (#297) — a process-wide flag the overlay still surfaces so
     // the person knows to re-auth, even though offline search itself no longer needs the network.
     val sessionExpired: Boolean = false,
 ) {
     /**
-     * Whether there is something to search on (#73, #311): a free-text term of at least the 2-char
-     * minimum, OR the "has attachment" filter (the deep-link runs with no text, just the filter + sort).
+     * Whether there is something to search on (#73, #311) — delegates to [TaskSearchQuery.hasRunnableConstraint]
+     * (the shared predicate [TaskRepository.search] also gates on) so the UI guard can't drift from the
+     * repository: a free-text term of at least the 2-char minimum, OR any structured filter
+     * (status / label / date range / "has attachment" — the deep-link runs with no text, just the filter + sort).
      */
-    val canSearch: Boolean get() = query.trim().length >= MIN_SEARCH_QUERY_LENGTH || hasAttachment
+    val canSearch: Boolean get() = toQuery().hasRunnableConstraint()
+
+    /** This state as the equivalent [TaskSearchQuery] — the single shape the guard + the search submit share. */
+    fun toQuery(): TaskSearchQuery = TaskSearchQuery(
+        query = query.trim(),
+        statuses = statuses,
+        labels = labels,
+        fromDate = fromDate,
+        toDate = toDate,
+        hasAttachment = hasAttachment,
+        sort = sort,
+    )
 }
 
 /**
@@ -161,19 +170,9 @@ class DefaultSearchComponent(
         _state.update { it.copy(isSearching = true) }
         scope.launch {
             // Offline local read (ADR-0042) — it can't fail, so the result is just the hits.
-            val hits = searchTasks.search(
-                TaskSearchQuery(
-                    query = current.query.trim(),
-                    statuses = current.statuses,
-                    labels = current.labels,
-                    fromDate = current.fromDate,
-                    toDate = current.toDate,
-                    hasAttachment = current.hasAttachment,
-                    sort = current.sort,
-                ),
-            )
+            val hits = searchTasks.search(current.toQuery())
             _state.update {
-                it.copy(results = hits, isSearching = false, hasSearched = true, searchFailed = false)
+                it.copy(results = hits, isSearching = false, hasSearched = true)
             }
         }
     }
