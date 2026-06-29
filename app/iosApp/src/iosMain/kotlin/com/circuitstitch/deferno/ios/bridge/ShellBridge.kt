@@ -15,6 +15,7 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
 import com.circuitstitch.deferno.core.agent.InferenceEngineOrigin
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
+import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.ChatMessage
@@ -134,6 +135,26 @@ fun setKeepBrainDumpRecordings(component: SettingsComponent, enabled: Boolean) =
 fun exportBackup(component: SettingsComponent, onData: (NSData?) -> Unit) {
     CoroutineScope(Dispatchers.Main).launch {
         onData(component.buildBackupZip().toNSData())
+    }
+}
+
+/**
+ * Restore items from an on-device Backup zip (#314, ADR-0041) the iOS document picker resolved: copy the
+ * picked file's [data] across (`NSData`→`ByteArray`, the same idiom as `addTaskAttachment`) and import it
+ * on the offline outbox. The outcome is reported to Swift as a stable `(kind, count)` pair — Swift switches
+ * on the [String] kind rather than a flattened Kotlin/Native class name — so it can show the right message
+ * ("restored N", "update Deferno", "too old", "couldn't read this file"). The reverse of [exportBackup].
+ */
+@OptIn(ExperimentalForeignApi::class)
+fun importBackup(component: SettingsComponent, data: NSData, onResult: (kind: String, count: Int) -> Unit) {
+    val bytes = data.bytes?.reinterpret<ByteVar>()?.readBytes(data.length.toInt()) ?: ByteArray(0)
+    CoroutineScope(Dispatchers.Main).launch {
+        when (val result = component.importBackup(bytes)) {
+            is ImportResult.Restored -> onResult("restored", result.count)
+            ImportResult.ForceUpgrade -> onResult("force_upgrade", 0)
+            ImportResult.Unsupported -> onResult("unsupported", 0)
+            ImportResult.Malformed -> onResult("malformed", 0)
+        }
     }
 }
 

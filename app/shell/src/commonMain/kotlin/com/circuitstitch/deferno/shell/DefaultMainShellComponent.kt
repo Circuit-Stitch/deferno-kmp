@@ -24,6 +24,7 @@ import com.circuitstitch.deferno.core.data.assistant.AssistantClient
 import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.MeResult
+import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
@@ -173,6 +174,9 @@ class DefaultMainShellComponent(
     // On-device Backup export (#313, ADR-0041), threaded into the Settings destination. Defaults to an
     // empty zip so the many shell tests build without it; production threads session::buildBackupZip.
     private val buildBackupZip: suspend () -> ByteArray = { ByteArray(0) },
+    // On-device Backup import/restore (#314, ADR-0041), threaded into the Settings destination. Defaults
+    // to Malformed so the many shell tests build without it; production threads session::importBackup.
+    private val importBackup: suspend (ByteArray) -> ImportResult = { ImportResult.Malformed },
     // The global-search seam (#73): a one-shot, online-only pull the Search overlay drives. Defaults
     // to "no results" so tests that don't exercise Search build without supplying it.
     private val searchTasks: SearchTasks = SearchTasks { _ -> TaskSearchResult.Success(emptyList()) },
@@ -601,6 +605,8 @@ class DefaultMainShellComponent(
                         onDeviceStorageUsage = onDeviceStorageUsage,
                         // On-device Backup export (#313, ADR-0041) — the Settings export action builds the zip.
                         buildBackup = buildBackupZip,
+                        // On-device Backup import (#314, ADR-0041) — the Settings import action restores the zip.
+                        restoreBackup = importBackup,
                         // The device-local "keep brain-dump recordings" choice (#211) — AppScope, never synced.
                         keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
                         // The device-local "Brain dump notifications" opt-in (#266/#271) — AppScope, never synced.

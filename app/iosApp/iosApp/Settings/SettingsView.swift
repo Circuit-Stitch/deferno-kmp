@@ -1,6 +1,7 @@
 import Deferno
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 import UserNotifications
 import WebKit
 
@@ -43,6 +44,11 @@ struct SettingsView: View {
     // zip handed to the iOS share sheet (nil = none). Replaces the old "export on the web" deep-link.
     @State private var showExportDialog = false
     @State private var exportFile: ExportFile?
+    // On-device data import/restore (#314, ADR-0041): the document picker, and the outcome message shown
+    // after the shared engine replays the Backup file's items as id-preserving creates on the outbox.
+    @State private var showImportPicker = false
+    @State private var showImportResult = false
+    @State private var importResultText = ""
 
     init(component: SettingsComponent) {
         self.component = component
@@ -266,19 +272,29 @@ struct SettingsView: View {
                 .listRowBackground(colors.surfaceCard)
             }
             Section {
-                Button("Export your data") { showExportDialog = true }
+                Button("Export or import your data") { showExportDialog = true }
                     .listRowBackground(colors.surfaceCard)
             } footer: {
-                Text("Export your tasks and lists as a backup file you can save or share.")
+                Text("Export your tasks and lists as a backup file you can save or share — or import one to restore them.")
             }
-            .confirmationDialog("Export your data", isPresented: $showExportDialog, titleVisibility: .visible) {
+            .confirmationDialog("Your data", isPresented: $showExportDialog, titleVisibility: .visible) {
                 Button("Export") { runExport() }
                 Button("Full backup — coming soon") {}.disabled(true)
+                Button("Import a backup") { showImportPicker = true }
                 Button("Cancel", role: .cancel) {}
             }
         }
         .sheet(item: $exportFile) { file in
             ShareSheet(activityItems: [file.url])
+        }
+        // Import (#314): the document picker accepts a Backup-file zip; its bytes cross to the shared engine.
+        .fileImporter(isPresented: $showImportPicker, allowedContentTypes: [.zip], allowsMultipleSelection: false) { result in
+            if case .success(let urls) = result, let url = urls.first { runImport(url) }
+        }
+        .alert("Import", isPresented: $showImportResult) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importResultText)
         }
     }
 
@@ -367,6 +383,35 @@ struct SettingsView: View {
             } catch {
                 // best-effort; nothing to share on failure
             }
+        }
+    }
+
+    /// Restore items from a picked Backup file (#314, ADR-0041): read the security-scoped file's bytes (the
+    /// same start/stop-access bracket as Feedback attachments), hand them to the shared engine, and show the
+    /// outcome. The bridge reports `(kind, count)` on the main thread, so mutating the alert state is safe.
+    private func runImport(_ url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            importResultText = "Couldn't read this file — it doesn't look like a Deferno backup."
+            showImportResult = true
+            return
+        }
+        ShellBridgeKt.importBackup(component: component, data: data) { kind, count in
+            switch kind {
+            case "restored":
+                let n = Int(truncating: count) // count crosses as a boxed KotlinInt (NSNumber)
+                importResultText = n == 0
+                    ? "That backup had no items to import."
+                    : "Restored \(n) item\(n == 1 ? "" : "s"). They'll sync when you're back online."
+            case "force_upgrade":
+                importResultText = "This backup needs a newer version of Deferno. Update the app to import it."
+            case "unsupported":
+                importResultText = "This backup is too old to import."
+            default:
+                importResultText = "Couldn't read this file — it doesn't look like a Deferno backup."
+            }
+            showImportResult = true
         }
     }
 

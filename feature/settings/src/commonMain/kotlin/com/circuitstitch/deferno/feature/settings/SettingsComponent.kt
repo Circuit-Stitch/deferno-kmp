@@ -18,6 +18,7 @@ import com.circuitstitch.deferno.core.data.attachment.OnDeviceStorageUsage
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderOption
+import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
@@ -339,6 +340,13 @@ interface SettingsComponent {
     suspend fun buildBackupZip(): ByteArray
 
     /**
+     * Data & Privacy: restore items from an on-device Backup zip (#314, ADR-0041) — parse + version-gate +
+     * replay each item as an id-preserving create on the offline outbox (idempotent via ADR-0034). The host
+     * supplies the picked file's bytes (iOS document picker) and surfaces the [ImportResult] to the person.
+     */
+    suspend fun importBackup(bytes: ByteArray): ImportResult
+
+    /**
      * Data & Privacy: ask the host to open the web app's export/import surface. Still used by desktop/
      * macOS (no in-app export there yet); on iOS and Android it is superseded by the in-app
      * [buildBackupZip] export action (#313) and no longer invoked (AC #3, ADR-0015).
@@ -433,6 +441,10 @@ class DefaultSettingsComponent(
     // tests build without it; the shell backs it with `session::buildBackupZip`. Named `buildBackup` (not
     // `buildBackupZip`) so the override below isn't a self-recursive call into the same-named member fn.
     private val buildBackup: suspend () -> ByteArray = { ByteArray(0) },
+    // The on-device Backup import/restore seam (#314, ADR-0041). Defaulted to [ImportResult.Malformed] so
+    // existing Settings tests build without it; the shell backs it with `session::importBackup`. Named
+    // `restoreBackup` (not `importBackup`) so the override below isn't a self-recursive call.
+    private val restoreBackup: suspend (ByteArray) -> ImportResult = { ImportResult.Malformed },
     // The device-local "keep brain-dump recordings" preference (#211). Defaulted to an in-memory (on)
     // preference so existing Settings tests build without supplying it (like the storage-catalog default).
     private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
@@ -637,6 +649,8 @@ class DefaultSettingsComponent(
     }
 
     override suspend fun buildBackupZip(): ByteArray = buildBackup()
+
+    override suspend fun importBackup(bytes: ByteArray): ImportResult = restoreBackup(bytes)
 
     override fun onOpenDataExportImport() = output(SettingsComponent.Output.OpenDataExportImport)
 

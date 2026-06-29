@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.shell
 import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.attachment.OnDeviceStorageUsage
+import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
@@ -95,6 +96,13 @@ interface AccountSession {
      * serialized to a `manifest.json`-only zip. Defaulted to an empty zip so test fakes build without it.
      */
     suspend fun buildBackupZip(): ByteArray = ByteArray(0)
+
+    /**
+     * Restore this Account's items from an on-device Backup zip (#314, ADR-0041): parse + version-gate +
+     * replay each item as an id-preserving create on the outbox. Defaulted to [ImportResult.Malformed] so
+     * test fakes build without it; production backs it with the Account's `backupImporter`.
+     */
+    suspend fun importBackup(bytes: ByteArray): ImportResult = ImportResult.Malformed
     val planRepository: PlanRepository
 
     /**
@@ -256,6 +264,8 @@ class AccountComponentSession(private val component: AccountComponent) : Account
 
     // #313: the on-device Backup-zip builder over this Account's four local stores (ADR-0041).
     override suspend fun buildBackupZip(): ByteArray = component.backupExporter.buildBackupZip()
+    // #314: the on-device import/restore over this Account's outbox (ADR-0041).
+    override suspend fun importBackup(bytes: ByteArray): ImportResult = component.backupImporter.import(bytes)
     override val settingsRepository: SettingsRepository get() = component.settingsRepository
     override val calendarRepository: CalendarRepository get() = component.calendarRepository
     override val conversationStore: ConversationStore get() = component.conversationStore
