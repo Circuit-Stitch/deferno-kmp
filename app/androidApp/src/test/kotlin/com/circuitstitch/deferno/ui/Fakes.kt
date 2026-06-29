@@ -340,9 +340,11 @@ internal class FakeAuthRepository(var result: MeResult = MeResult.Authenticated(
 internal class FakeProfileComponent(
     initial: ProfileState,
     override val account: Account = sampleAccount,
+    timeZone: String? = "America/Los_Angeles",
 ) : ProfileComponent {
     private val _state = MutableStateFlow(initial)
     override val state: StateFlow<ProfileState> = _state
+    override val timeZone: StateFlow<String?> = MutableStateFlow(timeZone)
     var retryCount = 0
         private set
     var signOutCount = 0

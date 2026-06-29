@@ -114,9 +114,10 @@ class MainShellComponentTest {
     @Test
     fun registryListsEveryDestination_notAHardcodedCount() {
         // The nav suite renders this; it must be the whole ordered registry (minus the conditionally-present
-        // Assistant, absent when not entitled — ADR-0040), not a fixed two-way switch.
+        // Assistant, absent when not entitled — ADR-0040 — and Profile, a Settings → Account drill-down, not a
+        // drawer row), not a fixed two-way switch.
         assertEquals(
-            Destination.entries.filterNot { it == Destination.Assistant },
+            Destination.entries.filterNot { it == Destination.Assistant || it == Destination.Profile },
             shell().destinations.value,
         )
     }
@@ -263,7 +264,7 @@ class MainShellComponentTest {
                 Destination.Inbox,
                 // Activity: the offline-first ledger feed (#260). Ordered after Inbox among the secondaries.
                 Destination.Activity,
-                Destination.Profile,
+                // Profile is omitted: it's a Settings → Account drill-down (back-arrow detail), not a drawer row.
                 Destination.Settings,
             ),
             shell().destinations.value,
@@ -291,9 +292,10 @@ class MainShellComponentTest {
     @Test
     fun assistant_presentRightAfterTasks_whenEntitled() {
         // An entitled client (resolved synchronously under Unconfined) reveals the Assistant row, ordered
-        // immediately after Tasks per ADR-0040 (Plan·Calendar·Tasks·Assistant·Inbox·Activity·Profile·Settings).
+        // immediately after Tasks per ADR-0040 (Plan·Calendar·Tasks·Assistant·Inbox·Activity·Settings — Profile
+        // is a Settings → Account drill-down, never a drawer row).
         val dests = shell(assistantClient = entitledAssistantClient()).destinations.value
-        assertEquals(Destination.entries, dests)
+        assertEquals(Destination.entries.filterNot { it == Destination.Profile }, dests)
         assertEquals(Destination.Assistant, dests[dests.indexOf(Destination.Tasks) + 1])
     }
 
@@ -509,6 +511,19 @@ class MainShellComponentTest {
         shell.settings().onOpenProfile()
 
         assertEquals(Destination.Profile, shell.activeDestination())
+    }
+
+    @Test
+    fun backFromProfile_returnsToSettings_notThePlanHome() {
+        // Profile is a Settings → Account drill-down, not a drawer Destination (#NN): its ← back returns to
+        // Settings (where it's reached from), unlike every other non-home Destination, which returns to Plan.
+        val shell = shell()
+        shell.selectDestination(Destination.Settings)
+        shell.settings().onOpenProfile()
+        assertEquals(Destination.Profile, shell.activeDestination())
+
+        assertTrue(shell.onBack(), "back is consumed by the Profile → Settings return")
+        assertEquals(Destination.Settings, shell.activeDestination())
     }
 
     @Test

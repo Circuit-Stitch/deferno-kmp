@@ -23,7 +23,8 @@ fun RootShell(component: RootComponent, modifier: Modifier = Modifier, developer
     val stack by component.stack.subscribeAsState()
     when (val child = stack.active.instance) {
         is RootComponent.Child.Auth ->
-            SignInScreen(child.component.signIn, modifier, showDeveloperOptions = developerOptions)
+            // onCancel is non-null only when re-entered to add an account (#NN) — renders a Cancel-back.
+            SignInScreen(child.component.signIn, modifier, showDeveloperOptions = developerOptions, onCancel = child.component.onCancel)
         is RootComponent.Child.Main -> MainShell(child.component, modifier)
     }
 }

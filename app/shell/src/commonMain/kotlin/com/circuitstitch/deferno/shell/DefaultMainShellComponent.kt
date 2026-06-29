@@ -23,7 +23,6 @@ import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.assistant.AssistantClient
 import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
-import com.circuitstitch.deferno.core.data.auth.MeResult
 import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
@@ -405,6 +404,12 @@ class DefaultMainShellComponent(
         }
         val active = stack.value.active.instance
         if (active.handleInnerBack()) return true
+        // Profile is a drill-down from Settings → Account (not a drawer Destination): back returns there,
+        // not to the Plan home (#NN).
+        if (active.destination == Destination.Profile) {
+            navigation.bringToFront(Config.Settings)
+            return true
+        }
         // Nothing left inside the active Destination: from a non-home Destination, return to the Plan
         // home (its retained state is untouched); on the home Destination, let the platform exit.
         if (active.destination != Destination.Plan) {
@@ -577,6 +582,8 @@ class DefaultMainShellComponent(
                     DefaultProfileComponent(
                         componentContext = childContext,
                         authRepository = authRepository,
+                        // Time zone moved into Profile (#72) — sourced from this Account's offline-first settings.
+                        settingsRepository = settingsRepository,
                         account = account,
                         output = ::onProfileOutput,
                         coroutineContext = coroutineContext,
@@ -608,6 +615,10 @@ class DefaultMainShellComponent(
                         buildBackup = buildBackupZip,
                         // On-device Backup import (#314, ADR-0041) — the Settings import action restores the zip.
                         restoreBackup = importBackup,
+                        // The Account-category switcher (#NN): the roster + the Active Account's id, from
+                        // the AppScope AccountManager (this Main shell is keyed to `account`).
+                        accounts = accounts,
+                        activeAccountId = account.id,
                         // The device-local "keep brain-dump recordings" choice (#211) — AppScope, never synced.
                         keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
                         // The device-local "Brain dump notifications" opt-in (#266/#271) — AppScope, never synced.
@@ -715,7 +726,8 @@ class DefaultMainShellComponent(
             // only rendered on the deferred Android/desktop Views, so a plain titled root bar suffices.
             is MainShellComponent.DestinationChild.Assistant -> flowOf(rootChrome("Assistant"))
             is MainShellComponent.DestinationChild.Inbox -> flowOf(rootChrome("Inbox"))
-            is MainShellComponent.DestinationChild.Profile -> flowOf(rootChrome("Profile"))
+            // Profile is a drill-down from Settings → Account (no drawer row): ← back, returning to Settings.
+            is MainShellComponent.DestinationChild.Profile -> flowOf(drilledChrome("Profile"))
             is MainShellComponent.DestinationChild.Activity -> flowOf(rootChrome("Activity"))
             is MainShellComponent.DestinationChild.Placeholder -> flowOf(rootChrome(active.destination.name))
         }
@@ -943,6 +955,12 @@ class DefaultMainShellComponent(
             // size sort, so the person lands on their largest-attachment items.
             SettingsComponent.Output.OpenBiggestAttachments ->
                 openOverlay(OverlayRoute.Search(SearchSeed(hasAttachment = true, sort = SearchSort.AttachmentSizeDesc)))
+            // The Account switcher (#NN): switching re-keys the Main shell (the same callback the drawer
+            // switcher uses); add-account + sign-out cross the Account-isolation boundary, so they land at
+            // the root (ADR-0002) — the same Output sign-out has always used.
+            is SettingsComponent.Output.SwitchAccount -> onSwitchAccount(output.id)
+            SettingsComponent.Output.AddAccount -> this.output(MainShellComponent.Output.AddAccountRequested)
+            SettingsComponent.Output.SignOut -> this.output(MainShellComponent.Output.SignOutRequested)
         }
     }
 
@@ -989,7 +1007,11 @@ class DefaultMainShellComponent(
  * Destination can't silently ride along on the entitled flip — it would need its own clause here.
  */
 private fun destinationsFor(assistantEntitled: Boolean): List<Destination> =
-    Destination.entries.filter { it != Destination.Assistant || assistantEntitled }
+    Destination.entries.filter {
+        // Profile is reached by drilling from Settings → Account (a ← back detail), not a drawer row (#NN).
+        it != Destination.Profile &&
+            (it != Destination.Assistant || assistantEntitled)
+    }
 
 /**
  * Dismiss the Tasks Destination's open detail (ADR-0034). The Item [TasksComponent.tree] is the

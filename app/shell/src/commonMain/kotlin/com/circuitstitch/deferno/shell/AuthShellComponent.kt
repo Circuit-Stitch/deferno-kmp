@@ -17,11 +17,19 @@ import com.circuitstitch.deferno.feature.signin.SignInComponent
 interface AuthShellComponent {
     /** The sign-in surface this shell hosts — v1's only Auth-shell child. */
     val signIn: SignInComponent
+
+    /**
+     * Cancel back to the Main shell — non-null **only** when the Auth shell was re-entered to *add* an
+     * account while already signed in (#NN, ADR-0013). `null` on a first sign-in / after sign-out (there is
+     * no signed-in shell to return to), so the View shows a Cancel affordance only when this is present.
+     */
+    val onCancel: (() -> Unit)?
 }
 
 class DefaultAuthShellComponent(
     componentContext: ComponentContext,
     signIn: (ComponentContext) -> SignInComponent,
+    override val onCancel: (() -> Unit)? = null,
 ) : AuthShellComponent, ComponentContext by componentContext {
 
     override val signIn: SignInComponent = signIn(childContext(key = "SignIn"))

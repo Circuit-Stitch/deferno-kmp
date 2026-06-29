@@ -4,13 +4,17 @@ import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
 import com.circuitstitch.deferno.core.data.auth.MeResult
+import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 
@@ -64,6 +68,14 @@ interface ProfileComponent {
 
     val state: StateFlow<ProfileState>
 
+    /**
+     * The Active Account's time zone (from the offline-first `UserSettings`, #72) — moved here from the
+     * Settings → Account category. `null` until the first settings emission / when unset (the View shows
+     * a "Device default" fallback). Offline-first: sourced from the local settings cache, never the live
+     * `/auth/me`, so it renders even when the identity fetch is unavailable.
+     */
+    val timeZone: StateFlow<String?>
+
     /** Re-fetches `/auth/me` — e.g. the user tapped "try again" / "sign in again". */
     fun onRetry()
 
@@ -82,6 +94,7 @@ interface ProfileComponent {
 class DefaultProfileComponent(
     componentContext: ComponentContext,
     private val authRepository: AuthRepository,
+    private val settingsRepository: SettingsRepository,
     override val account: Account,
     private val output: (ProfileComponent.Output) -> Unit,
     coroutineContext: CoroutineContext = Dispatchers.Default,
@@ -91,6 +104,13 @@ class DefaultProfileComponent(
 
     private val _state = MutableStateFlow<ProfileState>(ProfileState.Loading)
     override val state: StateFlow<ProfileState> = _state.asStateFlow()
+
+    // The Active Account's time zone, mirrored from the offline-first settings cache (#72) — never the
+    // live /auth/me, so it renders even when the identity fetch is offline.
+    override val timeZone: StateFlow<String?> =
+        settingsRepository.observeSettings()
+            .map { it.timeZone }
+            .stateIn(scope, SharingStarted.Eagerly, null)
 
     init {
         load()

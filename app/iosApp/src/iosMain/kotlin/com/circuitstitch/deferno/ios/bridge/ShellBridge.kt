@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.ios.bridge
 
 import com.circuitstitch.deferno.feature.calendar.CalendarState
+import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileState
 import com.circuitstitch.deferno.feature.settings.InferenceEngineSettings
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
@@ -299,6 +300,10 @@ fun profileUser(state: ProfileState): User? = (state as? ProfileState.SignedIn)?
 fun profileIsLoading(state: ProfileState): Boolean = state is ProfileState.Loading
 fun profileIsReauthRequired(state: ProfileState): Boolean = state is ProfileState.ReauthRequired
 fun profileIsUnavailable(state: ProfileState): Boolean = state is ProfileState.Unavailable
+// The Active Account's time zone, moved into Profile (#72). A snapshot read of the offline-first
+// `timeZone` flow (a String? can't cross as a class-bound SKIE observer); the Profile body re-renders
+// on each ProfileState change, by which point the local settings cache has populated it.
+fun profileTimeZone(component: ProfileComponent): String? = component.timeZone.value
 
 fun newStatusIsSubmitting(state: NewState): Boolean = state.status is NewStatus.Submitting
 fun newStatusIsOffline(state: NewState): Boolean = state.status is NewStatus.Offline
@@ -326,6 +331,13 @@ fun accountKey(account: Account): String = account.id.value
 
 /** Switch the Active Account without Swift constructing an `AccountId` (its `init` throws on blank). */
 fun switchToAccount(component: MainShellComponent, account: Account) = component.switchAccount(account.id)
+
+// The Settings → Account switcher (#NN). `accounts`/`activeAccountId` are read as snapshots: switching or
+// adding an account re-keys the whole Main shell (destroying this Settings View), so live updates aren't
+// needed. `switchSettingsAccount` reads the Account's header-erased value-class id (like switchToAccount).
+fun settingsAccounts(component: SettingsComponent): List<Account> = component.accounts.value
+fun settingsActiveAccountKey(component: SettingsComponent): String = component.activeAccountId.value
+fun switchSettingsAccount(component: SettingsComponent, account: Account) = component.onSwitchAccount(account.id)
 
 /** Stable String identity of a speech-engine option (SpeechEngineId value class is header-erased). */
 fun speechOptionKey(option: SpeechEngineOption): String = option.id.value

@@ -4,6 +4,7 @@ import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.auth.SignInResult
 import com.circuitstitch.deferno.core.data.auth.SignInService
+import com.circuitstitch.deferno.core.model.Account
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,6 +30,11 @@ import kotlin.coroutines.CoroutineContext
 class DefaultSignInComponent(
     componentContext: ComponentContext,
     private val signInService: SignInService,
+    // Invoked with the established [Account] on a successful sign-in (#NN, ADR-0013). On the **first**
+    // sign-in the Auth shell leaves it default — the reactive `activeAccount` flip swaps in the Main shell,
+    // so there's nothing to do. The **add-account** re-entry (RootComponent, already signed in) uses it to
+    // switch to the newly added Account, which `addAccount` does not auto-activate. No token crosses (ADR-0009).
+    private val onSignedIn: (Account) -> Unit = {},
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : SignInComponent, ComponentContext by componentContext {
 
@@ -42,7 +48,7 @@ class DefaultSignInComponent(
 
     override fun onSignInClick() {
         if (!beginBusy()) return
-        signInJob = launchAttempt { signInService.signInWithBrowser().toBrowserError() }
+        signInJob = launchAttempt(browser = true) { signInService.signInWithBrowser() }
     }
 
     override fun onRetry() {
@@ -51,7 +57,7 @@ class DefaultSignInComponent(
         // browser leg cancels the prior redirect wait, so nothing leaks. isBusy is already true.
         signInJob?.cancel()
         _state.update { it.copy(isBusy = true, error = null) }
-        signInJob = launchAttempt { signInService.signInWithBrowser().toBrowserError() }
+        signInJob = launchAttempt(browser = true) { signInService.signInWithBrowser() }
     }
 
     override fun onUseTokenInstead() {
@@ -66,16 +72,19 @@ class DefaultSignInComponent(
         val token = _state.value.token.trim()
         if (token.isEmpty()) return
         if (!beginBusy()) return
-        signInJob = launchAttempt { signInService.signIn(token).toPasteError() }
+        signInJob = launchAttempt(browser = false) { signInService.signIn(token) }
     }
 
     /**
-     * Run [attempt] on [scope] and settle `isBusy = false` with whatever [SignInError] it mapped to
-     * (`null` = success or browser-cancel; on success the shell swaps this surface away, ADR-0013).
-     * The caller owns the in-flight guard (`beginBusy` for a fresh start; [onRetry] forces a restart).
+     * Run [attempt] on [scope], notify [onSignedIn] on a [SignInResult.Success], then settle
+     * `isBusy = false` with the [SignInError] the result maps to (`null` = success or browser-cancel; on a
+     * first sign-in the shell swaps this surface away, ADR-0013). [browser] selects the error mapping (the
+     * paste path surfaces `InvalidToken`, the browser path can't). The caller owns the in-flight guard.
      */
-    private fun launchAttempt(attempt: suspend () -> SignInError?): Job = scope.launch {
-        val error = attempt()
+    private fun launchAttempt(browser: Boolean, attempt: suspend () -> SignInResult): Job = scope.launch {
+        val result = attempt()
+        if (result is SignInResult.Success) onSignedIn(result.account)
+        val error = if (browser) result.toBrowserError() else result.toPasteError()
         _state.update { it.copy(isBusy = false, error = error) }
     }
 

@@ -29,11 +29,41 @@ class DefaultSignInComponentTest {
 
     private val account = Account(AccountId("u-1"), "Ada")
 
-    private fun TestScope.component(service: FakeSignInService) = DefaultSignInComponent(
+    private fun TestScope.component(
+        service: FakeSignInService,
+        onSignedIn: (Account) -> Unit = {},
+    ) = DefaultSignInComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         signInService = service,
+        onSignedIn = onSignedIn,
         coroutineContext = StandardTestDispatcher(testScheduler),
     )
+
+    @Test
+    fun successfulSignIn_invokesOnSignedInWithTheEstablishedAccount() = runTest {
+        // The add-account re-entry (#NN) hooks this to switch to the new Account; on a first sign-in the
+        // shell's onSignedIn no-ops and the reactive activeAccount flip handles the swap (ADR-0013).
+        val signedIn = mutableListOf<Account>()
+        val component = component(FakeSignInService(SignInResult.Success(account)), onSignedIn = signedIn::add)
+
+        component.onTokenChange("pat")
+        component.onSubmit()
+        advanceUntilIdle()
+
+        assertEquals(listOf(account), signedIn)
+    }
+
+    @Test
+    fun aRejectedSignIn_doesNotInvokeOnSignedIn() = runTest {
+        val signedIn = mutableListOf<Account>()
+        val component = component(FakeSignInService(SignInResult.InvalidToken), onSignedIn = signedIn::add)
+
+        component.onTokenChange("bad")
+        component.onSubmit()
+        advanceUntilIdle()
+
+        assertTrue(signedIn.isEmpty())
+    }
 
     @Test
     fun startsIdleWithNoTokenEntryShown() = runTest {

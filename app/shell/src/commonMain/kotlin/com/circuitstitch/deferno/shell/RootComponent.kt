@@ -44,6 +44,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlin.coroutines.CoroutineContext
@@ -260,6 +261,14 @@ class DefaultRootComponent(
 
     private val navigation = StackNavigation<Config>()
 
+    /**
+     * Add-account mode (#NN, ADR-0013): forces the **Auth shell** even while an Account is active, so the
+     * user can sign into an *additional* account without signing out. The existing accounts stay in the
+     * roster (still active underneath); on success [onSignedIn] switches to the new one, and Cancel
+     * ([cancelAddAccount]) drops back to the Main shell. Combined with `activeAccount` to pick the shell.
+     */
+    private val addingAccount = MutableStateFlow(false)
+
     /** The foreground Main child's session, used to apply per-Account writes (add-to-plan). */
     private var activeSession: AccountSession? = null
 
@@ -277,7 +286,7 @@ class DefaultRootComponent(
         childStack(
             source = navigation,
             serializer = null,
-            initialConfiguration = configFor(accountManager.activeAccount.value),
+            initialConfiguration = effectiveConfig(accountManager.activeAccount.value, adding = false),
             key = "ShellStack",
             handleBackButton = false, // back is routed via onBackClicked(), not a stack pop
             childFactory = ::createChild,
@@ -287,12 +296,12 @@ class DefaultRootComponent(
         stack.asStateFlow(scope) { it.active.instance }
 
     init {
-        // Follow the Active Account: swap shells (and re-key the Main child per Account) as it changes.
-        // replaceAll retains the child when the target config is unchanged (data-class equality), so a
-        // no-op emission doesn't rebuild the current shell.
+        // Follow the Active Account *and* add-account mode: swap shells (and re-key the Main child per
+        // Account) as either changes. replaceAll retains the child when the target config is unchanged
+        // (data-class equality), so a no-op emission doesn't rebuild the current shell.
         scope.launch {
-            accountManager.activeAccount.collect { account ->
-                val target = configFor(account)
+            combine(accountManager.activeAccount, addingAccount, ::Pair).collect { (account, adding) ->
+                val target = effectiveConfig(account, adding)
                 if (stack.value.active.configuration != target) {
                     navigation.replaceAll(target)
                 }
@@ -302,7 +311,9 @@ class DefaultRootComponent(
 
     override fun onBackClicked(): Boolean =
         when (val child = stack.value.active.instance) {
-            is RootComponent.Child.Auth -> false // can't go back out of the Auth shell — exit the scene
+            // The Auth shell normally can't be backed out of (signed out → exit the scene), but when it was
+            // re-entered to *add* an account, back cancels that and returns to the Main shell (#NN).
+            is RootComponent.Child.Auth -> if (addingAccount.value) { cancelAddAccount(); true } else false
             is RootComponent.Child.Main -> child.component.onBack()
         }
 
@@ -363,8 +374,11 @@ class DefaultRootComponent(
                     DefaultAuthShellComponent(
                         componentContext = childContext,
                         // The paste-PAT sign-in surface (#15, ADR-0023): on a valid token it calls
-                        // addAccount, the activeAccount collector above swaps in the Main shell.
-                        signIn = { ctx -> DefaultSignInComponent(ctx, signInService, scope.coroutineContext) },
+                        // addAccount; the first sign-in's activeAccount flip swaps in the Main shell, while
+                        // an add-account re-entry switches via [onSignedIn] (addAccount doesn't auto-activate).
+                        signIn = { ctx -> DefaultSignInComponent(ctx, signInService, onSignedIn = ::onSignedIn, coroutineContext = scope.coroutineContext) },
+                        // A Cancel-back only when re-entered to add an account (already signed in, #NN).
+                        onCancel = if (addingAccount.value) ::cancelAddAccount else null,
                     ),
                 )
             }
@@ -518,6 +532,8 @@ class DefaultRootComponent(
             is MainShellComponent.Output.AddToPlanRequested -> onAddToPlan(output.id)
             // Sign out crosses the Account-isolation boundary (ADR-0002), so it lands at the root.
             MainShellComponent.Output.SignOutRequested -> onSignOut()
+            // Add-account re-enters the Auth shell while keeping the existing accounts (#NN, ADR-0013).
+            MainShellComponent.Output.AddAccountRequested -> beginAddAccount()
             // OS / browser deep-links cross the app boundary (an Android Intent), so the host issues
             // them (#72). App permissions opens the OS settings; the console URL is resolved from the
             // Active Account's /auth/me identity (only admins carry one — a no-op when absent).
@@ -564,6 +580,31 @@ class DefaultRootComponent(
         scope.launch { accountManager.switchTo(id) }
     }
 
-    private fun configFor(account: Account?): Config =
-        if (account != null) Config.Main(account.id.value) else Config.Auth
+    /** Enter add-account mode (#NN): force the Auth shell while staying signed into the current Account(s). */
+    private fun beginAddAccount() {
+        addingAccount.value = true
+    }
+
+    /** Leave add-account mode without signing in (Cancel / back): the collector swaps back to the Main shell. */
+    private fun cancelAddAccount() {
+        addingAccount.value = false
+    }
+
+    /**
+     * A sign-in succeeded. On a **first** sign-in (not add mode) there's nothing to do — `addAccount`
+     * already flipped `activeAccount` and the collector swapped in the Main shell. In **add mode** the new
+     * Account was added but not activated, so switch to it, *then* leave add mode — sequenced so the shell
+     * makes a single Auth → Main(new) transition rather than briefly rebuilding Main for the old Account.
+     */
+    private fun onSignedIn(account: Account) {
+        if (!addingAccount.value) return
+        scope.launch {
+            accountManager.switchTo(account.id)
+            addingAccount.value = false
+        }
+    }
+
+    /** The shell config for [account] / add-account [adding]: the Auth shell when adding or signed out. */
+    private fun effectiveConfig(account: Account?, adding: Boolean): Config =
+        if (account != null && !adding) Config.Main(account.id.value) else Config.Auth
 }

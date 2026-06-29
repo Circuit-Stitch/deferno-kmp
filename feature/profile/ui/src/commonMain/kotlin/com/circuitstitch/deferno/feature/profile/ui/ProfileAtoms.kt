@@ -112,7 +112,7 @@ internal fun IdentityCard(user: User) {
  * Confirming calls [onSignOut] — the View raises `Output.SignOutRequested`; the shell does the wipe.
  */
 @Composable
-internal fun AccountSection(account: Account, onSignOut: () -> Unit) {
+internal fun AccountSection(account: Account, timeZone: String?, onSignOut: () -> Unit) {
     var showConfirm by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -121,6 +121,8 @@ internal fun AccountSection(account: Account, onSignOut: () -> Unit) {
             modifier = Modifier.semantics { heading() },
         )
         LabeledRow(label = "Active account", value = account.label)
+        // Time zone moved here from Settings → Account (#72); offline-first, so it always renders.
+        LabeledRow(label = "Time zone", value = timeZone ?: "Device default")
         LabeledRow(label = "Credential", value = "Personal access token")
         Text(
             text = "Stored only on this device.",

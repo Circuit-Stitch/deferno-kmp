@@ -45,6 +45,9 @@ fun SignInScreen(
     component: SignInComponent,
     modifier: Modifier = Modifier,
     showDeveloperOptions: Boolean = false,
+    // Non-null only when the Auth shell was re-entered to *add* an account while signed in (#NN): renders a
+    // Cancel-back to the Main shell. Null on a first sign-in / after sign-out (nothing to return to).
+    onCancel: (() -> Unit)? = null,
 ) {
     val state by component.state.collectAsState()
     SignInContent(
@@ -55,6 +58,7 @@ fun SignInScreen(
         onTokenChange = component::onTokenChange,
         onSubmit = component::onSubmit,
         showDeveloperOptions = showDeveloperOptions,
+        onCancel = onCancel,
         modifier = modifier,
     )
 }
@@ -69,6 +73,7 @@ internal fun SignInContent(
     onTokenChange: (String) -> Unit,
     onSubmit: () -> Unit,
     showDeveloperOptions: Boolean,
+    onCancel: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier = modifier.fillMaxSize()) {
@@ -83,7 +88,7 @@ internal fun SignInContent(
             ) {
                 Text(text = "Deferno", style = MaterialTheme.typography.headlineMedium)
                 Text(
-                    text = "Sign in to your account",
+                    text = if (onCancel == null) "Sign in to your account" else "Add another account",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -140,6 +145,13 @@ internal fun SignInContent(
                             onClick = onUseTokenInstead,
                             modifier = Modifier.padding(top = 8.dp),
                         ) { Text(text = "Use a token instead") }
+                    }
+                }
+
+                // Add-account re-entry (#NN): a Cancel-back to the Main shell. Absent on a first sign-in.
+                if (onCancel != null) {
+                    TextButton(onClick = onCancel, modifier = Modifier.padding(top = 16.dp)) {
+                        Text(text = "Cancel")
                     }
                 }
             }
