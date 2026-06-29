@@ -34,6 +34,8 @@ class TaskEntityQueriesTest {
         externalSource: String? = null,
         externalId: String? = null,
         externalUrl: String? = null,
+        attachmentCount: Long? = null,
+        attachmentTotalSize: Long? = null,
     ) = taskEntityQueries.insertOrReplace(
         id = id,
         org_slug = "u-e4h2qk",
@@ -63,12 +65,14 @@ class TaskEntityQueriesTest {
         external_source = externalSource,
         external_id = externalId,
         external_url = externalUrl,
+        attachment_count = attachmentCount,
+        attachment_total_size = attachmentTotalSize,
     )
 
     @Test
     fun insertAndSelectByIdRoundTrips() {
         val db = inMemoryDefernoDatabase()
-        db.insert(id = "a", title = "first", ownerOrgId = "org-1", hydration = "Full", descendantDone = 2, descendantTotal = 5, blocked = 1, isBlocker = 1)
+        db.insert(id = "a", title = "first", ownerOrgId = "org-1", hydration = "Full", descendantDone = 2, descendantTotal = 5, blocked = 1, isBlocker = 1, attachmentCount = 3, attachmentTotalSize = 4096)
 
         val row: TaskEntity? = db.taskEntityQueries.selectById("a").executeAsOneOrNull()
         assertEquals("a", row?.id)
@@ -82,6 +86,9 @@ class TaskEntityQueriesTest {
         // Server-derived dependency flags round-trip (#290, schema v10).
         assertEquals(1L, row?.blocked)
         assertEquals(1L, row?.is_blocker)
+        // Attachment rollup columns round-trip (#311, schema v12).
+        assertEquals(3L, row?.attachment_count)
+        assertEquals(4096L, row?.attachment_total_size)
     }
 
     @Test

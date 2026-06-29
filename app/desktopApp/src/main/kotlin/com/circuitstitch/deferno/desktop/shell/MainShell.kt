@@ -72,7 +72,7 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
             // Desktop loads the shared composeResources glyphs off the JVM classpath (see ShellChrome KDoc).
             brainDumpIcon = painterResource(Res.drawable.ic_voice_chat),
             newIcon = painterResource(Res.drawable.ic_add_task),
-            body = { DestinationContent(active, onSearch = { component.openOverlay(OverlayRoute.Search) }) },
+            body = { DestinationContent(active, onSearch = { component.openOverlay(OverlayRoute.Search()) }) },
         )
 
         // The shell-level overlay route sits above the whole chrome (ADR-0015); shell back (Esc)

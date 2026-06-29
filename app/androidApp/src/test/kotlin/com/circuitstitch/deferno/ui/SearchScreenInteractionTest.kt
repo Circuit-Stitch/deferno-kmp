@@ -91,16 +91,6 @@ class SearchScreenInteractionTest {
     }
 
     @Test
-    fun failedSearch_showsTheUnavailableCopy_notNoMatches() {
-        // A 503/offline pull must not render as "No matches" (#73 follow-up).
-        val component = FakeSearchComponent(SearchState(query = "zzz", hasSearched = true, searchFailed = true))
-        setContent { SearchScreen(component) }
-
-        composeRule.onNodeWithText("Search is unavailable").assertIsDisplayed()
-        composeRule.onNodeWithText("No matches").assertDoesNotExist()
-    }
-
-    @Test
     fun openingFiltersShowsTheSheetSections() {
         val component = FakeSearchComponent()
         setContent { SearchScreen(component) }

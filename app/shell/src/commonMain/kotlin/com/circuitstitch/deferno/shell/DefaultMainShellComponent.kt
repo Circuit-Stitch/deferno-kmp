@@ -32,13 +32,14 @@ import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.feedback.FeedbackResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.data.task.SearchSeed
+import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.task.TaskRepository
-import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.domain.command.CommandResult
 import com.circuitstitch.deferno.core.domain.command.CreateItem
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
@@ -179,7 +180,7 @@ class DefaultMainShellComponent(
     private val importBackup: suspend (ByteArray) -> ImportResult = { ImportResult.Malformed },
     // The global-search seam (#73): a one-shot, online-only pull the Search overlay drives. Defaults
     // to "no results" so tests that don't exercise Search build without supplying it.
-    private val searchTasks: SearchTasks = SearchTasks { _ -> TaskSearchResult.Success(emptyList()) },
+    private val searchTasks: SearchTasks = SearchTasks { _ -> emptyList() },
     // The in-app Help → Feedback service (#375) the Feedback overlay submits through (presign → PUT →
     // submit). AppScope; defaulted to a no-op Offline so shell tests build without supplying it.
     private val feedbackRepository: FeedbackRepository = NoopFeedbackRepository,
@@ -767,15 +768,16 @@ class DefaultMainShellComponent(
         when (route) {
             OverlayRoute.Placeholder -> MainShellComponent.OverlayChild.Placeholder
 
-            OverlayRoute.Search ->
+            is OverlayRoute.Search ->
                 MainShellComponent.OverlayChild.Search(
                     DefaultSearchComponent(
                         componentContext = childContext,
                         searchTasks = searchTasks,
                         output = ::onSearchOutput,
+                        // A deep-link's pre-applied filter/sort (#311) — null for the plain ⌕ overlay.
+                        initialSeed = route.seed,
                         // The Search overlay sits above the chrome, so the shell-level banner can't show
-                        // over it — feed the same flag in so a 401'd search shows "Session expired" rather
-                        // than the generic "couldn't reach the server" (#297).
+                        // over it — feed the same flag in so the overlay can surface "Session expired" (#297).
                         sessionExpired = sessionExpired,
                         coroutineContext = coroutineContext,
                     ),
@@ -937,6 +939,10 @@ class DefaultMainShellComponent(
             }
             // An un-triaged recording placeholder has no owning Task yet — go to the Inbox where triage clears it.
             SettingsComponent.Output.OpenInbox -> navigation.bringToFront(Config.Inbox)
+            // The "biggest attachments" deep-link (#311): open Search seeded with the attachment filter +
+            // size sort, so the person lands on their largest-attachment items.
+            SettingsComponent.Output.OpenBiggestAttachments ->
+                openOverlay(OverlayRoute.Search(SearchSeed(hasAttachment = true, sort = SearchSort.AttachmentSizeDesc)))
         }
     }
 

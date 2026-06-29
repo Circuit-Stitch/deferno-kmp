@@ -260,6 +260,18 @@ class SettingsComponentTest {
     }
 
     @Test
+    fun openingBiggestAttachments_emitsTheDeepLinkOutput() {
+        // The Storage "biggest attachments" affordance (#311) emits a host output the shell turns into a
+        // seeded Search overlay (the attachment filter + size sort).
+        val outputs = mutableListOf<SettingsComponent.Output>()
+        val (component, _, _) = component(output = outputs::add)
+
+        component.onOpenBiggestAttachments()
+
+        assertEquals(listOf<SettingsComponent.Output>(SettingsComponent.Output.OpenBiggestAttachments), outputs)
+    }
+
+    @Test
     fun opensAtTheCategoryList() {
         val (component, _, _) = component()
         assertEquals(SettingsComponent.SettingsChild.List, component.stack.value.active.instance)

@@ -210,7 +210,7 @@ fun ShellChrome(
             },
             onSearch = {
                 onDrawerOpenChange(false)
-                component.openOverlay(OverlayRoute.Search)
+                component.openOverlay(OverlayRoute.Search())
             },
             // The two top-of-drawer capture triggers (re-skin: the drawer surfaces the same overlay
             // routes the top-bar create actions raise, so a capture path is always a tap away).

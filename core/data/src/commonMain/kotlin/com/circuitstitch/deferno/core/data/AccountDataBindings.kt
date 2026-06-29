@@ -215,7 +215,10 @@ interface AccountDataBindings {
         localStore: TaskLocalStore,
         remoteSource: TaskRemoteSource,
         itemSync: ItemSync,
-    ): TaskRepository = OfflineTaskRepository(localStore, remoteSource, itemSync)
+        habitStore: HabitLocalStore,
+        choreStore: ChoreLocalStore,
+        eventStore: EventLocalStore,
+    ): TaskRepository = OfflineTaskRepository(localStore, remoteSource, itemSync, habitStore, choreStore, eventStore)
 
     // The unified cross-kind read of the Item store (ADR-0034, #226): merges the four per-kind caches
     // into one Item list so the Tasks Item tree (#227) renders the whole catalog as one parent_id

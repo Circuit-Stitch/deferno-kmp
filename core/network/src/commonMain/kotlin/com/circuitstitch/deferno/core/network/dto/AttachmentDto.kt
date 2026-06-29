@@ -22,6 +22,20 @@ data class AttachmentViewDto(
 )
 
 /**
+ * The size-only projection of the `attachments` block nested per item on the `/items` snapshot and the
+ * `/tasks/{id}` detail (#311). The full backend-hosted attachment object carries `id`/`filename`/`mime`/
+ * `url`/… but the offline-search rollup only needs [size]; the tolerant reader
+ * ([com.circuitstitch.deferno.core.network.DefernoJson], `ignoreUnknownKeys`) drops the rest, so this
+ * stays a one-field shape. Defaulted to `0` so an entry missing the key decodes cleanly rather than
+ * throwing (matching the reader's tolerant posture). Lets the client cache `attachment_count` +
+ * `attachment_total_size` from data already on the wire — no backend rollup field needed (ADR-0042).
+ */
+@Serializable
+data class AttachmentSizeDto(
+    val size: Long = 0,
+)
+
+/**
  * `POST /tasks/{id}/attachments/presign` body — the batch of files to presign, identical in shape to
  * the feedback presign (reuses the generic [PresignRequestDto]). One [PresignResponseDto] comes back
  * per file, in order, under the response envelope's `data.attachments`.

@@ -93,9 +93,26 @@ class TaskEntityMappingTest {
             // Server-derived dependency flags from the /items snapshot (#290).
             blocked = true,
             isBlocker = true,
+            // Attachment rollup from the /items snapshot (#311).
+            attachmentCount = 4,
+            attachmentTotalSize = 8192,
         )
 
         assertEquals(task, task.toEntity().toDomain())
+    }
+
+    @Test
+    fun attachmentRollupRoundTripsAndNullColumnDecodesToZero() {
+        // #311: count + total bytes round-trip through the row...
+        val withAttachments = sampleTask(pinned = false).copy(attachmentCount = 2, attachmentTotalSize = 3072)
+        assertEquals(withAttachments, withAttachments.toEntity().toDomain())
+        assertEquals(2L, withAttachments.toEntity().attachment_count)
+        assertEquals(3072L, withAttachments.toEntity().attachment_total_size)
+        // ...and a pre-migration NULL column (sampleEntity leaves them null) decodes to 0, not a crash.
+        val decoded = sampleEntity().toDomain()
+        assertEquals(0, decoded.attachmentCount)
+        assertEquals(0L, decoded.attachmentTotalSize)
+        assertEquals(false, decoded.hasAttachment)
     }
 
     @Test
@@ -237,5 +254,7 @@ class TaskEntityMappingTest {
         external_source = externalSource,
         external_id = externalId,
         external_url = externalUrl,
+        attachment_count = null,
+        attachment_total_size = null,
     )
 }

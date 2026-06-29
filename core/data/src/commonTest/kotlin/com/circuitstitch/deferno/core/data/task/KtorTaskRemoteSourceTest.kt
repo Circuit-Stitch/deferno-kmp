@@ -1,10 +1,8 @@
 package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.model.HydrationState
-import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
-import com.circuitstitch.deferno.core.model.WorkingState
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -19,7 +17,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
-import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,22 +25,12 @@ import kotlin.test.assertTrue
 
 /**
  * Behaviour of [KtorTaskRemoteSource] (#22), driven by Ktor's MockEngine on the JVM-fast path
- * (ADR-0006) — no real network. Proves the detail + search reads hit the right `/tasks/{id}` +
- * `/tasks/search` paths and map the wire envelope through the #18 DTO->domain mappers, and honour the
- * offline-first contract: an error response yields `null` (fetch) so a failed hydrate leaves the cache
- * intact, while a failed search stays [TaskSearchResult.Unavailable]. (The cold list snapshot moved to
- * `GET /items` — `KtorItemSnapshotSourceTest` — #226.)
+ * (ADR-0006) — no real network. Proves the detail read hits the right `/tasks/{id}` path and maps the
+ * wire envelope through the #18 DTO->domain mappers, and honours the offline-first contract: an error
+ * response yields `null` so a failed hydrate leaves the cache intact. (The cold list snapshot moved to
+ * `GET /items` — `KtorItemSnapshotSourceTest` — #226; global search went offline — #311.)
  */
 class KtorTaskRemoteSourceTest {
-
-    private val listEnvelope = """
-        {"version":"0.1","data":[
-            {"id":"a","org_slug":"u-e4h2qk","title":"first","status":"open","sequence":1,"type":"task",
-             "date_created":"2026-05-20T16:11:42Z"},
-            {"id":"b","org_slug":"u-e4h2qk","title":"second","status":"in-progress","sequence":2,"type":"habit",
-             "date_created":"2026-05-20T16:11:42Z","deleted_at":"2026-06-01T00:00:00Z"}
-        ]}
-    """.trimIndent()
 
     private val detailEnvelope = """
         {"version":"0.1","data":{
@@ -74,48 +61,8 @@ class KtorTaskRemoteSourceTest {
         assertNull(source.fetch(TaskId("a")))
     }
 
-    @Test
-    fun searchHitsTheSearchPathWithTheTermAndFilterQueryParams() = runTest {
-        var captured: HttpRequestData? = null
-        val source = KtorTaskRemoteSource(client { req -> captured = req; respondJson(listEnvelope) })
-
-        val outcome = source.search(
-            TaskSearchQuery(
-                query = "spring",
-                statuses = setOf(WorkingState.InProgress),
-                labels = setOf("home"),
-                fromDate = LocalDate(2026, 6, 1),
-                toDate = LocalDate(2026, 6, 30),
-            ),
-        )
-
-        val params = captured?.url?.parameters
-        assertTrue(captured?.url?.encodedPath?.endsWith("/tasks/search") == true)
-        assertEquals("spring", params?.get("q"))
-        assertEquals("in-progress", params?.get("status"))
-        assertEquals("home", params?.get("label"))
-        // The REST query-param names per the OpenAPI contract (GET /tasks/search) are "from"/"to" —
-        // NOT the MCP search_tasks tool's from_date/to_date (#73 follow-up). Sending from_date/to_date
-        // made the real backend silently ignore the date range.
-        assertEquals("2026-06-01", params?.get("from"))
-        assertEquals("2026-06-30", params?.get("to"))
-        assertNull(params?.get("from_date"), "the MCP tool param name must not leak onto the REST query")
-        assertNull(params?.get("to_date"), "the MCP tool param name must not leak onto the REST query")
-        val hits = (outcome as TaskSearchResult.Success).hits
-        assertEquals(listOf("a", "b"), hits.map { it.id })
-        // Kind-agnostic (#231): the wire `type` discriminant is carried through, not discarded — so the
-        // habit hit reads as a Habit, not force-fit to Task the way the v1 client did.
-        assertEquals(listOf(ItemKind.Task, ItemKind.Habit), hits.map { it.kind })
-    }
-
-    @Test
-    fun searchReportsUnavailableOnFailure() = runTest {
-        // Unlike the background reads, a failed search must stay visible (#73 follow-up): the UI
-        // renders "search is unavailable", never a misleading "No matches".
-        val source = KtorTaskRemoteSource(client { respond("", HttpStatusCode.InternalServerError) })
-
-        assertEquals(TaskSearchResult.Unavailable, source.search(TaskSearchQuery("query")))
-    }
+    // Global search went offline in #311 (a local read over the cache, ADR-0042) — it is proved in
+    // OfflineTaskRepositoryTest now, and KtorTaskRemoteSource no longer carries `/tasks/search`.
 
     // --- test helpers ---
 

@@ -375,6 +375,12 @@ interface SettingsComponent {
      */
     fun onOpenRecording(taskId: String?)
 
+    /**
+     * Storage: deep-link into global Search pre-filtered to items with attachments, sorted biggest-first
+     * (#311 — the original "find my biggest attachments" ask). Host-routed: the shell opens the Search overlay.
+     */
+    fun onOpenBiggestAttachments()
+
     /** A live category detail, tagged with which [SettingsCategory] it is (for the unbacked stubs). */
     sealed interface SettingsChild {
         /** The category list root. */
@@ -405,6 +411,9 @@ interface SettingsComponent {
 
         /** Open the Inbox for an un-triaged recording placeholder (a Storage row tap, #211). */
         data object OpenInbox : Output
+
+        /** Open global Search pre-filtered to items with attachments, biggest-first (a Storage tap, #311). */
+        data object OpenBiggestAttachments : Output
     }
 }
 
@@ -665,6 +674,8 @@ class DefaultSettingsComponent(
 
     override fun onOpenRecording(taskId: String?) =
         output(if (taskId != null) SettingsComponent.Output.OpenTask(taskId) else SettingsComponent.Output.OpenInbox)
+
+    override fun onOpenBiggestAttachments() = output(SettingsComponent.Output.OpenBiggestAttachments)
 
     private fun createChild(
         config: Config,

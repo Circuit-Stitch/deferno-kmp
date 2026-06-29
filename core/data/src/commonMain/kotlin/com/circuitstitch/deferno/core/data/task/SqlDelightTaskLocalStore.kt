@@ -74,6 +74,8 @@ class SqlDelightTaskLocalStore(
             external_source = e.external_source,
             external_id = e.external_id,
             external_url = e.external_url,
+            attachment_count = e.attachment_count,
+            attachment_total_size = e.attachment_total_size,
         )
     }
 

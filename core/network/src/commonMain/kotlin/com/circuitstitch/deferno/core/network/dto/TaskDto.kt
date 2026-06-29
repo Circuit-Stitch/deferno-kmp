@@ -100,6 +100,10 @@ data class TaskDetailDto(
     // a native Task. `/tasks/{id}` carries the `external` block but NOT the derived `origin_label` (that's
     // only on the get_item `/items/{id}` envelope) — the client derives the origin label from `external.id`.
     val external: ExternalProvenanceDto? = null,
+    // Backend-hosted attachment metadata, size-only (#311) — the `/tasks/{id}` detail carries the full
+    // `attachments` array; rolled up to `attachment_count` + `attachment_total_size` so hydrate keeps the
+    // offline attachment rollup authoritative (ADR-0042). Absent/empty → no attachments.
+    val attachments: List<AttachmentSizeDto> = emptyList(),
 )
 
 /**

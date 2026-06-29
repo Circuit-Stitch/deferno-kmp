@@ -26,4 +26,11 @@ data class SearchHit(
     val completeBy: Instant? = null,
     val deadlineTimeOfDay: LocalTime? = null,
     val ref: String? = null,
-)
+    // Backend-hosted attachment rollup (#311), carried so a result row can show a "N files · size" badge and
+    // the offline attachment-size sort has a value to order by. Task-only today (recurring hits carry 0).
+    val attachmentCount: Int = 0,
+    val attachmentTotalSize: Long = 0,
+) {
+    /** Whether this hit has at least one backend-hosted attachment (#311). */
+    val hasAttachment: Boolean get() = attachmentCount > 0
+}

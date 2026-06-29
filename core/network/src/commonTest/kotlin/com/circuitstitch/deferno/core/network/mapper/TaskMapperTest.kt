@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.network.dto.AttachmentSizeDto
 import com.circuitstitch.deferno.core.network.dto.BlockedByRefDto
 import com.circuitstitch.deferno.core.network.dto.ExternalProvenanceDto
 import com.circuitstitch.deferno.core.network.dto.ItemView
@@ -93,35 +94,6 @@ class TaskMapperTest {
         assertEquals(true, task.isDeleted)
     }
 
-    @Test
-    fun taskSummaryDtoMapsToKindAgnosticSearchHit() {
-        // The wire `type` discriminant is carried into the hit's kind (not dropped, the way toDomain
-        // force-fits everything to Task), and a Dropped status folds into the terminal de-emphasis (#231).
-        val hit = summary(type = "habit").toSearchHit()
-        assertEquals(TaskId("7033cae7-eff6-4df1-bed9-01d16e89c2b0").value, hit.id)
-        assertEquals(ItemKind.Habit, hit.kind)
-        assertEquals("<title>", hit.title)
-        assertEquals(true, hit.isTerminal) // Dropped is terminal
-        assertEquals(Instant.parse("2026-04-10T07:45:00Z"), hit.completeBy)
-        assertEquals("u-e4h2qk-1", hit.ref)
-        // The server-derived blocked flag rides the hit so Search can flag it (#292); defaults false.
-        assertEquals(false, hit.blocked)
-        assertEquals(true, summary().copy(blocked = true).toSearchHit().blocked)
-    }
-
-    @Test
-    fun toSearchHitMapsEveryKindAndDefaultsUnknownToTask() {
-        assertEquals(ItemKind.Task, summary(type = "task").toSearchHit().kind)
-        assertEquals(ItemKind.Habit, summary(type = "habit").toSearchHit().kind)
-        assertEquals(ItemKind.Chore, summary(type = "chore").toSearchHit().kind)
-        assertEquals(ItemKind.Event, summary(type = "event").toSearchHit().kind)
-        // An absent or additive/unknown `type` degrades to Task rather than dropping the row.
-        assertEquals(ItemKind.Task, summary(type = null).toSearchHit().kind)
-        assertEquals(ItemKind.Task, summary(type = "subproject").toSearchHit().kind)
-        // A non-terminal status leaves the hit active.
-        assertEquals(false, summary(status = TaskStatusWire.InProgress).toSearchHit().isTerminal)
-    }
-
     private fun detail(
         finishedAt: String? = null,
         deletedAt: String? = null,
@@ -190,6 +162,45 @@ class TaskMapperTest {
         // Absent `external` → null.
         assertNull(detail().toDomain().external)
     }
+
+    @Test
+    fun attachmentArrayRollsUpToCountAndTotalSize() {
+        // #311: the per-item `attachments` array (size-only) rolls up to a count + summed bytes the cache
+        // can sort/filter on — no backend rollup field needed. Empty/absent → 0 (back-compat with the old
+        // drop-the-block behaviour).
+        val withAttachments = detail()
+            .copy(attachments = listOf(AttachmentSizeDto(1024), AttachmentSizeDto(2048), AttachmentSizeDto(0)))
+            .toDomain()
+        assertEquals(3, withAttachments.attachmentCount)
+        assertEquals(3072L, withAttachments.attachmentTotalSize)
+        assertEquals(true, withAttachments.hasAttachment)
+
+        val none = detail().toDomain()
+        assertEquals(0, none.attachmentCount)
+        assertEquals(0L, none.attachmentTotalSize)
+        assertEquals(false, none.hasAttachment)
+    }
+
+    @Test
+    fun itemViewTaskRollsUpAttachments() {
+        // The cold-sync snapshot variant carries the same `attachments` array (#311) — the main path that
+        // populates the cache for offline search.
+        val mapped = sampleTaskView()
+            .copy(attachments = listOf(AttachmentSizeDto(500), AttachmentSizeDto(1500)))
+            .asTaskOrNull()
+        assertEquals(2, mapped?.attachmentCount)
+        assertEquals(2000L, mapped?.attachmentTotalSize)
+        // Absent array → 0 (the historical drop-the-block result).
+        assertEquals(0, sampleTaskView().asTaskOrNull()?.attachmentCount)
+    }
+
+    private fun sampleTaskView() = ItemView.Task(
+        id = "948bcfab-063d-4499-b2de-f21801bc6f9c",
+        orgSlug = "u-e4h2qk",
+        title = "<title>",
+        status = TaskStatusWire.Open,
+        dateCreated = "2026-05-20T16:11:42.625684725Z",
+    )
 
     @Test
     fun itemViewTaskMapsToDomainTaskOthersToNull() {
