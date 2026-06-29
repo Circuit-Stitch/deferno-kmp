@@ -128,9 +128,11 @@ class SettingsScreenInteractionTest {
     }
 
     @Test
-    fun dataPrivacy_exportImportButton_forwardsTheReachableWebAction() {
-        // AC #3: export/import must be a REACHABLE action (a real button → Output), not static prose.
-        val outputs = mutableListOf<SettingsComponent.Output>()
+    fun dataPrivacy_export_buildsTheBackupZip_forTheShareSheet() {
+        // #313: the Android export is in-app now — tapping Export builds the Backup zip on the shared
+        // side (the View then hands it to the system share sheet). The disabled "Full backup" item
+        // mirrors the iOS action sheet's coming-soon teaser.
+        var built = false
         val repo = FakeSettingsRepository()
         setContent {
             SettingsScreen(
@@ -138,19 +140,19 @@ class SettingsScreenInteractionTest {
                     componentContext = DefaultComponentContext(LifecycleRegistry()),
                     settingsRepository = repo,
                     settingsEditor = FakeSettingsEditor(repo),
-                    output = outputs::add,
+                    buildBackup = { built = true; ByteArray(0) },
                     coroutineContext = Dispatchers.Unconfined,
                 ),
             )
         }
 
         composeRule.onNodeWithText("Data & Privacy").performClick()
-        composeRule.onNodeWithText("Export or import your data").performClick()
+        composeRule.onNodeWithText("Export your data").performClick()
+        composeRule.onNodeWithText("Full backup — coming soon").assertIsNotEnabled()
+        composeRule.onNodeWithText("Export").performClick()
 
-        assertEquals(
-            listOf<SettingsComponent.Output>(SettingsComponent.Output.OpenDataExportImport),
-            outputs,
-        )
+        composeRule.waitUntil { built }
+        assertTrue("tapping Export built the Backup zip", built)
     }
 
     @Test

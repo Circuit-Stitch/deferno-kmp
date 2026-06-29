@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider paths for the on-device Backup export (#313, ADR-0041): exposes only the cache
+     `backups/` subdir the Settings export writes to, nothing else. -->
+<paths>
+    <cache-path name="backups" path="backups/" />
+</paths>

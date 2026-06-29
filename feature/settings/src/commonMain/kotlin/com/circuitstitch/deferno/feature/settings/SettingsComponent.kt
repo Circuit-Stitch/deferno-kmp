@@ -15,10 +15,10 @@ import com.circuitstitch.deferno.core.common.asStateFlow
 import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachment
 import com.circuitstitch.deferno.core.data.attachment.OnDeviceStorageUsage
-import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderOption
+import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
@@ -347,9 +347,9 @@ interface SettingsComponent {
     suspend fun importBackup(bytes: ByteArray): ImportResult
 
     /**
-     * Data & Privacy: ask the host to open the web app's export/import surface. Still used by Android/
-     * desktop/macOS (no in-app export there yet); on iOS it is superseded by the in-app [buildBackupZip]
-     * export action (#313) and no longer invoked (AC #3, ADR-0015).
+     * Data & Privacy: ask the host to open the web app's export/import surface. Still used by desktop/
+     * macOS (no in-app export there yet); on iOS and Android it is superseded by the in-app
+     * [buildBackupZip] export action (#313) and no longer invoked (AC #3, ADR-0015).
      */
     fun onOpenDataExportImport()
 
