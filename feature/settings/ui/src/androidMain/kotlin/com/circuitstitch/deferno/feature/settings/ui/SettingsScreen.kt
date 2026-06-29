@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.feature.settings.ui
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,11 +38,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
@@ -60,6 +70,8 @@ import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
 import com.circuitstitch.deferno.feature.settings.StorageProviderSettings
+import kotlinx.coroutines.launch
+import java.io.File
 
 /** Minimum height for a tappable row/control — design-principles.md "≥44–48dp" touch targets. */
 private val MinTouchTarget = 48.dp
@@ -391,16 +403,53 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     SectionLabel("Your data")
     Text(
-        text = "Export and import run in the Deferno web app — there’s no in-app endpoint yet. " +
-            "Open the web app to manage your data.",
+        text = "Export your tasks and lists as a backup file you can save or share.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
-    // Reachable web action, not dead prose (AC #3): the host deep-links the web app's data surface.
+    // On-device export (#313, ADR-0041): build the Backup zip on the shared side, then hand it to the
+    // system share sheet — Android's counterpart to the iOS share-sheet export. The small menu mirrors
+    // the iOS action sheet: the wired on-device Export now + the server-built Full backup teaser (a later
+    // slice). Replaces the old web-redirect (the host's [onOpenDataExportImport] is now Android-dead too).
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var menuOpen by remember { mutableStateOf(false) }
     TextButton(
-        onClick = component::onOpenDataExportImport,
+        onClick = { menuOpen = true },
         modifier = Modifier.heightIn(min = MinTouchTarget),
-    ) { Text("Export or import your data") }
+    ) { Text("Export your data") }
+    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+        DropdownMenuItem(
+            text = { Text("Export") },
+            onClick = {
+                menuOpen = false
+                scope.launch { shareBackup(context, component.buildBackupZip()) }
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("Full backup — coming soon") },
+            enabled = false,
+            onClick = {},
+        )
+    }
+}
+
+/**
+ * Write the on-device Backup zip to app-private cache and hand it to the system share sheet (#313,
+ * ADR-0041) — Android's counterpart to the iOS share sheet. Shared via a `content://` FileProvider URI
+ * (ACTION_SEND shares file URIs, not raw bytes); the provider is declared in the app manifest
+ * (`${applicationId}.fileprovider` → `res/xml/file_paths.xml`, scoped to this `backups/` cache subdir).
+ */
+private fun shareBackup(context: Context, zip: ByteArray) {
+    val dir = File(context.cacheDir, "backups").apply { mkdirs() }
+    val file = File(dir, "deferno-backup.zip").apply { writeBytes(zip) }
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "application/zip"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(send, "Export your data"))
 }
 
 @Composable

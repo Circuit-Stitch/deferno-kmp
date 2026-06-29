@@ -339,9 +339,9 @@ interface SettingsComponent {
     suspend fun buildBackupZip(): ByteArray
 
     /**
-     * Data & Privacy: ask the host to open the web app's export/import surface. Still used by Android/
-     * desktop/macOS (no in-app export there yet); on iOS it is superseded by the in-app [buildBackupZip]
-     * export action (#313) and no longer invoked (AC #3, ADR-0015).
+     * Data & Privacy: ask the host to open the web app's export/import surface. Still used by desktop/
+     * macOS (no in-app export there yet); on iOS and Android it is superseded by the in-app
+     * [buildBackupZip] export action (#313) and no longer invoked (AC #3, ADR-0015).
      */
     fun onOpenDataExportImport()
 
