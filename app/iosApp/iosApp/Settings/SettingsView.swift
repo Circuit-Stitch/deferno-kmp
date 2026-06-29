@@ -1,5 +1,6 @@
 import Deferno
 import SwiftUI
+import UIKit
 import UserNotifications
 import WebKit
 
@@ -7,8 +8,9 @@ import WebKit
 /// rendered from the shared component's stack, so the single adaptive shell bar (`MainShellView`) titles
 /// it ("Settings" / the category) and drives ← back. A thin renderer of `SettingsComponent`: backed
 /// categories read/write the Active Account's `UserSettings` (Appearance applies the theme live), the
-/// unbacked ones (Security & 2FA, Integrations) are gentle coming-soon stubs, and host concerns
-/// (export/import, feedback, app permissions, console) are forwarded for the shell to deep-link. The
+/// unbacked ones (Security & 2FA, Integrations) are gentle coming-soon stubs, data export builds an
+/// on-device Backup file in-app for the share sheet (#313, ADR-0041), and the remaining host concerns
+/// (feedback, app permissions, console) are forwarded for the shell to deep-link. The
 /// SpeechEngine + Agent rows stay hidden until a real device engine is registered (#95/#150). Mirrors
 /// macOS's `SettingsView`.
 struct SettingsView: View {
@@ -37,6 +39,10 @@ struct SettingsView: View {
     // Compliant in-app presentation of our hosted Terms/Privacy — no link-stripping needed (Apple
     // 3.1.1 is about external purchase flows, not legal text).
     @State private var legalPage: LegalPage?
+    // On-device data export (#313, ADR-0041): the Export/Full-backup action sheet, and the built Backup
+    // zip handed to the iOS share sheet (nil = none). Replaces the old "export on the web" deep-link.
+    @State private var showExportDialog = false
+    @State private var exportFile: ExportFile?
 
     init(component: SettingsComponent) {
         self.component = component
@@ -260,11 +266,19 @@ struct SettingsView: View {
                 .listRowBackground(colors.surfaceCard)
             }
             Section {
-                Button("Export or import your data") { component.onOpenDataExportImport() }
+                Button("Export your data") { showExportDialog = true }
                     .listRowBackground(colors.surfaceCard)
             } footer: {
-                Text("Your data is yours. Export or import it anytime on the web.")
+                Text("Export your tasks and lists as a backup file you can save or share.")
             }
+            .confirmationDialog("Export your data", isPresented: $showExportDialog, titleVisibility: .visible) {
+                Button("Export") { runExport() }
+                Button("Full backup — coming soon") {}.disabled(true)
+                Button("Cancel", role: .cancel) {}
+            }
+        }
+        .sheet(item: $exportFile) { file in
+            ShareSheet(activityItems: [file.url])
         }
     }
 
@@ -338,6 +352,22 @@ struct SettingsView: View {
     private func setKeepRecordings(_ on: Bool) {
         keepRecordings = on
         ShellBridgeKt.setKeepBrainDumpRecordings(component: component, enabled: on)
+    }
+
+    /// Build the on-device Backup zip on the shared side (#313, ADR-0041), write it to a temp `.zip`, then
+    /// present the iOS share sheet — share sheets share file URLs, not raw bytes. The bridge calls back on
+    /// the main thread, so mutating `exportFile` here is safe.
+    private func runExport() {
+        ShellBridgeKt.exportBackup(component: component) { nsData in
+            guard let nsData else { return }
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("deferno-backup.zip")
+            do {
+                try (nsData as Data).write(to: url, options: .atomic)
+                exportFile = ExportFile(url: url)
+            } catch {
+                // best-effort; nothing to share on failure
+            }
+        }
     }
 
     private var legalDetail: some View {
@@ -519,6 +549,22 @@ private struct LegalPage: Identifiable {
     let title: String
     let url: URL
     var id: String { url.absoluteString }
+}
+
+/// A built Backup file (#313) to present via `.sheet(item:)` — a temp `.zip` URL. Identifiable for the sheet.
+private struct ExportFile: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+/// Minimal `UIActivityViewController` wrapper for the iOS share sheet (#313, ADR-0041) — the same
+/// `UIViewControllerRepresentable` UIKit-interop idiom as `LegalWebView`'s `WKWebView` below.
+private struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 /// Our hosted Terms/Privacy with the site chrome removed, shown in-app. The pages are server-rendered

@@ -332,9 +332,16 @@ interface SettingsComponent {
     // --- host-routed intents (Output up to the shell) ---
 
     /**
-     * Data & Privacy: ask the host to open the web app's export/import surface. There is no client
-     * REST endpoint at envelope v0.1 (export/import is deferred), so it is **reachable** as a web
-     * action rather than handled in-app — not dead prose (AC #3, ADR-0015).
+     * Data & Privacy: build the on-device Backup zip (#313, ADR-0041) — a one-shot, offline read of the
+     * local stores serialized to a `manifest.json`-only zip whose manifest **is** the REST envelope. The
+     * host shares the bytes (iOS share sheet). The web-redirect [onOpenDataExportImport] is now iOS-dead.
+     */
+    suspend fun buildBackupZip(): ByteArray
+
+    /**
+     * Data & Privacy: ask the host to open the web app's export/import surface. Still used by desktop/
+     * macOS (no in-app export there yet); on iOS and Android it is superseded by the in-app
+     * [buildBackupZip] export action (#313) and no longer invoked (AC #3, ADR-0015).
      */
     fun onOpenDataExportImport()
 
@@ -422,6 +429,10 @@ class DefaultSettingsComponent(
     // read-out. Defaulted to [OnDeviceStorageUsage.Inert] (empty) so existing Settings tests build without
     // supplying it; the shell backs it with `localAttachmentRepository`.
     private val onDeviceStorageUsage: OnDeviceStorageUsage = OnDeviceStorageUsage.Inert,
+    // The on-device Backup-zip builder (#313, ADR-0041). Defaulted to an empty zip so existing Settings
+    // tests build without it; the shell backs it with `session::buildBackupZip`. Named `buildBackup` (not
+    // `buildBackupZip`) so the override below isn't a self-recursive call into the same-named member fn.
+    private val buildBackup: suspend () -> ByteArray = { ByteArray(0) },
     // The device-local "keep brain-dump recordings" preference (#211). Defaulted to an in-memory (on)
     // preference so existing Settings tests build without supplying it (like the storage-catalog default).
     private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
@@ -624,6 +635,8 @@ class DefaultSettingsComponent(
         brainDumpNotificationPreference.setEnabled(enabled)
         _brainDumpNotificationsEnabled.value = enabled
     }
+
+    override suspend fun buildBackupZip(): ByteArray = buildBackup()
 
     override fun onOpenDataExportImport() = output(SettingsComponent.Output.OpenDataExportImport)
 

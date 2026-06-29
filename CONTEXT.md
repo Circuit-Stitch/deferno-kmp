@@ -537,3 +537,55 @@ stored on-device regardless of the selection. The non-default providers are road
 must never imply the bytes leave the device before routing actually exists.
 _Avoid_: presenting a non-On-device provider as functional today; the [[Inference engine]] or
 speech-engine catalogs (different [[App setting]]s).
+
+### Data portability (export / import)
+
+The person's data is theirs to take out and bring back. Two distinct ways to take it out (an
+[[On-device export]] and a [[Full extract]]) both produce the same [[Backup file]], and one way to
+bring it back ([[Import]]).
+
+**Backup file** *(client)*:
+The portable artifact of a person's own data — a **zip** whose `manifest.json` is the REST response
+envelope (`{ version, data }`, the *same* DTO shapes the API's read endpoints emit) and whose
+`attachments/` folder holds attachment bytes. It is **compatible with the web API by construction**:
+the manifest *is* the API's own JSON, carrying the same envelope `version` the client gates reads on
+(ADR-0005), so a file an [[On-device export]] writes, a [[Full extract]] writes, and the web app reads
+are one format. **Full-fidelity-capable**: the format carries items (Task/Habit/Chore/Event) with
+their comments, history, and attachments — but how much is actually filled depends on the export mode
+([[On-device export]] writes only what the device holds; a [[Full extract]] writes everything).
+_Avoid_: dump, CSV (the format is the API envelope, not a spreadsheet), archive (overloaded with the
+macOS Helper's audio archive), "the export" (that is the *act* — this is the file it produces).
+
+**On-device export** *(client)*:
+Building a [[Backup file]] **locally and entirely offline** from the local source-of-truth DB —
+**only what the device actually holds**: items (a never-opened, un-hydrated item exports without its
+`description`) plus [[On-device attachment]] bytes. It **omits** comments and item history (never
+cached locally) and references no backend-hosted attachment (only a [[Full extract]] can include
+those). Immediate; handed to the OS share sheet. The offline-first half of export — always works with
+no network, at the cost of being a partial snapshot.
+_Avoid_: [[Full extract]] (the online, server-built counterpart), "backup" unqualified (name which of
+the two export modes).
+
+**Full extract** *(client; server-mediated)*:
+The **online** counterpart of [[On-device export]] — a **server-side export job** the client merely
+*requests*, which assembles the complete [[Backup file]] including **backend-hosted attachment bytes**,
+stores it in object storage, and **emails the person a time-limited download link** (~30 days). The
+client triggers it and tells the person to check their email; the heavy gather/package/host happens
+server-side (the server mediates the external work, ADR-0038). Chosen at export time when the person
+wants bytes the device doesn't hold.
+_Avoid_: [[On-device export]] (the offline, device-built counterpart), sync (a [[Full extract]] is a
+one-shot archive, not continuous replication).
+
+**Import** *(client; a restore, not a copy)*:
+Reading a [[Backup file]] and re-creating its items **with their original ids** through the
+offline-first create path ([[Command]] + outbox), so it is **idempotent**: re-importing the same file
+changes nothing because the backend dedupes on the client-supplied id (ADR-0034). A genuine
+**restore/merge** — an incoming item that collides with an existing one that differs is reconciled
+last-writer-wins (the existing reconcile behaviour), not duplicated. Restores items and their embedded
+[[On-device attachment]] bytes (re-created as local attachments, never re-uploaded); **comment** restore
+arrives with the [[Full extract]] (no [[On-device export]] file carries comments). Item **history** is
+export-only and is **not** restored: the backend owns the audit log and writes its own
+"created/imported" entry.
+_Avoid_: copy/duplicate (those would mint new ids — [[Import]] preserves them), merge as a diff/review
+(it does not prompt per conflict; it last-writer-wins), [[ExternalProvenance]]/"imported item" (the
+backend's term for a row synced *from* Google Tasks/Todoist/etc. — a different concept).

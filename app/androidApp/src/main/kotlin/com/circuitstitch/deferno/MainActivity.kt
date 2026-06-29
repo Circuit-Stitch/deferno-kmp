@@ -26,7 +26,6 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.di.createAccountComponent
 import com.circuitstitch.deferno.core.model.ThemeFamily
-import com.circuitstitch.deferno.core.network.DefernoEnvironment
 import com.circuitstitch.deferno.core.speech.AudioSpectrum
 import com.circuitstitch.deferno.braindump.recordBrainDumpAudio
 import com.circuitstitch.deferno.shell.AccountComponentSession
@@ -95,15 +94,9 @@ class MainActivity : ComponentActivity() {
                     ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     appContext.startActivity(intent)
                 },
-                // Settings → Data & Privacy: export/import has no client endpoint at v0.1 (ADR-0015),
-                // so it is a REACHABLE web action — open the web app's data surface (AC #3). The origin
-                // is derived from the configured environment, so it tracks staging/prod automatically.
-                onOpenDataExportImport = {
-                    val url = webAppUrl(appComponent.environment, "settings/data")
-                    appContext.startActivity(
-                        Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                },
+                // Settings → Data & Privacy export is now in-app on Android too (#313, ADR-0041): the
+                // Settings View builds the Backup zip and hands it to the system share sheet, so the old
+                // web-redirect [onOpenDataExportImport] is no longer wired here (desktop/macOS still use it).
                 // Settings → Help & Feedback (#375): the in-app feedback form is now a shell overlay
                 // (the Settings tap opens it over the foreground Destination), submitting through this
                 // AppScope service — the authed client attaches the Active Account's PAT per request.
@@ -294,16 +287,4 @@ internal fun appActionRoute(data: Uri?): AppActionRoute? {
         DEEP_LINK_HOST_CREATE -> data.getQueryParameter(DEEP_LINK_PARAM_TITLE)?.let { AppActionRoute.AddTask(it) }
         else -> null
     }
-}
-
-/**
- * Build a web-app URL for [path] from the configured backend [environment] (#72, AC #3/#4). The web
- * app shares the API host: the env [com.circuitstitch.deferno.core.network.DefernoEnvironment.baseUrl]
- * carries the `/api/` API prefix, so the web origin is that base with the `/api/` suffix dropped — the
- * deep-link tracks staging/prod automatically rather than hard-coding a host. [path] is a relative
- * web-app route (no leading slash), e.g. `settings/data` or `feedback`.
- */
-internal fun webAppUrl(environment: DefernoEnvironment, path: String): String {
-    val origin = environment.baseUrl.removeSuffix("/").removeSuffix("/api")
-    return "$origin/$path"
 }
