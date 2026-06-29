@@ -1,7 +1,7 @@
 package com.circuitstitch.deferno.feature.settings.ui
 
-import android.content.Context
-import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -48,7 +48,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
@@ -71,7 +70,6 @@ import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
 import com.circuitstitch.deferno.feature.settings.StorageProviderSettings
 import kotlinx.coroutines.launch
-import java.io.File
 
 /** Minimum height for a tappable row/control — design-principles.md "≥44–48dp" touch targets. */
 private val MinTouchTarget = 48.dp
@@ -407,13 +405,25 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
-    // On-device export (#313, ADR-0041): build the Backup zip on the shared side, then hand it to the
-    // system share sheet — Android's counterpart to the iOS share-sheet export. The small menu mirrors
-    // the iOS action sheet: the wired on-device Export now + the server-built Full backup teaser (a later
+    // On-device export (#313, ADR-0041): save the Backup zip via the Storage Access Framework "Save to…"
+    // picker — the Android idiom for "export a file" (the picker always offers Files/Drive/Downloads;
+    // ACTION_SEND share sheets do not surface a save-to-files target). The picker returns a destination
+    // URI; the zip is built on the shared side only once the person commits to a location, then streamed
+    // out. The small menu mirrors the iOS action sheet: the wired Export + the Full backup teaser (later
     // slice). Replaces the old web-redirect (the host's [onOpenDataExportImport] is now Android-dead too).
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
+    val saveBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val zip = component.buildBackupZip()
+                context.contentResolver.openOutputStream(uri)?.use { it.write(zip) }
+            }
+        }
+    }
     TextButton(
         onClick = { menuOpen = true },
         modifier = Modifier.heightIn(min = MinTouchTarget),
@@ -423,7 +433,7 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
             text = { Text("Export") },
             onClick = {
                 menuOpen = false
-                scope.launch { shareBackup(context, component.buildBackupZip()) }
+                saveBackup.launch("deferno-backup.zip")
             },
         )
         DropdownMenuItem(
@@ -432,24 +442,6 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
             onClick = {},
         )
     }
-}
-
-/**
- * Write the on-device Backup zip to app-private cache and hand it to the system share sheet (#313,
- * ADR-0041) — Android's counterpart to the iOS share sheet. Shared via a `content://` FileProvider URI
- * (ACTION_SEND shares file URIs, not raw bytes); the provider is declared in the app manifest
- * (`${applicationId}.fileprovider` → `res/xml/file_paths.xml`, scoped to this `backups/` cache subdir).
- */
-private fun shareBackup(context: Context, zip: ByteArray) {
-    val dir = File(context.cacheDir, "backups").apply { mkdirs() }
-    val file = File(dir, "deferno-backup.zip").apply { writeBytes(zip) }
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-    val send = Intent(Intent.ACTION_SEND).apply {
-        type = "application/zip"
-        putExtra(Intent.EXTRA_STREAM, uri)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    context.startActivity(Intent.createChooser(send, "Export your data"))
 }
 
 @Composable

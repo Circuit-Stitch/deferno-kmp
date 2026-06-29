@@ -4,11 +4,11 @@ package com.circuitstitch.deferno.core.data.backup
  * A minimal, dependency-free zip writer (#313, ADR-0041). The Backup file is a zip, but no zip library
  * is on the KMP classpath and the catalog has none — so rather than add a dependency (or split an
  * expect/actual across `java.util.zip` + Foundation) for what is a few lines, this writes the format by
- * hand in commonMain so every target inherits it. Entries are **STORED** (uncompressed): the manifest
+ * hand in commonMain so every target inherits it. Entries are **STORED** (uncompressed): `items.json`
  * is small text and a STORED single-entry zip is a fixed, well-understood layout (local header → data →
  * central directory → end-of-central-directory, all little-endian).
  *
- * ponytail: STORED + in-memory `ByteArray`, fine for the items-only manifest (KBs). When attachment
+ * ponytail: STORED + in-memory `ByteArray`, fine for the items-only export (KBs). When attachment
  * bytes join the zip (a later ADR-0041 slice), switch to DEFLATE + a streaming sink so megabytes don't
  * all sit in memory.
  */

@@ -16,7 +16,7 @@ import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
 /**
  * The **outbound** domain→DTO mapping for on-device export (#313, ADR-0041) — the inverse of the
  * read-side `core:network/mapper/{TaskMapper,RecurringItemMapper}.kt`. It re-emits a clean `core:model`
- * item as the `/items` wire shape ([ItemView]), so the exported `manifest.json` carries the API's own
+ * item as the `/items` wire shape ([ItemView]), so the exported `items.json` carries the API's own
  * snake-case DTOs (compatible-by-construction). Only the fields the **local DB actually holds** are
  * mapped: server-derived state never persisted offline (`descendant_*`, `blocked`/`is_blocker`,
  * `blocked_by`) is left at its DTO default and omitted, and `external` provenance is excluded entirely

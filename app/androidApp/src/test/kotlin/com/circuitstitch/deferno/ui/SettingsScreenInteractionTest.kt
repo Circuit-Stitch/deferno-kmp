@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -128,31 +129,17 @@ class SettingsScreenInteractionTest {
     }
 
     @Test
-    fun dataPrivacy_export_buildsTheBackupZip_forTheShareSheet() {
-        // #313: the Android export is in-app now — tapping Export builds the Backup zip on the shared
-        // side (the View then hands it to the system share sheet). The disabled "Full backup" item
-        // mirrors the iOS action sheet's coming-soon teaser.
-        var built = false
-        val repo = FakeSettingsRepository()
-        setContent {
-            SettingsScreen(
-                DefaultSettingsComponent(
-                    componentContext = DefaultComponentContext(LifecycleRegistry()),
-                    settingsRepository = repo,
-                    settingsEditor = FakeSettingsEditor(repo),
-                    buildBackup = { built = true; ByteArray(0) },
-                    coroutineContext = Dispatchers.Unconfined,
-                ),
-            )
-        }
+    fun dataPrivacy_exportMenu_offersSaveAndDisablesFullBackup() {
+        // #313: the Android export is in-app now. "Export your data" opens a menu offering the wired
+        // on-device Export (saves the Backup zip via the SAF "Save to…" picker) + a disabled "Full
+        // backup — coming soon" teaser mirroring the iOS action sheet. The actual save runs through the
+        // system document picker, which can't be driven here — the build path is covered in core:data.
+        setContent { SettingsScreen(component()) }
 
         composeRule.onNodeWithText("Data & Privacy").performClick()
         composeRule.onNodeWithText("Export your data").performClick()
+        composeRule.onNodeWithText("Export").assertIsEnabled()
         composeRule.onNodeWithText("Full backup — coming soon").assertIsNotEnabled()
-        composeRule.onNodeWithText("Export").performClick()
-
-        composeRule.waitUntil { built }
-        assertTrue("tapping Export built the Backup zip", built)
     }
 
     @Test

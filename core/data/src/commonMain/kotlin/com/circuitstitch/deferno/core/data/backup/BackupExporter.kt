@@ -14,9 +14,9 @@ import kotlinx.serialization.json.Json
 
 /**
  * The on-device export engine (#313, ADR-0041): reads the person's items from the local source-of-truth
- * DB and writes a [Backup file][buildBackupZip] — a zip whose single `manifest.json` entry **is** the
+ * DB and writes a [Backup file][buildBackupZip] — a zip whose single `items.json` entry **is** the
  * REST response envelope `{ version, data }`, carrying the same snake-case `core:network` DTO shapes the
- * API's read endpoints emit. "Compatible with the web API" holds by construction: the manifest is the
+ * API's read endpoints emit. "Compatible with the web API" holds by construction: `items.json` is the
  * API's own JSON, serialized by the very same [DefernoJson], and it carries the envelope [version].
  *
  * Shared KMP core so Android/desktop inherit it; iOS contributes only the share-sheet bridge.
@@ -33,15 +33,15 @@ class BackupExporter(
     private val eventStore: EventLocalStore,
     private val json: Json = DefernoJson,
 ) {
-    /** The `manifest.json` body: the `{ version, data }` envelope of cross-kind item DTOs. */
-    suspend fun buildManifestJson(): String {
+    /** The `items.json` body: the `{ version, data }` envelope of cross-kind item DTOs. */
+    suspend fun buildItemsJson(): String {
         val envelope = Envelope(version = SupportedApiVersions.MAX.toString(), data = collectItems())
         return json.encodeToString(Envelope.serializer(ListSerializer(ItemView.serializer())), envelope)
     }
 
-    /** The Backup file: a zip whose only entry is [MANIFEST_ENTRY] (attachments join in a later slice). */
+    /** The Backup file: a zip whose only entry is [ITEMS_ENTRY] (attachments join in a later slice). */
     suspend fun buildBackupZip(): ByteArray =
-        zipStored(listOf(MANIFEST_ENTRY to buildManifestJson().encodeToByteArray()))
+        zipStored(listOf(ITEMS_ENTRY to buildItemsJson().encodeToByteArray()))
 
     private suspend fun collectItems(): List<ItemView> {
         val tasks = taskStore.observeActive().first()
@@ -54,7 +54,7 @@ class BackupExporter(
     }
 
     companion object {
-        /** The manifest's path inside the Backup file zip. */
-        const val MANIFEST_ENTRY: String = "manifest.json"
+        /** The items envelope's path inside the Backup file zip. */
+        const val ITEMS_ENTRY: String = "items.json"
     }
 }

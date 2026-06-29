@@ -93,7 +93,7 @@ interface AccountSession {
 
     /**
      * Build this Account's on-device Backup zip (#313, ADR-0041): a one-shot read of the four local stores
-     * serialized to a `manifest.json`-only zip. Defaulted to an empty zip so test fakes build without it.
+     * serialized to an `items.json`-only zip. Defaulted to an empty zip so test fakes build without it.
      */
     suspend fun buildBackupZip(): ByteArray = ByteArray(0)
 

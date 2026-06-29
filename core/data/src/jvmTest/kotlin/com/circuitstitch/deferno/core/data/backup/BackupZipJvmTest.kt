@@ -20,13 +20,13 @@ import kotlin.time.Instant
 /**
  * The hand-rolled, dependency-free [zipStored] writer must produce a genuinely valid zip: this opens
  * the Backup file with the JVM's own `java.util.zip.ZipInputStream` (which verifies the STORED entry's
- * CRC-32 + sizes) and asserts the single `manifest.json` entry round-trips byte-for-byte. The JVM is
+ * CRC-32 + sizes) and asserts the single `items.json` entry round-trips byte-for-byte. The JVM is
  * the natural place to prove the format — `java.util.zip` is the independent reader the K/N targets lack.
  */
 class BackupZipJvmTest {
 
     @Test
-    fun zip_is_readable_by_java_util_zip_and_manifest_matches() = runTest {
+    fun zip_is_readable_by_java_util_zip_and_items_json_matches() = runTest {
         val exporter = BackupExporter(
             taskStore = FakeTaskLocalStore(
                 mapOf(
@@ -46,15 +46,15 @@ class BackupZipJvmTest {
             eventStore = FakeEventLocalStore(),
         )
 
-        val expectedManifest = exporter.buildManifestJson()
+        val expectedItemsJson = exporter.buildItemsJson()
         val zip = exporter.buildBackupZip()
 
         ZipInputStream(ByteArrayInputStream(zip)).use { zis ->
             val entry = zis.nextEntry
             assertNotNull(entry, "zip has no entries")
-            assertEquals("manifest.json", entry.name)
+            assertEquals("items.json", entry.name)
             val content = zis.readBytes().decodeToString() // throws ZipException on CRC/size mismatch
-            assertEquals(expectedManifest, content)
+            assertEquals(expectedItemsJson, content)
             assertNull(zis.nextEntry, "zip has unexpected extra entries")
         }
     }

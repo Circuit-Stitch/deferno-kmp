@@ -95,8 +95,8 @@ class MainActivity : ComponentActivity() {
                     appContext.startActivity(intent)
                 },
                 // Settings → Data & Privacy export is now in-app on Android too (#313, ADR-0041): the
-                // Settings View builds the Backup zip and hands it to the system share sheet, so the old
-                // web-redirect [onOpenDataExportImport] is no longer wired here (desktop/macOS still use it).
+                // Settings View builds the Backup zip and saves it via the SAF "Save to…" picker, so the
+                // old web-redirect [onOpenDataExportImport] is no longer wired here (desktop/macOS still use it).
                 // Settings → Help & Feedback (#375): the in-app feedback form is now a shell overlay
                 // (the Settings tap opens it over the foreground Destination), submitting through this
                 // AppScope service — the authed client attaches the Active Account's PAT per request.

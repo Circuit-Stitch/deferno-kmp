@@ -30,9 +30,10 @@ kotlin {
             // hides the row), like the Agent row above.
             implementation(project(":core:data"))
 
-            // FileProvider for the on-device Backup export (#313, ADR-0041): the Data & Privacy "Export
-            // your data" action writes the zip to cache and shares it via a content:// URI (ACTION_SEND).
-            implementation(libs.androidx.core.ktx)
+            // On-device Backup export (#313, ADR-0041): the Data & Privacy "Export your data" action saves
+            // the zip via the Storage Access Framework "Save to…" picker (rememberLauncherForActivityResult
+            // + ActivityResultContracts.CreateDocument) — androidx.activity.compose, Android-only glue.
+            implementation(libs.androidx.activity.compose)
 
             implementation(libs.decompose)
             implementation(libs.decompose.extensions.compose)

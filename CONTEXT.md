@@ -545,10 +545,10 @@ The person's data is theirs to take out and bring back. Two distinct ways to tak
 bring it back ([[Import]]).
 
 **Backup file** *(client)*:
-The portable artifact of a person's own data — a **zip** whose `manifest.json` is the REST response
+The portable artifact of a person's own data — a **zip** whose `items.json` is the REST response
 envelope (`{ version, data }`, the *same* DTO shapes the API's read endpoints emit) and whose
 `attachments/` folder holds attachment bytes. It is **compatible with the web API by construction**:
-the manifest *is* the API's own JSON, carrying the same envelope `version` the client gates reads on
+`items.json` *is* the API's own JSON, carrying the same envelope `version` the client gates reads on
 (ADR-0005), so a file an [[On-device export]] writes, a [[Full extract]] writes, and the web app reads
 are one format. **Full-fidelity-capable**: the format carries items (Task/Habit/Chore/Event) with
 their comments, history, and attachments — but how much is actually filled depends on the export mode
