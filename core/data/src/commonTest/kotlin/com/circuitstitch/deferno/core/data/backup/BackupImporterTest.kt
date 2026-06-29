@@ -93,7 +93,7 @@ class BackupImporterTest {
     ).buildBackupZip()
 
     private fun zipOf(manifest: String): ByteArray =
-        zipStored(listOf(BackupExporter.MANIFEST_ENTRY to manifest.encodeToByteArray()))
+        zipStored(listOf(BackupExporter.ITEMS_ENTRY to manifest.encodeToByteArray()))
 
     private class Fixture {
         val taskStore = FakeTaskLocalStore()
