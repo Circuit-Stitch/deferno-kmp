@@ -1,9 +1,18 @@
 package com.circuitstitch.deferno.feature.settings.ui
 
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -44,10 +54,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
@@ -224,7 +238,7 @@ private fun CategoryDetail(
             SettingsCategory.DataPrivacy -> DataPrivacyDetail(settings, component)
             SettingsCategory.HelpFeedback -> HelpFeedbackDetail(component)
             SettingsCategory.AppPermissions -> AppPermissionsDetail(component)
-            SettingsCategory.Legal -> LegalDetail()
+            SettingsCategory.Legal -> LegalDetail(component)
             SettingsCategory.Account -> AccountDetail(settings, component)
             SettingsCategory.Security2FA -> ComingSoonDetail(
                 body = "Two-factor authentication and security are managed by your identity provider. " +
@@ -473,25 +487,190 @@ private fun AppPermissionsDetail(component: SettingsComponent) {
 }
 
 @Composable
-private fun LegalDetail() {
+private fun LegalDetail(component: SettingsComponent) {
+    val context = LocalContext.current
+    // The hosted page presented in the in-app reader (null = none).
+    var reader by remember { mutableStateOf<LegalPage?>(null) }
     SectionLabel("Terms of Service")
     Text(
         text = "By using Deferno you agree to our Terms of Service and acceptable-use policy.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
+    TextButton(
+        onClick = { reader = LegalPage("Terms of Service", TermsUrl) },
+        modifier = Modifier.heightIn(min = MinTouchTarget),
+    ) { Text("View Terms of Service") }
     SectionLabel("Privacy")
     Text(
         text = "Your data stays yours. We never sell it. See the full privacy policy on the web.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
+    TextButton(
+        onClick = { reader = LegalPage("Privacy Policy", PrivacyUrl) },
+        modifier = Modifier.heightIn(min = MinTouchTarget),
+    ) { Text("View Privacy Policy") }
     SectionLabel("Open source")
     Text(
         text = "Deferno is built on open-source software, with thanks to its authors.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
+
+    reader?.let { page ->
+        LegalReaderDialog(
+            page = page,
+            onDismiss = { reader = null },
+            // support@ → the in-app feedback form (matches iOS); close the reader first.
+            onContact = {
+                reader = null
+                component.onOpenSubmitFeedback()
+            },
+            // accounts@ → the mail app with a prefilled account-removal request.
+            onAccountRemoval = { openAccountRemovalEmail(context) },
+        )
+    }
+}
+
+/** A hosted legal page to read in-app: its reader-bar title + URL. */
+private data class LegalPage(val title: String, val url: String)
+
+private const val TermsUrl = "https://www.defernowork.com/terms"
+private const val PrivacyUrl = "https://www.defernowork.com/privacy"
+
+/**
+ * iOS-parity in-app reader for our hosted Terms/Privacy: a full-screen [Dialog] over a [LegalWebView]
+ * that hides the site's `nav`/`footer` and flattens in-content links *before* the content is revealed —
+ * no full-site flash. The two email links stay live: `accounts@` opens the mail app with a prefilled
+ * account-removal request ([onAccountRemoval]); any other `mailto:` / Cloudflare `email-protection`
+ * link (i.e. `support@`) routes to the in-app feedback form ([onContact]).
+ */
+@Composable
+private fun LegalReaderDialog(
+    page: LegalPage,
+    onDismiss: () -> Unit,
+    onContact: () -> Unit,
+    onAccountRemoval: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 8.dp)
+                        .heightIn(min = MinTouchTarget),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = page.title,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f).semantics { heading() },
+                    )
+                    TextButton(onClick = onDismiss) { Text("Done") }
+                }
+                LegalWebView(
+                    url = page.url,
+                    onContact = onContact,
+                    onAccountRemoval = onAccountRemoval,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+}
+
+// Hides the site chrome (`nav`/`footer`) and flattens every link *except* the contact emails to inert
+// plain text — so the emails read as the only tappable thing. A CSS rule applies to nav/footer added
+// later in the parse, so injecting at page-start covers the whole load. Mirrors the iOS user script.
+private const val HideChromeJs =
+    "var s=document.createElement('style');" +
+        "s.textContent='nav,footer{display:none!important} " +
+        "a:not([href^=\"mailto:\"]):not([href*=\"email-protection\"])" +
+        "{color:inherit!important;text-decoration:none!important;pointer-events:none!important}';" +
+        "document.documentElement.appendChild(s);"
+
+/**
+ * The [WebView] half of [LegalReaderDialog]. Kept invisible behind a spinner until the page finishes
+ * and the chrome-hiding CSS is applied (so the user never sees the full site), then revealed. JS is on
+ * so the page's Cloudflare email-protection links decode to real `mailto:`s. Tapped links are inert
+ * (the CSS kills `pointer-events`); the email links are handed off in [shouldOverrideUrlLoading].
+ */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun LegalWebView(
+    url: String,
+    onContact: () -> Unit,
+    onAccountRemoval: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var loading by remember(url) { mutableStateOf(true) }
+    Box(modifier) {
+        AndroidView(
+            factory = { context ->
+                WebView(context).apply {
+                    settings.javaScriptEnabled = true
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                            view.evaluateJavascript(HideChromeJs, null)
+                        }
+
+                        override fun onPageFinished(view: WebView, url: String?) {
+                            view.evaluateJavascript(HideChromeJs, null)
+                            loading = false
+                        }
+
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView,
+                            request: WebResourceRequest,
+                        ): Boolean {
+                            // Let the page's own loads + decode scripts through; act only on user taps.
+                            if (!request.hasGesture()) return false
+                            val target = request.url
+                            val address = if (target.scheme == "mailto") {
+                                target.schemeSpecificPart.substringBefore('?').trim()
+                            } else {
+                                ""
+                            }
+                            return when {
+                                address.startsWith("accounts@defernowork.com", ignoreCase = true) -> {
+                                    onAccountRemoval()
+                                    true
+                                }
+                                target.scheme == "mailto" || target.toString().contains("email-protection") -> {
+                                    onContact()
+                                    true
+                                }
+                                // Every other tapped link is inert (matches iOS).
+                                else -> true
+                            }
+                        }
+                    }
+                    loadUrl(url)
+                }
+            },
+            onRelease = WebView::destroy,
+            modifier = Modifier.fillMaxSize().alpha(if (loading) 0f else 1f),
+        )
+        if (loading) CircularProgressIndicator(Modifier.align(Alignment.Center))
+    }
+}
+
+/** Open the mail app with a prefilled account-removal request — the `accounts@` link's destination. */
+private fun openAccountRemovalEmail(context: Context) {
+    val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:accounts@defernowork.com")).apply {
+        putExtra(Intent.EXTRA_SUBJECT, "Account removal request")
+        putExtra(
+            Intent.EXTRA_TEXT,
+            "Hello,\n\n" +
+                "I'd like to request removal of my Deferno account and its associated data.\n\n" +
+                "Account email:\n\n" +
+                "Thank you.",
+        )
+    }
+    // No mail app installed → no-op rather than crash.
+    runCatching { context.startActivity(intent) }
 }
 
 @Composable

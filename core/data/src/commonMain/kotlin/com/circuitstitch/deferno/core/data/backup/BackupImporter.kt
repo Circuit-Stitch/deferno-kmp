@@ -60,7 +60,7 @@ class BackupImporter(
      * [ImportResult.Malformed] with nothing written.
      */
     suspend fun import(bytes: ByteArray): ImportResult {
-        val manifest = runCatching { unzipStored(bytes)[BackupExporter.MANIFEST_ENTRY] }.getOrNull()
+        val manifest = runCatching { unzipStored(bytes)[BackupExporter.ITEMS_ENTRY] }.getOrNull()
             ?: return ImportResult.Malformed
         val envelope = runCatching {
             json.decodeFromString(Envelope.serializer(ListSerializer(ItemView.serializer())), manifest.decodeToString())
