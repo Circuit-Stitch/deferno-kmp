@@ -13,6 +13,7 @@ import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.assistant.SqlDelightConversationStore
 import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
+import com.circuitstitch.deferno.core.data.backup.BackupExporter
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
@@ -158,6 +159,18 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun eventLocalStore(db: DefernoDatabase): EventLocalStore = SqlDelightEventLocalStore(db)
+
+    // The on-device export engine (#313, ADR-0041): reads the four per-kind local stores and serializes
+    // the Backup zip. AccountScope — the same stores the create/sync path composes, so it reads exactly
+    // this Account's source-of-truth rows (per-account isolation, ADR-0002). `json` defaults to DefernoJson.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun backupExporter(
+        taskStore: TaskLocalStore,
+        habitStore: HabitLocalStore,
+        choreStore: ChoreLocalStore,
+        eventStore: EventLocalStore,
+    ): BackupExporter = BackupExporter(taskStore, habitStore, choreStore, eventStore)
 
     // The Occurrence (firing-level) local store (#71, AC #4): the per-Account SQLDelight cache an
     // occurrence read from the kind-scoped endpoint seeds into, so it joins the observe Flow (ADR-0001).

@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.di
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
 import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
+import com.circuitstitch.deferno.core.data.backup.BackupExporter
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
@@ -118,6 +119,13 @@ abstract class AccountComponent(
      * and readies the consumer (#211 audio retention); feedback attachments never use it (always backend).
      */
     abstract val localAttachmentRepository: LocalAttachmentRepository
+
+    /**
+     * The on-device export engine (#313, ADR-0041): the Backup-zip builder over this Account's four local
+     * stores. Exposing it anchors anvil's compile-time validation of its AccountScope chain (stores → DB)
+     * and gives the shell its accessor (the AccountComponentSession surfaces buildBackupZip from it).
+     */
+    abstract val backupExporter: BackupExporter
 
     /** The command-registry dispatch site (ADR-0007) over this Account's write seams. */
     abstract val commandExecutor: CommandExecutor

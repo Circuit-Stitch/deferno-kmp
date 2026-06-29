@@ -417,6 +417,8 @@ class DefaultRootComponent(
                         onDeviceAttachments = session.onDeviceAttachments,
                         // On-device storage usage (#211): the Settings > Storage read-out over those recordings.
                         onDeviceStorageUsage = session.onDeviceStorageUsage,
+                        // On-device Backup export (#313, ADR-0041): the Settings export action builds the zip.
+                        buildBackupZip = session::buildBackupZip,
                         searchTasks = SearchTasks.of(session.taskRepository),
                         accounts = accountManager.accounts,
                         activeAccount = accountManager.activeAccount,

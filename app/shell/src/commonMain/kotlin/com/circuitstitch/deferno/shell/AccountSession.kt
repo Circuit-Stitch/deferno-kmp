@@ -89,6 +89,12 @@ interface AccountSession {
      * recordings (largest first), observed offline-first. Backed by the Account's `LocalAttachmentRepository`.
      */
     val onDeviceStorageUsage: OnDeviceStorageUsage
+
+    /**
+     * Build this Account's on-device Backup zip (#313, ADR-0041): a one-shot read of the four local stores
+     * serialized to a `manifest.json`-only zip. Defaulted to an empty zip so test fakes build without it.
+     */
+    suspend fun buildBackupZip(): ByteArray = ByteArray(0)
     val planRepository: PlanRepository
 
     /**
@@ -247,6 +253,9 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     // #211: the Settings > Storage usage read-out over this Account's on-device recordings (largest first).
     override val onDeviceStorageUsage: OnDeviceStorageUsage =
         OnDeviceStorageUsage { component.localAttachmentRepository.observeBrainDumpRecordings() }
+
+    // #313: the on-device Backup-zip builder over this Account's four local stores (ADR-0041).
+    override suspend fun buildBackupZip(): ByteArray = component.backupExporter.buildBackupZip()
     override val settingsRepository: SettingsRepository get() = component.settingsRepository
     override val calendarRepository: CalendarRepository get() = component.calendarRepository
     override val conversationStore: ConversationStore get() = component.conversationStore

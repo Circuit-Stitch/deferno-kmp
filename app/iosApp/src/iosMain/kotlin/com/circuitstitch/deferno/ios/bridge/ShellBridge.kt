@@ -46,6 +46,9 @@ import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.reinterpret
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import platform.Foundation.NSData
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -122,6 +125,17 @@ fun keepBrainDumpRecordingsEnabled(component: SettingsComponent): Boolean = comp
 /** Persist the "keep brain-dump recordings" choice (#211) — device-local, never synced. */
 fun setKeepBrainDumpRecordings(component: SettingsComponent, enabled: Boolean) =
     component.onKeepBrainDumpRecordingsChanged(enabled)
+
+/**
+ * Build the on-device Backup zip (#313, ADR-0041) and hand it to Swift as `NSData` for the share sheet.
+ * The local-store read is quick, so it runs in a one-shot [Dispatchers.Main] coroutine; [onData] then gets
+ * the zip bytes. Mirrors `onDeviceAttachmentData` (Bridge.kt) — `SettingsComponent.buildBackupZip` suspends.
+ */
+fun exportBackup(component: SettingsComponent, onData: (NSData?) -> Unit) {
+    CoroutineScope(Dispatchers.Main).launch {
+        onData(component.buildBackupZip().toNSData())
+    }
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Sealed discriminators — Swift reads these instead of casting Kotlin/Native flattened class names

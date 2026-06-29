@@ -170,6 +170,9 @@ class DefaultMainShellComponent(
     // destination. Defaults to Inert (empty) so the many shell tests build without it; production threads
     // this Account's seam from the session.
     private val onDeviceStorageUsage: OnDeviceStorageUsage = OnDeviceStorageUsage.Inert,
+    // On-device Backup export (#313, ADR-0041), threaded into the Settings destination. Defaults to an
+    // empty zip so the many shell tests build without it; production threads session::buildBackupZip.
+    private val buildBackupZip: suspend () -> ByteArray = { ByteArray(0) },
     // The global-search seam (#73): a one-shot, online-only pull the Search overlay drives. Defaults
     // to "no results" so tests that don't exercise Search build without supplying it.
     private val searchTasks: SearchTasks = SearchTasks { _ -> TaskSearchResult.Success(emptyList()) },
@@ -596,6 +599,8 @@ class DefaultMainShellComponent(
                         storageProviderCatalog = storageProviderCatalog,
                         // On-device storage usage for the Storage read-out (#211) — this Account's recordings.
                         onDeviceStorageUsage = onDeviceStorageUsage,
+                        // On-device Backup export (#313, ADR-0041) — the Settings export action builds the zip.
+                        buildBackup = buildBackupZip,
                         // The device-local "keep brain-dump recordings" choice (#211) — AppScope, never synced.
                         keepBrainDumpRecordingsPreference = keepBrainDumpRecordingsPreference,
                         // The device-local "Brain dump notifications" opt-in (#266/#271) — AppScope, never synced.
