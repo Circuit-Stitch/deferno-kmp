@@ -333,8 +333,9 @@ interface SettingsComponent {
 
     /**
      * Data & Privacy: build the on-device Backup zip (#313, ADR-0041) — a one-shot, offline read of the
-     * local stores serialized to a `manifest.json`-only zip whose manifest **is** the REST envelope. The
-     * host shares the bytes (iOS share sheet). The web-redirect [onOpenDataExportImport] is now iOS-dead.
+     * local stores serialized to an `items.json`-only zip whose `items.json` **is** the REST envelope. The
+     * host saves/shares the bytes (iOS share sheet, Android SAF picker). The web-redirect
+     * [onOpenDataExportImport] is now iOS/Android-dead (desktop/macOS still use it).
      */
     suspend fun buildBackupZip(): ByteArray
 

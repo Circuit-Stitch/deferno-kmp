@@ -33,7 +33,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /**
- * The on-device export engine (#313, ADR-0041): the `manifest.json` it serializes **is** the REST
+ * The on-device export engine (#313, ADR-0041): the `items.json` it serializes **is** the REST
  * response envelope `{ version, data }`, carrying the same snake-case `core:network` DTO shapes the
  * API's read endpoints emit. Covers AC #6 — envelope shape, version `0.1`, DTO fidelity, and the
  * `external`-provenance exclusion — on the ADR-0006 JVM-fast path against the in-memory store fakes.
@@ -110,25 +110,25 @@ class BackupExporterTest {
         DefernoJson.decodeFromString(Envelope.serializer(ListSerializer(ItemView.serializer())), json)
 
     @Test
-    fun manifest_is_a_versioned_envelope() = runTest {
-        val manifest = exporter(tasks = listOf(task("t1"))).buildManifestJson()
-        val envelope = decode(manifest)
+    fun itemsJson_is_a_versioned_envelope() = runTest {
+        val itemsJson = exporter(tasks = listOf(task("t1"))).buildItemsJson()
+        val envelope = decode(itemsJson)
         assertEquals("0.1", envelope.version)
         assertEquals(1, envelope.data.size)
     }
 
     @Test
     fun task_serializes_in_snake_case_dto_shape_with_fidelity() = runTest {
-        val manifest = exporter(
+        val itemsJson = exporter(
             tasks = listOf(task("t1", title = "Buy milk", state = WorkingState.InProgress, description = "2%")),
-        ).buildManifestJson()
+        ).buildItemsJson()
 
         // The wire shape: discriminated cross-kind union, snake_case keys (ADR-0011 DTOs).
-        assertTrue(manifest.contains("\"type\":\"task\""), manifest)
-        assertTrue(manifest.contains("\"date_created\""), manifest)
-        assertTrue(manifest.contains("\"org_slug\""), manifest)
+        assertTrue(itemsJson.contains("\"type\":\"task\""), itemsJson)
+        assertTrue(itemsJson.contains("\"date_created\""), itemsJson)
+        assertTrue(itemsJson.contains("\"org_slug\""), itemsJson)
 
-        val view = decode(manifest).data.single() as ItemView.Task
+        val view = decode(itemsJson).data.single() as ItemView.Task
         assertEquals("t1", view.id)
         assertEquals("Buy milk", view.title)
         assertEquals("2%", view.description)
@@ -138,14 +138,14 @@ class BackupExporterTest {
 
     @Test
     fun all_four_kinds_are_exported_with_their_discriminator() = runTest {
-        val manifest = exporter(
+        val itemsJson = exporter(
             tasks = listOf(task("t1")),
             habits = listOf(habit("h1")),
             chores = listOf(chore("c1")),
             events = listOf(event("e1")),
-        ).buildManifestJson()
+        ).buildItemsJson()
 
-        val kinds = decode(manifest).data.map {
+        val kinds = decode(itemsJson).data.map {
             when (it) {
                 is ItemView.Task -> "task"
                 is ItemView.Habit -> "habit"
@@ -158,11 +158,11 @@ class BackupExporterTest {
 
     @Test
     fun recurring_kinds_round_trip_their_recurrence_and_cadence() = runTest {
-        val manifest = exporter(
+        val itemsJson = exporter(
             habits = listOf(habit("h1")),
             chores = listOf(chore("c1")),
-        ).buildManifestJson()
-        val data = decode(manifest).data
+        ).buildItemsJson()
+        val data = decode(itemsJson).data
 
         val habitView = data.filterIsInstance<ItemView.Habit>().single()
         assertEquals("weekly", habitView.recurrence?.type)
@@ -177,24 +177,24 @@ class BackupExporterTest {
     fun external_provenance_items_are_omitted() = runTest {
         val native = task("t1")
         val imported = task("t2", external = ExternalRef(ItemSource.GitHub, "owner/repo#5", url = null))
-        val manifest = exporter(tasks = listOf(native, imported)).buildManifestJson()
+        val itemsJson = exporter(tasks = listOf(native, imported)).buildItemsJson()
 
-        val ids = decode(manifest).data.filterIsInstance<ItemView.Task>().map { it.id }
+        val ids = decode(itemsJson).data.filterIsInstance<ItemView.Task>().map { it.id }
         assertEquals(listOf("t1"), ids)
     }
 
     @Test
     fun unhydrated_task_exports_without_a_description() = runTest {
         val summary = task("t1", description = null, hydration = HydrationState.Summary)
-        val manifest = exporter(tasks = listOf(summary)).buildManifestJson()
+        val itemsJson = exporter(tasks = listOf(summary)).buildItemsJson()
 
-        assertFalse(manifest.contains("\"description\""), manifest)
-        assertNull(decode(manifest).data.filterIsInstance<ItemView.Task>().single().description)
+        assertFalse(itemsJson.contains("\"description\""), itemsJson)
+        assertNull(decode(itemsJson).data.filterIsInstance<ItemView.Task>().single().description)
     }
 
     @Test
     fun empty_db_exports_an_empty_data_array() = runTest {
-        val envelope = decode(exporter().buildManifestJson())
+        val envelope = decode(exporter().buildItemsJson())
         assertEquals("0.1", envelope.version)
         assertTrue(envelope.data.isEmpty())
     }

@@ -87,19 +87,6 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
-
-        <!-- On-device Backup export (#313, ADR-0041): the Settings "Export your data" action writes the
-             zip to the cache `backups/` dir and shares it via a content:// URI. exported=false +
-             grantUriPermissions so only the share-sheet recipient (per ACTION_SEND grant) can read it. -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
     </application>
 
 </manifest>

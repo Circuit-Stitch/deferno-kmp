@@ -18,12 +18,13 @@ everything.
 
 **Decision.**
 
-- **One file format — the [[Backup file]].** A **zip**: `manifest.json` is the REST response envelope
+- **One file format — the [[Backup file]].** A **zip**: `items.json` is the REST response envelope
   `{ version, data }` (ADR-0005) carrying the **same snake-case DTO shapes** the API's read endpoints emit
   (`data` = an array of cross-kind item detail objects, with comments/history/attachment metadata nested
   per item where present); `attachments/<attachmentId>` holds raw bytes. "Compatible with the web API" is
-  satisfied **by construction** — the manifest *is* the API's own JSON — and the file **carries the
-  envelope `version`** so an import can version-gate it. **Plaintext** (like any "export my data"): the
+  satisfied **by construction** — `items.json` *is* the API's own JSON — and the file **carries the
+  envelope `version`** so an import can version-gate it. (The entry is named for its content — the items —
+  rather than `manifest.json`, which reads as metadata when it is in fact the data.) **Plaintext** (like any "export my data"): the
   person controls the destination; encrypting would break direct web/API readability, the whole point.
 - **Two export modes, chosen at export time.**
   - **[[On-device export]] (built now):** a pure-offline snapshot of the **local DB only** — items
@@ -42,7 +43,7 @@ everything.
   (the backend owns the audit log). **Comment restore defers** with the Full extract (no on-device file
   carries comments). Items land in the **active account's personal org** (the file's `owner_org_id`/`ref`/
   `sequence` are informational; the create path re-homes — hard isolation is intact because the *person* is
-  moving their own data). Version-gated by ADR-0005's window: manifest `version` **above MAX** → force-upgrade
+  moving their own data). Version-gated by ADR-0005's window: the file's `version` **above MAX** → force-upgrade
   ("update to import"); **below MIN** → refuse.
 - **Engine in shared KMP core; iOS owns only the pickers.** The read-DB → build-zip → parse-zip →
   replay-create logic lives in `core/data`/`core/network` (where the DB, outbox, DTOs, and create path
@@ -57,7 +58,7 @@ everything.
 - **A custom or CSV format** — loses the free web-API compatibility and the version gate; a zip of the REST
   envelope reuses the existing DTOs and reader wholesale.
 - **Single base64-in-JSON file** (no zip) — "one API document," but bloats ~33% and loads all bytes
-  (incl. brain-dump audio) into memory; a zip keeps the manifest pure and streams bytes.
+  (incl. brain-dump audio) into memory; a zip keeps `items.json` pure and streams bytes.
 - **Mint-new-ids "copy" import** — breaks round-trip (re-import duplicates) and forces parent/child +
   sequence remapping; id-preserving restore is idempotent for free via ADR-0034.
 - **Per-conflict review on import** — a triage queue atop restore; last-writer-wins already exists and is
