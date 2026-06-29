@@ -52,6 +52,7 @@ import com.circuitstitch.deferno.feature.tasks.ui.TasksScreen
 import com.circuitstitch.deferno.shell.ui.ActivityScreen
 import com.circuitstitch.deferno.shell.ui.ShellChrome
 import com.circuitstitch.deferno.shell.ui.label
+import com.circuitstitch.deferno.shell.ui.systemGestureExclusionCompat
 
 /**
  * The **Main shell** View (ADR-0013): the shared [ShellChrome] reveal drawer hosting the
@@ -122,7 +123,9 @@ private fun TasksSearchBar(onMenu: () -> Unit, onSearch: () -> Unit) {
             .padding(start = 8.dp, end = 8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onMenu) {
+            // Reserve the ☰ from the OS back gesture so its taps aren't eaten at the left edge after a
+            // screen wake (the same fix as ShellTopBar's leading control).
+            IconButton(onClick = onMenu, modifier = Modifier.systemGestureExclusionCompat()) {
                 Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Row(

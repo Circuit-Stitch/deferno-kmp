@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -230,6 +231,13 @@ class DefaultRootComponent(
      */
     private val reauthRequests: ReauthRequests = DefaultReauthCoordinator(),
     coroutineContext: CoroutineContext = Dispatchers.Main,
+    /**
+     * The context the outbox driver runs its flush + settings reconcile on. The flush does synchronous
+     * SQLite I/O, so it must NOT run on the Main lifecycle [coroutineContext] — that blocks the UI thread
+     * on every activation + 30s tick + reconnect edge (1-2s tap lag right after start / after idle).
+     * Defaulted to inherit (tests keep their virtual-clock dispatcher); production passes `Dispatchers.IO`.
+     */
+    private val outboxFlushContext: CoroutineContext = EmptyCoroutineContext,
 ) : RootComponent, ComponentContext by componentContext {
 
     private val scope = componentScope(coroutineContext)
@@ -241,7 +249,7 @@ class DefaultRootComponent(
     private var themeJob: Job? = null
 
     /** The active session's outbox driver (#143/#158): flush, settings reconcile, then the periodic loop. */
-    private val outboxDriver = OutboxDriver(scope, connectivity, now, outboxFlushPeriod)
+    private val outboxDriver = OutboxDriver(scope, connectivity, now, outboxFlushPeriod, outboxFlushContext)
 
     private sealed interface Config {
         data object Auth : Config

@@ -8,6 +8,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration
 import kotlin.time.Instant
 
@@ -35,13 +37,22 @@ class OutboxDriver(
     private val connectivity: Connectivity,
     private val now: () -> Instant,
     private val flushPeriod: Duration,
+    /**
+     * The context the flush loop runs on. The flush + settings reconcile do **synchronous** SQLite I/O
+     * (`SqlDelightOutboxStore` runs its queries straight through on the calling dispatcher), so this must
+     * be a background context — [scope] is the component's *Main* lifecycle scope, and running the flush
+     * there blocks the UI thread on every activation, every [flushPeriod] tick, and every reconnect edge
+     * (the 1-2s tap lag right after start / after idle). Defaulted to inherit [scope]'s dispatcher so the
+     * virtual-clock tests keep their single-threaded scheduler; production passes `Dispatchers.IO`.
+     */
+    private val flushContext: CoroutineContext = EmptyCoroutineContext,
 ) {
     private var job: Job? = null
 
     /** Re-point the driver at [session] (cancelling any prior session's loop first). */
     fun drive(session: AccountSession) {
         job?.cancel()
-        job = scope.launch {
+        job = scope.launch(flushContext) {
             val online = connectivity.online
             if (online.value) guarded { session.flushOutbox(now()) }
             guarded { session.settingsRepository.refresh() }
@@ -69,9 +80,9 @@ class OutboxDriver(
     /**
      * Run one driver step, swallowing any failure so a flush/reconcile throw can never crash the app —
      * the periodic loop just retries on the next tick (and the reconnect edge on the next transition).
-     * On Kotlin/Native an uncaught exception in a [scope] coroutine (Main dispatcher in production) aborts
-     * the process, so this guard is what keeps a bad DB open, a network blip, or a schema downgrade from
-     * taking the whole UI down. [CancellationException] is rethrown so [stop] / re-[drive] / scene-destroy
+     * On Kotlin/Native an uncaught exception in a [scope] coroutine (the loop is a child of the Main
+     * lifecycle [scope], even though it runs on [flushContext]) aborts the process, so this guard is what
+     * keeps a bad DB open, a network blip, or a schema downgrade from taking the whole UI down. [CancellationException] is rethrown so [stop] / re-[drive] / scene-destroy
      * still tears the driver down cleanly.
      */
     private suspend fun guarded(block: suspend () -> Unit) {

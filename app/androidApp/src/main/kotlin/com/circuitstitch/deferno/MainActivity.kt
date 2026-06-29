@@ -34,6 +34,7 @@ import com.circuitstitch.deferno.shell.RootComponent
 import com.circuitstitch.deferno.shell.RootShell
 import java.util.Locale
 import kotlin.time.Clock
+import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 
@@ -152,6 +153,9 @@ class MainActivity : ComponentActivity() {
                 connectivity = appComponent.connectivity,
                 // The read-surface session-expiry banner flag (#297): the shared client sets it on a 401.
                 reauthRequests = appComponent.reauthRequests,
+                // The outbox flush does synchronous SQLite I/O — keep it off the Main lifecycle scope so it
+                // can't block taps on activation / the 30s tick / a reconnect (the 1-2s tap-lag bug).
+                outboxFlushContext = Dispatchers.IO,
             )
         }
 

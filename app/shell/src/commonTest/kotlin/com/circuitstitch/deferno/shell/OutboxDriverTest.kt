@@ -5,14 +5,18 @@ import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.model.UserSettings
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.ContinuationInterceptor
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertSame
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -160,6 +164,31 @@ class OutboxDriverTest {
 
         advanceTimeBy(31.seconds)
         assertEquals(2, session.flushes.size, "the driver survived the failure and re-flushed")
+    }
+
+    @Test
+    fun flushesRunOnTheInjectedBackgroundContext_notTheMainLifecycleScope() = runTest {
+        // The flush does synchronous SQLite I/O (SqlDelightOutboxStore "runs straight through" on the
+        // calling dispatcher), so the driver must hop it onto the injected background context. [scope] is
+        // the component's Main lifecycle scope; running the flush there blocks the UI thread on every
+        // activation + every tick — the 1-2s tap lag right after start / after idle. A distinct dispatcher
+        // sharing this test's scheduler keeps virtual time while letting us assert which one the flush ran on.
+        val flushDispatcher = StandardTestDispatcher(testScheduler)
+        var flushInterceptor: ContinuationInterceptor? = null
+        val session = FakeAccountSession(onFlush = {
+            flushInterceptor = currentCoroutineContext()[ContinuationInterceptor]
+        })
+
+        OutboxDriver(backgroundScope, AssumeOnlineConnectivity(), { t0 }, 30.seconds, flushDispatcher)
+            .drive(session)
+        runCurrent()
+
+        assertEquals(1, session.flushes.size, "the activation flush ran")
+        assertSame(
+            flushDispatcher,
+            flushInterceptor,
+            "the flush must run on the injected background context, not the Main lifecycle scope",
+        )
     }
 
     @Test
