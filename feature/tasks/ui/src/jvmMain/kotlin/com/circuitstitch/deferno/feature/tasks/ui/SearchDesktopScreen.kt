@@ -406,6 +406,7 @@ private fun sortLabel(sort: SearchSort): String = when (sort) {
     SearchSort.Relevance -> "Best match"
     SearchSort.TitleAsc -> "Title (A–Z)"
     SearchSort.DeadlineAsc -> "Soonest due"
+    SearchSort.AttachmentSizeDesc -> "Biggest attachments"
 }
 
 // [workingStateLabel] is the shared commonMain label (lifted with WorkingStateEditor, see TaskDetailContent).

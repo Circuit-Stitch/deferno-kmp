@@ -10,9 +10,9 @@ import com.circuitstitch.deferno.core.network.ApiResult
  * longer be mistaken for a failed pull (the bug: a server that legitimately emptied could never reconcile
  * the stale local rows away, because empty read as "offline → skip").
  *
- * The read-side mirror of [com.circuitstitch.deferno.core.data.task.TaskSearchResult] /
- * [com.circuitstitch.deferno.core.data.auth.MeResult] — same `Unavailable` term for "couldn't reach the
- * server", here over the background reads the offline-first repositories reconcile through.
+ * The read-side mirror of [com.circuitstitch.deferno.core.data.auth.MeResult] — same `Unavailable` term
+ * for "couldn't reach the server", here over the background reads the offline-first repositories reconcile
+ * through. (Global search dropped its own `Unavailable` result when it went offline — #311.)
  */
 sealed interface RemoteSnapshot<out T> {
     data class Available<out T>(val value: T) : RemoteSnapshot<T>

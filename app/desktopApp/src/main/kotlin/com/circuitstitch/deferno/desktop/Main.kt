@@ -420,7 +420,7 @@ private fun handleRootKey(event: KeyEvent, root: RootComponent, onQuit: () -> Un
             main != null
         }
         Key.F -> {
-            main?.openOverlay(OverlayRoute.Search)
+            main?.openOverlay(OverlayRoute.Search())
             main != null
         }
         else -> {
@@ -487,7 +487,7 @@ private fun DefernoMenuBar(
                 }
                 HorizontalDivider()
                 MenuRow(text = "New…", shortcut = "Ctrl+N") { dismiss(); main.openNew() }
-                MenuRow(text = "Search…", shortcut = "Ctrl+F") { dismiss(); main.openOverlay(OverlayRoute.Search) }
+                MenuRow(text = "Search…", shortcut = "Ctrl+F") { dismiss(); main.openOverlay(OverlayRoute.Search()) }
                 HorizontalDivider()
                 MenuRow(text = "Refresh", shortcut = "Ctrl+R") { dismiss(); main.refreshActiveDestination() }
             }
@@ -536,7 +536,7 @@ private fun DefernoMenuBar(
                     if (update.action == UpdateAction.INSTALL) onInstallUpdate()
                 }
             }
-            ToolbarAction(text = "Search") { main.openOverlay(OverlayRoute.Search) }
+            ToolbarAction(text = "Search") { main.openOverlay(OverlayRoute.Search()) }
             ToolbarAction(text = "+ New") { main.openNew() }
         }
     }

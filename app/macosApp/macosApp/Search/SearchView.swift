@@ -1,10 +1,11 @@
 import Deferno
+import Foundation
 import SwiftUI
 
-/// The global Search overlay (#73) — a thin renderer of `SearchComponent`. Online-only, one-shot: the
-/// query (≥2 chars, gated in the component) plus optional status / tag / date-range / sort filters drive
-/// a pull; tapping a result opens it in the Tasks Destination (the shell routes + dismisses). No native
-/// date picker — ISO `YYYY-MM-DD` text fields, identical across platforms by design.
+/// The global Search overlay (#73, #311) — a thin renderer of `SearchComponent`. Offline + one-shot: the
+/// query (≥2 chars, or the "has attachment" filter) plus optional status / tag / date-range / attachment /
+/// sort filters drive a local read; tapping a result opens it in the Tasks Destination (the shell routes +
+/// dismisses). No native date picker — ISO `YYYY-MM-DD` text fields, identical across platforms by design.
 struct SearchView: View {
     let component: SearchComponent
     @StateObject private var state: StateFlowObserver<SearchState>
@@ -39,6 +40,7 @@ struct SearchView: View {
                     statusFilter(value)
                     tagsFilter(value)
                     dateRangeFilter
+                    attachmentFilter(value)
                     sortFilter(value)
                     Divider().background(colors.outlineVariant)
                     results(value)
@@ -102,6 +104,14 @@ struct SearchView: View {
         }
     }
 
+    // The "has attachment" filter (#311) — a single toggle chip. A bare attachment filter searches with no
+    // text, so it runs on its own (the Settings → Storage "biggest attachments" deep-link relies on it).
+    private func attachmentFilter(_ value: SearchState) -> some View {
+        filterSection("Attachments") {
+            chip("Has attachment", selected: value.hasAttachment) { component.onHasAttachmentToggled() }
+        }
+    }
+
     private func dateField(_ placeholder: String, text: Binding<String>) -> some View {
         TextField(placeholder, text: text)
             .textFieldStyle(.roundedBorder)
@@ -139,13 +149,8 @@ struct SearchView: View {
         } else if value.isSearching {
             LoadingStrip(label: "Searching…")
         } else if value.sessionExpired {
-            // The banner above already explains the expired session — don't also show a "couldn't reach the
-            // server" state (#297).
+            // The banner above already explains the expired session — don't double up (#297).
             EmptyView()
-        } else if value.searchFailed {
-            // A failed pull (offline / server error) is NOT "no matches" — say so (#73 follow-up).
-            EmptyStateView(title: "Search is unavailable",
-                           message: "Something went wrong reaching the server. Check your connection and try again.")
         } else if value.hasSearched {
             EmptyStateView(title: "No matches",
                            message: "Nothing matched your search. Try a different word or fewer filters.")
@@ -181,9 +186,18 @@ struct SearchView: View {
         case "Relevance": return "Best match"
         case "TitleAsc": return "Title (A–Z)"
         case "DeadlineAsc": return "Soonest due"
+        case "AttachmentSizeDesc": return "Biggest attachments"
         default: return key
         }
     }
+}
+
+/// Formats an attachment-size rollup as "N files · 1.2 MB" for a search hit (#311); empty when none.
+func attachmentSummary(count: Int32, totalSize: Int64) -> String? {
+    guard count > 0 else { return nil }
+    let files = count == 1 ? "1 file" : "\(count) files"
+    let size = ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
+    return "\(files) · \(size)"
 }
 
 /// A single global-search result. `SearchHit` is a lightweight, kind-agnostic projection (title · kind ·
@@ -207,6 +221,10 @@ private struct SearchHitRow: View {
                         Text(ref)
                             .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
+                    }
+                    // Attachment rollup (#311) — visible so the "biggest attachments" sort is legible.
+                    if let summary = attachmentSummary(count: hit.attachmentCount, totalSize: hit.attachmentTotalSize) {
+                        Text(summary).font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 Spacer(minLength: 12)

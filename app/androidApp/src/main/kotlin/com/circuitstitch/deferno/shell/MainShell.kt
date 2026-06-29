@@ -73,7 +73,7 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = drawerOpen) { drawerOpen = false }
 
-    val openSearch = { component.openOverlay(OverlayRoute.Search) }
+    val openSearch = { component.openOverlay(OverlayRoute.Search()) }
 
     Box(modifier.fillMaxSize()) {
         ShellChrome(

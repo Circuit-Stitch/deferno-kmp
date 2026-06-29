@@ -4,7 +4,6 @@ import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
-import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -68,18 +67,17 @@ internal class DemoTaskRepository(initial: List<Task>) : TaskRepository, ItemRep
         }
     }
 
-    override suspend fun search(query: TaskSearchQuery): TaskSearchResult {
+    override suspend fun search(query: TaskSearchQuery): List<SearchHit> {
         val term = query.query.trim().lowercase()
-        if (term.length < 2) return TaskSearchResult.Success(emptyList())
-        return TaskSearchResult.Success(
-            tasks.value.filter { task ->
-                val matchesTerm = task.title.lowercase().contains(term) ||
-                    task.description?.lowercase()?.contains(term) == true
-                val matchesStatus = query.statuses.isEmpty() || task.workingState in query.statuses
-                val matchesLabel = query.labels.isEmpty() || task.labels.any { it in query.labels }
-                matchesTerm && matchesStatus && matchesLabel
-            }.map { it.toDemoSearchHit() },
-        )
+        if (term.length < 2 && !query.hasAttachment) return emptyList()
+        return tasks.value.filter { task ->
+            val matchesTerm = term.isEmpty() || task.title.lowercase().contains(term) ||
+                task.description?.lowercase()?.contains(term) == true
+            val matchesStatus = query.statuses.isEmpty() || task.workingState in query.statuses
+            val matchesLabel = query.labels.isEmpty() || task.labels.any { it in query.labels }
+            val matchesAttachment = !query.hasAttachment || task.hasAttachment
+            matchesTerm && matchesStatus && matchesLabel && matchesAttachment
+        }.map { it.toDemoSearchHit() }
     }
 
     /** Optimistically flip a Task's working state — the demo stand-in for the offline-first write seam. */

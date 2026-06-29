@@ -1,0 +1,11 @@
+-- Migration 11 -> 12: cache the backend-hosted attachment rollup on the Task cache (#311).
+--
+-- The `/items` snapshot ships a per-item `attachments` array (each entry carries a byte `size`) that the
+-- client used to drop. We now roll it up to a count + summed bytes and cache it so global Search can run
+-- offline with a "has attachment" filter and an attachment-size sort (ADR-0042) — no backend rollup field
+-- needed. Plain ADD COLUMN appends nullable columns; existing rows get NULL (decoded as 0) and are
+-- repopulated on the next refresh. Task-only: file attachments live on Tasks, so the recurring kinds don't
+-- carry the rollup yet (same posture as the 10->11 external-provenance migration). Never edit a released
+-- migration or snapshot — ADR-0022 runbook.
+ALTER TABLE taskEntity ADD COLUMN attachment_count INTEGER;
+ALTER TABLE taskEntity ADD COLUMN attachment_total_size INTEGER;

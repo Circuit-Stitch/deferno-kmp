@@ -630,7 +630,7 @@ class MainShellComponentTest {
         val shell = shell()
         assertNull(shell.overlay.value.child, "no overlay initially")
 
-        shell.openOverlay(OverlayRoute.Search)
+        shell.openOverlay(OverlayRoute.Search())
         val child = shell.overlay.value.child?.instance
         assertTrue(child is MainShellComponent.OverlayChild.Search, "the Search overlay is pushed above the foreground")
         assertEquals(Destination.Plan, shell.activeDestination(), "the foreground Destination is untouched")
@@ -652,7 +652,7 @@ class MainShellComponentTest {
         expired.value = true
         assertEquals(true, shell.sessionExpired.value)
 
-        shell.openOverlay(OverlayRoute.Search)
+        shell.openOverlay(OverlayRoute.Search())
         val search = shell.overlay.value.child?.instance as MainShellComponent.OverlayChild.Search
         assertTrue(search.component.state.value.sessionExpired, "the Search overlay reflects the expired session")
     }
@@ -693,7 +693,7 @@ class MainShellComponentTest {
     @Test
     fun searchResultTap_opensThatTaskInTheTasksDestination_andDismissesTheOverlay() {
         val shell = shell()
-        shell.openOverlay(OverlayRoute.Search)
+        shell.openOverlay(OverlayRoute.Search())
         val search = (shell.overlay.value.child?.instance as MainShellComponent.OverlayChild.Search).component
 
         search.onResultClicked(SearchHit(id = "t-1", kind = ItemKind.Task, title = "Task t-1"))
@@ -709,7 +709,7 @@ class MainShellComponentTest {
         val shell = shell()
         shell.selectDestination(Destination.Tasks)
         shell.tasks().tree.onOpenDetail("t-1", ItemKind.Task)
-        shell.openOverlay(OverlayRoute.Search)
+        shell.openOverlay(OverlayRoute.Search())
 
         assertTrue(shell.onBack(), "back dismisses the Search overlay")
         assertNull(shell.overlay.value.child)

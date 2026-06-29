@@ -259,6 +259,8 @@ internal class FakeSearchComponent(initial: SearchState = SearchState()) : Searc
     val dateRangeChanges = mutableListOf<Pair<LocalDate?, LocalDate?>>()
     val sortChanges = mutableListOf<SearchSort>()
     val resultClicks = mutableListOf<SearchHit>()
+    var hasAttachmentToggles = 0
+        private set
     var submitCount = 0
         private set
     var dismissCount = 0
@@ -269,6 +271,7 @@ internal class FakeSearchComponent(initial: SearchState = SearchState()) : Searc
     override fun onQueryChanged(query: String) { queryChanges += query }
     override fun onStatusToggled(status: WorkingState) { statusToggles += status }
     override fun onLabelToggled(label: String) { labelToggles += label }
+    override fun onHasAttachmentToggled() { hasAttachmentToggles++ }
     override fun onSortChanged(sort: SearchSort) { sortChanges += sort }
     override fun onDateRangeChanged(from: LocalDate?, to: LocalDate?) { dateRangeChanges += (from to to) }
     override fun onSubmit() { submitCount++ }

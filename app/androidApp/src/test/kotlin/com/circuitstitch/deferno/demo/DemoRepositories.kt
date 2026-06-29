@@ -3,7 +3,6 @@ package com.circuitstitch.deferno.demo
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
-import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.SearchHit
@@ -60,20 +59,19 @@ internal class DemoTaskRepository(initial: List<Task>) : TaskRepository {
         }
     }
 
-    override suspend fun search(query: TaskSearchQuery): TaskSearchResult {
-        // Offline demo: filter the in-memory list by the term + status/label filters (a stand-in for
-        // the online `GET /tasks/search`, so the shell's Search overlay returns rows in tests, #73).
+    override suspend fun search(query: TaskSearchQuery): List<SearchHit> {
+        // Offline demo: filter the in-memory list by the term + status/label/attachment filters (a
+        // stand-in for the real offline local read, so the shell's Search overlay returns rows in tests).
         val term = query.query.trim().lowercase()
-        if (term.length < 2) return TaskSearchResult.Success(emptyList())
-        return TaskSearchResult.Success(
-            tasks.value.filter { task ->
-                val matchesTerm = task.title.lowercase().contains(term) ||
-                    task.description?.lowercase()?.contains(term) == true
-                val matchesStatus = query.statuses.isEmpty() || task.workingState in query.statuses
-                val matchesLabel = query.labels.isEmpty() || task.labels.any { it in query.labels }
-                matchesTerm && matchesStatus && matchesLabel
-            }.map { it.toDemoSearchHit() },
-        )
+        if (term.length < 2 && !query.hasAttachment) return emptyList()
+        return tasks.value.filter { task ->
+            val matchesTerm = term.isEmpty() || task.title.lowercase().contains(term) ||
+                task.description?.lowercase()?.contains(term) == true
+            val matchesStatus = query.statuses.isEmpty() || task.workingState in query.statuses
+            val matchesLabel = query.labels.isEmpty() || task.labels.any { it in query.labels }
+            val matchesAttachment = !query.hasAttachment || task.hasAttachment
+            matchesTerm && matchesStatus && matchesLabel && matchesAttachment
+        }.map { it.toDemoSearchHit() }
     }
 
     /** Current snapshot of a Task (used to mirror an add-to-plan into the demo plan). */

@@ -570,6 +570,7 @@ private fun sortLabel(sort: SearchSort): String = when (sort) {
     SearchSort.Relevance -> "Best match"
     SearchSort.TitleAsc -> "Title (A–Z)"
     SearchSort.DeadlineAsc -> "Soonest due"
+    SearchSort.AttachmentSizeDesc -> "Biggest attachments"
 }
 
 /** The three STATUS presets the sheet offers, each mapped onto a [WorkingState] set. */

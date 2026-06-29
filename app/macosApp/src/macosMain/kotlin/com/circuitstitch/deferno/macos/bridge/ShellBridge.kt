@@ -351,7 +351,7 @@ fun itemKindsEqual(a: ItemKind, b: ItemKind): Boolean = a == b
 // ---------------------------------------------------------------------------------------------------
 
 /** Open the global Search overlay (the ⌕ in the shell top bar, #73). */
-fun openSearchOverlay(component: MainShellComponent) = component.openOverlay(OverlayRoute.Search)
+fun openSearchOverlay(component: MainShellComponent) = component.openOverlay(OverlayRoute.Search())
 
 /** Open the New create overlay, undated (the shell FAB on a non-Calendar Destination, #71). */
 fun openNewOverlay(component: MainShellComponent) = component.openOverlay(OverlayRoute.New(null))

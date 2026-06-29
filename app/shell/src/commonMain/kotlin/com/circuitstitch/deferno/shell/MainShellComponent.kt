@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.shell
 import com.arkivanov.decompose.router.slot.ChildSlot
 import com.arkivanov.decompose.router.stack.ChildStack
 import com.arkivanov.decompose.value.Value
+import com.circuitstitch.deferno.core.data.task.SearchSeed
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.TaskId
@@ -253,8 +254,12 @@ sealed interface OverlayRoute {
     /** The trivial v1 placeholder so the overlay mechanism is wired and testable. */
     data object Placeholder : OverlayRoute
 
-    /** The global Search route (#73) — launched from the ⌕ in any Destination app bar. */
-    data object Search : OverlayRoute
+    /**
+     * The global Search route (#73) — launched from the ⌕ in any Destination app bar. [seed] pre-applies
+     * a filter/sort when opened from a deep-link (#311 — e.g. Settings → Storage "biggest attachments");
+     * `null` opens the plain search overlay.
+     */
+    data class Search(val seed: SearchSeed? = null) : OverlayRoute
 
     /**
      * The New create surface (#71): the FAB pushes this above the foreground Destination. [date]

@@ -3,10 +3,10 @@ package com.circuitstitch.deferno.feature.tasks
 import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.task.MIN_SEARCH_QUERY_LENGTH
+import com.circuitstitch.deferno.core.data.task.SearchSeed
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
-import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.TaskId
@@ -21,14 +21,12 @@ import kotlinx.datetime.LocalDate
 import kotlin.coroutines.CoroutineContext
 
 /**
- * Observable state for the global-search overlay (#73). [hasSearched] distinguishes the initial,
- * untouched overlay ("type to search") from a completed search that found nothing ("no matches"), so
- * the View can show the right gentle copy; [searchFailed] further distinguishes a search that
- * **couldn't run** ([TaskSearchResult.Unavailable] — offline or a server error) from one that ran and
- * found nothing, so a broken backend never masquerades as "no matches". [results] is the last
- * completed search's rows; [isSearching] is true only while a pull is in flight. The filters
- * ([statuses]/[labels]/[fromDate]/[toDate]) and [sort] mirror [TaskSearchQuery] so the View binds
- * straight to them.
+ * Observable state for the global-search overlay (#73, #311). [hasSearched] distinguishes the initial,
+ * untouched overlay ("type to search") from a completed search that found nothing ("no matches"), so the
+ * View can show the right gentle copy. [results] is the last completed search's rows; [isSearching] is
+ * true only while the local read runs. The filters ([statuses]/[labels]/[fromDate]/[toDate]/[hasAttachment])
+ * and [sort] mirror [TaskSearchQuery] so the View binds straight to them. [searchFailed] is vestigial now
+ * that search is offline (a local read can't fail) — see its field doc.
  */
 data class SearchState(
     val query: String = "",
@@ -36,27 +34,36 @@ data class SearchState(
     val labels: Set<String> = emptySet(),
     val fromDate: LocalDate? = null,
     val toDate: LocalDate? = null,
+    // The "has attachment" filter (#311): when on, only items with backend-hosted attachments match.
+    val hasAttachment: Boolean = false,
     val sort: SearchSort = SearchSort.Relevance,
     val results: List<SearchHit> = emptyList(),
     val isSearching: Boolean = false,
     val hasSearched: Boolean = false,
+    // Search is offline (#311, ADR-0042) — a local read can't fail — so this stays false; kept so the
+    // existing Compose/SwiftUI views compile unchanged (their failure branch is simply never hit now).
     val searchFailed: Boolean = false,
-    // The Active Account's session has expired (#297). When set, a failed search is the dead token, not a
-    // network blip — the View shows "Session expired — sign in again" instead of the generic failure copy.
+    // The Active Account's session has expired (#297) — a process-wide flag the overlay still surfaces so
+    // the person knows to re-auth, even though offline search itself no longer needs the network.
     val sessionExpired: Boolean = false,
 ) {
-    /** Whether the current query meets the backend's 2-char minimum (#73). */
-    val canSearch: Boolean get() = query.trim().length >= MIN_SEARCH_QUERY_LENGTH
+    /**
+     * Whether there is something to search on (#73, #311): a free-text term of at least the 2-char
+     * minimum, OR the "has attachment" filter (the deep-link runs with no text, just the filter + sort).
+     */
+    val canSearch: Boolean get() = query.trim().length >= MIN_SEARCH_QUERY_LENGTH || hasAttachment
 }
 
 /**
- * The global-search component (#73, ADR-0007): the shared, Compose-free logic behind the search
- * overlay route. It is **online-only and one-shot** — it drives [TaskRepository.search] (a suspend
- * pull, NOT the offline observed `Flow`), so search results are never confused with the live task list
+ * The global-search component (#73, #311, ADR-0042): the shared, Compose-free logic behind the search
+ * overlay route. It is **offline and one-shot** — it drives [TaskRepository.search] (a suspend local read
+ * over the cache, NOT the observed `Flow`), so search results are never confused with the live task list
  * (ADR-0001). Selecting a result emits an [Output.OpenTask] intent the shell routes into the Tasks
  * Destination; [onDismiss] emits [Output.Dismissed] for the shell to pop the overlay.
  *
- * The 2-char minimum guard lives here ([SearchState.canSearch]) so every platform binding inherits it.
+ * The search guard lives here ([SearchState.canSearch]) so every platform binding inherits it. Opening
+ * with a [SearchSeed] (a deep-link, e.g. Settings → Storage "biggest attachments") pre-applies the
+ * filter/sort and runs the search immediately.
  */
 interface SearchComponent {
     val state: StateFlow<SearchState>
@@ -64,10 +71,14 @@ interface SearchComponent {
     fun onQueryChanged(query: String)
     fun onStatusToggled(status: WorkingState)
     fun onLabelToggled(label: String)
+
+    /** Toggle the "has attachment" filter (#311), then re-run if results are already shown. */
+    fun onHasAttachmentToggled()
+
     fun onSortChanged(sort: SearchSort)
     fun onDateRangeChanged(from: LocalDate?, to: LocalDate?)
 
-    /** Run the search for the current query + filters (a no-op if the query is below the 2-char floor). */
+    /** Run the search for the current query + filters (a no-op when [SearchState.canSearch] is false). */
     fun onSubmit()
 
     /**
@@ -91,20 +102,27 @@ class DefaultSearchComponent(
     componentContext: ComponentContext,
     private val searchTasks: SearchTasks,
     private val output: (SearchComponent.Output) -> Unit,
-    // The process-wide session-expiry flag (#297), folded into the state so a 401'd search shows the
+    // A deep-link's pre-applied filter/sort (#311): when present, the overlay opens with it and runs the
+    // search immediately (e.g. Settings → Storage "biggest attachments"). Null = the plain search overlay.
+    initialSeed: SearchSeed? = null,
+    // The process-wide session-expiry flag (#297), folded into the state so the overlay can surface the
     // re-auth prompt. Defaulted to "not expired" so existing tests build without supplying it.
     sessionExpired: StateFlow<Boolean> = MutableStateFlow(false),
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : SearchComponent, ComponentContext by componentContext {
 
     private val scope = componentScope(coroutineContext)
-    private val _state = MutableStateFlow(SearchState())
+    private val _state = MutableStateFlow(
+        initialSeed?.let { SearchState(hasAttachment = it.hasAttachment, sort = it.sort) } ?: SearchState(),
+    )
     override val state: StateFlow<SearchState> = _state.asStateFlow()
 
     init {
-        // Mirror the process-wide session-expiry flag into the state so a 401'd search shows the
-        // re-auth prompt (#297). Folding it in here keeps `state.value` a synchronous read of `_state`.
+        // Mirror the process-wide session-expiry flag into the state (#297). Folding it in here keeps
+        // `state.value` a synchronous read of `_state`.
         scope.launch { sessionExpired.collect { expired -> _state.update { it.copy(sessionExpired = expired) } } }
+        // A seeded overlay lands on results, not an empty box (#311) — run the seeded filter/sort at once.
+        if (initialSeed != null) onSubmit()
     }
 
     override fun onQueryChanged(query: String) {
@@ -117,6 +135,13 @@ class DefaultSearchComponent(
 
     override fun onLabelToggled(label: String) {
         _state.update { it.copy(labels = it.labels.toggle(label)) }
+    }
+
+    override fun onHasAttachmentToggled() {
+        val shouldRerun = _state.value.hasSearched
+        _state.update { it.copy(hasAttachment = !it.hasAttachment) }
+        // Re-run if results are already shown and the toggle still leaves something to search on.
+        if (shouldRerun && _state.value.canSearch) onSubmit()
     }
 
     override fun onSortChanged(sort: SearchSort) {
@@ -135,31 +160,20 @@ class DefaultSearchComponent(
         if (!current.canSearch || current.isSearching) return
         _state.update { it.copy(isSearching = true) }
         scope.launch {
-            val outcome = searchTasks.search(
+            // Offline local read (ADR-0042) — it can't fail, so the result is just the hits.
+            val hits = searchTasks.search(
                 TaskSearchQuery(
                     query = current.query.trim(),
                     statuses = current.statuses,
                     labels = current.labels,
                     fromDate = current.fromDate,
                     toDate = current.toDate,
+                    hasAttachment = current.hasAttachment,
                     sort = current.sort,
                 ),
             )
             _state.update {
-                when (outcome) {
-                    is TaskSearchResult.Success -> it.copy(
-                        results = outcome.hits,
-                        isSearching = false,
-                        hasSearched = true,
-                        searchFailed = false,
-                    )
-                    TaskSearchResult.Unavailable -> it.copy(
-                        results = emptyList(),
-                        isSearching = false,
-                        hasSearched = true,
-                        searchFailed = true,
-                    )
-                }
+                it.copy(results = hits, isSearching = false, hasSearched = true, searchFailed = false)
             }
         }
     }

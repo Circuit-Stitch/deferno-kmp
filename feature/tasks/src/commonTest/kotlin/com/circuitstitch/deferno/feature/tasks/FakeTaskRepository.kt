@@ -2,7 +2,6 @@ package com.circuitstitch.deferno.feature.tasks
 
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
-import com.circuitstitch.deferno.core.data.task.TaskSearchResult
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.SearchHit
@@ -56,9 +55,9 @@ class FakeTaskRepository(initial: List<Task> = emptyList()) : TaskRepository {
         }
     }
 
-    override suspend fun search(query: TaskSearchQuery): TaskSearchResult {
+    override suspend fun search(query: TaskSearchQuery): List<SearchHit> {
         searchQueries += query
-        return TaskSearchResult.Success(searchResults)
+        return searchResults
     }
 }
 

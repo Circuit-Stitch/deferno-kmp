@@ -60,6 +60,9 @@ fun TaskEntity.toDomain(): Task = Task(
     blocked = blocked == 1L,
     isBlocker = is_blocker == 1L,
     external = decodeExternalRef(external_source, external_id, external_url),
+    // Attachment rollup (#311): NULL (pre-migration / omitted) decodes to 0.
+    attachmentCount = (attachment_count ?: 0L).toInt(),
+    attachmentTotalSize = attachment_total_size ?: 0L,
 )
 
 /** Encodes a domain [Task] into a `taskEntity` row, ready for `insertOrReplace`. */
@@ -92,6 +95,8 @@ fun Task.toEntity(): TaskEntity = TaskEntity(
     external_source = external?.source?.name,
     external_id = external?.id,
     external_url = external?.url,
+    attachment_count = attachmentCount.toLong(),
+    attachment_total_size = attachmentTotalSize,
 )
 
 /**

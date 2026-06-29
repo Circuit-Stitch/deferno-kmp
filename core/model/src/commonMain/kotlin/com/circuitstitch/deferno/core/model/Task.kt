@@ -63,7 +63,17 @@ data class Task(
     // `/items` snapshot + the `/tasks/{id}` detail (both carry the wire `external` block); like [blocked]
     // it is not on the list/summary path.
     val external: ExternalRef? = null,
+    // Backend-hosted attachment rollup (#311), derived from the `attachments` array on the `/items`
+    // snapshot + `/tasks/{id}` detail (the array used to be dropped). [attachmentCount] is the number of
+    // files; [attachmentTotalSize] their summed bytes. Both `0` when the source has none / on the
+    // summary path. Power offline "has attachment" search + attachment-size sort (ADR-0042). Task-only
+    // for now — recurring kinds carry no attachment metadata yet.
+    val attachmentCount: Int = 0,
+    val attachmentTotalSize: Long = 0,
 ) {
     /** Whether this row is a soft-delete tombstone (`deleted_at` present). */
     val isDeleted: Boolean get() = deletedAt != null
+
+    /** Whether this Task has at least one backend-hosted attachment (#311). */
+    val hasAttachment: Boolean get() = attachmentCount > 0
 }

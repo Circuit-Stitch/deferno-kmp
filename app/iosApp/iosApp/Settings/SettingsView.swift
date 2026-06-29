@@ -335,6 +335,27 @@ struct SettingsView: View {
                 Text("Recordings you kept when accepting a brain dump. Tap one to open its task — or the Inbox if it's still to review.")
             }
 
+            // Logical attachments across ALL items (#311) — distinct from the on-device bytes above:
+            // backend-hosted attachments occupy no device storage, so this deep-links into Search,
+            // filtered to items with attachments and sorted biggest-first.
+            Section {
+                Button {
+                    component.onOpenBiggestAttachments()
+                } label: {
+                    HStack {
+                        Text("Biggest attachments").foregroundStyle(colors.onSurface)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(colors.inkMuted)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .listRowBackground(colors.surfaceCard)
+            } header: {
+                Text("All items")
+            } footer: {
+                Text("Find the items with the largest attachments, across everything — searched on this device.")
+            }
+
             Section {
                 labeledRow("Storage provider", ShellBridgeKt.storageActiveProviderName(state: provider.value))
                 comingLaterRow("Deferno-hosted")

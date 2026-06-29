@@ -51,10 +51,11 @@ class OfflineToOnlineTest {
         // Local source of truth (the UI reads this); the "server" is the /items snapshot source.
         val local = FakeTaskLocalStore(mapOf(a to task(a), b to task(b)))
         val source = FakeItemSnapshotSource(ItemSnapshot(tasks = listOf(task(a), task(b))))
-        val itemSync = ItemSync(
-            local, FakeHabitLocalStore(), FakeChoreLocalStore(), FakeEventLocalStore(), source, FakePendingCreateStore(),
-        )
-        val repository = OfflineTaskRepository(local, FakeTaskRemoteSource(), itemSync)
+        val habit = FakeHabitLocalStore()
+        val chore = FakeChoreLocalStore()
+        val event = FakeEventLocalStore()
+        val itemSync = ItemSync(local, habit, chore, event, source, FakePendingCreateStore())
+        val repository = OfflineTaskRepository(local, FakeTaskRemoteSource(), itemSync, habit, chore, event)
         val outbox = FakeOutboxStore()
         val writer = OutboxTaskWriter(local, outbox, now = { t0 })
 

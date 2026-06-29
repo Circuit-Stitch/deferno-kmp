@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.flow.Flow
@@ -30,19 +31,19 @@ interface TaskRepository {
     suspend fun hydrate(id: TaskId)
 
     /**
-     * Global search (#73): a **one-shot, online-only** pull of the Tasks matching [query] (the search
-     * overlay's term + date/status/tag filters + client sort). Deliberately a `suspend` returning a
-     * snapshot, **not** an observable `Flow`: search results are a separate read surface and are *not*
-     * written into the live [observeTasks] cache (ADR-0001 keeps the observed list local-only — there
-     * is no offline search). A failed pull is [TaskSearchResult.Unavailable] so the overlay can show
-     * "search is unavailable" instead of a misleading "no matches"; the 2-char minimum guard returns
-     * an empty [TaskSearchResult.Success] without a round trip. See [OfflineTaskRepository.search].
+     * Global search (#73, #311): an **offline, one-shot** local read of the cached Items matching
+     * [query] (the overlay's term + date/status/tag/attachment filters + sort), across all kinds.
+     * Deliberately a `suspend` returning a snapshot, **not** an observable `Flow`: search results are a
+     * separate read surface and are *not* written into the live [observeTasks] cache (ADR-0001 keeps the
+     * observed list local-only). It never fails (a local read can't be "unavailable"), so it returns a
+     * plain list — empty when nothing matches or when the query has no constraint at all. See
+     * [OfflineTaskRepository.search] and ADR-0042.
      */
-    suspend fun search(query: TaskSearchQuery): TaskSearchResult
+    suspend fun search(query: TaskSearchQuery): List<SearchHit>
 }
 
-/** Minimum query length the backend `search_tasks` contract enforces (#73). */
+/** Minimum free-text query length the search overlay enforces before it will run a text search (#73). */
 const val MIN_SEARCH_QUERY_LENGTH: Int = 2
 
 /** Convenience search by a bare term (no filters, relevance sort). */
-suspend fun TaskRepository.search(query: String): TaskSearchResult = search(TaskSearchQuery(query))
+suspend fun TaskRepository.search(query: String): List<SearchHit> = search(TaskSearchQuery(query))

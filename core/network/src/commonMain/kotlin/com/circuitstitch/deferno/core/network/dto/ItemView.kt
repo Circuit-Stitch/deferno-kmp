@@ -62,6 +62,11 @@ sealed interface ItemView {
         // External provenance for a synced/imported item (e.g. a GitHub issue → Task).
         // Absent on a native item; the tolerant reader ignores its unmodelled fields (write_policy/…).
         val external: ExternalProvenanceDto? = null,
+        // Backend-hosted attachment metadata, size-only (#311). The cold-sync snapshot carries the full
+        // `attachments` array on every item; the client used to drop it. Modelled here as size-only so the
+        // DTO→domain mapper can roll it up to `attachment_count` + `attachment_total_size` for offline
+        // attachment search/sort (ADR-0042). Absent/empty → no attachments.
+        val attachments: List<AttachmentSizeDto> = emptyList(),
     ) : ItemView
 
     /** The `habit` variant — a recurring definition with no extra kind-specific fields. */
