@@ -10,6 +10,9 @@ import SwiftUI
 /// the Active Account and `RootView` swaps this surface for Main.
 struct SignInView: View {
     let component: SignInComponent
+    /// Non-nil only when the Auth shell was re-entered to *add* an account while signed in (#NN): renders a
+    /// Cancel-back to the Main shell. Nil on a first sign-in / after sign-out (nothing to return to).
+    let onCancel: (() -> Void)?
     @StateObject private var state: StateFlowObserver<SignInState>
     @Environment(\.defernoColors) private var colors
     @State private var revealed = false
@@ -22,8 +25,9 @@ struct SignInView: View {
     private let showDeveloperOptions = false
     #endif
 
-    init(component: SignInComponent) {
+    init(component: SignInComponent, onCancel: (() -> Void)? = nil) {
         self.component = component
+        self.onCancel = onCancel
         _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
@@ -36,7 +40,7 @@ struct SignInView: View {
                 Text("Deferno")
                     .font(.largeTitle.weight(.semibold))
                     .foregroundStyle(colors.onSurface)
-                Text("Sign in to your account")
+                Text(onCancel == nil ? "Sign in to your account" : "Add another account")
                     .font(.subheadline)
                     .foregroundStyle(colors.inkMuted)
                     .multilineTextAlignment(.center)
@@ -63,6 +67,15 @@ struct SignInView: View {
             }
             .frame(maxWidth: 420)
             .padding(24)
+        }
+        // Add-account re-entry (#NN): a Cancel-back to the Main shell. Absent on first sign-in (nowhere to go).
+        .overlay(alignment: .topLeading) {
+            if let onCancel {
+                Button("Cancel") { onCancel() }
+                    .foregroundStyle(colors.primary)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+            }
         }
     }
 

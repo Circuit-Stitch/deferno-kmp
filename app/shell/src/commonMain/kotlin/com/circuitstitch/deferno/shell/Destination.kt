@@ -37,6 +37,8 @@ enum class Destination(val slot: NavSlot) {
     // global history feed lands — tracked in #260. Still a real Secondary Destination with its
     // own retained back stack, so the slice drops in later with no structural change (ADR-0015).
     Activity(NavSlot.Secondary),
+    // Profile: the Active Account's identity + sign-out. NOT a drawer row — the shell's `destinations`
+    // filters it out; it's reached by drilling from Settings → Account (a ← back detail), back to Settings.
     Profile(NavSlot.Secondary),
     Settings(NavSlot.Secondary),
 }

@@ -235,6 +235,13 @@ interface MainShellComponent {
         /** A Profile "sign out" intent — the host secure-wipes the Active Account (ADR-0009/0012). */
         data object SignOutRequested : Output
 
+        /**
+         * A Settings "Account → Add account" tap — the host re-enters the Auth shell to sign into an
+         * additional account while keeping the existing ones (ADR-0013, CONTEXT.md "re-entered … for
+         * add-account"), then switches to the new Account.
+         */
+        data object AddAccountRequested : Output
+
         /** A Settings "App Permissions" tap — the host deep-links to the OS app-settings screen (#72). */
         data object OpenOsAppSettings : Output
 

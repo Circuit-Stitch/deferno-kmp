@@ -471,16 +471,46 @@ struct SettingsView: View {
     private static let termsURL = URL(string: "https://www.defernowork.com/terms")!
     private static let privacyURL = URL(string: "https://www.defernowork.com/privacy")!
 
+    /// The Account category is an **account switcher** (#NN): the signed-in roster — tap the active account
+    /// (chevron) to open its Profile (where identity + sign-out live), tap another to switch to it — plus
+    /// "Add another account" (re-enters sign-in, keeping the others). Time zone moved to Profile too.
     private var accountDetail: some View {
-        let value = settings.value
+        let active = ShellBridgeKt.settingsActiveAccountKey(component: component)
         return List {
             Section {
-                labeledRow("Username", value.username ?? "—")
-                labeledRow("Time zone", value.timeZone ?? "Device default")
+                ForEach(ShellBridgeKt.settingsAccounts(component: component)) { account in
+                    let isActive = ShellBridgeKt.accountKey(account: account) == active
+                    Button {
+                        if isActive {
+                            component.onOpenProfile()
+                        } else {
+                            ShellBridgeKt.switchSettingsAccount(component: component, account: account)
+                        }
+                    } label: {
+                        HStack {
+                            Text(account.label).foregroundStyle(colors.onSurface)
+                            Spacer()
+                            if isActive {
+                                Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(colors.primary)
+                                // The chevron marks the active row as a drill-in to its Profile.
+                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(colors.inkMuted)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .listRowBackground(colors.surfaceCard)
+                    .accessibilityAddTraits(isActive ? [.isSelected] : [])
+                }
+            } header: {
+                Text("Signed in")
+            } footer: {
+                Text("Tap the active account to view its profile, or another to switch. Each account's data stays separate on this device.")
             }
             Section {
-                Button("View profile") { component.onOpenProfile() }
-                    .listRowBackground(colors.surfaceCard)
+                Button { component.onAddAccount() } label: {
+                    Label("Add another account", systemImage: "plus")
+                }
+                .listRowBackground(colors.surfaceCard)
             }
         }
     }

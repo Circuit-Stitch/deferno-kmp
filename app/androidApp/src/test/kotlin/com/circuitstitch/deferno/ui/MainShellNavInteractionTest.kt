@@ -62,11 +62,12 @@ class MainShellNavInteractionTest {
         val shell = shell()
         composeRule.setContent { DefernoTheme { MainShell(shell) } }
 
-        // The menu button slides the content aside to reveal the drawer; picking Profile switches to it.
+        // The menu button slides the content aside to reveal the drawer; picking a row switches to it.
+        // (Profile is no longer a drawer row — it's a Settings → Account drill-down — so pick Activity.)
         composeRule.onNodeWithContentDescription("Menu").performClick()
-        composeRule.onNodeWithText("Profile").performClick()
+        composeRule.onNodeWithText("Activity").performClick()
 
-        assertEquals(Destination.Profile, shell.stack.value.active.instance.destination)
+        assertEquals(Destination.Activity, shell.stack.value.active.instance.destination)
     }
 
     @Test

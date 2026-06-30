@@ -211,6 +211,92 @@ class RootComponentTest {
         assertFalse(root(FakeAccountManager()).onBackClicked())
     }
 
+    // --- add-account: re-enter the Auth shell while signed in (#NN, ADR-0013) ---
+
+    /** Drive the Settings → Account "Add account" intent on the foreground Main shell. */
+    private fun RootComponent.requestAddAccount() {
+        val main = (activeChild() as RootComponent.Child.Main).component
+        main.selectDestination(Destination.Settings)
+        (main.stack.value.active.instance as MainShellComponent.DestinationChild.Settings).component.onAddAccount()
+    }
+
+    @Test
+    fun addAccount_reEntersTheAuthShell_keepingTheCurrentAccountActive() {
+        val manager = FakeAccountManager(active = account)
+        val root = root(manager)
+
+        root.requestAddAccount()
+
+        // The Auth shell is shown to sign into another account, but the current Account stays active+vaulted.
+        assertTrue(root.activeChild() is RootComponent.Child.Auth)
+        assertEquals(account, manager.activeAccount.value)
+    }
+
+    @Test
+    fun addAccount_cancel_returnsToTheMainShell_forTheCurrentAccount() {
+        val manager = FakeAccountManager(active = account)
+        val root = root(manager)
+        root.requestAddAccount()
+        val auth = root.activeChild() as RootComponent.Child.Auth
+
+        // The Auth shell is cancelable only in add mode; cancelling drops back to the Main shell.
+        assertTrue(auth.component.onCancel != null, "add mode exposes a Cancel-back")
+        auth.component.onCancel?.invoke()
+
+        assertTrue(root.activeChild() is RootComponent.Child.Main)
+        assertEquals(account, manager.activeAccount.value)
+    }
+
+    @Test
+    fun addAccount_signingIn_switchesToTheNewlyAddedAccount() {
+        val personal = Account(AccountId("personal"), "Personal")
+        val manager = FakeAccountManager(active = account)
+        // Sign-in adds the new account to the roster WITHOUT activating it (one is already active), mirroring
+        // AccountManager.addAccount; the root's onSignedIn then switches to it (a single Auth → Main(new) swap).
+        val root = root(
+            manager,
+            signInService = FakeSignInService { manager.addWithoutActivating(personal); SignInResult.Success(personal) },
+        )
+        root.requestAddAccount()
+        val auth = root.activeChild() as RootComponent.Child.Auth
+
+        auth.component.signIn.onTokenChange("pat-new")
+        auth.component.signIn.onSubmit()
+
+        assertTrue(root.activeChild() is RootComponent.Child.Main)
+        assertEquals(personal, manager.activeAccount.value)
+    }
+
+    @Test
+    fun addAccount_cancelViaSystemBack_returnsToTheMainShell() {
+        val manager = FakeAccountManager(active = account)
+        val root = root(manager)
+        root.requestAddAccount()
+        assertTrue(root.activeChild() is RootComponent.Child.Auth)
+
+        // System-back in add mode cancels it (consumed) rather than exiting the scene.
+        assertTrue(root.onBackClicked())
+        assertTrue(root.activeChild() is RootComponent.Child.Main)
+    }
+
+    @Test
+    fun firstSignIn_isUnaffectedByOnSignedIn_stillSwapsToMainReactively() {
+        // The onSignedIn hook is a no-op outside add mode: a first sign-in still swaps in via the reactive
+        // activeAccount flip (not a redundant switch), preserving the #15/ADR-0023 path.
+        val manager = FakeAccountManager()
+        val root = root(
+            manager,
+            signInService = FakeSignInService { manager.signIn(account); SignInResult.Success(account) },
+        )
+        val auth = root.activeChild() as RootComponent.Child.Auth
+
+        auth.component.signIn.onTokenChange("pat-xyz")
+        auth.component.signIn.onSubmit()
+
+        assertTrue(root.activeChild() is RootComponent.Child.Main)
+        assertEquals(account, manager.activeAccount.value)
+    }
+
     @Test
     fun backOnMainShell_delegatesToTheActiveDestination() {
         val root = root(FakeAccountManager(active = account))
@@ -546,6 +632,11 @@ private class FakeAccountManager(active: Account? = null) : AccountManager {
     fun signIn(account: Account) {
         if (_accounts.value.none { it.id == account.id }) _accounts.value = _accounts.value + account
         _activeAccount.value = account
+    }
+
+    /** Add to the roster without activating — mirrors addAccount while another Account is already active. */
+    fun addWithoutActivating(account: Account) {
+        if (_accounts.value.none { it.id == account.id }) _accounts.value = _accounts.value + account
     }
 
     fun activate(id: AccountId) {

@@ -119,4 +119,5 @@ private class FakeMainShell : MainShellComponent {
 private object FakeAuthShell : AuthShellComponent {
     override val signIn: SignInComponent
         get() = error("unused by the chrome routing")
+    override val onCancel: (() -> Unit)? = null
 }

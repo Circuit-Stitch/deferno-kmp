@@ -26,6 +26,8 @@ import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPref
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
@@ -191,6 +193,16 @@ interface SettingsComponent {
 
     /** The Active Account's settings — drives every backed category and the app-wide live theme. */
     val settings: StateFlow<UserSettings>
+
+    /**
+     * Every Account signed in on this device (ADR-0002) — the [SettingsCategory.Account] switcher's
+     * roster. AppScope, fed by the shell from the `AccountManager`; observable so adding/removing an
+     * Account reflects live. The active one is [activeAccountId].
+     */
+    val accounts: StateFlow<List<Account>>
+
+    /** The Active Account's id — the switcher marks this row and never switches to it (it's already active). */
+    val activeAccountId: AccountId
 
     /**
      * The device-local speech-engine choice ([SettingsCategory.SpeechEngine], #93, ADR-0018) — an
@@ -370,6 +382,25 @@ interface SettingsComponent {
     fun onOpenProfile()
 
     /**
+     * Account switcher: make [id] the Active Account (a no-op if it already is). Host-routed — the shell
+     * re-keys the Main shell for the target Account (no re-auth; its PAT is already vaulted, ADR-0002/0012).
+     */
+    fun onSwitchAccount(id: AccountId)
+
+    /**
+     * Account switcher: sign into an **additional** account. Host-routed — the shell re-enters the Auth
+     * shell while keeping the existing accounts (ADR-0013, CONTEXT.md "re-entered … for add-account"),
+     * then switches to the newly signed-in Account.
+     */
+    fun onAddAccount()
+
+    /**
+     * Account switcher: sign out of the **Active** Account. Host-routed — the shell secure-wipes it
+     * (ADR-0009/0012) and returns to the Auth shell, or to a remaining sibling Account.
+     */
+    fun onSignOut()
+
+    /**
      * Storage: open an on-device recording's owning Task (#211) — or the [[Inbox]] when it's an un-triaged
      * placeholder ([taskId] null, not yet attached to a Task). Host-routed: the shell owns the Destination graph.
      */
@@ -405,6 +436,15 @@ interface SettingsComponent {
 
         /** Switch to the Profile Destination (Account category links to identity). */
         data object OpenProfile : Output
+
+        /** Switch the Active Account to [id] (the Account switcher, #NN) — the shell re-keys the Main shell. */
+        data class SwitchAccount(val id: AccountId) : Output
+
+        /** Sign into an additional account (the Account switcher) — the shell re-enters the Auth shell. */
+        data object AddAccount : Output
+
+        /** Sign out of the Active Account (the Account switcher) — the shell secure-wipes + returns to Auth. */
+        data object SignOut : Output
 
         /** Open a recording's owning Task in the Tasks Destination (a Storage row tap, #211). */
         data class OpenTask(val taskId: String) : Output
@@ -455,6 +495,11 @@ class DefaultSettingsComponent(
     // existing Settings tests build without it; the shell backs it with `session::importBackup`. Named
     // `restoreBackup` (not `importBackup`) so the override below isn't a self-recursive call.
     private val restoreBackup: suspend (ByteArray) -> ImportResult = { ImportResult.Malformed },
+    // The account switcher's roster + active id (#NN, ADR-0002): AppScope, fed by the shell from the
+    // `AccountManager`. Defaulted to an empty roster + a placeholder active id so existing Settings tests
+    // build without supplying them; with no roster the switcher renders no rows, so the id never matches.
+    override val accounts: StateFlow<List<Account>> = MutableStateFlow(emptyList()),
+    override val activeAccountId: AccountId = AccountId("none"),
     // The device-local "keep brain-dump recordings" preference (#211). Defaulted to an in-memory (on)
     // preference so existing Settings tests build without supplying it (like the storage-catalog default).
     private val keepBrainDumpRecordingsPreference: KeepBrainDumpRecordingsPreference =
@@ -671,6 +716,15 @@ class DefaultSettingsComponent(
     override fun onOpenConsole() = output(SettingsComponent.Output.OpenConsoleUrl)
 
     override fun onOpenProfile() = output(SettingsComponent.Output.OpenProfile)
+
+    override fun onSwitchAccount(id: AccountId) {
+        // No-op when it's already active — the View guards this too, but keep the Output honest.
+        if (id != activeAccountId) output(SettingsComponent.Output.SwitchAccount(id))
+    }
+
+    override fun onAddAccount() = output(SettingsComponent.Output.AddAccount)
+
+    override fun onSignOut() = output(SettingsComponent.Output.SignOut)
 
     override fun onOpenRecording(taskId: String?) =
         output(if (taskId != null) SettingsComponent.Output.OpenTask(taskId) else SettingsComponent.Output.OpenInbox)

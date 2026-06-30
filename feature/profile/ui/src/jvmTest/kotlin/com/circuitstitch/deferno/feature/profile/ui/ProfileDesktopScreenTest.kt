@@ -45,6 +45,8 @@ class ProfileDesktopScreenTest {
         // The Account controls are co-located with the identity (CONTEXT.md).
         onNodeWithText("Active account").assertExists()
         onNodeWithText("Personal access token").assertExists()
+        // Time zone moved into Profile (#72).
+        onNodeWithText("America/Los_Angeles").assertExists()
         onNodeWithText("Sign out").assertExists()
         // The Admin chip shows only for admins; sampleUser.isAdmin == false.
         onNodeWithText("Admin").assertDoesNotExist()
@@ -112,6 +114,7 @@ private class FakeProfileComponent(
 ) : ProfileComponent {
     private val _state = MutableStateFlow(initial)
     override val state: StateFlow<ProfileState> = _state
+    override val timeZone: StateFlow<String?> = MutableStateFlow("America/Los_Angeles")
 
     var retryCount = 0
         private set

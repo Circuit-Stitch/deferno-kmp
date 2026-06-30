@@ -45,9 +45,11 @@ import com.circuitstitch.deferno.feature.profile.ProfileState
 @Composable
 fun ProfileScreen(component: ProfileComponent, modifier: Modifier = Modifier) {
     val state by component.state.collectAsState()
+    val timeZone by component.timeZone.collectAsState()
     ProfileContent(
         account = component.account,
         state = state,
+        timeZone = timeZone,
         onRetry = component::onRetry,
         onSignOut = component::onSignOut,
         modifier = modifier,
@@ -59,6 +61,7 @@ fun ProfileScreen(component: ProfileComponent, modifier: Modifier = Modifier) {
 internal fun ProfileContent(
     account: Account,
     state: ProfileState,
+    timeZone: String?,
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
@@ -95,7 +98,7 @@ internal fun ProfileContent(
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         // The Account controls are always available — sign-out works offline (ADR-0009).
-        AccountSection(account = account, onSignOut = onSignOut)
+        AccountSection(account = account, timeZone = timeZone, onSignOut = onSignOut)
     }
 }
 

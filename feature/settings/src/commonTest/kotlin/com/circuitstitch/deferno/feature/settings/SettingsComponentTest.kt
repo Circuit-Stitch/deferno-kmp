@@ -19,6 +19,8 @@ import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderAvailability
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
+import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.AssistantAvailability
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -29,6 +31,7 @@ import com.circuitstitch.deferno.core.speech.SpeechEngineId
 import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import com.circuitstitch.deferno.core.speech.UnavailableReason
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -62,6 +65,8 @@ class SettingsComponentTest {
             InMemoryBrainDumpNotificationPreference(),
         shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
         onDeviceStorageUsage: OnDeviceStorageUsage = OnDeviceStorageUsage.Inert,
+        accounts: List<Account> = emptyList(),
+        activeAccountId: AccountId = AccountId("none"),
     ): Triple<DefaultSettingsComponent, FakeSettingsRepository, FakeSettingsEditor> {
         val repo = FakeSettingsRepository(initial)
         val editor = FakeSettingsEditor(repo)
@@ -78,6 +83,8 @@ class SettingsComponentTest {
             brainDumpNotificationPreference = brainDumpNotificationPreference,
             shakeToUndoPreference = shakeToUndoPreference,
             onDeviceStorageUsage = onDeviceStorageUsage,
+            accounts = MutableStateFlow(accounts),
+            activeAccountId = activeAccountId,
             coroutineContext = Dispatchers.Unconfined,
         )
         return Triple(component, repo, editor)
@@ -118,6 +125,40 @@ class SettingsComponentTest {
         caption = null,
         createdAt = Instant.parse("2026-06-15T10:00:00Z"),
     )
+
+    @Test
+    fun accountSwitcher_exposesTheRosterAndActiveId() {
+        val work = Account(AccountId("w"), "Work")
+        val home = Account(AccountId("h"), "Home")
+        val (component, _, _) = component(accounts = listOf(work, home), activeAccountId = AccountId("w"))
+        assertEquals(listOf(work, home), component.accounts.value)
+        assertEquals(AccountId("w"), component.activeAccountId)
+    }
+
+    @Test
+    fun onSwitchAccount_emitsSwitch_butNotForTheAlreadyActiveAccount() {
+        val outputs = mutableListOf<SettingsComponent.Output>()
+        val (component, _, _) = component(output = outputs::add, activeAccountId = AccountId("w"))
+
+        component.onSwitchAccount(AccountId("w")) // already active — no-op
+        component.onSwitchAccount(AccountId("h"))
+
+        assertEquals(listOf<SettingsComponent.Output>(SettingsComponent.Output.SwitchAccount(AccountId("h"))), outputs)
+    }
+
+    @Test
+    fun onAddAccount_andOnSignOut_emitTheirOutputs() {
+        val outputs = mutableListOf<SettingsComponent.Output>()
+        val (component, _, _) = component(output = outputs::add)
+
+        component.onAddAccount()
+        component.onSignOut()
+
+        assertEquals(
+            listOf(SettingsComponent.Output.AddAccount, SettingsComponent.Output.SignOut),
+            outputs,
+        )
+    }
 
     @Test
     fun keepBrainDumpRecordings_defaultsOn_andTogglePersistsThroughThePreference() {

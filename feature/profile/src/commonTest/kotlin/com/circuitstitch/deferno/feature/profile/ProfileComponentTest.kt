@@ -8,6 +8,7 @@ import com.circuitstitch.deferno.core.model.AccountId
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.User
 import com.circuitstitch.deferno.core.model.UserId
+import com.circuitstitch.deferno.core.model.UserSettings
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -42,10 +43,12 @@ class ProfileComponentTest {
 
     private fun TestScope.profileComponent(
         repo: FakeAuthRepository,
+        settings: FakeSettingsRepository = FakeSettingsRepository(),
         output: (ProfileComponent.Output) -> Unit = {},
     ) = DefaultProfileComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         authRepository = repo,
+        settingsRepository = settings,
         account = account,
         output = output,
         coroutineContext = StandardTestDispatcher(testScheduler),
@@ -100,6 +103,18 @@ class ProfileComponentTest {
 
         assertEquals(ProfileState.SignedIn(user), component.state.value)
         assertEquals(2, repo.loadCount)
+    }
+
+    @Test
+    fun mirrorsTheActiveAccountsTimeZoneFromSettings() = runTest {
+        // Time zone moved here from Settings → Account (#72): it comes from the offline-first settings
+        // cache, not /auth/me, so it's available even when the identity fetch fails.
+        val component = profileComponent(
+            FakeAuthRepository(MeResult.Unavailable),
+            settings = FakeSettingsRepository(UserSettings(timeZone = "America/Los_Angeles")),
+        )
+        advanceUntilIdle()
+        assertEquals("America/Los_Angeles", component.timeZone.value)
     }
 
     @Test

@@ -205,7 +205,7 @@ private fun CategoryDetail(
             SettingsCategory.DataPrivacy -> DataPrivacyDetail(settings, component)
             SettingsCategory.HelpFeedback -> HelpFeedbackDetail(component)
             SettingsCategory.Legal -> LegalDetail()
-            SettingsCategory.Account -> AccountDetail(settings, component)
+            SettingsCategory.Account -> AccountDetail(component)
             SettingsCategory.Security2FA -> ComingSoonDetail(
                 body = "Two-factor authentication and security are managed by your identity provider. " +
                     "We’ll bring these controls into the app soon.",
@@ -444,14 +444,44 @@ private fun LegalDetail() {
     )
 }
 
+/**
+ * The Account category is an **account switcher** (#NN): the signed-in roster — tap the active account
+ * (chevron) to open its Profile (where identity + sign-out live), tap another to switch to it — plus
+ * "Add another account" (re-enters sign-in, keeping the others). Time zone moved to Profile too. Mirrors
+ * the Android screen.
+ */
 @Composable
-private fun AccountDetail(settings: UserSettings, component: SettingsComponent) {
-    LabeledValue(label = "Username", value = settings.username ?: "—")
-    LabeledValue(label = "Time zone", value = settings.timeZone ?: "Device default")
+private fun AccountDetail(component: SettingsComponent) {
+    val accounts by component.accounts.collectAsState()
+    val activeId = component.activeAccountId
+
+    SectionLabel("Signed in")
+    accounts.forEach { account ->
+        val isActive = account.id == activeId
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = MinTouchTarget)
+                // The active account drills into its Profile; the others switch to themselves.
+                .clickable { if (isActive) component.onOpenProfile() else component.onSwitchAccount(account.id) }
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(selected = isActive, onClick = null)
+            Text(
+                text = account.label,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(start = 8.dp).weight(1f),
+            )
+            // The chevron marks the active row as a drill-in to its Profile.
+            if (isActive) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+        }
+    }
+
     TextButton(
-        onClick = component::onOpenProfile,
+        onClick = component::onAddAccount,
         modifier = Modifier.heightIn(min = MinTouchTarget),
-    ) { Text("View profile") }
+    ) { Text("Add another account") }
 }
 
 @Composable
@@ -589,18 +619,6 @@ private fun ChoiceChip(label: String, selected: Boolean, onSelect: () -> Unit) {
         } else {
             Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.defernoColors.inkMuted)
         }
-    }
-}
-
-@Composable
-private fun LabeledValue(label: String, value: String) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.defernoColors.inkMuted,
-        )
-        Text(text = value, style = MaterialTheme.typography.bodyLarge)
     }
 }
 

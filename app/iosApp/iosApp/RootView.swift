@@ -31,7 +31,8 @@ struct RootView: View {
         if let main = ShellBridgeKt.rootChildMain(child: child) {
             MainShellView(component: main, recorder: recorder)
         } else if let auth = ShellBridgeKt.rootChildAuth(child: child) {
-            SignInView(component: auth.signIn)
+            // `onCancel` is non-nil only when re-entered to add an account (#NN) — it shows a Cancel-back.
+            SignInView(component: auth.signIn, onCancel: auth.onCancel)
         }
     }
 }
