@@ -6,14 +6,14 @@ import com.russhwolf.settings.Settings
  * The device-local **speech-engine choice** (ADR-0018): which [SpeechToText] engine the user prefers.
  * It is an **[[App setting]]** — stored device-locally, **never synced**, never crossing Accounts —
  * because engine availability is per-device (the same engine may not exist on another device). The
- * default is [SpeechEngineId.Whisper], the portable baseline, until better/more-specific engines exist;
- * the user may switch via the Settings [[Destination]].
+ * default is [SpeechEngineId.Automatic] — let the selector rank-pick the best available engine — until
+ * the user explicitly chooses one via the Settings [[Destination]].
  *
  * The [SpeechToTextSelector] reads this to bias selection toward the chosen engine when it is available,
  * falling back to rank otherwise.
  */
 interface SpeechEnginePreference {
-    /** The chosen engine — defaults to [SpeechEngineId.Whisper] (ADR-0018) when none has been set. */
+    /** The chosen engine — defaults to [SpeechEngineId.Automatic] (rank-pick, ADR-0018) when none has been set. */
     fun preferredEngine(): SpeechEngineId
 
     /** Persist the chosen engine device-locally. Never synced to the backend (App setting, ADR-0018). */
@@ -22,10 +22,10 @@ interface SpeechEnginePreference {
 
 /**
  * A non-persistent [SpeechEnginePreference] for tests and previews (the analogue of `InMemorySecretVault`).
- * **Measured** (commonTest) — defaults to [SpeechEngineId.Whisper] and round-trips a set value.
+ * **Measured** (commonTest) — defaults to [SpeechEngineId.Automatic] and round-trips a set value.
  */
 class InMemorySpeechEnginePreference(
-    initial: SpeechEngineId = SpeechEngineId.Whisper,
+    initial: SpeechEngineId = SpeechEngineId.Automatic,
 ) : SpeechEnginePreference {
     private var current: SpeechEngineId = initial
     override fun preferredEngine(): SpeechEngineId = current
@@ -42,7 +42,7 @@ class InMemorySpeechEnginePreference(
  */
 class SettingsSpeechEnginePreference(
     private val settings: Settings,
-    private val default: SpeechEngineId = SpeechEngineId.Whisper,
+    private val default: SpeechEngineId = SpeechEngineId.Automatic,
 ) : SpeechEnginePreference {
     override fun preferredEngine(): SpeechEngineId =
         settings.getStringOrNull(KEY)?.let(::SpeechEngineId) ?: default

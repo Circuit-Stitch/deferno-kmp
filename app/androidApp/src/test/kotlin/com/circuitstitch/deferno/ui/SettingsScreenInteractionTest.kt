@@ -195,7 +195,7 @@ class SettingsScreenInteractionTest {
         // The row shows on a device with a real engine (Android, whisper), summarised by the current choice.
         composeRule.onNodeWithText("Speech engine").performClick()
         // The detail lists Automatic + Whisper; choose Automatic.
-        composeRule.onNodeWithText("Whisper").assertIsDisplayed()
+        composeRule.onNodeWithText("Whisper (on-device)").assertIsDisplayed()
         composeRule.onNodeWithText("Automatic").performClick()
 
         // Persisted device-locally through the catalog — never the synced SettingsEditor.
@@ -215,7 +215,7 @@ class SettingsScreenInteractionTest {
         setContent { SettingsScreen(component(speechEngineCatalog = catalog)) }
 
         // The list row summary flags the chosen-but-unavailable engine.
-        composeRule.onNodeWithText("Whisper · unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText("Whisper (on-device) · unavailable").assertIsDisplayed()
 
         // Drilling in, the per-engine note explains WHY (the ModelMissing → "Downloading…" mapping).
         composeRule.onNodeWithText("Speech engine").performClick()

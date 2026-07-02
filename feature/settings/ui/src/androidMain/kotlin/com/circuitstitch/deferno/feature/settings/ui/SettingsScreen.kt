@@ -55,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -290,6 +291,8 @@ private fun SpeechEngineDetail(state: SpeechEngineSettings, onSelect: (SpeechEng
             note = speechEngineNote(option),
             selected = state.selected == option.id,
             onSelect = { onSelect(option.id) },
+            // ponytail: Whisper's model download isn't set up yet — not selectable until it is.
+            enabled = option.id != SpeechEngineId.Whisper,
         )
     }
 }
@@ -778,7 +781,11 @@ private fun EngineChoiceRow(
         RadioButton(selected = selected, onClick = null, enabled = enabled)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) Color.Unspecified else MaterialTheme.defernoColors.inkMuted,
+            )
             if (note != null) {
                 Text(
                     text = note,
@@ -901,7 +908,7 @@ private fun SettingsCategory.rowSummary(
 /** The human label for an engine id (View concern, like the nav-suite labels) — `Automatic` leads the row. */
 private fun speechEngineLabel(id: SpeechEngineId): String = when (id) {
     SpeechEngineId.Automatic -> "Automatic"
-    SpeechEngineId.Whisper -> "Whisper"
+    SpeechEngineId.Whisper -> "Whisper (on-device)"
     SpeechEngineId.AndroidNative -> "Android (on-device)"
     // Future native fast paths get explicit labels as they land (#96/#97); fall back to a humanised id.
     else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }

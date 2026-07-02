@@ -33,7 +33,7 @@ interface SpeechEngineCatalog {
      */
     suspend fun options(locale: String): List<SpeechEngineOption>
 
-    /** The current device-local choice — defaults to [SpeechEngineId.Whisper] when none is set (ADR-0018). */
+    /** The current device-local choice — defaults to [SpeechEngineId.Automatic] when none is set (ADR-0018). */
     fun selected(): SpeechEngineId
 
     /** Persist the device-local choice. **Never** synced to the backend (App setting, ADR-0018). */
@@ -78,7 +78,7 @@ object EmptySpeechEngineCatalog : SpeechEngineCatalog {
     override suspend fun options(locale: String): List<SpeechEngineOption> =
         listOf(SpeechEngineOption(SpeechEngineId.Automatic, SpeechAvailability.Available))
 
-    override fun selected(): SpeechEngineId = SpeechEngineId.Whisper
+    override fun selected(): SpeechEngineId = SpeechEngineId.Automatic
 
     override fun select(id: SpeechEngineId) { /* inert: no device-local store without a real engine */ }
 }

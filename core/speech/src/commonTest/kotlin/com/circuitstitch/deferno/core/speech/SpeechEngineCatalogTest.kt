@@ -79,9 +79,9 @@ class SpeechEngineCatalogTest {
     }
 
     @Test
-    fun selected_defaultsToWhisper_whenNonePersisted() {
+    fun selected_defaultsToAutomatic_whenNonePersisted() {
         val whisper = FakeSpeechToText(whisperId, rank = 0)
-        assertEquals(SpeechEngineId.Whisper, catalog(whisper).selected())
+        assertEquals(SpeechEngineId.Automatic, catalog(whisper).selected())
     }
 
     @Test
@@ -105,12 +105,12 @@ class SpeechEngineCatalogTest {
     }
 
     @Test
-    fun emptyCatalog_isInert_onlyAutomatic_defaultWhisper_selectIsNoOp() = runTest {
-        // The shared inert default (analogue of UnavailableSpeechToText): no real engine, default Whisper.
+    fun emptyCatalog_isInert_onlyAutomatic_defaultAutomatic_selectIsNoOp() = runTest {
+        // The shared inert default (analogue of UnavailableSpeechToText): no real engine, default Automatic.
         assertEquals(listOf(SpeechEngineId.Automatic), EmptySpeechEngineCatalog.options("en-US").map { it.id })
-        assertEquals(SpeechEngineId.Whisper, EmptySpeechEngineCatalog.selected())
+        assertEquals(SpeechEngineId.Automatic, EmptySpeechEngineCatalog.selected())
         // select is inert (no store) — selected() is unchanged afterward.
-        EmptySpeechEngineCatalog.select(SpeechEngineId.Automatic)
-        assertEquals(SpeechEngineId.Whisper, EmptySpeechEngineCatalog.selected())
+        EmptySpeechEngineCatalog.select(SpeechEngineId.Whisper)
+        assertEquals(SpeechEngineId.Automatic, EmptySpeechEngineCatalog.selected())
     }
 }
