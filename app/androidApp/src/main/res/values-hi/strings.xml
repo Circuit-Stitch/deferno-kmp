@@ -1,0 +1,16 @@
+<resources>
+    <!-- app_name जानबूझकर छोड़ा गया — ब्रांड 'Deferno' values/ से fallback होता है। -->
+    <!-- ऑफ़लाइन-फ़र्स्ट पुष्टि: create क़तार में है और सिंक होगा — कभी "सर्वर पर सेव" नहीं। -->
+    <string name="task_queued">“%1$s” जोड़ा गया — यह सिंक हो जाएगा</string>
+    <string name="visual_feedback_on">विज़ुअल ऑडियो फ़ीडबैक चालू किया गया</string>
+    <string name="visual_feedback_off">विज़ुअल ऑडियो फ़ीडबैक बंद किया गया</string>
+    <!-- 'Brain dump' = "मन की बात" — साझा Compose कैटलॉग (values-hi) से मेल में -->
+    <string name="braindump_notification_channel_name">मन की बातें</string>
+    <string name="braindump_notification_title">मन की बात</string>
+    <plurals name="braindump_notification_drafts_ready">
+        <!-- hi CLDR: quantity 'one' पर n=0 भी आता है — इसलिए literal '1' की जगह %1$d -->
+        <item quantity="one">%1$d ड्राफ़्ट समीक्षा के लिए तैयार</item>
+        <item quantity="other">%1$d ड्राफ़्ट समीक्षा के लिए तैयार</item>
+    </plurals>
+    <string name="braindump_notification_recording_saved">रिकॉर्डिंग समीक्षा के लिए सेव की गई</string>
+</resources>

@@ -1,4 +1,10 @@
 <resources>
+    <!-- ============================================================================
+         Deferno string catalog (pt-BR) — português do Brasil, você informal.
+         Registro calmo e acolhedor (nunca "atrasado/falhou" como cobrança).
+         Plain XML: apóstrofos sem escape; & < > como entidades.
+         ============================================================================ -->
+
     <!-- Padrões java.time (ver values/strings.xml). "21 de jun. · 09:45" -->
     <string name="activity_when_pattern">d 'de' MMM · HH:mm</string>
     <!-- "junho de 2026" -->
@@ -9,4 +15,685 @@
     <string name="calendar_day_pattern">d 'de' MMMM</string>
     <!-- "14:30" -->
     <string name="common_time_pattern">HH:mm</string>
+
+
+    <!-- ── about ─────────────────────────────────────────────── -->
+    <string name="about_version">Versão %1$s</string>
+
+    <!-- ── activity ─────────────────────────────────────────────── -->
+    <plurals name="activity_change_count">
+        <item quantity="one">%1$d alteração</item>
+        <item quantity="other">%1$d alterações</item>
+    </plurals>
+    <string name="activity_empty_body">Cada alteração que você faz — e cada alteração sincronizada de outro lugar — aparece aqui, da mais recente para a mais antiga.</string>
+    <string name="activity_empty_title">Nada por enquanto</string>
+    <!-- 'MCP' é nome técnico — mantido -->
+    <string name="activity_source_mcp">via agente MCP</string>
+    <string name="activity_source_mobile">App móvel</string>
+    <string name="activity_source_unknown">Desconhecida</string>
+    <string name="activity_source_website">via Site</string>
+    <string name="activity_summary_changed_settings">Alterou as configurações</string>
+    <string name="activity_summary_cleared_occurrence_chore">Limpou uma ocorrência de afazer</string>
+    <string name="activity_summary_cleared_occurrence_event">Limpou uma ocorrência de evento</string>
+    <string name="activity_summary_cleared_occurrence_habit">Limpou uma ocorrência de hábito</string>
+    <string name="activity_summary_created_chore">Criou um afazer</string>
+    <string name="activity_summary_created_event">Criou um evento</string>
+    <string name="activity_summary_created_habit">Criou um hábito</string>
+    <string name="activity_summary_created_item">Criou um item</string>
+    <string name="activity_summary_created_task">Criou uma tarefa</string>
+    <string name="activity_summary_deleted_task">Excluiu uma tarefa</string>
+    <string name="activity_summary_moved_item">Moveu um item</string>
+    <string name="activity_summary_updated_item">Atualizou um item</string>
+    <string name="activity_summary_updated_occurrence_chore">Atualizou uma ocorrência de afazer</string>
+    <string name="activity_summary_updated_occurrence_event">Atualizou uma ocorrência de evento</string>
+    <string name="activity_summary_updated_occurrence_habit">Atualizou uma ocorrência de hábito</string>
+    <string name="activity_summary_updated_plan">Atualizou seu plano</string>
+    <string name="activity_summary_updated_task">Atualizou uma tarefa</string>
+
+    <!-- ── assistant ─────────────────────────────────────────────── -->
+    <string name="assistant_action_working">Trabalhando…</string>
+    <!-- Texto de consentimento de saída de dados — tradução literal e precisa -->
+    <string name="assistant_default_disclosure">Ativar o Assistente envia o conteúdo descriptografado dos seus itens para um subprocessador de IA de terceiros, para que ele possa ler suas tarefas e atuar sobre elas. Você pode desativá-lo a qualquer momento.</string>
+    <string name="assistant_error_apply_failed">Não foi possível aplicar a alteração. Tente de novo.</string>
+    <string name="assistant_error_enable_failed">Não foi possível ativar o Assistente. Tente de novo.</string>
+    <string name="assistant_error_turn_failed">A resposta falhou. Tente de novo.</string>
+    <string name="assistant_error_unavailable_on_device">O Assistente ainda não está disponível neste dispositivo.</string>
+    <string name="assistant_new_chat_title">Nova conversa</string>
+    <string name="assistant_proposal_applied">Aplicado: %1$s</string>
+    <string name="assistant_proposal_apply_failed_summary">Não foi possível aplicar: %1$s</string>
+
+    <!-- ── auth ─────────────────────────────────────────────── -->
+    <string name="auth_add_another_account">Adicionar outra conta</string>
+    <string name="auth_browser_hint">Uma janela segura do navegador abre para concluir o login.</string>
+    <string name="auth_browser_signed_in_body">Você pode fechar esta aba e voltar para o app.</string>
+    <string name="auth_browser_signed_in_title">Você entrou no Deferno.</string>
+    <string name="auth_error_invalid_token">Esse token não é válido. Confira e tente de novo.</string>
+    <string name="auth_error_unavailable">Não foi possível conectar ao Deferno. Verifique sua conexão e tente de novo.</string>
+    <string name="auth_retry_prompt">Precisa tentar de novo?</string>
+    <string name="auth_session_expired_body">Seu login nesta conta terminou. Entre de novo para continuar.</string>
+    <string name="auth_session_expired_title">Sessão expirada</string>
+    <string name="auth_sign_in">Entrar</string>
+    <string name="auth_sign_in_with_token">Entrar com token</string>
+    <string name="auth_signed_in_as">Conectado como</string>
+    <string name="auth_subtitle_sign_in">Entre na sua conta</string>
+    <string name="auth_token_field_label">Token de acesso pessoal</string>
+    <!-- Deve espelhar os rótulos do app web -->
+    <string name="auth_token_help">Crie um token no Deferno na web: Configurações → Tokens.</string>
+    <string name="auth_token_hide">Ocultar</string>
+    <string name="auth_token_show">Mostrar</string>
+    <string name="auth_unavailable_body">Verifique sua conexão e tente de novo.</string>
+    <string name="auth_unavailable_title">Sem conexão com o Deferno</string>
+    <string name="auth_use_token_instead">Usar um token</string>
+
+    <!-- ── braindump ─────────────────────────────────────────────── -->
+    <!-- 'Brain dump' → 'Despejo de ideias' — conceito de captura livre, usado de forma consistente -->
+    <string name="braindump_allow_microphone">Permitir microfone</string>
+    <string name="braindump_desktop_placeholder_body">Fale à vontade e o Deferno transforma tudo em rascunhos de tarefas. O despejo de ideias está disponível no Android; o suporte no desktop está a caminho.</string>
+    <string name="braindump_drafts_inbox_meta">Os rascunhos vão aparecer na sua Caixa de entrada</string>
+    <string name="braindump_enqueued_note">Transcrevendo em segundo plano — avisaremos quando seus rascunhos estiverem prontos na Caixa de entrada.</string>
+    <string name="braindump_extract_drafts">Extrair rascunhos</string>
+    <string name="braindump_failed_note">Não foi possível gravar. Tente de novo.</string>
+    <string name="braindump_intro">Fale ou digite o que estiver na sua cabeça. Eu monto rascunhos de árvores a partir disso — nada é adicionado até você aceitá-los na sua Caixa de entrada.</string>
+    <string name="braindump_listening_hint">Ouvindo o que está na sua cabeça. Toque para parar quando terminar — eu preparo os rascunhos.</string>
+    <string name="braindump_mic_denied">O despejo de ideias precisa de acesso ao microfone.</string>
+    <string name="braindump_mic_denied_permanent">O despejo de ideias precisa de acesso ao microfone, que está desativado para este app.</string>
+    <string name="braindump_no_drafts_yet">Nenhum rascunho ainda</string>
+    <string name="braindump_notification_channel_name">Despejos de ideias</string>
+    <plurals name="braindump_notification_drafts_ready">
+        <item quantity="one">%1$d rascunho pronto para revisar</item>
+        <item quantity="other">%1$d rascunhos prontos para revisar</item>
+    </plurals>
+    <string name="braindump_notification_recording_saved">Gravação salva para revisar</string>
+    <string name="braindump_ready_to_draft">Pronto para criar rascunhos do que você digitou</string>
+    <string name="braindump_recording_status">Gravando…</string>
+    <string name="braindump_salvage_reason">Não foi possível transformar esta gravação em tarefas, então ela ficou salva aqui para você revisar.</string>
+    <string name="braindump_salvage_title">Despejo de ideias #%1$d</string>
+    <string name="braindump_speak_toggle">Falar</string>
+    <string name="braindump_start_recording">Iniciar gravação</string>
+    <string name="braindump_stop">Parar</string>
+    <string name="braindump_title">Despejo de ideias</string>
+    <string name="braindump_try_again">Tentar de novo</string>
+    <string name="braindump_type_field_cd">Texto do despejo de ideias</string>
+    <string name="braindump_type_field_label">O que está na sua cabeça?</string>
+    <!-- Verbo (digitar), não o substantivo 'tipo' -->
+    <string name="braindump_type_toggle">Digitar</string>
+    <string name="braindump_visual_feedback_turn_off">Desativar o feedback visual de áudio</string>
+    <string name="braindump_visual_feedback_turn_on">Ativar o feedback visual de áudio</string>
+
+    <!-- ── breakdown ─────────────────────────────────────────────── -->
+    <string name="breakdown_composer_placeholder">O que está te impedindo?</string>
+    <string name="breakdown_focus_prefix">Dividindo: %1$s</string>
+    <string name="breakdown_keep_it">Manter</string>
+    <!-- Registro gentil — nunca 'excluir/abandonar' -->
+    <string name="breakdown_let_it_go">Deixar ir</string>
+    <string name="breakdown_msg_added_prerequisite">Adicionei um pré-requisito para fazer antes: “%1$s”.</string>
+    <string name="breakdown_msg_added_to_plan">Adicionado ao plano de hoje.</string>
+    <string name="breakdown_msg_broke_into">Dividi em %1$s.</string>
+    <string name="breakdown_msg_classifier_retry">Não consegui entender direito aqui no dispositivo. Quer dizer de outro jeito?</string>
+    <!-- A resposta afirmativa localizada precisa combinar com 'sim' -->
+    <string name="breakdown_msg_confirm_drop">Parece que você vem adiando isso. Você realmente precisa disso? Posso tirar “%1$s” da sua lista — é só dizer sim.</string>
+    <string name="breakdown_msg_dropped">Pronto — tirando “%1$s” da sua lista. Dá para recuperar pelo histórico.</string>
+    <string name="breakdown_msg_finished_dropped">Tudo certo — tiramos o que você não precisava.</string>
+    <string name="breakdown_msg_finished_ready">Tudo dividido e pronto. Bom trabalho.</string>
+    <string name="breakdown_msg_kept_reask">Mantido. Então — o que está te impedindo de “%1$s”?</string>
+    <string name="breakdown_msg_more_urgent">Algo mais urgente agora — anotado. (Baixar a prioridade está a caminho; por enquanto, fica como está.)</string>
+    <string name="breakdown_msg_name_first_piece">Vamos nomear o primeiro pedacinho — qual parte você poderia começar?</string>
+    <string name="breakdown_msg_ready_to_go">Então “%1$s” está pronto para começar.</string>
+    <string name="breakdown_msg_transient_obstacle">Isso é temporário — tudo bem pular por enquanto. Continua importante para você, então vai estar aqui quando você quiser retomar.</string>
+    <string name="breakdown_msg_waiting_dependency">Parece que está bloqueado por outra coisa — anotado. (Vincular esse bloqueio está a caminho.)</string>
+    <string name="breakdown_msg_whats_stopping">O que está te impedindo de “%1$s”?</string>
+    <!-- Vira TÍTULO DE SUBTAREFA criada e persistida -->
+    <string name="breakdown_prereq_define_done">Definir o que significa “pronto” e decidir se eu sou a pessoa certa ou se devo delegar</string>
+    <string name="breakdown_prereq_figure_out">Descobrir como fazer isso</string>
+    <string name="breakdown_thinking">Pensando…</string>
+    <string name="breakdown_title">Dividir em partes</string>
+    <!-- 'Configurações'/'Agente' devem combinar com shell_destination_settings + settings_category_agent -->
+    <string name="breakdown_unavailable_body">Ative um mecanismo de inferência em Configurações → Agente para dividir uma tarefa travada em passos menores.</string>
+    <string name="breakdown_unavailable_title">A divisão precisa de um mecanismo de IA</string>
+
+    <!-- ── calendar ─────────────────────────────────────────────── -->
+    <!-- Chip de ação IMPERATIVA (concluir esta ocorrência) — diferente do status Concluída -->
+    <string name="calendar_action_done">Concluir</string>
+    <string name="calendar_action_reschedule">Reagendar</string>
+    <string name="calendar_action_skip">Pular</string>
+    <plurals name="calendar_day_item_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d itens</item>
+    </plurals>
+    <string name="calendar_day_no_items">nenhum item</string>
+    <string name="calendar_day_selected">selecionado</string>
+    <!-- Registro gentil, sem julgamento — preservado -->
+    <string name="calendar_empty_body">Um dia livre. Adicione algo quando quiser — sem pressão.</string>
+    <string name="calendar_empty_title">Nada neste dia</string>
+    <string name="calendar_next_month">Próximo mês</string>
+    <string name="calendar_previous_month">Mês anterior</string>
+    <string name="calendar_reschedule_pick_day">Escolha um novo dia para “%1$s”</string>
+
+    <!-- ── common ─────────────────────────────────────────────── -->
+    <string name="common_account">Conta</string>
+    <string name="common_add">Adicionar</string>
+    <!-- Marca — não traduzir -->
+    <string name="common_app_name">Deferno</string>
+    <string name="common_attach_files">Anexar arquivos</string>
+    <string name="common_back">Voltar</string>
+    <string name="common_blocked">Bloqueada</string>
+    <string name="common_cancel">Cancelar</string>
+    <string name="common_cannot_be_undone">Isso não pode ser desfeito.</string>
+    <string name="common_clear">Limpar</string>
+    <string name="common_close">Fechar</string>
+    <string name="common_collapse_named_cd">Recolher %1$s</string>
+    <string name="common_delete">Excluir</string>
+    <string name="common_dismiss">Dispensar</string>
+    <!-- Botão que encerra um fluxo — distinto do status Concluída (common_status_done) -->
+    <string name="common_done">Pronto</string>
+    <string name="common_due">Prazo: %1$s</string>
+    <string name="common_edit">Editar</string>
+    <string name="common_error_app_out_of_date">Este app está desatualizado — atualize, por favor.</string>
+    <string name="common_expand_named_cd">Expandir %1$s</string>
+    <string name="common_kind_chore">Afazer</string>
+    <string name="common_kind_event">Evento</string>
+    <string name="common_kind_habit">Hábito</string>
+    <string name="common_kind_item">item</string>
+    <string name="common_kind_task">Tarefa</string>
+    <string name="common_labels">Etiquetas</string>
+    <string name="common_loading">Carregando…</string>
+    <string name="common_mark_done_cd">Marcar %1$s como concluída</string>
+    <string name="common_mark_not_done_cd">Marcar %1$s como não concluída</string>
+    <string name="common_open_named_cd">Abrir %1$s</string>
+    <string name="common_open_settings">Abrir configurações</string>
+    <string name="common_reconnect_to_save">Reconecte para salvar</string>
+    <string name="common_refresh">Atualizar</string>
+    <string name="common_remove">Remover</string>
+    <string name="common_remove_named_cd">Remover %1$s</string>
+    <string name="common_retry">Tentar de novo</string>
+    <string name="common_save">Salvar</string>
+    <!-- Serve como verbo e rótulo em todas as superfícies -->
+    <string name="common_search">Buscar</string>
+    <string name="common_send">Enviar</string>
+    <string name="common_session_expired_message">Sessão expirada — entre de novo para atualizar.</string>
+    <string name="common_set">Definir</string>
+    <string name="common_sign_in_again">Entrar de novo</string>
+    <string name="common_sign_out">Sair</string>
+    <string name="common_signing_in">Entrando…</string>
+    <string name="common_size_bytes">%1$d B</string>
+    <string name="common_size_kb">%1$s KB</string>
+    <string name="common_size_mb">%1$s MB</string>
+    <!-- Marca — não traduzir -->
+    <string name="common_source_github">GitHub</string>
+    <!-- Marca — não traduzir -->
+    <string name="common_source_google_calendar">Google Calendar</string>
+    <string name="common_start">Começar</string>
+    <string name="common_state_collapsed">Recolhido</string>
+    <string name="common_state_done">Concluída</string>
+    <string name="common_state_expanded">Expandido</string>
+    <string name="common_state_not_done">Não concluída</string>
+    <string name="common_state_selected">Selecionado</string>
+    <string name="common_status_a11y">Status: %1$s</string>
+    <!-- Adjetivo de status — distinto do botão common_done -->
+    <string name="common_status_done">Concluída</string>
+    <string name="common_status_in_progress">Em andamento</string>
+    <string name="common_status_in_review">Em revisão</string>
+    <!-- Deliberadamente neutro (nunca 'atrasada/perdida') -->
+    <string name="common_status_scheduled">Agendada</string>
+    <string name="common_status_skipped">Pulada</string>
+    <string name="common_undo">Desfazer</string>
+    <string name="common_username_handle">@%1$s</string>
+    <string name="common_when">Quando</string>
+
+    <!-- ── feedback ─────────────────────────────────────────────── -->
+    <string name="feedback_attachment_cd">Anexo %1$s</string>
+    <string name="feedback_attachment_fallback_name">anexo</string>
+    <string name="feedback_body_cd">Corpo do feedback</string>
+    <string name="feedback_body_label">O que está acontecendo?</string>
+    <!-- 'Bug' é termo corrente em pt-BR -->
+    <string name="feedback_category_bug">Bug</string>
+    <string name="feedback_category_cd">Categoria</string>
+    <string name="feedback_category_idea">Ideia</string>
+    <string name="feedback_category_other">Outro</string>
+    <string name="feedback_category_question">Pergunta</string>
+    <string name="feedback_error_presign_failed">Não foi possível preparar os anexos. Tente de novo.</string>
+    <string name="feedback_error_send_failed">Não foi possível enviar o feedback (%1$d).</string>
+    <string name="feedback_error_upload_failed">O envio do anexo falhou (%1$d).</string>
+    <string name="feedback_offline_note">Você está offline — reconecte para enviar. Nada ficou na fila.</string>
+    <string name="feedback_status_cd">Status do feedback</string>
+    <string name="feedback_subject_label">Assunto</string>
+    <string name="feedback_submit_sending">Enviando…</string>
+    <string name="feedback_title">Enviar feedback</string>
+
+    <!-- ── inbox ─────────────────────────────────────────────── -->
+    <string name="inbox_add_task">Adicionar tarefa</string>
+    <string name="inbox_dismissed_snackbar">“%1$s” dispensado</string>
+    <plurals name="inbox_draft_count">
+        <item quantity="one">%1$d rascunho</item>
+        <item quantity="other">%1$d rascunhos</item>
+    </plurals>
+    <string name="inbox_draft_eyebrow">Em rascunho</string>
+    <!-- Mantido em caixa alta até o Eyebrow aplicar o estilo -->
+    <string name="inbox_draft_eyebrow_caps">EM RASCUNHO</string>
+    <string name="inbox_due_date_time">Prazo: %1$s às %2$s</string>
+    <string name="inbox_empty_body">Os rascunhos do despejo de ideias chegam aqui para você revisar. Fale um despejo de ideias e o Deferno o transforma em rascunhos de tarefas para esta lista.</string>
+    <!-- Ideia de 'inbox zero' — sentimento de tudo em dia -->
+    <string name="inbox_empty_title">Caixa de entrada zerada</string>
+    <string name="inbox_error_couldnt_save_task">Não foi possível salvar esta tarefa.</string>
+    <string name="inbox_footer_reassurance">Organize no seu ritmo — nada se perde.</string>
+    <string name="inbox_header_subtitle">Revise um por um — adicione como tarefa ou dispense. Nada é excluído.</string>
+    <string name="inbox_section_waiting">Esperando por você</string>
+    <string name="inbox_section_waiting_caps">ESPERANDO POR VOCÊ</string>
+
+    <!-- ── new ─────────────────────────────────────────────── -->
+    <string name="new_create_task">Criar tarefa</string>
+    <string name="new_date_cd">Data</string>
+    <!-- O exemplo mantém o formato ISO — o parser espera entrada ISO -->
+    <string name="new_date_label">Data (opcional, ex.: 2026-06-08)</string>
+    <string name="new_deadline_time_cd">Hora do prazo</string>
+    <string name="new_dictation_denied">O ditado precisa de acesso ao microfone. Toque no microfone para permitir.</string>
+    <string name="new_dictation_denied_permanent">O ditado precisa de acesso ao microfone, que está desativado para este app.</string>
+    <string name="new_dictation_denied_permanent_desktop">O ditado precisa de acesso ao microfone, que está desativado para o Deferno.</string>
+    <string name="new_dictation_denied_short">O ditado precisa de acesso ao microfone.</string>
+    <string name="new_dictation_error">Não deu para ouvir — tente o microfone de novo.</string>
+    <!-- Nome oficial do app no macOS em pt-BR: Ajustes do Sistema -->
+    <string name="new_dictation_open_system_settings">Abrir os Ajustes do Sistema</string>
+    <string name="new_dictation_status_cd">Status do ditado</string>
+    <string name="new_error_could_not_save">Não foi possível salvar.</string>
+    <string name="new_error_could_not_save_retry">Não foi possível salvar. Tente de novo.</string>
+    <string name="new_event_end_cd">Fim do evento</string>
+    <string name="new_event_end_label">Termina (opcional)</string>
+    <string name="new_event_start_cd">Início do evento</string>
+    <string name="new_event_start_label">Começa (ex.: 2026-06-08T09:00:00Z)</string>
+    <!-- 'Novo' é o nome desta tela (shell_new) -->
+    <string name="new_kind_note">Você escolhe o tipo aqui — o Deferno nunca adivinha na tela Novo.</string>
+    <string name="new_kind_picker_cd">Seletor de tipo</string>
+    <string name="new_kind_section">Que tipo de coisa?</string>
+    <string name="new_mic_dictate_cd">Ditar</string>
+    <string name="new_mic_stop_dictation_cd">Parar ditado</string>
+    <string name="new_notes_label">Notas</string>
+    <string name="new_notes_section">Notas · opcional</string>
+    <string name="new_offline_note">Você está offline — reconecte para salvar. Nada ficou na fila.</string>
+    <string name="new_saves_online_eyebrow">Salva online · você pode mudar tudo depois</string>
+    <string name="new_submit_create">Criar</string>
+    <string name="new_submit_saving">Salvando…</string>
+    <string name="new_time_label">Hora (opcional, ex.: 14:30)</string>
+    <string name="new_title_label">Título</string>
+
+    <!-- ── plan ─────────────────────────────────────────────── -->
+    <!-- 'Floresta' é a metáfora do produto para todas as suas árvores -->
+    <string name="plan_add_from_forest">Adicionar da floresta</string>
+    <string name="plan_back_to_today">‹ Hoje</string>
+    <string name="plan_choose_task_click_label">Escolher %1$s</string>
+    <!-- Padrão java.time do cabeçalho de Hoje; a View põe em caixa alta ("seg., 16 de jun." → "SEG., 16 DE JUN."). -->
+    <string name="plan_header_date_pattern">EEE, d 'de' MMM</string>
+    <!-- Minúscula — aparece depois de uma data -->
+    <string name="plan_deadline_anytime">a qualquer hora</string>
+    <string name="plan_empty_body">Nada agendado para hoje. Adicione algo quando quiser — sem pressão.</string>
+    <string name="plan_empty_title">Seu plano está livre</string>
+    <string name="plan_exit_focus">⌄ Sair do foco</string>
+    <string name="plan_focus_done">Pronto — próximo passo</string>
+    <string name="plan_focus_pause">Pausar · descanse quando precisar</string>
+    <string name="plan_focus_subtitle">Só isso. O resto está guardado.</string>
+    <plurals name="plan_need_attention">
+        <item quantity="one">%1$d precisa de atenção</item>
+        <item quantity="other">%1$d precisam de atenção</item>
+    </plurals>
+    <string name="plan_nothing_overdue">Nada está atrasado</string>
+    <string name="plan_pick_for_me">Escolha por mim</string>
+    <string name="plan_rather_not_decide">Prefere não decidir agora?</string>
+    <string name="plan_refreshing">Atualizando seu plano…</string>
+    <string name="plan_see_everything">Ver tudo</string>
+    <string name="plan_start_with_title">Começar · %1$s</string>
+    <string name="plan_suggested_chip">Sugestão</string>
+    <string name="plan_suggestion_eyebrow">Se não tiver certeza, comece aqui</string>
+    <string name="plan_suggestion_eyebrow_caps">SE NÃO TIVER CERTEZA, COMECE AQUI</string>
+    <plurals name="plan_today_subtitle">
+        <item quantity="one">%1$d árvore que você escolheu. Comece por onde fizer sentido.</item>
+        <item quantity="other">%1$d árvores que você escolheu. Comece por onde fizer sentido.</item>
+    </plurals>
+    <string name="plan_today_title">Hoje</string>
+    <!-- 'Eu' = o app falando; registro gentil -->
+    <string name="plan_whats_next_subtitle">Você está no comando. Toque no que parecer possível — eu só alinhei algumas ideias.</string>
+    <string name="plan_whats_next_title">O que vem agora?</string>
+    <string name="plan_why_pinned">Você disse que isso importa</string>
+    <string name="plan_why_quick_win">Uma vitória rápida, se você quiser embalo</string>
+    <string name="plan_your_day_section">Seu dia</string>
+    <string name="plan_your_day_section_caps">SEU DIA</string>
+
+    <!-- ── profile ─────────────────────────────────────────────── -->
+    <string name="profile_account_active_label">Conta ativa</string>
+    <string name="profile_account_credential_label">Credencial</string>
+    <string name="profile_account_stored_on_device">Armazenado apenas neste dispositivo.</string>
+    <string name="profile_account_time_zone_default">Padrão do dispositivo</string>
+    <string name="profile_account_time_zone_label">Fuso horário</string>
+    <string name="profile_admin_chip">Admin</string>
+    <string name="profile_loading">Carregando seu perfil…</string>
+    <string name="profile_org_label">Organização</string>
+    <string name="profile_org_personal_chip">Pessoal</string>
+    <string name="profile_session_expired_body">Seu login nesta conta terminou. Entre de novo para atualizar seus dados.</string>
+    <string name="profile_sign_out_confirm_body">Isso remove esta conta e os dados dela deste dispositivo. Você vai precisar entrar de novo para usá-la aqui.</string>
+    <string name="profile_sign_out_confirm_title">Sair de %1$s?</string>
+    <string name="profile_unavailable_body">Não foi possível carregar os dados do seu perfil. Verifique sua conexão e tente de novo.</string>
+
+    <!-- ── search ─────────────────────────────────────────────── -->
+    <string name="search_add_tag_button">Adicionar tag</string>
+    <string name="search_add_tag_label">Adicionar uma tag</string>
+    <string name="search_apply_filters">Aplicar filtros</string>
+    <string name="search_clear_a11y">Limpar busca</string>
+    <!-- Token de formato mantido como está (formato de entrada) -->
+    <string name="search_date_from_label">De (YYYY-MM-DD)</string>
+    <string name="search_date_to_label">Até (YYYY-MM-DD)</string>
+    <string name="search_field_label">Buscar tarefas</string>
+    <string name="search_filter_date_range">Intervalo de datas</string>
+    <string name="search_filter_sort">Ordenação</string>
+    <string name="search_filter_tags">Tags</string>
+    <string name="search_filters">Filtros</string>
+    <string name="search_initial_body">Digite pelo menos dois caracteres para encontrar qualquer coisa pelo título.</string>
+    <string name="search_initial_body_desktop">Digite pelo menos dois caracteres para encontrar tarefas pelo título ou pela descrição.</string>
+    <string name="search_initial_title">Busque nas suas árvores</string>
+    <string name="search_initial_title_desktop">Busque nas suas tarefas</string>
+    <string name="search_label_chip_format">#%1$s</string>
+    <string name="search_no_matches_body">Nada correspondeu à sua busca. Tente outra palavra ou menos filtros.</string>
+    <string name="search_no_matches_title">Nenhum resultado</string>
+    <string name="search_placeholder_trees">Buscar em todas as suas árvores…</string>
+    <string name="search_remove_tag_a11y">Remover tag %1$s</string>
+    <string name="search_reset">Redefinir</string>
+    <string name="search_reset_filters_a11y">Redefinir filtros</string>
+    <string name="search_searching">Buscando…</string>
+    <string name="search_section_status">Status</string>
+    <string name="search_sort_a11y">Ordenação: %1$s. Toque para mudar.</string>
+    <string name="search_sort_best_match">Mais relevante</string>
+    <string name="search_sort_biggest_attachments">Maiores anexos</string>
+    <string name="search_sort_soonest_due">Prazo mais próximo</string>
+    <string name="search_sort_title_asc">Título (A–Z)</string>
+    <string name="search_when_any_time">Qualquer data</string>
+    <!-- Só no filtro de busca — registro factual -->
+    <string name="search_when_overdue">Atrasadas</string>
+    <string name="search_when_this_week">Esta semana</string>
+
+    <!-- ── settings ─────────────────────────────────────────────── -->
+    <string name="settings_agent_engine_deferno_cloud">IA na nuvem do Deferno</string>
+    <string name="settings_agent_engine_off">Desativado</string>
+    <string name="settings_agent_engine_on_device_basics">Básico no dispositivo</string>
+    <!-- Texto de consentimento de IA — preserva exatamente a distinção no dispositivo vs. fora dele -->
+    <string name="settings_agent_intro">O Agente pode transformar um despejo de ideias em rascunhos de tarefas e sugerir mudanças no seu plano. Escolha qual mecanismo ele usa — ou desative-o. Um mecanismo no dispositivo mantém seu texto neste dispositivo; a IA na nuvem do Deferno envia o texto para fora do seu dispositivo para gerar propostas (você sempre revisa antes de qualquer coisa ser salva). Ele vem desativado por padrão, e essa escolha fica neste dispositivo, sem sincronizar com a sua conta.</string>
+    <string name="settings_agent_note_cloud">Envia seu texto para fora do dispositivo, para a IA hospedada do Deferno</string>
+    <string name="settings_agent_note_on_device">Roda neste dispositivo</string>
+    <string name="settings_agent_note_premium">Premium — ainda não disponível para a sua conta</string>
+    <string name="settings_agent_off_note">O Agente fica desativado. Nada é enviado a lugar nenhum.</string>
+    <string name="settings_appearance_mode_section">Modo</string>
+    <string name="settings_appearance_theme_section">Tema</string>
+    <string name="settings_category_account">Conta</string>
+    <string name="settings_category_agent">Agente</string>
+    <string name="settings_category_app_permissions">Permissões do app</string>
+    <string name="settings_category_appearance">Aparência</string>
+    <string name="settings_category_assistant">Assistente</string>
+    <string name="settings_category_data_privacy">Dados e privacidade</string>
+    <string name="settings_category_help_feedback">Ajuda e feedback</string>
+    <string name="settings_category_integrations">Integrações</string>
+    <string name="settings_category_legal">Informações legais</string>
+    <string name="settings_category_security_2fa">Segurança e 2FA</string>
+    <string name="settings_category_speech_engine">Mecanismo de fala</string>
+    <string name="settings_category_storage">Armazenamento</string>
+    <string name="settings_category_task_behavior">Comportamento das tarefas</string>
+    <string name="settings_coming_soon_assistant_body">O Assistente está disponível no iPhone por enquanto. Em breve chega ao Android.</string>
+    <string name="settings_coming_soon_integrations_body">Conecte o Deferno às outras ferramentas que você usa. As integrações estão a caminho.</string>
+    <string name="settings_coming_soon_security_body">A autenticação de dois fatores e a segurança são gerenciadas pelo seu provedor de identidade. Em breve traremos esses controles para o app.</string>
+    <string name="settings_coming_soon_title">Em breve</string>
+    <string name="settings_data_export_button">Exportar seus dados</string>
+    <string name="settings_data_export_description">Exporte suas tarefas e listas como um arquivo de backup que você pode salvar ou compartilhar.</string>
+    <string name="settings_data_export_menu_export">Exportar</string>
+    <string name="settings_data_export_menu_full_backup">Backup completo — em breve</string>
+    <string name="settings_data_export_web_button">Exportar ou importar seus dados</string>
+    <string name="settings_data_export_web_description">A exportação e a importação acontecem no app web do Deferno — ainda não há um recurso dentro do app. Abra o app web para gerenciar seus dados.</string>
+    <string name="settings_data_your_data_section">Seus dados</string>
+    <string name="settings_done_visibility_always">Sempre</string>
+    <string name="settings_done_visibility_dashboard">No painel</string>
+    <string name="settings_done_visibility_description">Por quanto tempo os itens concluídos ficam visíveis.</string>
+    <string name="settings_done_visibility_everywhere">Em todo lugar</string>
+    <string name="settings_done_visibility_one_day">1 dia</string>
+    <string name="settings_done_visibility_one_week">1 semana</string>
+    <string name="settings_done_visibility_section">Visibilidade dos concluídos</string>
+    <string name="settings_done_visibility_three_days">3 dias</string>
+    <string name="settings_help_feedback_intro">Tem uma pergunta, um bug ou uma sugestão? Envie direto para a equipe do Deferno — anexe arquivos se ajudar.</string>
+    <string name="settings_legal_account_removal_email_body">Olá,
+
+Gostaria de solicitar a remoção da minha conta do Deferno e dos dados associados a ela.
+
+E-mail da conta:
+
+Agradeço.</string>
+    <string name="settings_legal_account_removal_email_subject">Solicitação de remoção de conta</string>
+    <string name="settings_legal_open_source_body">O Deferno é construído sobre software de código aberto, com agradecimentos aos autores.</string>
+    <string name="settings_legal_open_source_section">Código aberto</string>
+    <string name="settings_legal_privacy_body">Seus dados continuam seus. Nunca os vendemos. Veja a política de privacidade completa na web.</string>
+    <string name="settings_legal_privacy_policy_title">Política de Privacidade</string>
+    <string name="settings_legal_privacy_section">Privacidade</string>
+    <string name="settings_legal_terms_body">Ao usar o Deferno, você concorda com nossos Termos de Serviço e com a política de uso aceitável.</string>
+    <string name="settings_legal_terms_section">Termos de Serviço</string>
+    <string name="settings_legal_view_privacy_button">Ver Política de Privacidade</string>
+    <string name="settings_legal_view_terms_button">Ver Termos de Serviço</string>
+    <string name="settings_permissions_intro">Gerencie notificações, armazenamento e outras permissões do Deferno nas configurações do dispositivo.</string>
+    <string name="settings_permissions_open_button">Abrir configurações do app</string>
+    <string name="settings_privacy_analytics_description">Ajude a melhorar o Deferno compartilhando dados de uso anônimos.</string>
+    <string name="settings_privacy_analytics_label">Análises e rastreamento</string>
+    <string name="settings_row_summary_unavailable">%1$s · indisponível</string>
+    <string name="settings_security_open_console_button">Abrir console de segurança</string>
+    <string name="settings_speech_engine_android_native">Android (no dispositivo)</string>
+    <string name="settings_speech_engine_automatic">Automático</string>
+    <string name="settings_speech_engine_system_dictation">Ditado do sistema</string>
+    <!-- 'Whisper' é nome de modelo — mantido -->
+    <string name="settings_speech_engine_whisper">Whisper</string>
+    <string name="settings_speech_engine_whisper_on_device">Whisper (no dispositivo)</string>
+    <string name="settings_speech_intro">Escolha como o ditado transforma sua voz em texto. Isso fica neste dispositivo e não é sincronizado com a sua conta.</string>
+    <string name="settings_speech_note_automatic">Usar o melhor mecanismo disponível neste dispositivo</string>
+    <string name="settings_speech_note_downloading">Baixando…</string>
+    <string name="settings_speech_note_no_engine">Não disponível neste dispositivo</string>
+    <string name="settings_speech_note_preparing">Preparando…</string>
+    <string name="settings_speech_note_unsupported_locale">Não disponível para o seu idioma</string>
+    <string name="settings_storage_intro">Escolha onde seus anexos ficam armazenados. No dispositivo, os arquivos ficam neste aparelho e funcionam offline. Essa escolha fica neste dispositivo e não é sincronizada com a sua conta. (O feedback que você envia à equipe é sempre enviado ao Deferno para que possamos vê-lo.)</string>
+    <string name="settings_storage_keep_recordings_description">Salve a gravação de voz original neste dispositivo quando você aceitar um despejo de ideias, para ouvir de novo mais tarde.</string>
+    <string name="settings_storage_keep_recordings_label">Manter gravações do despejo de ideias</string>
+    <string name="settings_storage_note_coming_later">Disponível mais tarde</string>
+    <string name="settings_storage_note_deferno_backend">Armazena os arquivos nos servidores do Deferno</string>
+    <string name="settings_storage_note_on_device">Mantém os arquivos neste dispositivo; funciona offline</string>
+    <string name="settings_storage_provider_deferno_backend">Backend do Deferno</string>
+    <!-- Marca — não traduzir -->
+    <string name="settings_storage_provider_dropbox">Dropbox</string>
+    <!-- Marca — não traduzir -->
+    <string name="settings_storage_provider_google_drive">Google Drive</string>
+    <string name="settings_storage_provider_on_device">No dispositivo</string>
+    <string name="settings_task_behavior_drag_drop_description">Reordene tarefas arrastando. Isso ainda está sendo aprimorado.</string>
+    <string name="settings_task_behavior_drag_drop_label">Arrastar e soltar (experimental)</string>
+    <string name="settings_task_behavior_shake_undo_description">Balance o celular para desfazer a última movimentação de tarefa. Você vai confirmar antes.</string>
+    <string name="settings_task_behavior_shake_undo_label">Balançar para desfazer</string>
+    <!-- Nome de tema — marca, não traduzir -->
+    <string name="settings_theme_family_deferno">Deferno</string>
+    <!-- Nome de tema — não traduzir -->
+    <string name="settings_theme_family_mono">Mono</string>
+    <string name="settings_theme_mode_dark">Escuro</string>
+    <string name="settings_theme_mode_follow_system">Seguir o sistema</string>
+    <string name="settings_theme_mode_light">Claro</string>
+
+    <!-- ── shell ─────────────────────────────────────────────── -->
+    <string name="shell_close_menu_cd">Fechar menu</string>
+    <string name="shell_coming_soon_body">Este espaço está reservado — os recursos chegam em um próximo lançamento.</string>
+    <string name="shell_coming_soon_body_desktop">Este espaço está reservado — a visualização para desktop chega em um próximo lançamento.</string>
+    <string name="shell_coming_soon_title">%1$s chega em breve</string>
+    <string name="shell_destination_activity">Atividade</string>
+    <string name="shell_destination_assistant">Assistente</string>
+    <string name="shell_destination_calendar">Calendário</string>
+    <string name="shell_destination_inbox">Caixa de entrada</string>
+    <string name="shell_destination_plan">Plano</string>
+    <string name="shell_destination_profile">Perfil</string>
+    <string name="shell_destination_settings">Configurações</string>
+    <string name="shell_destination_tasks">Tarefas</string>
+    <string name="shell_drawer_add_something">Adicionar algo</string>
+    <string name="shell_drawer_add_something_eyebrow">ADICIONAR ALGO</string>
+    <!-- 'Caixa de entrada' deve combinar com shell_destination_inbox -->
+    <string name="shell_drawer_brain_dump_subtitle">Fale ou digite — vai para a Caixa de entrada</string>
+    <string name="shell_drawer_capture_cd">%1$s. %2$s</string>
+    <string name="shell_drawer_new_task">Nova tarefa</string>
+    <string name="shell_drawer_new_task_subtitle">Preencha os detalhes</string>
+    <string name="shell_inbox_badge_empty">vazia</string>
+    <string name="shell_menu_cd">Menu</string>
+    <string name="shell_menu_file">Arquivo</string>
+    <string name="shell_menu_help">Ajuda</string>
+    <string name="shell_menu_new">Novo…</string>
+    <string name="shell_menu_quit">Sair</string>
+    <string name="shell_menu_search">Buscar…</string>
+    <string name="shell_menu_selected_mark">✓</string>
+    <string name="shell_menu_view">Exibir</string>
+    <string name="shell_new">Novo</string>
+    <string name="shell_overlay_placeholder_body">A rota de sobreposição do shell está conectada — Buscar e Novo renderizam conteúdo real sobre ela.</string>
+    <string name="shell_overlay_placeholder_body_desktop">Esta tela chega ao desktop em um próximo lançamento.</string>
+    <string name="shell_overlay_placeholder_title">Sobreposição</string>
+    <string name="shell_select_account">Selecionar conta</string>
+    <string name="shell_shortcut_destination">Ctrl+%1$d</string>
+    <string name="shell_shortcut_new">Ctrl+N</string>
+    <string name="shell_shortcut_quit">Ctrl+Q</string>
+    <string name="shell_shortcut_refresh">Ctrl+R</string>
+    <string name="shell_shortcut_search">Ctrl+F</string>
+    <string name="shell_signed_in">Conectado</string>
+    <string name="shell_signed_in_as_cd">Conectado como %1$s</string>
+    <string name="shell_switch_account_cd">Trocar de conta</string>
+    <string name="shell_toolbar_new">+ Novo</string>
+    <string name="shell_window_title_destination">Deferno — %1$s</string>
+
+    <!-- ── tasks ─────────────────────────────────────────────── -->
+    <string name="tasks_add_subtask_dialog_title">Adicionar uma subtarefa</string>
+    <string name="tasks_add_subtask_placeholder">Subtarefa de %1$s</string>
+    <!-- Chip: este item bloqueia outros -->
+    <string name="tasks_badge_blocker">Bloqueador</string>
+    <string name="tasks_badge_blocker_a11y">Bloqueia outros itens</string>
+    <string name="tasks_delete_item_confirm_title">Excluir “%1$s”?</string>
+    <string name="tasks_detail_add_caption">Adicionar legenda</string>
+    <string name="tasks_detail_add_comment_placeholder">Adicionar um comentário…</string>
+    <string name="tasks_detail_add_file">Adicionar arquivo</string>
+    <string name="tasks_detail_add_label_placeholder">Adicionar uma etiqueta…</string>
+    <string name="tasks_detail_add_subtask_placeholder">Adicionar uma subtarefa…</string>
+    <string name="tasks_detail_attachment_meta">%1$s · %2$s</string>
+    <string name="tasks_detail_attachment_meta_on_device">%1$s · %2$s · No dispositivo</string>
+    <string name="tasks_detail_caption_placeholder">Legenda</string>
+    <string name="tasks_detail_clear_due_date_a11y">Limpar prazo</string>
+    <string name="tasks_detail_comment_author_member">Membro</string>
+    <string name="tasks_detail_comment_author_you">Você</string>
+    <string name="tasks_detail_comment_edited">(editado)</string>
+    <string name="tasks_detail_comments_error">Não foi possível carregar os comentários. Puxe para atualizar mais tarde.</string>
+    <string name="tasks_detail_delete_attachment_a11y">Excluir %1$s</string>
+    <string name="tasks_detail_delete_confirm_title">Excluir esta tarefa?</string>
+    <string name="tasks_detail_due_date_a11y">Prazo: %1$s. Toque para mudar.</string>
+    <string name="tasks_detail_edit_caption">Editar legenda</string>
+    <string name="tasks_detail_edit_caption_a11y">Editar legenda de %1$s</string>
+    <string name="tasks_detail_encrypted_comment">🔒 Comentário criptografado</string>
+    <string name="tasks_detail_loading">Carregando detalhes…</string>
+    <string name="tasks_detail_more_actions">Mais ações</string>
+    <string name="tasks_detail_no_attachments">Nenhum anexo.</string>
+    <string name="tasks_detail_no_comments">Nenhum comentário ainda.</string>
+    <string name="tasks_detail_no_description">Nenhuma descrição ainda.</string>
+    <string name="tasks_detail_not_found_body">Esta tarefa pode ter sido removida. Volte para a sua lista.</string>
+    <string name="tasks_detail_not_found_title">Tarefa não encontrada</string>
+    <string name="tasks_detail_pane_empty_body">Escolha uma tarefa à esquerda para ver os detalhes aqui.</string>
+    <string name="tasks_detail_pane_empty_title">Nada aberto</string>
+    <string name="tasks_detail_play">Reproduzir</string>
+    <string name="tasks_detail_play_attachment_a11y">Reproduzir %1$s</string>
+    <string name="tasks_detail_post">Publicar</string>
+    <string name="tasks_detail_posting">Publicando…</string>
+    <!-- Rótulo de propriedade — distinto do formato common_due -->
+    <string name="tasks_detail_property_due">Prazo</string>
+    <string name="tasks_detail_property_owner">Responsável</string>
+    <string name="tasks_detail_property_source">Origem</string>
+    <string name="tasks_detail_property_time">Hora</string>
+    <string name="tasks_detail_remove_caption_a11y">Remover legenda de %1$s</string>
+    <string name="tasks_detail_remove_label_a11y">Remover etiqueta %1$s</string>
+    <string name="tasks_detail_section_activity">Atividade</string>
+    <string name="tasks_detail_section_attachments">Anexos</string>
+    <string name="tasks_detail_section_properties">Propriedades</string>
+    <string name="tasks_detail_section_subtasks">Subtarefas</string>
+    <string name="tasks_detail_set_due_date">Definir prazo</string>
+    <string name="tasks_detail_set_working_state_a11y">Definir como %1$s</string>
+    <string name="tasks_detail_source_open_in">Abrir em %1$s</string>
+    <string name="tasks_detail_source_row_a11y">Origem: %1$s, %2$s. Abre em %1$s.</string>
+    <string name="tasks_detail_source_row_no_link_a11y">Origem: %1$s, %2$s</string>
+    <string name="tasks_detail_subtask_mark_done_a11y">Marcar “%1$s” como concluída</string>
+    <string name="tasks_detail_subtask_mark_not_done_a11y">Marcar “%1$s” como não concluída</string>
+    <string name="tasks_detail_subtask_progress_a11y">%1$d de %2$d subtarefas concluídas</string>
+    <string name="tasks_detail_title">Detalhes</string>
+    <string name="tasks_detail_uploading">Enviando…</string>
+    <string name="tasks_detail_working_state_current_a11y">%1$s, estado de trabalho atual</string>
+    <string name="tasks_detail_working_state_heading">Estado de trabalho</string>
+    <string name="tasks_external_ref_prefix">[%1$s#%2$d]</string>
+    <string name="tasks_filter_active">Ativas</string>
+    <!-- Referenciado dentro de tasks_tree_filtered_empty_body — manter em sincronia -->
+    <string name="tasks_filter_all">Todas</string>
+    <!-- 'hoje' = plano de hoje -->
+    <string name="tasks_filter_in_today">Para hoje</string>
+    <string name="tasks_kind_a11y_chore">afazer</string>
+    <string name="tasks_kind_a11y_event">evento</string>
+    <string name="tasks_kind_a11y_habit">hábito</string>
+    <string name="tasks_kind_a11y_task">tarefa</string>
+    <string name="tasks_kind_label_chore">AFAZER</string>
+    <string name="tasks_kind_label_event">EVENTO</string>
+    <string name="tasks_kind_label_habit">HÁBITO</string>
+    <string name="tasks_kind_label_task">TAREFA</string>
+    <string name="tasks_menu_activate">Ativar</string>
+    <string name="tasks_menu_add_subtask">Adicionar subtarefa</string>
+    <string name="tasks_menu_add_to_plan">Adicionar ao plano de hoje</string>
+    <string name="tasks_menu_archive">Arquivar</string>
+    <string name="tasks_menu_break_this_down">Dividir em partes</string>
+    <string name="tasks_menu_delete_permanent">Excluir (permanente!)</string>
+    <string name="tasks_menu_mark_done">Marcar como concluída</string>
+    <string name="tasks_menu_move">Mover</string>
+    <string name="tasks_menu_open">Abrir</string>
+    <string name="tasks_menu_pin">Fixar</string>
+    <string name="tasks_menu_remove_from_plan">Remover do plano de hoje</string>
+    <string name="tasks_menu_start_working">Começar a trabalhar</string>
+    <string name="tasks_menu_undo_move">Desfazer movimento</string>
+    <string name="tasks_menu_unpin">Desafixar</string>
+    <string name="tasks_move_down">Mover para baixo</string>
+    <string name="tasks_move_indent">Aumentar recuo</string>
+    <!-- Interpolado em tasks_undo_operation_confirm_title ('Desfazer …?') -->
+    <string name="tasks_move_operation_indent">aumento de recuo</string>
+    <string name="tasks_move_operation_outdent">diminuição de recuo</string>
+    <string name="tasks_move_operation_reorder">reordenação</string>
+    <string name="tasks_move_outdent">Diminuir recuo</string>
+    <string name="tasks_move_up">Mover para cima</string>
+    <string name="tasks_moved_snackbar">Movido</string>
+    <string name="tasks_progress_done">%1$d de %2$d concluídas</string>
+    <string name="tasks_progress_fraction">%1$d de %2$d</string>
+    <!-- Vocabulário gentil para WorkingState.Dropped — nunca 'abandonar/largar' -->
+    <string name="tasks_set_aside">Deixar de lado</string>
+    <string name="tasks_source_from_github">Do GitHub</string>
+    <string name="tasks_source_from_google_calendar">Do Google Calendar</string>
+    <string name="tasks_tree_actions_for_item">Ações para %1$s</string>
+    <string name="tasks_tree_add_tree">Adicionar uma árvore</string>
+    <plurals name="tasks_tree_count">
+        <item quantity="one">%1$d árvore</item>
+        <item quantity="other">%1$d árvores</item>
+    </plurals>
+    <string name="tasks_tree_empty_body">Quando você adicionar uma árvore, ela aparece aqui. Um passinho de cada vez.</string>
+    <!-- 'Árvore' = termo do glossário do produto para uma árvore de tarefas -->
+    <string name="tasks_tree_empty_title">Nenhuma árvore ainda</string>
+    <!-- “Todas” deve combinar com tasks_filter_all -->
+    <string name="tasks_tree_filtered_empty_body">Tudo aqui está concluído. Mude para “Todas” para ver de novo.</string>
+    <string name="tasks_tree_filtered_empty_title">Nada para mostrar aqui</string>
+    <string name="tasks_tree_refreshing">Atualizando…</string>
+    <string name="tasks_tree_show_blocked">Mostrar bloqueadas</string>
+    <string name="tasks_tree_title">Tudo</string>
+    <string name="tasks_undo_operation_confirm_title">Desfazer %1$s?</string>
+    <!-- ADJETIVO de estado (ainda não iniciada) — distinto do verbo Abrir -->
+    <string name="tasks_working_state_open">Aberta</string>
+
+    <!-- ── update ─────────────────────────────────────────────── -->
+    <string name="update_badge_available">Atualização disponível</string>
+    <string name="update_check_action">Verificar atualizações…</string>
+    <string name="update_check_failed_fallback">Falha ao verificar atualizações</string>
+    <string name="update_check_failed_status">Falha ao verificar atualizações: %1$s</string>
+    <string name="update_checking">Verificando atualizações…</string>
+    <string name="update_installing_status">Instalando %1$s — o app vai reiniciar</string>
+    <string name="update_restart_to_update">Reinicie para atualizar para %1$s</string>
+    <string name="update_unsupported_not_packaged">A atualização automática está disponível no app instalado</string>
+    <string name="update_unsupported_other">Atualizações automáticas não estão disponíveis aqui</string>
+    <string name="update_unsupported_package_manager">As atualizações são gerenciadas pelo seu gerenciador de pacotes</string>
+    <string name="update_up_to_date">Tudo atualizado</string>
+    <string name="update_updating">Atualizando…</string>
+    <string name="update_version_available">A versão %1$s está disponível</string>
+    <string name="update_version_line">%1$s %2$s</string>
+    <string name="update_view_releases">Ver todos os lançamentos…</string>
 </resources>

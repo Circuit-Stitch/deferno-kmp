@@ -1,4 +1,9 @@
 <resources>
+    <!-- ============================================================================
+         Deferno string catalog (hi) — हिंदी। values/strings.xml के साथ lockstep में।
+         Plain XML: bare apostrophes ठीक हैं (Android \' एस्केपिंग नहीं)।
+         ============================================================================ -->
+
     <!-- java.time पैटर्न (values/strings.xml देखें)। "21 जून · 09:45" -->
     <string name="activity_when_pattern">d MMM · HH:mm</string>
     <!-- "जून 2026" -->
@@ -9,4 +14,685 @@
     <string name="calendar_day_pattern">d MMMM</string>
     <!-- "2:30 pm" -->
     <string name="common_time_pattern">h:mm a</string>
+
+
+    <!-- ── about ─────────────────────────────────────────────── -->
+    <string name="about_version">वर्शन %1$s</string>
+
+    <!-- ── activity ─────────────────────────────────────────────── -->
+    <plurals name="activity_change_count">
+        <!-- hi CLDR: quantity 'one' पर n=0 भी आता है — इसलिए literal '1' की जगह %1$d -->
+        <item quantity="one">%1$d बदलाव</item>
+        <item quantity="other">%1$d बदलाव</item>
+    </plurals>
+    <string name="activity_empty_body">आपका किया हर बदलाव — और कहीं और से सिंक हुआ हर बदलाव — यहाँ दिखता है, सबसे नया सबसे ऊपर।</string>
+    <string name="activity_empty_title">अभी कुछ नहीं</string>
+    <!-- 'MCP' तकनीकी नाम — जस का तस -->
+    <string name="activity_source_mcp">MCP एजेंट से</string>
+    <string name="activity_source_mobile">मोबाइल ऐप</string>
+    <string name="activity_source_unknown">अज्ञात</string>
+    <string name="activity_source_website">वेबसाइट से</string>
+    <string name="activity_summary_changed_settings">सेटिंग्स बदलीं</string>
+    <string name="activity_summary_cleared_occurrence_chore">काम की एक बारी साफ़ की</string>
+    <string name="activity_summary_cleared_occurrence_event">इवेंट की एक बारी साफ़ की</string>
+    <string name="activity_summary_cleared_occurrence_habit">आदत की एक बारी साफ़ की</string>
+    <string name="activity_summary_created_chore">एक काम बनाया</string>
+    <string name="activity_summary_created_event">एक इवेंट बनाया</string>
+    <string name="activity_summary_created_habit">एक आदत बनाई</string>
+    <string name="activity_summary_created_item">एक आइटम बनाया</string>
+    <string name="activity_summary_created_task">एक कार्य बनाया</string>
+    <string name="activity_summary_deleted_task">एक कार्य हटाया</string>
+    <string name="activity_summary_moved_item">एक आइटम मूव किया</string>
+    <string name="activity_summary_updated_item">एक आइटम अपडेट किया</string>
+    <string name="activity_summary_updated_occurrence_chore">काम की एक बारी अपडेट की</string>
+    <string name="activity_summary_updated_occurrence_event">इवेंट की एक बारी अपडेट की</string>
+    <string name="activity_summary_updated_occurrence_habit">आदत की एक बारी अपडेट की</string>
+    <string name="activity_summary_updated_plan">आपकी योजना अपडेट की</string>
+    <string name="activity_summary_updated_task">एक कार्य अपडेट किया</string>
+
+    <!-- ── assistant ─────────────────────────────────────────────── -->
+    <string name="assistant_action_working">काम चल रहा है…</string>
+    <!-- Egress-consent text — सटीक और शाब्दिक अनुवाद (निजता प्रकटीकरण) -->
+    <string name="assistant_default_disclosure">सहायक को चालू करने पर आपकी डिक्रिप्ट की गई आइटम सामग्री एक तृतीय-पक्ष AI उप-प्रोसेसर को भेजी जाती है, ताकि वह आपके कार्यों को पढ़ सके और उन पर कार्रवाई कर सके। आप इसे कभी भी बंद कर सकते हैं।</string>
+    <string name="assistant_error_apply_failed">बदलाव लागू नहीं हो सका। फिर से कोशिश करें।</string>
+    <string name="assistant_error_enable_failed">सहायक चालू नहीं हो सका। फिर से कोशिश करें।</string>
+    <string name="assistant_error_turn_failed">यह टर्न पूरा नहीं हो सका। फिर से कोशिश करें।</string>
+    <string name="assistant_error_unavailable_on_device">सहायक अभी इस डिवाइस पर उपलब्ध नहीं है।</string>
+    <string name="assistant_new_chat_title">नई चैट</string>
+    <string name="assistant_proposal_applied">लागू किया गया: %1$s</string>
+    <string name="assistant_proposal_apply_failed_summary">लागू नहीं हो सका: %1$s</string>
+
+    <!-- ── auth ─────────────────────────────────────────────── -->
+    <string name="auth_add_another_account">एक और खाता जोड़ें</string>
+    <string name="auth_browser_hint">साइन इन पूरा करने के लिए एक सुरक्षित ब्राउज़र विंडो खुलती है।</string>
+    <string name="auth_browser_signed_in_body">आप यह टैब बंद करके ऐप पर लौट सकते हैं।</string>
+    <string name="auth_browser_signed_in_title">आप Deferno में साइन इन हो गए हैं।</string>
+    <string name="auth_error_invalid_token">वह token मान्य नहीं है। इसे जाँचकर फिर से कोशिश करें।</string>
+    <string name="auth_error_unavailable">Deferno से संपर्क नहीं हो सका। अपना कनेक्शन जाँचकर फिर से कोशिश करें।</string>
+    <string name="auth_retry_prompt">फिर से कोशिश करनी है?</string>
+    <string name="auth_session_expired_body">इस खाते का आपका साइन-इन समाप्त हो गया है। जारी रखने के लिए फिर से साइन इन करें।</string>
+    <string name="auth_session_expired_title">सेशन समाप्त हो गया</string>
+    <string name="auth_sign_in">साइन इन करें</string>
+    <string name="auth_sign_in_with_token">Token से साइन इन करें</string>
+    <string name="auth_signed_in_as">इस रूप में साइन इन</string>
+    <string name="auth_subtitle_sign_in">अपने खाते में साइन इन करें</string>
+    <string name="auth_token_field_label">व्यक्तिगत एक्सेस token</string>
+    <!-- वेब ऐप के nav लेबल अंग्रेज़ी में हैं — जस के तस -->
+    <string name="auth_token_help">वेब पर Deferno में token बनाएँ: Settings → Tokens।</string>
+    <string name="auth_token_hide">छिपाएँ</string>
+    <string name="auth_token_show">दिखाएँ</string>
+    <string name="auth_unavailable_body">अपना कनेक्शन जाँचकर फिर से कोशिश करें।</string>
+    <string name="auth_unavailable_title">Deferno से संपर्क नहीं हो पा रहा</string>
+    <string name="auth_use_token_instead">इसके बजाय token इस्तेमाल करें</string>
+
+    <!-- ── braindump ─────────────────────────────────────────────── -->
+    <!-- 'Brain dump' की अवधारणा = "मन की बात" — हर जगह यही -->
+    <string name="braindump_allow_microphone">माइक्रोफ़ोन की अनुमति दें</string>
+    <string name="braindump_desktop_placeholder_body">खुलकर बोलें और Deferno उसे ड्राफ़्ट कार्यों में बदल देगा। मन की बात Android पर उपलब्ध है; डेस्कटॉप समर्थन जल्द आ रहा है।</string>
+    <string name="braindump_drafts_inbox_meta">ड्राफ़्ट आपके इनबॉक्स में दिखेंगे</string>
+    <string name="braindump_enqueued_note">बैकग्राउंड में टेक्स्ट में बदला जा रहा है — आपके ड्राफ़्ट इनबॉक्स में तैयार होते ही हम आपको बता देंगे।</string>
+    <string name="braindump_extract_drafts">ड्राफ़्ट निकालें</string>
+    <string name="braindump_failed_note">रिकॉर्ड नहीं हो सका। फिर से कोशिश करें।</string>
+    <string name="braindump_intro">जो भी मन में है, बोलें या लिखें। मैं उससे ड्राफ़्ट पेड़ बना दूँगा — जब तक आप उन्हें इनबॉक्स में स्वीकार नहीं करते, कुछ भी जोड़ा नहीं जाता।</string>
+    <string name="braindump_listening_hint">आपके मन की बात सुन रहा हूँ। पूरा हो जाए तो रोकने के लिए टैप करें — मैं उससे ड्राफ़्ट बना दूँगा।</string>
+    <string name="braindump_mic_denied">मन की बात के लिए माइक्रोफ़ोन की अनुमति चाहिए।</string>
+    <string name="braindump_mic_denied_permanent">मन की बात के लिए माइक्रोफ़ोन की अनुमति चाहिए, जो इस ऐप के लिए बंद है।</string>
+    <string name="braindump_no_drafts_yet">अभी कोई ड्राफ़्ट नहीं</string>
+    <string name="braindump_notification_channel_name">मन की बातें</string>
+    <plurals name="braindump_notification_drafts_ready">
+        <item quantity="one">%1$d ड्राफ़्ट समीक्षा के लिए तैयार</item>
+        <item quantity="other">%1$d ड्राफ़्ट समीक्षा के लिए तैयार</item>
+    </plurals>
+    <string name="braindump_notification_recording_saved">रिकॉर्डिंग समीक्षा के लिए सेव की गई</string>
+    <string name="braindump_ready_to_draft">आपके लिखे से ड्राफ़्ट बनाने के लिए तैयार</string>
+    <string name="braindump_recording_status">रिकॉर्डिंग जारी…</string>
+    <string name="braindump_salvage_reason">यह रिकॉर्डिंग कार्यों में नहीं बदली जा सकी, इसलिए आपकी समीक्षा के लिए यहाँ सेव की गई है।</string>
+    <string name="braindump_salvage_title">मन की बात #%1$d</string>
+    <string name="braindump_speak_toggle">बोलें</string>
+    <string name="braindump_start_recording">रिकॉर्डिंग शुरू करें</string>
+    <string name="braindump_stop">रोकें</string>
+    <string name="braindump_title">मन की बात</string>
+    <string name="braindump_try_again">फिर से कोशिश करें</string>
+    <string name="braindump_type_field_cd">मन की बात का टेक्स्ट</string>
+    <string name="braindump_type_field_label">आपके मन में क्या है?</string>
+    <string name="braindump_type_toggle">लिखें</string>
+    <string name="braindump_visual_feedback_turn_off">विज़ुअल ऑडियो फ़ीडबैक बंद करें</string>
+    <string name="braindump_visual_feedback_turn_on">विज़ुअल ऑडियो फ़ीडबैक चालू करें</string>
+
+    <!-- ── breakdown ─────────────────────────────────────────────── -->
+    <string name="breakdown_composer_placeholder">आपको क्या रोक रहा है?</string>
+    <string name="breakdown_focus_prefix">बाँट रहे हैं: %1$s</string>
+    <string name="breakdown_keep_it">इसे रखें</string>
+    <!-- सौम्य 'जाने दें' — कभी 'हटाना/त्यागना' वाला लहज़ा नहीं -->
+    <string name="breakdown_let_it_go">जाने दें</string>
+    <string name="breakdown_msg_added_prerequisite">पहले करने के लिए एक ज़रूरी कदम जोड़ा: “%1$s”।</string>
+    <string name="breakdown_msg_added_to_plan">आज की योजना में जोड़ा गया।</string>
+    <string name="breakdown_msg_broke_into">इसे %1$s में बाँट दिया।</string>
+    <string name="breakdown_msg_classifier_retry">मैं इसे डिवाइस पर ठीक से समझ नहीं पाया। क्या आप इसे किसी और तरीक़े से कहना चाहेंगे?</string>
+    <!-- हाँ/नहीं चरण चलाता है — स्थानीयकृत 'हाँ' से मेल ज़रूरी -->
+    <string name="breakdown_msg_confirm_drop">लगता है आप इसे टालते आ रहे हैं। क्या यह सच में ज़रूरी है? मैं “%1$s” को आपकी सूची से हटा सकता हूँ — बस हाँ कह दें।</string>
+    <string name="breakdown_msg_dropped">हो गया — “%1$s” को आपकी सूची से हटा रहा हूँ। आप इसे इतिहास से वापस पा सकते हैं।</string>
+    <string name="breakdown_msg_finished_dropped">सब हो गया — जो आपको ज़रूरी नहीं था, वह हमने हटा दिया।</string>
+    <string name="breakdown_msg_finished_ready">सब कुछ बँटकर तैयार है। बहुत बढ़िया।</string>
+    <string name="breakdown_msg_kept_reask">रख लिया। तो — “%1$s” में आपको क्या रोक रहा है?</string>
+    <string name="breakdown_msg_more_urgent">अभी कुछ और ज़्यादा ज़रूरी है — नोट कर लिया। (इसकी प्राथमिकता घटाना जल्द आ रहा है; फ़िलहाल यह यहीं रहेगा।)</string>
+    <string name="breakdown_msg_name_first_piece">आइए पहला छोटा हिस्सा तय करें — कौन-सा एक हिस्सा है जिससे आप शुरुआत कर सकते हैं?</string>
+    <string name="breakdown_msg_ready_to_go">तो फिर “%1$s” तैयार है।</string>
+    <string name="breakdown_msg_transient_obstacle">यह अस्थायी है — अभी इसे छोड़ देना ठीक है। यह आपके लिए मायने रखता था, इसलिए जब आप तैयार हों, यह यहीं मिलेगा।</string>
+    <string name="breakdown_msg_waiting_dependency">लगता है यह किसी और चीज़ की वजह से रुका है — नोट कर लिया। (उस अड़चन को जोड़ना जल्द आ रहा है।)</string>
+    <string name="breakdown_msg_whats_stopping">“%1$s” में आपको क्या रोक रहा है?</string>
+    <!-- सर्वर पर बनने वाला उपकार्य शीर्षक -->
+    <string name="breakdown_prereq_define_done">तय करें कि “पूरा हुआ” कैसा दिखेगा, और सोचें कि यह मुझे करना चाहिए या किसी और को सौंपना चाहिए</string>
+    <string name="breakdown_prereq_figure_out">समझें कि इसे कैसे करना है</string>
+    <string name="breakdown_thinking">सोच रहा हूँ…</string>
+    <string name="breakdown_title">छोटे हिस्सों में बाँटें</string>
+    <!-- 'सेटिंग्स'/'एजेंट' shell_destination_settings + settings_category_agent से मेल खाते हैं -->
+    <string name="breakdown_unavailable_body">किसी अटके हुए कार्य को छोटे चरणों में बाँटने के लिए सेटिंग्स → एजेंट में कोई AI इंजन चालू करें।</string>
+    <string name="breakdown_unavailable_title">बाँटने के लिए AI इंजन चाहिए</string>
+
+    <!-- ── calendar ─────────────────────────────────────────────── -->
+    <!-- आदेशसूचक क्रिया-चिप — Done स्थिति (common_status_done) से अलग -->
+    <string name="calendar_action_done">पूर्ण करें</string>
+    <string name="calendar_action_reschedule">दिन बदलें</string>
+    <string name="calendar_action_skip">छोड़ें</string>
+    <plurals name="calendar_day_item_count">
+        <item quantity="one">%1$d आइटम</item>
+        <item quantity="other">%1$d आइटम</item>
+    </plurals>
+    <string name="calendar_day_no_items">कोई आइटम नहीं</string>
+    <string name="calendar_day_selected">चयनित</string>
+    <!-- सौम्य, बिना दबाव वाला लहज़ा — डिज़ाइन-अनिवार्य -->
+    <string name="calendar_empty_body">एक खाली दिन। जब मन हो तब कुछ जोड़ें — कोई जल्दी नहीं।</string>
+    <string name="calendar_empty_title">इस दिन कुछ नहीं</string>
+    <string name="calendar_next_month">अगला महीना</string>
+    <string name="calendar_previous_month">पिछला महीना</string>
+    <string name="calendar_reschedule_pick_day">“%1$s” के लिए नया दिन चुनें</string>
+
+    <!-- ── common ─────────────────────────────────────────────── -->
+    <string name="common_account">खाता</string>
+    <string name="common_add">जोड़ें</string>
+    <!-- ब्रांड — अनुवाद नहीं -->
+    <string name="common_app_name">Deferno</string>
+    <string name="common_attach_files">फ़ाइलें अटैच करें</string>
+    <string name="common_back">वापस</string>
+    <string name="common_blocked">अवरुद्ध</string>
+    <string name="common_cancel">रद्द करें</string>
+    <string name="common_cannot_be_undone">इसे पूर्ववत नहीं किया जा सकता।</string>
+    <string name="common_clear">साफ़ करें</string>
+    <string name="common_close">बंद करें</string>
+    <string name="common_collapse_named_cd">%1$s को समेटें</string>
+    <string name="common_delete">हटाएँ</string>
+    <string name="common_dismiss">ख़ारिज करें</string>
+    <!-- बटन 'हो गया' — Done स्थिति-लेबल (common_status_done) से अलग -->
+    <string name="common_done">हो गया</string>
+    <string name="common_due">%1$s तक</string>
+    <string name="common_edit">संपादित करें</string>
+    <string name="common_error_app_out_of_date">यह ऐप पुराना हो गया है — कृपया अपडेट करें।</string>
+    <string name="common_expand_named_cd">%1$s को फैलाएँ</string>
+    <string name="common_kind_chore">काम</string>
+    <string name="common_kind_event">इवेंट</string>
+    <string name="common_kind_habit">आदत</string>
+    <string name="common_kind_item">आइटम</string>
+    <string name="common_kind_task">कार्य</string>
+    <string name="common_labels">लेबल</string>
+    <string name="common_loading">लोड हो रहा है…</string>
+    <string name="common_mark_done_cd">%1$s को पूर्ण चिह्नित करें</string>
+    <string name="common_mark_not_done_cd">%1$s को अपूर्ण चिह्नित करें</string>
+    <string name="common_open_named_cd">%1$s खोलें</string>
+    <string name="common_open_settings">सेटिंग्स खोलें</string>
+    <string name="common_reconnect_to_save">सेव करने के लिए फिर से कनेक्ट करें</string>
+    <string name="common_refresh">रीफ़्रेश करें</string>
+    <string name="common_remove">निकालें</string>
+    <string name="common_remove_named_cd">%1$s निकालें</string>
+    <string name="common_retry">फिर से कोशिश करें</string>
+    <string name="common_save">सेव करें</string>
+    <string name="common_search">खोजें</string>
+    <string name="common_send">भेजें</string>
+    <string name="common_session_expired_message">सेशन समाप्त — रीफ़्रेश करने के लिए फिर से साइन इन करें।</string>
+    <string name="common_set">सेट करें</string>
+    <string name="common_sign_in_again">फिर से साइन इन करें</string>
+    <string name="common_sign_out">साइन आउट करें</string>
+    <string name="common_signing_in">साइन इन हो रहा है…</string>
+    <string name="common_size_bytes">%1$d B</string>
+    <string name="common_size_kb">%1$s KB</string>
+    <string name="common_size_mb">%1$s MB</string>
+    <!-- ब्रांड — अनुवाद नहीं -->
+    <string name="common_source_github">GitHub</string>
+    <!-- ब्रांड — अनुवाद नहीं -->
+    <string name="common_source_google_calendar">Google Calendar</string>
+    <string name="common_start">शुरू करें</string>
+    <string name="common_state_collapsed">समेटा गया</string>
+    <string name="common_state_done">पूर्ण</string>
+    <string name="common_state_expanded">फैलाया गया</string>
+    <string name="common_state_not_done">अपूर्ण</string>
+    <string name="common_state_selected">चयनित</string>
+    <string name="common_status_a11y">स्थिति: %1$s</string>
+    <string name="common_status_done">पूर्ण</string>
+    <string name="common_status_in_progress">प्रगति पर</string>
+    <string name="common_status_in_review">समीक्षा में</string>
+    <!-- जानबूझकर तटस्थ — कभी 'देर हुई/चूक गए' नहीं -->
+    <string name="common_status_scheduled">निर्धारित</string>
+    <string name="common_status_skipped">छोड़ा गया</string>
+    <string name="common_undo">पूर्ववत करें</string>
+    <string name="common_username_handle">@%1$s</string>
+    <string name="common_when">कब</string>
+
+    <!-- ── feedback ─────────────────────────────────────────────── -->
+    <string name="feedback_attachment_cd">अटैचमेंट %1$s</string>
+    <string name="feedback_attachment_fallback_name">अटैचमेंट</string>
+    <string name="feedback_body_cd">फ़ीडबैक विवरण</string>
+    <string name="feedback_body_label">क्या हो रहा है?</string>
+    <string name="feedback_category_bug">बग</string>
+    <string name="feedback_category_cd">श्रेणी</string>
+    <string name="feedback_category_idea">आइडिया</string>
+    <string name="feedback_category_other">अन्य</string>
+    <string name="feedback_category_question">सवाल</string>
+    <string name="feedback_error_presign_failed">अटैचमेंट तैयार नहीं हो सके। फिर से कोशिश करें।</string>
+    <string name="feedback_error_send_failed">फ़ीडबैक नहीं भेजा जा सका (%1$d)।</string>
+    <string name="feedback_error_upload_failed">अटैचमेंट अपलोड नहीं हो सका (%1$d)।</string>
+    <string name="feedback_offline_note">आप ऑफ़लाइन हैं — भेजने के लिए फिर से कनेक्ट करें। कुछ भी क़तार में नहीं रखा गया।</string>
+    <string name="feedback_status_cd">फ़ीडबैक की स्थिति</string>
+    <string name="feedback_subject_label">विषय</string>
+    <string name="feedback_submit_sending">भेजा जा रहा है…</string>
+    <string name="feedback_title">फ़ीडबैक भेजें</string>
+
+    <!-- ── inbox ─────────────────────────────────────────────── -->
+    <string name="inbox_add_task">कार्य जोड़ें</string>
+    <string name="inbox_dismissed_snackbar">“%1$s” ख़ारिज किया गया</string>
+    <plurals name="inbox_draft_count">
+        <item quantity="one">%1$d ड्राफ़्ट</item>
+        <item quantity="other">%1$d ड्राफ़्ट</item>
+    </plurals>
+    <string name="inbox_draft_eyebrow">ड्राफ़्ट किया गया</string>
+    <!-- देवनागरी में केस नहीं — caps सिबलिंग वही टेक्स्ट -->
+    <string name="inbox_draft_eyebrow_caps">ड्राफ़्ट किया गया</string>
+    <string name="inbox_due_date_time">%1$s, %2$s तक</string>
+    <string name="inbox_empty_body">मन की बात के ड्राफ़्ट यहाँ आते हैं ताकि आप उनकी समीक्षा कर सकें। मन की बात बोलें और Deferno उसे इस सूची के लिए ड्राफ़्ट कार्यों में बदल देगा।</string>
+    <!-- 'Inbox zero' मुहावरे का भाव — 'सब निपट गया' -->
+    <string name="inbox_empty_title">इनबॉक्स एकदम खाली</string>
+    <string name="inbox_error_couldnt_save_task">यह कार्य सेव नहीं हो सका।</string>
+    <string name="inbox_footer_reassurance">अपनी रफ़्तार से निपटाएँ — कुछ भी खोता नहीं।</string>
+    <string name="inbox_header_subtitle">हर एक की समीक्षा करें — उसे कार्य के रूप में जोड़ें, या ख़ारिज करें। कुछ भी हटाया नहीं जाता।</string>
+    <string name="inbox_section_waiting">आपकी प्रतीक्षा में</string>
+    <string name="inbox_section_waiting_caps">आपकी प्रतीक्षा में</string>
+
+    <!-- ── new ─────────────────────────────────────────────── -->
+    <string name="new_create_task">कार्य बनाएँ</string>
+    <string name="new_date_cd">तारीख़</string>
+    <!-- ISO उदाहरण का स्वरूप वही रहे — पार्सर ISO इनपुट चाहता है -->
+    <string name="new_date_label">तारीख़ (वैकल्पिक, जैसे 2026-06-08)</string>
+    <string name="new_deadline_time_cd">नियत समय</string>
+    <string name="new_dictation_denied">बोलकर लिखने के लिए माइक्रोफ़ोन की अनुमति चाहिए। अनुमति देने के लिए माइक पर टैप करें।</string>
+    <string name="new_dictation_denied_permanent">बोलकर लिखने के लिए माइक्रोफ़ोन की अनुमति चाहिए, जो इस ऐप के लिए बंद है।</string>
+    <string name="new_dictation_denied_permanent_desktop">बोलकर लिखने के लिए माइक्रोफ़ोन की अनुमति चाहिए, जो Deferno के लिए बंद है।</string>
+    <string name="new_dictation_denied_short">बोलकर लिखने के लिए माइक्रोफ़ोन की अनुमति चाहिए।</string>
+    <string name="new_dictation_error">सुनाई नहीं दिया — माइक फिर से आज़माएँ।</string>
+    <!-- macOS ऐप का नाम — जस का तस -->
+    <string name="new_dictation_open_system_settings">System Settings खोलें</string>
+    <string name="new_dictation_status_cd">बोलकर लिखने की स्थिति</string>
+    <string name="new_error_could_not_save">सेव नहीं हो सका।</string>
+    <string name="new_error_could_not_save_retry">सेव नहीं हो सका। फिर से कोशिश करें।</string>
+    <string name="new_event_end_cd">इवेंट का समापन</string>
+    <string name="new_event_end_label">समाप्त होता है (वैकल्पिक)</string>
+    <string name="new_event_start_cd">इवेंट की शुरुआत</string>
+    <string name="new_event_start_label">शुरू होता है (जैसे 2026-06-08T09:00:00Z)</string>
+    <!-- ‘नया’ = इसी स्क्रीन का नाम (shell_new) -->
+    <string name="new_kind_note">प्रकार यहाँ आप चुनते हैं — ‘नया’ पर Deferno कभी इसका अंदाज़ा नहीं लगाता।</string>
+    <string name="new_kind_picker_cd">प्रकार चुनने का विकल्प</string>
+    <string name="new_kind_section">किस तरह की चीज़?</string>
+    <string name="new_mic_dictate_cd">बोलकर लिखें</string>
+    <string name="new_mic_stop_dictation_cd">बोलकर लिखना रोकें</string>
+    <string name="new_notes_label">नोट्स</string>
+    <string name="new_notes_section">नोट्स · वैकल्पिक</string>
+    <string name="new_offline_note">आप ऑफ़लाइन हैं — सेव करने के लिए फिर से कनेक्ट करें। कुछ भी क़तार में नहीं रखा गया।</string>
+    <string name="new_saves_online_eyebrow">ऑनलाइन सेव होता है · बाद में आप कुछ भी बदल सकते हैं</string>
+    <string name="new_submit_create">बनाएँ</string>
+    <string name="new_submit_saving">सेव हो रहा है…</string>
+    <string name="new_time_label">समय (वैकल्पिक, जैसे 14:30)</string>
+    <string name="new_title_label">शीर्षक</string>
+
+    <!-- ── plan ─────────────────────────────────────────────── -->
+    <!-- 'Forest/वन' = सभी पेड़ों का उत्पाद-रूपक — 'पेड़' के साथ संगत -->
+    <string name="plan_add_from_forest">वन से जोड़ें</string>
+    <string name="plan_back_to_today">‹ आज</string>
+    <string name="plan_choose_task_click_label">%1$s चुनें</string>
+    <!-- java.time पैटर्न — Plan के Today-हेडर की तारीख़; "सोम, 16 जून" (View का uppercase देवनागरी पर असर नहीं करता) -->
+    <string name="plan_header_date_pattern">EEE, d MMM</string>
+    <!-- तारीख़ के बाद इनलाइन आता है -->
+    <string name="plan_deadline_anytime">किसी भी समय</string>
+    <string name="plan_empty_body">आज के लिए कुछ भी निर्धारित नहीं। जब मन हो तब कुछ जोड़ें — कोई जल्दी नहीं।</string>
+    <string name="plan_empty_title">आपकी योजना खाली है</string>
+    <string name="plan_exit_focus">⌄ फ़ोकस से बाहर</string>
+    <string name="plan_focus_done">हो गया — अगला कदम</string>
+    <string name="plan_focus_pause">रोकें · जब भी ज़रूरत हो, विराम लें</string>
+    <string name="plan_focus_subtitle">बस यही। बाक़ी सब अभी अलग रखा है।</string>
+    <plurals name="plan_need_attention">
+        <item quantity="one">%1$d को ध्यान चाहिए</item>
+        <item quantity="other">%1$d को ध्यान चाहिए</item>
+    </plurals>
+    <string name="plan_nothing_overdue">कुछ भी लंबित नहीं</string>
+    <string name="plan_pick_for_me">मेरे लिए चुनें</string>
+    <string name="plan_rather_not_decide">अभी तय नहीं करना चाहते?</string>
+    <string name="plan_refreshing">आपकी योजना रीफ़्रेश हो रही है…</string>
+    <string name="plan_see_everything">सब कुछ देखें</string>
+    <string name="plan_start_with_title">शुरू करें · %1$s</string>
+    <string name="plan_suggested_chip">सुझाया गया</string>
+    <string name="plan_suggestion_eyebrow">पक्का न हो, तो यहाँ से शुरू करें</string>
+    <string name="plan_suggestion_eyebrow_caps">पक्का न हो, तो यहाँ से शुरू करें</string>
+    <plurals name="plan_today_subtitle">
+        <item quantity="one">आपका चुना %1$d पेड़। जहाँ से ठीक लगे, वहीं से शुरू करें।</item>
+        <item quantity="other">आपके चुने %1$d पेड़। जहाँ से ठीक लगे, वहीं से शुरू करें।</item>
+    </plurals>
+    <string name="plan_today_title">आज</string>
+    <!-- 'मैं' = ऐप की आवाज़ — सौम्य लहज़ा -->
+    <string name="plan_whats_next_subtitle">फ़ैसला आपका है। जो भी करने लायक़ लगे, उस पर टैप करें — मैंने बस कुछ सुझाव सजा दिए हैं।</string>
+    <string name="plan_whats_next_title">आगे क्या?</string>
+    <string name="plan_why_pinned">आपने कहा था कि यह मायने रखता है</string>
+    <string name="plan_why_quick_win">एक छोटी जीत, अगर रफ़्तार चाहिए</string>
+    <string name="plan_your_day_section">आपका दिन</string>
+    <string name="plan_your_day_section_caps">आपका दिन</string>
+
+    <!-- ── profile ─────────────────────────────────────────────── -->
+    <string name="profile_account_active_label">सक्रिय खाता</string>
+    <string name="profile_account_credential_label">क्रेडेंशियल</string>
+    <string name="profile_account_stored_on_device">केवल इसी डिवाइस पर संग्रहीत।</string>
+    <string name="profile_account_time_zone_default">डिवाइस डिफ़ॉल्ट</string>
+    <string name="profile_account_time_zone_label">समय क्षेत्र</string>
+    <string name="profile_admin_chip">एडमिन</string>
+    <string name="profile_loading">आपकी प्रोफ़ाइल लोड हो रही है…</string>
+    <string name="profile_org_label">संगठन</string>
+    <string name="profile_org_personal_chip">व्यक्तिगत</string>
+    <string name="profile_session_expired_body">इस खाते का आपका साइन-इन समाप्त हो गया है। अपनी जानकारी रीफ़्रेश करने के लिए फिर से साइन इन करें।</string>
+    <string name="profile_sign_out_confirm_body">इससे यह खाता और इसका डेटा इस डिवाइस से हट जाएगा। इसे यहाँ फिर से इस्तेमाल करने के लिए आपको दोबारा साइन इन करना होगा।</string>
+    <string name="profile_sign_out_confirm_title">%1$s से साइन आउट करें?</string>
+    <string name="profile_unavailable_body">आपकी प्रोफ़ाइल की जानकारी लोड नहीं हो सकी। अपना कनेक्शन जाँचकर फिर से कोशिश करें।</string>
+
+    <!-- ── search ─────────────────────────────────────────────── -->
+    <string name="search_add_tag_button">टैग जोड़ें</string>
+    <string name="search_add_tag_label">कोई टैग जोड़ें</string>
+    <string name="search_apply_filters">फ़िल्टर लागू करें</string>
+    <string name="search_clear_a11y">खोज साफ़ करें</string>
+    <!-- पैटर्न टोकन जस का तस (इनपुट फ़ॉर्मैट) -->
+    <string name="search_date_from_label">से (YYYY-MM-DD)</string>
+    <string name="search_date_to_label">तक (YYYY-MM-DD)</string>
+    <string name="search_field_label">कार्य खोजें</string>
+    <string name="search_filter_date_range">तारीख़ की सीमा</string>
+    <string name="search_filter_sort">क्रम</string>
+    <string name="search_filter_tags">टैग</string>
+    <string name="search_filters">फ़िल्टर</string>
+    <string name="search_initial_body">शीर्षक से कुछ भी खोजने के लिए कम से कम दो अक्षर लिखें।</string>
+    <string name="search_initial_body_desktop">शीर्षक या विवरण से कार्य खोजने के लिए कम से कम दो अक्षर लिखें।</string>
+    <string name="search_initial_title">अपने पेड़ों में खोजें</string>
+    <string name="search_initial_title_desktop">अपने कार्यों में खोजें</string>
+    <string name="search_label_chip_format">#%1$s</string>
+    <string name="search_no_matches_body">आपकी खोज से कुछ नहीं मिला। कोई और शब्द या कम फ़िल्टर आज़माएँ।</string>
+    <string name="search_no_matches_title">कोई मिलान नहीं</string>
+    <string name="search_placeholder_trees">अपने सभी पेड़ों में खोजें…</string>
+    <string name="search_remove_tag_a11y">टैग %1$s निकालें</string>
+    <string name="search_reset">रीसेट करें</string>
+    <string name="search_reset_filters_a11y">फ़िल्टर रीसेट करें</string>
+    <string name="search_searching">खोजा जा रहा है…</string>
+    <string name="search_section_status">स्थिति</string>
+    <string name="search_sort_a11y">क्रम: %1$s। बदलने के लिए टैप करें।</string>
+    <string name="search_sort_best_match">सबसे अच्छा मिलान</string>
+    <string name="search_sort_biggest_attachments">सबसे बड़े अटैचमेंट</string>
+    <string name="search_sort_soonest_due">सबसे पहले नियत</string>
+    <!-- A–Z संकेत लैटिन-विशिष्ट — hi में सिर्फ़ 'शीर्षक' -->
+    <string name="search_sort_title_asc">शीर्षक</string>
+    <string name="search_when_any_time">किसी भी समय</string>
+    <!-- केवल खोज-फ़िल्टर में — तथ्यात्मक, बिना दोषारोपण -->
+    <string name="search_when_overdue">समय बीत चुका</string>
+    <string name="search_when_this_week">इस सप्ताह</string>
+
+    <!-- ── settings ─────────────────────────────────────────────── -->
+    <string name="settings_agent_engine_deferno_cloud">Deferno क्लाउड AI</string>
+    <string name="settings_agent_engine_off">बंद</string>
+    <string name="settings_agent_engine_on_device_basics">डिवाइस पर बुनियादी</string>
+    <!-- AI-सहमति पाठ — on-device बनाम off-device का भेद ठीक वैसा ही रखा गया है -->
+    <string name="settings_agent_intro">एजेंट मन की बात को ड्राफ़्ट कार्यों में बदल सकता है और आपकी योजना में बदलाव सुझा सकता है। चुनें कि यह कौन-सा इंजन इस्तेमाल करे — या इसे बंद रखें। डिवाइस पर चलने वाला इंजन आपका टेक्स्ट इसी डिवाइस पर रखता है; Deferno का क्लाउड AI प्रस्ताव बनाने के लिए इसे आपके डिवाइस से बाहर भेजता है (कुछ भी सेव होने से पहले आप हमेशा समीक्षा करते हैं)। यह डिफ़ॉल्ट रूप से बंद है, और यह चुनाव इसी डिवाइस पर रहता है, आपके खाते से सिंक नहीं होता।</string>
+    <!-- सहमति-संबंधी — सटीक रखें -->
+    <string name="settings_agent_note_cloud">आपका टेक्स्ट डिवाइस से बाहर Deferno के होस्ट किए गए AI को भेजता है</string>
+    <string name="settings_agent_note_on_device">इसी डिवाइस पर चलता है</string>
+    <string name="settings_agent_note_premium">प्रीमियम — आपके खाते के लिए अभी उपलब्ध नहीं</string>
+    <string name="settings_agent_off_note">एजेंट बंद रहता है। कुछ भी कहीं नहीं भेजा जाता।</string>
+    <string name="settings_appearance_mode_section">मोड</string>
+    <string name="settings_appearance_theme_section">थीम</string>
+    <string name="settings_category_account">खाता</string>
+    <string name="settings_category_agent">एजेंट</string>
+    <string name="settings_category_app_permissions">ऐप अनुमतियाँ</string>
+    <string name="settings_category_appearance">दिखावट</string>
+    <string name="settings_category_assistant">सहायक</string>
+    <string name="settings_category_data_privacy">डेटा और निजता</string>
+    <string name="settings_category_help_feedback">सहायता और फ़ीडबैक</string>
+    <string name="settings_category_integrations">इंटीग्रेशन</string>
+    <string name="settings_category_legal">क़ानूनी</string>
+    <string name="settings_category_security_2fa">सुरक्षा और 2FA</string>
+    <string name="settings_category_speech_engine">स्पीच इंजन</string>
+    <string name="settings_category_storage">स्टोरेज</string>
+    <string name="settings_category_task_behavior">कार्य व्यवहार</string>
+    <string name="settings_coming_soon_assistant_body">सहायक फ़िलहाल iPhone पर उपलब्ध है। यह जल्द ही Android पर आ रहा है।</string>
+    <string name="settings_coming_soon_integrations_body">Deferno को अपने दूसरे टूल से जोड़ें। इंटीग्रेशन जल्द आ रहे हैं।</string>
+    <string name="settings_coming_soon_security_body">टू-फ़ैक्टर ऑथेंटिकेशन और सुरक्षा आपके पहचान प्रदाता द्वारा प्रबंधित हैं। हम ये नियंत्रण जल्द ही ऐप में लाएँगे।</string>
+    <string name="settings_coming_soon_title">जल्द आ रहा है</string>
+    <string name="settings_data_export_button">अपना डेटा एक्सपोर्ट करें</string>
+    <string name="settings_data_export_description">अपने कार्यों और सूचियों को बैकअप फ़ाइल के रूप में एक्सपोर्ट करें, जिसे आप सेव या साझा कर सकते हैं।</string>
+    <string name="settings_data_export_menu_export">एक्सपोर्ट करें</string>
+    <string name="settings_data_export_menu_full_backup">पूरा बैकअप — जल्द आ रहा है</string>
+    <string name="settings_data_export_web_button">अपना डेटा एक्सपोर्ट या इंपोर्ट करें</string>
+    <string name="settings_data_export_web_description">एक्सपोर्ट और इंपोर्ट Deferno वेब ऐप में चलते हैं — अभी ऐप के भीतर यह सुविधा नहीं है। अपना डेटा प्रबंधित करने के लिए वेब ऐप खोलें।</string>
+    <string name="settings_data_your_data_section">आपका डेटा</string>
+    <string name="settings_done_visibility_always">हमेशा</string>
+    <string name="settings_done_visibility_dashboard">डैशबोर्ड पर</string>
+    <string name="settings_done_visibility_description">पूर्ण हो चुके आइटम कितने समय तक दिखते रहें।</string>
+    <string name="settings_done_visibility_everywhere">हर जगह</string>
+    <string name="settings_done_visibility_one_day">1 दिन</string>
+    <string name="settings_done_visibility_one_week">1 सप्ताह</string>
+    <string name="settings_done_visibility_section">पूर्ण आइटम की दृश्यता</string>
+    <string name="settings_done_visibility_three_days">3 दिन</string>
+    <string name="settings_help_feedback_intro">कोई सवाल, बग या सुझाव है? इसे सीधे Deferno टीम को भेजें — मदद हो तो फ़ाइलें भी अटैच करें।</string>
+    <string name="settings_legal_account_removal_email_body">नमस्ते,
+
+मैं अपने Deferno खाते और उससे जुड़े डेटा को हटाने का अनुरोध करना चाहता/चाहती हूँ।
+
+खाते का ईमेल:
+
+धन्यवाद।</string>
+    <string name="settings_legal_account_removal_email_subject">खाता हटाने का अनुरोध</string>
+    <string name="settings_legal_open_source_body">Deferno ओपन-सोर्स सॉफ़्टवेयर पर बना है — इसके रचनाकारों का आभार।</string>
+    <string name="settings_legal_open_source_section">ओपन सोर्स</string>
+    <string name="settings_legal_privacy_body">आपका डेटा आपका ही रहता है। हम इसे कभी नहीं बेचते। पूरी निजता नीति वेब पर देखें।</string>
+    <string name="settings_legal_privacy_policy_title">निजता नीति</string>
+    <string name="settings_legal_privacy_section">निजता</string>
+    <string name="settings_legal_terms_body">Deferno का उपयोग करके आप हमारी सेवा की शर्तों और स्वीकार्य-उपयोग नीति से सहमत होते हैं।</string>
+    <string name="settings_legal_terms_section">सेवा की शर्तें</string>
+    <string name="settings_legal_view_privacy_button">निजता नीति देखें</string>
+    <string name="settings_legal_view_terms_button">सेवा की शर्तें देखें</string>
+    <string name="settings_permissions_intro">Deferno की सूचनाएँ, स्टोरेज और अन्य अनुमतियाँ अपने डिवाइस की सेटिंग्स में प्रबंधित करें।</string>
+    <string name="settings_permissions_open_button">ऐप सेटिंग्स खोलें</string>
+    <string name="settings_privacy_analytics_description">गुमनाम उपयोग डेटा साझा करके Deferno को बेहतर बनाने में मदद करें।</string>
+    <string name="settings_privacy_analytics_label">एनालिटिक्स और ट्रैकिंग</string>
+    <string name="settings_row_summary_unavailable">%1$s · उपलब्ध नहीं</string>
+    <string name="settings_security_open_console_button">सुरक्षा कंसोल खोलें</string>
+    <string name="settings_speech_engine_android_native">Android (डिवाइस पर)</string>
+    <string name="settings_speech_engine_automatic">स्वचालित</string>
+    <string name="settings_speech_engine_system_dictation">सिस्टम डिक्टेशन</string>
+    <!-- 'Whisper' मॉडल का नाम — जस का तस -->
+    <string name="settings_speech_engine_whisper">Whisper</string>
+    <string name="settings_speech_engine_whisper_on_device">Whisper (डिवाइस पर)</string>
+    <string name="settings_speech_intro">चुनें कि बोलकर लिखना आपकी आवाज़ को टेक्स्ट में कैसे बदले। यह इसी डिवाइस पर रहता है और आपके खाते से सिंक नहीं होता।</string>
+    <string name="settings_speech_note_automatic">इस डिवाइस पर उपलब्ध सबसे अच्छा इंजन इस्तेमाल करें</string>
+    <string name="settings_speech_note_downloading">डाउनलोड हो रहा है…</string>
+    <string name="settings_speech_note_no_engine">इस डिवाइस पर उपलब्ध नहीं</string>
+    <string name="settings_speech_note_preparing">तैयार हो रहा है…</string>
+    <string name="settings_speech_note_unsupported_locale">आपकी भाषा के लिए उपलब्ध नहीं</string>
+    <string name="settings_storage_intro">चुनें कि आपके अटैचमेंट कहाँ संग्रहीत हों। ‘डिवाइस पर’ फ़ाइलें इसी डिवाइस पर रखता है और ऑफ़लाइन काम करता है। यह चुनाव इसी डिवाइस पर रहता है और आपके खाते से सिंक नहीं होता। (टीम को भेजा गया फ़ीडबैक हमेशा Deferno पर अपलोड होता है ताकि हम उसे देख सकें।)</string>
+    <string name="settings_storage_keep_recordings_description">मन की बात स्वीकार करने पर मूल आवाज़ की रिकॉर्डिंग इसी डिवाइस पर सेव करें, ताकि आप बाद में उसे सुन सकें।</string>
+    <string name="settings_storage_keep_recordings_label">मन की बात की रिकॉर्डिंग रखें</string>
+    <string name="settings_storage_note_coming_later">बाद में आ रहा है</string>
+    <string name="settings_storage_note_deferno_backend">फ़ाइलें Deferno के सर्वर पर रखता है</string>
+    <string name="settings_storage_note_on_device">फ़ाइलें इसी डिवाइस पर रखता है; ऑफ़लाइन काम करता है</string>
+    <string name="settings_storage_provider_deferno_backend">Deferno बैकएंड</string>
+    <!-- ब्रांड — अनुवाद नहीं -->
+    <string name="settings_storage_provider_dropbox">Dropbox</string>
+    <!-- ब्रांड — अनुवाद नहीं -->
+    <string name="settings_storage_provider_google_drive">Google Drive</string>
+    <string name="settings_storage_provider_on_device">डिवाइस पर</string>
+    <string name="settings_task_behavior_drag_drop_description">कार्यों को खींचकर उनका क्रम बदलें। इसे अभी और निखारा जा रहा है।</string>
+    <string name="settings_task_behavior_drag_drop_label">ड्रैग और ड्रॉप (प्रायोगिक)</string>
+    <string name="settings_task_behavior_shake_undo_description">आख़िरी कार्य-मूव को पूर्ववत करने के लिए फ़ोन हिलाएँ। पहले आपसे पुष्टि माँगी जाएगी।</string>
+    <string name="settings_task_behavior_shake_undo_label">हिलाकर पूर्ववत करें</string>
+    <!-- थीम नाम — ब्रांड, अनुवाद नहीं -->
+    <string name="settings_theme_family_deferno">Deferno</string>
+    <!-- थीम नाम — अनुवाद नहीं -->
+    <string name="settings_theme_family_mono">Mono</string>
+    <string name="settings_theme_mode_dark">डार्क</string>
+    <string name="settings_theme_mode_follow_system">सिस्टम के अनुसार</string>
+    <string name="settings_theme_mode_light">लाइट</string>
+
+    <!-- ── shell ─────────────────────────────────────────────── -->
+    <string name="shell_close_menu_cd">मेन्यू बंद करें</string>
+    <string name="shell_coming_soon_body">यह जगह आरक्षित है — इसकी सुविधाएँ आने वाले रिलीज़ में आएँगी।</string>
+    <string name="shell_coming_soon_body_desktop">यह जगह आरक्षित है — इसका डेस्कटॉप व्यू आने वाले रिलीज़ में आएगा।</string>
+    <string name="shell_coming_soon_title">%1$s जल्द आ रहा है</string>
+    <string name="shell_destination_activity">गतिविधि</string>
+    <string name="shell_destination_assistant">सहायक</string>
+    <string name="shell_destination_calendar">कैलेंडर</string>
+    <string name="shell_destination_inbox">इनबॉक्स</string>
+    <string name="shell_destination_plan">योजना</string>
+    <string name="shell_destination_profile">प्रोफ़ाइल</string>
+    <string name="shell_destination_settings">सेटिंग्स</string>
+    <string name="shell_destination_tasks">कार्य</string>
+    <string name="shell_drawer_add_something">कुछ जोड़ें</string>
+    <!-- देवनागरी में केस नहीं — caps सिबलिंग वही टेक्स्ट -->
+    <string name="shell_drawer_add_something_eyebrow">कुछ जोड़ें</string>
+    <!-- 'इनबॉक्स' shell_destination_inbox से मेल खाता है -->
+    <string name="shell_drawer_brain_dump_subtitle">बोलें या लिखें — इनबॉक्स में जाता है</string>
+    <string name="shell_drawer_capture_cd">%1$s। %2$s</string>
+    <string name="shell_drawer_new_task">नया कार्य</string>
+    <string name="shell_drawer_new_task_subtitle">विवरण भरें</string>
+    <string name="shell_inbox_badge_empty">खाली</string>
+    <string name="shell_menu_cd">मेन्यू</string>
+    <string name="shell_menu_file">फ़ाइल</string>
+    <string name="shell_menu_help">सहायता</string>
+    <string name="shell_menu_new">नया…</string>
+    <string name="shell_menu_quit">बाहर निकलें</string>
+    <string name="shell_menu_search">खोजें…</string>
+    <string name="shell_menu_selected_mark">✓</string>
+    <string name="shell_menu_view">दृश्य</string>
+    <string name="shell_new">नया</string>
+    <string name="shell_overlay_placeholder_body">शेल ओवरले रूट जुड़ा हुआ है — खोज और नया इसके ऊपर असली सामग्री दिखाते हैं।</string>
+    <string name="shell_overlay_placeholder_body_desktop">यह सतह डेस्कटॉप पर आने वाले रिलीज़ में आएगी।</string>
+    <string name="shell_overlay_placeholder_title">ओवरले</string>
+    <string name="shell_select_account">खाता चुनें</string>
+    <string name="shell_shortcut_destination">Ctrl+%1$d</string>
+    <string name="shell_shortcut_new">Ctrl+N</string>
+    <string name="shell_shortcut_quit">Ctrl+Q</string>
+    <string name="shell_shortcut_refresh">Ctrl+R</string>
+    <string name="shell_shortcut_search">Ctrl+F</string>
+    <string name="shell_signed_in">साइन इन</string>
+    <string name="shell_signed_in_as_cd">%1$s के रूप में साइन इन</string>
+    <string name="shell_switch_account_cd">खाता बदलें</string>
+    <string name="shell_toolbar_new">+ नया</string>
+    <string name="shell_window_title_destination">Deferno — %1$s</string>
+
+    <!-- ── tasks ─────────────────────────────────────────────── -->
+    <string name="tasks_add_subtask_dialog_title">उपकार्य जोड़ें</string>
+    <string name="tasks_add_subtask_placeholder">%1$s का उपकार्य</string>
+    <string name="tasks_badge_blocker">अवरोधक</string>
+    <string name="tasks_badge_blocker_a11y">अन्य आइटम को रोकता है</string>
+    <string name="tasks_delete_item_confirm_title">“%1$s” हटाएँ?</string>
+    <string name="tasks_detail_add_caption">कैप्शन जोड़ें</string>
+    <string name="tasks_detail_add_comment_placeholder">टिप्पणी जोड़ें…</string>
+    <string name="tasks_detail_add_file">फ़ाइल जोड़ें</string>
+    <string name="tasks_detail_add_label_placeholder">लेबल जोड़ें…</string>
+    <string name="tasks_detail_add_subtask_placeholder">उपकार्य जोड़ें…</string>
+    <string name="tasks_detail_attachment_meta">%1$s · %2$s</string>
+    <string name="tasks_detail_attachment_meta_on_device">%1$s · %2$s · डिवाइस पर</string>
+    <string name="tasks_detail_caption_placeholder">कैप्शन</string>
+    <string name="tasks_detail_clear_due_date_a11y">नियत तिथि हटाएँ</string>
+    <string name="tasks_detail_comment_author_member">सदस्य</string>
+    <string name="tasks_detail_comment_author_you">आप</string>
+    <string name="tasks_detail_comment_edited">(संपादित)</string>
+    <string name="tasks_detail_comments_error">टिप्पणियाँ लोड नहीं हो सकीं। बाद में खींचकर रीफ़्रेश करें।</string>
+    <string name="tasks_detail_delete_attachment_a11y">%1$s हटाएँ</string>
+    <string name="tasks_detail_delete_confirm_title">यह कार्य हटाएँ?</string>
+    <string name="tasks_detail_due_date_a11y">नियत तिथि: %1$s। बदलने के लिए टैप करें।</string>
+    <string name="tasks_detail_edit_caption">कैप्शन संपादित करें</string>
+    <string name="tasks_detail_edit_caption_a11y">%1$s का कैप्शन संपादित करें</string>
+    <string name="tasks_detail_encrypted_comment">🔒 एन्क्रिप्टेड टिप्पणी</string>
+    <string name="tasks_detail_loading">विवरण लोड हो रहा है…</string>
+    <string name="tasks_detail_more_actions">अन्य क्रियाएँ</string>
+    <string name="tasks_detail_no_attachments">कोई अटैचमेंट नहीं।</string>
+    <string name="tasks_detail_no_comments">अभी कोई टिप्पणी नहीं।</string>
+    <string name="tasks_detail_no_description">अभी कोई विवरण नहीं।</string>
+    <string name="tasks_detail_not_found_body">हो सकता है यह कार्य हटाया जा चुका हो। अपनी सूची पर वापस जाएँ।</string>
+    <string name="tasks_detail_not_found_title">कार्य नहीं मिला</string>
+    <string name="tasks_detail_pane_empty_body">बाईं ओर से कोई कार्य चुनें — उसका विवरण यहाँ दिखेगा।</string>
+    <string name="tasks_detail_pane_empty_title">कुछ खुला नहीं</string>
+    <string name="tasks_detail_play">चलाएँ</string>
+    <string name="tasks_detail_play_attachment_a11y">%1$s चलाएँ</string>
+    <string name="tasks_detail_post">पोस्ट करें</string>
+    <string name="tasks_detail_posting">पोस्ट हो रहा है…</string>
+    <string name="tasks_detail_property_due">नियत तिथि</string>
+    <string name="tasks_detail_property_owner">स्वामी</string>
+    <string name="tasks_detail_property_source">स्रोत</string>
+    <string name="tasks_detail_property_time">समय</string>
+    <string name="tasks_detail_remove_caption_a11y">%1$s का कैप्शन निकालें</string>
+    <string name="tasks_detail_remove_label_a11y">लेबल %1$s निकालें</string>
+    <string name="tasks_detail_section_activity">गतिविधि</string>
+    <string name="tasks_detail_section_attachments">अटैचमेंट</string>
+    <string name="tasks_detail_section_properties">गुण</string>
+    <string name="tasks_detail_section_subtasks">उपकार्य</string>
+    <string name="tasks_detail_set_due_date">नियत तिथि सेट करें</string>
+    <string name="tasks_detail_set_working_state_a11y">%1$s पर सेट करें</string>
+    <string name="tasks_detail_source_open_in">%1$s में खोलें</string>
+    <string name="tasks_detail_source_row_a11y">स्रोत: %1$s, %2$s। %1$s में खुलता है।</string>
+    <string name="tasks_detail_source_row_no_link_a11y">स्रोत: %1$s, %2$s</string>
+    <string name="tasks_detail_subtask_mark_done_a11y">“%1$s” को पूर्ण चिह्नित करें</string>
+    <string name="tasks_detail_subtask_mark_not_done_a11y">“%1$s” को अपूर्ण चिह्नित करें</string>
+    <string name="tasks_detail_subtask_progress_a11y">%2$d में से %1$d उपकार्य पूर्ण</string>
+    <string name="tasks_detail_title">विवरण</string>
+    <string name="tasks_detail_uploading">अपलोड हो रहा है…</string>
+    <string name="tasks_detail_working_state_current_a11y">%1$s, वर्तमान कार्य-स्थिति</string>
+    <string name="tasks_detail_working_state_heading">कार्य-स्थिति</string>
+    <!-- संभवतः translatable=false -->
+    <string name="tasks_external_ref_prefix">[%1$s#%2$d]</string>
+    <string name="tasks_filter_active">सक्रिय</string>
+    <!-- tasks_tree_filtered_empty_body में संदर्भित — मेल में रखें -->
+    <string name="tasks_filter_all">सभी</string>
+    <string name="tasks_filter_in_today">आज में</string>
+    <string name="tasks_kind_a11y_chore">काम</string>
+    <string name="tasks_kind_a11y_event">इवेंट</string>
+    <string name="tasks_kind_a11y_habit">आदत</string>
+    <string name="tasks_kind_a11y_task">कार्य</string>
+    <!-- देवनागरी में केस नहीं — kind लेबल वही शब्द -->
+    <string name="tasks_kind_label_chore">काम</string>
+    <string name="tasks_kind_label_event">इवेंट</string>
+    <string name="tasks_kind_label_habit">आदत</string>
+    <string name="tasks_kind_label_task">कार्य</string>
+    <string name="tasks_menu_activate">सक्रिय करें</string>
+    <string name="tasks_menu_add_subtask">उपकार्य जोड़ें</string>
+    <string name="tasks_menu_add_to_plan">आज की योजना में जोड़ें</string>
+    <string name="tasks_menu_archive">संग्रहित करें</string>
+    <string name="tasks_menu_break_this_down">इसे छोटे हिस्सों में बाँटें</string>
+    <string name="tasks_menu_delete_permanent">हटाएँ (स्थायी!)</string>
+    <string name="tasks_menu_mark_done">पूर्ण चिह्नित करें</string>
+    <string name="tasks_menu_move">मूव करें</string>
+    <!-- क्रिया (खोलना) — tasks_working_state_open विशेषण से अलग -->
+    <string name="tasks_menu_open">खोलें</string>
+    <string name="tasks_menu_pin">पिन करें</string>
+    <string name="tasks_menu_remove_from_plan">आज की योजना से निकालें</string>
+    <string name="tasks_menu_start_working">काम शुरू करें</string>
+    <string name="tasks_menu_undo_move">मूव पूर्ववत करें</string>
+    <string name="tasks_menu_unpin">पिन हटाएँ</string>
+    <string name="tasks_move_down">नीचे ले जाएँ</string>
+    <string name="tasks_move_indent">इंडेंट करें</string>
+    <string name="tasks_move_operation_indent">इंडेंट</string>
+    <string name="tasks_move_operation_outdent">आउटडेंट</string>
+    <!-- tasks_undo_operation_confirm_title के वाक्य में बैठता है -->
+    <string name="tasks_move_operation_reorder">क्रम बदलाव</string>
+    <string name="tasks_move_outdent">आउटडेंट करें</string>
+    <string name="tasks_move_up">ऊपर ले जाएँ</string>
+    <string name="tasks_moved_snackbar">मूव किया गया</string>
+    <string name="tasks_progress_done">%2$d में से %1$d पूर्ण</string>
+    <string name="tasks_progress_fraction">%2$d में से %1$d</string>
+    <!-- सौम्य 'अलग रखें' — कभी 'छोड़ा/त्यागा' नहीं -->
+    <string name="tasks_set_aside">अलग रखें</string>
+    <string name="tasks_source_from_github">GitHub से</string>
+    <string name="tasks_source_from_google_calendar">Google Calendar से</string>
+    <string name="tasks_tree_actions_for_item">%1$s के लिए क्रियाएँ</string>
+    <string name="tasks_tree_add_tree">एक पेड़ जोड़ें</string>
+    <plurals name="tasks_tree_count">
+        <item quantity="one">%1$d पेड़</item>
+        <item quantity="other">%1$d पेड़</item>
+    </plurals>
+    <string name="tasks_tree_empty_body">जब आप कोई पेड़ जोड़ते हैं, तो वह यहाँ दिखता है। एक बार में एक छोटा कदम।</string>
+    <!-- 'पेड़' = task tree का उत्पाद-शब्द -->
+    <string name="tasks_tree_empty_title">अभी कोई पेड़ नहीं</string>
+    <!-- “सभी” tasks_filter_all से मेल खाता है -->
+    <string name="tasks_tree_filtered_empty_body">यहाँ सब कुछ पूर्ण है। इसे फिर से देखने के लिए “सभी” पर जाएँ।</string>
+    <string name="tasks_tree_filtered_empty_title">यहाँ दिखाने को कुछ नहीं</string>
+    <string name="tasks_tree_refreshing">रीफ़्रेश हो रहा है…</string>
+    <string name="tasks_tree_show_blocked">अवरुद्ध दिखाएँ</string>
+    <string name="tasks_tree_title">सब कुछ</string>
+    <string name="tasks_undo_operation_confirm_title">%1$s पूर्ववत करें?</string>
+    <!-- स्थिति-विशेषण (अभी शुरू नहीं) — tasks_menu_open क्रिया से अलग -->
+    <string name="tasks_working_state_open">खुला</string>
+
+    <!-- ── update ─────────────────────────────────────────────── -->
+    <string name="update_badge_available">अपडेट उपलब्ध</string>
+    <string name="update_check_action">अपडेट जाँचें…</string>
+    <string name="update_check_failed_fallback">अपडेट की जाँच नहीं हो सकी</string>
+    <string name="update_check_failed_status">अपडेट की जाँच नहीं हो सकी: %1$s</string>
+    <string name="update_checking">अपडेट की जाँच हो रही है…</string>
+    <string name="update_installing_status">%1$s इंस्टॉल हो रहा है — ऐप फिर से शुरू होगा</string>
+    <string name="update_restart_to_update">%1$s पर अपडेट करने के लिए फिर से शुरू करें</string>
+    <string name="update_unsupported_not_packaged">स्व-अपडेट इंस्टॉल किए गए ऐप में उपलब्ध है</string>
+    <string name="update_unsupported_other">स्वचालित अपडेट यहाँ उपलब्ध नहीं हैं</string>
+    <string name="update_unsupported_package_manager">अपडेट आपका पैकेज मैनेजर संभालता है</string>
+    <string name="update_up_to_date">आप अप-टू-डेट हैं</string>
+    <string name="update_updating">अपडेट हो रहा है…</string>
+    <string name="update_version_available">वर्शन %1$s उपलब्ध है</string>
+    <string name="update_version_line">%1$s %2$s</string>
+    <string name="update_view_releases">सभी रिलीज़ देखें…</string>
 </resources>

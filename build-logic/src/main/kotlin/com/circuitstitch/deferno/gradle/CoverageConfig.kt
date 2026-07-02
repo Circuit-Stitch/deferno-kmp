@@ -149,6 +149,11 @@ object CoverageConfig {
     /** Package globs excluded from coverage (generated DI contribution hints + platform glue). */
     val EXCLUDED_PACKAGES: List<String> = listOf(
         "amazon.lastmile.inject", // anvil contribution-hint classes
+        // The Compose-resources GENERATED accessors for the shared string catalog (l10n, 5 locales):
+        // ~575 one-line lazy accessors emitted by the Compose resources Gradle plugin (Res, String0…,
+        // Plurals0…, Drawable0…, Font0…). Generated plumbing, never hand-written logic — the same
+        // "measure logic, not boilerplate" carve-out as the DI graph (ADR-0006).
+        "com.circuitstitch.deferno.core.designsystem.resources",
         // The shared "See the trees" design-language atoms (#design): stateless, palette-adaptive
         // Compose Composables + their hand-built icon vectors. Thin UI glue exercised by Roborazzi
         // screenshots, not the headless JVM gate — same rationale as the designsystem theme above and

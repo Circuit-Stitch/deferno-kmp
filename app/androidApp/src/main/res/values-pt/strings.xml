@@ -1,0 +1,17 @@
+<resources>
+    <!-- app_name omitido de propósito — marca "Deferno", usa o fallback de values/ -->
+    <!-- Confirmação honesta e offline-first de uma App Action "adicionar tarefa":
+         a criação entra na fila e vai sincronizar — nunca "salva no servidor". -->
+    <string name="task_queued">“%1$s” adicionada — vai sincronizar</string>
+    <string name="visual_feedback_on">Feedback visual de áudio ativado</string>
+    <string name="visual_feedback_off">Feedback visual de áudio desativado</string>
+    <!-- Notificações do despejo de ideias (BrainDumpWorker): o nome do canal aparece
+         nas configurações de notificação do sistema. -->
+    <string name="braindump_notification_channel_name">Despejos de ideias</string>
+    <string name="braindump_notification_title">Despejo de ideias</string>
+    <plurals name="braindump_notification_drafts_ready">
+        <item quantity="one">%1$d rascunho pronto para revisar</item>
+        <item quantity="other">%1$d rascunhos prontos para revisar</item>
+    </plurals>
+    <string name="braindump_notification_recording_saved">Gravação salva para revisar</string>
+</resources>

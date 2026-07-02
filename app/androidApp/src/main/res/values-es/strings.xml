@@ -1,0 +1,15 @@
+<resources>
+    <!-- app_name omitido a propósito — la marca «Deferno» no se traduce (recurre a values/). -->
+    <!-- Confirmación honesta y sin conexión de una App Action «agregar tarea»: la creación queda
+         en cola y se sincronizará; nunca «guardada en el servidor». %1$s = título literal. -->
+    <string name="task_queued">Se agregó «%1$s» — se sincronizará</string>
+    <string name="visual_feedback_on">Indicador visual de audio activado</string>
+    <string name="visual_feedback_off">Indicador visual de audio desactivado</string>
+    <string name="braindump_notification_channel_name">Descargas mentales</string>
+    <string name="braindump_notification_title">Descarga mental</string>
+    <plurals name="braindump_notification_drafts_ready">
+        <item quantity="one">1 borrador listo para revisar</item>
+        <item quantity="other">%1$d borradores listos para revisar</item>
+    </plurals>
+    <string name="braindump_notification_recording_saved">Grabación guardada para revisar</string>
+</resources>
