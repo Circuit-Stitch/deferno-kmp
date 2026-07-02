@@ -53,6 +53,28 @@ import com.arkivanov.decompose.extensions.compose.lifecycle.LifecycleController
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.DevAccounts
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.about_version
+import com.circuitstitch.deferno.core.designsystem.resources.common_account
+import com.circuitstitch.deferno.core.designsystem.resources.common_app_name
+import com.circuitstitch.deferno.core.designsystem.resources.common_close
+import com.circuitstitch.deferno.core.designsystem.resources.common_refresh
+import com.circuitstitch.deferno.core.designsystem.resources.common_search
+import com.circuitstitch.deferno.core.designsystem.resources.common_sign_out
+import com.circuitstitch.deferno.core.designsystem.resources.shell_menu_file
+import com.circuitstitch.deferno.core.designsystem.resources.shell_menu_help
+import com.circuitstitch.deferno.core.designsystem.resources.shell_menu_new
+import com.circuitstitch.deferno.core.designsystem.resources.shell_menu_quit
+import com.circuitstitch.deferno.core.designsystem.resources.shell_menu_search
+import com.circuitstitch.deferno.core.designsystem.resources.shell_menu_selected_mark
+import com.circuitstitch.deferno.core.designsystem.resources.shell_menu_view
+import com.circuitstitch.deferno.core.designsystem.resources.shell_shortcut_destination
+import com.circuitstitch.deferno.core.designsystem.resources.shell_shortcut_new
+import com.circuitstitch.deferno.core.designsystem.resources.shell_shortcut_quit
+import com.circuitstitch.deferno.core.designsystem.resources.shell_shortcut_refresh
+import com.circuitstitch.deferno.core.designsystem.resources.shell_shortcut_search
+import com.circuitstitch.deferno.core.designsystem.resources.shell_toolbar_new
+import com.circuitstitch.deferno.core.designsystem.resources.shell_window_title_destination
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.di.AppComponent
@@ -94,6 +116,7 @@ import kotlinx.coroutines.swing.Swing
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import org.jetbrains.compose.resources.decodeToSvgPainter
+import org.jetbrains.compose.resources.stringResource
 import software.amazon.app.kmplogger.LogLevel
 import software.amazon.app.kmplogger.Logger
 
@@ -476,24 +499,36 @@ private fun DefernoMenuBar(
             modifier = Modifier.height(40.dp).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MenuBarMenu(label = "File") { dismiss ->
-                MenuRow(text = "Quit", shortcut = "Ctrl+Q") { dismiss(); onQuit() }
+            MenuBarMenu(label = stringResource(Res.string.shell_menu_file)) { dismiss ->
+                MenuRow(
+                    text = stringResource(Res.string.shell_menu_quit),
+                    shortcut = stringResource(Res.string.shell_shortcut_quit),
+                ) { dismiss(); onQuit() }
             }
-            MenuBarMenu(label = "View") { dismiss ->
+            MenuBarMenu(label = stringResource(Res.string.shell_menu_view)) { dismiss ->
                 destinations.forEachIndexed { index, destination ->
                     MenuRow(
                         text = destination.label,
-                        shortcut = "Ctrl+${index + 1}",
+                        shortcut = stringResource(Res.string.shell_shortcut_destination, index + 1),
                         selected = destination == activeDestination,
                     ) { dismiss(); main.selectDestination(destination) }
                 }
                 HorizontalDivider()
-                MenuRow(text = "New…", shortcut = "Ctrl+N") { dismiss(); main.openNew() }
-                MenuRow(text = "Search…", shortcut = "Ctrl+F") { dismiss(); main.openOverlay(OverlayRoute.Search()) }
+                MenuRow(
+                    text = stringResource(Res.string.shell_menu_new),
+                    shortcut = stringResource(Res.string.shell_shortcut_new),
+                ) { dismiss(); main.openNew() }
+                MenuRow(
+                    text = stringResource(Res.string.shell_menu_search),
+                    shortcut = stringResource(Res.string.shell_shortcut_search),
+                ) { dismiss(); main.openOverlay(OverlayRoute.Search()) }
                 HorizontalDivider()
-                MenuRow(text = "Refresh", shortcut = "Ctrl+R") { dismiss(); main.refreshActiveDestination() }
+                MenuRow(
+                    text = stringResource(Res.string.common_refresh),
+                    shortcut = stringResource(Res.string.shell_shortcut_refresh),
+                ) { dismiss(); main.refreshActiveDestination() }
             }
-            MenuBarMenu(label = "Account") { dismiss ->
+            MenuBarMenu(label = stringResource(Res.string.common_account)) { dismiss ->
                 // The Active-Account switcher (#68, ADR-0014): picking one re-keys the shell for that
                 // Account — fast user switching with no re-auth (ADR-0002/0012). Sign out emits
                 // SignOutRequested up to the root, which secure-wipes the Account (ADR-0009/0012).
@@ -506,9 +541,9 @@ private fun DefernoMenuBar(
                     }
                 }
                 if (accounts.isNotEmpty()) HorizontalDivider()
-                MenuRow(text = "Sign out") { dismiss(); main.signOut() }
+                MenuRow(text = stringResource(Res.string.common_sign_out)) { dismiss(); main.signOut() }
             }
-            MenuBarMenu(label = "Help") { dismiss ->
+            MenuBarMenu(label = stringResource(Res.string.shell_menu_help)) { dismiss ->
                 // Self-update (#103, ADR-0021): the running version, then a single state-driven row —
                 // "Check for updates…" / "Restart to update…" / "View all releases…" depending on the
                 // update state, plus an optional status line (up to date, available, error).
@@ -538,8 +573,8 @@ private fun DefernoMenuBar(
                     if (update.action == UpdateAction.INSTALL) onInstallUpdate()
                 }
             }
-            ToolbarAction(text = "Search") { main.openOverlay(OverlayRoute.Search()) }
-            ToolbarAction(text = "+ New") { main.openNew() }
+            ToolbarAction(text = stringResource(Res.string.common_search)) { main.openOverlay(OverlayRoute.Search()) }
+            ToolbarAction(text = stringResource(Res.string.shell_toolbar_new)) { main.openNew() }
         }
     }
 }
@@ -553,9 +588,9 @@ private fun DefernoMenuBar(
 private fun AboutDialog(version: String, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Deferno") },
-        text = { Text("Version $version") },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text(stringResource(Res.string.common_app_name)) },
+        text = { Text(stringResource(Res.string.about_version, version)) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_close)) } },
     )
 }
 
@@ -612,7 +647,7 @@ private fun MenuRow(
         onClick = onClick,
         enabled = enabled,
         leadingIcon = if (selected) {
-            { Text("✓") }
+            { Text(stringResource(Res.string.shell_menu_selected_mark)) }
         } else {
             null
         },
@@ -670,8 +705,9 @@ private fun MainShellComponent.refreshActiveDestination() {
 private fun rememberWindowTitle(root: RootComponent): String {
     val rootStack by root.stack.subscribeAsState()
     return when (val child = rootStack.active.instance) {
-        is RootComponent.Child.Auth -> "Deferno"
-        is RootComponent.Child.Main -> "Deferno — ${activeDestinationLabel(child.component)}"
+        is RootComponent.Child.Auth -> stringResource(Res.string.common_app_name)
+        is RootComponent.Child.Main ->
+            stringResource(Res.string.shell_window_title_destination, activeDestinationLabel(child.component))
     }
 }
 

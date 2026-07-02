@@ -35,13 +35,31 @@ sealed interface AcceptResult {
     data class Failed(val message: String) : AcceptResult
 }
 
+/** A gentle note after a non-accepting outcome — typed so the View can localize the fixed arms. */
+sealed interface InboxNote {
+    /** The create is queued behind connectivity — the View renders the localized "Reconnect to save". */
+    data object Offline : InboxNote
+
+    /** A server-authored error message — rendered verbatim (not client-localizable). */
+    data class ServerMessage(val text: String) : InboxNote
+}
+
+/** The English rendering [InboxRow.note] keeps for the SwiftUI bridges. */
+internal fun InboxNote.legacyText(): String = when (this) {
+    InboxNote.Offline -> "Reconnect to save"
+    is InboxNote.ServerMessage -> text
+}
+
 /** One Ready draft as rendered in the Inbox, with any transient accept state. */
 data class InboxRow(
     val draft: BrainDumpDraft,
     /** The accept create is in flight (the row shows progress, taps are ignored). */
     val accepting: Boolean = false,
-    /** A gentle note after a non-accepting outcome (offline / server error), else null. */
+    /** A gentle note after a non-accepting outcome (offline / server error), else null. The typed
+     *  twin of [noteKind]'s English rendering — kept for the SwiftUI bridges. */
     val note: String? = null,
+    /** The typed note the Compose View localizes; mirrors [note]. */
+    val noteKind: InboxNote? = null,
 )
 
 /** The Inbox render state: the Ready drafts, plus the just-dismissed one for a brief Undo. */
@@ -99,7 +117,7 @@ class DefaultInboxComponent(
     private val resumeTick = MutableStateFlow(0)
     private val ready = MutableStateFlow<List<BrainDumpDraft>>(emptyList())
     private val accepting = MutableStateFlow<Set<BrainDumpDraftId>>(emptySet())
-    private val notes = MutableStateFlow<Map<BrainDumpDraftId, String>>(emptyMap())
+    private val notes = MutableStateFlow<Map<BrainDumpDraftId, InboxNote>>(emptyMap())
     private val dismissed = MutableStateFlow<BrainDumpDraft?>(null)
 
     init {
@@ -114,7 +132,9 @@ class DefaultInboxComponent(
     override val state: StateFlow<InboxState> =
         combine(ready, accepting, notes, dismissed) { rows, inFlight, msgs, justDismissed ->
             InboxState(
-                rows = rows.map { InboxRow(it, accepting = it.id in inFlight, note = msgs[it.id]) },
+                rows = rows.map {
+                    InboxRow(it, accepting = it.id in inFlight, note = msgs[it.id]?.legacyText(), noteKind = msgs[it.id])
+                },
                 recentlyDismissed = justDismissed,
             )
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000L), InboxState())
@@ -128,8 +148,8 @@ class DefaultInboxComponent(
             try {
                 when (val r = accept(draft)) {
                     AcceptResult.Accepted -> Unit // marked Accepted by the seam → leaves the Ready list
-                    AcceptResult.Offline -> notes.value = notes.value + (id to "Reconnect to save")
-                    is AcceptResult.Failed -> notes.value = notes.value + (id to r.message)
+                    AcceptResult.Offline -> notes.value = notes.value + (id to InboxNote.Offline)
+                    is AcceptResult.Failed -> notes.value = notes.value + (id to InboxNote.ServerMessage(r.message))
                 }
             } finally {
                 accepting.value = accepting.value - id

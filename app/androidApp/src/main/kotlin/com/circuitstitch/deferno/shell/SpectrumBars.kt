@@ -25,10 +25,14 @@ import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.R
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_visual_feedback_turn_off
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_visual_feedback_turn_on
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.exp
 import kotlin.math.sin
 
@@ -86,12 +90,15 @@ internal fun SpectrumBars(
             }
         }
     }
+    val toggleLabel = stringResource(
+        if (enabled) Res.string.braindump_visual_feedback_turn_off else Res.string.braindump_visual_feedback_turn_on,
+    )
     Box(
         modifier
             .fillMaxWidth()
             .height(barHeight)
             .clickable(
-                onClickLabel = if (enabled) "Turn off visual audio feedback" else "Turn on visual audio feedback",
+                onClickLabel = toggleLabel,
                 onClick = onToggle,
             )
             .drawBehind {

@@ -29,8 +29,22 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.sp
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_collapse_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_expand_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_state_collapsed
+import com.circuitstitch.deferno.core.designsystem.resources.common_state_expanded
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_a11y_chore
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_a11y_event
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_a11y_habit
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_a11y_task
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_label_chore
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_label_event
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_label_habit
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_label_task
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
+import org.jetbrains.compose.resources.stringResource
 
 // Tasks-specific design helpers for the "See the trees" restyle. The reusable atoms (SectionLabel,
 // TreeChip, KindDot, ProgressBarThin, CheckDot, SearchBarDisplay, SegmentedFilter, DashedAddButton,
@@ -49,7 +63,26 @@ internal fun kindColor(kind: ItemKind): Color = when (kind) {
 }
 
 /** The plain, upper-case label for a kind, e.g. "TASK" — used as a TreeChip marker. */
-internal fun kindLabel(kind: ItemKind): String = kind.name.uppercase()
+@Composable
+internal fun kindLabel(kind: ItemKind): String = stringResource(
+    when (kind) {
+        ItemKind.Task -> Res.string.tasks_kind_label_task
+        ItemKind.Habit -> Res.string.tasks_kind_label_habit
+        ItemKind.Event -> Res.string.tasks_kind_label_event
+        ItemKind.Chore -> Res.string.tasks_kind_label_chore
+    },
+)
+
+/** The lowercase kind name for a KindDot's TalkBack label, e.g. "task" (search result rows). */
+@Composable
+internal fun kindA11yLabel(kind: ItemKind): String = stringResource(
+    when (kind) {
+        ItemKind.Task -> Res.string.tasks_kind_a11y_task
+        ItemKind.Habit -> Res.string.tasks_kind_a11y_habit
+        ItemKind.Event -> Res.string.tasks_kind_a11y_event
+        ItemKind.Chore -> Res.string.tasks_kind_a11y_chore
+    },
+)
 
 /** The rail reads as a calm tint of the row's accent (#231), not a loud line — apply to the kind colour. */
 internal const val RailTintAlpha = 0.5f
@@ -166,6 +199,11 @@ internal fun TreeNode(
     val trailing = with(density) { NodeTrailingGap.toDp() }
     val angle by animateFloatAsState(if (isExpanded) 90f else 0f, label = "fold")
     val interactive = hasChildren && !inMoveMode
+    val foldState = if (isExpanded) {
+        stringResource(Res.string.common_state_expanded)
+    } else {
+        stringResource(Res.string.common_state_collapsed)
+    }
 
     Box(
         modifier = modifier
@@ -176,11 +214,15 @@ internal fun TreeNode(
                     Modifier
                         .clickable(
                             role = Role.Button,
-                            onClickLabel = if (isExpanded) "Collapse $title" else "Expand $title",
+                            onClickLabel = if (isExpanded) {
+                                stringResource(Res.string.common_collapse_named_cd, title)
+                            } else {
+                                stringResource(Res.string.common_expand_named_cd, title)
+                            },
                             onClick = onToggle,
                         )
                         .focusable()
-                        .semantics { stateDescription = if (isExpanded) "Expanded" else "Collapsed" }
+                        .semantics { stateDescription = foldState }
                 } else {
                     Modifier.clearAndSetSemantics {}
                 },

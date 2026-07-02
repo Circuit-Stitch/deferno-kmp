@@ -20,6 +20,8 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
+            // String resources (stringResource/pluralStringResource) from the shared designsystem catalog.
+            implementation(libs.compose.components.resources)
         }
         // The Android-native Inbox screen: renders the shared InboxComponent (#27, ADR-0015 Inbox amendment).
         androidMain.dependencies {

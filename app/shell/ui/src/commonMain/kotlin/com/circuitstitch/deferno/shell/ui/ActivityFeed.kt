@@ -26,14 +26,43 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.data.activity.ActivitySource
+import com.circuitstitch.deferno.core.data.activity.ActivitySummary
+import com.circuitstitch.deferno.core.data.activity.ActivityVerb
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.format.formatInstant
 import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.activity_change_count
+import com.circuitstitch.deferno.core.designsystem.resources.activity_empty_body
+import com.circuitstitch.deferno.core.designsystem.resources.activity_empty_title
+import com.circuitstitch.deferno.core.designsystem.resources.activity_source_mcp
+import com.circuitstitch.deferno.core.designsystem.resources.activity_source_mobile
+import com.circuitstitch.deferno.core.designsystem.resources.activity_source_unknown
+import com.circuitstitch.deferno.core.designsystem.resources.activity_source_website
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_changed_settings
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cleared_occurrence_chore
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cleared_occurrence_event
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cleared_occurrence_habit
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_chore
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_event
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_habit
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_item
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_task
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_deleted_task
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_moved_item
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_item
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_occurrence_chore
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_occurrence_event
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_occurrence_habit
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_plan
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_task
 import com.circuitstitch.deferno.core.designsystem.resources.activity_when_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_activity
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.shell.ActivityComponent
 import com.circuitstitch.deferno.shell.ActivityFeedRow
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -55,11 +84,11 @@ fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) 
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
-                    text = "Activity",
+                    text = stringResource(Res.string.shell_destination_activity),
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.semantics { heading() },
                 )
-                MonoMeta(text = if (state.rows.size == 1) "1 change" else "${state.rows.size} changes")
+                MonoMeta(text = pluralStringResource(Res.plurals.activity_change_count, state.rows.size, state.rows.size))
             }
         }
         if (state.rows.isEmpty()) {
@@ -88,13 +117,50 @@ private fun ActivityRowView(row: ActivityFeedRow) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(text = row.summary, style = MaterialTheme.typography.titleMedium)
-            TreeChip(text = row.sourceLabel, filled = false)
+            Text(text = row.summaryInfo.text, style = MaterialTheme.typography.titleMedium)
+            TreeChip(text = row.source.label, filled = false)
         }
         // A calm absolute timestamp — "Jun 21 · 09:45" in the device's time zone and language.
         MonoMeta(text = formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern)))
     }
 }
+
+/** The localized one-liner for a typed [ActivitySummary] — per-kind keys keep article/gender right. */
+private val ActivitySummary.text: String
+    @Composable get() = when (verb) {
+        ActivityVerb.ChangedSettings -> stringResource(Res.string.activity_summary_changed_settings)
+        ActivityVerb.Created -> when (kindToken) {
+            "task" -> stringResource(Res.string.activity_summary_created_task)
+            "chore" -> stringResource(Res.string.activity_summary_created_chore)
+            "habit" -> stringResource(Res.string.activity_summary_created_habit)
+            "event" -> stringResource(Res.string.activity_summary_created_event)
+            else -> stringResource(Res.string.activity_summary_created_item)
+        }
+        ActivityVerb.MovedItem -> stringResource(Res.string.activity_summary_moved_item)
+        ActivityVerb.UpdatedPlan -> stringResource(Res.string.activity_summary_updated_plan)
+        ActivityVerb.DeletedTask -> stringResource(Res.string.activity_summary_deleted_task)
+        ActivityVerb.UpdatedTask -> stringResource(Res.string.activity_summary_updated_task)
+        ActivityVerb.ClearedOccurrence -> when (kindToken) {
+            "chore" -> stringResource(Res.string.activity_summary_cleared_occurrence_chore)
+            "habit" -> stringResource(Res.string.activity_summary_cleared_occurrence_habit)
+            else -> stringResource(Res.string.activity_summary_cleared_occurrence_event)
+        }
+        ActivityVerb.UpdatedOccurrence -> when (kindToken) {
+            "chore" -> stringResource(Res.string.activity_summary_updated_occurrence_chore)
+            "habit" -> stringResource(Res.string.activity_summary_updated_occurrence_habit)
+            else -> stringResource(Res.string.activity_summary_updated_occurrence_event)
+        }
+        ActivityVerb.UpdatedItem -> stringResource(Res.string.activity_summary_updated_item)
+    }
+
+/** The localized "who" chip: a local write reads "Mobile app"; remote writes name their surface. */
+private val ActivitySource.label: String
+    @Composable get() = when (this) {
+        ActivitySource.Mobile -> stringResource(Res.string.activity_source_mobile)
+        ActivitySource.Website -> stringResource(Res.string.activity_source_website)
+        ActivitySource.Mcp -> stringResource(Res.string.activity_source_mcp)
+        ActivitySource.Unknown -> stringResource(Res.string.activity_source_unknown)
+    }
 
 @Composable
 private fun EmptyActivity(modifier: Modifier = Modifier) {
@@ -104,13 +170,13 @@ private fun EmptyActivity(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "Nothing yet",
+            text = stringResource(Res.string.activity_empty_title),
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
             modifier = Modifier.semantics { heading() },
         )
         Text(
-            text = "Every change you make — and every change synced from elsewhere — shows up here, newest first.",
+            text = stringResource(Res.string.activity_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.defernoColors.inkMuted,
             textAlign = TextAlign.Center,

@@ -21,16 +21,96 @@ import kotlinx.coroutines.flow.asStateFlow
  * deterministic and tests just `await` them. The moves it applies are the shared offline-first
  * [BreakdownActions] (capture child / drop / add-to-plan), so a captured subtask or a drop rides the same
  * outbox as any other edit (#185) — the engine never reimplements persistence.
+ *
+ * The engine holds **no user-visible prose**: a [Message] is a typed [MessageKind] + its interpolation
+ * args, and the View resolves each kind to a localized `breakdown_msg_*` string resource at render time.
+ * The one exception is the two fallback [Prerequisites] titles, which are *persisted* as server-synced
+ * subtasks — those are injected localized at construction (defaults keep the English wiring unchanged).
  */
 class BreakdownEngine(
     root: ItemContext,
     private val classifier: ImpedimentClassifier,
     private val moves: BreakdownActions,
+    private val prerequisites: Prerequisites = Prerequisites(),
 ) {
     enum class Role { Assistant, User }
 
-    /** One line in the Breakdown conversation the View renders; [id] is a stable per-engine sequence (Compose key). */
-    data class Message(val id: Long, val role: Role, val text: String)
+    /**
+     * What a conversation line *says* — the View maps each kind to its localized `breakdown_msg_*` resource,
+     * so no English is baked into engine state. [Message.arg]/[Message.args] carry the interpolations.
+     */
+    enum class MessageKind {
+        /** The person's own words ([Message.arg]) — user content, rendered verbatim, never localized. */
+        UserText,
+
+        /** "What's stopping you from …?" — [Message.arg] is the focus title. */
+        WhatsStopping,
+
+        /** Subtasks captured for a too-big item — [Message.args] are the created titles, listed by the View. */
+        BrokeInto,
+
+        /** Too-big came back with no usable titles — ask the person to name the first small piece. */
+        NameFirstPiece,
+
+        /** A prerequisite subtask was captured — [Message.arg] is its title. */
+        AddedPrerequisite,
+
+        /** The drop offer (PRD #14/#26) — [Message.arg] is the node title. */
+        ConfirmDrop,
+
+        /** The confirmed drop happened — [Message.arg] is the dropped title. */
+        Dropped,
+
+        /** The drop was declined; re-asking — [Message.arg] is the kept title. */
+        KeptReask,
+
+        /** A transient obstacle — skip it for now, no structural change. */
+        TransientObstacle,
+
+        /** Something more urgent — degraded acknowledgement until the priority model (#526) lands. */
+        MoreUrgent,
+
+        /** Waiting on a dependency — degraded acknowledgement until set_blocked_by lands. */
+        WaitingOnDependency,
+
+        /** Nothing stopping — [Message.arg] is the ready title. */
+        ReadyToGo,
+
+        /** The Ready terminal's confirmed add-to-plan (PRD #21). */
+        AddedToPlan,
+
+        /** A transient classifier hiccup — invite a rephrase. */
+        ClassifierRetry,
+
+        /** Terminal: the root was dropped. */
+        FinishedDropped,
+
+        /** Terminal: everything broken down and Ready. */
+        FinishedReady,
+    }
+
+    /**
+     * One line in the Breakdown conversation the View renders; [id] is a stable per-engine sequence (Compose
+     * key). [kind] says *what* the line is; [arg] (a task/node title, or the person's own words for
+     * [MessageKind.UserText]) and [args] (the created subtask titles for [MessageKind.BrokeInto]) are its data.
+     */
+    data class Message(
+        val id: Long,
+        val role: Role,
+        val kind: MessageKind,
+        val arg: String? = null,
+        val args: List<String> = emptyList(),
+    )
+
+    /**
+     * The two fallback prerequisite titles the engine may **persist** as server-synced subtasks. Injected —
+     * mirroring `BrainDumpPipeline`'s salvage prose — so each platform passes localized words at engine
+     * creation time; the defaults keep the English wiring working unchanged.
+     */
+    data class Prerequisites(
+        val figureOutHow: String = "Figure out how to do this",
+        val defineDone: String = "Define what “done” looks like, and decide if I'm the right person or should delegate",
+    )
 
     sealed interface Phase {
         /** Waiting for the person's free-text answer to "what's stopping you?". */
@@ -84,7 +164,7 @@ class BreakdownEngine(
         val text = answer.trim()
         val node = current
         if (_phase.value != Phase.Asking || node == null || text.isEmpty()) return
-        append(Role.User, text)
+        append(Role.User, MessageKind.UserText, arg = text)
         _phase.value = Phase.Working
 
         val classification = try {
@@ -94,7 +174,7 @@ class BreakdownEngine(
         } catch (e: Exception) {
             // A transient on-device hiccup: never strand the person — let them rephrase (availability is
             // checked before the engine is built, so this is a generation glitch, not "no engine").
-            append(Role.Assistant, "I couldn't quite work that out on-device. Want to say it a different way?")
+            append(Role.Assistant, MessageKind.ClassifierRetry)
             current = node
             _phase.value = Phase.Asking
             return
@@ -111,10 +191,10 @@ class BreakdownEngine(
         if (yes) {
             moves.drop(node.id)
             if (node.id == rootId) rootDropped = true
-            append(Role.Assistant, "Done — taking “${node.title}” off your list. You can recover it from history.")
+            append(Role.Assistant, MessageKind.Dropped, arg = node.title)
             advance()
         } else {
-            append(Role.Assistant, "Kept it. So — what's stopping you from “${node.title}”?")
+            append(Role.Assistant, MessageKind.KeptReask, arg = node.title)
             current = node
             _focusTitle.value = node.title
             _phase.value = Phase.Asking
@@ -126,7 +206,7 @@ class BreakdownEngine(
         val p = _phase.value
         if (p !is Phase.Finished || p.outcome != Outcome.Ready) return
         moves.addToPlan(rootId)
-        append(Role.Assistant, "Added to today's plan.")
+        append(Role.Assistant, MessageKind.AddedToPlan)
     }
 
     /** Leave at any point (PRD #22) — never trapped in a long interrogation. */
@@ -142,12 +222,12 @@ class BreakdownEngine(
             ImpedimentClass.tooBig -> {
                 val created = capture(c.subtaskTitles, node)
                 if (created.isEmpty()) {
-                    append(Role.Assistant, "Let's name the first small piece — what's one part you could start on?")
+                    append(Role.Assistant, MessageKind.NameFirstPiece)
                     current = node
                     _phase.value = Phase.Asking
                     return
                 }
-                append(Role.Assistant, "Broke it into " + listed(created.map { it.title }) + ".")
+                append(Role.Assistant, MessageKind.BrokeInto, args = created.map { it.title })
                 created.asReversed().forEach { stack.addLast(it) } // depth-first into the new parts
                 advance()
             }
@@ -156,7 +236,7 @@ class BreakdownEngine(
                 val title = c.prerequisiteTitle?.trim()?.takeIf { it.isNotEmpty() } ?: defaultPrerequisite(c.kind)
                 val id = moves.captureSubtask(node.id, title)
                 if (id != null) {
-                    append(Role.Assistant, "Added a prerequisite to do first: “$title”.")
+                    append(Role.Assistant, MessageKind.AddedPrerequisite, arg = title)
                     stack.addLast(Node(id, title))
                 }
                 advance()
@@ -164,27 +244,23 @@ class BreakdownEngine(
 
             ImpedimentClass.persistentAvoidance -> {
                 pendingDrop = node
-                append(
-                    Role.Assistant,
-                    "Sounds like you keep putting it off. Do you actually need this? I can take " +
-                        "“${node.title}” off your list — just say yes.",
-                )
+                append(Role.Assistant, MessageKind.ConfirmDrop, arg = node.title)
                 _phase.value = Phase.ConfirmingDrop
             }
 
             ImpedimentClass.transientObstacle ->
-                advanceWith("That's temporary — it's okay to skip it for now. It still mattered to you, so it'll be here when you're ready.")
+                advanceWith(MessageKind.TransientObstacle)
 
             // Degraded until the priority model (#526) lands — record the tension, don't bury the item.
             ImpedimentClass.somethingMoreUrgent ->
-                advanceWith("Something more pressing right now — noted. (Lowering its priority is coming soon; for now it stays put.)")
+                advanceWith(MessageKind.MoreUrgent)
 
             // Degraded until set_blocked_by lands — acknowledge, don't fake an edge.
             ImpedimentClass.waitingOnDependency ->
-                advanceWith("Sounds like it's blocked by something else — noted. (Linking that blocker is coming soon.)")
+                advanceWith(MessageKind.WaitingOnDependency)
 
             ImpedimentClass.nothingStopping ->
-                advanceWith("Then “${node.title}” is ready to go.")
+                advanceWith(MessageKind.ReadyToGo, arg = node.title)
         }
     }
 
@@ -204,13 +280,13 @@ class BreakdownEngine(
     private fun ask(node: Node) {
         current = node
         _focusTitle.value = node.title
-        append(Role.Assistant, "What's stopping you from “${node.title}”?")
+        append(Role.Assistant, MessageKind.WhatsStopping, arg = node.title)
         _phase.value = Phase.Asking
     }
 
-    /** Say [text], then move on to the next part (or the terminal) — the common "no further input" tail. */
-    private fun advanceWith(text: String) {
-        append(Role.Assistant, text)
+    /** Say [kind] (with [arg]), then move on to the next part (or the terminal) — the common "no further input" tail. */
+    private fun advanceWith(kind: MessageKind, arg: String? = null) {
+        append(Role.Assistant, kind, arg = arg)
         advance()
     }
 
@@ -224,11 +300,7 @@ class BreakdownEngine(
             val outcome = if (rootDropped) Outcome.Dropped else Outcome.Ready
             append(
                 Role.Assistant,
-                if (outcome == Outcome.Dropped) {
-                    "All set — we cleared what you didn't need."
-                } else {
-                    "Everything's broken down and ready. Nice work."
-                },
+                if (outcome == Outcome.Dropped) MessageKind.FinishedDropped else MessageKind.FinishedReady,
             )
             _phase.value = Phase.Finished(outcome)
         }
@@ -238,15 +310,12 @@ class BreakdownEngine(
 
     private fun notesFor(node: Node): String? = if (node.id == rootId) rootNotes else null
 
-    private fun append(role: Role, text: String) {
-        _messages.value = _messages.value + Message(nextId++, role, text)
+    private fun append(role: Role, kind: MessageKind, arg: String? = null, args: List<String> = emptyList()) {
+        _messages.value = _messages.value + Message(nextId++, role, kind, arg, args)
     }
 
-    private fun listed(titles: List<String>): String = titles.joinToString(", ") { "“$it”" }
-
     private fun defaultPrerequisite(kind: ImpedimentClass): String = when (kind) {
-        ImpedimentClass.scaredOfDoingItWrong ->
-            "Define what “done” looks like, and decide if I'm the right person or should delegate"
-        else -> "Figure out how to do this"
+        ImpedimentClass.scaredOfDoingItWrong -> prerequisites.defineDone
+        else -> prerequisites.figureOutHow
     }
 }

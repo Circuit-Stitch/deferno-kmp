@@ -26,9 +26,27 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.auth_add_another_account
+import com.circuitstitch.deferno.core.designsystem.resources.auth_browser_hint
+import com.circuitstitch.deferno.core.designsystem.resources.auth_error_invalid_token
+import com.circuitstitch.deferno.core.designsystem.resources.auth_error_unavailable
+import com.circuitstitch.deferno.core.designsystem.resources.auth_retry_prompt
+import com.circuitstitch.deferno.core.designsystem.resources.auth_sign_in
+import com.circuitstitch.deferno.core.designsystem.resources.auth_sign_in_with_token
+import com.circuitstitch.deferno.core.designsystem.resources.auth_subtitle_sign_in
+import com.circuitstitch.deferno.core.designsystem.resources.auth_token_field_label
+import com.circuitstitch.deferno.core.designsystem.resources.auth_token_help
+import com.circuitstitch.deferno.core.designsystem.resources.auth_token_hide
+import com.circuitstitch.deferno.core.designsystem.resources.auth_token_show
+import com.circuitstitch.deferno.core.designsystem.resources.auth_use_token_instead
+import com.circuitstitch.deferno.core.designsystem.resources.common_app_name
+import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
+import com.circuitstitch.deferno.core.designsystem.resources.common_signing_in
 import com.circuitstitch.deferno.feature.signin.SignInComponent
 import com.circuitstitch.deferno.feature.signin.SignInError
 import com.circuitstitch.deferno.feature.signin.SignInState
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The sign-in screen (#15, ADR-0012/0026): the Auth-shell View that renders the shared [SignInComponent].
@@ -86,9 +104,13 @@ internal fun SignInContent(
                 modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(text = "Deferno", style = MaterialTheme.typography.headlineMedium)
+                Text(text = stringResource(Res.string.common_app_name), style = MaterialTheme.typography.headlineMedium)
                 Text(
-                    text = if (onCancel == null) "Sign in to your account" else "Add another account",
+                    text = if (onCancel == null) {
+                        stringResource(Res.string.auth_subtitle_sign_in)
+                    } else {
+                        stringResource(Res.string.auth_add_another_account)
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -100,10 +122,16 @@ internal fun SignInContent(
                     enabled = state.canStartBrowser,
                     modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
                 ) {
-                    Text(text = if (state.isBusy) "Signing in…" else "Sign in")
+                    Text(
+                        text = if (state.isBusy) {
+                            stringResource(Res.string.common_signing_in)
+                        } else {
+                            stringResource(Res.string.auth_sign_in)
+                        },
+                    )
                 }
                 Text(
-                    text = "A secure browser window opens to finish signing in.",
+                    text = stringResource(Res.string.auth_browser_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -114,14 +142,14 @@ internal fun SignInContent(
                 // sign-in can't auto-cancel — offer an explicit restart while the leg is in flight.
                 if (state.canRetryBrowser) {
                     Text(
-                        text = "Need to try again?",
+                        text = stringResource(Res.string.auth_retry_prompt),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 12.dp),
                     )
                     TextButton(onClick = onRetry, modifier = Modifier.padding(top = 4.dp)) {
-                        Text(text = "Sign in")
+                        Text(text = stringResource(Res.string.auth_sign_in))
                     }
                 }
 
@@ -144,14 +172,14 @@ internal fun SignInContent(
                         TextButton(
                             onClick = onUseTokenInstead,
                             modifier = Modifier.padding(top = 8.dp),
-                        ) { Text(text = "Use a token instead") }
+                        ) { Text(text = stringResource(Res.string.auth_use_token_instead)) }
                     }
                 }
 
                 // Add-account re-entry (#NN): a Cancel-back to the Main shell. Absent on a first sign-in.
                 if (onCancel != null) {
                     TextButton(onClick = onCancel, modifier = Modifier.padding(top = 16.dp)) {
-                        Text(text = "Cancel")
+                        Text(text = stringResource(Res.string.common_cancel))
                     }
                 }
             }
@@ -174,7 +202,7 @@ private fun TokenEntry(state: SignInState, onTokenChange: (String) -> Unit, onSu
         value = state.token,
         onValueChange = onTokenChange,
         modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-        label = { Text(text = "Personal access token") },
+        label = { Text(text = stringResource(Res.string.auth_token_field_label)) },
         singleLine = true,
         enabled = !state.isBusy,
         isError = state.error != null,
@@ -188,7 +216,13 @@ private fun TokenEntry(state: SignInState, onTokenChange: (String) -> Unit, onSu
         ),
         trailingIcon = {
             TextButton(onClick = { revealed = !revealed }) {
-                Text(text = if (revealed) "Hide" else "Show")
+                Text(
+                    text = if (revealed) {
+                        stringResource(Res.string.auth_token_hide)
+                    } else {
+                        stringResource(Res.string.auth_token_show)
+                    },
+                )
             }
         },
         supportingText = supporting,
@@ -199,11 +233,17 @@ private fun TokenEntry(state: SignInState, onTokenChange: (String) -> Unit, onSu
         enabled = state.canSubmitToken,
         modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
     ) {
-        Text(text = if (state.isBusy) "Signing in…" else "Sign in with token")
+        Text(
+            text = if (state.isBusy) {
+                stringResource(Res.string.common_signing_in)
+            } else {
+                stringResource(Res.string.auth_sign_in_with_token)
+            },
+        )
     }
 
     Text(
-        text = "Create a token in Deferno on the web: Settings → Tokens.",
+        text = stringResource(Res.string.auth_token_help),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
@@ -211,7 +251,8 @@ private fun TokenEntry(state: SignInState, onTokenChange: (String) -> Unit, onSu
     )
 }
 
+@Composable
 private fun errorMessage(error: SignInError): String = when (error) {
-    SignInError.InvalidToken -> "That token isn’t valid. Check it and try again."
-    SignInError.Unavailable -> "Couldn’t reach Deferno. Check your connection and try again."
+    SignInError.InvalidToken -> stringResource(Res.string.auth_error_invalid_token)
+    SignInError.Unavailable -> stringResource(Res.string.auth_error_unavailable)
 }

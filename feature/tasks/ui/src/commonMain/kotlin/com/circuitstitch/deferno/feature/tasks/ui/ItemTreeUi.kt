@@ -77,6 +77,57 @@ import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SearchBarDisplay
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_add
+import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
+import com.circuitstitch.deferno.core.designsystem.resources.common_cannot_be_undone
+import com.circuitstitch.deferno.core.designsystem.resources.common_collapse_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_delete
+import com.circuitstitch.deferno.core.designsystem.resources.common_done
+import com.circuitstitch.deferno.core.designsystem.resources.common_expand_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_refresh
+import com.circuitstitch.deferno.core.designsystem.resources.search_placeholder_trees
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_add_subtask_dialog_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_add_subtask_placeholder
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_badge_blocker
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_badge_blocker_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_delete_item_confirm_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_filter_active
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_filter_all
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_filter_in_today
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_activate
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_add_subtask
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_add_to_plan
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_archive
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_delete_permanent
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_mark_done
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_move
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_open
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_pin
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_remove_from_plan
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_start_working
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_undo_move
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_unpin
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_move_down
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_move_indent
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_move_outdent
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_move_up
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_progress_done
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_progress_fraction
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_set_aside
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_source_from_github
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_source_from_google_calendar
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_actions_for_item
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_add_tree
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_count
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_empty_body
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_empty_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_filtered_empty_body
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_filtered_empty_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_refreshing
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_show_blocked
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_title
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -85,6 +136,8 @@ import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.ItemRow
 import com.circuitstitch.deferno.feature.tasks.MoveMode
 import com.circuitstitch.deferno.feature.tasks.TaskMenuState
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 // The Tasks Item-tree renderer (ADR-0034, #227/#228) restyled to the "See the trees" direction (#231):
 // the cross-kind forest ("Everything") flattened to depth-indented rows in one LazyColumn, shared by the
@@ -103,8 +156,8 @@ internal const val ItemTreeTag = "itemTree"
 /** Breathing room between the tree filigree (the left-most rail line / depth-0 dot) and the screen edge. */
 private val TreeRowStartInset = 12.dp
 
-/** The calm in-list filter segments — local view state, not a component intent. "Active" hides terminals. */
-private val TreeFilters = listOf("In today", "Active", "All")
+// The calm in-list filter segments ("In today" / "Active" / "All") are local view state, not a component
+// intent — resolved from string resources inside [EverythingSearchFilter]. "Active" hides terminals.
 
 /**
  * The Tasks Item tree ("Everything"): a calm header band (title + count + a read-only search bar + a
@@ -265,16 +318,20 @@ internal fun ItemTreeContent(
                 }
             }
             if (isRefreshing) {
-                item(key = "refreshing") { LoadingStrip(label = "Refreshing…") }
+                item(key = "refreshing") { LoadingStrip(label = stringResource(Res.string.tasks_tree_refreshing)) }
             }
             if (visibleRows.isEmpty() && !isRefreshing) {
                 item(key = "empty") {
                     EmptyState(
-                        title = if (rows.isEmpty()) "No trees yet" else "Nothing to show here",
-                        body = if (rows.isEmpty()) {
-                            "When you add a tree, it shows up here. One small step at a time."
+                        title = if (rows.isEmpty()) {
+                            stringResource(Res.string.tasks_tree_empty_title)
                         } else {
-                            "Everything here is done. Switch to “All” to see it again."
+                            stringResource(Res.string.tasks_tree_filtered_empty_title)
+                        },
+                        body = if (rows.isEmpty()) {
+                            stringResource(Res.string.tasks_tree_empty_body)
+                        } else {
+                            stringResource(Res.string.tasks_tree_filtered_empty_body)
                         },
                     )
                 }
@@ -304,7 +361,7 @@ internal fun ItemTreeContent(
             if (moveMode == null) {
                 item(key = "add-tree") {
                     DashedAddButton(
-                        text = "Add a tree",
+                        text = stringResource(Res.string.tasks_tree_add_tree),
                         onClick = onAdd,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     )
@@ -341,17 +398,17 @@ private fun EverythingTitle(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Everything",
+                    text = stringResource(Res.string.tasks_tree_title),
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.semantics { heading() },
                 )
-                MonoMeta(text = if (treeCount == 1) "1 tree" else "$treeCount trees")
+                MonoMeta(text = pluralStringResource(Res.plurals.tasks_tree_count, treeCount, treeCount))
             }
             TextButton(
                 onClick = onRefresh,
                 enabled = !isRefreshing,
                 modifier = Modifier.heightIn(min = MinTouchTarget),
-            ) { Text("Refresh") }
+            ) { Text(stringResource(Res.string.common_refresh)) }
         }
     }
 }
@@ -376,9 +433,16 @@ private fun EverythingSearchFilter(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // Hosts with a top-bar search (Android) omit the inline bar; desktop keeps it (no top-bar dock).
-            if (showSearch) SearchBarDisplay(placeholder = "Search all your trees…", onClick = onSearch)
+            if (showSearch) {
+                SearchBarDisplay(placeholder = stringResource(Res.string.search_placeholder_trees), onClick = onSearch)
+            }
+            val treeFilters = listOf(
+                stringResource(Res.string.tasks_filter_in_today),
+                stringResource(Res.string.tasks_filter_active),
+                stringResource(Res.string.tasks_filter_all),
+            )
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SegmentedFilter(options = TreeFilters, selectedIndex = filterIndex, onSelect = onFilterSelect)
+                SegmentedFilter(options = treeFilters, selectedIndex = filterIndex, onSelect = onFilterSelect)
                 Spacer(Modifier.weight(1f))
                 // The readiness axis (#290), distinct from the In-today/Active/All segment: ready-only by
                 // default (off → blocked items + their subtrees pruned), toggled on to reveal them. A
@@ -386,7 +450,7 @@ private fun EverythingSearchFilter(
                 FilterChip(
                     selected = showBlocked,
                     onClick = { onSetShowBlocked(!showBlocked) },
-                    label = { Text("Show blocked") },
+                    label = { Text(stringResource(Res.string.tasks_tree_show_blocked)) },
                 )
             }
         }
@@ -450,10 +514,10 @@ private fun ItemTreeRow(
             Modifier.combinedClickable(
                 onClickLabel = when {
                     !row.hasChildren -> null
-                    row.isExpanded -> "Collapse ${item.title}"
-                    else -> "Expand ${item.title}"
+                    row.isExpanded -> stringResource(Res.string.common_collapse_named_cd, item.title)
+                    else -> stringResource(Res.string.common_expand_named_cd, item.title)
                 },
-                onLongClickLabel = "Actions for ${item.title}",
+                onLongClickLabel = stringResource(Res.string.tasks_tree_actions_for_item, item.title),
                 onLongClick = { menuOpen = true },
                 onClick = { if (row.hasChildren) onToggleExpand(item.id, row.isExpanded) },
             )
@@ -514,9 +578,10 @@ private fun ItemTreeRow(
                     if (row.hasChildren && !row.isExpanded && total != null) {
                         val done = item.descendantDone ?: 0
                         Spacer(Modifier.size(4.dp))
+                        val progressA11y = stringResource(Res.string.tasks_progress_done, done, total)
                         MonoMeta(
-                            text = "$done of $total",
-                            modifier = Modifier.clearAndSetSemantics { contentDescription = "$done of $total done" },
+                            text = stringResource(Res.string.tasks_progress_fraction, done, total),
+                            modifier = Modifier.clearAndSetSemantics { contentDescription = progressA11y },
                         )
                         if (total > 0) {
                             Spacer(Modifier.size(2.dp))
@@ -536,8 +601,8 @@ private fun ItemTreeRow(
                 }
                 if (item.isBlocker) {
                     TreeChip(
-                        text = "Blocker",
-                        semanticLabel = "Blocks other items",
+                        text = stringResource(Res.string.tasks_badge_blocker),
+                        semanticLabel = stringResource(Res.string.tasks_badge_blocker_a11y),
                         modifier = Modifier.padding(horizontal = 4.dp),
                     )
                 }
@@ -550,11 +615,12 @@ private fun ItemTreeRow(
                 // The lone open-detail affordance: a fixed target, immune to title length (ADR-0034 dec. 7).
                 // Inert in move mode (the list is calm). An icon-only control, so it carries its own
                 // contentDescription for TalkBack; the glyph's own semantics are cleared so it isn't read twice.
+                val openItemCd = stringResource(Res.string.common_open_named_cd, item.title)
                 Box(
                     modifier = Modifier
                         .size(chevronGutter)
                         .then(if (inMoveMode) Modifier else Modifier.clickable { onOpenDetail(item.id, item.kind) })
-                        .semantics { contentDescription = "Open ${item.title}" },
+                        .semantics { contentDescription = openItemCd },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -581,21 +647,21 @@ private fun ItemTreeRow(
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 if (isTask) {
                     DropdownMenuItem(
-                        text = { Text("Open") },
+                        text = { Text(stringResource(Res.string.tasks_menu_open)) },
                         onClick = { menuOpen = false; onOpenDetail(item.id, item.kind) },
                     )
                 }
                 DropdownMenuItem(
-                    text = { Text("Add subtask") },
+                    text = { Text(stringResource(Res.string.tasks_menu_add_subtask)) },
                     onClick = { menuOpen = false; addSubtaskOpen = true },
                 )
                 DropdownMenuItem(
-                    text = { Text("Move") },
+                    text = { Text(stringResource(Res.string.tasks_menu_move)) },
                     onClick = { menuOpen = false; onEnterMoveMode(item.id) },
                 )
                 if (canUndo) {
                     DropdownMenuItem(
-                        text = { Text("Undo move") },
+                        text = { Text(stringResource(Res.string.tasks_menu_undo_move)) },
                         onClick = { menuOpen = false; onUndoMove() },
                     )
                 }
@@ -604,11 +670,27 @@ private fun ItemTreeRow(
                     // they appear once it's present; Delete needs only the id, so it rides the kind gate alone.
                     if (menuState != null) {
                         DropdownMenuItem(
-                            text = { Text(if (menuState.pinned) "Unpin" else "Pin") },
+                            text = {
+                                Text(
+                                    if (menuState.pinned) {
+                                        stringResource(Res.string.tasks_menu_unpin)
+                                    } else {
+                                        stringResource(Res.string.tasks_menu_pin)
+                                    },
+                                )
+                            },
                             onClick = { menuOpen = false; onSetPinned(item.id, !menuState.pinned) },
                         )
                         DropdownMenuItem(
-                            text = { Text(if (menuState.inPlan) "Remove from today's plan" else "Add to today's plan") },
+                            text = {
+                                Text(
+                                    if (menuState.inPlan) {
+                                        stringResource(Res.string.tasks_menu_remove_from_plan)
+                                    } else {
+                                        stringResource(Res.string.tasks_menu_add_to_plan)
+                                    },
+                                )
+                            },
                             onClick = { menuOpen = false; onSetInPlan(item.id, !menuState.inPlan) },
                         )
                         HorizontalDivider()
@@ -616,26 +698,26 @@ private fun ItemTreeRow(
                         // redundant transition is offered (Habit/Chore/Event status verbs await their seam, #299).
                         if (menuState.workingState != WorkingState.InProgress) {
                             DropdownMenuItem(
-                                text = { Text("Start working") },
+                                text = { Text(stringResource(Res.string.tasks_menu_start_working)) },
                                 onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.InProgress) },
                             )
                         }
                         if (menuState.workingState != WorkingState.Done) {
                             DropdownMenuItem(
-                                text = { Text("Mark done") },
+                                text = { Text(stringResource(Res.string.tasks_menu_mark_done)) },
                                 onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.Done) },
                             )
                         }
                         if (menuState.workingState != WorkingState.Dropped) {
                             DropdownMenuItem(
-                                text = { Text("Set aside", color = MaterialTheme.colorScheme.error) },
+                                text = { Text(stringResource(Res.string.tasks_set_aside), color = MaterialTheme.colorScheme.error) },
                                 onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.Dropped) },
                             )
                         }
                     }
                     HorizontalDivider()
                     DropdownMenuItem(
-                        text = { Text("Delete (Permanent!)", color = MaterialTheme.colorScheme.error) },
+                        text = { Text(stringResource(Res.string.tasks_menu_delete_permanent), color = MaterialTheme.colorScheme.error) },
                         onClick = { menuOpen = false; confirmDelete = true },
                     )
                 }
@@ -648,12 +730,12 @@ private fun ItemTreeRow(
                     HorizontalDivider()
                     if (item.isTerminal) {
                         DropdownMenuItem(
-                            text = { Text("Activate") },
+                            text = { Text(stringResource(Res.string.tasks_menu_activate)) },
                             onClick = { menuOpen = false; onSetDefinitionState(item.id, DefinitionState.Active) },
                         )
                     } else {
                         DropdownMenuItem(
-                            text = { Text("Archive") },
+                            text = { Text(stringResource(Res.string.tasks_menu_archive)) },
                             onClick = { menuOpen = false; onSetDefinitionState(item.id, DefinitionState.Archived) },
                         )
                     }
@@ -666,15 +748,15 @@ private fun ItemTreeRow(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete “${item.title}”?") },
-            text = { Text("This can't be undone.") },
+            title = { Text(stringResource(Res.string.tasks_delete_item_confirm_title, item.title)) },
+            text = { Text(stringResource(Res.string.common_cannot_be_undone)) },
             confirmButton = {
                 TextButton(onClick = { confirmDelete = false; onDelete(item.id) }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(Res.string.common_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(Res.string.common_cancel)) }
             },
         )
     }
@@ -707,22 +789,22 @@ private fun AddSubtaskDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add a subtask") },
+        title = { Text(stringResource(Res.string.tasks_add_subtask_dialog_title)) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                placeholder = { Text("Subtask of $parentTitle") },
+                placeholder = { Text(stringResource(Res.string.tasks_add_subtask_placeholder, parentTitle)) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { submit() }),
             )
         },
         confirmButton = {
-            TextButton(onClick = ::submit, enabled = text.isNotBlank()) { Text("Add") }
+            TextButton(onClick = ::submit, enabled = text.isNotBlank()) { Text(stringResource(Res.string.common_add)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
         },
     )
 }
@@ -744,14 +826,14 @@ internal fun SourceIndicator(source: ItemSource, modifier: Modifier = Modifier) 
         ItemSource.GitHub ->
             Icon(
                 painter = painter,
-                contentDescription = "From GitHub",
+                contentDescription = stringResource(Res.string.tasks_source_from_github),
                 tint = MaterialTheme.defernoColors.inkMuted,
                 modifier = modifier.size(SourceMarkSize),
             )
         ItemSource.GoogleCalendar ->
             Image(
                 painter = painter,
-                contentDescription = "From Google Calendar",
+                contentDescription = stringResource(Res.string.tasks_source_from_google_calendar),
                 modifier = modifier.size(SourceMarkSize),
             )
     }
@@ -792,12 +874,12 @@ private fun MoveModeBar(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MoveControl(glyph = "↑", description = "Move up", enabled = move.canMoveUp, onClick = onMoveUp)
-            MoveControl(glyph = "↓", description = "Move down", enabled = move.canMoveDown, onClick = onMoveDown)
-            MoveControl(glyph = "‹", description = "Outdent", enabled = move.canOutdent, onClick = onOutdent)
-            MoveControl(glyph = "›", description = "Indent", enabled = move.canIndent, onClick = onIndent)
+            MoveControl(glyph = "↑", description = stringResource(Res.string.tasks_move_up), enabled = move.canMoveUp, onClick = onMoveUp)
+            MoveControl(glyph = "↓", description = stringResource(Res.string.tasks_move_down), enabled = move.canMoveDown, onClick = onMoveDown)
+            MoveControl(glyph = "‹", description = stringResource(Res.string.tasks_move_outdent), enabled = move.canOutdent, onClick = onOutdent)
+            MoveControl(glyph = "›", description = stringResource(Res.string.tasks_move_indent), enabled = move.canIndent, onClick = onIndent)
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = onDone, modifier = Modifier.heightIn(min = MinTouchTarget)) { Text("Done") }
+            TextButton(onClick = onDone, modifier = Modifier.heightIn(min = MinTouchTarget)) { Text(stringResource(Res.string.common_done)) }
         }
     }
 }

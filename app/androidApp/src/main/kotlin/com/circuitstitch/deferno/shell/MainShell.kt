@@ -40,6 +40,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.R
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_dismiss
+import com.circuitstitch.deferno.core.designsystem.resources.common_search
+import com.circuitstitch.deferno.core.designsystem.resources.shell_coming_soon_body
+import com.circuitstitch.deferno.core.designsystem.resources.shell_coming_soon_title
+import com.circuitstitch.deferno.core.designsystem.resources.shell_menu_cd
+import com.circuitstitch.deferno.core.designsystem.resources.shell_overlay_placeholder_body
+import com.circuitstitch.deferno.core.designsystem.resources.shell_overlay_placeholder_title
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.feature.braindumps.ui.InboxScreen
 import com.circuitstitch.deferno.feature.calendar.ui.CalendarScreen
@@ -53,6 +61,7 @@ import com.circuitstitch.deferno.shell.ui.ActivityScreen
 import com.circuitstitch.deferno.shell.ui.ShellChrome
 import com.circuitstitch.deferno.shell.ui.label
 import com.circuitstitch.deferno.shell.ui.systemGestureExclusionCompat
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The **Main shell** View (ADR-0013): the shared [ShellChrome] reveal drawer hosting the
@@ -126,17 +135,22 @@ private fun TasksSearchBar(onMenu: () -> Unit, onSearch: () -> Unit) {
             // Reserve the ☰ from the OS back gesture so its taps aren't eaten at the left edge after a
             // screen wake (the same fix as ShellTopBar's leading control).
             IconButton(onClick = onMenu, modifier = Modifier.systemGestureExclusionCompat()) {
-                Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(
+                    Icons.Filled.Menu,
+                    contentDescription = stringResource(Res.string.shell_menu_cd),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
+            val search = stringResource(Res.string.common_search)
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clickable(role = Role.Button, onClickLabel = "Search", onClick = onSearch),
+                    .clickable(role = Role.Button, onClickLabel = search, onClick = onSearch),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Search",
+                    text = search,
                     color = MaterialTheme.defernoColors.inkMuted,
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
@@ -221,13 +235,13 @@ private fun ComingSoon(destination: Destination, modifier: Modifier = Modifier) 
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "${destination.label} is coming soon",
+            text = stringResource(Res.string.shell_coming_soon_title, destination.label),
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
             modifier = Modifier.semantics { heading() },
         )
         Text(
-            text = "This space is reserved — its features arrive in an upcoming release.",
+            text = stringResource(Res.string.shell_coming_soon_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.defernoColors.inkMuted,
             textAlign = TextAlign.Center,
@@ -252,19 +266,19 @@ private fun OverlayHost(child: MainShellComponent.OverlayChild, onDismiss: () ->
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        text = "Overlay",
+                        text = stringResource(Res.string.shell_overlay_placeholder_title),
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.semantics { heading() },
                     )
                     Text(
-                        text = "The shell overlay route is wired — Search and New render real content over it.",
+                        text = stringResource(Res.string.shell_overlay_placeholder_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.defernoColors.inkMuted,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                     Button(onClick = onDismiss, modifier = Modifier.padding(top = 24.dp)) {
-                        Text("Dismiss")
+                        Text(stringResource(Res.string.common_dismiss))
                     }
                 }
             }

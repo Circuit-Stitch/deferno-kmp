@@ -47,6 +47,24 @@ import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
+import com.circuitstitch.deferno.core.designsystem.resources.common_kind_chore
+import com.circuitstitch.deferno.core.designsystem.resources.common_kind_event
+import com.circuitstitch.deferno.core.designsystem.resources.common_kind_habit
+import com.circuitstitch.deferno.core.designsystem.resources.common_kind_task
+import com.circuitstitch.deferno.core.designsystem.resources.common_open_settings
+import com.circuitstitch.deferno.core.designsystem.resources.common_when
+import com.circuitstitch.deferno.core.designsystem.resources.new_create_task
+import com.circuitstitch.deferno.core.designsystem.resources.new_dictation_denied
+import com.circuitstitch.deferno.core.designsystem.resources.new_dictation_denied_permanent
+import com.circuitstitch.deferno.core.designsystem.resources.new_kind_note
+import com.circuitstitch.deferno.core.designsystem.resources.new_kind_section
+import com.circuitstitch.deferno.core.designsystem.resources.new_notes_section
+import com.circuitstitch.deferno.core.designsystem.resources.new_saves_online_eyebrow
+import com.circuitstitch.deferno.core.designsystem.resources.new_submit_saving
+import com.circuitstitch.deferno.core.designsystem.resources.new_title_label
+import com.circuitstitch.deferno.core.designsystem.resources.shell_drawer_new_task
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.shell.ui.NewDateField
@@ -57,6 +75,7 @@ import com.circuitstitch.deferno.shell.ui.NewEventStartField
 import com.circuitstitch.deferno.shell.ui.NewNotesField
 import com.circuitstitch.deferno.shell.ui.NewStatusMessage
 import com.circuitstitch.deferno.shell.ui.NewTitleField
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The **New task** create surface View (#71, ADR-0015/0016), restyled to the "See the trees" direction:
@@ -135,19 +154,28 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "New task",
+                    text = stringResource(Res.string.shell_drawer_new_task),
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.semantics { heading() },
                 )
-                TextButton(onClick = component::dismiss) { Text("Cancel") }
+                TextButton(onClick = component::dismiss) { Text(stringResource(Res.string.common_cancel)) }
             }
 
             Spacer(Modifier.height(20.dp))
 
             // The explicit kind choice — the "See the trees" segmented control. Bound to the same
             // selectKind seam the old FilterChip picker used (ItemKind.entries is Task/Habit/Chore/Event).
-            SectionLabel("WHAT KIND OF THING?")
+            // Section labels are stored sentence-case in the catalog and uppercased at render (locale-safe
+            // casing lives with the styling, not baked into the resource).
+            SectionLabel(stringResource(Res.string.new_kind_section).uppercase())
             Spacer(Modifier.height(8.dp))
+            // The kind-picker labels — the explicit Task/Habit/Chore/Event choice, in ItemKind.entries order.
+            val kindOptions = listOf(
+                stringResource(Res.string.common_kind_task),
+                stringResource(Res.string.common_kind_habit),
+                stringResource(Res.string.common_kind_chore),
+                stringResource(Res.string.common_kind_event),
+            )
             SegmentedFilter(
                 options = kindOptions,
                 selectedIndex = ItemKind.entries.indexOf(state.selectedKind),
@@ -156,7 +184,7 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "You choose the kind here — Deferno never guesses it on New.",
+                text = stringResource(Res.string.new_kind_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.defernoColors.inkMuted,
             )
@@ -167,13 +195,13 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
             // dependency-module composeResources, so the shared atom takes an injected painter — the
             // same approach as the shell-chrome icons).
             val micIcon = painterResource(R.drawable.ic_mic)
-            SectionLabel("TITLE")
+            SectionLabel(stringResource(Res.string.new_title_label).uppercase())
             Spacer(Modifier.height(8.dp))
             NewTitleField(state = state, onTitleChange = component::setTitle, onMic = ::onMic, micIcon = micIcon)
 
             Spacer(Modifier.height(16.dp))
 
-            SectionLabel("NOTES · OPTIONAL")
+            SectionLabel(stringResource(Res.string.new_notes_section).uppercase())
             Spacer(Modifier.height(8.dp))
             NewNotesField(state = state, onNotesChange = component::setNotes, onMic = ::onMic, micIcon = micIcon)
 
@@ -181,9 +209,9 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
             // The Android voice of the shared atom, deep-linking to this app's OS settings page.
             NewDictationMessage(
                 status = state.dictation,
-                deniedNote = "Dictation needs microphone access. Tap the mic to allow it.",
-                permanentlyDeniedNote = "Dictation needs microphone access, which is turned off for this app.",
-                openSettingsLabel = "Open settings",
+                deniedNote = stringResource(Res.string.new_dictation_denied),
+                permanentlyDeniedNote = stringResource(Res.string.new_dictation_denied_permanent),
+                openSettingsLabel = stringResource(Res.string.common_open_settings),
                 onOpenSettings = {
                     context.startActivity(
                         Intent(
@@ -199,7 +227,7 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
 
             // The "When / details" settings card: the date + deadline-time rows (the non-Event kinds) or
             // the Event's fixed start/end window — re-skinned into one calm card, the same atoms + seams.
-            SectionLabel("WHEN")
+            SectionLabel(stringResource(Res.string.common_when).uppercase())
             Spacer(Modifier.height(8.dp))
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -228,14 +256,18 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
 
             Spacer(Modifier.height(20.dp))
 
-            Eyebrow("SAVES ONLINE · YOU CAN CHANGE ANYTHING LATER")
+            Eyebrow(stringResource(Res.string.new_saves_online_eyebrow).uppercase())
             Spacer(Modifier.height(10.dp))
 
             // Create — the big, thumb-reachable primary action (the "See the trees" verb), gated by the
             // same canSubmit rule and surfacing the submitting state ("Saving…"), wired to the existing
             // create seam.
             PrimaryActionButton(
-                text = if (state.status == NewStatus.Submitting) "Saving…" else "Create task",
+                text = if (state.status == NewStatus.Submitting) {
+                    stringResource(Res.string.new_submit_saving)
+                } else {
+                    stringResource(Res.string.new_create_task)
+                },
                 onClick = component::submit,
                 icon = null,
                 enabled = state.canSubmit,
@@ -243,6 +275,3 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
         }
     }
 }
-
-/** The kind-picker labels — the explicit Task/Habit/Chore/Event choice, in [ItemKind.entries] order. */
-private val kindOptions = listOf("Task", "Habit", "Chore", "Event")

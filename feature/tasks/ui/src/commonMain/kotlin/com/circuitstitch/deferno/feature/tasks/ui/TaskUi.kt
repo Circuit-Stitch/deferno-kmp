@@ -27,10 +27,12 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_back
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.ItemSource
-import kotlinx.datetime.LocalTime
+import org.jetbrains.compose.resources.stringResource
 
 // Shared building blocks for the Tasks Views (#27). These are thin, stateless Composables — they
 // render a Task and surface taps via callbacks; all logic stays in the shared components (#25).
@@ -89,13 +91,6 @@ internal fun titleWithExternalRef(
     append(title)
 }
 
-/** A [LocalTime] as a friendly 12-hour clock, e.g. `14:30` → "2:30 PM" (#348 display). */
-internal fun LocalTime.toDisplayTime(): String {
-    val h12 = (hour % 12).let { if (it == 0) 12 else it }
-    val suffix = if (hour < 12) "AM" else "PM"
-    return "$h12:${minute.toString().padStart(2, '0')} $suffix"
-}
-
 /**
  * A calm, single-line section header for a pane: a title (marked as a heading for screen readers)
  * with an optional leading **Back** affordance and trailing [actions]. Used by every Tasks pane so
@@ -117,7 +112,7 @@ internal fun PaneHeader(
                 androidx.compose.material3.TextButton(
                     onClick = onBack,
                     modifier = Modifier.heightIn(min = MinTouchTarget),
-                ) { Text("Back") }
+                ) { Text(stringResource(Res.string.common_back)) }
             }
             Text(
                 text = title,

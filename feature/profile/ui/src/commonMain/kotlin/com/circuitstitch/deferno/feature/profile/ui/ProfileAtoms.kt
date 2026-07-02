@@ -34,10 +34,28 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.auth_token_field_label
+import com.circuitstitch.deferno.core.designsystem.resources.common_account
+import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
+import com.circuitstitch.deferno.core.designsystem.resources.common_sign_out
+import com.circuitstitch.deferno.core.designsystem.resources.common_username_handle
+import com.circuitstitch.deferno.core.designsystem.resources.profile_account_active_label
+import com.circuitstitch.deferno.core.designsystem.resources.profile_account_credential_label
+import com.circuitstitch.deferno.core.designsystem.resources.profile_account_stored_on_device
+import com.circuitstitch.deferno.core.designsystem.resources.profile_account_time_zone_default
+import com.circuitstitch.deferno.core.designsystem.resources.profile_account_time_zone_label
+import com.circuitstitch.deferno.core.designsystem.resources.profile_admin_chip
+import com.circuitstitch.deferno.core.designsystem.resources.profile_loading
+import com.circuitstitch.deferno.core.designsystem.resources.profile_org_label
+import com.circuitstitch.deferno.core.designsystem.resources.profile_org_personal_chip
+import com.circuitstitch.deferno.core.designsystem.resources.profile_sign_out_confirm_body
+import com.circuitstitch.deferno.core.designsystem.resources.profile_sign_out_confirm_title
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.designsystem.theme.plexMono
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.User
+import org.jetbrains.compose.resources.stringResource
 
 /*
  * Shared, stateless Profile atoms (#84). Extracted out of the Android `ProfileScreen` so the
@@ -71,7 +89,7 @@ internal fun IdentityCard(user: User) {
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
-                    text = "@${user.username}",
+                    text = stringResource(Res.string.common_username_handle, user.username),
                     style = MaterialTheme.typography.bodyMedium,
                     fontFamily = plexMono(),
                     color = MaterialTheme.defernoColors.inkMuted,
@@ -82,19 +100,19 @@ internal fun IdentityCard(user: User) {
         // The personal Org — the lone Org a v1 user can know (ADR-0015: no org-listing API yet).
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = "Organization",
+                text = stringResource(Res.string.profile_org_label),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.defernoColors.inkMuted,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Chip(
-                    label = user.orgSlug.ifBlank { "Personal" },
+                    label = user.orgSlug.ifBlank { stringResource(Res.string.profile_org_personal_chip) },
                     container = MaterialTheme.colorScheme.secondaryContainer,
                     content = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
                 if (user.isAdmin) {
                     Chip(
-                        label = "Admin",
+                        label = stringResource(Res.string.profile_admin_chip),
                         container = MaterialTheme.colorScheme.tertiaryContainer,
                         content = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
@@ -116,16 +134,22 @@ internal fun AccountSection(account: Account, timeZone: String?, onSignOut: () -
     var showConfirm by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = "Account",
+            text = stringResource(Res.string.common_account),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.semantics { heading() },
         )
-        LabeledRow(label = "Active account", value = account.label)
+        LabeledRow(label = stringResource(Res.string.profile_account_active_label), value = account.label)
         // Time zone moved here from Settings → Account (#72); offline-first, so it always renders.
-        LabeledRow(label = "Time zone", value = timeZone ?: "Device default")
-        LabeledRow(label = "Credential", value = "Personal access token")
+        LabeledRow(
+            label = stringResource(Res.string.profile_account_time_zone_label),
+            value = timeZone ?: stringResource(Res.string.profile_account_time_zone_default),
+        )
+        LabeledRow(
+            label = stringResource(Res.string.profile_account_credential_label),
+            value = stringResource(Res.string.auth_token_field_label),
+        )
         Text(
-            text = "Stored only on this device.",
+            text = stringResource(Res.string.profile_account_stored_on_device),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.defernoColors.inkMuted,
         )
@@ -136,27 +160,24 @@ internal fun AccountSection(account: Account, timeZone: String?, onSignOut: () -
                 contentColor = MaterialTheme.colorScheme.onError,
             ),
             modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
-        ) { Text("Sign out") }
+        ) { Text(stringResource(Res.string.common_sign_out)) }
     }
 
     if (showConfirm) {
         AlertDialog(
             onDismissRequest = { showConfirm = false },
-            title = { Text("Sign out of ${account.label}?") },
+            title = { Text(stringResource(Res.string.profile_sign_out_confirm_title, account.label)) },
             text = {
-                Text(
-                    "This removes this account and its data from this device. " +
-                        "You’ll need to sign in again to use it here.",
-                )
+                Text(stringResource(Res.string.profile_sign_out_confirm_body))
             },
             confirmButton = {
                 TextButton(onClick = {
                     showConfirm = false
                     onSignOut()
-                }) { Text("Sign out") }
+                }) { Text(stringResource(Res.string.common_sign_out)) }
             },
             dismissButton = {
-                TextButton(onClick = { showConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showConfirm = false }) { Text(stringResource(Res.string.common_cancel)) }
             },
         )
     }
@@ -218,7 +239,7 @@ internal fun LoadingIdentity() {
     ) {
         CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
         Text(
-            text = "Loading your profile…",
+            text = stringResource(Res.string.profile_loading),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.defernoColors.inkMuted,
         )

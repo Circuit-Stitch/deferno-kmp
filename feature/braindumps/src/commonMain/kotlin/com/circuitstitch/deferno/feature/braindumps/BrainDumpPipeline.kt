@@ -40,6 +40,10 @@ class BrainDumpPipeline(
     private val salvageCounter: BrainDumpSalvageCounter,
     private val notifications: BrainDumpNotificationPreference,
     private val notifier: BrainDumpNotifier,
+    // Persisted draft prose (title/notes freeze in the locale they were written in). Injected so each
+    // platform passes its localized words; the defaults keep the English wiring working unchanged.
+    private val salvageReason: String = SALVAGE_REASON,
+    private val salvageTitle: (Int) -> String = { "Brain dump #$it" },
 ) {
     /**
      * Process one recorded [take]. [today]/[timeZone] are the captured date context extraction resolves relative
@@ -64,8 +68,8 @@ class BrainDumpPipeline(
             BrainDumpOutcome.Drafts(produced.size)
         } else {
             // The transcript is the most salvageable note; fall back to a reason only when there is none.
-            val notes = transcript.ifBlank { SALVAGE_REASON }
-            drafts.upsert(salvageDraft(salvageCounter.next(), notes, createdAt))
+            val notes = transcript.ifBlank { salvageReason }
+            drafts.upsert(salvageDraft(salvageTitle(salvageCounter.next()), notes, createdAt))
             retain(take, createdAt) // salvage keeps the recording even when keep-recordings is off
             BrainDumpOutcome.Salvaged
         }
@@ -148,9 +152,9 @@ fun isTrivialRecording(byteCount: Long): Boolean = byteCount <= WAV_HEADER_BYTES
 
 // A Salvage draft: a Ready BrainDumpDraft titled `Brain dump #n`, id keyed off the take's instant so a
 // re-processed take upserts the same row (idempotent) rather than duplicating (#270).
-private fun salvageDraft(number: Int, notes: String, createdAt: Instant): BrainDumpDraft = BrainDumpDraft(
+private fun salvageDraft(title: String, notes: String, createdAt: Instant): BrainDumpDraft = BrainDumpDraft(
     id = BrainDumpDraftId("salvage-${createdAt.toEpochMilliseconds()}"),
-    title = "Brain dump #$number",
+    title = title,
     notes = notes,
     status = BrainDumpDraftStatus.Ready,
     createdAt = createdAt,

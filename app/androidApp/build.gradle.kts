@@ -57,6 +57,13 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    androidResources {
+        // The shipped locales (keep in lockstep with res/xml/locales_config.xml): strips the dozens
+        // of other locales androidx libraries carry, so an unsupported device locale falls back to
+        // English instead of a mixed-language surface.
+        localeFilters += listOf("en", "es", "de", "hi", "pt")
+    }
+
     buildTypes {
         debug {
             // Dev PAT login placeholder (#68): seed Accounts from local.properties on debug builds.

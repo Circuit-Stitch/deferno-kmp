@@ -21,8 +21,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_dismiss
 import com.circuitstitch.deferno.core.designsystem.resources.ic_add_task
 import com.circuitstitch.deferno.core.designsystem.resources.ic_voice_chat
+import com.circuitstitch.deferno.core.designsystem.resources.shell_coming_soon_body_desktop
+import com.circuitstitch.deferno.core.designsystem.resources.shell_coming_soon_title
+import com.circuitstitch.deferno.core.designsystem.resources.shell_overlay_placeholder_body_desktop
+import com.circuitstitch.deferno.core.designsystem.resources.shell_overlay_placeholder_title
 import com.circuitstitch.deferno.feature.braindumps.ui.InboxDesktopScreen
 import com.circuitstitch.deferno.feature.calendar.ui.CalendarDesktopScreen
 import com.circuitstitch.deferno.feature.plan.ui.PlanDesktopScreen
@@ -39,6 +44,7 @@ import com.circuitstitch.deferno.shell.ui.BrainDumpPlaceholder
 import com.circuitstitch.deferno.shell.ui.ShellChrome
 import com.circuitstitch.deferno.shell.ui.label
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The **Main shell** View, desktop edition (ADR-0013 / ADR-0017): it renders the **shared** [ShellChrome]
@@ -185,16 +191,16 @@ private fun OverlayPlaceholder(onDismiss: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(text = "Overlay", style = MaterialTheme.typography.titleLarge)
+            Text(text = stringResource(Res.string.shell_overlay_placeholder_title), style = MaterialTheme.typography.titleLarge)
             Text(
-                text = "This surface arrives on desktop in an upcoming release.",
+                text = stringResource(Res.string.shell_overlay_placeholder_body_desktop),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp),
             )
             Button(onClick = onDismiss, modifier = Modifier.padding(top = 24.dp)) {
-                Text("Dismiss")
+                Text(stringResource(Res.string.common_dismiss))
             }
         }
     }
@@ -209,12 +215,12 @@ private fun ComingSoon(destination: Destination, modifier: Modifier = Modifier) 
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "${destination.label} is coming soon",
+            text = stringResource(Res.string.shell_coming_soon_title, destination.label),
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
         )
         Text(
-            text = "This space is reserved — its desktop view arrives in an upcoming release.",
+            text = stringResource(Res.string.shell_coming_soon_body_desktop),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

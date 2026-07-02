@@ -51,11 +51,15 @@ interface BreakdownComponent {
     val engine: StateFlow<BreakdownEngine?>
 
     /**
-     * Provide the on-device [classifier] so the [engine] can be built — once the [target] resolves.
+     * Provide the on-device [classifier] — plus the localized fallback [prerequisites] titles the engine may
+     * persist as server-synced subtasks — so the [engine] can be built once the [target] resolves.
      * Idempotent, so the Compose screen may call it on every (re)composition; only the first call builds.
      * Android/desktop only; iOS never calls it (its Swift engine owns classification).
      */
-    fun bind(classifier: ImpedimentClassifier)
+    fun bind(
+        classifier: ImpedimentClassifier,
+        prerequisites: BreakdownEngine.Prerequisites = BreakdownEngine.Prerequisites(),
+    )
 
     /** Submit the person's "what's stopping you?" answer. Launched on the component scope; a no-op until [bind] builds the engine. */
     fun submit(answer: String)
@@ -93,7 +97,7 @@ class DefaultBreakdownComponent(
     // Touched only from the Compose main thread (bind is called from a LaunchedEffect).
     private var building = false
 
-    override fun bind(classifier: ImpedimentClassifier) {
+    override fun bind(classifier: ImpedimentClassifier, prerequisites: BreakdownEngine.Prerequisites) {
         if (building) return
         building = true
         scope.launch {
@@ -104,6 +108,7 @@ class DefaultBreakdownComponent(
                 root = BreakdownEngine.ItemContext(id = taskId, title = task.title, notes = task.description),
                 classifier = classifier,
                 moves = actions,
+                prerequisites = prerequisites,
             )
         }
     }

@@ -77,8 +77,13 @@ sealed interface FeedbackStatus {
     /** Offline (ADR-0016): the gentle "reconnect to send"; nothing was queued. */
     data object Offline : FeedbackStatus
 
-    /** A server/upload rejection — a gentle [message]. */
-    data class Failed(val message: String) : FeedbackStatus
+    /** A server/upload rejection — a typed [reason] the View localizes; [message] keeps the
+     *  English words for the SwiftUI bridges. */
+    data class Failed(
+        val message: String,
+        val reason: FeedbackResult.Failed.Reason = FeedbackResult.Failed.Reason.ServerMessage,
+        val statusCode: Int? = null,
+    ) : FeedbackStatus
 }
 
 /**
@@ -134,7 +139,7 @@ class DefaultFeedbackComponent(
                     onDone()
                 }
                 FeedbackResult.Offline -> _state.update { it.copy(status = FeedbackStatus.Offline) }
-                is FeedbackResult.Failed -> _state.update { it.copy(status = FeedbackStatus.Failed(result.message)) }
+                is FeedbackResult.Failed -> _state.update { it.copy(status = FeedbackStatus.Failed(result.message, result.reason, result.statusCode)) }
             }
         }
     }

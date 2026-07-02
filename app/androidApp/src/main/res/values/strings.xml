@@ -7,4 +7,14 @@
          (SpectrumBars in BrainDumpScreen.kt). The choice persists device-locally. -->
     <string name="visual_feedback_on">Visual audio feedback turned on</string>
     <string name="visual_feedback_off">Visual audio feedback turned off</string>
+    <!-- Brain dump completion notification (BrainDumpWorker.kt): Android framework strings — the
+         channel name shows in the OS notification settings, and the title/body are posted from a
+         non-composable seam, so they live here rather than in the shared Compose catalog. -->
+    <string name="braindump_notification_channel_name">Brain dumps</string>
+    <string name="braindump_notification_title">Brain dump</string>
+    <plurals name="braindump_notification_drafts_ready">
+        <item quantity="one">1 draft ready to review</item>
+        <item quantity="other">%1$d drafts ready to review</item>
+    </plurals>
+    <string name="braindump_notification_recording_saved">Recording saved to review</string>
 </resources>

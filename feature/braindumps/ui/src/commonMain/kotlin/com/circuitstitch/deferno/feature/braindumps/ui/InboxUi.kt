@@ -32,8 +32,19 @@ import com.circuitstitch.deferno.core.designsystem.component.Eyebrow
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
 import com.circuitstitch.deferno.core.designsystem.component.TextLink
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_dismiss
+import com.circuitstitch.deferno.core.designsystem.resources.common_reconnect_to_save
+import com.circuitstitch.deferno.core.designsystem.resources.common_due
+import com.circuitstitch.deferno.core.designsystem.resources.inbox_add_task
+import com.circuitstitch.deferno.core.designsystem.resources.inbox_draft_eyebrow_caps
+import com.circuitstitch.deferno.core.designsystem.resources.inbox_due_date_time
+import com.circuitstitch.deferno.core.designsystem.resources.inbox_empty_body
+import com.circuitstitch.deferno.core.designsystem.resources.inbox_empty_title
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.BrainDumpDraft
+import com.circuitstitch.deferno.feature.braindumps.InboxNote
+import org.jetbrains.compose.resources.stringResource
 
 /** Vertical gap between Inbox list rows (header · section · draft cards · footer) — shared by the
  *  Android and desktop lists. */
@@ -58,14 +69,14 @@ internal fun EmptyInbox(modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            text = "Inbox zero",
+            text = stringResource(Res.string.inbox_empty_title),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.semantics { heading() },
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Brain-dump drafts land here for you to review. Speak a brain dump and Deferno turns it into draft tasks for this list.",
+            text = stringResource(Res.string.inbox_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -87,7 +98,7 @@ internal fun EmptyInbox(modifier: Modifier = Modifier) {
 internal fun DraftCard(
     draft: BrainDumpDraft,
     accepting: Boolean,
-    note: String?,
+    note: InboxNote?,
     onAccept: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -106,9 +117,9 @@ internal fun DraftCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Eyebrow(text = "DRAFTED")
+            Eyebrow(text = stringResource(Res.string.inbox_draft_eyebrow_caps))
             if (!accepting) {
-                TextLink(text = "Dismiss", onClick = onDismiss, color = MaterialTheme.defernoColors.inkMuted)
+                TextLink(text = stringResource(Res.string.common_dismiss), onClick = onDismiss, color = MaterialTheme.defernoColors.inkMuted)
             }
         }
         Spacer(Modifier.height(4.dp))
@@ -130,7 +141,11 @@ internal fun DraftCard(
         note?.let {
             Spacer(Modifier.height(8.dp))
             Text(
-                text = it,
+                // The fixed arm localizes; a server-authored message renders verbatim.
+                text = when (it) {
+                    InboxNote.Offline -> stringResource(Res.string.common_reconnect_to_save)
+                    is InboxNote.ServerMessage -> it.text
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.error,
             )
@@ -141,12 +156,14 @@ internal fun DraftCard(
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             }
         } else {
-            PrimaryActionButton(text = "Add task", onClick = onAccept, icon = DefernoIcons.Check)
+            PrimaryActionButton(text = stringResource(Res.string.inbox_add_task), onClick = onAccept, icon = DefernoIcons.Check)
         }
     }
 }
 
 /** A short "Due …" line for a draft's deadline, or null when it carries none (mirrors the Brain dump overlay). */
+@Composable
 private fun BrainDumpDraft.dueLine(): String? = completeBy?.let { due ->
-    deadlineTimeOfDay?.let { time -> "Due $due at $time" } ?: "Due $due"
+    deadlineTimeOfDay?.let { time -> stringResource(Res.string.inbox_due_date_time, due, time) }
+        ?: stringResource(Res.string.common_due, due)
 }

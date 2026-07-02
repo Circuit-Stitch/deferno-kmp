@@ -50,7 +50,14 @@ data class ItemTreeState(
  * [operation] feeds the shake confirm ("Undo [operation]?"); [id] is a monotonic token that re-keys the
  * single-shot snackbar effect across successive moves (two indents in a row still each raise the snackbar).
  */
-data class MoveUndo(val id: Int, val operation: String, val structural: Boolean)
+data class MoveUndo(
+    val id: Int,
+    /** The legacy lowercase label the SwiftUI bridges render — [operationKind]'s token. */
+    val operation: String,
+    val structural: Boolean,
+    /** Typed for locale-aware rendering in the Compose View. */
+    val operationKind: MoveOperation,
+)
 
 /**
  * What a device shake should do (ADR-0034 decision 8, #230): raise the [Confirm] prompt for [operation]
@@ -58,7 +65,9 @@ data class MoveUndo(val id: Int, val operation: String, val structural: Boolean)
  * already emitted its tracking event). The View renders the confirm and, on accept, calls [ItemTreeComponent.undoLastMove].
  */
 sealed interface ShakeOutcome {
-    data class Confirm(val operation: String) : ShakeOutcome
+    /** [operation] keeps the legacy lowercase label for the SwiftUI bridges; the Compose View
+     *  localizes from [operationKind]. */
+    data class Confirm(val operation: String, val operationKind: MoveOperation) : ShakeOutcome
     data object Nothing : ShakeOutcome
 }
 
@@ -256,7 +265,7 @@ class DefaultItemTreeComponent(
             menuStates,
         ) { core, undoable, menus ->
             core.copy(
-                lastMove = undoable?.let { MoveUndo(it.id, it.operation, it.structural) },
+                lastMove = undoable?.let { MoveUndo(it.id, it.operation.token, it.structural, it.operation) },
                 menuStates = menus,
             )
         }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ItemTreeState())
@@ -294,13 +303,13 @@ class DefaultItemTreeComponent(
         liftedId.value = null
     }
 
-    override fun onMoveUp() = applyMove("reorder") { it.up }
+    override fun onMoveUp() = applyMove(MoveOperation.Reorder) { it.up }
 
-    override fun onMoveDown() = applyMove("reorder") { it.down }
+    override fun onMoveDown() = applyMove(MoveOperation.Reorder) { it.down }
 
-    override fun onIndent() = applyMove("indent") { it.indent }
+    override fun onIndent() = applyMove(MoveOperation.Indent) { it.indent }
 
-    override fun onOutdent() = applyMove("outdent") { it.outdent }
+    override fun onOutdent() = applyMove(MoveOperation.Outdent) { it.outdent }
 
     /**
      * Issues the [select]ed relative move for the lifted item as one independently-undoable Move (#228):
@@ -314,7 +323,7 @@ class DefaultItemTreeComponent(
      * snackbar; a same-level reorder records too (shake-undoable) but shows no snackbar. [operation] labels
      * the shake confirm.
      */
-    private fun applyMove(operation: String, select: (MoveOptions) -> MoveTarget?) {
+    private fun applyMove(operation: MoveOperation, select: (MoveOptions) -> MoveTarget?) {
         val id = liftedId.value ?: return
         scope.launch {
             val items = itemRepository.observeItems().first()
@@ -335,7 +344,7 @@ class DefaultItemTreeComponent(
         if (!shakeToUndoPreference.enabled()) return ShakeOutcome.Nothing
         val entry = lastUndoable.current.value
             ?: return ShakeOutcome.Nothing.also { trackEvent("shake_undo_no_target") }
-        return ShakeOutcome.Confirm(entry.operation)
+        return ShakeOutcome.Confirm(entry.operation.token, entry.operation)
     }
 
     // --- Kind-aware command menu writes (ADR-0034 decision 7, #231). Each is a thin dispatch to its

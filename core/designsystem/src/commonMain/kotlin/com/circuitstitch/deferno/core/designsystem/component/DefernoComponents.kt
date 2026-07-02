@@ -40,8 +40,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_blocked
+import com.circuitstitch.deferno.core.designsystem.resources.common_search
+import com.circuitstitch.deferno.core.designsystem.resources.common_state_done
+import com.circuitstitch.deferno.core.designsystem.resources.common_state_not_done
+import com.circuitstitch.deferno.core.designsystem.resources.common_state_selected
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.designsystem.theme.plexMono
+import org.jetbrains.compose.resources.stringResource
 
 /*
  * Shared "See the trees" design-language atoms (the Deferno Android direction). Thin, stateless,
@@ -129,6 +136,8 @@ fun CheckDot(
     size: androidx.compose.ui.unit.Dp = 24.dp,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val checkedState = stringResource(Res.string.common_state_done)
+    val uncheckedState = stringResource(Res.string.common_state_not_done)
     Box(
         modifier = modifier
             .size(size)
@@ -140,7 +149,7 @@ fun CheckDot(
             .clickable(enabled = enabled, role = Role.Checkbox, onClick = { onCheckedChange(!checked) })
             .semantics {
                 this.contentDescription = contentDescription
-                this.stateDescription = if (checked) "Done" else "Not done"
+                this.stateDescription = if (checked) checkedState else uncheckedState
             },
         contentAlignment = Alignment.Center,
     ) {
@@ -307,7 +316,7 @@ fun SearchBarDisplay(placeholder: String, onClick: () -> Unit, modifier: Modifie
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
-            .clickable(role = Role.Button, onClickLabel = "Search", onClick = onClick),
+            .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.common_search), onClick = onClick),
     ) {
         Row(
             Modifier.padding(horizontal = 15.dp),
@@ -339,6 +348,7 @@ fun SegmentedFilter(
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        val selectedState = stringResource(Res.string.common_state_selected)
         options.forEachIndexed { i, label ->
             val selected = i == selectedIndex
             Surface(
@@ -349,7 +359,7 @@ fun SegmentedFilter(
                     .heightIn(min = 40.dp)
                     .clip(RoundedCornerShape(9.dp))
                     .clickable(role = Role.RadioButton, onClick = { onSelect(i) })
-                    .semantics { if (selected) stateDescription = "Selected" },
+                    .semantics { if (selected) stateDescription = selectedState },
             ) {
                 Box(Modifier.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                     Text(
@@ -441,10 +451,10 @@ fun TreeChip(
 @Composable
 fun BlockedChip(modifier: Modifier = Modifier) {
     TreeChip(
-        text = "Blocked",
+        text = stringResource(Res.string.common_blocked),
         modifier = modifier,
         filled = false,
         content = MaterialTheme.defernoColors.inkMuted,
-        semanticLabel = "Blocked",
+        semanticLabel = stringResource(Res.string.common_blocked),
     )
 }

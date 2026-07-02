@@ -28,8 +28,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
+import com.circuitstitch.deferno.core.designsystem.resources.common_undo
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_undo_operation_confirm_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_move_operation_reorder
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_move_operation_outdent
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_move_operation_indent
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_moved_snackbar
 import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
+import com.circuitstitch.deferno.feature.tasks.MoveOperation
 import com.circuitstitch.deferno.feature.tasks.ShakeOutcome
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.sqrt
 
 /**
@@ -59,11 +69,14 @@ fun TaskListScreen(
 
     // The top "Moved · Undo" snackbar fires once per *structural* move (keyed on the move token so two
     // indents in a row each raise it); a plain reorder records an undoable but shows no snackbar (#230).
+    // Resolved in composition — showSnackbar runs in a coroutine, outside composable scope.
+    val movedMessage = stringResource(Res.string.tasks_moved_snackbar)
+    val undoLabel = stringResource(Res.string.common_undo)
     LaunchedEffect(state.lastMove?.takeIf { it.structural }?.id) {
         if (state.lastMove?.structural != true) return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
-            message = "Moved",
-            actionLabel = "Undo",
+            message = movedMessage,
+            actionLabel = undoLabel,
             duration = SnackbarDuration.Short,
         )
         if (result == SnackbarResult.ActionPerformed) component.undoLastMove()
@@ -71,10 +84,10 @@ fun TaskListScreen(
 
     // Shake-to-undo: a shake asks the component what to do (it gates on the device-local toggle + emits the
     // no-target tracking event itself); a Confirm raises the "Undo [operation]?" prompt before reverting.
-    var pendingUndo by remember { mutableStateOf<String?>(null) }
+    var pendingUndo by remember { mutableStateOf<MoveOperation?>(null) }
     ShakeDetector {
         when (val outcome = component.onShake()) {
-            is ShakeOutcome.Confirm -> pendingUndo = outcome.operation
+            is ShakeOutcome.Confirm -> pendingUndo = outcome.operationKind
             ShakeOutcome.Nothing -> Unit
         }
     }
@@ -123,12 +136,23 @@ fun TaskListScreen(
                 TextButton(onClick = {
                     pendingUndo = null
                     component.undoLastMove()
-                }) { Text("Undo") }
+                }) { Text(stringResource(Res.string.common_undo)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingUndo = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingUndo = null }) { Text(stringResource(Res.string.common_cancel)) }
             },
-            title = { Text("Undo $operation?") },
+            title = {
+                Text(
+                    stringResource(
+                        Res.string.tasks_undo_operation_confirm_title,
+                        when (operation) {
+                            MoveOperation.Reorder -> stringResource(Res.string.tasks_move_operation_reorder)
+                            MoveOperation.Indent -> stringResource(Res.string.tasks_move_operation_indent)
+                            MoveOperation.Outdent -> stringResource(Res.string.tasks_move_operation_outdent)
+                        },
+                    ),
+                )
+            },
         )
     }
 }

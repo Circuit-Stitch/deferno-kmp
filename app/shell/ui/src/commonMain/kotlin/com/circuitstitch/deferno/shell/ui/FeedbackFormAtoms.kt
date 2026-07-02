@@ -29,10 +29,35 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.circuitstitch.deferno.core.data.feedback.FeedbackResult
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_attach_files
+import com.circuitstitch.deferno.core.designsystem.resources.common_error_app_out_of_date
+import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
+import com.circuitstitch.deferno.core.designsystem.resources.common_remove
+import com.circuitstitch.deferno.core.designsystem.resources.common_remove_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_send
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_attachment_cd
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_body_cd
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_body_label
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_category_bug
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_category_cd
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_category_idea
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_category_other
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_category_question
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_error_presign_failed
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_error_send_failed
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_error_upload_failed
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_offline_note
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_status_cd
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_subject_label
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_submit_sending
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_title
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.shell.FeedbackCategory
 import com.circuitstitch.deferno.shell.FeedbackComponent
 import com.circuitstitch.deferno.shell.FeedbackStatus
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The shared, stateless **Feedback** form (#375): the platform-neutral render of
@@ -60,54 +85,58 @@ fun FeedbackForm(
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
-                    text = "Send feedback",
+                    text = stringResource(Res.string.feedback_title),
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.semantics { heading() },
                 )
-                TextButton(onClick = component::dismiss) { Text("Cancel") }
+                TextButton(onClick = component::dismiss) { Text(stringResource(Res.string.common_cancel)) }
             }
 
             Spacer(Modifier.padding(top = 16.dp))
 
+            val categoryCd = stringResource(Res.string.feedback_category_cd)
             Row(
-                Modifier.fillMaxWidth().semantics { contentDescription = "Category" },
+                Modifier.fillMaxWidth().semantics { contentDescription = categoryCd },
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 FeedbackCategory.entries.forEach { category ->
                     FilterChip(
                         selected = state.category == category,
                         onClick = { component.setCategory(category) },
-                        label = { Text(category.label) },
+                        label = { Text(category.chipLabel) },
                     )
                 }
             }
 
             Spacer(Modifier.padding(top = 16.dp))
 
+            val subjectLabel = stringResource(Res.string.feedback_subject_label)
             OutlinedTextField(
                 value = state.subject,
                 onValueChange = component::setSubject,
-                label = { Text("Subject") },
+                label = { Text(subjectLabel) },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Subject" },
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = subjectLabel },
             )
 
             Spacer(Modifier.padding(top = 8.dp))
 
+            val bodyCd = stringResource(Res.string.feedback_body_cd)
             OutlinedTextField(
                 value = state.body,
                 onValueChange = component::setBody,
-                label = { Text("What's going on?") },
+                label = { Text(stringResource(Res.string.feedback_body_label)) },
                 minLines = 4,
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Feedback body" },
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = bodyCd },
             )
 
             if (onAttach != null) {
                 Spacer(Modifier.padding(top = 12.dp))
+                val attachFiles = stringResource(Res.string.common_attach_files)
                 OutlinedButton(
                     onClick = onAttach,
-                    modifier = Modifier.semantics { contentDescription = "Attach files" },
-                ) { Text("Attach files") }
+                    modifier = Modifier.semantics { contentDescription = attachFiles },
+                ) { Text(attachFiles) }
             }
 
             state.attachments.forEachIndexed { index, file ->
@@ -116,21 +145,23 @@ fun FeedbackForm(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
+                    val attachmentCd = stringResource(Res.string.feedback_attachment_cd, file.filename)
                     Text(
                         text = file.filename,
                         style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.semantics { contentDescription = "Attachment ${file.filename}" },
+                        modifier = Modifier.semantics { contentDescription = attachmentCd },
                     )
+                    val removeCd = stringResource(Res.string.common_remove_named_cd, file.filename)
                     TextButton(
                         onClick = { component.removeAttachment(index) },
-                        modifier = Modifier.semantics { contentDescription = "Remove ${file.filename}" },
-                    ) { Text("Remove") }
+                        modifier = Modifier.semantics { contentDescription = removeCd },
+                    ) { Text(stringResource(Res.string.common_remove)) }
                 }
             }
 
             when (val status = state.status) {
-                FeedbackStatus.Offline -> FeedbackNote("You're offline — reconnect to send. Nothing was queued.")
-                is FeedbackStatus.Failed -> FeedbackNote(status.message, error = true)
+                FeedbackStatus.Offline -> FeedbackNote(stringResource(Res.string.feedback_offline_note))
+                is FeedbackStatus.Failed -> FeedbackNote(status.localizedMessage, error = true)
                 else -> Unit
             }
 
@@ -141,7 +172,13 @@ fun FeedbackForm(
                 enabled = state.canSubmit,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (state.status == FeedbackStatus.Submitting) "Sending…" else "Send")
+                Text(
+                    if (state.status == FeedbackStatus.Submitting) {
+                        stringResource(Res.string.feedback_submit_sending)
+                    } else {
+                        stringResource(Res.string.common_send)
+                    },
+                )
             }
         }
     }
@@ -149,10 +186,31 @@ fun FeedbackForm(
 
 @Composable
 private fun FeedbackNote(text: String, error: Boolean = false) {
+    val statusCd = stringResource(Res.string.feedback_status_cd)
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
         color = if (error) MaterialTheme.colorScheme.error else MaterialTheme.defernoColors.inkMuted,
-        modifier = Modifier.fillMaxWidth().padding(top = 16.dp).semantics { contentDescription = "Feedback status" },
+        modifier = Modifier.fillMaxWidth().padding(top = 16.dp).semantics { contentDescription = statusCd },
     )
 }
+
+/** The localized chip label for a [FeedbackCategory] — the enum's [FeedbackCategory.label] stays the
+ *  wire/bridge English. */
+private val FeedbackCategory.chipLabel: String
+    @Composable get() = when (this) {
+        FeedbackCategory.Bug -> stringResource(Res.string.feedback_category_bug)
+        FeedbackCategory.Idea -> stringResource(Res.string.feedback_category_idea)
+        FeedbackCategory.Question -> stringResource(Res.string.feedback_category_question)
+        FeedbackCategory.Other -> stringResource(Res.string.feedback_category_other)
+    }
+
+/** The localized note for a failed send — server-authored prose renders verbatim. */
+private val FeedbackStatus.Failed.localizedMessage: String
+    @Composable get() = when (reason) {
+        FeedbackResult.Failed.Reason.PrepareAttachments -> stringResource(Res.string.feedback_error_presign_failed)
+        FeedbackResult.Failed.Reason.UploadFailed -> stringResource(Res.string.feedback_error_upload_failed, statusCode ?: 0)
+        FeedbackResult.Failed.Reason.SendFailed -> stringResource(Res.string.feedback_error_send_failed, statusCode ?: 0)
+        FeedbackResult.Failed.Reason.AppOutOfDate -> stringResource(Res.string.common_error_app_out_of_date)
+        FeedbackResult.Failed.Reason.ServerMessage -> message
+    }

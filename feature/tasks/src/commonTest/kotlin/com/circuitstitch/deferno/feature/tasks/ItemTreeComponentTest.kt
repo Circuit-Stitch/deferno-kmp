@@ -300,7 +300,7 @@ class ItemTreeComponentTest {
         advanceUntilIdle()
         c.onEnterMoveMode("b"); c.onIndent(); advanceUntilIdle()
 
-        assertEquals(ShakeOutcome.Confirm("indent"), c.onShake())
+        assertEquals(ShakeOutcome.Confirm("indent", MoveOperation.Indent), c.onShake())
     }
 
     @Test

@@ -52,9 +52,29 @@ import com.circuitstitch.deferno.core.designsystem.format.formatDate
 import com.circuitstitch.deferno.core.designsystem.format.formatTime
 import com.circuitstitch.deferno.core.designsystem.format.shortWeekdayLabels
 import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_action_done
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_action_reschedule
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_action_skip
 import com.circuitstitch.deferno.core.designsystem.resources.calendar_agenda_heading_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_day_item_count
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_day_no_items
 import com.circuitstitch.deferno.core.designsystem.resources.calendar_day_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_day_selected
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_empty_body
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_empty_title
 import com.circuitstitch.deferno.core.designsystem.resources.calendar_month_year_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_next_month
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_previous_month
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_reschedule_pick_day
+import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
+import com.circuitstitch.deferno.core.designsystem.resources.common_clear
+import com.circuitstitch.deferno.core.designsystem.resources.common_start
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_done
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_in_progress
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_in_review
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_scheduled
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_skipped
 import com.circuitstitch.deferno.core.designsystem.resources.common_time_pattern
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.CalendarItem
@@ -68,6 +88,7 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 // Stateless building blocks for the Calendar View (#74): a month grid + a day agenda over Occurrences.
@@ -138,13 +159,15 @@ fun CalendarContent(
 /** The month label (e.g. "June 2026") flanked by previous / next paging arrows. */
 @Composable
 internal fun MonthHeader(visibleMonth: LocalDate, onPrevious: () -> Unit, onNext: () -> Unit, modifier: Modifier = Modifier) {
+    val previousMonthLabel = stringResource(Res.string.calendar_previous_month)
+    val nextMonthLabel = stringResource(Res.string.calendar_next_month)
     Row(
         modifier = modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(
             onClick = onPrevious,
-            modifier = Modifier.size(MinTouchTarget).semantics { contentDescription = "Previous month" },
+            modifier = Modifier.size(MinTouchTarget).semantics { contentDescription = previousMonthLabel },
         ) { Text("‹", style = MaterialTheme.typography.headlineSmall) }
         Text(
             // The visible-month label, e.g. "June 2026" in the device's language.
@@ -155,7 +178,7 @@ internal fun MonthHeader(visibleMonth: LocalDate, onPrevious: () -> Unit, onNext
         )
         IconButton(
             onClick = onNext,
-            modifier = Modifier.size(MinTouchTarget).semantics { contentDescription = "Next month" },
+            modifier = Modifier.size(MinTouchTarget).semantics { contentDescription = nextMonthLabel },
         ) { Text("›", style = MaterialTheme.typography.headlineSmall) }
     }
 }
@@ -223,10 +246,20 @@ private fun DayCell(
     }
     // The spoken day, e.g. "June 8" in the device's language.
     val dayLabel = formatDate(date, stringResource(Res.string.calendar_day_pattern))
+    val countLabel = if (markerCount > 0) {
+        pluralStringResource(Res.plurals.calendar_day_item_count, markerCount, markerCount)
+    } else {
+        stringResource(Res.string.calendar_day_no_items)
+    }
+    val selectedLabel = stringResource(Res.string.calendar_day_selected)
     val description = buildString {
         append(dayLabel)
-        append(if (markerCount > 0) ", $markerCount ${if (markerCount == 1) "item" else "items"}" else ", no items")
-        if (isSelected) append(", selected")
+        append(", ")
+        append(countLabel)
+        if (isSelected) {
+            append(", ")
+            append(selectedLabel)
+        }
     }
     Box(
         modifier = modifier
@@ -275,12 +308,12 @@ internal fun RescheduleBanner(item: CalendarItem, onCancel: () -> Unit, modifier
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Pick a new day for “${item.title}”",
+                text = stringResource(Res.string.calendar_reschedule_pick_day, item.title),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onCancel) { Text("Cancel") }
+            TextButton(onClick = onCancel) { Text(stringResource(Res.string.common_cancel)) }
         }
     }
 }
@@ -331,10 +364,10 @@ private fun EmptyAgenda(modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxWidth().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Nothing on this day", style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(Res.string.calendar_empty_title), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(8.dp))
         Text(
-            "A clear day. Add something when you're ready — no pressure.",
+            stringResource(Res.string.calendar_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.defernoColors.inkMuted,
             textAlign = TextAlign.Center,
@@ -383,17 +416,17 @@ internal fun AgendaRow(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Habit firings are binary (Done / Clear); chore/event firings carry start / done / skip.
                 if (item.kind != ItemKind.Habit) {
-                    ActionChip("Start") { onMark(item.id, OccurrenceAction.Start) }
+                    ActionChip(stringResource(Res.string.common_start)) { onMark(item.id, OccurrenceAction.Start) }
                 }
-                ActionChip("Done") { onMark(item.id, OccurrenceAction.Complete) }
+                ActionChip(stringResource(Res.string.calendar_action_done)) { onMark(item.id, OccurrenceAction.Complete) }
                 if (item.kind != ItemKind.Habit) {
-                    ActionChip("Skip") { onMark(item.id, OccurrenceAction.Skip) }
+                    ActionChip(stringResource(Res.string.calendar_action_skip)) { onMark(item.id, OccurrenceAction.Skip) }
                 }
-                ActionChip("Clear") { onClear(item.id) }
+                ActionChip(stringResource(Res.string.common_clear)) { onClear(item.id) }
                 // Reschedule is Events-only in v1 (habit/chore reschedule is server-unimplemented; moving a
                 // row that would snap back reads as shaming-by-failure, design-principle #4).
                 if (item.kind == ItemKind.Event) {
-                    ActionChip("Reschedule") { onStartReschedule(item) }
+                    ActionChip(stringResource(Res.string.calendar_action_reschedule)) { onStartReschedule(item) }
                 }
             }
         }
@@ -417,12 +450,13 @@ private fun AgendaStatusChip(status: WorkingState, modifier: Modifier = Modifier
     val (label, container, content) = when (status) {
         // A scheduled-but-unfinished firing — including a past one — reads plainly as "Scheduled"
         // (design-principle #4: no "overdue"/"missed"/"late").
-        WorkingState.Open -> Triple("Scheduled", scheme.surfaceVariant, scheme.onSurfaceVariant)
-        WorkingState.InProgress -> Triple("In progress", scheme.primaryContainer, scheme.onPrimaryContainer)
-        WorkingState.InReview -> Triple("In review", scheme.secondaryContainer, scheme.onSecondaryContainer)
-        WorkingState.Done -> Triple("Done", brand.successContainer, brand.onSuccessContainer)
-        WorkingState.Dropped -> Triple("Skipped", scheme.surfaceVariant, brand.inkMuted)
+        WorkingState.Open -> Triple(stringResource(Res.string.common_status_scheduled), scheme.surfaceVariant, scheme.onSurfaceVariant)
+        WorkingState.InProgress -> Triple(stringResource(Res.string.common_status_in_progress), scheme.primaryContainer, scheme.onPrimaryContainer)
+        WorkingState.InReview -> Triple(stringResource(Res.string.common_status_in_review), scheme.secondaryContainer, scheme.onSecondaryContainer)
+        WorkingState.Done -> Triple(stringResource(Res.string.common_status_done), brand.successContainer, brand.onSuccessContainer)
+        WorkingState.Dropped -> Triple(stringResource(Res.string.common_status_skipped), scheme.surfaceVariant, brand.inkMuted)
     }
+    val statusDescription = stringResource(Res.string.common_status_a11y, label)
     Text(
         text = label,
         style = MaterialTheme.typography.labelMedium,
@@ -431,7 +465,7 @@ private fun AgendaStatusChip(status: WorkingState, modifier: Modifier = Modifier
             .clip(MaterialTheme.shapes.small)
             .background(container)
             .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clearAndSetSemantics { contentDescription = "Status: $label" },
+            .clearAndSetSemantics { contentDescription = statusDescription },
     )
 }
 

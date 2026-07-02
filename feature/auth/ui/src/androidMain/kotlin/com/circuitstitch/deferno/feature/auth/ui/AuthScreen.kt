@@ -18,9 +18,20 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.auth_session_expired_body
+import com.circuitstitch.deferno.core.designsystem.resources.auth_session_expired_title
+import com.circuitstitch.deferno.core.designsystem.resources.auth_signed_in_as
+import com.circuitstitch.deferno.core.designsystem.resources.auth_unavailable_body
+import com.circuitstitch.deferno.core.designsystem.resources.auth_unavailable_title
+import com.circuitstitch.deferno.core.designsystem.resources.common_retry
+import com.circuitstitch.deferno.core.designsystem.resources.common_sign_in_again
+import com.circuitstitch.deferno.core.designsystem.resources.common_signing_in
+import com.circuitstitch.deferno.core.designsystem.resources.common_username_handle
 import com.circuitstitch.deferno.core.model.User
 import com.circuitstitch.deferno.feature.auth.AuthComponent
 import com.circuitstitch.deferno.feature.auth.AuthState
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The #20 tracer's minimal identity screen — the visible end of the `/auth/me` vertical slice. A thin
@@ -47,7 +58,7 @@ internal fun AuthContent(state: AuthState, onRetry: () -> Unit, modifier: Modifi
             AuthState.Loading -> {
                 CircularProgressIndicator()
                 Text(
-                    text = "Signing in…",
+                    text = stringResource(Res.string.common_signing_in),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 16.dp),
@@ -57,16 +68,16 @@ internal fun AuthContent(state: AuthState, onRetry: () -> Unit, modifier: Modifi
             is AuthState.SignedIn -> SignedIn(state.user)
 
             AuthState.ReauthRequired -> Retryable(
-                title = "Session expired",
-                body = "Your sign-in for this account has ended. Sign in again to continue.",
-                action = "Sign in again",
+                title = stringResource(Res.string.auth_session_expired_title),
+                body = stringResource(Res.string.auth_session_expired_body),
+                action = stringResource(Res.string.common_sign_in_again),
                 onAction = onRetry,
             )
 
             AuthState.Unavailable -> Retryable(
-                title = "Can’t reach Deferno",
-                body = "Check your connection and try again.",
-                action = "Retry",
+                title = stringResource(Res.string.auth_unavailable_title),
+                body = stringResource(Res.string.auth_unavailable_body),
+                action = stringResource(Res.string.common_retry),
                 onAction = onRetry,
             )
         }
@@ -76,7 +87,7 @@ internal fun AuthContent(state: AuthState, onRetry: () -> Unit, modifier: Modifi
 @Composable
 private fun SignedIn(user: User) {
     Text(
-        text = "Signed in as",
+        text = stringResource(Res.string.auth_signed_in_as),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -87,7 +98,7 @@ private fun SignedIn(user: User) {
         modifier = Modifier.padding(top = 4.dp).semantics { heading() },
     )
     Text(
-        text = "@${user.username}",
+        text = stringResource(Res.string.common_username_handle, user.username),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 2.dp),

@@ -31,6 +31,9 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
+            // stringResource/pluralStringResource over core:designsystem's generated string catalog (Res);
+            // also serves the desktop source-mark painterResource(DrawableResource), previously jvmMain-only.
+            implementation(libs.compose.components.resources)
         }
         // The Android-native screens (#27): they render the shared Decompose components (#25) and
         // observe the co-resident detail/tree slots via `subscribeAsState()`. Kept out of commonMain
@@ -68,10 +71,8 @@ kotlin {
             implementation(project(":core:data"))
             implementation(libs.decompose.extensions.compose)
             // The desktop source-mark painter loads core:designsystem's Compose resource via its public
-            // Res (Res.drawable.ic_source_*); painterResource(DrawableResource) lives in this artifact,
-            // which designsystem only `implementation`s (not exposed transitively). Android needs nothing
-            // extra — it uses androidx.compose.ui.res.painterResource(R.drawable.*) from libs.compose.ui.
-            implementation(libs.compose.components.resources)
+            // Res (Res.drawable.ic_source_*); painterResource(DrawableResource) comes from
+            // libs.compose.components.resources, declared in commonMain above.
         }
         // The desktop render/screenshot test (#86, cf. #39): a Compose-Multiplatform UI test on the
         // JVM-fast path (no device) exercising the desktop Search View's empty/results/no-matches states

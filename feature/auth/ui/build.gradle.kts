@@ -19,6 +19,9 @@ kotlin {
         androidMain.dependencies {
             implementation(project(":feature:auth"))
             implementation(project(":core:model"))
+            // core:designsystem hosts the shared string catalog (composeResources Res accessors).
+            implementation(project(":core:designsystem"))
+            implementation(libs.compose.components.resources)
 
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
