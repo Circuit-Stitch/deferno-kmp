@@ -33,6 +33,8 @@ data class AssistantState(
     val enabling: Boolean = false,
     val usageExhausted: Boolean = false,
     val error: String? = null,
+    /** Typed twin of [error] for locale-aware rendering — [error] keeps the English words for the SwiftUI bridges. */
+    val errorKind: AssistantError? = null,
 ) {
     /** The gate is on — render the chat. */
     val available: Boolean get() = availability?.available == true
@@ -52,4 +54,14 @@ data class AssistantState(
 
     /** Whether a typed message can be sent right now (the composer guard plus a non-blank message). */
     val canSend: Boolean get() = composerEnabled && composer.isNotBlank()
+}
+
+/** What went wrong — typed so the Compose View localizes; server prose is rendered verbatim. */
+sealed interface AssistantError {
+    data object TurnFailed : AssistantError
+    data object EnableFailed : AssistantError
+    data object ApplyFailed : AssistantError
+
+    /** A server-authored message from the turn stream — not client-localizable. */
+    data class ServerMessage(val text: String) : AssistantError
 }

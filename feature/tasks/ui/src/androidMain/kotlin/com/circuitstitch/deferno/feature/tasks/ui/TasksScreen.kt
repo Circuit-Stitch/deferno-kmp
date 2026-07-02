@@ -15,8 +15,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_pane_empty_body
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_pane_empty_title
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The Tasks feature host — the **adaptive tier-2 Pane layout** for the Tasks Destination (#29, ADR-0007).
@@ -79,8 +83,8 @@ private fun TasksDetailPane(
         TaskDetailScreen(detail, modifier)
     } else {
         EmptyState(
-            title = "Nothing open",
-            body = "Pick a task on the left to see its details here.",
+            title = stringResource(Res.string.tasks_detail_pane_empty_title),
+            body = stringResource(Res.string.tasks_detail_pane_empty_body),
             modifier = modifier,
         )
     }

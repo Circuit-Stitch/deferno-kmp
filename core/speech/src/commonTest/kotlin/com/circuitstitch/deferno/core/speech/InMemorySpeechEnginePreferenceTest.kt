@@ -3,12 +3,12 @@ package com.circuitstitch.deferno.core.speech
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** The in-memory engine preference (ADR-0018): defaults to Whisper and round-trips a chosen engine. */
+/** The in-memory engine preference (ADR-0018): defaults to Automatic and round-trips a chosen engine. */
 class InMemorySpeechEnginePreferenceTest {
 
     @Test
-    fun defaultsToWhisper() {
-        assertEquals(SpeechEngineId.Whisper, InMemorySpeechEnginePreference().preferredEngine())
+    fun defaultsToAutomatic() {
+        assertEquals(SpeechEngineId.Automatic, InMemorySpeechEnginePreference().preferredEngine())
     }
 
     @Test

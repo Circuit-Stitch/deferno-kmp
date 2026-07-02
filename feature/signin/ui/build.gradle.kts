@@ -24,6 +24,8 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
+            // stringResource over core:designsystem's shared string catalog (composeResources).
+            implementation(libs.compose.components.resources)
         }
         // The desktop render test (cf. feature:profile:ui): a Compose-Multiplatform UI test on the
         // JVM-fast path (no device) driving the screen over a fake SignInComponent — no DI graph.

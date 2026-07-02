@@ -68,7 +68,7 @@ class FakeSettingsEditor(private val repo: FakeSettingsRepository) : SettingsEdi
  */
 class FakeSpeechEngineCatalog(
     private val fixedOptions: List<SpeechEngineOption> = emptyList(),
-    initial: SpeechEngineId = SpeechEngineId.Whisper,
+    initial: SpeechEngineId = SpeechEngineId.Automatic,
 ) : SpeechEngineCatalog {
     var current: SpeechEngineId = initial
         private set

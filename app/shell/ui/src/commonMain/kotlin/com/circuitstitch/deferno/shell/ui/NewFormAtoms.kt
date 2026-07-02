@@ -23,6 +23,32 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_kind_chore
+import com.circuitstitch.deferno.core.designsystem.resources.common_kind_event
+import com.circuitstitch.deferno.core.designsystem.resources.common_kind_habit
+import com.circuitstitch.deferno.core.designsystem.resources.common_kind_task
+import com.circuitstitch.deferno.core.designsystem.resources.common_reconnect_to_save
+import com.circuitstitch.deferno.core.designsystem.resources.new_date_cd
+import com.circuitstitch.deferno.core.designsystem.resources.new_date_label
+import com.circuitstitch.deferno.core.designsystem.resources.new_deadline_time_cd
+import com.circuitstitch.deferno.core.designsystem.resources.new_dictation_error
+import com.circuitstitch.deferno.core.designsystem.resources.new_dictation_status_cd
+import com.circuitstitch.deferno.core.designsystem.resources.new_event_end_cd
+import com.circuitstitch.deferno.core.designsystem.resources.new_event_end_label
+import com.circuitstitch.deferno.core.designsystem.resources.new_event_start_cd
+import com.circuitstitch.deferno.core.designsystem.resources.new_event_start_label
+import com.circuitstitch.deferno.core.designsystem.resources.new_kind_picker_cd
+import com.circuitstitch.deferno.core.designsystem.resources.new_mic_dictate_cd
+import com.circuitstitch.deferno.core.designsystem.resources.new_mic_stop_dictation_cd
+import com.circuitstitch.deferno.core.designsystem.resources.new_notes_label
+import com.circuitstitch.deferno.core.designsystem.resources.new_error_could_not_save
+import com.circuitstitch.deferno.core.designsystem.resources.new_error_could_not_save_retry
+import com.circuitstitch.deferno.core.designsystem.resources.new_offline_note
+import com.circuitstitch.deferno.core.designsystem.resources.new_submit_create
+import com.circuitstitch.deferno.core.designsystem.resources.new_submit_saving
+import com.circuitstitch.deferno.core.designsystem.resources.new_time_label
+import com.circuitstitch.deferno.core.designsystem.resources.new_title_label
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.shell.DictationField
@@ -32,6 +58,7 @@ import com.circuitstitch.deferno.shell.NewStatus
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import org.jetbrains.compose.resources.stringResource
 
 // The shared, stateless **New**-form atoms (#175): the platform-neutral pieces of the New create
 // surface (#71/#87, ADR-0015/0016) extracted to this module's commonMain so the binding to
@@ -52,8 +79,9 @@ fun NewKindPicker(
     onSelectKind: (ItemKind) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val kindPickerCd = stringResource(Res.string.new_kind_picker_cd)
     Row(
-        modifier = modifier.fillMaxWidth().semantics { contentDescription = "Kind picker" },
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = kindPickerCd },
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ItemKind.entries.forEach { kind ->
@@ -83,7 +111,7 @@ fun NewTitleField(
     DictationTextField(
         value = state.title,
         onValueChange = onTitleChange,
-        label = "Title",
+        label = stringResource(Res.string.new_title_label),
         singleLine = true,
         field = DictationField.Title,
         state = state,
@@ -105,7 +133,7 @@ fun NewNotesField(
     DictationTextField(
         value = state.notes,
         onValueChange = onNotesChange,
-        label = "Notes",
+        label = stringResource(Res.string.new_notes_label),
         singleLine = false,
         field = DictationField.Notes,
         state = state,
@@ -167,7 +195,11 @@ private fun MicButton(
     IconButton(onClick = { onClick(field) }) {
         Icon(
             painter = icon,
-            contentDescription = if (listening) "Stop dictation" else "Dictate",
+            contentDescription = if (listening) {
+                stringResource(Res.string.new_mic_stop_dictation_cd)
+            } else {
+                stringResource(Res.string.new_mic_dictate_cd)
+            },
             tint = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -199,18 +231,19 @@ fun NewDictationMessage(
                 modifier = Modifier.semantics { contentDescription = openSettingsLabel },
             ) { Text(openSettingsLabel) }
         }
-        is DictationStatus.Error -> DictationNote("Couldn't hear that — try the mic again.", modifier)
+        is DictationStatus.Error -> DictationNote(stringResource(Res.string.new_dictation_error), modifier)
         DictationStatus.Idle, DictationStatus.Listening -> Unit
     }
 }
 
 @Composable
 private fun DictationNote(text: String, modifier: Modifier = Modifier) {
+    val statusCd = stringResource(Res.string.new_dictation_status_cd)
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
-        modifier = modifier.fillMaxWidth().semantics { contentDescription = "Dictation status" },
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = statusCd },
     )
 }
 
@@ -227,16 +260,17 @@ fun NewDateField(
     modifier: Modifier = Modifier,
 ) {
     var text by remember(value) { mutableStateOf(value?.toString() ?: "") }
+    val dateCd = stringResource(Res.string.new_date_cd)
     OutlinedTextField(
         value = text,
         onValueChange = {
             text = it
             onValueChange(runCatching { LocalDate.parse(it.trim()) }.getOrNull())
         },
-        label = { Text("Date (optional, e.g. 2026-06-08)") },
+        label = { Text(stringResource(Res.string.new_date_label)) },
         singleLine = true,
         isError = text.isNotBlank() && runCatching { LocalDate.parse(text.trim()) }.getOrNull() == null,
-        modifier = modifier.fillMaxWidth().semantics { contentDescription = "Date" },
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = dateCd },
     )
 }
 
@@ -254,16 +288,17 @@ fun NewDeadlineTimeField(
     modifier: Modifier = Modifier,
 ) {
     var text by remember(value) { mutableStateOf(value?.toString() ?: "") }
+    val deadlineTimeCd = stringResource(Res.string.new_deadline_time_cd)
     OutlinedTextField(
         value = text,
         onValueChange = {
             text = it
             onValueChange(runCatching { LocalTime.parse(it.trim()) }.getOrNull())
         },
-        label = { Text("Time (optional, e.g. 14:30)") },
+        label = { Text(stringResource(Res.string.new_time_label)) },
         singleLine = true,
         isError = text.isNotBlank() && runCatching { LocalTime.parse(text.trim()) }.getOrNull() == null,
-        modifier = modifier.fillMaxWidth().semantics { contentDescription = "Deadline time" },
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = deadlineTimeCd },
     )
 }
 
@@ -280,8 +315,8 @@ fun NewEventStartField(
     InstantField(
         value = value,
         onValueChange = onValueChange,
-        label = "Starts (e.g. 2026-06-08T09:00:00Z)",
-        semanticsLabel = "Event start",
+        label = stringResource(Res.string.new_event_start_label),
+        semanticsLabel = stringResource(Res.string.new_event_start_cd),
         modifier = modifier,
     )
 }
@@ -296,8 +331,8 @@ fun NewEventEndField(
     InstantField(
         value = value,
         onValueChange = onValueChange,
-        label = "Ends (optional)",
-        semanticsLabel = "Event end",
+        label = stringResource(Res.string.new_event_end_label),
+        semanticsLabel = stringResource(Res.string.new_event_end_cd),
         modifier = modifier,
     )
 }
@@ -338,16 +373,20 @@ private fun InstantField(
  */
 @Composable
 fun NewStatusMessage(status: NewStatus, modifier: Modifier = Modifier) {
+    val offlineCd = stringResource(Res.string.common_reconnect_to_save)
     when (status) {
         NewStatus.Offline -> Text(
-            text = "You're offline — reconnect to save. Nothing was queued.",
+            text = stringResource(Res.string.new_offline_note),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.defernoColors.inkMuted,
             textAlign = TextAlign.Center,
-            modifier = modifier.fillMaxWidth().semantics { contentDescription = "Reconnect to save" },
+            modifier = modifier.fillMaxWidth().semantics { contentDescription = offlineCd },
         )
         is NewStatus.Failed -> Text(
-            text = status.message,
+            text = when (status.reason) {
+                NewStatus.Failed.FailedReason.CouldNotSaveRetry -> stringResource(Res.string.new_error_could_not_save_retry)
+                NewStatus.Failed.FailedReason.CouldNotSave -> stringResource(Res.string.new_error_could_not_save)
+            },
             color = MaterialTheme.colorScheme.error,
             modifier = modifier,
         )
@@ -371,15 +410,21 @@ fun NewSubmitButton(
         enabled = canSubmit,
         modifier = modifier.fillMaxWidth(),
     ) {
-        Text(if (status == NewStatus.Submitting) "Saving…" else "Create")
+        Text(
+            if (status == NewStatus.Submitting) {
+                stringResource(Res.string.new_submit_saving)
+            } else {
+                stringResource(Res.string.new_submit_create)
+            },
+        )
     }
 }
 
 /** The picker label for an [ItemKind] — a View concern, kept out of the shared model. */
 private val ItemKind.pickerLabel: String
-    get() = when (this) {
-        ItemKind.Task -> "Task"
-        ItemKind.Habit -> "Habit"
-        ItemKind.Chore -> "Chore"
-        ItemKind.Event -> "Event"
+    @Composable get() = when (this) {
+        ItemKind.Task -> stringResource(Res.string.common_kind_task)
+        ItemKind.Habit -> stringResource(Res.string.common_kind_habit)
+        ItemKind.Chore -> stringResource(Res.string.common_kind_chore)
+        ItemKind.Event -> stringResource(Res.string.common_kind_event)
     }

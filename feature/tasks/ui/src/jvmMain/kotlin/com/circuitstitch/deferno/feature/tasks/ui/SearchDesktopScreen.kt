@@ -47,12 +47,36 @@ import com.circuitstitch.deferno.core.designsystem.component.BlockedChip
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.SessionExpiredBanner
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_close
+import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_search
+import com.circuitstitch.deferno.core.designsystem.resources.search_add_tag_button
+import com.circuitstitch.deferno.core.designsystem.resources.search_add_tag_label
+import com.circuitstitch.deferno.core.designsystem.resources.search_date_from_label
+import com.circuitstitch.deferno.core.designsystem.resources.search_date_to_label
+import com.circuitstitch.deferno.core.designsystem.resources.search_field_label
+import com.circuitstitch.deferno.core.designsystem.resources.search_filter_date_range
+import com.circuitstitch.deferno.core.designsystem.resources.search_filter_sort
+import com.circuitstitch.deferno.core.designsystem.resources.search_filter_tags
+import com.circuitstitch.deferno.core.designsystem.resources.search_initial_body_desktop
+import com.circuitstitch.deferno.core.designsystem.resources.search_initial_title_desktop
+import com.circuitstitch.deferno.core.designsystem.resources.search_no_matches_body
+import com.circuitstitch.deferno.core.designsystem.resources.search_no_matches_title
+import com.circuitstitch.deferno.core.designsystem.resources.search_remove_tag_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.search_searching
+import com.circuitstitch.deferno.core.designsystem.resources.search_section_status
+import com.circuitstitch.deferno.core.designsystem.resources.search_sort_best_match
+import com.circuitstitch.deferno.core.designsystem.resources.search_sort_biggest_attachments
+import com.circuitstitch.deferno.core.designsystem.resources.search_sort_soonest_due
+import com.circuitstitch.deferno.core.designsystem.resources.search_sort_title_asc
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
 import kotlinx.datetime.LocalDate
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The global Search overlay View, desktop edition (#86, ADR-0015/0017) — the desktop counterpart of
@@ -109,11 +133,11 @@ internal fun SearchDesktopContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Search",
+                    text = stringResource(Res.string.common_search),
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() },
                 )
-                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_close)) }
             }
 
             // Search is online-only and above the chrome, so it can't rely on the shell banner — a 401'd
@@ -131,7 +155,7 @@ internal fun SearchDesktopContent(
                     OutlinedTextField(
                         value = state.query,
                         onValueChange = onQueryChanged,
-                        label = { Text("Search tasks") },
+                        label = { Text(stringResource(Res.string.search_field_label)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                         keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
@@ -139,7 +163,7 @@ internal fun SearchDesktopContent(
                     )
                     // Explicit desktop affordance (#30): Enter submits too, but a visible Search button is
                     // the desktop-class control. Disabled below the 2-char floor (SearchState.canSearch).
-                    Button(onClick = onSubmit, enabled = state.canSearch) { Text("Search") }
+                    Button(onClick = onSubmit, enabled = state.canSearch) { Text(stringResource(Res.string.common_search)) }
                 }
 
                 StatusFilters(selected = state.statuses, onToggle = onStatusToggled)
@@ -163,7 +187,7 @@ private fun StatusFilters(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = "Status",
+            text = stringResource(Res.string.search_section_status),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.defernoColors.inkMuted,
         )
@@ -199,7 +223,7 @@ private fun TagsFilter(
     }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = "Tags",
+            text = stringResource(Res.string.search_filter_tags),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.defernoColors.inkMuted,
         )
@@ -210,22 +234,23 @@ private fun TagsFilter(
             OutlinedTextField(
                 value = draft,
                 onValueChange = { draft = it },
-                label = { Text("Add a tag") },
+                label = { Text(stringResource(Res.string.search_add_tag_label)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
                 keyboardActions = KeyboardActions(onDone = { add() }),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             )
-            TextButton(onClick = add) { Text("Add tag") }
+            TextButton(onClick = add) { Text(stringResource(Res.string.search_add_tag_button)) }
         }
         if (selected.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 selected.forEach { label ->
+                    val removeTagCd = stringResource(Res.string.search_remove_tag_a11y, label)
                     FilterChip(
                         selected = true,
                         onClick = { onToggle(label) },
                         label = { Text(label) },
-                        modifier = Modifier.semantics { contentDescription = "Remove tag $label" },
+                        modifier = Modifier.semantics { contentDescription = removeTagCd },
                     )
                 }
             }
@@ -248,7 +273,7 @@ private fun DateRangeFilter(
     var toText by remember { mutableStateOf(to?.toString() ?: "") }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = "Date range",
+            text = stringResource(Res.string.search_filter_date_range),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.defernoColors.inkMuted,
         )
@@ -259,7 +284,7 @@ private fun DateRangeFilter(
                     fromText = it
                     onChange(parseIsoDateOrNull(it), parseIsoDateOrNull(toText))
                 },
-                label = { Text("From (YYYY-MM-DD)") },
+                label = { Text(stringResource(Res.string.search_date_from_label)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
@@ -269,7 +294,7 @@ private fun DateRangeFilter(
                     toText = it
                     onChange(parseIsoDateOrNull(fromText), parseIsoDateOrNull(it))
                 },
-                label = { Text("To (YYYY-MM-DD)") },
+                label = { Text(stringResource(Res.string.search_date_to_label)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
@@ -286,7 +311,7 @@ private fun parseIsoDateOrNull(text: String): LocalDate? =
 private fun SortControl(selected: SearchSort, onChange: (SearchSort) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = "Sort",
+            text = stringResource(Res.string.search_filter_sort),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.defernoColors.inkMuted,
         )
@@ -311,16 +336,16 @@ private fun SearchResults(state: SearchState, onResultClicked: (SearchHit) -> Un
                 HorizontalDivider()
             }
         }
-        state.isSearching -> LoadingStrip(label = "Searching…")
+        state.isSearching -> LoadingStrip(label = stringResource(Res.string.search_searching))
         // An expired session is shown by the banner above, not as a "couldn't reach the server" state (#297).
         state.sessionExpired -> Unit
         state.hasSearched -> EmptyState(
-            title = "No matches",
-            body = "Nothing matched your search. Try a different word or fewer filters.",
+            title = stringResource(Res.string.search_no_matches_title),
+            body = stringResource(Res.string.search_no_matches_body),
         )
         else -> EmptyState(
-            title = "Search your tasks",
-            body = "Type at least two characters to find tasks by title or description.",
+            title = stringResource(Res.string.search_initial_title_desktop),
+            body = stringResource(Res.string.search_initial_body_desktop),
         )
     }
 }
@@ -336,11 +361,12 @@ private fun SearchHitRow(hit: SearchHit, query: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 64.dp)
-            .clickable(onClickLabel = "Open ${hit.title}", onClick = onClick)
+            .clickable(onClickLabel = stringResource(Res.string.common_open_named_cd, hit.title), onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        KindDot(color = kindColor(hit.kind), modifier = Modifier.semantics { contentDescription = hit.kind.name.lowercase() })
+        val kindCd = kindA11yLabel(hit.kind)
+        KindDot(color = kindColor(hit.kind), modifier = Modifier.semantics { contentDescription = kindCd })
         Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
             Text(
                 text = highlightedTitle(hit.title, query),
@@ -397,11 +423,14 @@ private fun highlightedTitle(title: String, query: String): AnnotatedString {
 }
 
 /** The plain label for a [SearchSort] option (a View concern, kept local). */
-private fun sortLabel(sort: SearchSort): String = when (sort) {
-    SearchSort.Relevance -> "Best match"
-    SearchSort.TitleAsc -> "Title (A–Z)"
-    SearchSort.DeadlineAsc -> "Soonest due"
-    SearchSort.AttachmentSizeDesc -> "Biggest attachments"
-}
+@Composable
+private fun sortLabel(sort: SearchSort): String = stringResource(
+    when (sort) {
+        SearchSort.Relevance -> Res.string.search_sort_best_match
+        SearchSort.TitleAsc -> Res.string.search_sort_title_asc
+        SearchSort.DeadlineAsc -> Res.string.search_sort_soonest_due
+        SearchSort.AttachmentSizeDesc -> Res.string.search_sort_biggest_attachments
+    },
+)
 
 // [workingStateLabel] is the shared commonMain label (lifted with WorkingStateEditor, see TaskDetailContent).

@@ -23,7 +23,12 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
 import com.circuitstitch.deferno.core.designsystem.resources.ic_mic
+import com.circuitstitch.deferno.core.designsystem.resources.new_dictation_denied_permanent_desktop
+import com.circuitstitch.deferno.core.designsystem.resources.new_dictation_denied_short
+import com.circuitstitch.deferno.core.designsystem.resources.new_dictation_open_system_settings
+import com.circuitstitch.deferno.core.designsystem.resources.shell_new
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.shell.DictationField
 import com.circuitstitch.deferno.shell.DictationStatus
@@ -39,6 +44,7 @@ import com.circuitstitch.deferno.shell.ui.NewStatusMessage
 import com.circuitstitch.deferno.shell.ui.NewSubmitButton
 import com.circuitstitch.deferno.shell.ui.NewTitleField
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The **New** create surface, desktop edition (#87, ADR-0015/0016/0017) — the desktop counterpart of
@@ -87,11 +93,11 @@ fun NewDesktopScreen(component: NewComponent, modifier: Modifier = Modifier) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "New",
+                        text = stringResource(Res.string.shell_new),
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.semantics { heading() },
                     )
-                    TextButton(onClick = component::dismiss) { Text("Cancel") }
+                    TextButton(onClick = component::dismiss) { Text(stringResource(Res.string.common_cancel)) }
                 }
 
                 NewKindPicker(selectedKind = state.selectedKind, onSelectKind = component::selectKind)
@@ -107,9 +113,9 @@ fun NewDesktopScreen(component: NewComponent, modifier: Modifier = Modifier) {
                 // on a foreclosed permission (#120, host-routed to the blocked capability's pane).
                 NewDictationMessage(
                     status = state.dictation,
-                    deniedNote = "Dictation needs microphone access.",
-                    permanentlyDeniedNote = "Dictation needs microphone access, which is turned off for Deferno.",
-                    openSettingsLabel = "Open System Settings",
+                    deniedNote = stringResource(Res.string.new_dictation_denied_short),
+                    permanentlyDeniedNote = stringResource(Res.string.new_dictation_denied_permanent_desktop),
+                    openSettingsLabel = stringResource(Res.string.new_dictation_open_system_settings),
                     onOpenSettings = component::openDictationPermissionSettings,
                 )
 

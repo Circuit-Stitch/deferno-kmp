@@ -82,16 +82,62 @@ import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.component.SessionExpiredBanner
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_desktop_placeholder_body
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_title
+import com.circuitstitch.deferno.core.designsystem.resources.common_app_name
+import com.circuitstitch.deferno.core.designsystem.resources.common_back
+import com.circuitstitch.deferno.core.designsystem.resources.common_close
+import com.circuitstitch.deferno.core.designsystem.resources.common_refresh
+import com.circuitstitch.deferno.core.designsystem.resources.common_kind_task
+import com.circuitstitch.deferno.core.designsystem.resources.common_search
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_account
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_agent
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_app_permissions
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_appearance
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_assistant
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_data_privacy
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_help_feedback
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_integrations
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_legal
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_security_2fa
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_speech_engine
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_storage
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_task_behavior
+import com.circuitstitch.deferno.core.designsystem.resources.shell_close_menu_cd
+import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_activity
+import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_assistant
+import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_calendar
+import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_inbox
+import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_plan
+import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_profile
+import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_settings
+import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_tasks
+import com.circuitstitch.deferno.core.designsystem.resources.shell_drawer_add_something_eyebrow
+import com.circuitstitch.deferno.core.designsystem.resources.shell_drawer_brain_dump_subtitle
+import com.circuitstitch.deferno.core.designsystem.resources.shell_drawer_capture_cd
+import com.circuitstitch.deferno.core.designsystem.resources.shell_drawer_new_task
+import com.circuitstitch.deferno.core.designsystem.resources.shell_drawer_new_task_subtitle
+import com.circuitstitch.deferno.core.designsystem.resources.shell_inbox_badge_empty
+import com.circuitstitch.deferno.core.designsystem.resources.shell_menu_cd
+import com.circuitstitch.deferno.core.designsystem.resources.shell_new
+import com.circuitstitch.deferno.core.designsystem.resources.shell_select_account
+import com.circuitstitch.deferno.core.designsystem.resources.shell_signed_in
+import com.circuitstitch.deferno.core.designsystem.resources.shell_signed_in_as_cd
+import com.circuitstitch.deferno.core.designsystem.resources.shell_switch_account_cd
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.shell.ChromeAction
 import com.circuitstitch.deferno.shell.ChromeActionKind
 import com.circuitstitch.deferno.shell.ChromeSpec
+import com.circuitstitch.deferno.shell.ChromeTitle
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.MainShellComponent
 import com.circuitstitch.deferno.shell.OverlayRoute
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The shared **Main shell chrome** (ADR-0013 / ADR-0017): one implementation of the navigation surface
@@ -280,7 +326,7 @@ fun ShellChrome(
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClickLabel = "Close menu",
+                                onClickLabel = stringResource(Res.string.shell_close_menu_cd),
                             ) { onDrawerOpenChange(false) },
                     )
                 }
@@ -353,10 +399,10 @@ private fun ShellTopBar(
             // Drilled into a tier-3 detail: ← back + the detail title, regardless of any center slot.
             chrome.drilled -> {
                 IconButton(onClick = onBack, modifier = Modifier.systemGestureExclusionCompat()) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.common_back))
                 }
                 Text(
-                    text = chrome.title,
+                    text = chrome.titleSpec.text,
                     style = MaterialTheme.typography.titleLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -372,19 +418,19 @@ private fun ShellTopBar(
             // actions are the FAB pair (ShellCaptureFabs) floating at the trailing corner, not bar buttons.
             else -> {
                 IconButton(onClick = onMenu, modifier = Modifier.systemGestureExclusionCompat()) {
-                    Icon(Icons.Filled.Menu, contentDescription = "Menu")
+                    Icon(Icons.Filled.Menu, contentDescription = stringResource(Res.string.shell_menu_cd))
                 }
                 chrome.actions.forEach { action ->
                     when (action.kind) {
                         ChromeActionKind.Refresh ->
                             IconButton(onClick = action.onInvoke) {
-                                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                                Icon(Icons.Filled.Refresh, contentDescription = stringResource(Res.string.common_refresh))
                             }
                         ChromeActionKind.BrainDump, ChromeActionKind.New -> Unit
                     }
                 }
                 Text(
-                    text = chrome.title,
+                    text = chrome.titleSpec.text,
                     style = MaterialTheme.typography.titleLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -423,7 +469,7 @@ private fun ShellCaptureFabs(
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             ) {
-                Icon(brainDumpIcon, contentDescription = "Brain dump", modifier = Modifier.size(22.dp))
+                Icon(brainDumpIcon, contentDescription = stringResource(Res.string.braindump_title), modifier = Modifier.size(22.dp))
             }
         }
         if (new != null) {
@@ -432,7 +478,7 @@ private fun ShellCaptureFabs(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
             ) {
-                Icon(newIcon, contentDescription = "New", modifier = Modifier.size(22.dp))
+                Icon(newIcon, contentDescription = stringResource(Res.string.shell_new), modifier = Modifier.size(22.dp))
             }
         }
     }
@@ -479,19 +525,19 @@ private fun ShellDrawer(
             Spacer(Modifier.height(20.dp))
 
             // The two capture paths, pinned at the top (design: a tap away).
-            SectionLabel("ADD SOMETHING")
+            SectionLabel(stringResource(Res.string.shell_drawer_add_something_eyebrow))
             Spacer(Modifier.height(10.dp))
             CaptureButton(
-                text = "New task",
-                subtitle = "Fill in the details",
+                text = stringResource(Res.string.shell_drawer_new_task),
+                subtitle = stringResource(Res.string.shell_drawer_new_task_subtitle),
                 icon = newIcon,
                 onClick = onNewTask,
                 solid = true,
             )
             Spacer(Modifier.height(10.dp))
             CaptureButton(
-                text = "Brain dump",
-                subtitle = "Speak or type — sorts to Inbox",
+                text = stringResource(Res.string.braindump_title),
+                subtitle = stringResource(Res.string.shell_drawer_brain_dump_subtitle),
                 icon = brainDumpIcon,
                 onClick = onBrainDump,
                 solid = false,
@@ -501,7 +547,7 @@ private fun ShellDrawer(
 
             // The destinations — calm rows. Search first, then the Destination registry.
             DrawerRow(
-                label = "Search",
+                label = stringResource(Res.string.common_search),
                 icon = Icons.Filled.Search,
                 selected = false,
                 onClick = onSearch,
@@ -513,7 +559,7 @@ private fun ShellDrawer(
                     selected = destination == activeDestination,
                     // The Inbox always declares whether there's anything to triage (ADR-0015 amendment).
                     badge = if (destination == Destination.Inbox) {
-                        if (inboxCount == 0) "empty" else inboxCount.toString()
+                        if (inboxCount == 0) stringResource(Res.string.shell_inbox_badge_empty) else inboxCount.toString()
                     } else {
                         null
                     },
@@ -555,7 +601,7 @@ private fun DrawerWordmark(modifier: Modifier = Modifier) {
             Text("🔥", style = MaterialTheme.typography.bodyMedium)
         }
         Text(
-            text = "Deferno",
+            text = stringResource(Res.string.common_app_name),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -584,6 +630,7 @@ private fun CaptureButton(
     val content = if (solid) scheme.onPrimary else scheme.onSurface
     val subtitleColor = if (solid) scheme.onPrimary.copy(alpha = 0.82f) else MaterialTheme.defernoColors.inkMuted
     val iconTint = if (solid) scheme.onPrimary else scheme.primary
+    val captureCd = stringResource(Res.string.shell_drawer_capture_cd, text, subtitle)
     Surface(
         color = container,
         contentColor = content,
@@ -594,7 +641,7 @@ private fun CaptureButton(
             .heightIn(min = 56.dp)
             .clip(RoundedCornerShape(16.dp))
             .clickable(role = Role.Button, onClickLabel = text, onClick = onClick)
-            .semantics(mergeDescendants = true) { contentDescription = "$text. $subtitle" },
+            .semantics(mergeDescendants = true) { contentDescription = captureCd },
     ) {
         Row(
             Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -671,17 +718,19 @@ private fun DrawerRow(
  */
 @Composable
 private fun DrawerAccountFooter(active: Account?, modifier: Modifier = Modifier) {
+    val appName = stringResource(Res.string.common_app_name)
+    val signedInAsCd = stringResource(Res.string.shell_signed_in_as_cd, active?.label ?: appName)
     Column(
         modifier
             .fillMaxWidth()
             .semantics(mergeDescendants = true) {
-                contentDescription = "Signed in as ${active?.label ?: "Deferno"}"
+                contentDescription = signedInAsCd
             },
     ) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
         Spacer(Modifier.height(12.dp))
         Text(
-            text = active?.label ?: "Deferno",
+            text = active?.label ?: appName,
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -689,7 +738,7 @@ private fun DrawerAccountFooter(active: Account?, modifier: Modifier = Modifier)
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 4.dp),
         )
-        MonoMeta(text = "Signed in", modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+        MonoMeta(text = stringResource(Res.string.shell_signed_in), modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
     }
 }
 
@@ -710,8 +759,8 @@ private fun AccountSwitcher(
         Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
         Box {
             TextButton(onClick = { expanded = true }) {
-                Text(active?.label ?: "Select account")
-                Icon(Icons.Filled.ArrowDropDown, contentDescription = "Switch account")
+                Text(active?.label ?: stringResource(Res.string.shell_select_account))
+                Icon(Icons.Filled.ArrowDropDown, contentDescription = stringResource(Res.string.shell_switch_account_cd))
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 accounts.forEach { account ->
@@ -746,36 +795,65 @@ fun BrainDumpPlaceholder(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                text = "Brain dump",
+                text = stringResource(Res.string.braindump_title),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.semantics { heading() },
             )
             Text(
-                text = "Speak freely and Deferno will turn it into draft tasks. Brain dump is available on Android; desktop support is on the way.",
+                text = stringResource(Res.string.braindump_desktop_placeholder_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp),
             )
             Button(onClick = onDismiss, modifier = Modifier.padding(top = 24.dp)) {
-                Text("Close")
+                Text(stringResource(Res.string.common_close))
             }
         }
     }
 }
 
+/** The localized top-bar title for a [ChromeTitle] — screen names resolve to resources; user text
+ *  (a drilled task's own title) renders verbatim (never translated). */
+val ChromeTitle.text: String
+    @Composable get() = when (this) {
+        ChromeTitle.None -> ""
+        is ChromeTitle.ForDestination -> destination.label
+        is ChromeTitle.ForSettingsCategory -> category.chromeLabel
+        is ChromeTitle.Verbatim -> text
+        ChromeTitle.TaskFallback -> stringResource(Res.string.common_kind_task)
+    }
+
+/** The localized shell-chrome title for a drilled Settings category. */
+private val SettingsCategory.chromeLabel: String
+    @Composable get() = when (this) {
+        SettingsCategory.Appearance -> stringResource(Res.string.settings_category_appearance)
+        SettingsCategory.TaskBehavior -> stringResource(Res.string.settings_category_task_behavior)
+        SettingsCategory.SpeechEngine -> stringResource(Res.string.settings_category_speech_engine)
+        SettingsCategory.Agent -> stringResource(Res.string.settings_category_agent)
+        SettingsCategory.Assistant -> stringResource(Res.string.settings_category_assistant)
+        SettingsCategory.Storage -> stringResource(Res.string.settings_category_storage)
+        SettingsCategory.DataPrivacy -> stringResource(Res.string.settings_category_data_privacy)
+        SettingsCategory.HelpFeedback -> stringResource(Res.string.settings_category_help_feedback)
+        SettingsCategory.AppPermissions -> stringResource(Res.string.settings_category_app_permissions)
+        SettingsCategory.Legal -> stringResource(Res.string.settings_category_legal)
+        SettingsCategory.Account -> stringResource(Res.string.settings_category_account)
+        SettingsCategory.Security2FA -> stringResource(Res.string.settings_category_security_2fa)
+        SettingsCategory.Integrations -> stringResource(Res.string.settings_category_integrations)
+    }
+
 /** The nav label for a [Destination] — a View concern, kept out of the shared registry (also read by
  *  the desktop menu bar, [com.circuitstitch.deferno.desktop.Main]). */
 val Destination.label: String
-    get() = when (this) {
-        Destination.Plan -> "Plan"
-        Destination.Calendar -> "Calendar"
-        Destination.Tasks -> "Tasks"
-        Destination.Assistant -> "Assistant"
-        Destination.Inbox -> "Inbox"
-        Destination.Activity -> "Activity"
-        Destination.Profile -> "Profile"
-        Destination.Settings -> "Settings"
+    @Composable get() = when (this) {
+        Destination.Plan -> stringResource(Res.string.shell_destination_plan)
+        Destination.Calendar -> stringResource(Res.string.shell_destination_calendar)
+        Destination.Tasks -> stringResource(Res.string.shell_destination_tasks)
+        Destination.Assistant -> stringResource(Res.string.shell_destination_assistant)
+        Destination.Inbox -> stringResource(Res.string.shell_destination_inbox)
+        Destination.Activity -> stringResource(Res.string.shell_destination_activity)
+        Destination.Profile -> stringResource(Res.string.shell_destination_profile)
+        Destination.Settings -> stringResource(Res.string.shell_destination_settings)
     }
 
 /** The drawer glyph for a [Destination] — a View concern, material-icons-core only. */

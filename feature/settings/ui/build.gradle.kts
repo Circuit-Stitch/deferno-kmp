@@ -42,6 +42,9 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
+            // Compose Resources runtime: the screens load their strings from core:designsystem's
+            // `Res.string` (declared `implementation` there, so this module names its own dependency).
+            implementation(libs.compose.components.resources)
             // The handful of nav glyphs the tier-3 drill-down uses (back arrow, the chevron on a
             // category row): `material-icons-core` (the small set, not the ≈37MB extended) — the same
             // choice the shell + desktop nav suite make. The JetBrains Compose Multiplatform artifact
@@ -73,6 +76,9 @@ kotlin {
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
             implementation(libs.compose.material.icons.core)
+            // Compose Resources runtime: the desktop screen loads its strings from core:designsystem's
+            // `Res.string` (declared `implementation` there, so this module names its own dependency).
+            implementation(libs.compose.components.resources)
         }
         // The desktop render/screenshot test (#85, cf. #39): a Compose-Multiplatform UI test on the
         // JVM-fast path (no device) over a real DefaultSettingsComponent + in-memory settings fakes.

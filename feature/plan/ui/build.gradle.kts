@@ -17,6 +17,9 @@ kotlin {
             implementation(project(":core:designsystem"))
 
             implementation(libs.compose.runtime)
+            // stringResource/pluralStringResource over core:designsystem's shared string catalog
+            // (its public Res) — designsystem only `implementation`s this artifact (not transitive).
+            implementation(libs.compose.components.resources)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)

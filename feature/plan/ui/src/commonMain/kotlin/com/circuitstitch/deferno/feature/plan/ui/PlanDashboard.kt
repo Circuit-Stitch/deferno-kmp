@@ -64,6 +64,35 @@ import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.component.StartPill
 import com.circuitstitch.deferno.core.designsystem.component.TextLink
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_due
+import com.circuitstitch.deferno.core.designsystem.resources.common_mark_done_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_mark_not_done_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_start
+import com.circuitstitch.deferno.core.designsystem.resources.plan_add_from_forest
+import com.circuitstitch.deferno.core.designsystem.resources.plan_back_to_today
+import com.circuitstitch.deferno.core.designsystem.resources.plan_choose_task_click_label
+import com.circuitstitch.deferno.core.designsystem.resources.plan_exit_focus
+import com.circuitstitch.deferno.core.designsystem.resources.plan_focus_done
+import com.circuitstitch.deferno.core.designsystem.resources.plan_focus_pause
+import com.circuitstitch.deferno.core.designsystem.resources.plan_focus_subtitle
+import com.circuitstitch.deferno.core.designsystem.resources.plan_need_attention
+import com.circuitstitch.deferno.core.designsystem.resources.plan_nothing_overdue
+import com.circuitstitch.deferno.core.designsystem.resources.plan_pick_for_me
+import com.circuitstitch.deferno.core.designsystem.resources.plan_rather_not_decide
+import com.circuitstitch.deferno.core.designsystem.resources.plan_refreshing
+import com.circuitstitch.deferno.core.designsystem.resources.plan_see_everything
+import com.circuitstitch.deferno.core.designsystem.resources.plan_start_with_title
+import com.circuitstitch.deferno.core.designsystem.resources.plan_suggested_chip
+import com.circuitstitch.deferno.core.designsystem.resources.plan_suggestion_eyebrow_caps
+import com.circuitstitch.deferno.core.designsystem.resources.plan_today_subtitle
+import com.circuitstitch.deferno.core.designsystem.resources.plan_today_title
+import com.circuitstitch.deferno.core.designsystem.resources.plan_whats_next_subtitle
+import com.circuitstitch.deferno.core.designsystem.resources.plan_whats_next_title
+import com.circuitstitch.deferno.core.designsystem.resources.plan_why_pinned
+import com.circuitstitch.deferno.core.designsystem.resources.plan_why_quick_win
+import com.circuitstitch.deferno.core.designsystem.resources.plan_your_day_section_caps
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -71,6 +100,8 @@ import com.circuitstitch.deferno.feature.plan.PlanComponent
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The daily Plan pane (#27) restyled to the "See the trees" direction — the app's calm home
@@ -160,7 +191,7 @@ internal fun PlanContent(
 
     Column(modifier = modifier.fillMaxSize().background(scheme.surface)) {
         if (isRefreshing) {
-            LoadingStrip(label = "Refreshing your plan…")
+            LoadingStrip(label = stringResource(Res.string.plan_refreshing))
         }
         if (tasks.isEmpty() && !isRefreshing) {
             EmptyPlan()
@@ -181,7 +212,7 @@ internal fun PlanContent(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "Today",
+                            text = stringResource(Res.string.plan_today_title),
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.semantics { heading() },
@@ -190,7 +221,7 @@ internal fun PlanContent(
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "${tasks.size} trees you picked. Start wherever feels right.",
+                        text = pluralStringResource(Res.plurals.plan_today_subtitle, tasks.size, tasks.size),
                         style = MaterialTheme.typography.bodyMedium,
                         color = scheme.onSurfaceVariant,
                     )
@@ -211,7 +242,7 @@ internal fun PlanContent(
 
             item(key = "section") {
                 SectionLabel(
-                    text = "YOUR DAY",
+                    text = stringResource(Res.string.plan_your_day_section_caps),
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                 )
             }
@@ -234,7 +265,7 @@ internal fun PlanContent(
 
             item(key = "add") {
                 DashedAddButton(
-                    text = "Add from the forest",
+                    text = stringResource(Res.string.plan_add_from_forest),
                     onClick = onAddFromForest,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
                 )
@@ -247,7 +278,7 @@ internal fun PlanContent(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     TextLink(
-                        text = "See everything",
+                        text = stringResource(Res.string.plan_see_everything),
                         onClick = onSeeEverything,
                         trailingChevron = true,
                     )
@@ -263,10 +294,15 @@ internal fun PlanContent(
 }
 
 /** "Nothing's overdue" or "{n} need attention" — gentle, never alarming. */
+@Composable
 private fun attentionLabel(tasks: List<Task>, today: LocalDate): String {
     val nowStart = today.atStartOfDayInstant()
     val overdue = tasks.count { t -> t.completeBy?.let { it < nowStart } == true && !t.workingState.isTerminal }
-    return if (overdue == 0) "Nothing's overdue" else "$overdue need attention"
+    return if (overdue == 0) {
+        stringResource(Res.string.plan_nothing_overdue)
+    } else {
+        pluralStringResource(Res.plurals.plan_need_attention, overdue, overdue)
+    }
 }
 
 private fun LocalDate.atStartOfDayInstant() =
@@ -286,7 +322,7 @@ private fun SuggestionBanner(task: Task, onStart: () -> Unit, modifier: Modifier
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(DefernoIcons.Sparkle, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Eyebrow(text = "IF YOU'RE NOT SURE, START HERE")
+            Eyebrow(text = stringResource(Res.string.plan_suggestion_eyebrow_caps))
         }
         Spacer(Modifier.height(8.dp))
         Text(
@@ -296,7 +332,7 @@ private fun SuggestionBanner(task: Task, onStart: () -> Unit, modifier: Modifier
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(12.dp))
-        StartPill(text = "Start", onClick = onStart)
+        StartPill(text = stringResource(Res.string.common_start), onClick = onStart)
     }
 }
 
@@ -328,14 +364,18 @@ private fun DayRow(task: Task, highlighted: Boolean, onClick: () -> Unit, modifi
     Row(
         modifier = rowModifier
             .heightIn(min = 64.dp)
-            .clickable(onClickLabel = "Open ${task.title}", onClick = onClick)
+            .clickable(onClickLabel = stringResource(Res.string.common_open_named_cd, task.title), onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CheckDot(
             checked = done,
             onCheckedChange = { done = it },
-            contentDescription = if (done) "Mark ${task.title} not done" else "Mark ${task.title} done",
+            contentDescription = if (done) {
+                stringResource(Res.string.common_mark_not_done_cd, task.title)
+            } else {
+                stringResource(Res.string.common_mark_done_cd, task.title)
+            },
         )
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
@@ -399,17 +439,17 @@ internal fun WhatsNextContent(
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(12.dp))
-        TextLink(text = "‹ Today", onClick = onBack)
+        TextLink(text = stringResource(Res.string.plan_back_to_today), onClick = onBack)
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "What's next?",
+            text = stringResource(Res.string.plan_whats_next_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.semantics { heading() },
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "You're in charge. Tap whichever feels doable — I just lined up a few ideas.",
+            text = stringResource(Res.string.plan_whats_next_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = scheme.onSurfaceVariant,
         )
@@ -432,16 +472,17 @@ internal fun WhatsNextContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Rather not decide right now?",
+                text = stringResource(Res.string.plan_rather_not_decide),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.defernoColors.inkMuted,
             )
             Spacer(Modifier.width(4.dp))
-            TextLink(text = "Pick for me", onClick = { selectedId = suggested?.id })
+            TextLink(text = stringResource(Res.string.plan_pick_for_me), onClick = { selectedId = suggested?.id })
         }
 
         PrimaryActionButton(
-            text = selected?.let { "Start · ${it.title}" } ?: "Start",
+            text = selected?.let { stringResource(Res.string.plan_start_with_title, it.title) }
+                ?: stringResource(Res.string.common_start),
             onClick = { selected?.let { onStartFocus(it.id) } },
             enabled = selected != null,
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -468,7 +509,7 @@ internal fun ChoiceCard(
             .border(if (selected) 2.dp else 1.dp, border, RoundedCornerShape(14.dp))
             .heightIn(min = MinTouchTarget)
             .clickable(
-                onClickLabel = "Choose ${task.title}",
+                onClickLabel = stringResource(Res.string.plan_choose_task_click_label, task.title),
                 role = Role.RadioButton,
                 onClick = onSelect,
             )
@@ -488,7 +529,8 @@ internal fun ChoiceCard(
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             if (isSuggested) {
-                TreeChip(text = "Suggested", leadingIcon = DefernoIcons.Sparkle, semanticLabel = "Suggested")
+                val suggestedLabel = stringResource(Res.string.plan_suggested_chip)
+                TreeChip(text = suggestedLabel, leadingIcon = DefernoIcons.Sparkle, semanticLabel = suggestedLabel)
                 Spacer(Modifier.height(6.dp))
             }
             Text(
@@ -519,11 +561,14 @@ internal fun ChoiceCard(
 }
 
 /** The derived "why" line for a choice. */
+@Composable
 private fun whyLine(task: Task): String = when {
-    task.completeBy != null ->
-        "Due ${formatDeadlineDate(task.completeBy!!, TimeZone.currentSystemDefault())}"
-    task.pinned -> "You said this one matters"
-    else -> "A quick win, if you want momentum"
+    task.completeBy != null -> stringResource(
+        Res.string.common_due,
+        formatDeadlineDate(task.completeBy!!, TimeZone.currentSystemDefault()),
+    )
+    task.pinned -> stringResource(Res.string.plan_why_pinned)
+    else -> stringResource(Res.string.plan_why_quick_win)
 }
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -562,7 +607,7 @@ internal fun FocusContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Chevron-down feel: exit collapses Focus back to Today.
-            TextLink(text = "⌄ Exit focus", onClick = onExit)
+            TextLink(text = stringResource(Res.string.plan_exit_focus), onClick = onExit)
             // ponytail: no derivable step counter on the flat PlanState — omit the right-hand meta.
         }
 
@@ -585,7 +630,7 @@ internal fun FocusContent(
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            text = "Just this. The rest is put away.",
+            text = stringResource(Res.string.plan_focus_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = brand.inkMuted,
             textAlign = TextAlign.Center,
@@ -595,14 +640,14 @@ internal fun FocusContent(
         Spacer(Modifier.weight(1f))
 
         PrimaryActionButton(
-            text = "Done — next step",
+            text = stringResource(Res.string.plan_focus_done),
             icon = DefernoIcons.Check,
             onClick = onDone,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))
         TextLink(
-            text = "Pause · take a break whenever you need",
+            text = stringResource(Res.string.plan_focus_pause),
             onClick = onExit,
             color = brand.inkMuted,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),

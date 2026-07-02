@@ -5,7 +5,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * One recorded inverse action (ADR-0034 decision 8, #230): the [operation] label (lowercase, for the
+ * The three relative move commands — typed so the View can localize the shake confirm
+ * ("Undo [reorder]?"); [token] is the legacy lowercase label the SwiftUI bridges still render.
+ */
+enum class MoveOperation(val token: String) {
+    Reorder("reorder"),
+    Indent("indent"),
+    Outdent("outdent"),
+}
+
+/**
+ * One recorded inverse action (ADR-0034 decision 8, #230): the [operation] (typed, for the
  * shake confirm — "Undo [operation]?"), whether it was a [structural] move (reparent / indent / outdent →
  * the "Moved · Undo" snackbar; a plain same-level reorder → no snackbar, but still shake-undoable), and the
  * [action] that reverts it. [id] is a monotonic token so a fresh record re-fires the (single-shot) snackbar
@@ -13,7 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 data class Undoable(
     val id: Int,
-    val operation: String,
+    val operation: MoveOperation,
     val structural: Boolean,
     val action: suspend () -> Unit,
 )
@@ -35,7 +45,7 @@ class LastUndoable {
     val current: StateFlow<Undoable?> = _current.asStateFlow()
 
     /** Record the inverse of a just-applied command, replacing any prior one (single-level). */
-    fun record(operation: String, structural: Boolean, action: suspend () -> Unit) {
+    fun record(operation: MoveOperation, structural: Boolean, action: suspend () -> Unit) {
         _current.value = Undoable(++counter, operation, structural, action)
     }
 

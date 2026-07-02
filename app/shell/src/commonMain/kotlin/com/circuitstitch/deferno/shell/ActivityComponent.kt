@@ -4,8 +4,10 @@ import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.activity.ActivitySource
+import com.circuitstitch.deferno.core.data.activity.ActivitySummary
 import com.circuitstitch.deferno.core.data.activity.itemId
 import com.circuitstitch.deferno.core.data.activity.summary
+import com.circuitstitch.deferno.core.data.activity.summaryInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,8 +19,10 @@ import kotlin.time.Instant
 
 /**
  * One row of the Activity feed — a render-ready projection of an [ActivityEntry] (#260): what changed
- * ([summary]), who made it ([sourceLabel]), and when ([recordedAt]). [itemId] is the thing it touched
- * (a future tap-to-open target; the v1 feed is read-only).
+ * ([summaryInfo], typed for locale-aware rendering), who made it ([source]), and when ([recordedAt]).
+ * [itemId] is the thing it touched (a future tap-to-open target; the v1 feed is read-only).
+ * [summary]/[sourceLabel] keep the English rendering for the SwiftUI bridges — the Compose View
+ * renders from the typed fields instead.
  */
 data class ActivityFeedRow(
     val seq: Long,
@@ -26,6 +30,8 @@ data class ActivityFeedRow(
     val sourceLabel: String,
     val recordedAt: Instant,
     val itemId: String?,
+    val summaryInfo: ActivitySummary,
+    val source: ActivitySource,
 )
 
 /** The Activity Destination render state: the recorded changes, newest first. */
@@ -66,6 +72,8 @@ private fun ActivityEntry.toRow(): ActivityFeedRow =
         sourceLabel = source.label(),
         recordedAt = recordedAt,
         itemId = itemId(),
+        summaryInfo = summaryInfo(),
+        source = source,
     )
 
 /** The human "who" chip: a local write reads "Mobile app"; remote writes name their surface. */

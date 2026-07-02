@@ -50,6 +50,67 @@ import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.format.formatTime
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_add
+import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
+import com.circuitstitch.deferno.core.designsystem.resources.common_clear
+import com.circuitstitch.deferno.core.designsystem.resources.common_collapse_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_delete
+import com.circuitstitch.deferno.core.designsystem.resources.common_edit
+import com.circuitstitch.deferno.core.designsystem.resources.common_expand_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_labels
+import com.circuitstitch.deferno.core.designsystem.resources.common_loading
+import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_remove
+import com.circuitstitch.deferno.core.designsystem.resources.common_save
+import com.circuitstitch.deferno.core.designsystem.resources.common_set
+import com.circuitstitch.deferno.core.designsystem.resources.common_size_bytes
+import com.circuitstitch.deferno.core.designsystem.resources.common_size_kb
+import com.circuitstitch.deferno.core.designsystem.resources.common_size_mb
+import com.circuitstitch.deferno.core.designsystem.resources.common_time_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_caption
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_comment_placeholder
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_file
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_label_placeholder
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_subtask_placeholder
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachment_meta
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachment_meta_on_device
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_caption_placeholder
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_clear_due_date_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_comment_author_member
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_comment_author_you
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_comment_edited
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_comments_error
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_delete_attachment_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_due_date_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_edit_caption
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_edit_caption_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_encrypted_comment
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_no_attachments
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_no_comments
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_play
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_play_attachment_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_post
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_posting
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_due
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_owner
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_source
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_time
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_remove_caption_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_remove_label_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_activity
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_attachments
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_properties
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_subtasks
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_set_due_date
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_source_open_in
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_source_row_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_source_row_no_link_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_subtask_mark_done_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_subtask_mark_not_done_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_uploading
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_progress_fraction
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
@@ -63,6 +124,8 @@ import com.circuitstitch.deferno.feature.tasks.SubtaskRow
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.compose.resources.stringResource
+import java.util.Locale
 import kotlin.time.Instant
 
 // The web-parity Task detail sections (Subtasks tree · Attachments · Activity/Comments). Platform-
@@ -105,12 +168,15 @@ internal fun PropertiesSection(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth()) {
-        SectionHeader("Properties")
+        SectionHeader(stringResource(Res.string.tasks_detail_section_properties))
         DueRow(completeBy = task.completeBy, onSetDeadline = onSetDeadline)
         // ponytail: editable TIME is deferred — it needs the deadline_time_of_day mutation seam.
-        PropertyRow(label = "Time", value = task.deadlineTimeOfDay?.toDisplayTime() ?: "—")
+        PropertyRow(
+            label = stringResource(Res.string.tasks_detail_property_time),
+            value = task.deadlineTimeOfDay?.let { formatTime(it, stringResource(Res.string.common_time_pattern)) } ?: "—",
+        )
         LabelsRow(labels = task.labels, onSetLabels = onSetLabels)
-        PropertyRow(label = "Owner", value = task.ownerOrgId?.value ?: "—")
+        PropertyRow(label = stringResource(Res.string.tasks_detail_property_owner), value = task.ownerOrgId?.value ?: "—")
         // Source cell for a synced/imported item: the provenance mark + origin label, linking to the
         // provider. Renders only when the item carries external provenance (a native Task shows no row).
         task.external?.let { SourceRow(it) }
@@ -127,18 +193,29 @@ private fun SourceRow(external: ExternalRef) {
     val uriHandler = LocalUriHandler.current
     val label = sourceOriginLabel(external)
     val url = external.url
-    val rowSemantics = "Source: ${sourceLabel(external.source)}, $label" +
-        if (url != null) ". Opens in ${sourceLabel(external.source)}." else ""
+    val rowSemantics = if (url != null) {
+        stringResource(Res.string.tasks_detail_source_row_a11y, sourceLabel(external.source), label)
+    } else {
+        stringResource(Res.string.tasks_detail_source_row_no_link_a11y, sourceLabel(external.source), label)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
-            .then(if (url != null) Modifier.clickable(onClickLabel = "Open in ${sourceLabel(external.source)}") { uriHandler.openUri(url) } else Modifier)
+            .then(
+                if (url != null) {
+                    Modifier.clickable(
+                        onClickLabel = stringResource(Res.string.tasks_detail_source_open_in, sourceLabel(external.source)),
+                    ) { uriHandler.openUri(url) }
+                } else {
+                    Modifier
+                },
+            )
             .clearAndSetSemantics { contentDescription = rowSemantics },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "Source",
+            text = stringResource(Res.string.tasks_detail_property_source),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.defernoColors.inkMuted,
             modifier = Modifier.width(80.dp),
@@ -192,11 +269,12 @@ private fun DueRow(completeBy: Instant?, onSetDeadline: (LocalDate?) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "Due",
+            text = stringResource(Res.string.tasks_detail_property_due),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.defernoColors.inkMuted,
             modifier = Modifier.width(80.dp),
         )
+        val dueDateA11y = stringResource(Res.string.tasks_detail_due_date_a11y, display)
         Text(
             text = display,
             style = MaterialTheme.typography.bodyLarge,
@@ -204,14 +282,15 @@ private fun DueRow(completeBy: Instant?, onSetDeadline: (LocalDate?) -> Unit) {
             modifier = Modifier
                 .weight(1f)
                 .heightIn(min = MinTouchTarget)
-                .clickable(onClickLabel = "Set due date") { showPicker = true }
-                .semantics { contentDescription = "Due date: $display. Tap to change." },
+                .clickable(onClickLabel = stringResource(Res.string.tasks_detail_set_due_date)) { showPicker = true }
+                .semantics { contentDescription = dueDateA11y },
         )
         if (completeBy != null) {
+            val clearDueDateA11y = stringResource(Res.string.tasks_detail_clear_due_date_a11y)
             TextButton(
                 onClick = { onSetDeadline(null) },
-                modifier = Modifier.semantics { contentDescription = "Clear due date" },
-            ) { Text("Clear") }
+                modifier = Modifier.semantics { contentDescription = clearDueDateA11y },
+            ) { Text(stringResource(Res.string.common_clear)) }
         }
     }
     if (showPicker) {
@@ -224,10 +303,10 @@ private fun DueRow(completeBy: Instant?, onSetDeadline: (LocalDate?) -> Unit) {
                         pickerState.selectedDateMillis?.let { onSetDeadline(it.toPickedLocalDate()) }
                         showPicker = false
                     },
-                ) { Text("Set") }
+                ) { Text(stringResource(Res.string.common_set)) }
             },
             dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showPicker = false }) { Text(stringResource(Res.string.common_cancel)) }
             },
         ) {
             DatePicker(state = pickerState)
@@ -258,7 +337,7 @@ private fun LabelsRow(labels: List<String>, onSetLabels: (List<String>) -> Unit)
 
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(
-            text = "Labels",
+            text = stringResource(Res.string.common_labels),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.defernoColors.inkMuted,
         )
@@ -269,9 +348,10 @@ private fun LabelsRow(labels: List<String>, onSetLabels: (List<String>) -> Unit)
                     onClick = { onSetLabels(normalize(labels - label)) },
                     label = { Text(label) },
                     trailingIcon = {
+                        val removeLabelA11y = stringResource(Res.string.tasks_detail_remove_label_a11y, label)
                         Text(
                             text = "×",
-                            modifier = Modifier.semantics { contentDescription = "Remove label $label" },
+                            modifier = Modifier.semantics { contentDescription = removeLabelA11y },
                         )
                     },
                 )
@@ -293,12 +373,12 @@ private fun AddLabelField(onAdd: (String) -> Unit) {
     OutlinedTextField(
         value = text,
         onValueChange = { text = it },
-        placeholder = { Text("Add a label…") },
+        placeholder = { Text(stringResource(Res.string.tasks_detail_add_label_placeholder)) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { submit() }),
         trailingIcon = {
-            TextButton(onClick = ::submit, enabled = text.isNotBlank()) { Text("Add") }
+            TextButton(onClick = ::submit, enabled = text.isNotBlank()) { Text(stringResource(Res.string.common_add)) }
         },
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
     )
@@ -328,7 +408,10 @@ internal fun SubtasksSection(
     addSubtaskFocus: FocusRequester? = null,
 ) {
     Column(modifier.fillMaxWidth()) {
-        SectionHeader("Subtasks", trailing = if (total > 0) "$done of $total" else null)
+        SectionHeader(
+            stringResource(Res.string.tasks_detail_section_subtasks),
+            trailing = if (total > 0) stringResource(Res.string.tasks_progress_fraction, done, total) else null,
+        )
         if (total > 0) {
             ProgressBarThin(
                 fraction = done.toFloat() / total,
@@ -367,7 +450,11 @@ private fun SubtaskRowView(
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp).clickable(
-                        onClickLabel = if (row.isExpanded) "Collapse ${task.title}" else "Expand ${task.title}",
+                        onClickLabel = if (row.isExpanded) {
+                            stringResource(Res.string.common_collapse_named_cd, task.title)
+                        } else {
+                            stringResource(Res.string.common_expand_named_cd, task.title)
+                        },
                     ) { onToggleExpand(task.id.value, row.isExpanded) },
                 )
             }
@@ -377,7 +464,11 @@ private fun SubtaskRowView(
         CheckDot(
             checked = done,
             onCheckedChange = { onToggleDone(task) },
-            contentDescription = if (done) "Mark “${task.title}” not done" else "Mark “${task.title}” done",
+            contentDescription = if (done) {
+                stringResource(Res.string.tasks_detail_subtask_mark_not_done_a11y, task.title)
+            } else {
+                stringResource(Res.string.tasks_detail_subtask_mark_done_a11y, task.title)
+            },
         )
         KindDot(
             color = kindColor(ItemKind.Task),
@@ -395,7 +486,7 @@ private fun SubtaskRowView(
             color = if (done || task.blocked) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .weight(1f)
-                .clickable(onClickLabel = "Open ${task.title}") { onOpen(task) },
+                .clickable(onClickLabel = stringResource(Res.string.common_open_named_cd, task.title)) { onOpen(task) },
         )
         // The "Blocked" pill carries its own TalkBack label (the row isn't a merged semantics node).
         if (task.blocked) {
@@ -425,12 +516,12 @@ private fun AddSubtaskField(onAdd: (String) -> Unit, focusRequester: FocusReques
     OutlinedTextField(
         value = text,
         onValueChange = { text = it },
-        placeholder = { Text("Add a subtask…") },
+        placeholder = { Text(stringResource(Res.string.tasks_detail_add_subtask_placeholder)) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { submit() }),
         trailingIcon = {
-            TextButton(onClick = ::submit, enabled = text.isNotBlank()) { Text("Add") }
+            TextButton(onClick = ::submit, enabled = text.isNotBlank()) { Text(stringResource(Res.string.common_add)) }
         },
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
@@ -461,18 +552,27 @@ internal fun AttachmentsSection(
     onPlayOnDevice: (OnDeviceAttachment) -> Unit = {},
 ) {
     Column(modifier.fillMaxWidth()) {
-        SectionHeader("Attachments", trailing = (attachments.size + onDeviceAttachments.size).toString())
+        SectionHeader(
+            stringResource(Res.string.tasks_detail_section_attachments),
+            trailing = (attachments.size + onDeviceAttachments.size).toString(),
+        )
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Button(onClick = onAddClick, enabled = !isUploading) {
-                Text(if (isUploading) "Uploading…" else "Add file")
+                Text(
+                    if (isUploading) {
+                        stringResource(Res.string.tasks_detail_uploading)
+                    } else {
+                        stringResource(Res.string.tasks_detail_add_file)
+                    },
+                )
             }
         }
         if (attachments.isEmpty() && onDeviceAttachments.isEmpty()) {
             Text(
-                "No attachments.",
+                stringResource(Res.string.tasks_detail_no_attachments),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.defernoColors.inkMuted,
             )
@@ -501,21 +601,29 @@ private fun OnDeviceAttachmentRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(attachment.filename, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-                MonoMeta(text = "${formatBytes(attachment.size)} · ${attachment.mime} · On device")
+                MonoMeta(
+                    text = stringResource(
+                        Res.string.tasks_detail_attachment_meta_on_device,
+                        formatBytes(attachment.size),
+                        attachment.mime,
+                    ),
+                )
                 attachment.caption?.takeIf { it.isNotBlank() }?.let { caption ->
                     Text(caption, style = MaterialTheme.typography.bodyMedium)
                 }
             }
             if (attachment.isAudio) {
+                val playA11y = stringResource(Res.string.tasks_detail_play_attachment_a11y, attachment.filename)
                 TextButton(
                     onClick = { onPlay(attachment) },
-                    modifier = Modifier.semantics { contentDescription = "Play ${attachment.filename}" },
-                ) { Text("Play") }
+                    modifier = Modifier.semantics { contentDescription = playA11y },
+                ) { Text(stringResource(Res.string.tasks_detail_play)) }
             }
+            val deleteA11y = stringResource(Res.string.tasks_detail_delete_attachment_a11y, attachment.filename)
             TextButton(
                 onClick = { onDelete(attachment.id) },
-                modifier = Modifier.semantics { contentDescription = "Delete ${attachment.filename}" },
-            ) { Text("Delete") }
+                modifier = Modifier.semantics { contentDescription = deleteA11y },
+            ) { Text(stringResource(Res.string.common_delete)) }
         }
     }
 }
@@ -547,25 +655,34 @@ private fun AttachmentRow(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable(onClickLabel = "Open ${attachment.filename}") { uriHandler.openUri(attachment.url) },
+                    .clickable(
+                        onClickLabel = stringResource(Res.string.common_open_named_cd, attachment.filename),
+                    ) { uriHandler.openUri(attachment.url) },
             ) {
                 Text(attachment.filename, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-                MonoMeta(text = "${formatBytes(attachment.size)} · ${attachment.mime}")
+                MonoMeta(
+                    text = stringResource(
+                        Res.string.tasks_detail_attachment_meta,
+                        formatBytes(attachment.size),
+                        attachment.mime,
+                    ),
+                )
                 attachment.caption?.takeIf { it.isNotBlank() }?.let { caption ->
                     Text(caption, style = MaterialTheme.typography.bodyMedium)
                 }
             }
+            val deleteA11y = stringResource(Res.string.tasks_detail_delete_attachment_a11y, attachment.filename)
             TextButton(
                 onClick = { onDelete(attachment.id) },
-                modifier = Modifier.semantics { contentDescription = "Delete ${attachment.filename}" },
-            ) { Text("Delete") }
+                modifier = Modifier.semantics { contentDescription = deleteA11y },
+            ) { Text(stringResource(Res.string.common_delete)) }
         }
         if (editing) {
             var draft by remember(attachment.id) { mutableStateOf(attachment.caption.orEmpty()) }
             OutlinedTextField(
                 value = draft,
                 onValueChange = { draft = it },
-                placeholder = { Text("Caption") },
+                placeholder = { Text(stringResource(Res.string.tasks_detail_caption_placeholder)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             )
@@ -573,27 +690,38 @@ private fun AttachmentRow(
                 // #416: an explicit Remove clears the caption (sends null), distinct from typing an
                 // empty string — shown only when there's a caption to remove.
                 if (!attachment.caption.isNullOrBlank()) {
+                    val removeCaptionA11y =
+                        stringResource(Res.string.tasks_detail_remove_caption_a11y, attachment.filename)
                     TextButton(
                         onClick = { onSetCaption(attachment.id, null); editing = false },
                         modifier = Modifier.semantics {
-                            contentDescription = "Remove caption for ${attachment.filename}"
+                            contentDescription = removeCaptionA11y
                         },
-                    ) { Text("Remove") }
+                    ) { Text(stringResource(Res.string.common_remove)) }
                 }
-                TextButton(onClick = { editing = false }) { Text("Cancel") }
+                TextButton(onClick = { editing = false }) { Text(stringResource(Res.string.common_cancel)) }
                 Button(
                     onClick = {
                         if (draft.isNotBlank()) onSetCaption(attachment.id, draft)
                         editing = false
                     },
                     enabled = draft.isNotBlank(),
-                ) { Text("Save") }
+                ) { Text(stringResource(Res.string.common_save)) }
             }
         } else {
+            val editCaptionA11y = stringResource(Res.string.tasks_detail_edit_caption_a11y, attachment.filename)
             TextButton(
                 onClick = { editing = true },
-                modifier = Modifier.semantics { contentDescription = "Edit caption for ${attachment.filename}" },
-            ) { Text(if (attachment.caption.isNullOrBlank()) "Add caption" else "Edit caption") }
+                modifier = Modifier.semantics { contentDescription = editCaptionA11y },
+            ) {
+                Text(
+                    if (attachment.caption.isNullOrBlank()) {
+                        stringResource(Res.string.tasks_detail_add_caption)
+                    } else {
+                        stringResource(Res.string.tasks_detail_edit_caption)
+                    },
+                )
+            }
         }
       }
     }
@@ -618,12 +746,12 @@ internal fun CommentsSection(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SectionHeader("Activity", trailing = comments.size.toString())
+        SectionHeader(stringResource(Res.string.tasks_detail_section_activity), trailing = comments.size.toString())
         CommentComposer(isPosting = isPosting, onPost = onPost)
         when {
-            loading && comments.isEmpty() -> MutedLine("Loading…")
-            error && comments.isEmpty() -> MutedLine("Couldn't load comments. Pull to refresh later.")
-            comments.isEmpty() -> MutedLine("No comments yet.")
+            loading && comments.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
+            error && comments.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_comments_error))
+            comments.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_no_comments))
             else -> comments.forEach { c ->
                 CommentRow(c, isMine = currentUserId != null && c.createdBy == currentUserId, onEdit, onDelete)
             }
@@ -638,7 +766,7 @@ private fun CommentComposer(isPosting: Boolean, onPost: (String) -> Unit) {
         OutlinedTextField(
             value = text,
             onValueChange = { if (it.length <= MaxCommentLength) text = it },
-            placeholder = { Text("Add a comment…") },
+            placeholder = { Text(stringResource(Res.string.tasks_detail_add_comment_placeholder)) },
             enabled = !isPosting,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -655,7 +783,15 @@ private fun CommentComposer(isPosting: Boolean, onPost: (String) -> Unit) {
                 },
                 enabled = !isPosting && text.isNotBlank(),
                 modifier = Modifier.heightIn(min = MinTouchTarget),
-            ) { Text(if (isPosting) "Posting…" else "Post") }
+            ) {
+                Text(
+                    if (isPosting) {
+                        stringResource(Res.string.tasks_detail_posting)
+                    } else {
+                        stringResource(Res.string.tasks_detail_post)
+                    },
+                )
+            }
         }
     }
 }
@@ -672,12 +808,17 @@ private fun CommentRow(
       Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = if (isMine) "You" else "Member",
+                text = if (isMine) {
+                    stringResource(Res.string.tasks_detail_comment_author_you)
+                } else {
+                    stringResource(Res.string.tasks_detail_comment_author_member)
+                },
                 style = MaterialTheme.typography.labelMedium,
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = comment.createdAt.toDisplayDate() + if (comment.editedAt != null) " (edited)" else "",
+                text = comment.createdAt.toDisplayDate() +
+                    if (comment.editedAt != null) " " + stringResource(Res.string.tasks_detail_comment_edited) else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.defernoColors.inkMuted,
             )
@@ -690,24 +831,24 @@ private fun CommentRow(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             )
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = { editing = false }) { Text("Cancel") }
+                TextButton(onClick = { editing = false }) { Text(stringResource(Res.string.common_cancel)) }
                 Button(
                     onClick = {
                         if (draft.isNotBlank()) onEdit(comment.id, draft)
                         editing = false
                     },
                     enabled = draft.isNotBlank(),
-                ) { Text("Save") }
+                ) { Text(stringResource(Res.string.common_save)) }
             }
         } else {
             Text(
-                text = comment.body ?: "🔒 Encrypted comment",
+                text = comment.body ?: stringResource(Res.string.tasks_detail_encrypted_comment),
                 style = MaterialTheme.typography.bodyMedium,
             )
             if (isMine) {
                 Row {
-                    TextButton(onClick = { editing = true }) { Text("Edit") }
-                    TextButton(onClick = { onDelete(comment.id) }) { Text("Delete") }
+                    TextButton(onClick = { editing = true }) { Text(stringResource(Res.string.common_edit)) }
+                    TextButton(onClick = { onDelete(comment.id) }) { Text(stringResource(Res.string.common_delete)) }
                 }
             }
         }
@@ -724,12 +865,16 @@ private fun MutedLine(text: String) {
     )
 }
 
-/** Bytes as a friendly size, e.g. 12345 → "12.1 KB". */
+/** Bytes as a friendly size, e.g. 12345 → "12.1 KB". Unit suffix and decimal separator are locale-aware. */
+@Composable
 internal fun formatBytes(bytes: Long): String = when {
-    bytes < 1024 -> "$bytes B"
-    bytes < 1024 * 1024 -> "${(bytes * 10 / 1024) / 10.0} KB"
-    else -> "${(bytes * 10 / (1024 * 1024)) / 10.0} MB"
+    bytes < 1024 -> stringResource(Res.string.common_size_bytes, bytes)
+    bytes < 1024 * 1024 -> stringResource(Res.string.common_size_kb, formatTenths(bytes * 10 / 1024))
+    else -> stringResource(Res.string.common_size_mb, formatTenths(bytes * 10 / (1024 * 1024)))
 }
+
+/** One-decimal rendering of a tenths count (123 → "12.3"), with the device locale's decimal separator. */
+private fun formatTenths(tenths: Long): String = String.format(Locale.getDefault(), "%.1f", tenths / 10.0)
 
 /**
  * The date portion of a comment's timestamp (e.g. "2026-04-17"). Sliced straight from the RFC3339

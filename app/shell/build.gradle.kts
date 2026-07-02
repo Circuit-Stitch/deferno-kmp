@@ -34,7 +34,9 @@ kotlin {
             implementation(project(":feature:braindumps"))
             implementation(project(":feature:calendar"))
             implementation(project(":feature:profile"))
-            implementation(project(":feature:settings"))
+            // `api`: ChromeTitle.ForSettingsCategory exposes SettingsCategory in ChromeSpec's public
+            // shape, so shell consumers (the ui module, the SwiftUI bridges) see the type transitively.
+            api(project(":feature:settings"))
             // The per-Account DI graph the production AccountSession adapts (ADR-0014); the data
             // repositories the shell observes + the AccountManager the RootComponent keys off; the
             // command executor + commands it drives (add-to-plan, working-state, online-only create);
@@ -48,7 +50,10 @@ kotlin {
             // the AppComponent into the Settings Destination (like the speech catalog). Default AgentGate.Inert
             // in tests.
             implementation(project(":core:agent"))
-            implementation(project(":core:data"))
+            // `api`: ActivityFeedRow (ActivitySummary/ActivitySource) and FeedbackStatus.Failed
+            // (FeedbackResult.Failed.Reason) expose core:data types in the shell's public state, so
+            // consumers (the ui module, the SwiftUI bridges) see them transitively.
+            api(project(":core:data"))
             implementation(project(":core:domain"))
             implementation(project(":core:network"))
             implementation(project(":core:model"))

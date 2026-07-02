@@ -55,10 +55,12 @@ class BreakdownEngineTest {
         moves: BreakdownActions,
         title: String = "Clean the garage",
         id: String = "root",
+        prerequisites: BreakdownEngine.Prerequisites = BreakdownEngine.Prerequisites(),
     ) = BreakdownEngine(
         root = BreakdownEngine.ItemContext(id = id, title = title),
         classifier = ScriptedClassifier(script),
         moves = moves,
+        prerequisites = prerequisites,
     )
 
     @Test
@@ -66,7 +68,10 @@ class BreakdownEngineTest {
         val e = engine(emptyList(), SpyMoves())
         assertEquals(BreakdownEngine.Phase.Asking, e.phase.value)
         assertEquals("Clean the garage", e.focusTitle.value)
-        assertEquals(BreakdownEngine.Role.Assistant, e.messages.value.last().role)
+        val last = e.messages.value.last()
+        assertEquals(BreakdownEngine.Role.Assistant, last.role)
+        assertEquals(BreakdownEngine.MessageKind.WhatsStopping, last.kind)
+        assertEquals("Clean the garage", last.arg)
     }
 
     @Test
@@ -89,6 +94,15 @@ class BreakdownEngineTest {
         assertEquals(listOf("Clear the workbench", "Sort the bins"), spy.capturedTitles)
         assertEquals(listOf("root", "root"), spy.capturedParents)
         assertTrue(spy.dropped.isEmpty())
+
+        // The person's own words ride through verbatim (user content, never localized) …
+        val userLine = e.messages.value.first { it.role == BreakdownEngine.Role.User }
+        assertEquals(BreakdownEngine.MessageKind.UserText, userLine.kind)
+        assertEquals("it's just too big", userLine.arg)
+        // … and the "broke it into" line carries the created titles for the View to list.
+        val broke = e.messages.value.first { it.kind == BreakdownEngine.MessageKind.BrokeInto }
+        assertEquals(listOf("Clear the workbench", "Sort the bins"), broke.args)
+        assertEquals(BreakdownEngine.MessageKind.FinishedReady, e.messages.value.last().kind)
     }
 
     @Test
@@ -108,6 +122,59 @@ class BreakdownEngineTest {
         assertEquals(listOf("Research disposal options"), spy.capturedTitles)
         assertEquals(listOf("root"), spy.capturedParents)
         assertEquals(BreakdownEngine.Phase.Finished(BreakdownEngine.Outcome.Ready), e.phase.value)
+        val added = e.messages.value.first { it.kind == BreakdownEngine.MessageKind.AddedPrerequisite }
+        assertEquals("Research disposal options", added.arg)
+    }
+
+    @Test
+    fun a_missing_prerequisite_title_falls_back_to_the_injected_defaults_per_kind() = runTest {
+        // The fallback titles are *persisted* server-synced Task content, so the platform injects them
+        // localized at engine creation (BreakdownScreen resolves breakdown_prereq_* via getString).
+        val spy = SpyMoves()
+        val e = engine(
+            listOf(
+                ImpedimentClassification(ImpedimentClass.dontKnowHow), // root: no prerequisiteTitle
+                ImpedimentClassification(ImpedimentClass.scaredOfDoingItWrong, prerequisiteTitle = "  "), // child-1: blank
+                ImpedimentClassification(ImpedimentClass.nothingStopping), // child-2: ready → finishes
+            ),
+            spy,
+            prerequisites = BreakdownEngine.Prerequisites(
+                figureOutHow = "Cómo hacerlo",
+                defineDone = "Definir “hecho”",
+            ),
+        )
+
+        e.submit("no idea where to start")
+        e.submit("what if I mess it up")
+        e.submit("nothing")
+
+        assertEquals(listOf("Cómo hacerlo", "Definir “hecho”"), spy.capturedTitles)
+        assertEquals(listOf("root", "child-1"), spy.capturedParents)
+        assertEquals(
+            listOf("Cómo hacerlo", "Definir “hecho”"),
+            e.messages.value.filter { it.kind == BreakdownEngine.MessageKind.AddedPrerequisite }.map { it.arg },
+        )
+        assertEquals(BreakdownEngine.Phase.Finished(BreakdownEngine.Outcome.Ready), e.phase.value)
+    }
+
+    @Test
+    fun the_default_prerequisite_titles_are_the_english_fallbacks() = runTest {
+        val spy = SpyMoves()
+        val e = engine(
+            listOf(
+                ImpedimentClassification(ImpedimentClass.scaredOfDoingItWrong), // no prerequisiteTitle
+                ImpedimentClassification(ImpedimentClass.nothingStopping), // the prerequisite child
+            ),
+            spy,
+        )
+
+        e.submit("what if I do it wrong")
+        e.submit("nothing")
+
+        assertEquals(
+            listOf("Define what “done” looks like, and decide if I'm the right person or should delegate"),
+            spy.capturedTitles,
+        )
     }
 
     @Test
@@ -117,10 +184,16 @@ class BreakdownEngineTest {
 
         e.submit("honestly I just never want to")
         assertEquals(BreakdownEngine.Phase.ConfirmingDrop, e.phase.value)
+        val offer = e.messages.value.last()
+        assertEquals(BreakdownEngine.MessageKind.ConfirmDrop, offer.kind)
+        assertEquals("Clean the garage", offer.arg)
 
         e.confirmDrop(true)
         assertEquals(BreakdownEngine.Phase.Finished(BreakdownEngine.Outcome.Dropped), e.phase.value)
         assertEquals(listOf("root"), spy.dropped)
+        val dropped = e.messages.value.first { it.kind == BreakdownEngine.MessageKind.Dropped }
+        assertEquals("Clean the garage", dropped.arg)
+        assertEquals(BreakdownEngine.MessageKind.FinishedDropped, e.messages.value.last().kind)
     }
 
     @Test
@@ -133,6 +206,9 @@ class BreakdownEngineTest {
 
         assertEquals(BreakdownEngine.Phase.Asking, e.phase.value)
         assertTrue(spy.dropped.isEmpty())
+        val kept = e.messages.value.last()
+        assertEquals(BreakdownEngine.MessageKind.KeptReask, kept.kind)
+        assertEquals("Clean the garage", kept.arg)
     }
 
     @Test
@@ -142,9 +218,12 @@ class BreakdownEngineTest {
 
         e.submit("nothing really, I can start")
         assertEquals(BreakdownEngine.Phase.Finished(BreakdownEngine.Outcome.Ready), e.phase.value)
+        val ready = e.messages.value.first { it.kind == BreakdownEngine.MessageKind.ReadyToGo }
+        assertEquals("Clean the garage", ready.arg)
 
         e.addRootToPlan()
         assertEquals(listOf("root"), spy.planned)
+        assertEquals(BreakdownEngine.MessageKind.AddedToPlan, e.messages.value.last().kind)
     }
 
     @Test
@@ -184,6 +263,7 @@ class BreakdownEngineTest {
 
         e.submit("uhh")
         assertEquals(BreakdownEngine.Phase.Asking, e.phase.value)
+        assertEquals(BreakdownEngine.MessageKind.ClassifierRetry, e.messages.value.last().kind)
     }
 
     @Test

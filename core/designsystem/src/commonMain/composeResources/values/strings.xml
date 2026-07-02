@@ -1,0 +1,924 @@
+<resources>
+    <!-- ============================================================================
+         Deferno string catalog (en) — the single shared source for every Compose
+         surface (Android + desktop). Locale variants live in the sibling values-* /
+         strings.xml files (es, de, hi, pt — keep all five in lockstep).
+         Plain XML: bare apostrophes, NO Android \' escaping. %1$s-style args are
+         positional. Keys are feature-prefixed; common_* is cross-cutting vocabulary.
+         ============================================================================ -->
+
+    <!-- java.time patterns for LocalizedDateFormats — per locale so translators control
+         field order and words; month/weekday names come from the JDK CLDR data. -->
+    <string name="activity_when_pattern">MMM d · HH:mm</string>
+    <string name="calendar_month_year_pattern">LLLL yyyy</string>
+    <string name="calendar_agenda_heading_pattern">EEEE, MMMM d</string>
+    <string name="calendar_day_pattern">MMMM d</string>
+    <string name="common_time_pattern">h:mm a</string>
+
+
+    <!-- ── about ─────────────────────────────────────────────── -->
+    <!-- About dialog; title uses common_app_name -->
+    <string name="about_version">Version %1$s</string>
+
+    <!-- ── activity ─────────────────────────────────────────────── -->
+    <!-- Was hand-rolled if(size==1); use quantity resource -->
+    <plurals name="activity_change_count">
+        <item quantity="one">1 change</item>
+        <item quantity="other">%1$d changes</item>
+    </plurals>
+    <string name="activity_empty_body">Every change you make — and every change synced from elsewhere — shows up here, newest first.</string>
+    <string name="activity_empty_title">Nothing yet</string>
+    <!-- 'MCP' is a technical name — keep -->
+    <string name="activity_source_mcp">via MCP agent</string>
+    <!-- Source chip — via ActivityComponent enum refactor -->
+    <string name="activity_source_mobile">Mobile app</string>
+    <string name="activity_source_unknown">Unknown</string>
+    <string name="activity_source_website">via Website</string>
+    <!-- Feed row summaries — via ActivityLedger structured-summary refactor -->
+    <string name="activity_summary_changed_settings">Changed settings</string>
+    <string name="activity_summary_cleared_occurrence_chore">Cleared a chore occurrence</string>
+    <string name="activity_summary_cleared_occurrence_event">Cleared an event occurrence</string>
+    <!-- Per-kind keys replace 'Cleared a $kind occurrence' -->
+    <string name="activity_summary_cleared_occurrence_habit">Cleared a habit occurrence</string>
+    <string name="activity_summary_created_chore">Created a chore</string>
+    <string name="activity_summary_created_event">Created an event</string>
+    <string name="activity_summary_created_habit">Created a habit</string>
+    <!-- Fallback kind -->
+    <string name="activity_summary_created_item">Created an item</string>
+    <!-- Per-kind keys replace 'Created a $kind' (article/gender agreement in es/de/pt) -->
+    <string name="activity_summary_created_task">Created a task</string>
+    <!-- Roborazzi golden fixtures embed sibling literals — update goldens on extraction -->
+    <string name="activity_summary_deleted_task">Deleted a task</string>
+    <string name="activity_summary_moved_item">Moved an item</string>
+    <string name="activity_summary_updated_item">Updated an item</string>
+    <string name="activity_summary_updated_occurrence_chore">Updated a chore occurrence</string>
+    <string name="activity_summary_updated_occurrence_event">Updated an event occurrence</string>
+    <string name="activity_summary_updated_occurrence_habit">Updated a habit occurrence</string>
+    <string name="activity_summary_updated_plan">Updated your plan</string>
+    <string name="activity_summary_updated_task">Updated a task</string>
+
+    <!-- ── assistant ─────────────────────────────────────────────── -->
+    <!-- Fallback tool-activity line (via typed-state refactor) -->
+    <string name="assistant_action_working">Working…</string>
+    <!-- Egress-consent text — legal review required per locale; resolved at render sites, not in core/model (see refactor) -->
+    <string name="assistant_default_disclosure">Enabling the Assistant sends your decrypted item content to a third-party AI sub-processor so it can read and act on your tasks. You can turn it off at any time.</string>
+    <string name="assistant_error_apply_failed">Couldn't apply the change. Try again.</string>
+    <string name="assistant_error_enable_failed">Couldn't enable the Assistant. Try again.</string>
+    <!-- Merges AssistantComponent + AssistantWireFormat duplicates; prefer always using this over raw e.message -->
+    <string name="assistant_error_turn_failed">The turn failed. Try again.</string>
+    <string name="assistant_error_unavailable_on_device">The Assistant isn't available on this device yet.</string>
+    <!-- Persisted conversation-title fallback -->
+    <string name="assistant_new_chat_title">New chat</string>
+    <!-- PERSISTED as a ChatMessage — freezes in the writing locale; arg = server-authored summary (English). Needs structured-outcome refactor or accept the freeze -->
+    <string name="assistant_proposal_applied">Applied: %1$s</string>
+    <string name="assistant_proposal_apply_failed_summary">Couldn't apply: %1$s</string>
+
+    <!-- ── auth ─────────────────────────────────────────────── -->
+    <!-- Merges sign-in re-entry subtitle and Settings add-account button -->
+    <string name="auth_add_another_account">Add another account</string>
+    <string name="auth_browser_hint">A secure browser window opens to finish signing in.</string>
+    <string name="auth_browser_signed_in_body">You can close this tab and return to the app.</string>
+    <!-- Served as HTML over a loopback socket (JVM + macOS duplicates share this) — needs an injected-string localization path, not Compose resources -->
+    <string name="auth_browser_signed_in_title">You're signed in to Deferno.</string>
+    <string name="auth_error_invalid_token">That token isn’t valid. Check it and try again.</string>
+    <string name="auth_error_unavailable">Couldn’t reach Deferno. Check your connection and try again.</string>
+    <string name="auth_retry_prompt">Need to try again?</string>
+    <!-- Merged with the Profile variant ('…to refresh your details.') — trivially different phrasing -->
+    <string name="auth_session_expired_body">Your sign-in for this account has ended. Sign in again to continue.</string>
+    <string name="auth_session_expired_title">Session expired</string>
+    <!-- Primary OAuth button + retry TextButton (test relies on single node while busy) -->
+    <string name="auth_sign_in">Sign in</string>
+    <string name="auth_sign_in_with_token">Sign in with token</string>
+    <!-- Label above the account identity block -->
+    <string name="auth_signed_in_as">Signed in as</string>
+    <string name="auth_subtitle_sign_in">Sign in to your account</string>
+    <!-- Also the Profile Credential row value -->
+    <string name="auth_token_field_label">Personal access token</string>
+    <!-- Must match the WEB app's localized nav labels; contains → arrow -->
+    <string name="auth_token_help">Create a token in Deferno on the web: Settings → Tokens.</string>
+    <string name="auth_token_hide">Hide</string>
+    <!-- Reveal-toggle arm — verb -->
+    <string name="auth_token_show">Show</string>
+    <string name="auth_unavailable_body">Check your connection and try again.</string>
+    <!-- Curly apostrophe; keep the brand name -->
+    <string name="auth_unavailable_title">Can’t reach Deferno</string>
+    <!-- Developer-only affordance -->
+    <string name="auth_use_token_instead">Use a token instead</string>
+
+    <!-- ── braindump ─────────────────────────────────────────────── -->
+    <string name="braindump_allow_microphone">Allow microphone</string>
+    <string name="braindump_desktop_placeholder_body">Speak freely and Deferno will turn it into draft tasks. Brain dump is available on Android; desktop support is on the way.</string>
+    <string name="braindump_drafts_inbox_meta">Drafts will appear in your Inbox</string>
+    <!-- Test-pinned verbatim -->
+    <string name="braindump_enqueued_note">Transcribing in the background — we'll let you know when your drafts are ready in the Inbox.</string>
+    <string name="braindump_extract_drafts">Extract drafts</string>
+    <string name="braindump_failed_note">Couldn't record that. Try again.</string>
+    <!-- 'Inbox' must match shell_destination_inbox -->
+    <string name="braindump_intro">Speak or type whatever's on your mind. I'll draft trees from it — nothing's added until you accept them in your Inbox.</string>
+    <string name="braindump_listening_hint">Listening for what's on your mind. Tap to stop when you're done — I'll draft from it.</string>
+    <string name="braindump_mic_denied">Brain dump needs microphone access.</string>
+    <string name="braindump_mic_denied_permanent">Brain dump needs microphone access, which is turned off for this app.</string>
+    <string name="braindump_no_drafts_yet">No drafts yet</string>
+    <!-- NotificationChannel display name (system settings) -->
+    <string name="braindump_notification_channel_name">Brain dumps</string>
+    <plurals name="braindump_notification_drafts_ready">
+        <item quantity="one">1 draft ready to review</item>
+        <item quantity="other">%1$d drafts ready to review</item>
+    </plurals>
+    <string name="braindump_notification_recording_saved">Recording saved to review</string>
+    <string name="braindump_ready_to_draft">Ready to draft from what you typed</string>
+    <string name="braindump_recording_status">Recording…</string>
+    <!-- PERSISTED as draft notes → Task notes on accept -->
+    <string name="braindump_salvage_reason">This recording couldn't be turned into tasks, so it's saved here for you to review.</string>
+    <!-- PERSISTED as draft/Task title (server-synced) — must resolve in the background worker at creation time; tests pin 'Brain dump #1' -->
+    <string name="braindump_salvage_title">Brain dump #%1$d</string>
+    <!-- Segmented toggle half — verb -->
+    <string name="braindump_speak_toggle">Speak</string>
+    <!-- MicOrb cd + tappable caption — one key (test-pinned) -->
+    <string name="braindump_start_recording">Start recording</string>
+    <!-- MicOrb cd while recording + Stop button (test-pinned) -->
+    <string name="braindump_stop">Stop</string>
+    <!-- One key for: screen heading, FAB cd, drawer capture button, desktop placeholder heading, notification title. 'Brain dump' = speak-freely capture; translate the concept, not literally, and use everywhere -->
+    <string name="braindump_title">Brain dump</string>
+    <string name="braindump_try_again">Try again</string>
+    <string name="braindump_type_field_cd">Brain dump text</string>
+    <string name="braindump_type_field_label">What's on your mind?</string>
+    <!-- Verb (enter text), not the noun 'kind' -->
+    <string name="braindump_type_toggle">Type</string>
+    <string name="braindump_visual_feedback_turn_off">Turn off visual audio feedback</string>
+    <!-- Distinct wording from existing R.string.visual_feedback_on/off toasts — keep both -->
+    <string name="braindump_visual_feedback_turn_on">Turn on visual audio feedback</string>
+
+    <!-- ── breakdown ─────────────────────────────────────────────── -->
+    <string name="breakdown_composer_placeholder">What's stopping you?</string>
+    <!-- Arg = item title (user content) -->
+    <string name="breakdown_focus_prefix">Breaking down: %1$s</string>
+    <!-- Drop-confirmation pair with 'Let it go' -->
+    <string name="breakdown_keep_it">Keep it</string>
+    <!-- Gentle 'drop the task' — never 'delete/abandon' register -->
+    <string name="breakdown_let_it_go">Let it go</string>
+    <string name="breakdown_msg_added_prerequisite">Added a prerequisite to do first: “%1$s”.</string>
+    <string name="breakdown_msg_added_to_plan">Added to today's plan.</string>
+    <!-- %1$s = locale-aware joined list of created subtask titles (replace listed()'s hardcoded ', ' join) -->
+    <string name="breakdown_msg_broke_into">Broke it into %1$s.</string>
+    <!-- All breakdown_msg_* land via the BreakdownEngine Message-kind refactor; conversational first-person app voice -->
+    <string name="breakdown_msg_classifier_retry">I couldn't quite work that out on-device. Want to say it a different way?</string>
+    <!-- Drives a yes/no phase — the affirmative-answer parsing must match localized 'yes' -->
+    <string name="breakdown_msg_confirm_drop">Sounds like you keep putting it off. Do you actually need this? I can take “%1$s” off your list — just say yes.</string>
+    <string name="breakdown_msg_dropped">Done — taking “%1$s” off your list. You can recover it from history.</string>
+    <string name="breakdown_msg_finished_dropped">All set — we cleared what you didn't need.</string>
+    <string name="breakdown_msg_finished_ready">Everything's broken down and ready. Nice work.</string>
+    <string name="breakdown_msg_kept_reask">Kept it. So — what's stopping you from “%1$s”?</string>
+    <string name="breakdown_msg_more_urgent">Something more pressing right now — noted. (Lowering its priority is coming soon; for now it stays put.)</string>
+    <string name="breakdown_msg_name_first_piece">Let's name the first small piece — what's one part you could start on?</string>
+    <string name="breakdown_msg_ready_to_go">Then “%1$s” is ready to go.</string>
+    <string name="breakdown_msg_transient_obstacle">That's temporary — it's okay to skip it for now. It still mattered to you, so it'll be here when you're ready.</string>
+    <string name="breakdown_msg_waiting_dependency">Sounds like it's blocked by something else — noted. (Linking that blocker is coming soon.)</string>
+    <string name="breakdown_msg_whats_stopping">What's stopping you from “%1$s”?</string>
+    <!-- Becomes a CREATED SUBTASK TITLE persisted to the server — localize at creation time -->
+    <string name="breakdown_prereq_define_done">Define what “done” looks like, and decide if I'm the right person or should delegate</string>
+    <!-- Also a created subtask title -->
+    <string name="breakdown_prereq_figure_out">Figure out how to do this</string>
+    <string name="breakdown_thinking">Thinking…</string>
+    <!-- Header of the Breakdown chat; keep wording aligned with the iOS SwiftUI twin -->
+    <string name="breakdown_title">Break it down</string>
+    <!-- 'Settings'/'Agent' must match shell_destination_settings + settings_category_agent translations -->
+    <string name="breakdown_unavailable_body">Turn on an inference engine in Settings → Agent to break a stuck task into smaller steps.</string>
+    <string name="breakdown_unavailable_title">Breakdown needs an AI engine</string>
+
+    <!-- ── calendar ─────────────────────────────────────────────── -->
+    <!-- IMPERATIVE action chip (complete this occurrence) — translates differently from the Done status (common_status_done) -->
+    <string name="calendar_action_done">Done</string>
+    <!-- Verb -->
+    <string name="calendar_action_reschedule">Reschedule</string>
+    <!-- Verb -->
+    <string name="calendar_action_skip">Skip</string>
+    <!-- Folded into the DayCell a11y sentence via a format resource instead of buildString comma-concatenation -->
+    <plurals name="calendar_day_item_count">
+        <item quantity="one">1 item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <!-- Zero branch of the DayCell a11y description -->
+    <string name="calendar_day_no_items">no items</string>
+    <!-- Consider semantics stateDescription instead of appending text -->
+    <string name="calendar_day_selected">selected</string>
+    <!-- Gentle non-judgmental register is design-enforced (banned-words test) — preserve in all locales -->
+    <string name="calendar_empty_body">A clear day. Add something when you're ready — no pressure.</string>
+    <string name="calendar_empty_title">Nothing on this day</string>
+    <string name="calendar_next_month">Next month</string>
+    <string name="calendar_previous_month">Previous month</string>
+    <string name="calendar_reschedule_pick_day">Pick a new day for “%1$s”</string>
+
+    <!-- ── common ─────────────────────────────────────────────── -->
+    <!-- Merges desktop menu, Settings category (+chrome title), Profile section heading -->
+    <string name="common_account">Account</string>
+    <!-- Verb button (submit a subtask/label). Single word — confirm imperative verb in translation -->
+    <string name="common_add">Add</string>
+    <!-- Brand wordmark — mark translatable=false; single-sourced (drawer, sign-in headline, window titles, macOS menu-bar name) -->
+    <string name="common_app_name">Deferno</string>
+    <!-- Merges feedback button+cd and both desktop AWT FileDialog titles -->
+    <string name="common_attach_files">Attach files</string>
+    <!-- Back affordance cd/onClickLabel -->
+    <string name="common_back">Back</string>
+    <!-- BlockedChip text + semanticLabel — single source for all surfaces (#290) -->
+    <string name="common_blocked">Blocked</string>
+    <!-- Generic dialog/form cancel; merges 13 occurrences across shell, tasks, calendar, sign-in, profile -->
+    <string name="common_cancel">Cancel</string>
+    <string name="common_cannot_be_undone">This can't be undone.</string>
+    <!-- Verb button; merges tasks clear-due-date and calendar clear-occurrence-status -->
+    <string name="common_clear">Clear</string>
+    <!-- Merges Close button/onClickLabel in ShellChrome, SearchDesktopScreen, BrainDump/Breakdown headers, About dialog -->
+    <string name="common_close">Close</string>
+    <string name="common_collapse_named_cd">Collapse %1$s</string>
+    <!-- Verb button/menu item (destructive) -->
+    <string name="common_delete">Delete</string>
+    <!-- Merges shell overlay Dismiss (Android+desktop) and Inbox card Dismiss -->
+    <string name="common_dismiss">Dismiss</string>
+    <!-- Button that closes/finishes a flow (Brain dump, Breakdown, Legal reader, move-mode exit). Imperative 'finished' — distinct from the Done status label (common_status_done) -->
+    <string name="common_done">Done</string>
+    <!-- Merges tasks detail 'Due ${toDisplayDate()}', plan whyLine 'Due ${formatDeadlineDate(...)}', inbox 'Due $due'; arg = pre-formatted date (needs locale-aware date formatting, see refactors) -->
+    <string name="common_due">Due %1$s</string>
+    <string name="common_edit">Edit</string>
+    <!-- UnsupportedVersion verdict (feedback repo); share with OfflineCreateWriter version error after its refactor -->
+    <string name="common_error_app_out_of_date">This app is out of date — please update.</string>
+    <!-- Merges ItemTreeUi, TreeAtoms toggle, detail subtask toggle -->
+    <string name="common_expand_named_cd">Expand %1$s</string>
+    <string name="common_kind_chore">Chore</string>
+    <string name="common_kind_event">Event</string>
+    <string name="common_kind_habit">Habit</string>
+    <!-- Generic fallback kind noun (activity summaries, calendar day counts) -->
+    <string name="common_kind_item">item</string>
+    <!-- ItemKind glossary term; shared by New form kind picker, kind chips (kindLabel refactor), detail kind a11y, ChromeSpec 'Task' fallback. Keep ItemKind.entries order in pickers -->
+    <string name="common_kind_task">Task</string>
+    <!-- Merges detail Labels property row and search LABELS section (uppercase via style) -->
+    <string name="common_labels">Labels</string>
+    <string name="common_loading">Loading…</string>
+    <!-- Merges plan CheckDot 'Mark ${task.title} done' and detail 'Mark “${task.title}” done' (curly quotes dropped; quote style is locale-specific anyway) -->
+    <string name="common_mark_done_cd">Mark %1$s done</string>
+    <string name="common_mark_not_done_cd">Mark %1$s not done</string>
+    <!-- a11y open-item action; arg = item/task/attachment title. Merges tree, detail subtask, attachment, search result, plan row, settings row 'Open $label' -->
+    <string name="common_open_named_cd">Open %1$s</string>
+    <!-- Android link to system app settings; merges BrainDumpScreen:521 + NewScreen:186 -->
+    <string name="common_open_settings">Open settings</string>
+    <!-- Merges New-form offline cd and InboxRow offline note (the latter via the InboxComponent typed-note refactor) -->
+    <string name="common_reconnect_to_save">Reconnect to save</string>
+    <!-- Merges shell top-bar cd, tasks tree button, desktop View menu item -->
+    <string name="common_refresh">Refresh</string>
+    <!-- Verb button -->
+    <string name="common_remove">Remove</string>
+    <!-- a11y; arg = filename or filter label. Merges feedback 'Remove ${file.filename}' and search 'Remove $label' -->
+    <string name="common_remove_named_cd">Remove %1$s</string>
+    <string name="common_retry">Retry</string>
+    <string name="common_save">Save</string>
+    <!-- Single word used as: SearchBarDisplay click label, Tasks search pill cd+placeholder, drawer row, desktop toolbar/screen title/submit button. Verify one translation fits all (noun vs verb) -->
+    <string name="common_search">Search</string>
+    <!-- Merges feedback submit and breakdown composer send -->
+    <string name="common_send">Send</string>
+    <!-- Default param of SessionExpiredBanner; audit call-site overrides -->
+    <string name="common_session_expired_message">Session expired — sign in again to refresh.</string>
+    <!-- DatePickerDialog confirm — verb -->
+    <string name="common_set">Set</string>
+    <!-- Merges SessionExpiredBanner action default, Auth retry button, Profile notice action -->
+    <string name="common_sign_in_again">Sign in again</string>
+    <!-- Merges desktop Account menu item, Profile destructive button + its dialog confirm -->
+    <string name="common_sign_out">Sign out</string>
+    <!-- Merges 3 occurrences (auth loading status, both sign-in busy button arms) -->
+    <string name="common_signing_in">Signing in…</string>
+    <!-- formatBytes refactor target; unit suffix localizes -->
+    <string name="common_size_bytes">%1$d B</string>
+    <!-- Decimal separator must be locale-aware (comma in es/de/pt) -->
+    <string name="common_size_kb">%1$s KB</string>
+    <string name="common_size_mb">%1$s MB</string>
+    <!-- Brand — translatable=false -->
+    <string name="common_source_github">GitHub</string>
+    <!-- Brand — translatable=false -->
+    <string name="common_source_google_calendar">Google Calendar</string>
+    <!-- Verb button; merges plan StartPill/fallback and calendar occurrence Start chip -->
+    <string name="common_start">Start</string>
+    <string name="common_state_collapsed">Collapsed</string>
+    <!-- TalkBack stateDescription of CheckDot when checked — state adjective, not the button -->
+    <string name="common_state_done">Done</string>
+    <!-- TreeNode stateDescription -->
+    <string name="common_state_expanded">Expanded</string>
+    <string name="common_state_not_done">Not done</string>
+    <!-- TalkBack stateDescription on selected segment -->
+    <string name="common_state_selected">Selected</string>
+    <!-- Arg = localized status label -->
+    <string name="common_status_a11y">Status: %1$s</string>
+    <!-- Status adjective ('completed'): calendar chip, task working-state chip, search status preset. Distinct from common_done button -->
+    <string name="common_status_done">Done</string>
+    <!-- Shared status vocabulary: calendar chip + task working-state chip -->
+    <string name="common_status_in_progress">In progress</string>
+    <string name="common_status_in_review">In review</string>
+    <!-- WorkingState.Open on calendar — deliberately neutral (never 'overdue/missed') -->
+    <string name="common_status_scheduled">Scheduled</string>
+    <!-- Gentle rendering of WorkingState.Dropped on calendar -->
+    <string name="common_status_skipped">Skipped</string>
+    <!-- Snackbar action + dialog confirm; merges tasks + inbox occurrences -->
+    <string name="common_undo">Undo</string>
+    <!-- Was @${user.username} in auth + profile; extract so locales control layout; translatable likely false -->
+    <string name="common_username_handle">@%1$s</string>
+    <!-- Time-filter/section label; merges search chip, search sheet section (uppercase via style), New WHEN section -->
+    <string name="common_when">When</string>
+
+    <!-- ── feedback ─────────────────────────────────────────────── -->
+    <!-- Arg = filename -->
+    <string name="feedback_attachment_cd">Attachment %1$s</string>
+    <!-- Display fallback when a picked file has no DISPLAY_NAME; split display use from the uploaded-filename use before localizing -->
+    <string name="feedback_attachment_fallback_name">attachment</string>
+    <string name="feedback_body_cd">Feedback body</string>
+    <string name="feedback_body_label">What's going on?</string>
+    <!-- Via FeedbackCategory enum→resource refactor; wire token stays untranslated -->
+    <string name="feedback_category_bug">Bug</string>
+    <string name="feedback_category_cd">Category</string>
+    <string name="feedback_category_idea">Idea</string>
+    <string name="feedback_category_other">Other</string>
+    <string name="feedback_category_question">Question</string>
+    <!-- Via FeedbackResult error-code refactor -->
+    <string name="feedback_error_presign_failed">Couldn't prepare the attachments. Try again.</string>
+    <string name="feedback_error_send_failed">Couldn't send feedback (%1$d).</string>
+    <!-- Arg = HTTP status code -->
+    <string name="feedback_error_upload_failed">Attachment upload failed (%1$d).</string>
+    <string name="feedback_offline_note">You're offline — reconnect to send. Nothing was queued.</string>
+    <string name="feedback_status_cd">Feedback status</string>
+    <!-- Label + cd, one resource -->
+    <string name="feedback_subject_label">Subject</string>
+    <string name="feedback_submit_sending">Sending…</string>
+    <!-- Overlay heading; also the Settings Help &amp; Feedback button -->
+    <string name="feedback_title">Send feedback</string>
+
+    <!-- ── inbox ─────────────────────────────────────────────── -->
+    <string name="inbox_add_task">Add task</string>
+    <!-- Curly quotes around user content — adapt per locale; Android + desktop duplicates merged -->
+    <string name="inbox_dismissed_snackbar">Dismissed “%1$s”</string>
+    <plurals name="inbox_draft_count">
+        <item quantity="one">1 draft</item>
+        <item quantity="other">%1$d drafts</item>
+    </plurals>
+    <!-- Was 'DRAFTED' — uppercase via style; past participle chip -->
+    <string name="inbox_draft_eyebrow">Drafted</string>
+    <!-- Draft-card eyebrow chip. Catalog's inbox_draft_eyebrow is 'Drafted' with an 'uppercase via style' note, but the designsystem Eyebrow component applies NO case transform — using it would change rendered text and break onNodeWithText/Roborazzi pins. Keep all-caps in the string until Eyebrow styles case. -->
+    <string name="inbox_draft_eyebrow_caps">DRAFTED</string>
+    <!-- Args = date, time (currently raw ISO toString — needs locale formatting) -->
+    <string name="inbox_due_date_time">Due %1$s at %2$s</string>
+    <string name="inbox_empty_body">Brain-dump drafts land here for you to review. Speak a brain dump and Deferno turns it into draft tasks for this list.</string>
+    <!-- Idiom — translate the sentiment ('all clear'), not literally, if 'inbox zero' isn't established in the locale -->
+    <string name="inbox_empty_title">Inbox zero</string>
+    <!-- Via AcceptResult typed-error refactor; server-message passthrough on the sibling arm stays untranslated -->
+    <string name="inbox_error_couldnt_save_task">Couldn't save this task.</string>
+    <string name="inbox_footer_reassurance">Triage at your pace — nothing's lost.</string>
+    <string name="inbox_header_subtitle">Review each one — add it as a task, or dismiss it. Nothing's deleted.</string>
+    <!-- Was 'WAITING FOR YOU' — uppercase via style -->
+    <string name="inbox_section_waiting">Waiting for you</string>
+    <!-- Inbox section band. Catalog's inbox_section_waiting is 'Waiting for you' with an 'uppercase via style' note, but SectionLabel applies NO case transform — byte-identical rendering requires the all-caps literal until SectionLabel styles case. -->
+    <string name="inbox_section_waiting_caps">WAITING FOR YOU</string>
+
+    <!-- ── new ─────────────────────────────────────────────── -->
+    <!-- Android overlay submit (test-pinned) -->
+    <string name="new_create_task">Create task</string>
+    <string name="new_date_cd">Date</string>
+    <!-- Wording translates; keep the ISO example shape — the parser expects ISO input -->
+    <string name="new_date_label">Date (optional, e.g. 2026-06-08)</string>
+    <string name="new_deadline_time_cd">Deadline time</string>
+    <string name="new_dictation_denied">Dictation needs microphone access. Tap the mic to allow it.</string>
+    <!-- Merged Android + desktop ('turned off for Deferno') variants -->
+    <string name="new_dictation_denied_permanent">Dictation needs microphone access, which is turned off for this app.</string>
+    <!-- Desktop permanently-denied dictation note — catalog's new_dictation_denied_permanent says 'for this app'; desktop names the brand, kept separate to stay byte-identical -->
+    <string name="new_dictation_denied_permanent_desktop">Dictation needs microphone access, which is turned off for Deferno.</string>
+    <!-- Desktop variant (no tap-the-mic affordance) -->
+    <string name="new_dictation_denied_short">Dictation needs microphone access.</string>
+    <string name="new_dictation_error">Couldn't hear that — try the mic again.</string>
+    <!-- Desktop; 'System Settings' is the macOS app name — use each OS's official localized name -->
+    <string name="new_dictation_open_system_settings">Open System Settings</string>
+    <string name="new_dictation_status_cd">Dictation status</string>
+    <string name="new_error_could_not_save">Could not save.</string>
+    <!-- Via NewStatus.Failed error-code refactor -->
+    <string name="new_error_could_not_save_retry">Could not save. Try again.</string>
+    <string name="new_event_end_cd">Event end</string>
+    <string name="new_event_end_label">Ends (optional)</string>
+    <string name="new_event_start_cd">Event start</string>
+    <string name="new_event_start_label">Starts (e.g. 2026-06-08T09:00:00Z)</string>
+    <!-- 'New' refers to this screen's name -->
+    <string name="new_kind_note">You choose the kind here — Deferno never guesses it on New.</string>
+    <string name="new_kind_picker_cd">Kind picker</string>
+    <!-- Was all-caps — uppercase via style -->
+    <string name="new_kind_section">What kind of thing?</string>
+    <!-- Mic toggle idle-state a11y label — verb -->
+    <string name="new_mic_dictate_cd">Dictate</string>
+    <string name="new_mic_stop_dictation_cd">Stop dictation</string>
+    <string name="new_notes_label">Notes</string>
+    <!-- Was 'NOTES · OPTIONAL' — sentence case + uppercase via style -->
+    <string name="new_notes_section">Notes · optional</string>
+    <!-- Sibling of feedback_offline_note (verb differs: save vs send) — kept separate -->
+    <string name="new_offline_note">You're offline — reconnect to save. Nothing was queued.</string>
+    <!-- Was all-caps eyebrow — uppercase via style -->
+    <string name="new_saves_online_eyebrow">Saves online · you can change anything later</string>
+    <!-- Verb button (test-pinned) -->
+    <string name="new_submit_create">Create</string>
+    <!-- Busy arm of Create button; merges NewFormAtoms + NewScreen occurrences -->
+    <string name="new_submit_saving">Saving…</string>
+    <string name="new_time_label">Time (optional, e.g. 14:30)</string>
+    <!-- Field label + cd; also the TITLE section header (uppercase via style). Test-pinned locator string -->
+    <string name="new_title_label">Title</string>
+
+    <!-- ── plan ─────────────────────────────────────────────── -->
+    <!-- 'Forest' is the product metaphor for all your trees (See-the-trees design) — translate the metaphor, keep it consistent with 'tree' -->
+    <string name="plan_add_from_forest">Add from the forest</string>
+    <!-- Prefer moving the ‹ glyph to layout and reusing plan_today_title; kept literal for the extractor -->
+    <string name="plan_back_to_today">‹ Today</string>
+    <string name="plan_choose_task_click_label">Choose %1$s</string>
+    <!-- Deadline fallback (no time-of-day) — lowercase, appears inline after a date -->
+    <!-- java.time pattern for the Plan Today-header date; the View uppercases the rendering ("Mon Jun 16" -> "MON JUN 16"). -->
+    <string name="plan_header_date_pattern">EEE MMM d</string>
+    <string name="plan_deadline_anytime">anytime</string>
+    <string name="plan_empty_body">Nothing scheduled for today. Add something when you're ready — no pressure.</string>
+    <!-- Test-pinned + Roborazzi golden -->
+    <string name="plan_empty_title">Your plan is clear</string>
+    <!-- Prefer glyph in layout; 'focus' = the single-task Focus surface -->
+    <string name="plan_exit_focus">⌄ Exit focus</string>
+    <string name="plan_focus_done">Done — next step</string>
+    <string name="plan_focus_pause">Pause · take a break whenever you need</string>
+    <string name="plan_focus_subtitle">Just this. The rest is put away.</string>
+    <plurals name="plan_need_attention">
+        <item quantity="one">1 needs attention</item>
+        <item quantity="other">%1$d need attention</item>
+    </plurals>
+    <string name="plan_nothing_overdue">Nothing's overdue</string>
+    <string name="plan_pick_for_me">Pick for me</string>
+    <string name="plan_rather_not_decide">Rather not decide right now?</string>
+    <string name="plan_refreshing">Refreshing your plan…</string>
+    <string name="plan_see_everything">See everything</string>
+    <!-- Falls back to common_start when nothing selected -->
+    <string name="plan_start_with_title">Start · %1$s</string>
+    <!-- Chip text + semanticLabel — one resource -->
+    <string name="plan_suggested_chip">Suggested</string>
+    <!-- Was all-caps — uppercase via style -->
+    <string name="plan_suggestion_eyebrow">If you're not sure, start here</string>
+    <!-- Caps variant kept byte-identical for tests/goldens — catalog's plan_suggestion_eyebrow is sentence-case; consolidate when the styling refactor lands -->
+    <string name="plan_suggestion_eyebrow_caps">IF YOU'RE NOT SURE, START HERE</string>
+    <plurals name="plan_today_subtitle">
+        <item quantity="one">1 tree you picked. Start wherever feels right.</item>
+        <item quantity="other">%1$d trees you picked. Start wherever feels right.</item>
+    </plurals>
+    <!-- Screen heading; also the back-link target word -->
+    <string name="plan_today_title">Today</string>
+    <!-- First-person 'I' = the app speaking; keep the gentle register -->
+    <string name="plan_whats_next_subtitle">You're in charge. Tap whichever feels doable — I just lined up a few ideas.</string>
+    <string name="plan_whats_next_title">What's next?</string>
+    <!-- whyLine() branch — via composable-lookup refactor -->
+    <string name="plan_why_pinned">You said this one matters</string>
+    <string name="plan_why_quick_win">A quick win, if you want momentum</string>
+    <!-- Was 'YOUR DAY' — uppercase via style -->
+    <string name="plan_your_day_section">Your day</string>
+    <!-- Caps variant kept byte-identical for tests/goldens — catalog's plan_your_day_section is sentence-case ('Your day', uppercase-via-style); consolidate when the styling refactor lands -->
+    <string name="plan_your_day_section_caps">YOUR DAY</string>
+
+    <!-- ── profile ─────────────────────────────────────────────── -->
+    <string name="profile_account_active_label">Active account</string>
+    <string name="profile_account_credential_label">Credential</string>
+    <string name="profile_account_stored_on_device">Stored only on this device.</string>
+    <string name="profile_account_time_zone_default">Device default</string>
+    <string name="profile_account_time_zone_label">Time zone</string>
+    <string name="profile_admin_chip">Admin</string>
+    <string name="profile_loading">Loading your profile…</string>
+    <string name="profile_org_label">Organization</string>
+    <!-- Fallback when no org — adjective ('personal account') -->
+    <string name="profile_org_personal_chip">Personal</string>
+    <!-- Profile ReauthRequired notice body — differs from auth_session_expired_body ('…to continue.'); used by ProfileScreen.kt (androidMain) and ProfileDesktopScreen.kt (jvmMain) -->
+    <string name="profile_session_expired_body">Your sign-in for this account has ended. Sign in again to refresh your details.</string>
+    <string name="profile_sign_out_confirm_body">This removes this account and its data from this device. You’ll need to sign in again to use it here.</string>
+    <!-- Arg = account label -->
+    <string name="profile_sign_out_confirm_title">Sign out of %1$s?</string>
+    <string name="profile_unavailable_body">Your profile details couldn’t load. Check your connection and try again.</string>
+
+    <!-- ── search ─────────────────────────────────────────────── -->
+    <string name="search_add_tag_button">Add tag</string>
+    <string name="search_add_tag_label">Add a tag</string>
+    <string name="search_apply_filters">Apply filters</string>
+    <string name="search_clear_a11y">Clear search</string>
+    <!-- Keep the pattern token as-is (input format); translate 'From' -->
+    <string name="search_date_from_label">From (YYYY-MM-DD)</string>
+    <string name="search_date_to_label">To (YYYY-MM-DD)</string>
+    <string name="search_field_label">Search tasks</string>
+    <string name="search_filter_date_range">Date range</string>
+    <!-- Noun label over the sort options -->
+    <string name="search_filter_sort">Sort</string>
+    <string name="search_filter_tags">Tags</string>
+    <!-- Pill text + onClickLabel + sheet heading — one resource -->
+    <string name="search_filters">Filters</string>
+    <!-- Desktop variant said '…find tasks by title or description' — unified; adjust if desktop search really covers descriptions -->
+    <string name="search_initial_body">Type at least two characters to find anything by title.</string>
+    <!-- Desktop Search empty-state body — desktop variant of search_initial_body (mentions descriptions); kept separate to stay byte-identical -->
+    <string name="search_initial_body_desktop">Type at least two characters to find tasks by title or description.</string>
+    <!-- MERGE DECISION NEEDED: desktop currently says 'Search your tasks' — unified on the glossary term 'trees'; update desktop + its test -->
+    <string name="search_initial_title">Search your trees</string>
+    <!-- Desktop Search empty-state title — pinned verbatim by jvmTest SearchDesktopScreenTest; catalog's search_initial_title says 'trees' (its MERGE DECISION comment: unify desktop + test later) -->
+    <string name="search_initial_title_desktop">Search your tasks</string>
+    <!-- Hashtag label chip; likely translatable=false -->
+    <string name="search_label_chip_format">#%1$s</string>
+    <string name="search_no_matches_body">Nothing matched your search. Try a different word or fewer filters.</string>
+    <string name="search_no_matches_title">No matches</string>
+    <!-- Merges ItemTreeUi + Android SearchScreen duplicates (test-pinned) -->
+    <string name="search_placeholder_trees">Search all your trees…</string>
+    <string name="search_remove_tag_a11y">Remove tag %1$s</string>
+    <!-- Verb button -->
+    <string name="search_reset">Reset</string>
+    <string name="search_reset_filters_a11y">Reset filters</string>
+    <string name="search_searching">Searching…</string>
+    <!-- Merges STATUS sheet section (uppercase via style), desktop Status filter label, Status fallback chip -->
+    <string name="search_section_status">Status</string>
+    <string name="search_sort_a11y">Sort: %1$s. Tap to change.</string>
+    <!-- Via sortLabel() enum→resource refactor (duplicated Android/desktop) -->
+    <string name="search_sort_best_match">Best match</string>
+    <string name="search_sort_biggest_attachments">Biggest attachments</string>
+    <string name="search_sort_soonest_due">Soonest due</string>
+    <!-- A–Z hint is Latin-alphabet-specific — hi should use its own collation hint or just 'Title' -->
+    <string name="search_sort_title_asc">Title (A–Z)</string>
+    <string name="search_when_any_time">Any time</string>
+    <!-- Only used inside the search filter — the product otherwise avoids 'overdue' shaming language; keep register factual -->
+    <string name="search_when_overdue">Overdue</string>
+    <string name="search_when_this_week">This week</string>
+
+    <!-- ── settings ─────────────────────────────────────────────── -->
+    <string name="settings_agent_engine_deferno_cloud">Deferno cloud AI</string>
+    <!-- Radio row, engine label, and category summary — one key -->
+    <string name="settings_agent_engine_off">Off</string>
+    <string name="settings_agent_engine_on_device_basics">On-device basics</string>
+    <!-- AI-consent copy (AC1) — legally sensitive: translations must preserve the on-device vs off-device distinction exactly; get legal review per locale -->
+    <string name="settings_agent_intro">The Agent can turn a brain dump into draft tasks and suggest changes to your plan. Choose which engine it uses — or turn it off. An on-device engine keeps your text on this device; Deferno’s cloud AI sends it off your device to generate proposals (you always review before anything is saved). It’s off by default, and this choice stays on this device, not synced to your account.</string>
+    <!-- Consent-relevant — keep precise -->
+    <string name="settings_agent_note_cloud">Sends your text off-device to Deferno’s hosted AI</string>
+    <string name="settings_agent_note_on_device">Runs on this device</string>
+    <string name="settings_agent_note_premium">Premium — not available for your account yet</string>
+    <string name="settings_agent_off_note">The Agent stays off. Nothing is sent anywhere.</string>
+    <string name="settings_appearance_mode_section">Mode</string>
+    <string name="settings_appearance_theme_section">Theme</string>
+    <!-- Product term for the AI agent — referenced by breakdown_unavailable_body -->
+    <!-- Drilled Settings category title (Account) -->
+    <string name="settings_category_account">Account</string>
+    <string name="settings_category_agent">Agent</string>
+    <string name="settings_category_app_permissions">App Permissions</string>
+    <!-- Category titles double as shell chrome titles (via ChromeSpec refactor) — one key each -->
+    <string name="settings_category_appearance">Appearance</string>
+    <!-- Drilled Settings category title (Assistant enable/consent) -->
+    <string name="settings_category_assistant">Assistant</string>
+    <string name="settings_category_data_privacy">Data &amp; Privacy</string>
+    <string name="settings_category_help_feedback">Help &amp; Feedback</string>
+    <string name="settings_category_integrations">Integrations</string>
+    <string name="settings_category_legal">Legal</string>
+    <string name="settings_category_security_2fa">Security &amp; 2FA</string>
+    <string name="settings_category_speech_engine">Speech engine</string>
+    <string name="settings_category_storage">Storage</string>
+    <string name="settings_category_task_behavior">Task behavior</string>
+    <string name="settings_coming_soon_assistant_body">The Assistant is available on iPhone for now. It’s coming to Android soon.</string>
+    <string name="settings_coming_soon_integrations_body">Connect Deferno with the other tools you use. Integrations are on the way.</string>
+    <string name="settings_coming_soon_security_body">Two-factor authentication and security are managed by your identity provider. We’ll bring these controls into the app soon.</string>
+    <!-- ComingSoonDetail title + category-row summary -->
+    <string name="settings_coming_soon_title">Coming soon</string>
+    <string name="settings_data_export_button">Export your data</string>
+    <string name="settings_data_export_description">Export your tasks and lists as a backup file you can save or share.</string>
+    <string name="settings_data_export_menu_export">Export</string>
+    <!-- Disabled teaser menu item -->
+    <string name="settings_data_export_menu_full_backup">Full backup — coming soon</string>
+    <string name="settings_data_export_web_button">Export or import your data</string>
+    <!-- Desktop-only variant (#313 web-redirect) -->
+    <string name="settings_data_export_web_description">Export and import run in the Deferno web app — there’s no in-app endpoint yet. Open the web app to manage your data.</string>
+    <string name="settings_data_your_data_section">Your data</string>
+    <string name="settings_done_visibility_always">Always</string>
+    <string name="settings_done_visibility_dashboard">On the dashboard</string>
+    <string name="settings_done_visibility_description">How long completed items stay visible.</string>
+    <string name="settings_done_visibility_everywhere">Everywhere</string>
+    <!-- Fixed-choice chip today; if choices become dynamic, convert the day chips to a plurals resource -->
+    <string name="settings_done_visibility_one_day">1 day</string>
+    <string name="settings_done_visibility_one_week">1 week</string>
+    <string name="settings_done_visibility_section">Done visibility</string>
+    <string name="settings_done_visibility_three_days">3 days</string>
+    <string name="settings_help_feedback_intro">Have a question, a bug, or a suggestion? Send it straight to the Deferno team — attach files if it helps.</string>
+    <string name="settings_legal_account_removal_email_body">Hello,
+
+I'd like to request removal of my Deferno account and its associated data.
+
+Account email:
+
+Thank you.</string>
+    <!-- Prefilled mailto EXTRA_SUBJECT — user-visible/editable -->
+    <string name="settings_legal_account_removal_email_subject">Account removal request</string>
+    <string name="settings_legal_open_source_body">Deferno is built on open-source software, with thanks to its authors.</string>
+    <string name="settings_legal_open_source_section">Open source</string>
+    <string name="settings_legal_privacy_body">Your data stays yours. We never sell it. See the full privacy policy on the web.</string>
+    <string name="settings_legal_privacy_policy_title">Privacy Policy</string>
+    <string name="settings_legal_privacy_section">Privacy</string>
+    <string name="settings_legal_terms_body">By using Deferno you agree to our Terms of Service and acceptable-use policy.</string>
+    <!-- Section heading AND the in-app reader title (via LegalPage state refactor) -->
+    <string name="settings_legal_terms_section">Terms of Service</string>
+    <string name="settings_legal_view_privacy_button">View Privacy Policy</string>
+    <string name="settings_legal_view_terms_button">View Terms of Service</string>
+    <!-- Android-only -->
+    <string name="settings_permissions_intro">Manage Deferno’s notifications, storage, and other permissions in your device settings.</string>
+    <string name="settings_permissions_open_button">Open app settings</string>
+    <string name="settings_privacy_analytics_description">Help improve Deferno by sharing anonymous usage data.</string>
+    <string name="settings_privacy_analytics_label">Analytics &amp; tracking</string>
+    <!-- Arg = engine/provider label; replaces the code-composed ' · ' suffix -->
+    <string name="settings_row_summary_unavailable">%1$s · unavailable</string>
+    <string name="settings_security_open_console_button">Open security console</string>
+    <string name="settings_speech_engine_android_native">Android (on-device)</string>
+    <string name="settings_speech_engine_automatic">Automatic</string>
+    <!-- Desktop Sidecar engine -->
+    <string name="settings_speech_engine_system_dictation">System dictation</string>
+    <!-- Desktop variant (no suffix) -->
+    <string name="settings_speech_engine_whisper">Whisper</string>
+    <!-- 'Whisper' is a model name — keep; Android wording -->
+    <string name="settings_speech_engine_whisper_on_device">Whisper (on-device)</string>
+    <string name="settings_speech_intro">Choose how dictation turns your voice into text. This stays on this device and isn’t synced to your account.</string>
+    <string name="settings_speech_note_automatic">Use the best engine available on this device</string>
+    <string name="settings_speech_note_downloading">Downloading…</string>
+    <string name="settings_speech_note_no_engine">Not available on this device</string>
+    <string name="settings_speech_note_preparing">Preparing…</string>
+    <string name="settings_speech_note_unsupported_locale">Not available for your language</string>
+    <string name="settings_storage_intro">Choose where your attachments are stored. On-device keeps the files on this device and works offline. This choice stays on this device and isn’t synced to your account. (Feedback you send the team is always uploaded to Deferno so we can see it.)</string>
+    <string name="settings_storage_keep_recordings_description">Save the original voice recording on this device when you accept a brain dump, so you can listen back later.</string>
+    <string name="settings_storage_keep_recordings_label">Keep brain dump recordings</string>
+    <string name="settings_storage_note_coming_later">Coming later</string>
+    <string name="settings_storage_note_deferno_backend">Stores files on Deferno’s servers</string>
+    <string name="settings_storage_note_on_device">Keeps files on this device; works offline</string>
+    <string name="settings_storage_provider_deferno_backend">Deferno backend</string>
+    <!-- Brand — translatable=false -->
+    <string name="settings_storage_provider_dropbox">Dropbox</string>
+    <!-- Brand — translatable=false -->
+    <string name="settings_storage_provider_google_drive">Google Drive</string>
+    <string name="settings_storage_provider_on_device">On-device</string>
+    <string name="settings_task_behavior_drag_drop_description">Reorder tasks by dragging. This is still being polished.</string>
+    <string name="settings_task_behavior_drag_drop_label">Drag and drop (experimental)</string>
+    <string name="settings_task_behavior_shake_undo_description">Shake your phone to undo the last task move. You’ll be asked to confirm first.</string>
+    <!-- Android-only -->
+    <string name="settings_task_behavior_shake_undo_label">Shake to undo</string>
+    <!-- Theme name — brand, translatable=false -->
+    <string name="settings_theme_family_deferno">Deferno</string>
+    <!-- Theme name — likely translatable=false -->
+    <string name="settings_theme_family_mono">Mono</string>
+    <string name="settings_theme_mode_dark">Dark</string>
+    <string name="settings_theme_mode_follow_system">Follow system</string>
+    <string name="settings_theme_mode_light">Light</string>
+
+    <!-- ── shell ─────────────────────────────────────────────── -->
+    <!-- onClickLabel on drawer scrim -->
+    <string name="shell_close_menu_cd">Close menu</string>
+    <!-- Merged Android + desktop near-duplicates ('its desktop view arrives' variant folded in) -->
+    <string name="shell_coming_soon_body">This space is reserved — its features arrive in an upcoming release.</string>
+    <!-- Desktop coming-soon body — catalog's shell_coming_soon_body says 'its features arrive', desktop says 'its desktop view arrives'; kept separate to stay byte-identical -->
+    <string name="shell_coming_soon_body_desktop">This space is reserved — its desktop view arrives in an upcoming release.</string>
+    <!-- Arg = localized destination label; word order varies by locale — positional format required -->
+    <string name="shell_coming_soon_title">%1$s is coming soon</string>
+    <!-- Merges drawer label, ActivityFeed screen heading, chrome title -->
+    <string name="shell_destination_activity">Activity</string>
+    <!-- Also the Settings 'Assistant' category title and its chrome title -->
+    <string name="shell_destination_assistant">Assistant</string>
+    <string name="shell_destination_calendar">Calendar</string>
+    <!-- Also the Inbox screen heading (Android+desktop) and chrome title -->
+    <string name="shell_destination_inbox">Inbox</string>
+    <!-- Destination.label — drawer nav + desktop menu bar + chrome titles (after ChromeSpec refactor). Public API — keep call sites working -->
+    <string name="shell_destination_plan">Plan</string>
+    <string name="shell_destination_profile">Profile</string>
+    <string name="shell_destination_settings">Settings</string>
+    <string name="shell_destination_tasks">Tasks</string>
+    <!-- Was ADD SOMETHING — store sentence case, uppercase via style (locale-sensitive casing) -->
+    <string name="shell_drawer_add_something">Add something</string>
+    <!-- Drawer capture eyebrow — SectionLabel renders text verbatim (no uppercase text style), so the catalog's sentence-case shell_drawer_add_something would change rendered bytes; this key preserves the baked all-caps literal until an uppercase-via-style pass -->
+    <string name="shell_drawer_add_something_eyebrow">ADD SOMETHING</string>
+    <!-- 'Inbox' must match shell_destination_inbox translation -->
+    <string name="shell_drawer_brain_dump_subtitle">Speak or type — sorts to Inbox</string>
+    <!-- TalkBack join of button text + subtitle -->
+    <string name="shell_drawer_capture_cd">%1$s. %2$s</string>
+    <!-- Drawer capture button; also the Android New overlay heading (NewScreen:138) -->
+    <string name="shell_drawer_new_task">New task</string>
+    <string name="shell_drawer_new_task_subtitle">Fill in the details</string>
+    <!-- Inbox badge zero state; non-zero branch is a bare locale-formatted number -->
+    <string name="shell_inbox_badge_empty">empty</string>
+    <!-- ☰ icon cd; merges ShellTopBar and Tasks search-pill occurrences (test-pinned) -->
+    <string name="shell_menu_cd">Menu</string>
+    <string name="shell_menu_file">File</string>
+    <string name="shell_menu_help">Help</string>
+    <string name="shell_menu_new">New…</string>
+    <string name="shell_menu_quit">Quit</string>
+    <string name="shell_menu_search">Search…</string>
+    <!-- Checkmark glyph marking the selected desktop menu row — likely translatable=false; consider an icon with a localized description later -->
+    <string name="shell_menu_selected_mark">✓</string>
+    <string name="shell_menu_view">View</string>
+    <!-- New FAB cd + desktop New overlay heading. Single word — 'new item' sense -->
+    <string name="shell_new">New</string>
+    <!-- Developer-ish; merged with desktop variant; prefer deletion -->
+    <string name="shell_overlay_placeholder_body">The shell overlay route is wired — Search and New render real content over it.</string>
+    <!-- Desktop overlay-placeholder body — catalog's shell_overlay_placeholder_body carries a different (merged) value, so the desktop literal gets its own key to stay byte-identical -->
+    <string name="shell_overlay_placeholder_body_desktop">This surface arrives on desktop in an upcoming release.</string>
+    <!-- Near-dead v1 placeholder — candidate for deletion instead of translation -->
+    <string name="shell_overlay_placeholder_title">Overlay</string>
+    <string name="shell_select_account">Select account</string>
+    <!-- Was Ctrl+${index + 1} -->
+    <string name="shell_shortcut_destination">Ctrl+%1$d</string>
+    <string name="shell_shortcut_new">Ctrl+N</string>
+    <!-- Shortcut hint text — 'Ctrl' localizes (de: Strg); consider a %1$s key-name format -->
+    <string name="shell_shortcut_quit">Ctrl+Q</string>
+    <string name="shell_shortcut_refresh">Ctrl+R</string>
+    <string name="shell_shortcut_search">Ctrl+F</string>
+    <!-- Also the Settings account-switcher roster section label -->
+    <string name="shell_signed_in">Signed in</string>
+    <!-- Arg = account label, fallback common_app_name -->
+    <string name="shell_signed_in_as_cd">Signed in as %1$s</string>
+    <string name="shell_switch_account_cd">Switch account</string>
+    <!-- '+' prefix is part of visible text; consider icon + shell_new instead -->
+    <string name="shell_toolbar_new">+ New</string>
+    <!-- Arg = localized destination label; plain 'Deferno' auth-shell title uses common_app_name -->
+    <string name="shell_window_title_destination">Deferno — %1$s</string>
+
+    <!-- ── tasks ─────────────────────────────────────────────── -->
+    <string name="tasks_add_subtask_dialog_title">Add a subtask</string>
+    <!-- Arg = parent title -->
+    <string name="tasks_add_subtask_placeholder">Subtask of %1$s</string>
+    <!-- Chip: this item blocks others -->
+    <string name="tasks_badge_blocker">Blocker</string>
+    <string name="tasks_badge_blocker_a11y">Blocks other items</string>
+    <!-- Curly quotes — adapt quote style per locale -->
+    <string name="tasks_delete_item_confirm_title">Delete “%1$s”?</string>
+    <string name="tasks_detail_add_caption">Add caption</string>
+    <string name="tasks_detail_add_comment_placeholder">Add a comment…</string>
+    <string name="tasks_detail_add_file">Add file</string>
+    <!-- Also the Search sheet label field -->
+    <string name="tasks_detail_add_label_placeholder">Add a label…</string>
+    <string name="tasks_detail_add_subtask_placeholder">Add a subtask…</string>
+    <!-- %1$s=formatted size, %2$s=raw mime (mime untranslated) -->
+    <string name="tasks_detail_attachment_meta">%1$s · %2$s</string>
+    <!-- 'On device' is the translatable segment -->
+    <string name="tasks_detail_attachment_meta_on_device">%1$s · %2$s · On device</string>
+    <!-- Noun — attachment caption field -->
+    <string name="tasks_detail_caption_placeholder">Caption</string>
+    <string name="tasks_detail_clear_due_date_a11y">Clear due date</string>
+    <!-- Non-self comment author fallback -->
+    <string name="tasks_detail_comment_author_member">Member</string>
+    <string name="tasks_detail_comment_author_you">You</string>
+    <!-- Was ' (edited)' appended by concatenation; compose as '%1$s (edited)' or separate node — drop the baked leading space -->
+    <string name="tasks_detail_comment_edited">(edited)</string>
+    <string name="tasks_detail_comments_error">Couldn't load comments. Pull to refresh later.</string>
+    <string name="tasks_detail_delete_attachment_a11y">Delete %1$s</string>
+    <string name="tasks_detail_delete_confirm_title">Delete this task?</string>
+    <string name="tasks_detail_due_date_a11y">Due date: %1$s. Tap to change.</string>
+    <string name="tasks_detail_edit_caption">Edit caption</string>
+    <string name="tasks_detail_edit_caption_a11y">Edit caption for %1$s</string>
+    <string name="tasks_detail_encrypted_comment">🔒 Encrypted comment</string>
+    <string name="tasks_detail_loading">Loading details…</string>
+    <!-- Kebab cd -->
+    <string name="tasks_detail_more_actions">More actions</string>
+    <string name="tasks_detail_no_attachments">No attachments.</string>
+    <string name="tasks_detail_no_comments">No comments yet.</string>
+    <string name="tasks_detail_no_description">No description yet.</string>
+    <string name="tasks_detail_not_found_body">This task may have been removed. Head back to your list.</string>
+    <string name="tasks_detail_not_found_title">Task not found</string>
+    <!-- 'left' assumes LTR pane order — reconsider for RTL later -->
+    <string name="tasks_detail_pane_empty_body">Pick a task on the left to see its details here.</string>
+    <!-- Two-pane detail placeholder (Android tablet + desktop) -->
+    <string name="tasks_detail_pane_empty_title">Nothing open</string>
+    <!-- Verb button -->
+    <string name="tasks_detail_play">Play</string>
+    <string name="tasks_detail_play_attachment_a11y">Play %1$s</string>
+    <!-- Verb — submit comment -->
+    <string name="tasks_detail_post">Post</string>
+    <string name="tasks_detail_posting">Posting…</string>
+    <!-- Row label (noun-ish) — distinct from common_due format -->
+    <string name="tasks_detail_property_due">Due</string>
+    <string name="tasks_detail_property_owner">Owner</string>
+    <string name="tasks_detail_property_source">Source</string>
+    <string name="tasks_detail_property_time">Time</string>
+    <string name="tasks_detail_remove_caption_a11y">Remove caption for %1$s</string>
+    <string name="tasks_detail_remove_label_a11y">Remove label %1$s</string>
+    <!-- Comment/history section heading — kept separate from shell_destination_activity in case translations diverge -->
+    <string name="tasks_detail_section_activity">Activity</string>
+    <string name="tasks_detail_section_attachments">Attachments</string>
+    <!-- Section header — uppercase via style, not .uppercase() (locale-insensitive) -->
+    <string name="tasks_detail_section_properties">Properties</string>
+    <string name="tasks_detail_section_subtasks">Subtasks</string>
+    <string name="tasks_detail_set_due_date">Set due date</string>
+    <!-- Test-pinned 'Set to Done' -->
+    <string name="tasks_detail_set_working_state_a11y">Set to %1$s</string>
+    <string name="tasks_detail_source_open_in">Open in %1$s</string>
+    <!-- Was cross-line concatenation; %1$s=source label, %2$s=ref label -->
+    <string name="tasks_detail_source_row_a11y">Source: %1$s, %2$s. Opens in %1$s.</string>
+    <!-- No-URL arm of tasks_detail_source_row_a11y (provenance row without a provider link — no trailing 'Opens in' sentence) -->
+    <string name="tasks_detail_source_row_no_link_a11y">Source: %1$s, %2$s</string>
+    <!-- Subtask CheckDot cd — curly quotes around the title are test-pinned (androidApp asserts 'Mark “Draft the announcement” done'); common_mark_done_cd dropped the quotes so it can't be reused byte-identically -->
+    <string name="tasks_detail_subtask_mark_done_a11y">Mark “%1$s” done</string>
+    <!-- Unchecked arm of the subtask CheckDot cd — quoted sibling of common_mark_not_done_cd -->
+    <string name="tasks_detail_subtask_mark_not_done_a11y">Mark “%1$s” not done</string>
+    <string name="tasks_detail_subtask_progress_a11y">%1$d of %2$d subtasks done</string>
+    <string name="tasks_detail_title">Details</string>
+    <string name="tasks_detail_uploading">Uploading…</string>
+    <!-- Test-pinned pattern 'In review, current working state' -->
+    <string name="tasks_detail_working_state_current_a11y">%1$s, current working state</string>
+    <string name="tasks_detail_working_state_heading">Working state</string>
+    <!-- Was [${sourceLabel}#$number]; ExternalRefLabelTest pins '[GitHub#42]' — likely translatable=false -->
+    <string name="tasks_external_ref_prefix">[%1$s#%2$d]</string>
+    <!-- Also the Search STATUS preset — status adjective (not archived/done) -->
+    <string name="tasks_filter_active">Active</string>
+    <!-- Also Search preset; referenced inside tasks_tree_filtered_empty_body — keep in sync -->
+    <string name="tasks_filter_all">All</string>
+    <!-- Segmented filter chip; 'today' = today's plan -->
+    <string name="tasks_filter_in_today">In today</string>
+    <!-- KindDot TalkBack label — lowercase kind name -->
+    <string name="tasks_kind_a11y_chore">chore</string>
+    <!-- KindDot TalkBack label — lowercase kind name -->
+    <string name="tasks_kind_a11y_event">event</string>
+    <!-- KindDot TalkBack label — lowercase kind name -->
+    <string name="tasks_kind_a11y_habit">habit</string>
+    <!-- KindDot TalkBack label on search result rows — lowercase kind name (was kind.name.lowercase()) -->
+    <string name="tasks_kind_a11y_task">task</string>
+    <!-- kindLabel() TreeChip marker — final rendered all-caps text; sibling of common_kind_chore -->
+    <string name="tasks_kind_label_chore">CHORE</string>
+    <!-- kindLabel() TreeChip marker — final rendered all-caps text; sibling of common_kind_event -->
+    <string name="tasks_kind_label_event">EVENT</string>
+    <!-- kindLabel() TreeChip marker — final rendered all-caps text; sibling of common_kind_habit -->
+    <string name="tasks_kind_label_habit">HABIT</string>
+    <!-- kindLabel() TreeChip marker — FINAL rendered all-caps text (was kind.name.uppercase()); all-caps sibling of common_kind_task, per module instruction the resource holds the exact rendered text -->
+    <string name="tasks_kind_label_task">TASK</string>
+    <!-- Non-Task definition light-switch (opposite of Archive) -->
+    <string name="tasks_menu_activate">Activate</string>
+    <string name="tasks_menu_add_subtask">Add subtask</string>
+    <!-- Merges tree menu, detail button, Breakdown button -->
+    <string name="tasks_menu_add_to_plan">Add to today's plan</string>
+    <!-- Verb -->
+    <string name="tasks_menu_archive">Archive</string>
+    <!-- Opens the Breakdown impediment chat -->
+    <string name="tasks_menu_break_this_down">Break this down</string>
+    <!-- Destructive; the word itself carries the warning (a11y) -->
+    <string name="tasks_menu_delete_permanent">Delete (Permanent!)</string>
+    <string name="tasks_menu_mark_done">Mark done</string>
+    <!-- Verb — enters move mode -->
+    <string name="tasks_menu_move">Move</string>
+    <!-- Menu verb (open the item) — distinct from tasks_working_state_open adjective -->
+    <string name="tasks_menu_open">Open</string>
+    <!-- Verb -->
+    <string name="tasks_menu_pin">Pin</string>
+    <string name="tasks_menu_remove_from_plan">Remove from today's plan</string>
+    <string name="tasks_menu_start_working">Start working</string>
+    <string name="tasks_menu_undo_move">Undo move</string>
+    <string name="tasks_menu_unpin">Unpin</string>
+    <string name="tasks_move_down">Move down</string>
+    <string name="tasks_move_indent">Indent</string>
+    <string name="tasks_move_operation_indent">indent</string>
+    <string name="tasks_move_operation_outdent">outdent</string>
+    <!-- Interpolated mid-sentence into tasks_undo_operation_confirm_title — lowercase noun-ish; translate to fit that sentence -->
+    <string name="tasks_move_operation_reorder">reorder</string>
+    <string name="tasks_move_outdent">Outdent</string>
+    <!-- cd for ↑ glyph button -->
+    <string name="tasks_move_up">Move up</string>
+    <!-- Past-participle snackbar after a move -->
+    <string name="tasks_moved_snackbar">Moved</string>
+    <!-- Merges tree a11y and detail visible text variants -->
+    <string name="tasks_progress_done">%1$d of %2$d done</string>
+    <!-- done-of-total meta (collapsed parent + Subtasks header trailing); args: done, total -->
+    <string name="tasks_progress_fraction">%1$d of %2$d</string>
+    <!-- App vocabulary for WorkingState.Dropped — VERB phrase ('put aside for now', deliberately gentle, never 'drop/abandon'). One key for menu entries AND the working-state chip label -->
+    <string name="tasks_set_aside">Set aside</string>
+    <!-- Sole TalkBack provenance cue; brand name stays -->
+    <string name="tasks_source_from_github">From GitHub</string>
+    <string name="tasks_source_from_google_calendar">From Google Calendar</string>
+    <string name="tasks_tree_actions_for_item">Actions for %1$s</string>
+    <string name="tasks_tree_add_tree">Add a tree</string>
+    <!-- Also the Search result count (rendered uppercase via style — was '1 TREE'/'N TREES') -->
+    <plurals name="tasks_tree_count">
+        <item quantity="one">1 tree</item>
+        <item quantity="other">%1$d trees</item>
+    </plurals>
+    <string name="tasks_tree_empty_body">When you add a tree, it shows up here. One small step at a time.</string>
+    <!-- 'Tree' = product glossary term for a task tree -->
+    <string name="tasks_tree_empty_title">No trees yet</string>
+    <!-- Embedded “All” must match tasks_filter_all translation -->
+    <string name="tasks_tree_filtered_empty_body">Everything here is done. Switch to “All” to see it again.</string>
+    <string name="tasks_tree_filtered_empty_title">Nothing to show here</string>
+    <string name="tasks_tree_refreshing">Refreshing…</string>
+    <!-- FilterChip — 'blocked' items toggle -->
+    <string name="tasks_tree_show_blocked">Show blocked</string>
+    <!-- Pane heading over the full tree list -->
+    <string name="tasks_tree_title">Everything</string>
+    <!-- Arg = localized move-operation label (via MoveOperation enum refactor) -->
+    <string name="tasks_undo_operation_confirm_title">Undo %1$s?</string>
+    <!-- STATE ADJECTIVE (not yet started) — different word from the Open verb in many languages (es: Abierta vs Abrir) -->
+    <string name="tasks_working_state_open">Open</string>
+
+    <!-- ── update ─────────────────────────────────────────────── -->
+    <string name="update_badge_available">Update available</string>
+    <!-- Extract once — repeats at 3 UpdatePresentation states -->
+    <string name="update_check_action">Check for updates…</string>
+    <string name="update_check_failed_fallback">Update check failed</string>
+    <!-- Arg is raw exception prose today — after the UpdateState refactor, show only the localized prefix or a typed reason -->
+    <string name="update_check_failed_status">Update check failed: %1$s</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_installing_status">Installing %1$s — the app will restart</string>
+    <string name="update_restart_to_update">Restart to update to %1$s</string>
+    <string name="update_unsupported_not_packaged">Self-update is available in the installed app</string>
+    <string name="update_unsupported_other">Automatic updates aren't available here</string>
+    <string name="update_unsupported_package_manager">Updates are managed by your package manager</string>
+    <string name="update_up_to_date">You're up to date</string>
+    <string name="update_updating">Updating…</string>
+    <string name="update_version_available">Version %1$s is available</string>
+    <!-- App name + version at top of Help menu; test pins 'Deferno 0.1.0' -->
+    <string name="update_version_line">%1$s %2$s</string>
+    <string name="update_view_releases">View all releases…</string>
+</resources>

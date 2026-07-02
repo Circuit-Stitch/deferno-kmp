@@ -17,14 +17,14 @@ class LastUndoableTest {
     fun recordsThenUndoRunsTheActionAndClears() = runTest {
         val register = LastUndoable()
         var ran = 0
-        register.record("indent", structural = true) { ran++ }
+        register.record(MoveOperation.Indent, structural = true) { ran++ }
 
-        assertEquals("indent", register.current.value?.operation)
+        assertEquals(MoveOperation.Indent, register.current.value?.operation)
         assertTrue(register.current.value!!.structural)
 
         val entry = register.undo()
         assertEquals(1, ran, "undo runs the recorded inverse")
-        assertEquals("indent", entry?.operation)
+        assertEquals(MoveOperation.Indent, entry?.operation)
         assertNull(register.current.value, "single-level: cleared after one undo, never replayed twice")
     }
 
@@ -38,10 +38,10 @@ class LastUndoableTest {
         val register = LastUndoable()
         var first = 0
         var second = 0
-        register.record("reorder", structural = false) { first++ }
-        register.record("outdent", structural = true) { second++ }
+        register.record(MoveOperation.Reorder, structural = false) { first++ }
+        register.record(MoveOperation.Outdent, structural = true) { second++ }
 
-        assertEquals("outdent", register.current.value?.operation, "single-level: the latest wins")
+        assertEquals(MoveOperation.Outdent, register.current.value?.operation, "single-level: the latest wins")
         register.undo()
         assertEquals(0, first, "the replaced action never runs")
         assertEquals(1, second)
@@ -51,7 +51,7 @@ class LastUndoableTest {
     fun clearDropsTheEntryWithoutRunningIt() = runTest {
         val register = LastUndoable()
         var ran = 0
-        register.record("indent", structural = true) { ran++ }
+        register.record(MoveOperation.Indent, structural = true) { ran++ }
 
         register.clear()
         assertNull(register.current.value)
@@ -61,9 +61,9 @@ class LastUndoableTest {
     @Test
     fun eachRecordBumpsTheToken() {
         val register = LastUndoable()
-        register.record("a", structural = false) {}
+        register.record(MoveOperation.Reorder, structural = false) {}
         val first = register.current.value!!.id
-        register.record("b", structural = false) {}
+        register.record(MoveOperation.Indent, structural = false) {}
 
         assertTrue(register.current.value!!.id > first, "a fresh token re-fires the single-shot snackbar effect")
         assertFalse(register.current.value!!.structural)

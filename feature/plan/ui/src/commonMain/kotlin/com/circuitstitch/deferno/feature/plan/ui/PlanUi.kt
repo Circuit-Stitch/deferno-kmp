@@ -17,7 +17,11 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.plan_empty_body
+import com.circuitstitch.deferno.core.designsystem.resources.plan_empty_title
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import org.jetbrains.compose.resources.stringResource
 
 // Shared building blocks for the Plan View (#27): thin, stateless Composables (loading + empty
 // states). Kept in commonMain (Android + desktop) so a future desktop Plan View can reuse them; the
@@ -53,10 +57,10 @@ internal fun EmptyPlan(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Your plan is clear", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(Res.string.plan_empty_title), style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Nothing scheduled for today. Add something when you're ready — no pressure.",
+            stringResource(Res.string.plan_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.defernoColors.inkMuted,
         )

@@ -7,6 +7,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
+import com.circuitstitch.deferno.core.data.activity.ActivitySource
+import com.circuitstitch.deferno.core.data.activity.ActivitySummary
+import com.circuitstitch.deferno.core.data.activity.ActivityVerb
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.shell.ActivityComponent
@@ -39,12 +42,24 @@ class ActivityScreenshotTest {
     }
 
     private val rows = listOf(
-        ActivityFeedRow(5, "Created a task", "Mobile app", Instant.parse("2026-06-21T09:45:00Z"), "t5"),
-        ActivityFeedRow(4, "Updated a task", "Mobile app", Instant.parse("2026-06-21T09:31:00Z"), "t4"),
-        ActivityFeedRow(3, "Updated your plan", "Mobile app", Instant.parse("2026-06-21T08:12:00Z"), null),
-        ActivityFeedRow(2, "Updated a task", "via Website", Instant.parse("2026-06-20T21:05:00Z"), "t2"),
-        ActivityFeedRow(1, "Created a habit", "via MCP agent", Instant.parse("2026-06-20T18:40:00Z"), "h1"),
+        row(5, ActivityVerb.Created, "task", "Created a task", ActivitySource.Mobile, "Mobile app", "2026-06-21T09:45:00Z", "t5"),
+        row(4, ActivityVerb.UpdatedTask, null, "Updated a task", ActivitySource.Mobile, "Mobile app", "2026-06-21T09:31:00Z", "t4"),
+        row(3, ActivityVerb.UpdatedPlan, null, "Updated your plan", ActivitySource.Mobile, "Mobile app", "2026-06-21T08:12:00Z", null),
+        row(2, ActivityVerb.UpdatedTask, null, "Updated a task", ActivitySource.Website, "via Website", "2026-06-20T21:05:00Z", "t2"),
+        row(1, ActivityVerb.Created, "habit", "Created a habit", ActivitySource.Mcp, "via MCP agent", "2026-06-20T18:40:00Z", "h1"),
     )
+
+    // The View renders the typed fields (summaryInfo/source); the strings mirror them for the bridges.
+    private fun row(
+        seq: Long,
+        verb: ActivityVerb,
+        kindToken: String?,
+        summary: String,
+        source: ActivitySource,
+        sourceLabel: String,
+        at: String,
+        itemId: String?,
+    ) = ActivityFeedRow(seq, summary, sourceLabel, Instant.parse(at), itemId, ActivitySummary(verb, kindToken), source)
 
     private fun capture(name: String, content: @Composable () -> Unit) {
         composeRule.setContent {

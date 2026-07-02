@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The locales the app ships (Play Store v1). Declared for Android 13+ per-app language settings
+     (Settings → App languages) — keep in lockstep with `androidResources.localeFilters` in
+     build.gradle.kts and the values-* variants in core:designsystem's composeResources + this
+     module's res/. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="es" />
+    <locale android:name="de" />
+    <locale android:name="hi" />
+    <locale android:name="pt" />
+</locale-config>

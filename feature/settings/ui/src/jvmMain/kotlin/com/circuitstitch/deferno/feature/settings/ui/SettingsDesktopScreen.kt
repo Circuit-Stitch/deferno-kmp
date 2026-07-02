@@ -42,6 +42,85 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineOrigin
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderAvailability
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderOption
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.auth_add_another_account
+import com.circuitstitch.deferno.core.designsystem.resources.common_account
+import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.feedback_title
+import com.circuitstitch.deferno.core.designsystem.resources.settings_agent_engine_deferno_cloud
+import com.circuitstitch.deferno.core.designsystem.resources.settings_agent_engine_off
+import com.circuitstitch.deferno.core.designsystem.resources.settings_agent_engine_on_device_basics
+import com.circuitstitch.deferno.core.designsystem.resources.settings_agent_intro
+import com.circuitstitch.deferno.core.designsystem.resources.settings_agent_note_cloud
+import com.circuitstitch.deferno.core.designsystem.resources.settings_agent_note_on_device
+import com.circuitstitch.deferno.core.designsystem.resources.settings_agent_note_premium
+import com.circuitstitch.deferno.core.designsystem.resources.settings_agent_off_note
+import com.circuitstitch.deferno.core.designsystem.resources.settings_appearance_mode_section
+import com.circuitstitch.deferno.core.designsystem.resources.settings_appearance_theme_section
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_agent
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_app_permissions
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_appearance
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_data_privacy
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_help_feedback
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_integrations
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_legal
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_security_2fa
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_speech_engine
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_storage
+import com.circuitstitch.deferno.core.designsystem.resources.settings_category_task_behavior
+import com.circuitstitch.deferno.core.designsystem.resources.settings_coming_soon_integrations_body
+import com.circuitstitch.deferno.core.designsystem.resources.settings_coming_soon_security_body
+import com.circuitstitch.deferno.core.designsystem.resources.settings_coming_soon_title
+import com.circuitstitch.deferno.core.designsystem.resources.settings_data_export_web_button
+import com.circuitstitch.deferno.core.designsystem.resources.settings_data_export_web_description
+import com.circuitstitch.deferno.core.designsystem.resources.settings_data_your_data_section
+import com.circuitstitch.deferno.core.designsystem.resources.settings_done_visibility_always
+import com.circuitstitch.deferno.core.designsystem.resources.settings_done_visibility_dashboard
+import com.circuitstitch.deferno.core.designsystem.resources.settings_done_visibility_description
+import com.circuitstitch.deferno.core.designsystem.resources.settings_done_visibility_everywhere
+import com.circuitstitch.deferno.core.designsystem.resources.settings_done_visibility_one_day
+import com.circuitstitch.deferno.core.designsystem.resources.settings_done_visibility_one_week
+import com.circuitstitch.deferno.core.designsystem.resources.settings_done_visibility_section
+import com.circuitstitch.deferno.core.designsystem.resources.settings_done_visibility_three_days
+import com.circuitstitch.deferno.core.designsystem.resources.settings_help_feedback_intro
+import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_open_source_body
+import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_open_source_section
+import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_privacy_body
+import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_privacy_section
+import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_terms_body
+import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_terms_section
+import com.circuitstitch.deferno.core.designsystem.resources.settings_privacy_analytics_description
+import com.circuitstitch.deferno.core.designsystem.resources.settings_privacy_analytics_label
+import com.circuitstitch.deferno.core.designsystem.resources.settings_row_summary_unavailable
+import com.circuitstitch.deferno.core.designsystem.resources.settings_security_open_console_button
+import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_engine_automatic
+import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_engine_system_dictation
+import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_engine_whisper
+import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_intro
+import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_note_automatic
+import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_note_downloading
+import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_note_no_engine
+import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_note_preparing
+import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_note_unsupported_locale
+import com.circuitstitch.deferno.core.designsystem.resources.settings_storage_intro
+import com.circuitstitch.deferno.core.designsystem.resources.settings_storage_keep_recordings_description
+import com.circuitstitch.deferno.core.designsystem.resources.settings_storage_keep_recordings_label
+import com.circuitstitch.deferno.core.designsystem.resources.settings_storage_note_coming_later
+import com.circuitstitch.deferno.core.designsystem.resources.settings_storage_note_deferno_backend
+import com.circuitstitch.deferno.core.designsystem.resources.settings_storage_note_on_device
+import com.circuitstitch.deferno.core.designsystem.resources.settings_storage_provider_deferno_backend
+import com.circuitstitch.deferno.core.designsystem.resources.settings_storage_provider_dropbox
+import com.circuitstitch.deferno.core.designsystem.resources.settings_storage_provider_google_drive
+import com.circuitstitch.deferno.core.designsystem.resources.settings_storage_provider_on_device
+import com.circuitstitch.deferno.core.designsystem.resources.settings_task_behavior_drag_drop_description
+import com.circuitstitch.deferno.core.designsystem.resources.settings_task_behavior_drag_drop_label
+import com.circuitstitch.deferno.core.designsystem.resources.settings_theme_family_deferno
+import com.circuitstitch.deferno.core.designsystem.resources.settings_theme_family_mono
+import com.circuitstitch.deferno.core.designsystem.resources.settings_theme_mode_dark
+import com.circuitstitch.deferno.core.designsystem.resources.settings_theme_mode_follow_system
+import com.circuitstitch.deferno.core.designsystem.resources.settings_theme_mode_light
+import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_assistant
+import com.circuitstitch.deferno.core.designsystem.resources.shell_signed_in
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -55,6 +134,8 @@ import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
 import com.circuitstitch.deferno.feature.settings.StorageProviderSettings
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 
 /** Minimum height for a clickable row/control — design-principles.md "≥44–48dp" targets. */
 private val MinTouchTarget = 48.dp
@@ -160,7 +241,7 @@ private fun CategoryRow(label: String, summary: String?, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clickable(onClickLabel = "Open $label", onClick = onClick)
+            .clickable(onClickLabel = stringResource(Res.string.common_open_named_cd, label), onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -207,14 +288,13 @@ private fun CategoryDetail(
             SettingsCategory.Legal -> LegalDetail()
             SettingsCategory.Account -> AccountDetail(component)
             SettingsCategory.Security2FA -> ComingSoonDetail(
-                body = "Two-factor authentication and security are managed by your identity provider. " +
-                    "We’ll bring these controls into the app soon.",
-                action = "Open security console",
+                body = stringResource(Res.string.settings_coming_soon_security_body),
+                action = stringResource(Res.string.settings_security_open_console_button),
                 onAction = component::onOpenConsole,
             )
 
             SettingsCategory.Integrations -> ComingSoonDetail(
-                body = "Connect Deferno with the other tools you use. Integrations are on the way.",
+                body = stringResource(Res.string.settings_coming_soon_integrations_body),
             )
 
             // The Agent inference-engine selector (#150): the cloud engine needs no on-device ML, so the
@@ -246,7 +326,7 @@ private fun CategoryDetail(
 
 @Composable
 private fun AppearanceDetail(settings: UserSettings, component: SettingsComponent) {
-    SectionLabel("Theme")
+    SectionLabel(stringResource(Res.string.settings_appearance_theme_section))
     ThemeFamily.entries.forEach { family ->
         ChoiceRow(
             label = family.label,
@@ -255,7 +335,7 @@ private fun AppearanceDetail(settings: UserSettings, component: SettingsComponen
         )
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    SectionLabel("Mode")
+    SectionLabel(stringResource(Res.string.settings_appearance_mode_section))
     ThemeMode.entries.forEach { mode ->
         ChoiceRow(
             label = mode.label,
@@ -269,8 +349,7 @@ private fun AppearanceDetail(settings: UserSettings, component: SettingsComponen
 private fun SpeechEngineDetail(state: SpeechEngineSettings, onSelect: (SpeechEngineId) -> Unit) {
     Text(
         // The App-setting nature, stated plainly (AC #2): device-local, never synced, never per-Account.
-        text = "Choose how dictation turns your voice into text. This stays on this device and isn’t " +
-            "synced to your account.",
+        text = stringResource(Res.string.settings_speech_intro),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
@@ -290,19 +369,15 @@ private fun AgentDetail(state: InferenceEngineSettings, onSelect: (InferenceEngi
     // on-device engine keeps your text local, the cloud engine sends it off-device, and "Off" runs nothing.
     // Picking the cloud engine is the explicit opt-in — it still needs your account to be entitled (AC2).
     Text(
-        text = "The Agent can turn a brain dump into draft tasks and suggest changes to your plan. Choose " +
-            "which engine it uses — or turn it off. An on-device engine keeps your text on this device; " +
-            "Deferno’s cloud AI sends it off your device to generate proposals (you always review before " +
-            "anything is saved). It’s off by default, and this choice stays on this device, not synced to " +
-            "your account.",
+        text = stringResource(Res.string.settings_agent_intro),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
     // "Off" is always offered first (the default); then each engine registered on this device. A cloud
     // engine the Account isn't entitled to is shown **disabled** ("Premium"), never selectable (AC2).
     EngineChoiceRow(
-        label = "Off",
-        note = "The Agent stays off. Nothing is sent anywhere.",
+        label = stringResource(Res.string.settings_agent_engine_off),
+        note = stringResource(Res.string.settings_agent_off_note),
         selected = state.selected == InferenceEngineId.Off,
         onSelect = { onSelect(InferenceEngineId.Off) },
     )
@@ -329,9 +404,7 @@ private fun StorageProviderDetail(
     // bytes on this device; the user-owned cloud providers are coming later. Feedback attachments are
     // separate — they always go to Deferno so the team can see what you send.
     Text(
-        text = "Choose where your attachments are stored. On-device keeps the files on this device and " +
-            "works offline. This choice stays on this device and isn’t synced to your account. (Feedback " +
-            "you send the team is always uploaded to Deferno so we can see it.)",
+        text = stringResource(Res.string.settings_storage_intro),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
@@ -350,8 +423,8 @@ private fun StorageProviderDetail(
     // still never leaves the device.
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     ToggleRow(
-        label = "Keep brain dump recordings",
-        description = "Save the original voice recording on this device when you accept a brain dump, so you can listen back later.",
+        label = stringResource(Res.string.settings_storage_keep_recordings_label),
+        description = stringResource(Res.string.settings_storage_keep_recordings_description),
         checked = keepRecordings,
         onCheckedChange = onKeepRecordingsChange,
     )
@@ -360,25 +433,25 @@ private fun StorageProviderDetail(
 @Composable
 private fun TaskBehaviorDetail(settings: UserSettings, component: SettingsComponent) {
     ToggleRow(
-        label = "Drag and drop (experimental)",
-        description = "Reorder tasks by dragging. This is still being polished.",
+        label = stringResource(Res.string.settings_task_behavior_drag_drop_label),
+        description = stringResource(Res.string.settings_task_behavior_drag_drop_description),
         checked = settings.dragAndDropEnabled,
         onCheckedChange = component::onDragAndDropChanged,
     )
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    SectionLabel("Done visibility")
+    SectionLabel(stringResource(Res.string.settings_done_visibility_section))
     Text(
-        text = "How long completed items stay visible.",
+        text = stringResource(Res.string.settings_done_visibility_description),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
     DoneVisibilityRow(
-        label = "Everywhere",
+        label = stringResource(Res.string.settings_done_visibility_everywhere),
         seconds = settings.globalDoneVisibilitySeconds,
         onSelect = { component.onDoneVisibilityChanged(it, settings.dashboardDoneVisibilitySeconds) },
     )
     DoneVisibilityRow(
-        label = "On the dashboard",
+        label = stringResource(Res.string.settings_done_visibility_dashboard),
         seconds = settings.dashboardDoneVisibilitySeconds,
         onSelect = { component.onDoneVisibilityChanged(settings.globalDoneVisibilitySeconds, it) },
     )
@@ -387,16 +460,15 @@ private fun TaskBehaviorDetail(settings: UserSettings, component: SettingsCompon
 @Composable
 private fun DataPrivacyDetail(settings: UserSettings, component: SettingsComponent) {
     ToggleRow(
-        label = "Analytics & tracking",
-        description = "Help improve Deferno by sharing anonymous usage data.",
+        label = stringResource(Res.string.settings_privacy_analytics_label),
+        description = stringResource(Res.string.settings_privacy_analytics_description),
         checked = settings.trackingEnabled,
         onCheckedChange = component::onTrackingChanged,
     )
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    SectionLabel("Your data")
+    SectionLabel(stringResource(Res.string.settings_data_your_data_section))
     Text(
-        text = "Export and import run in the Deferno web app — there’s no in-app endpoint yet. " +
-            "Open the web app to manage your data.",
+        text = stringResource(Res.string.settings_data_export_web_description),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
@@ -404,14 +476,13 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
     TextButton(
         onClick = component::onOpenDataExportImport,
         modifier = Modifier.heightIn(min = MinTouchTarget),
-    ) { Text("Export or import your data") }
+    ) { Text(stringResource(Res.string.settings_data_export_web_button)) }
 }
 
 @Composable
 private fun HelpFeedbackDetail(component: SettingsComponent) {
     Text(
-        text = "Have a question, a bug, or a suggestion? Send it straight to the Deferno team — " +
-            "attach files if it helps.",
+        text = stringResource(Res.string.settings_help_feedback_intro),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
@@ -419,26 +490,26 @@ private fun HelpFeedbackDetail(component: SettingsComponent) {
     TextButton(
         onClick = component::onOpenSubmitFeedback,
         modifier = Modifier.heightIn(min = MinTouchTarget),
-    ) { Text("Send feedback") }
+    ) { Text(stringResource(Res.string.feedback_title)) }
 }
 
 @Composable
 private fun LegalDetail() {
-    SectionLabel("Terms of Service")
+    SectionLabel(stringResource(Res.string.settings_legal_terms_section))
     Text(
-        text = "By using Deferno you agree to our Terms of Service and acceptable-use policy.",
+        text = stringResource(Res.string.settings_legal_terms_body),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
-    SectionLabel("Privacy")
+    SectionLabel(stringResource(Res.string.settings_legal_privacy_section))
     Text(
-        text = "Your data stays yours. We never sell it. See the full privacy policy on the web.",
+        text = stringResource(Res.string.settings_legal_privacy_body),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
-    SectionLabel("Open source")
+    SectionLabel(stringResource(Res.string.settings_legal_open_source_section))
     Text(
-        text = "Deferno is built on open-source software, with thanks to its authors.",
+        text = stringResource(Res.string.settings_legal_open_source_body),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
@@ -455,7 +526,7 @@ private fun AccountDetail(component: SettingsComponent) {
     val accounts by component.accounts.collectAsState()
     val activeId = component.activeAccountId
 
-    SectionLabel("Signed in")
+    SectionLabel(stringResource(Res.string.shell_signed_in))
     accounts.forEach { account ->
         val isActive = account.id == activeId
         Row(
@@ -481,13 +552,13 @@ private fun AccountDetail(component: SettingsComponent) {
     TextButton(
         onClick = component::onAddAccount,
         modifier = Modifier.heightIn(min = MinTouchTarget),
-    ) { Text("Add another account") }
+    ) { Text(stringResource(Res.string.auth_add_another_account)) }
 }
 
 @Composable
 private fun ComingSoonDetail(body: String, action: String? = null, onAction: (() -> Unit)? = null) {
     Text(
-        text = "Coming soon",
+        text = stringResource(Res.string.settings_coming_soon_title),
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier.semantics { heading() },
     )
@@ -599,7 +670,7 @@ private fun DoneVisibilityRow(label: String, seconds: Long?, onSelect: (Long?) -
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DoneVisibilityWindow.entries.forEach { window ->
                 ChoiceChip(
-                    label = window.label,
+                    label = stringResource(window.label),
                     selected = seconds == window.seconds,
                     onSelect = { onSelect(window.seconds) },
                 )
@@ -625,26 +696,27 @@ private fun ChoiceChip(label: String, selected: Boolean, onSelect: () -> Unit) {
 // --- View-only labels (kept out of the shared domain/registry, like the nav-suite labels) ---
 
 private val SettingsCategory.title: String
-    get() = when (this) {
-        SettingsCategory.Appearance -> "Appearance"
-        SettingsCategory.TaskBehavior -> "Task behavior"
-        SettingsCategory.SpeechEngine -> "Speech engine"
-        SettingsCategory.Agent -> "Agent"
-        SettingsCategory.Assistant -> "Assistant"
-        SettingsCategory.Storage -> "Storage"
-        SettingsCategory.DataPrivacy -> "Data & Privacy"
-        SettingsCategory.HelpFeedback -> "Help & Feedback"
-        SettingsCategory.AppPermissions -> "App Permissions"
-        SettingsCategory.Legal -> "Legal"
-        SettingsCategory.Account -> "Account"
-        SettingsCategory.Security2FA -> "Security & 2FA"
-        SettingsCategory.Integrations -> "Integrations"
+    @Composable get() = when (this) {
+        SettingsCategory.Appearance -> stringResource(Res.string.settings_category_appearance)
+        SettingsCategory.TaskBehavior -> stringResource(Res.string.settings_category_task_behavior)
+        SettingsCategory.SpeechEngine -> stringResource(Res.string.settings_category_speech_engine)
+        SettingsCategory.Agent -> stringResource(Res.string.settings_category_agent)
+        SettingsCategory.Assistant -> stringResource(Res.string.shell_destination_assistant)
+        SettingsCategory.Storage -> stringResource(Res.string.settings_category_storage)
+        SettingsCategory.DataPrivacy -> stringResource(Res.string.settings_category_data_privacy)
+        SettingsCategory.HelpFeedback -> stringResource(Res.string.settings_category_help_feedback)
+        SettingsCategory.AppPermissions -> stringResource(Res.string.settings_category_app_permissions)
+        SettingsCategory.Legal -> stringResource(Res.string.settings_category_legal)
+        SettingsCategory.Account -> stringResource(Res.string.common_account)
+        SettingsCategory.Security2FA -> stringResource(Res.string.settings_category_security_2fa)
+        SettingsCategory.Integrations -> stringResource(Res.string.settings_category_integrations)
     }
 
 /**
  * The category-row summary line: the Speech engine row shows the current choice (and flags it when the
  * chosen engine isn't usable yet — AC #3); the unbacked categories show "Coming soon"; the rest show none.
  */
+@Composable
 private fun SettingsCategory.rowSummary(
     speechEngine: SpeechEngineSettings,
     inferenceEngine: InferenceEngineSettings,
@@ -656,102 +728,108 @@ private fun SettingsCategory.rowSummary(
         // Flag unavailability when the chosen engine reports Unavailable OR is no longer registered at all
         // (selected ∉ options) — both mean it can't transcribe now, so the row must reflect that (AC3).
         val unavailable = selectedOption == null || selectedOption.availability is SpeechAvailability.Unavailable
-        if (unavailable) "$label · unavailable" else label
+        if (unavailable) stringResource(Res.string.settings_row_summary_unavailable, label) else label
     }
     // The Agent row reflects the chosen engine ("Off" when off); the Storage row names the provider (#150/#210).
     this == SettingsCategory.Agent -> when (inferenceEngine.selected) {
-        InferenceEngineId.Off -> "Off"
+        InferenceEngineId.Off -> stringResource(Res.string.settings_agent_engine_off)
         else -> inferenceEngineLabel(inferenceEngine.selected)
     }
     this == SettingsCategory.Storage -> storageProviderLabel(storageProvider.selected)
-    !backed -> "Coming soon"
+    !backed -> stringResource(Res.string.settings_coming_soon_title)
     else -> null
 }
 
 /** The human label for an engine id (View concern, like the nav-suite labels) — `Automatic` leads the row. */
+@Composable
 private fun speechEngineLabel(id: SpeechEngineId): String = when (id) {
-    SpeechEngineId.Automatic -> "Automatic"
-    SpeechEngineId.Whisper -> "Whisper"
+    SpeechEngineId.Automatic -> stringResource(Res.string.settings_speech_engine_automatic)
+    SpeechEngineId.Whisper -> stringResource(Res.string.settings_speech_engine_whisper)
     // The Sidecar-hosted native recognizer (#119, ADR-0024) — the OS's own dictation engine
     // (SFSpeechRecognizer on macOS), named for what it is to the user, not its plumbing.
-    SpeechEngineId.Sidecar -> "System dictation"
+    SpeechEngineId.Sidecar -> stringResource(Res.string.settings_speech_engine_system_dictation)
     // Future native fast paths get explicit labels as they land (#96/#97); fall back to a humanised id.
     else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
 }
 
 /** The per-engine subtitle: Automatic explains itself; a real engine shows *why* it isn't usable yet (AC #3). */
+@Composable
 private fun speechEngineNote(option: SpeechEngineOption): String? = when (option.id) {
-    SpeechEngineId.Automatic -> "Use the best engine available on this device"
+    SpeechEngineId.Automatic -> stringResource(Res.string.settings_speech_note_automatic)
     else -> when (val availability = option.availability) {
         SpeechAvailability.Available -> null
         is SpeechAvailability.Unavailable -> when (availability.reason) {
-            UnavailableReason.ModelMissing -> "Downloading…"
-            UnavailableReason.UnsupportedLocale -> "Not available for your language"
-            UnavailableReason.NoEngine -> "Not available on this device"
-            UnavailableReason.NotReady -> "Preparing…"
+            UnavailableReason.ModelMissing -> stringResource(Res.string.settings_speech_note_downloading)
+            UnavailableReason.UnsupportedLocale -> stringResource(Res.string.settings_speech_note_unsupported_locale)
+            UnavailableReason.NoEngine -> stringResource(Res.string.settings_speech_note_no_engine)
+            UnavailableReason.NotReady -> stringResource(Res.string.settings_speech_note_preparing)
             // An absent optional fast path (no Sidecar Helper on this machine, ADR-0024) — permanent,
             // so it must never read as the transient "Preparing…".
-            UnavailableReason.NotInstalled -> "Not available on this device"
+            UnavailableReason.NotInstalled -> stringResource(Res.string.settings_speech_note_no_engine)
         }
     }
 }
 
 /** The human label for an inference-engine id (View concern, like the speech-engine labels). */
+@Composable
 private fun inferenceEngineLabel(id: InferenceEngineId): String = when (id) {
-    InferenceEngineId.Off -> "Off"
-    InferenceEngineId.DefernoCloud -> "Deferno cloud AI"
+    InferenceEngineId.Off -> stringResource(Res.string.settings_agent_engine_off)
+    InferenceEngineId.DefernoCloud -> stringResource(Res.string.settings_agent_engine_deferno_cloud)
     // The zero-ML deterministic floor — distinct from the planned on-device-LLM hybrid (ADR-0027).
-    InferenceEngineId.OnDeviceFloor -> "On-device basics"
+    InferenceEngineId.OnDeviceFloor -> stringResource(Res.string.settings_agent_engine_on_device_basics)
     // Further on-device runtimes + a future BYO engine get explicit labels as they land; fall back to a humanised id.
     else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
 }
 
 /** The per-engine subtitle: where it runs, or *why* it isn't selectable yet (the premium upsell, AC2). */
+@Composable
 private fun inferenceEngineNote(option: InferenceEngineOption): String? = when (option.availability) {
-    InferenceEngineAvailability.RequiresPremium -> "Premium — not available for your account yet"
+    InferenceEngineAvailability.RequiresPremium -> stringResource(Res.string.settings_agent_note_premium)
     InferenceEngineAvailability.Available -> when (option.origin) {
-        InferenceEngineOrigin.OnDevice -> "Runs on this device"
-        InferenceEngineOrigin.DefernoCloud -> "Sends your text off-device to Deferno’s hosted AI"
+        InferenceEngineOrigin.OnDevice -> stringResource(Res.string.settings_agent_note_on_device)
+        InferenceEngineOrigin.DefernoCloud -> stringResource(Res.string.settings_agent_note_cloud)
     }
 }
 
 /** The human label for a storage-provider id (View concern, like the engine labels). */
+@Composable
 private fun storageProviderLabel(id: StorageProviderId): String = when (id) {
-    StorageProviderId.OnDevice -> "On-device"
-    StorageProviderId.DefernoBackend -> "Deferno backend"
-    StorageProviderId.Dropbox -> "Dropbox"
-    StorageProviderId.GoogleDrive -> "Google Drive"
+    StorageProviderId.OnDevice -> stringResource(Res.string.settings_storage_provider_on_device)
+    StorageProviderId.DefernoBackend -> stringResource(Res.string.settings_storage_provider_deferno_backend)
+    StorageProviderId.Dropbox -> stringResource(Res.string.settings_storage_provider_dropbox)
+    StorageProviderId.GoogleDrive -> stringResource(Res.string.settings_storage_provider_google_drive)
     // Future user-owned providers get explicit labels as they land; fall back to a humanised id.
     else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
 }
 
 /** The per-provider subtitle: where the bytes live, or that the provider is coming later (#210). */
+@Composable
 private fun storageProviderNote(option: StorageProviderOption): String? = when (option.availability) {
-    StorageProviderAvailability.ComingLater -> "Coming later"
+    StorageProviderAvailability.ComingLater -> stringResource(Res.string.settings_storage_note_coming_later)
     StorageProviderAvailability.Available -> when (option.id) {
-        StorageProviderId.OnDevice -> "Keeps files on this device; works offline"
-        StorageProviderId.DefernoBackend -> "Stores files on Deferno’s servers"
+        StorageProviderId.OnDevice -> stringResource(Res.string.settings_storage_note_on_device)
+        StorageProviderId.DefernoBackend -> stringResource(Res.string.settings_storage_note_deferno_backend)
         else -> null
     }
 }
 
 private val ThemeFamily.label: String
-    get() = when (this) {
-        ThemeFamily.Deferno -> "Deferno"
-        ThemeFamily.Mono -> "Mono"
+    @Composable get() = when (this) {
+        ThemeFamily.Deferno -> stringResource(Res.string.settings_theme_family_deferno)
+        ThemeFamily.Mono -> stringResource(Res.string.settings_theme_family_mono)
     }
 
 private val ThemeMode.label: String
-    get() = when (this) {
-        ThemeMode.Light -> "Light"
-        ThemeMode.Dark -> "Dark"
-        ThemeMode.Auto -> "Follow system"
+    @Composable get() = when (this) {
+        ThemeMode.Light -> stringResource(Res.string.settings_theme_mode_light)
+        ThemeMode.Dark -> stringResource(Res.string.settings_theme_mode_dark)
+        ThemeMode.Auto -> stringResource(Res.string.settings_theme_mode_follow_system)
     }
 
 /** The selectable done-visibility windows the View offers (seconds match the contract fixture). */
-private enum class DoneVisibilityWindow(val label: String, val seconds: Long?) {
-    OneDay("1 day", 86400L),
-    ThreeDays("3 days", 259200L),
-    OneWeek("1 week", 604800L),
-    Always("Always", null),
+private enum class DoneVisibilityWindow(val label: StringResource, val seconds: Long?) {
+    OneDay(Res.string.settings_done_visibility_one_day, 86400L),
+    ThreeDays(Res.string.settings_done_visibility_three_days, 259200L),
+    OneWeek(Res.string.settings_done_visibility_one_week, 604800L),
+    Always(Res.string.settings_done_visibility_always, null),
 }

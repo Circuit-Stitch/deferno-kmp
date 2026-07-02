@@ -22,8 +22,16 @@ sealed interface FeedbackResult {
     /** No usable network — nothing was sent; the user can retry when back online. */
     data object Offline : FeedbackResult
 
-    /** The server (or an attachment upload) rejected it — a gentle [message]. */
-    data class Failed(val message: String) : FeedbackResult
+    /** The server (or an attachment upload) rejected it — a typed [reason] the View localizes;
+     *  [message] keeps the English words for the SwiftUI bridges. */
+    data class Failed(
+        val message: String,
+        val reason: Reason = Reason.ServerMessage,
+        /** The HTTP status for the *Failed arms whose message shows it, else null. */
+        val statusCode: Int? = null,
+    ) : FeedbackResult {
+        enum class Reason { PrepareAttachments, UploadFailed, SendFailed, AppOutOfDate, ServerMessage }
+    }
 }
 
 /**

@@ -442,13 +442,13 @@ class RootComponentTest {
         val catalog = DefaultSpeechEngineCatalog(emptySet(), InMemorySpeechEnginePreference())
         val root = rootWithSessions(manager, speechEngineCatalog = catalog) { FakeAccountSession() }
 
-        // On Work, choose "Automatic" via the Settings Destination.
+        // On Work, choose "Whisper" (a non-default engine) via the Settings Destination.
         val workMain = (root.activeChild() as RootComponent.Child.Main).component
         workMain.selectDestination(Destination.Settings)
         val workSettings =
             (workMain.stack.value.active.instance as MainShellComponent.DestinationChild.Settings).component
-        workSettings.onSpeechEngineSelected(SpeechEngineId.Automatic)
-        assertEquals(SpeechEngineId.Automatic, workSettings.speechEngine.value.selected)
+        workSettings.onSpeechEngineSelected(SpeechEngineId.Whisper)
+        assertEquals(SpeechEngineId.Whisper, workSettings.speechEngine.value.selected)
 
         // Switch to Personal: the Main shell is re-keyed (per-Account isolation, ADR-0002), but the
         // device-local speech choice persists — it is NOT rebuilt per Account.
@@ -459,7 +459,7 @@ class RootComponentTest {
         val personalSettings =
             (personalMain.stack.value.active.instance as MainShellComponent.DestinationChild.Settings).component
         assertEquals(
-            SpeechEngineId.Automatic,
+            SpeechEngineId.Whisper,
             personalSettings.speechEngine.value.selected,
             "the device-local speech choice survives the Account switch (it is not per-Account)",
         )

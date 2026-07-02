@@ -132,7 +132,7 @@ class DefaultAssistantComponent(
         val userMessage = ChatMessage(id = newId(), role = ChatRole.User, text = text, createdAt = startedAt)
         val assistantMessageId = newId()
 
-        _state.update { it.copy(composer = "", streaming = true, error = null, actions = emptyList()) }
+        _state.update { it.copy(composer = "", streaming = true, error = null, errorKind = null, actions = emptyList()) }
 
         turnJob = scope.launch {
             // Preserve an existing Conversation's title; only a brand-new chat gets one from its first line.
@@ -155,7 +155,7 @@ class DefaultAssistantComponent(
                         is AssistantEvent.Proposal -> _state.update { it.copy(pendingProposal = event.proposal) }
                         // Symmetric: a later usage frame after a reset clears the hard-stop, never just sets it.
                         is AssistantEvent.Usage -> _state.update { it.copy(usageExhausted = event.exhausted) }
-                        is AssistantEvent.Error -> _state.update { it.copy(error = event.message) }
+                        is AssistantEvent.Error -> _state.update { it.copy(error = event.message, errorKind = AssistantError.ServerMessage(event.message)) }
                         // Each autonomous tool action shows as transient activity (cleared next turn) — the
                         // person sees what the Assistant did, not just its final text. A result completes a
                         // call it already named, so it adds no new line.
@@ -168,7 +168,8 @@ class DefaultAssistantComponent(
             } catch (e: CancellationException) {
                 throw e // a cancel (onCancelTurn) is not an error
             } catch (e: Throwable) {
-                _state.update { it.copy(error = e.message ?: "The turn failed. Try again.") }
+                // A fixed, localizable message — raw platform exception prose never reaches the person.
+                _state.update { it.copy(error = "The turn failed. Try again.", errorKind = AssistantError.TurnFailed) }
             } finally {
                 // Synchronous state update — safe even after cancellation; the partial reply stays persisted.
                 _state.update { it.copy(streaming = false) }
@@ -182,12 +183,12 @@ class DefaultAssistantComponent(
 
     override fun onNewConversation() {
         activeId.value = null
-        _state.update { it.copy(activeConversationId = null, pendingProposal = null, error = null, actions = emptyList()) }
+        _state.update { it.copy(activeConversationId = null, pendingProposal = null, error = null, errorKind = null, actions = emptyList()) }
     }
 
     override fun onSelectConversation(id: ConversationId) {
         activeId.value = id
-        _state.update { it.copy(activeConversationId = id, pendingProposal = null, error = null, actions = emptyList()) }
+        _state.update { it.copy(activeConversationId = id, pendingProposal = null, error = null, errorKind = null, actions = emptyList()) }
         scope.launch { hydrate(id) }
     }
 
@@ -201,14 +202,14 @@ class DefaultAssistantComponent(
 
     override fun onConsentAccepted() {
         if (_state.value.enabling) return
-        _state.update { it.copy(enabling = true, error = null) }
+        _state.update { it.copy(enabling = true, error = null, errorKind = null) }
         scope.launch {
             // The write-through updates the shared [availability] flow on success (so the gate reflects
             // everywhere at once); we only own the enabling/disclosure UI state + the failure message.
             val updated = setEnabled(true)
             _state.update {
                 if (updated != null) it.copy(enabling = false, showingDisclosure = false)
-                else it.copy(enabling = false, error = "Couldn't enable the Assistant. Try again.")
+                else it.copy(enabling = false, error = "Couldn't enable the Assistant. Try again.", errorKind = AssistantError.EnableFailed)
             }
         }
     }
@@ -231,7 +232,7 @@ class DefaultAssistantComponent(
                     _state.update { it.copy(pendingProposal = null, applyingProposal = false) }
                 }
                 is RemoteSnapshot.Unavailable ->
-                    _state.update { it.copy(applyingProposal = false, error = "Couldn't apply the change. Try again.") }
+                    _state.update { it.copy(applyingProposal = false, error = "Couldn't apply the change. Try again.", errorKind = AssistantError.ApplyFailed) }
             }
         }
     }
@@ -241,7 +242,7 @@ class DefaultAssistantComponent(
     }
 
     override fun onDismissError() {
-        _state.update { it.copy(error = null) }
+        _state.update { it.copy(error = null, errorKind = null) }
     }
 
     private fun newConversation(): ConversationId {

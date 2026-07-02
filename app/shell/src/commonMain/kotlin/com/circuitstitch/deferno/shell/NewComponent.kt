@@ -179,8 +179,11 @@ sealed interface NewStatus {
      */
     data object Offline : NewStatus
 
-    /** A server rejection — a gentle error [message]. */
-    data class Failed(val message: String) : NewStatus
+    /** A server rejection — a typed [reason] the View localizes; [message] keeps the English words
+     *  for the SwiftUI bridges until their own localization pass. */
+    data class Failed(val message: String, val reason: FailedReason = FailedReason.CouldNotSaveRetry) : NewStatus {
+        enum class FailedReason { CouldNotSaveRetry, CouldNotSave }
+    }
 }
 
 /**
@@ -246,9 +249,13 @@ class DefaultNewComponent(
             when (create(snapshot.toPayload(tz))) {
                 is CommandResult.Accepted -> onCreated()
                 is CommandResult.Offline -> _state.update { it.copy(status = NewStatus.Offline) }
-                is CommandResult.Failed -> _state.update { it.copy(status = NewStatus.Failed("Could not save. Try again.")) }
+                is CommandResult.Failed -> _state.update {
+                    it.copy(status = NewStatus.Failed("Could not save. Try again.", NewStatus.Failed.FailedReason.CouldNotSaveRetry))
+                }
                 // The create gate never rejects pre-flight (CreateItem has no enabledFor rule), but be total.
-                is CommandResult.Rejected -> _state.update { it.copy(status = NewStatus.Failed("Could not save.")) }
+                is CommandResult.Rejected -> _state.update {
+                    it.copy(status = NewStatus.Failed("Could not save.", NewStatus.Failed.FailedReason.CouldNotSave))
+                }
             }
         }
     }

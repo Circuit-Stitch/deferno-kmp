@@ -26,9 +26,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.auth_session_expired_title
+import com.circuitstitch.deferno.core.designsystem.resources.auth_unavailable_title
+import com.circuitstitch.deferno.core.designsystem.resources.common_retry
+import com.circuitstitch.deferno.core.designsystem.resources.common_sign_in_again
+import com.circuitstitch.deferno.core.designsystem.resources.profile_session_expired_body
+import com.circuitstitch.deferno.core.designsystem.resources.profile_unavailable_body
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileState
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The **Profile** Destination View (#70, ADR-0013): a thin renderer of [ProfileComponent] (ADR-0003:
@@ -81,16 +89,16 @@ internal fun ProfileContent(
             ProfileState.Loading -> LoadingIdentity()
             is ProfileState.SignedIn -> IdentityCard(state.user)
             ProfileState.ReauthRequired -> InlineNotice(
-                title = "Session expired",
-                body = "Your sign-in for this account has ended. Sign in again to refresh your details.",
-                action = "Sign in again",
+                title = stringResource(Res.string.auth_session_expired_title),
+                body = stringResource(Res.string.profile_session_expired_body),
+                action = stringResource(Res.string.common_sign_in_again),
                 onAction = onRetry,
             )
 
             ProfileState.Unavailable -> InlineNotice(
-                title = "Can’t reach Deferno",
-                body = "Your profile details couldn’t load. Check your connection and try again.",
-                action = "Retry",
+                title = stringResource(Res.string.auth_unavailable_title),
+                body = stringResource(Res.string.profile_unavailable_body),
+                action = stringResource(Res.string.common_retry),
                 onAction = onRetry,
             )
         }

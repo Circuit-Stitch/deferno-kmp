@@ -49,7 +49,39 @@ import com.circuitstitch.deferno.DefernoApplication
 import com.circuitstitch.deferno.core.agent.InferenceImpedimentClassifier
 import com.circuitstitch.deferno.core.agent.hasGeneralPurposeEngine
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_composer_placeholder
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_focus_prefix
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_keep_it
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_let_it_go
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_added_prerequisite
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_added_to_plan
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_broke_into
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_classifier_retry
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_confirm_drop
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_dropped
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_finished_dropped
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_finished_ready
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_kept_reask
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_more_urgent
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_name_first_piece
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_ready_to_go
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_transient_obstacle
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_waiting_dependency
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_msg_whats_stopping
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_prereq_define_done
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_prereq_figure_out
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_thinking
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_title
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_unavailable_body
+import com.circuitstitch.deferno.core.designsystem.resources.breakdown_unavailable_title
+import com.circuitstitch.deferno.core.designsystem.resources.common_close
+import com.circuitstitch.deferno.core.designsystem.resources.common_done
+import com.circuitstitch.deferno.core.designsystem.resources.common_send
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_add_to_plan
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The Android **Breakdown** surface (Deferno#525) — the Compose render of the on-device impediment flow,
@@ -84,8 +116,18 @@ fun BreakdownScreen(component: BreakdownComponent, modifier: Modifier = Modifier
                     val classifier = remember(appComponent) {
                         InferenceImpedimentClassifier(appComponent.inferenceEngine)
                     }
-                    // Idempotent: the component builds the retained engine once the row resolves.
-                    LaunchedEffect(component, classifier) { component.bind(classifier) }
+                    // Idempotent: the component builds the retained engine once the row resolves. The two
+                    // fallback prerequisite titles are *persisted* as server-synced subtasks, so they're
+                    // resolved to the person's locale here (suspend getString) and injected at creation time.
+                    LaunchedEffect(component, classifier) {
+                        component.bind(
+                            classifier,
+                            BreakdownEngine.Prerequisites(
+                                figureOutHow = getString(Res.string.breakdown_prereq_figure_out),
+                                defineDone = getString(Res.string.breakdown_prereq_define_done),
+                            ),
+                        )
+                    }
                     val engine by component.engine.collectAsStateWithLifecycle()
                     val built = engine
                     if (built != null) {
@@ -104,13 +146,14 @@ fun BreakdownScreen(component: BreakdownComponent, modifier: Modifier = Modifier
 /** A compact top bar: a calm chevron-down "Close" at the start, the surface title centered (mirrors the iOS nav bar). */
 @Composable
 private fun BreakdownHeader(onClose: () -> Unit) {
+    val close = stringResource(Res.string.common_close)
     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .clip(RoundedCornerShape(8.dp))
-                .clickable(onClickLabel = "Close", onClick = onClose)
+                .clickable(onClickLabel = close, onClick = onClose)
                 .padding(vertical = 4.dp, horizontal = 4.dp),
         ) {
             Icon(
@@ -120,10 +163,10 @@ private fun BreakdownHeader(onClose: () -> Unit) {
                 modifier = Modifier.size(20.dp),
             )
             Spacer(Modifier.width(4.dp))
-            Text("Close", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.defernoColors.amberDeep)
+            Text(close, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.defernoColors.amberDeep)
         }
         Text(
-            text = "Break it down",
+            text = stringResource(Res.string.breakdown_title),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.align(Alignment.Center).semantics { heading() },
         )
@@ -139,13 +182,13 @@ private fun BreakdownUnavailable(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "Breakdown needs an AI engine",
+            text = stringResource(Res.string.breakdown_unavailable_title),
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
             modifier = Modifier.semantics { heading() },
         )
         Text(
-            text = "Turn on an inference engine in Settings → Agent to break a stuck task into smaller steps.",
+            text = stringResource(Res.string.breakdown_unavailable_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.defernoColors.inkMuted,
             textAlign = TextAlign.Center,
@@ -180,7 +223,7 @@ private fun BreakdownChat(engine: BreakdownEngine, component: BreakdownComponent
         // leaf "what's stopping you?" is about. Hidden at the terminal (focus is null).
         focusTitle?.let { title ->
             Text(
-                text = "Breaking down: $title",
+                text = stringResource(Res.string.breakdown_focus_prefix, title),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.defernoColors.inkMuted,
                 maxLines = 1,
@@ -231,7 +274,7 @@ private fun Bubble(message: BreakdownEngine.Message) {
             modifier = Modifier.widthIn(max = 320.dp),
         ) {
             Text(
-                text = message.text,
+                text = messageText(message),
                 style = MaterialTheme.typography.bodyLarge,
                 color = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -240,12 +283,46 @@ private fun Bubble(message: BreakdownEngine.Message) {
     }
 }
 
+/**
+ * Resolves a typed engine [message] to its prose at render time: the person's own words verbatim
+ * ([BreakdownEngine.MessageKind.UserText] — user content, never localized), everything else via its
+ * localized `breakdown_msg_*` resource with the engine's args interpolated.
+ */
+@Composable
+private fun messageText(message: BreakdownEngine.Message): String = when (message.kind) {
+    BreakdownEngine.MessageKind.UserText -> message.arg.orEmpty()
+    BreakdownEngine.MessageKind.WhatsStopping ->
+        stringResource(Res.string.breakdown_msg_whats_stopping, message.arg.orEmpty())
+    BreakdownEngine.MessageKind.BrokeInto ->
+        stringResource(Res.string.breakdown_msg_broke_into, listed(message.args))
+    BreakdownEngine.MessageKind.NameFirstPiece -> stringResource(Res.string.breakdown_msg_name_first_piece)
+    BreakdownEngine.MessageKind.AddedPrerequisite ->
+        stringResource(Res.string.breakdown_msg_added_prerequisite, message.arg.orEmpty())
+    BreakdownEngine.MessageKind.ConfirmDrop ->
+        stringResource(Res.string.breakdown_msg_confirm_drop, message.arg.orEmpty())
+    BreakdownEngine.MessageKind.Dropped -> stringResource(Res.string.breakdown_msg_dropped, message.arg.orEmpty())
+    BreakdownEngine.MessageKind.KeptReask ->
+        stringResource(Res.string.breakdown_msg_kept_reask, message.arg.orEmpty())
+    BreakdownEngine.MessageKind.TransientObstacle -> stringResource(Res.string.breakdown_msg_transient_obstacle)
+    BreakdownEngine.MessageKind.MoreUrgent -> stringResource(Res.string.breakdown_msg_more_urgent)
+    BreakdownEngine.MessageKind.WaitingOnDependency -> stringResource(Res.string.breakdown_msg_waiting_dependency)
+    BreakdownEngine.MessageKind.ReadyToGo ->
+        stringResource(Res.string.breakdown_msg_ready_to_go, message.arg.orEmpty())
+    BreakdownEngine.MessageKind.AddedToPlan -> stringResource(Res.string.breakdown_msg_added_to_plan)
+    BreakdownEngine.MessageKind.ClassifierRetry -> stringResource(Res.string.breakdown_msg_classifier_retry)
+    BreakdownEngine.MessageKind.FinishedDropped -> stringResource(Res.string.breakdown_msg_finished_dropped)
+    BreakdownEngine.MessageKind.FinishedReady -> stringResource(Res.string.breakdown_msg_finished_ready)
+}
+
+/** “A”, “B”, … — the ", " joiner stays hardcoded (locale-aware list formatting is a follow-up); the surrounding sentence is a resource. */
+private fun listed(titles: List<String>): String = titles.joinToString(", ") { "“$it”" }
+
 @Composable
 private fun TypingIndicator() {
     Row(verticalAlignment = Alignment.CenterVertically) {
         CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
         Spacer(Modifier.width(8.dp))
-        Text("Thinking…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.defernoColors.inkMuted)
+        Text(stringResource(Res.string.breakdown_thinking), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.defernoColors.inkMuted)
     }
 }
 
@@ -263,7 +340,7 @@ private fun Composer(enabled: Boolean, onSend: (String) -> Unit) {
             value = draft,
             onValueChange = { draft = it },
             enabled = enabled,
-            placeholder = { Text("What's stopping you?") },
+            placeholder = { Text(stringResource(Res.string.breakdown_composer_placeholder)) },
             maxLines = 4,
             colors = OutlinedTextFieldDefaults.colors(
                 cursorColor = MaterialTheme.colorScheme.primary,
@@ -278,7 +355,7 @@ private fun Composer(enabled: Boolean, onSend: (String) -> Unit) {
                 onSend(text)
             },
             enabled = canSend,
-        ) { Text("Send") }
+        ) { Text(stringResource(Res.string.common_send)) }
     }
 }
 
@@ -289,8 +366,8 @@ private fun DropConfirm(onKeep: () -> Unit, onLetGo: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        OutlinedButton(onClick = onKeep, modifier = Modifier.weight(1f)) { Text("Keep it") }
-        Button(onClick = onLetGo, modifier = Modifier.weight(1f)) { Text("Let it go") }
+        OutlinedButton(onClick = onKeep, modifier = Modifier.weight(1f)) { Text(stringResource(Res.string.breakdown_keep_it)) }
+        Button(onClick = onLetGo, modifier = Modifier.weight(1f)) { Text(stringResource(Res.string.breakdown_let_it_go)) }
     }
 }
 
@@ -310,8 +387,8 @@ private fun FinishedBar(outcome: BreakdownEngine.Outcome, onAddToPlan: () -> Uni
                 },
                 enabled = !addedToPlan,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Add to today's plan") }
+            ) { Text(stringResource(Res.string.tasks_menu_add_to_plan)) }
         }
-        OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("Done") }
+        OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text(stringResource(Res.string.common_done)) }
     }
 }

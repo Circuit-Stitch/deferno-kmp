@@ -57,6 +57,13 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    androidResources {
+        // The shipped locales (keep in lockstep with res/xml/locales_config.xml): strips the dozens
+        // of other locales androidx libraries carry, so an unsupported device locale falls back to
+        // English instead of a mixed-language surface.
+        localeFilters += listOf("en", "es", "de", "hi", "pt")
+    }
+
     buildTypes {
         debug {
             // Dev PAT login placeholder (#68): seed Accounts from local.properties on debug builds.
@@ -163,6 +170,10 @@ dependencies {
     // AccountComponent per Active Account (createAppComponent / createAccountComponent).
     implementation(project(":core:di"))
     implementation(project(":core:designsystem"))
+    // Compose Resources runtime: the Android screens load shared localized strings
+    // (`Res.string.*`) from core:designsystem's composeResources (packaged with publicResClass);
+    // designsystem declares the loader as `implementation`, so this module names its own dependency.
+    implementation(libs.compose.components.resources)
     // The Brain dump async worker (#150, ADR-0027) names these directly: the Extractor + Transcript
     // (core:agent) it runs over the on-device transcription, and the AudioFileRecorder +
     // BrainDumpTranscriber platform glue (core:speech). Both reach the app transitively via core:di's

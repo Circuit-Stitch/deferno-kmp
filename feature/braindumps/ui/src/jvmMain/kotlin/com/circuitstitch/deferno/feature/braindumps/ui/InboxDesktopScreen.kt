@@ -32,8 +32,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_undo
+import com.circuitstitch.deferno.core.designsystem.resources.inbox_dismissed_snackbar
+import com.circuitstitch.deferno.core.designsystem.resources.inbox_draft_count
+import com.circuitstitch.deferno.core.designsystem.resources.inbox_footer_reassurance
+import com.circuitstitch.deferno.core.designsystem.resources.inbox_header_subtitle
+import com.circuitstitch.deferno.core.designsystem.resources.inbox_section_waiting_caps
+import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_inbox
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.feature.braindumps.InboxComponent
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The desktop-native **Inbox** screen (ADR-0015 Inbox amendment): the desktop counterpart of
@@ -52,11 +62,13 @@ fun InboxDesktopScreen(component: InboxComponent, modifier: Modifier = Modifier)
     val state by component.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val dismissedMessage = state.recentlyDismissed?.let { stringResource(Res.string.inbox_dismissed_snackbar, it.title) }
+    val undoLabel = stringResource(Res.string.common_undo)
     LaunchedEffect(state.recentlyDismissed?.id) {
-        val dismissed = state.recentlyDismissed ?: return@LaunchedEffect
+        val message = dismissedMessage ?: return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
-            message = "Dismissed “${dismissed.title}”",
-            actionLabel = "Undo",
+            message = message,
+            actionLabel = undoLabel,
             duration = SnackbarDuration.Short,
         )
         if (result == SnackbarResult.ActionPerformed) component.onUndoDismiss()
@@ -79,7 +91,7 @@ fun InboxDesktopScreen(component: InboxComponent, modifier: Modifier = Modifier)
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = "Inbox",
+                                text = stringResource(Res.string.shell_destination_inbox),
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.semantics { heading() },
@@ -88,7 +100,7 @@ fun InboxDesktopScreen(component: InboxComponent, modifier: Modifier = Modifier)
                         }
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "Review each one — add it as a task, or dismiss it. Nothing's deleted.",
+                            text = stringResource(Res.string.inbox_header_subtitle),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -96,14 +108,14 @@ fun InboxDesktopScreen(component: InboxComponent, modifier: Modifier = Modifier)
                 }
 
                 item(key = "section") {
-                    SectionLabel(text = "WAITING FOR YOU", modifier = Modifier.padding(horizontal = 20.dp))
+                    SectionLabel(text = stringResource(Res.string.inbox_section_waiting_caps), modifier = Modifier.padding(horizontal = 20.dp))
                 }
 
                 items(state.rows, key = { it.draft.id.value }) { row ->
                     DraftCard(
                         draft = row.draft,
                         accepting = row.accepting,
-                        note = row.note,
+                        note = row.noteKind,
                         onAccept = { component.onAccept(row.draft.id) },
                         onDismiss = { component.onDismiss(row.draft.id) },
                         modifier = Modifier.padding(horizontal = 20.dp),
@@ -112,7 +124,7 @@ fun InboxDesktopScreen(component: InboxComponent, modifier: Modifier = Modifier)
 
                 item(key = "footer") {
                     Text(
-                        text = "Triage at your pace — nothing's lost.",
+                        text = stringResource(Res.string.inbox_footer_reassurance),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.defernoColors.inkMuted,
                         textAlign = TextAlign.Center,
@@ -125,4 +137,5 @@ fun InboxDesktopScreen(component: InboxComponent, modifier: Modifier = Modifier)
 }
 
 /** "1 draft" / "N drafts" — the quiet count beside the header. */
-private fun draftCount(n: Int): String = if (n == 1) "1 draft" else "$n drafts"
+@Composable
+private fun draftCount(n: Int): String = pluralStringResource(Res.plurals.inbox_draft_count, n, n)

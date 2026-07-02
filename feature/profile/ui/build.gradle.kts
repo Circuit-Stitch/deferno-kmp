@@ -25,6 +25,9 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
+            // Compose Resources runtime: the atoms + screens load their strings from core:designsystem's
+            // `Res.string` (declared `implementation` there, so this module names its own dependency).
+            implementation(libs.compose.components.resources)
         }
         // The Android-native Profile screen (#70): renders the shared ProfileComponent (#71), reusing
         // the commonMain atoms. Kept out of commonMain so desktop/iOS get their own native screens.

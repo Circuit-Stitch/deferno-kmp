@@ -65,6 +65,38 @@ import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
 import com.circuitstitch.deferno.core.designsystem.component.SessionExpiredBanner
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_back
+import com.circuitstitch.deferno.core.designsystem.resources.common_labels
+import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_remove_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_done
+import com.circuitstitch.deferno.core.designsystem.resources.common_when
+import com.circuitstitch.deferno.core.designsystem.resources.search_apply_filters
+import com.circuitstitch.deferno.core.designsystem.resources.search_clear_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.search_filters
+import com.circuitstitch.deferno.core.designsystem.resources.search_initial_body
+import com.circuitstitch.deferno.core.designsystem.resources.search_initial_title
+import com.circuitstitch.deferno.core.designsystem.resources.search_label_chip_format
+import com.circuitstitch.deferno.core.designsystem.resources.search_no_matches_body
+import com.circuitstitch.deferno.core.designsystem.resources.search_no_matches_title
+import com.circuitstitch.deferno.core.designsystem.resources.search_placeholder_trees
+import com.circuitstitch.deferno.core.designsystem.resources.search_reset
+import com.circuitstitch.deferno.core.designsystem.resources.search_reset_filters_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.search_searching
+import com.circuitstitch.deferno.core.designsystem.resources.search_section_status
+import com.circuitstitch.deferno.core.designsystem.resources.search_sort_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.search_sort_best_match
+import com.circuitstitch.deferno.core.designsystem.resources.search_sort_biggest_attachments
+import com.circuitstitch.deferno.core.designsystem.resources.search_sort_soonest_due
+import com.circuitstitch.deferno.core.designsystem.resources.search_sort_title_asc
+import com.circuitstitch.deferno.core.designsystem.resources.search_when_any_time
+import com.circuitstitch.deferno.core.designsystem.resources.search_when_overdue
+import com.circuitstitch.deferno.core.designsystem.resources.search_when_this_week
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_label_placeholder
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_filter_active
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_filter_all
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_count
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.SearchHit
@@ -75,6 +107,9 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Clock
 
 /**
@@ -162,18 +197,18 @@ private fun SearchHeader(query: String, onQueryChanged: (String) -> Unit, onSubm
     ) {
         Icon(
             imageVector = DefernoIcons.ChevronLeft,
-            contentDescription = "Back",
+            contentDescription = stringResource(Res.string.common_back),
             tint = MaterialTheme.defernoColors.amberDeep,
             modifier = Modifier
                 .size(MinTouchTarget)
                 .clip(CircleShape)
-                .clickable(onClickLabel = "Back", onClick = onBack)
+                .clickable(onClickLabel = stringResource(Res.string.common_back), onClick = onBack)
                 .padding(10.dp),
         )
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChanged,
-            placeholder = { Text("Search all your trees…") },
+            placeholder = { Text(stringResource(Res.string.search_placeholder_trees)) },
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
             leadingIcon = {
@@ -187,7 +222,7 @@ private fun SearchHeader(query: String, onQueryChanged: (String) -> Unit, onSubm
                         color = MaterialTheme.defernoColors.inkMuted,
                         modifier = Modifier
                             .clip(CircleShape)
-                            .clickable(onClickLabel = "Clear search") { onQueryChanged("") }
+                            .clickable(onClickLabel = stringResource(Res.string.search_clear_a11y)) { onQueryChanged("") }
                             .padding(horizontal = 8.dp),
                     )
                 }
@@ -228,10 +263,10 @@ private fun FilterBar(
             RemovableChip(label = statusSummary(state.statuses), onRemove = onRemoveStatuses)
         }
         state.labels.forEach { label ->
-            RemovableChip(label = "#$label", onRemove = { onRemoveLabel(label) })
+            RemovableChip(label = stringResource(Res.string.search_label_chip_format, label), onRemove = { onRemoveLabel(label) })
         }
         if (state.fromDate != null || state.toDate != null) {
-            RemovableChip(label = "When", onRemove = onRemoveDates)
+            RemovableChip(label = stringResource(Res.string.common_when), onRemove = onRemoveDates)
         }
     }
 }
@@ -243,13 +278,17 @@ private fun FiltersPill(count: Int, onClick: () -> Unit) {
         modifier = Modifier
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.primary)
-            .clickable(onClickLabel = "Filters", onClick = onClick)
+            .clickable(onClickLabel = stringResource(Res.string.search_filters), onClick = onClick)
             .heightIn(min = 36.dp)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        Text(text = "Filters", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimary)
+        Text(
+            text = stringResource(Res.string.search_filters),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onPrimary,
+        )
         if (count > 0) {
             Box(
                 modifier = Modifier
@@ -282,15 +321,16 @@ private fun RemovableChip(label: String, onRemove: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(text = label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        val removeCd = stringResource(Res.string.common_remove_named_cd, label)
         Text(
             text = "×",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.defernoColors.inkMuted,
             modifier = Modifier
                 .clip(CircleShape)
-                .clickable(onClickLabel = "Remove $label", onClick = onRemove)
+                .clickable(onClickLabel = removeCd, onClick = onRemove)
                 .padding(horizontal = 4.dp)
-                .semantics { contentDescription = "Remove $label" },
+                .semantics { contentDescription = removeCd },
         )
     }
 }
@@ -319,15 +359,15 @@ private fun FilterSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Filters",
+                    text = stringResource(Res.string.search_filters),
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
-                    text = "Reset",
+                    text = stringResource(Res.string.search_reset),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.defernoColors.amberDeep,
-                    modifier = Modifier.clickable(onClickLabel = "Reset filters") {
+                    modifier = Modifier.clickable(onClickLabel = stringResource(Res.string.search_reset_filters_a11y)) {
                         setStatusPreset(emptySet(), state.statuses, onStatusToggled)
                         state.labels.forEach(onLabelToggled)
                         onDateRangeChanged(null, null)
@@ -335,11 +375,12 @@ private fun FilterSheet(
                 )
             }
 
-            // STATUS — Active / Done / All, mapped onto the WorkingState set.
+            // STATUS — Active / Done / All, mapped onto the WorkingState set. (The catalog stores the
+            // sentence-case labels; the section headers render uppercased, as before.)
             Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                SectionLabel("STATUS")
+                SectionLabel(stringResource(Res.string.search_section_status).uppercase())
                 SegmentedFilter(
-                    options = StatusPresets.map { it.label },
+                    options = StatusPresets.map { stringResource(it.labelRes) },
                     selectedIndex = statusPresetIndex(state.statuses),
                     onSelect = { setStatusPreset(StatusPresets[it].statuses, state.statuses, onStatusToggled) },
                     modifier = Modifier.fillMaxWidth(),
@@ -348,11 +389,11 @@ private fun FilterSheet(
 
             // WHEN — calm presets that set the date range (Custom… is deferred — no inline picker yet).
             Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                SectionLabel("WHEN")
+                SectionLabel(stringResource(Res.string.common_when).uppercase())
                 val whenPresets = listOf(
-                    "Any time" to (null to null),
-                    "This week" to (today to today.plus(7, DateTimeUnit.DAY)),
-                    "Overdue" to (null to today),
+                    stringResource(Res.string.search_when_any_time) to (null to null),
+                    stringResource(Res.string.search_when_this_week) to (today to today.plus(7, DateTimeUnit.DAY)),
+                    stringResource(Res.string.search_when_overdue) to (null to today),
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     whenPresets.forEach { (label, range) ->
@@ -364,11 +405,11 @@ private fun FilterSheet(
 
             // LABELS — add a tag, plus a removable chip per selected label.
             Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                SectionLabel("LABELS")
+                SectionLabel(stringResource(Res.string.common_labels).uppercase())
                 LabelsEditor(selected = state.labels, onToggle = onLabelToggled)
             }
 
-            PrimaryActionButton(text = "Apply filters", onClick = onApply, icon = null)
+            PrimaryActionButton(text = stringResource(Res.string.search_apply_filters), onClick = onApply, icon = null)
         }
     }
 }
@@ -408,7 +449,7 @@ private fun LabelsEditor(selected: Set<String>, onToggle: (String) -> Unit) {
         OutlinedTextField(
             value = draft,
             onValueChange = { draft = it },
-            placeholder = { Text("Add a label…") },
+            placeholder = { Text(stringResource(Res.string.tasks_detail_add_label_placeholder)) },
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
             keyboardActions = KeyboardActions(onDone = { add() }),
@@ -417,7 +458,9 @@ private fun LabelsEditor(selected: Set<String>, onToggle: (String) -> Unit) {
         )
         if (selected.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                selected.forEach { label -> RemovableChip(label = "#$label", onRemove = { onToggle(label) }) }
+                selected.forEach { label ->
+                    RemovableChip(label = stringResource(Res.string.search_label_chip_format, label), onRemove = { onToggle(label) })
+                }
             }
         }
     }
@@ -437,16 +480,16 @@ private fun SearchResults(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
-        state.isSearching -> LoadingStrip(label = "Searching…")
+        state.isSearching -> LoadingStrip(label = stringResource(Res.string.search_searching))
         // An expired session is shown by the banner above, not as a "couldn't reach the server" state (#297).
         state.sessionExpired -> Unit
         state.hasSearched -> EmptyState(
-            title = "No matches",
-            body = "Nothing matched your search. Try a different word or fewer filters.",
+            title = stringResource(Res.string.search_no_matches_title),
+            body = stringResource(Res.string.search_no_matches_body),
         )
         else -> EmptyState(
-            title = "Search your trees",
-            body = "Type at least two characters to find anything by title.",
+            title = stringResource(Res.string.search_initial_title),
+            body = stringResource(Res.string.search_initial_body),
         )
     }
 }
@@ -459,12 +502,13 @@ private fun ResultMeta(count: Int, sort: SearchSort, onSortChanged: (SearchSort)
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SectionLabel(text = if (count == 1) "1 TREE" else "$count TREES")
+        // The catalog stores the sentence-case "N trees" plural; this meta line renders it uppercased, as before.
+        SectionLabel(text = pluralStringResource(Res.plurals.tasks_tree_count, count, count).uppercase())
         val next = SearchSort.entries[(SearchSort.entries.indexOf(sort) + 1) % SearchSort.entries.size]
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
-                .clickable(onClickLabel = "Sort: ${sortLabel(sort)}. Tap to change.") { onSortChanged(next) }
+                .clickable(onClickLabel = stringResource(Res.string.search_sort_a11y, sortLabel(sort))) { onSortChanged(next) }
                 .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -496,13 +540,14 @@ private fun SearchResultRow(hit: SearchHit, query: String, onClick: () -> Unit) 
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 64.dp)
-                .clickable(onClickLabel = "Open ${hit.title}", onClick = onClick)
+                .clickable(onClickLabel = stringResource(Res.string.common_open_named_cd, hit.title), onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val kindCd = kindA11yLabel(hit.kind)
             KindDot(
                 color = kindColor(hit.kind),
-                modifier = Modifier.semantics { contentDescription = hit.kind.name.lowercase() },
+                modifier = Modifier.semantics { contentDescription = kindCd },
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(
@@ -561,20 +606,23 @@ private fun highlightedTitle(title: String, query: String): AnnotatedString {
 }
 
 /** The plain label for a [SearchSort] option. */
-private fun sortLabel(sort: SearchSort): String = when (sort) {
-    SearchSort.Relevance -> "Best match"
-    SearchSort.TitleAsc -> "Title (A–Z)"
-    SearchSort.DeadlineAsc -> "Soonest due"
-    SearchSort.AttachmentSizeDesc -> "Biggest attachments"
-}
+@Composable
+private fun sortLabel(sort: SearchSort): String = stringResource(
+    when (sort) {
+        SearchSort.Relevance -> Res.string.search_sort_best_match
+        SearchSort.TitleAsc -> Res.string.search_sort_title_asc
+        SearchSort.DeadlineAsc -> Res.string.search_sort_soonest_due
+        SearchSort.AttachmentSizeDesc -> Res.string.search_sort_biggest_attachments
+    },
+)
 
 /** The three STATUS presets the sheet offers, each mapped onto a [WorkingState] set. */
-private class StatusPreset(val label: String, val statuses: Set<WorkingState>)
+private class StatusPreset(val labelRes: StringResource, val statuses: Set<WorkingState>)
 
 private val StatusPresets = listOf(
-    StatusPreset("Active", setOf(WorkingState.Open, WorkingState.InProgress, WorkingState.InReview)),
-    StatusPreset("Done", setOf(WorkingState.Done, WorkingState.Dropped)),
-    StatusPreset("All", emptySet()),
+    StatusPreset(Res.string.tasks_filter_active, setOf(WorkingState.Open, WorkingState.InProgress, WorkingState.InReview)),
+    StatusPreset(Res.string.common_status_done, setOf(WorkingState.Done, WorkingState.Dropped)),
+    StatusPreset(Res.string.tasks_filter_all, emptySet()),
 )
 
 /** Which STATUS preset the current set reads as (empty ⇒ All; the terminal set ⇒ Done; else Active). */
@@ -583,8 +631,11 @@ private fun statusPresetIndex(statuses: Set<WorkingState>): Int =
         ?: if (statuses.isEmpty()) 2 else 0
 
 /** A short summary of the active STATUS chip (Active / Done / Status). */
+@Composable
 private fun statusSummary(statuses: Set<WorkingState>): String =
-    StatusPresets.firstOrNull { it.statuses == statuses && it.statuses.isNotEmpty() }?.label ?: "Status"
+    StatusPresets.firstOrNull { it.statuses == statuses && it.statuses.isNotEmpty() }
+        ?.let { stringResource(it.labelRes) }
+        ?: stringResource(Res.string.search_section_status)
 
 /**
  * Apply a STATUS [target] set through the single-toggle [onToggle] intent: flip exactly the statuses whose

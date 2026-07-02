@@ -44,9 +44,10 @@ must **never silently fall back to cloud**.
   variant) or report unavailable, so no code path can select a server recognizer; a
   chosen-but-unavailable engine falls to the whisper floor.
 - **Engine choice is a device-local [[App setting]]** (multiplatform-settings — a new dependency, owned
-  by `core/speech`), default **Whisper** until better/more-specific engines exist; the user may
-  switch/opt-in via the Settings [[Destination]]. **Not a synced [[User setting]]** (availability is
-  per-device, identity-independent).
+  by `core/speech`), default **Automatic** — the selector rank-picks the best available engine (amended
+  2026-07-02; originally **Whisper**, demoted once its model stopped shipping in-app and the download
+  flow wasn't built yet); the user may switch/opt-in via the Settings [[Destination]]. **Not a synced
+  [[User setting]]** (availability is per-device, identity-independent).
 - **[[Dictation]] is enabled by default, OS-permission-gated** (first mic tap prompts; gentle "needs
   microphone access" on deny; deep-link to OS settings on permanent denial). Audio is **transient**:
   PCM in memory, **never written to disk, persisted, uploaded, or logged** — extending ADR-0009's

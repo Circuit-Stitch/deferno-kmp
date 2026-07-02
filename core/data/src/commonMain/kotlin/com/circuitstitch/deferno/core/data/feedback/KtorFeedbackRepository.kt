@@ -54,7 +54,7 @@ class KtorFeedbackRepository(
                 is ApiResult.Failure -> return presign.error.toFeedbackResult()
             }
             if (presigned.size != draft.attachments.size) {
-                return FeedbackResult.Failed("Couldn't prepare the attachments. Try again.")
+                return FeedbackResult.Failed("Couldn't prepare the attachments. Try again.", FeedbackResult.Failed.Reason.PrepareAttachments)
             }
             // Upload each file byte-exact, in request order (the presign list is parallel to it).
             presigned.forEachIndexed { i, p ->
@@ -107,7 +107,7 @@ class KtorFeedbackRepository(
         return if (response.status.isSuccess()) {
             FeedbackResult.Sent
         } else {
-            FeedbackResult.Failed("Attachment upload failed (${response.status.value}).")
+            FeedbackResult.Failed("Attachment upload failed (${response.status.value}).", FeedbackResult.Failed.Reason.UploadFailed, response.status.value)
         }
     }
 }
@@ -115,7 +115,7 @@ class KtorFeedbackRepository(
 /** Map a network [ApiError] to the user-facing [FeedbackResult] — transport ⇒ Offline, else Failed. */
 private fun ApiError.toFeedbackResult(): FeedbackResult = when (this) {
     is ApiError.Transport -> FeedbackResult.Offline
-    is ApiError.Endpoint -> FeedbackResult.Failed(message)
-    is ApiError.Status -> FeedbackResult.Failed("Couldn't send feedback ($status).")
-    is ApiError.UnsupportedVersion -> FeedbackResult.Failed("This app is out of date — please update.")
+    is ApiError.Endpoint -> FeedbackResult.Failed(message, FeedbackResult.Failed.Reason.ServerMessage)
+    is ApiError.Status -> FeedbackResult.Failed("Couldn't send feedback ($status).", FeedbackResult.Failed.Reason.SendFailed, status)
+    is ApiError.UnsupportedVersion -> FeedbackResult.Failed("This app is out of date — please update.", FeedbackResult.Failed.Reason.AppOutOfDate)
 }

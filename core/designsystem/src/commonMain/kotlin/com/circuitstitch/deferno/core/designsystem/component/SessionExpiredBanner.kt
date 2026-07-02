@@ -15,6 +15,10 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_session_expired_message
+import com.circuitstitch.deferno.core.designsystem.resources.common_sign_in_again
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The shared "Session expired — sign in again" banner (#297): a full-width tinted strip the read
@@ -28,8 +32,8 @@ import androidx.compose.ui.unit.dp
 fun SessionExpiredBanner(
     onSignIn: () -> Unit,
     modifier: Modifier = Modifier,
-    message: String = "Session expired — sign in again to refresh.",
-    action: String = "Sign in again",
+    message: String = stringResource(Res.string.common_session_expired_message),
+    action: String = stringResource(Res.string.common_sign_in_again),
 ) {
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,

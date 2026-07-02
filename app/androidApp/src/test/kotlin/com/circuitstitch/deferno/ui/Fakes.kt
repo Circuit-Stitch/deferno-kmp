@@ -417,7 +417,7 @@ internal class FakeSettingsEditor(private val repo: FakeSettingsRepository = Fak
  */
 internal class FakeSpeechEngineCatalog(
     private val fixedOptions: List<SpeechEngineOption> = emptyList(),
-    initial: SpeechEngineId = SpeechEngineId.Whisper,
+    initial: SpeechEngineId = SpeechEngineId.Automatic,
 ) : SpeechEngineCatalog {
     var current: SpeechEngineId = initial
         private set
@@ -436,7 +436,7 @@ internal class FakeSpeechEngineCatalog(
                 SpeechEngineOption(SpeechEngineId.Automatic, SpeechAvailability.Available),
                 SpeechEngineOption(SpeechEngineId.Whisper, SpeechAvailability.Available),
             ),
-            initial = SpeechEngineId.Whisper,
+            initial = SpeechEngineId.Automatic,
         )
 
         /** Whisper selected but its model still arriving (#93 AC3) — the unavailable visual state. */

@@ -22,9 +22,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_attach_files
+import com.circuitstitch.deferno.core.designsystem.resources.common_undo
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_pane_empty_body
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_pane_empty_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_moved_snackbar
 import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
+import org.jetbrains.compose.resources.stringResource
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
@@ -87,8 +94,8 @@ private fun SecondaryPane(detail: TaskDetailComponent?) {
         TaskDetailScreen(detail)
     } else {
         EmptyState(
-            title = "Nothing open",
-            body = "Pick a task on the left to see its details here.",
+            title = stringResource(Res.string.tasks_detail_pane_empty_title),
+            body = stringResource(Res.string.tasks_detail_pane_empty_body),
         )
     }
 }
@@ -112,11 +119,14 @@ private fun TreePane(
 
     // One "Moved · Undo" snackbar per *structural* move (keyed on the move token so two indents in a row
     // each raise it); a plain reorder records an undoable but shows no snackbar (#230, parity with Android).
+    // Resolved in composition — showSnackbar runs in a coroutine, outside composable scope.
+    val movedMessage = stringResource(Res.string.tasks_moved_snackbar)
+    val undoLabel = stringResource(Res.string.common_undo)
     LaunchedEffect(state.lastMove?.takeIf { it.structural }?.id) {
         if (state.lastMove?.structural != true) return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
-            message = "Moved",
-            actionLabel = "Undo",
+            message = movedMessage,
+            actionLabel = undoLabel,
             duration = SnackbarDuration.Short,
         )
         if (result == SnackbarResult.ActionPerformed) component.undoLastMove()
@@ -166,6 +176,8 @@ private fun TreePane(
 @Composable
 fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifier) {
     val state by component.state.collectAsState()
+    // Resolved in composition — the AWT FileDialog opens from a click callback, outside composable scope.
+    val attachFilesTitle = stringResource(Res.string.common_attach_files)
     TaskDetailContent(
         state = state,
         modifier = modifier,
@@ -182,7 +194,7 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
         onPostComment = component::onPostComment,
         onEditComment = component::onEditComment,
         onDeleteComment = component::onDeleteComment,
-        onAddAttachment = { pickAttachments()?.let(component::onAddAttachments) },
+        onAddAttachment = { pickAttachments(attachFilesTitle)?.let(component::onAddAttachments) },
         onDeleteAttachment = component::onDeleteAttachment,
         onSetAttachmentCaption = component::onSetAttachmentCaption,
     )
@@ -198,8 +210,8 @@ private const val MaxAttachmentBytes = 25 * 1024 * 1024
  * everything is filtered out) so the caller skips the empty add. Blocks the UI thread while the dialog is
  * open — the accepted desktop pattern (cf. FeedbackDesktopScreen).
  */
-private fun pickAttachments(): List<AttachmentUpload>? {
-    val dialog = FileDialog(null as Frame?, "Attach files", FileDialog.LOAD).apply {
+private fun pickAttachments(title: String): List<AttachmentUpload>? {
+    val dialog = FileDialog(null as Frame?, title, FileDialog.LOAD).apply {
         isMultipleMode = true
         isVisible = true // modal — blocks until the user picks or cancels
     }

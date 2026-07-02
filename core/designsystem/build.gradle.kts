@@ -18,6 +18,9 @@ kotlin {
             implementation(libs.compose.material3)
             // Compose Resources — the IBM Plex font families packaged in commonMain/composeResources.
             implementation(libs.compose.components.resources)
+            // LocalizedDateFormats bridges kotlinx types (LocalDate/LocalTime/Instant) to java.time
+            // formatting — this module is Android+JVM only, so commonMain sees java.time (ADR-0004).
+            implementation(libs.kotlinx.datetime)
         }
     }
 }

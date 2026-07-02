@@ -56,7 +56,7 @@ interface SpeechToText {
 @JvmInline
 value class SpeechEngineId(val value: String) {
     companion object {
-        /** The portable whisper.cpp baseline — the v1 default and the always-available floor (ADR-0018). */
+        /** The portable whisper.cpp baseline — the always-available floor (ADR-0018). */
         val Whisper: SpeechEngineId = SpeechEngineId("whisper")
 
         /**
@@ -64,7 +64,8 @@ value class SpeechEngineId(val value: String) {
          * the device-local preference value meaning *"let the [SpeechToTextSelector] rank-pick whatever is
          * available"*. Because it never matches a registered engine's id, the selector falls through its
          * preference step to the highest-[rank] available engine — exactly the rank-pick this denotes
-         * (ADR-0018). The v1 default stays [Whisper] (pinned), with Automatic offered as an opt-in.
+         * (ADR-0018). It is the device-local **default**: a fresh device rank-picks, and an explicit
+         * engine choice is the opt-in.
          */
         val Automatic: SpeechEngineId = SpeechEngineId("automatic")
 

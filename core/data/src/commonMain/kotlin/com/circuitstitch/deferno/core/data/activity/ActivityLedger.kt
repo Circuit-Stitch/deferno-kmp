@@ -38,24 +38,61 @@ data class ActivityEntry(
     val path: List<String>,
 )
 
+/** The coarse verb of a recorded change — the typed twin of [summary] for locale-aware rendering. */
+enum class ActivityVerb {
+    ChangedSettings,
+    Created,
+    MovedItem,
+    UpdatedPlan,
+    DeletedTask,
+    UpdatedTask,
+    ClearedOccurrence,
+    UpdatedOccurrence,
+    UpdatedItem,
+}
+
 /**
- * A human one-liner for the feed, derived from the structured [ActivityEntry.target] + method. Kept
- * deliberately coarse for v1 ("Updated a task", not "Renamed a task") — the row links to the thing it
- * changed, so the verb need only orient. Refine here freely; nothing is persisted.
+ * The typed feed summary: the [verb], plus the lowercase item-kind token it acted on ("task",
+ * "chore", "habit", "event") when the verb is kind-qualified ([ActivityVerb.Created] /
+ * the occurrence verbs) — null where the verb says it all. The View maps this to a localized
+ * one-liner; [summary] stays as the English rendering for the SwiftUI bridges.
  */
-fun ActivityEntry.summary(): String {
-    if (target == "settings") return "Changed settings"
+data class ActivitySummary(val verb: ActivityVerb, val kindToken: String? = null)
+
+/**
+ * The typed feed summary, derived from the structured [ActivityEntry.target] + method. Kept
+ * deliberately coarse for v1 ("Updated a task", not "Renamed a task") — the row links to the thing
+ * it changed, so the verb need only orient. Refine here freely; nothing is persisted.
+ */
+fun ActivityEntry.summaryInfo(): ActivitySummary {
+    if (target == "settings") return ActivitySummary(ActivityVerb.ChangedSettings)
     val parts = target.split(":")
     return when (parts.firstOrNull()) {
-        "create" -> "Created a ${parts.getOrElse(1) { "item" }.lowercase()}"
-        "item" -> "Moved an item"
-        "plan" -> "Updated your plan"
-        "task" -> if (method == OutboxMethod.Delete) "Deleted a task" else "Updated a task"
-        "occurrence" -> {
-            val kind = parts.getOrElse(1) { "event" }.lowercase()
-            if (method == OutboxMethod.Delete) "Cleared a $kind occurrence" else "Updated a $kind occurrence"
-        }
-        else -> "Updated an item"
+        "create" -> ActivitySummary(ActivityVerb.Created, parts.getOrElse(1) { "item" }.lowercase())
+        "item" -> ActivitySummary(ActivityVerb.MovedItem)
+        "plan" -> ActivitySummary(ActivityVerb.UpdatedPlan)
+        "task" -> ActivitySummary(if (method == OutboxMethod.Delete) ActivityVerb.DeletedTask else ActivityVerb.UpdatedTask)
+        "occurrence" -> ActivitySummary(
+            if (method == OutboxMethod.Delete) ActivityVerb.ClearedOccurrence else ActivityVerb.UpdatedOccurrence,
+            parts.getOrElse(1) { "event" }.lowercase(),
+        )
+        else -> ActivitySummary(ActivityVerb.UpdatedItem)
+    }
+}
+
+/** The English one-liner over [summaryInfo] — kept for the SwiftUI bridges (localized rendering lives in the Compose View). */
+fun ActivityEntry.summary(): String {
+    val info = summaryInfo()
+    return when (info.verb) {
+        ActivityVerb.ChangedSettings -> "Changed settings"
+        ActivityVerb.Created -> "Created a ${info.kindToken}"
+        ActivityVerb.MovedItem -> "Moved an item"
+        ActivityVerb.UpdatedPlan -> "Updated your plan"
+        ActivityVerb.DeletedTask -> "Deleted a task"
+        ActivityVerb.UpdatedTask -> "Updated a task"
+        ActivityVerb.ClearedOccurrence -> "Cleared a ${info.kindToken} occurrence"
+        ActivityVerb.UpdatedOccurrence -> "Updated a ${info.kindToken} occurrence"
+        ActivityVerb.UpdatedItem -> "Updated an item"
     }
 }
 

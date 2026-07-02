@@ -43,6 +43,32 @@ import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
+import com.circuitstitch.deferno.core.designsystem.resources.common_cannot_be_undone
+import com.circuitstitch.deferno.core.designsystem.resources.common_delete
+import com.circuitstitch.deferno.core.designsystem.resources.common_due
+import com.circuitstitch.deferno.core.designsystem.resources.common_kind_task
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_done
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_in_progress
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_in_review
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_delete_confirm_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_loading
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_more_actions
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_no_description
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_not_found_body
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_not_found_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_set_working_state_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_subtask_progress_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_working_state_current_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_working_state_heading
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_add_subtask
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_add_to_plan
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_break_this_down
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_progress_done
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_set_aside
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_working_state_open
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
@@ -50,6 +76,7 @@ import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import kotlinx.datetime.LocalDate
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The Task detail body (#27/#231) — platform-neutral Compose (Android + desktop), the shared half of the
@@ -101,14 +128,14 @@ internal fun TaskDetailContent(
             // "See the trees" (#231): the prominent title now lives in the body title block (kind chip +
             // headline), so the header is the calm "Details" label — matching the design and avoiding a
             // duplicate title node. In single-pane the leading control returns to the list ("Back").
-            PaneHeader(title = "Details", onBack = onClose)
+            PaneHeader(title = stringResource(Res.string.tasks_detail_title), onBack = onClose)
             if (state.isHydrating) {
-                LoadingStrip(label = "Loading details…")
+                LoadingStrip(label = stringResource(Res.string.tasks_detail_loading))
             }
             when {
                 task == null && !state.isHydrating -> EmptyState(
-                    title = "Task not found",
-                    body = "This task may have been removed. Head back to your list.",
+                    title = stringResource(Res.string.tasks_detail_not_found_title),
+                    body = stringResource(Res.string.tasks_detail_not_found_body),
                 )
                 task == null -> Unit // brief hydrating gap before the row is observed; the bar above shows it
                 else -> TaskBody(
@@ -197,7 +224,7 @@ private fun TaskBody(
         when {
             !description.isNullOrBlank() -> Text(description, style = MaterialTheme.typography.bodyLarge)
             !state.isHydrating -> Text(
-                text = "No description yet.",
+                text = stringResource(Res.string.tasks_detail_no_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.defernoColors.inkMuted,
             )
@@ -206,7 +233,7 @@ private fun TaskBody(
         Button(
             onClick = onAddToPlan,
             modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
-        ) { Text("Add to today's plan") }
+        ) { Text(stringResource(Res.string.tasks_menu_add_to_plan)) }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         PropertiesSection(
@@ -255,16 +282,16 @@ private fun TaskBody(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete this task?") },
-            text = { Text("This can't be undone.") },
+            title = { Text(stringResource(Res.string.tasks_detail_delete_confirm_title)) },
+            text = { Text(stringResource(Res.string.common_cannot_be_undone)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     onDelete()
-                }) { Text("Delete") }
+                }) { Text(stringResource(Res.string.common_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(Res.string.common_cancel)) }
             },
         )
     }
@@ -285,29 +312,29 @@ private fun TaskOverflowMenu(
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(imageVector = DefernoIcons.MoreVert, contentDescription = "More actions")
+            Icon(imageVector = DefernoIcons.MoreVert, contentDescription = stringResource(Res.string.tasks_detail_more_actions))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("Add subtask") },
+                text = { Text(stringResource(Res.string.tasks_menu_add_subtask)) },
                 onClick = { expanded = false; onAddSubtask() },
             )
             // "Break this down" (Deferno#525) — the on-device impediment flow. Only where a host wired it
             // (Android); desktop has no engine, so the item is absent rather than opening an empty overlay.
             if (onBreakdown != null) {
                 DropdownMenuItem(
-                    text = { Text("Break this down") },
+                    text = { Text(stringResource(Res.string.tasks_menu_break_this_down)) },
                     onClick = { expanded = false; onBreakdown() },
                 )
             }
             // The app's vocabulary for WorkingState.Dropped is "Set aside" (the chip below + SearchScreen),
             // so the kebab uses the same word rather than web's "Drop" — one term per concept.
             DropdownMenuItem(
-                text = { Text("Set aside") },
+                text = { Text(stringResource(Res.string.tasks_set_aside)) },
                 onClick = { expanded = false; onDrop() },
             )
             DropdownMenuItem(
-                text = { Text("Delete") },
+                text = { Text(stringResource(Res.string.common_delete)) },
                 onClick = { expanded = false; onDelete() },
             )
         }
@@ -329,7 +356,7 @@ private fun DetailTitleBlock(task: Task, subtaskDone: Int, subtaskTotal: Int) {
             filled = true,
             container = kindColor(ItemKind.Task),
             content = MaterialTheme.colorScheme.onPrimary,
-            semanticLabel = "Task",
+            semanticLabel = stringResource(Res.string.common_kind_task),
         )
         Text(
             // A dimmed `[GitHub#N]` ref prefix for a GitHub-imported issue; the tracker owns the title
@@ -344,7 +371,7 @@ private fun DetailTitleBlock(task: Task, subtaskDone: Int, subtaskTotal: Int) {
         )
         val meta = buildList {
             task.ref?.let { add(it) }
-            task.completeBy?.let { add("Due ${it.toDisplayDate()}") }
+            task.completeBy?.let { add(stringResource(Res.string.common_due, it.toDisplayDate())) }
         }
         if (meta.isNotEmpty()) {
             MonoMeta(text = meta.joinToString("  ·  "))
@@ -352,10 +379,12 @@ private fun DetailTitleBlock(task: Task, subtaskDone: Int, subtaskTotal: Int) {
         if (subtaskTotal > 0) {
             // A "{done} of {total} done" label over a full-width bar — the same proven pattern as the
             // Subtasks section (a bare weighted Row mis-measured the title block here).
+            val subtaskProgressA11y =
+                stringResource(Res.string.tasks_detail_subtask_progress_a11y, subtaskDone, subtaskTotal)
             MonoMeta(
-                text = "$subtaskDone of $subtaskTotal done",
+                text = stringResource(Res.string.tasks_progress_done, subtaskDone, subtaskTotal),
                 modifier = Modifier.padding(top = 2.dp).clearAndSetSemantics {
-                    contentDescription = "$subtaskDone of $subtaskTotal subtasks done"
+                    contentDescription = subtaskProgressA11y
                 },
             )
             ProgressBarThin(
@@ -384,7 +413,7 @@ internal fun WorkingStateEditor(
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
-            text = "Working state",
+            text = stringResource(Res.string.tasks_detail_working_state_heading),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.defernoColors.inkMuted,
             modifier = Modifier.semantics { heading() },
@@ -393,12 +422,17 @@ internal fun WorkingStateEditor(
             WorkingState.entries.forEach { state ->
                 val label = workingStateLabel(state)
                 val selected = state == current
+                val chipA11y = if (selected) {
+                    stringResource(Res.string.tasks_detail_working_state_current_a11y, label)
+                } else {
+                    stringResource(Res.string.tasks_detail_set_working_state_a11y, label)
+                }
                 FilterChip(
                     selected = selected,
                     onClick = { onSetWorkingState(state) },
                     label = { Text(label) },
                     modifier = Modifier.semantics {
-                        contentDescription = if (selected) "$label, current working state" else "Set to $label"
+                        contentDescription = chipA11y
                     },
                 )
             }
@@ -407,10 +441,13 @@ internal fun WorkingStateEditor(
 }
 
 /** The plain, non-shaming label for each [WorkingState] (design-principles.md: no jargon, no shaming). */
-internal fun workingStateLabel(state: WorkingState): String = when (state) {
-    WorkingState.Open -> "Open"
-    WorkingState.InProgress -> "In progress"
-    WorkingState.InReview -> "In review"
-    WorkingState.Done -> "Done"
-    WorkingState.Dropped -> "Set aside"
-}
+@Composable
+internal fun workingStateLabel(state: WorkingState): String = stringResource(
+    when (state) {
+        WorkingState.Open -> Res.string.tasks_working_state_open
+        WorkingState.InProgress -> Res.string.common_status_in_progress
+        WorkingState.InReview -> Res.string.common_status_in_review
+        WorkingState.Done -> Res.string.common_status_done
+        WorkingState.Dropped -> Res.string.tasks_set_aside
+    },
+)

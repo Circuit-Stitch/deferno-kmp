@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.shell
 
+import com.circuitstitch.deferno.feature.settings.SettingsCategory
+
 /**
  * The adaptive chrome the shell's single top bar renders for the foreground **in-chrome** surface
  * (Cand 1): one bar, computed here in the shell from the active [Destination] + its tier-3 drill-down,
@@ -20,7 +22,28 @@ data class ChromeSpec(
     val title: String,
     val drilled: Boolean = false,
     val actions: List<ChromeAction> = emptyList(),
+    /** The typed twin of [title] for locale-aware rendering — the Compose Views render from this;
+     *  [title] keeps the English words for the SwiftUI bridges until their own localization pass. */
+    val titleSpec: ChromeTitle = ChromeTitle.Verbatim(title),
 )
+
+/** What the top bar's title IS — so the View can localize screen names while user text stays verbatim. */
+sealed interface ChromeTitle {
+    /** No bar title (the body carries its own header — Plan dashboard, Tasks panes). */
+    data object None : ChromeTitle
+
+    /** A Destination root/drill screen name — localized by the View (shell_destination_*). */
+    data class ForDestination(val destination: Destination) : ChromeTitle
+
+    /** A drilled Settings category name — localized by the View (settings_category_*). */
+    data class ForSettingsCategory(val category: SettingsCategory) : ChromeTitle
+
+    /** User-authored text (a drilled task's own title) — rendered verbatim, never translated. */
+    data class Verbatim(val text: String) : ChromeTitle
+
+    /** The drilled Task-detail fallback while the title hydrates — localized (common_kind_task). */
+    data object TaskFallback : ChromeTitle
+}
 
 /**
  * A trailing top-bar action: [kind] picks the glyph + content description (platform-injected — the View

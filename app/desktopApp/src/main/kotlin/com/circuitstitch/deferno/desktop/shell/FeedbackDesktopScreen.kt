@@ -2,6 +2,8 @@ package com.circuitstitch.deferno.desktop.shell
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_attach_files
 import com.circuitstitch.deferno.shell.FeedbackComponent
 import com.circuitstitch.deferno.shell.FeedbackFile
 import com.circuitstitch.deferno.shell.ui.FeedbackForm
@@ -9,6 +11,7 @@ import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
 import java.nio.file.Files
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The desktop chrome around the shared [FeedbackForm] (#375): it owns the file-picker affordance —
@@ -18,10 +21,12 @@ import java.nio.file.Files
  */
 @Composable
 fun FeedbackDesktopScreen(component: FeedbackComponent, modifier: Modifier = Modifier) {
+    // Resolved in composable scope — the onAttach click callback runs outside composition.
+    val attachDialogTitle = stringResource(Res.string.common_attach_files)
     FeedbackForm(
         component = component,
         onAttach = {
-            val dialog = FileDialog(null as Frame?, "Attach files", FileDialog.LOAD).apply {
+            val dialog = FileDialog(null as Frame?, attachDialogTitle, FileDialog.LOAD).apply {
                 isMultipleMode = true
                 isVisible = true // modal — blocks until the user picks or cancels
             }

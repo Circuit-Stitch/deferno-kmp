@@ -1,0 +1,14 @@
+<resources>
+    <!-- app_name deliberately omitted — the brand "Deferno" falls back to values/strings.xml -->
+    <!-- Offline-first App-Action-Bestätigung: nur „vorgemerkt, wird synchronisiert“, nie „gespeichert“. -->
+    <string name="task_queued">„%1$s“ hinzugefügt — wird synchronisiert</string>
+    <string name="visual_feedback_on">Visuelles Audio-Feedback eingeschaltet</string>
+    <string name="visual_feedback_off">Visuelles Audio-Feedback ausgeschaltet</string>
+    <string name="braindump_notification_channel_name">Braindumps</string>
+    <string name="braindump_notification_title">Braindump</string>
+    <plurals name="braindump_notification_drafts_ready">
+        <item quantity="one">1 Entwurf bereit zur Durchsicht</item>
+        <item quantity="other">%1$d Entwürfe bereit zur Durchsicht</item>
+    </plurals>
+    <string name="braindump_notification_recording_saved">Aufnahme zur Durchsicht gespeichert</string>
+</resources>

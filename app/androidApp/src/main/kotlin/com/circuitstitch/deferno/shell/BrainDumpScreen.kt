@@ -56,7 +56,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -71,11 +70,36 @@ import com.circuitstitch.deferno.R
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_allow_microphone
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_drafts_inbox_meta
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_enqueued_note
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_extract_drafts
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_failed_note
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_intro
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_listening_hint
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_mic_denied
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_mic_denied_permanent
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_no_drafts_yet
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_ready_to_draft
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_recording_status
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_speak_toggle
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_start_recording
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_stop
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_title
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_try_again
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_type_field_cd
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_type_field_label
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_type_toggle
+import com.circuitstitch.deferno.core.designsystem.resources.common_close
+import com.circuitstitch.deferno.core.designsystem.resources.common_done
+import com.circuitstitch.deferno.core.designsystem.resources.common_open_settings
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.designsystem.theme.LocalDefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The **Brain dump** surface View (ADR-0027, #150; Stage 4 async rework, #212 follow-on), restyled to
@@ -144,9 +168,11 @@ fun BrainDumpScreen(component: BrainDumpComponent, modifier: Modifier = Modifier
     val prefs = remember(context) { context.getSharedPreferences(APP_SETTINGS_PREFS, Context.MODE_PRIVATE) }
     var feedbackEnabled by remember { mutableStateOf(prefs.getBoolean(VISUAL_FEEDBACK_KEY, true)) }
     // Resolve the toggle-confirmation strings in composition (not via context.getString in the click
-    // lambda) — the config-correct path lint wants (LocalContextGetResourceValueCall).
-    val feedbackOnMsg = stringResource(R.string.visual_feedback_on)
-    val feedbackOffMsg = stringResource(R.string.visual_feedback_off)
+    // lambda) — the config-correct path lint wants (LocalContextGetResourceValueCall). Android res
+    // (not the shared catalog), so the androidx stringResource is used, qualified past the
+    // compose-resources one this file imports.
+    val feedbackOnMsg = androidx.compose.ui.res.stringResource(R.string.visual_feedback_on)
+    val feedbackOffMsg = androidx.compose.ui.res.stringResource(R.string.visual_feedback_off)
 
     BrainDumpContent(
         state = state,
@@ -223,14 +249,13 @@ internal fun BrainDumpContent(
 
             Spacer(Modifier.height(12.dp))
             Text(
-                text = "Brain dump",
+                text = stringResource(Res.string.braindump_title),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.semantics { heading() },
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Speak or type whatever's on your mind. I'll draft trees from it — nothing's added " +
-                    "until you accept them in your Inbox.",
+                text = stringResource(Res.string.braindump_intro),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.defernoColors.inkMuted,
             )
@@ -287,14 +312,15 @@ private fun SpeakPane(
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         when (state.phase) {
             Phase.Idle -> {
-                MicOrb(active = false, reducedMotion = reducedMotion, contentDescription = "Start recording", onClick = onMic)
+                val startRecording = stringResource(Res.string.braindump_start_recording)
+                MicOrb(active = false, reducedMotion = reducedMotion, contentDescription = startRecording, onClick = onMic)
                 Spacer(Modifier.height(16.dp))
                 // Kept as a labelled tappable line so the existing test (onNodeWithText("Start recording"))
                 // still finds + clicks it.
-                OrbCaption(text = "Start recording", onClick = onMic)
+                OrbCaption(text = startRecording, onClick = onMic)
             }
             Phase.Recording -> {
-                MicOrb(active = true, reducedMotion = reducedMotion, contentDescription = "Stop", onClick = onMic)
+                MicOrb(active = true, reducedMotion = reducedMotion, contentDescription = stringResource(Res.string.braindump_stop), onClick = onMic)
                 Spacer(Modifier.height(20.dp))
                 // The live "listening" spectrum — real mic-audio energy across ≈110 Hz–3.5 kHz (see
                 // [SpectrumBars]). Gated on reduced-motion like the orb pulse. Tapping it toggles whether it
@@ -311,7 +337,7 @@ private fun SpeakPane(
                 // One status line now (was "LISTENING…" + "Recording…"); the polite live region stays here
                 // so a screen reader still announces when recording begins.
                 Text(
-                    "Recording…",
+                    stringResource(Res.string.braindump_recording_status),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
@@ -321,22 +347,22 @@ private fun SpeakPane(
                 RecordingTimer()
                 Spacer(Modifier.height(16.dp))
                 TranscriptCard(
-                    "Listening for what's on your mind. Tap to stop when you're done — I'll draft from it.",
+                    stringResource(Res.string.braindump_listening_hint),
                 )
                 Spacer(Modifier.height(20.dp))
-                PrimaryActionButton(text = "Stop", onClick = onMic, icon = null)
+                PrimaryActionButton(text = stringResource(Res.string.braindump_stop), onClick = onMic, icon = null)
             }
             Phase.Enqueued -> {
-                StatusNote("Transcribing in the background — we'll let you know when your drafts are ready in the Inbox.")
+                StatusNote(stringResource(Res.string.braindump_enqueued_note))
                 Spacer(Modifier.height(8.dp))
-                MonoMeta("Drafts will appear in your Inbox", modifier = Modifier.fillMaxWidth())
+                MonoMeta(stringResource(Res.string.braindump_drafts_inbox_meta), modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(20.dp))
-                PrimaryActionButton(text = "Done", onClick = onClose, icon = null)
+                PrimaryActionButton(text = stringResource(Res.string.common_done), onClick = onClose, icon = null)
             }
             Phase.Failed -> {
-                StatusNote("Couldn't record that. Try again.")
+                StatusNote(stringResource(Res.string.braindump_failed_note))
                 Spacer(Modifier.height(20.dp))
-                PrimaryActionButton(text = "Try again", onClick = onMic, icon = null)
+                PrimaryActionButton(text = stringResource(Res.string.braindump_try_again), onClick = onMic, icon = null)
             }
             Phase.PermissionDenied -> PermissionBody(permanent = false, onMic = onMic, onOpenSettings = onOpenSettings)
             Phase.PermissionPermanentlyDenied -> PermissionBody(permanent = true, onMic = onMic, onOpenSettings = onOpenSettings)
@@ -378,11 +404,13 @@ private fun RecordingTimer(modifier: Modifier = Modifier) {
  */
 @Composable
 private fun TypePane(text: String, onTextChange: (String) -> Unit) {
+    // Resolved in composition — the semantics block below isn't a composable scope.
+    val fieldCd = stringResource(Res.string.braindump_type_field_cd)
     Column(Modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = text,
             onValueChange = onTextChange,
-            label = { Text("What's on your mind?") },
+            label = { Text(stringResource(Res.string.braindump_type_field_label)) },
             minLines = 6,
             // Amber cursor + focus accent to match the toggle (the system caret already blinks).
             colors = OutlinedTextFieldDefaults.colors(
@@ -393,17 +421,21 @@ private fun TypePane(text: String, onTextChange: (String) -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 160.dp)
-                .semantics { contentDescription = "Brain dump text" },
+                .semantics { contentDescription = fieldCd },
         )
         Spacer(Modifier.height(12.dp))
         MonoMeta(
-            text = if (text.isBlank()) "No drafts yet" else "Ready to draft from what you typed",
+            text = if (text.isBlank()) {
+                stringResource(Res.string.braindump_no_drafts_yet)
+            } else {
+                stringResource(Res.string.braindump_ready_to_draft)
+            },
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(16.dp))
         // No typed-extract seam yet — keep the affordance, gate it on text, no-op for now (see KDoc).
         PrimaryActionButton(
-            text = "Extract drafts",
+            text = stringResource(Res.string.braindump_extract_drafts),
             onClick = { /* ponytail: no typed-extract seam on BrainDumpComponent yet */ },
             icon = null,
             enabled = text.isNotBlank(),
@@ -516,13 +548,13 @@ private fun TranscriptCard(text: String) {
 private fun PermissionBody(permanent: Boolean, onMic: () -> Unit, onOpenSettings: () -> Unit) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (permanent) {
-            StatusNote("Brain dump needs microphone access, which is turned off for this app.")
+            StatusNote(stringResource(Res.string.braindump_mic_denied_permanent))
             Spacer(Modifier.height(20.dp))
-            PrimaryActionButton(text = "Open settings", onClick = onOpenSettings, icon = null)
+            PrimaryActionButton(text = stringResource(Res.string.common_open_settings), onClick = onOpenSettings, icon = null)
         } else {
-            StatusNote("Brain dump needs microphone access.")
+            StatusNote(stringResource(Res.string.braindump_mic_denied))
             Spacer(Modifier.height(20.dp))
-            PrimaryActionButton(text = "Allow microphone", onClick = onMic, icon = null)
+            PrimaryActionButton(text = stringResource(Res.string.braindump_allow_microphone), onClick = onMic, icon = null)
         }
     }
 }
@@ -536,11 +568,12 @@ private fun StatusNote(text: String) {
 /** The left-aligned dismiss: a chevron-down + "Close" in the accent colour (the mock's calm close). */
 @Composable
 private fun CloseHeader(onClose: () -> Unit) {
+    val close = stringResource(Res.string.common_close)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .clickable(onClickLabel = "Close", onClick = onClose)
+            .clickable(onClickLabel = close, onClick = onClose)
             .padding(vertical = 4.dp, horizontal = 2.dp),
     ) {
         Icon(
@@ -551,7 +584,7 @@ private fun CloseHeader(onClose: () -> Unit) {
         )
         Spacer(Modifier.width(4.dp))
         Text(
-            text = "Close",
+            text = close,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.defernoColors.amberDeep,
         )
@@ -573,14 +606,14 @@ private fun SpeakTypeToggle(typeMode: Boolean, onSelect: (Boolean) -> Unit, modi
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         ToggleHalf(
-            label = "Speak",
+            label = stringResource(Res.string.braindump_speak_toggle),
             iconResId = R.drawable.ic_mic,
             selected = !typeMode,
             onClick = { onSelect(false) },
             modifier = Modifier.weight(1f),
         )
         ToggleHalf(
-            label = "Type",
+            label = stringResource(Res.string.braindump_type_toggle),
             iconResId = R.drawable.ic_keyboard,
             selected = typeMode,
             onClick = { onSelect(true) },

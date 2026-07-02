@@ -28,6 +28,11 @@ kotlin {
         compileSdk = ProjectConfig.COMPILE_SDK
         minSdk = ProjectConfig.MIN_SDK
 
+        // Package this module's composeResources into Android assets. Without this, the AGP 9 KMP
+        // android target silently drops them from the APK (and from Robolectric's merged assets):
+        // Res.string/Res.font would throw MissingResourceException on device (CMP-9547).
+        androidResources.enable = true
+
         // Android unit tests run on the JVM host (no device) — the JVM-fast path.
         withHostTest {}
     }

@@ -10,24 +10,29 @@ import android.content.pm.PackageManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.circuitstitch.deferno.MainActivity
 import androidx.work.CoroutineWorker
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.circuitstitch.deferno.DefernoApplication
+import com.circuitstitch.deferno.MainActivity
+import com.circuitstitch.deferno.R
 import com.circuitstitch.deferno.core.agent.Extractor
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_salvage_reason
+import com.circuitstitch.deferno.core.designsystem.resources.braindump_salvage_title
 import com.circuitstitch.deferno.core.di.createAccountComponent
 import com.circuitstitch.deferno.core.speech.BrainDumpTranscriber
 import com.circuitstitch.deferno.feature.braindumps.BrainDumpNotifier
 import com.circuitstitch.deferno.feature.braindumps.BrainDumpOutcome
 import com.circuitstitch.deferno.feature.braindumps.BrainDumpPipeline
 import com.circuitstitch.deferno.feature.braindumps.BrainDumpTake
-import kotlinx.datetime.LocalDate
-import software.amazon.app.kmplogger.logger
 import java.io.File
 import kotlin.time.Instant
+import kotlinx.datetime.LocalDate
+import org.jetbrains.compose.resources.getString
+import software.amazon.app.kmplogger.logger
 
 /**
  * The async Brain dump worker (#150, ADR-0027/0037). Recording is foreground (the overlay holds the mic and
@@ -71,6 +76,10 @@ class BrainDumpWorker(
 
         return try {
             val accountComponent = createAccountComponent(appComponent, account)
+            // Salvage prose resolved up front (suspend getString; the pipeline's title lambda is not
+            // suspend) — persisted drafts freeze in the device language at creation time.
+            val salvageReason = getString(Res.string.braindump_salvage_reason)
+            val salvageTitleTemplate = getString(Res.string.braindump_salvage_title)
             val pipeline = BrainDumpPipeline(
                 extractor = Extractor(appComponent.inferenceEngine),
                 drafts = accountComponent.brainDumpDraftRepository::upsert,
@@ -88,6 +97,8 @@ class BrainDumpWorker(
                 salvageCounter = appComponent.brainDumpSalvageCounter,
                 notifications = appComponent.brainDumpNotificationPreference,
                 notifier = AndroidBrainDumpNotifier(applicationContext),
+                salvageReason = salvageReason,
+                salvageTitle = { n -> salvageTitleTemplate.replace("%1\$d", n.toString()) },
             )
             pipeline.process(
                 take = AndroidBrainDumpTake(wav, BrainDumpTranscriber(applicationContext)),
@@ -156,15 +167,20 @@ private fun notifyDraftsReady(context: Context, outcome: BrainDumpOutcome) {
     val manager = context.getSystemService(NotificationManager::class.java) ?: return
     // minSdk 27 ≥ 26, so the channel always exists; creating it is idempotent.
     manager.createNotificationChannel(
-        NotificationChannel(CHANNEL_ID, "Brain dumps", NotificationManager.IMPORTANCE_DEFAULT),
+        NotificationChannel(
+            CHANNEL_ID,
+            context.getString(R.string.braindump_notification_channel_name),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ),
     )
     val text = when (outcome) {
-        is BrainDumpOutcome.Drafts -> when (outcome.count) {
-            1 -> "1 draft ready to review"
-            else -> "${outcome.count} drafts ready to review"
-        }
+        is BrainDumpOutcome.Drafts -> context.resources.getQuantityString(
+            R.plurals.braindump_notification_drafts_ready,
+            outcome.count,
+            outcome.count,
+        )
         // Salvage: the take couldn't become tasks, but the recording is kept for the user to review.
-        BrainDumpOutcome.Salvaged -> "Recording saved to review"
+        BrainDumpOutcome.Salvaged -> context.getString(R.string.braindump_notification_recording_saved)
     }
     // Tapping the notification opens the app on the Inbox, where the drafts are reviewed (#150 Stage 4).
     // MainActivity is singleTop, so a running instance is reused (onNewIntent) rather than stacked.
@@ -178,7 +194,7 @@ private fun notifyDraftsReady(context: Context, outcome: BrainDumpOutcome) {
     )
     val notification = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-        .setContentTitle("Brain dump")
+        .setContentTitle(context.getString(R.string.braindump_notification_title))
         .setContentText(text)
         .setContentIntent(openInbox)
         .setAutoCancel(true)
