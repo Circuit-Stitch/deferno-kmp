@@ -1,0 +1,16 @@
+<resources>
+    <!-- java.time patterns for LocalizedDateFormats — per locale so translators control field order
+         and words, while month/weekday names come from the JDK's CLDR data. NOTE: Compose resource
+         files are plain XML — quoted pattern literals use bare apostrophes (d 'de' MMM), NOT the
+         Android res \' escaping. -->
+    <!-- Activity feed timestamp, e.g. "Jun 21 · 09:45". -->
+    <string name="activity_when_pattern">MMM d · HH:mm</string>
+    <!-- Calendar visible-month heading, e.g. "June 2026". -->
+    <string name="calendar_month_year_pattern">LLLL yyyy</string>
+    <!-- Calendar day-agenda heading, e.g. "Monday, June 8". -->
+    <string name="calendar_agenda_heading_pattern">EEEE, MMMM d</string>
+    <!-- A spoken/short day, e.g. "June 8" (day-cell accessibility). -->
+    <string name="calendar_day_pattern">MMMM d</string>
+    <!-- Clock time on timed agenda rows, e.g. "2:30 PM". -->
+    <string name="common_time_pattern">h:mm a</string>
+</resources>

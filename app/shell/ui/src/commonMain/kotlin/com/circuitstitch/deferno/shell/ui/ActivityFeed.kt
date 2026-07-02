@@ -28,12 +28,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
+import com.circuitstitch.deferno.core.designsystem.format.formatInstant
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.activity_when_pattern
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.shell.ActivityComponent
 import com.circuitstitch.deferno.shell.ActivityFeedRow
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
-import kotlin.time.Instant
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The **Activity** Destination View (#260): a calm, reverse-chronological feed of every change the app
@@ -90,7 +91,8 @@ private fun ActivityRowView(row: ActivityFeedRow) {
             Text(text = row.summary, style = MaterialTheme.typography.titleMedium)
             TreeChip(text = row.sourceLabel, filled = false)
         }
-        MonoMeta(text = formatWhen(row.recordedAt))
+        // A calm absolute timestamp — "Jun 21 · 09:45" in the device's time zone and language.
+        MonoMeta(text = formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern)))
     }
 }
 
@@ -115,14 +117,4 @@ private fun EmptyActivity(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(top = 8.dp),
         )
     }
-}
-
-private val MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-
-/** A calm absolute timestamp — "Jun 21 · 09:45" in the device's time zone. */
-private fun formatWhen(instant: Instant): String {
-    val t = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-    val hh = t.hour.toString().padStart(2, '0')
-    val mm = t.minute.toString().padStart(2, '0')
-    return "${MONTHS[t.monthNumber - 1]} ${t.dayOfMonth} · $hh:$mm"
 }

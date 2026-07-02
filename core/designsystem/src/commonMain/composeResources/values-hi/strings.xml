@@ -1,0 +1,12 @@
+<resources>
+    <!-- java.time पैटर्न (values/strings.xml देखें)। "21 जून · 09:45" -->
+    <string name="activity_when_pattern">d MMM · HH:mm</string>
+    <!-- "जून 2026" -->
+    <string name="calendar_month_year_pattern">LLLL yyyy</string>
+    <!-- "सोमवार, 8 जून" -->
+    <string name="calendar_agenda_heading_pattern">EEEE, d MMMM</string>
+    <!-- "8 जून" -->
+    <string name="calendar_day_pattern">d MMMM</string>
+    <!-- "2:30 pm" -->
+    <string name="common_time_pattern">h:mm a</string>
+</resources>

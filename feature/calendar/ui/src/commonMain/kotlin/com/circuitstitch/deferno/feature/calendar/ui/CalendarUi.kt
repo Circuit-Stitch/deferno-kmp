@@ -48,6 +48,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.format.formatDate
+import com.circuitstitch.deferno.core.designsystem.format.formatTime
+import com.circuitstitch.deferno.core.designsystem.format.shortWeekdayLabels
+import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_agenda_heading_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_day_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.calendar_month_year_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.common_time_pattern
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -55,13 +63,12 @@ import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.Month
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.compose.resources.stringResource
 
 // Stateless building blocks for the Calendar View (#74): a month grid + a day agenda over Occurrences.
 // Kept in commonMain (Android + desktop) so both platform screens share them. Gentle by default — no
@@ -71,14 +78,6 @@ import kotlinx.datetime.toLocalDateTime
 /** Minimum height for a tappable control — design-principles.md "≥44–48dp" touch targets. */
 internal val MinTouchTarget = 48.dp
 
-/** A [LocalTime] as a friendly 12-hour clock, e.g. `14:30` → "2:30 PM" (#348 agenda display). */
-internal fun LocalTime.toClock(): String {
-    val h12 = (hour % 12).let { if (it == 0) 12 else it }
-    val suffix = if (hour < 12) "AM" else "PM"
-    return "$h12:${minute.toString().padStart(2, '0')} $suffix"
-}
-
-private val WEEKDAY_LABELS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 /**
  * The stateless Calendar body — a [MonthHeader] + month grid over the visible month, then the selected
@@ -148,7 +147,8 @@ internal fun MonthHeader(visibleMonth: LocalDate, onPrevious: () -> Unit, onNext
             modifier = Modifier.size(MinTouchTarget).semantics { contentDescription = "Previous month" },
         ) { Text("‹", style = MaterialTheme.typography.headlineSmall) }
         Text(
-            text = monthLabel(visibleMonth),
+            // The visible-month label, e.g. "June 2026" in the device's language.
+            text = formatDate(visibleMonth, stringResource(Res.string.calendar_month_year_pattern)),
             style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center,
             modifier = Modifier.weight(1f).semantics { heading() },
@@ -163,8 +163,9 @@ internal fun MonthHeader(visibleMonth: LocalDate, onPrevious: () -> Unit, onNext
 /** The Monday-start weekday column headers. */
 @Composable
 internal fun WeekdayHeader(modifier: Modifier = Modifier) {
+    val labels = remember { shortWeekdayLabels() }
     Row(modifier = modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-        WEEKDAY_LABELS.forEach { label ->
+        labels.forEach { label ->
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
@@ -220,8 +221,10 @@ private fun DayCell(
         inMonth -> scheme.onSurface
         else -> MaterialTheme.defernoColors.inkMuted
     }
+    // The spoken day, e.g. "June 8" in the device's language.
+    val dayLabel = formatDate(date, stringResource(Res.string.calendar_day_pattern))
     val description = buildString {
-        append(monthName(date.month)).append(' ').append(date.day)
+        append(dayLabel)
         append(if (markerCount > 0) ", $markerCount ${if (markerCount == 1) "item" else "items"}" else ", no items")
         if (isSelected) append(", selected")
     }
@@ -294,7 +297,8 @@ internal fun DayAgenda(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = agendaHeading(date),
+            // The day-agenda heading, e.g. "Monday, June 8" in the device's language.
+            text = formatDate(date, stringResource(Res.string.calendar_agenda_heading_pattern)),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).semantics { heading() },
         )
@@ -361,7 +365,11 @@ internal fun AgendaRow(
                 // device-zone ≠ account-zone matters.
                 if (!item.allDay) {
                     Text(
-                        text = item.start.toLocalDateTime(TimeZone.currentSystemDefault()).time.toClock(),
+                        // The firing's clock time, e.g. "2:30 PM" / "14:30" per locale (#348).
+                        text = formatTime(
+                            item.start.toLocalDateTime(TimeZone.currentSystemDefault()).time,
+                            stringResource(Res.string.common_time_pattern),
+                        ),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.defernoColors.inkMuted,
                     )
@@ -429,42 +437,10 @@ private fun AgendaStatusChip(status: WorkingState, modifier: Modifier = Modifier
 
 // --- pure helpers (date → display) ---
 
-/** "June 2026" — the visible-month label. */
-internal fun monthLabel(date: LocalDate): String = "${monthName(date.month)} ${date.year}"
-
-/** "Monday, June 8" — the agenda heading for a day. */
-internal fun agendaHeading(date: LocalDate): String =
-    "${weekdayName(date)}, ${monthName(date.month)} ${date.day}"
-
 /** The 42 day cells (6 weeks) for [visibleMonth]'s grid, Monday-start — matches the repository window. */
 internal fun calendarGridDays(visibleMonth: LocalDate): List<LocalDate> {
     val first = LocalDate(visibleMonth.year, visibleMonth.month, 1)
     val lead = first.dayOfWeek.isoDayNumber - 1
     val start = first.minus(lead, DateTimeUnit.DAY)
     return (0 until 42).map { start.plus(it, DateTimeUnit.DAY) }
-}
-
-private fun monthName(month: Month): String = when (month) {
-    Month.JANUARY -> "January"
-    Month.FEBRUARY -> "February"
-    Month.MARCH -> "March"
-    Month.APRIL -> "April"
-    Month.MAY -> "May"
-    Month.JUNE -> "June"
-    Month.JULY -> "July"
-    Month.AUGUST -> "August"
-    Month.SEPTEMBER -> "September"
-    Month.OCTOBER -> "October"
-    Month.NOVEMBER -> "November"
-    Month.DECEMBER -> "December"
-}
-
-private fun weekdayName(date: LocalDate): String = when (date.dayOfWeek.isoDayNumber) {
-    1 -> "Monday"
-    2 -> "Tuesday"
-    3 -> "Wednesday"
-    4 -> "Thursday"
-    5 -> "Friday"
-    6 -> "Saturday"
-    else -> "Sunday"
 }

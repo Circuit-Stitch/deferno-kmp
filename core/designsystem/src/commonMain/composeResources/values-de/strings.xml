@@ -1,0 +1,12 @@
+<resources>
+    <!-- java.time-Muster (siehe values/strings.xml). "21. Juni · 09:45" -->
+    <string name="activity_when_pattern">d. MMM · HH:mm</string>
+    <!-- "Juni 2026" -->
+    <string name="calendar_month_year_pattern">LLLL yyyy</string>
+    <!-- "Montag, 8. Juni" -->
+    <string name="calendar_agenda_heading_pattern">EEEE, d. MMMM</string>
+    <!-- "8. Juni" -->
+    <string name="calendar_day_pattern">d. MMMM</string>
+    <!-- "14:30" -->
+    <string name="common_time_pattern">HH:mm</string>
+</resources>

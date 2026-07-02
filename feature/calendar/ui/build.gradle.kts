@@ -23,6 +23,10 @@ kotlin {
             implementation(libs.compose.ui)
             // The month grid derives its 42 day cells from the visible month (LocalDate math).
             implementation(libs.kotlinx.datetime)
+            // Compose Resources runtime: the month/agenda headings + clock times load their per-locale
+            // java.time patterns from core:designsystem's `Res.string` (declared `implementation`
+            // there, so this module names its own dependency).
+            implementation(libs.compose.components.resources)
         }
         // The Android-native Calendar screen (#74): renders the shared CalendarComponent. Kept out of
         // commonMain so desktop/iOS get their own native screens (ADR-0007).
