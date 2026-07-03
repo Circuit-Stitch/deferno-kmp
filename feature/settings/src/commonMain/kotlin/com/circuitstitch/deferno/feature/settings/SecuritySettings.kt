@@ -32,20 +32,6 @@ data class SecuritySettings(
         data class Ready(val totpEnabled: Boolean, val emailBackup: Boolean) : Overview
     }
 
-    companion object {
-        /** In-place summary flip after a successful enroll — a non-[Overview.Ready] summary becomes Ready. */
-        fun Overview.withTotp(enabled: Boolean): Overview = when (this) {
-            is Overview.Ready -> copy(totpEnabled = enabled)
-            else -> Overview.Ready(totpEnabled = enabled, emailBackup = false)
-        }
-
-        /** In-place backup flip after a successful add/remove; a non-Ready summary stays as-is. */
-        fun Overview.withEmailBackup(enabled: Boolean): Overview = when (this) {
-            is Overview.Ready -> copy(emailBackup = enabled)
-            else -> this
-        }
-    }
-
     /** The connected-devices list (`GET /auth/connected-devices`). */
     sealed interface Devices {
         data object Loading : Devices

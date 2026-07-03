@@ -35,6 +35,7 @@ import com.circuitstitch.deferno.core.speech.DictationPermissionSettings
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.scopes.PlatformContext
+import io.ktor.client.HttpClient
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.MergeComponent
@@ -190,11 +191,11 @@ abstract class AppComponent(
     abstract val attachmentBytesStore: AttachmentBytesStore
 
     /**
-     * The one shared Deferno [io.ktor.client.HttpClient] (ADR-0005/0014). Re-exposed so the child
-     * AccountScope can consume it (same reason as [attachmentBytesStore]) — the per-Account
-     * `SecurityRemoteSource` wraps this shared client while keeping its step-up cookie Account-scoped.
+     * The one shared Deferno [HttpClient] (ADR-0005/0014). Re-exposed so the child AccountScope can
+     * consume it (same reason as [attachmentBytesStore]) — the per-Account `SecurityRemoteSource`
+     * wraps this shared client while keeping its step-up cookie Account-scoped.
      */
-    abstract val httpClient: io.ktor.client.HttpClient
+    abstract val httpClient: HttpClient
 
     /**
      * The read-only Active-Account resolver + the per-Account re-auth raiser (ADR-0002). Re-exposed

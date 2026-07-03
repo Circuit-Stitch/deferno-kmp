@@ -28,6 +28,7 @@ import io.ktor.http.appendPathSegments
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.serialization.json.JsonObject
 
 /**
  * The production [SecurityRemoteSource] over the shared Deferno [HttpClient]. Reads run through the
@@ -102,17 +103,17 @@ class KtorSecurityRemoteSource(
         }.condense(rejectedStatus = 400) { it.recoveryCodes }
 
     override suspend fun addEmailBackup(): SecurityResult<Unit> =
-        client.requestApi<kotlinx.serialization.json.JsonObject> {
+        client.requestApi<JsonObject> {
             gatedPost("backup", "add")
         }.condense { }
 
     override suspend fun removeEmailBackup(): SecurityResult<Unit> =
-        client.requestApi<kotlinx.serialization.json.JsonObject> {
+        client.requestApi<JsonObject> {
             gatedPost("backup", "remove")
         }.condense { }
 
     override suspend fun disableMfa(): SecurityResult<Unit> =
-        client.requestApi<kotlinx.serialization.json.JsonObject> {
+        client.requestApi<JsonObject> {
             gatedPost("disable")
         }.condense { }
 

@@ -38,16 +38,12 @@ import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import com.circuitstitch.deferno.core.data.security.SecurityRepository
-import com.circuitstitch.deferno.core.data.security.SecurityResult
-import com.circuitstitch.deferno.feature.settings.SecuritySettings.Companion.withEmailBackup
-import com.circuitstitch.deferno.feature.settings.SecuritySettings.Companion.withTotp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 
@@ -659,10 +655,10 @@ class DefaultSettingsComponent(
     private val _shakeToUndo = MutableStateFlow(shakeToUndoPreference.enabled())
     override val shakeToUndo: StateFlow<Boolean> = _shakeToUndo.asStateFlow()
 
-    // The Security & 2FA state. Seeded Loading; the drill-in ([openCategory]) triggers the fresh
-    // fetch — never cached across visits (the factor list is server truth the sign-in challenge shares).
-    private val _security = MutableStateFlow(SecuritySettings())
-    override val security: StateFlow<SecuritySettings> = _security.asStateFlow()
+    // The Security & 2FA step machine (#72 follow-through): the category's whole read model + intent
+    // handling live in [SecuritySettingsMachine]; this component delegates 1:1.
+    private val securityMachine = SecuritySettingsMachine(scope, securityRepository, activeTokenId)
+    override val security: StateFlow<SecuritySettings> = securityMachine.state
 
     init {
         scope.launch {
@@ -696,7 +692,7 @@ class DefaultSettingsComponent(
         navigation.push(Config.Category(category))
         // Security & 2FA reads fresh on every drill-in (the webui does the same deliberately — a
         // stale "2FA off" summary for an enrolled user is the bug the status endpoint exists to fix).
-        if (category == SettingsCategory.Security2FA) refreshSecurity()
+        if (category == SettingsCategory.Security2FA) securityMachine.refresh()
     }
 
     override fun onBack(): Boolean =
@@ -791,177 +787,29 @@ class DefaultSettingsComponent(
 
     override fun onOpenConsole() = output(SettingsComponent.Output.OpenConsoleUrl)
 
-    // --- Security & 2FA (#72 follow-through): the webui SecurityPane's step machine, Compose-free ---
+    // --- Security & 2FA (#72 follow-through): delegated 1:1 to the step machine ---
 
-    override fun onSecurityRetry() = refreshSecurity()
+    override fun onSecurityRetry() = securityMachine.refresh()
 
-    private fun refreshSecurity() {
-        // Reset to Loading and drop any stale flow — a re-entered category never resumes an old step.
-        _security.value = SecuritySettings()
-        scope.launch {
-            val status = securityRepository.status()
-            _security.update {
-                it.copy(
-                    overview = when (status) {
-                        is SecurityResult.Success ->
-                            SecuritySettings.Overview.Ready(status.value.totpEnabled, status.value.emailBackup)
-                        else -> SecuritySettings.Overview.Unavailable
-                    },
-                )
-            }
-        }
-        scope.launch {
-            val devices = securityRepository.connectedDevices()
-            _security.update {
-                it.copy(
-                    devices = when (devices) {
-                        is SecurityResult.Success ->
-                            SecuritySettings.Devices.Ready(devices.value, activeTokenId)
-                        else -> SecuritySettings.Devices.Unavailable
-                    },
-                )
-            }
-        }
-    }
+    override fun onEnrollTotp() = securityMachine.enrollTotp()
 
-    override fun onEnrollTotp() = dispatchGated(PendingSecurityAction.EnrollTotp)
+    override fun onDisableMfa() = securityMachine.disableMfa()
 
-    override fun onDisableMfa() = dispatchGated(PendingSecurityAction.DisableMfa)
+    override fun onAddEmailBackup() = securityMachine.addEmailBackup()
 
-    override fun onAddEmailBackup() = dispatchGated(PendingSecurityAction.AddEmailBackup)
+    override fun onRemoveEmailBackup() = securityMachine.removeEmailBackup()
 
-    override fun onRemoveEmailBackup() = dispatchGated(PendingSecurityAction.RemoveEmailBackup)
+    override fun onEnrollCodeSubmit(code: String) = securityMachine.submitEnrollCode(code)
 
-    override fun onEnrollCodeSubmit(code: String) {
-        val step = _security.value.flow as? SecuritySettings.Flow.EnterCode ?: return
-        dispatchGated(PendingSecurityAction.VerifyCode(step.enrollment, code))
-    }
+    override fun onStepUpSubmit(password: String) = securityMachine.submitStepUp(password)
 
-    override fun onStepUpSubmit(password: String) {
-        val step = _security.value.flow as? SecuritySettings.Flow.StepUp ?: return
-        if (_security.value.busy) return
-        _security.update { it.copy(busy = true, lastActionFailed = false, flow = step.copy(wrongPassword = false)) }
-        scope.launch {
-            when (securityRepository.stepUp(password)) {
-                // Freshness stamped — resume the exact pending action (same code, same secret for a
-                // gated verify; the whole point of the typed [PendingSecurityAction]).
-                is SecurityResult.Success -> applyOutcome(step.pending, runAction(step.pending))
-                // Step-up's Rejected is "wrong password" (or budget exhausted — deliberately
-                // indistinguishable server-side); stay on the sheet for another attempt.
-                SecurityResult.Rejected -> _security.update { it.copy(flow = step.copy(wrongPassword = true)) }
-                else -> _security.update { it.copy(lastActionFailed = true) }
-            }
-            _security.update { it.copy(busy = false) }
-        }
-    }
+    override fun onStepUpDismiss() = securityMachine.dismissStepUp()
 
-    override fun onStepUpDismiss() {
-        _security.update { if (it.flow is SecuritySettings.Flow.StepUp) it.copy(flow = null) else it }
-    }
+    override fun onEnrollDismiss() = securityMachine.dismissEnroll()
 
-    override fun onEnrollDismiss() {
-        _security.update { if (it.flow is SecuritySettings.Flow.EnterCode) it.copy(flow = null) else it }
-    }
+    override fun onRecoveryCodesAcknowledged() = securityMachine.acknowledgeRecoveryCodes()
 
-    override fun onRecoveryCodesAcknowledged() {
-        // The one exit from the recovery-codes step (the View offers no other) — the summary was
-        // already flipped to enrolled when the verify succeeded.
-        _security.update { if (it.flow is SecuritySettings.Flow.RecoveryCodes) it.copy(flow = null) else it }
-    }
-
-    override fun onRevokeDevice(tokenId: String) {
-        if (tokenId == activeTokenId) return // this device — sign-out owns that path (never revoke-in-place)
-        if (_security.value.busy) return
-        _security.update { it.copy(busy = true, lastActionFailed = false) }
-        scope.launch {
-            when (securityRepository.revokeDevice(tokenId)) {
-                is SecurityResult.Success -> _security.update { s ->
-                    val devices = s.devices
-                    if (devices is SecuritySettings.Devices.Ready) {
-                        s.copy(devices = devices.copy(devices = devices.devices.filterNot { it.id == tokenId }))
-                    } else {
-                        s
-                    }
-                }
-                else -> _security.update { it.copy(lastActionFailed = true) }
-            }
-            _security.update { it.copy(busy = false) }
-        }
-    }
-
-    /** One gated mutation at a time: dispatch [action], routing its outcome through [applyOutcome]. */
-    private fun dispatchGated(action: PendingSecurityAction) {
-        if (_security.value.busy) return
-        _security.update { it.copy(busy = true, lastActionFailed = false) }
-        scope.launch {
-            applyOutcome(action, runAction(action))
-            _security.update { it.copy(busy = false) }
-        }
-    }
-
-    /**
-     * Issue [action]'s server call, applying its success step-transition inline (so a step-up
-     * *resume* transitions identically to a first attempt). Returns the raw result for [applyOutcome].
-     */
-    private suspend fun runAction(action: PendingSecurityAction): SecurityResult<*> = when (action) {
-        PendingSecurityAction.EnrollTotp -> securityRepository.enrollStart().also { r ->
-            if (r is SecurityResult.Success) {
-                _security.update { it.copy(flow = SecuritySettings.Flow.EnterCode(r.value)) }
-            }
-        }
-        is PendingSecurityAction.VerifyCode -> securityRepository.enrollVerify(action.code).also { r ->
-            if (r is SecurityResult.Success) {
-                // Enrolled: show the one-shot recovery codes and flip the summary in place (the next
-                // drill-in re-reads server truth anyway).
-                _security.update {
-                    it.copy(
-                        flow = SecuritySettings.Flow.RecoveryCodes(r.value),
-                        overview = it.overview.withTotp(enabled = true),
-                    )
-                }
-            }
-        }
-        PendingSecurityAction.DisableMfa -> securityRepository.disableMfa().also { r ->
-            if (r is SecurityResult.Success) {
-                _security.update {
-                    it.copy(flow = null, overview = SecuritySettings.Overview.Ready(totpEnabled = false, emailBackup = false))
-                }
-            }
-        }
-        PendingSecurityAction.AddEmailBackup -> securityRepository.addEmailBackup().also { r ->
-            if (r is SecurityResult.Success) {
-                _security.update { it.copy(flow = null, overview = it.overview.withEmailBackup(enabled = true)) }
-            }
-        }
-        PendingSecurityAction.RemoveEmailBackup -> securityRepository.removeEmailBackup().also { r ->
-            if (r is SecurityResult.Success) {
-                _security.update { it.copy(flow = null, overview = it.overview.withEmailBackup(enabled = false)) }
-            }
-        }
-    }
-
-    /** The non-success routing shared by first attempts and step-up resumes. */
-    private fun applyOutcome(action: PendingSecurityAction, outcome: SecurityResult<*>) {
-        when (outcome) {
-            is SecurityResult.Success -> Unit // runAction applied the step transition already
-            // The server's freshness refusal: open (or re-open) the step-up sheet carrying the
-            // pending action — a resume can itself be refused if the stamp expired mid-flow.
-            SecurityResult.StepUpRequired ->
-                _security.update { it.copy(flow = SecuritySettings.Flow.StepUp(action)) }
-            SecurityResult.Rejected -> when (action) {
-                // A wrong/expired TOTP code: back to code entry against the SAME secret (no new QR).
-                is PendingSecurityAction.VerifyCode -> _security.update {
-                    it.copy(flow = SecuritySettings.Flow.EnterCode(action.enrollment, wrongCode = true))
-                }
-                // No other gated action produces Rejected today — treat defensively as a failure.
-                else -> _security.update { it.copy(lastActionFailed = true, flow = null) }
-            }
-            SecurityResult.Unauthorized, SecurityResult.Unavailable ->
-                // Transient (or a PAT 401 the repository already routed to re-auth): keep the current
-                // step so the person can retry in place, and surface the failure flag.
-                _security.update { it.copy(lastActionFailed = true) }
-        }
-    }
+    override fun onRevokeDevice(tokenId: String) = securityMachine.revokeDevice(tokenId)
 
     override fun onOpenProfile() = output(SettingsComponent.Output.OpenProfile)
 

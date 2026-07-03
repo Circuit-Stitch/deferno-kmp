@@ -7,7 +7,9 @@ import kotlinx.serialization.Serializable
  * Wire DTOs for the account-security surface (CONTRACT-NOTES → "Security & 2FA") — the first-party
  * MFA management endpoints under `/auth/mfa/…` plus the connected-devices token list. Faithful flat
  * snake_case shapes decoded by the tolerant reader ([com.circuitstitch.deferno.core.network.DefernoJson]),
- * so additive backend fields pass through. Must parse the `contracts/fixtures/security-*.json` goldens (#19).
+ * so additive backend fields pass through. No `security-*.json` fixture goldens (#19) exist **yet**:
+ * these endpoints are deliberately not in the OpenAPI spec, so `contracts/refresh.sh` can't capture
+ * them — shapes derive from the backend source (see CONTRACT-NOTES). Add the goldens when captured.
  */
 
 /** `GET /auth/mfa/status` — the caller's current second-factor enrollment. */
@@ -35,13 +37,9 @@ data class MfaEnrollVerifyDto(
     @SerialName("recovery_codes") val recoveryCodes: List<String> = emptyList(),
 )
 
-/** `POST /auth/step-up` — the fresh re-auth stamp (epoch seconds); the gate itself rides the session cookie. */
-@Serializable
-data class StepUpDto(
-    @SerialName("stepped_up_at") val steppedUpAt: Long,
-)
-
-/** `POST /auth/step-up` request: the account password, re-verified against the IdP. */
+/** `POST /auth/step-up` request: the account password, re-verified against the IdP. (The response
+ *  body — `{stepped_up_at}` — has no DTO: the client's outcome is the `Set-Cookie` freshness stamp,
+ *  and the body is deliberately ignored; see `KtorSecurityRemoteSource.stepUp`.) */
 @Serializable
 data class StepUpRequest(
     val password: String,
