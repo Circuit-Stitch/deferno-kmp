@@ -32,8 +32,7 @@ data class AssistantState(
     val showingDisclosure: Boolean = false,
     val enabling: Boolean = false,
     val usageExhausted: Boolean = false,
-    val error: String? = null,
-    /** Typed twin of [error] for locale-aware rendering — [error] keeps the English words for the SwiftUI bridges. */
+    /** What went wrong this turn, typed so every platform View localizes it (server prose renders verbatim, #327). */
     val errorKind: AssistantError? = null,
 ) {
     /** The gate is on — render the chat. */

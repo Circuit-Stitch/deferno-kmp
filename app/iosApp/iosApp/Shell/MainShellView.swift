@@ -133,7 +133,7 @@ struct MainShellView: View {
                 NavigationStack {
                     destinationBody
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .navigationTitle(ShellBridgeKt.chromeTitle(spec: chrome.value))
+                        .navigationTitle(L.chromeTitle(chrome.value))
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ChromeToolbar(

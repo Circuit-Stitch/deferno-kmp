@@ -9,6 +9,7 @@ import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
 import com.circuitstitch.deferno.feature.settings.StorageProviderSettings
 import com.circuitstitch.deferno.feature.assistant.AssistantComponent
+import com.circuitstitch.deferno.feature.assistant.AssistantError
 import com.circuitstitch.deferno.feature.assistant.AssistantState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
@@ -31,6 +32,7 @@ import com.circuitstitch.deferno.ios.TasksRoot
 import com.circuitstitch.deferno.shell.AuthShellComponent
 import com.circuitstitch.deferno.shell.ChromeActionKind
 import com.circuitstitch.deferno.shell.ChromeSpec
+import com.circuitstitch.deferno.shell.ChromeTitle
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.FeedbackCategory
 import com.circuitstitch.deferno.shell.FeedbackComponent
@@ -68,6 +70,8 @@ import com.circuitstitch.deferno.shell.DictationStatus
 import com.circuitstitch.deferno.shell.Phase
 import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.feature.braindumps.InboxComponent
+import com.circuitstitch.deferno.feature.braindumps.InboxNote
+import com.circuitstitch.deferno.feature.braindumps.InboxRow
 import com.circuitstitch.deferno.feature.tasks.ShakeOutcome
 
 /**
@@ -90,10 +94,19 @@ import com.circuitstitch.deferno.feature.tasks.ShakeOutcome
 // ---------------------------------------------------------------------------------------------------
 
 /** An empty chrome spec (no actions) for demo / preview call sites — the live shell supplies a real one. */
-fun emptyChrome(): ChromeSpec = ChromeSpec(title = "Everything")
-fun chromeTitle(spec: ChromeSpec): String = spec.title
+fun emptyChrome(): ChromeSpec = ChromeSpec(titleSpec = ChromeTitle.None)
 fun chromeDrilled(spec: ChromeSpec): Boolean = spec.drilled
 fun chromeActionCount(spec: ChromeSpec): Int = spec.actions.size
+
+// The top-bar title, as the typed [ChromeTitle] cracked open for Swift (#327): the View localizes a
+// Destination / Settings-category screen name (via destinationName / settingsCategoryName + the string
+// catalog) and the Task-detail fallback, but renders user-authored [Verbatim] text as-is (never translated).
+fun chromeTitleDestination(spec: ChromeSpec): Destination? =
+    (spec.titleSpec as? ChromeTitle.ForDestination)?.destination
+fun chromeTitleSettingsCategory(spec: ChromeSpec): SettingsCategory? =
+    (spec.titleSpec as? ChromeTitle.ForSettingsCategory)?.category
+fun chromeTitleVerbatim(spec: ChromeSpec): String? = (spec.titleSpec as? ChromeTitle.Verbatim)?.text
+fun chromeTitleIsTaskFallback(spec: ChromeSpec): Boolean = spec.titleSpec is ChromeTitle.TaskFallback
 
 /** The trailing action's kind at [index], as a stable String the View maps to a glyph + a11y label. */
 fun chromeActionKind(spec: ChromeSpec, index: Int): String = when (spec.actions[index].kind) {
@@ -227,6 +240,20 @@ fun assistantSelectConversation(component: AssistantComponent, conversation: Con
 /** The open Conversation's id as a String (to highlight the active switcher row), or null for a fresh chat. */
 fun assistantActiveConversationKey(state: AssistantState): String? = state.activeConversationId?.value
 
+// The turn error, typed for Swift (#327): [assistantErrorKind] is a stable enum-name token
+// ("TurnFailed" / "EnableFailed" / "ApplyFailed" / "ServerMessage") the View localizes for the fixed
+// arms, or null when there's no error; [assistantErrorServerMessage] is the server-authored prose the
+// View renders verbatim for the ServerMessage arm.
+fun assistantErrorKind(state: AssistantState): String? = when (state.errorKind) {
+    is AssistantError.TurnFailed -> "TurnFailed"
+    is AssistantError.EnableFailed -> "EnableFailed"
+    is AssistantError.ApplyFailed -> "ApplyFailed"
+    is AssistantError.ServerMessage -> "ServerMessage"
+    null -> null
+}
+fun assistantErrorServerMessage(state: AssistantState): String? =
+    (state.errorKind as? AssistantError.ServerMessage)?.text
+
 /** Whether a [ChatMessage] is the person's prompt (the View right-aligns it) vs the Assistant's reply. */
 fun chatMessageIsUser(message: ChatMessage): Boolean = message.role == ChatRole.User
 
@@ -268,6 +295,14 @@ fun feedbackAddAttachment(
 // FeedbackStatus is a sealed type; Swift reads these instead of casting Kotlin/Native class names (as New does).
 fun feedbackStatusIsSubmitting(state: FeedbackState): Boolean = state.status is FeedbackStatus.Submitting
 fun feedbackStatusIsOffline(state: FeedbackState): Boolean = state.status is FeedbackStatus.Offline
+// The failed-send note, typed for Swift to localize (#327): [reason] is a stable enum-name token
+// ("PrepareAttachments" / "UploadFailed" / "SendFailed" / "AppOutOfDate" / "ServerMessage"); [statusCode]
+// fills the upload/send codes (-1 when absent); [message] is the server-authored prose the View renders
+// verbatim ONLY for the ServerMessage reason.
+fun feedbackStatusFailedReason(state: FeedbackState): String? =
+    (state.status as? FeedbackStatus.Failed)?.reason?.name
+fun feedbackStatusFailedStatusCode(state: FeedbackState): Int =
+    (state.status as? FeedbackStatus.Failed)?.statusCode ?: -1
 fun feedbackStatusFailedMessage(state: FeedbackState): String? = (state.status as? FeedbackStatus.Failed)?.message
 
 // The ordered categories the chip picker renders (Swift reads label + equality without naming the enum).
@@ -307,7 +342,9 @@ fun profileTimeZone(component: ProfileComponent): String? = component.timeZone.v
 
 fun newStatusIsSubmitting(state: NewState): Boolean = state.status is NewStatus.Submitting
 fun newStatusIsOffline(state: NewState): Boolean = state.status is NewStatus.Offline
-fun newStatusFailedMessage(state: NewState): String? = (state.status as? NewStatus.Failed)?.message
+/** The create-failure reason as a stable enum-name token ("CouldNotSaveRetry" / "CouldNotSave") the
+ *  View localizes, or null when the surface isn't in a Failed state (#327). */
+fun newStatusFailedReason(state: NewState): String? = (state.status as? NewStatus.Failed)?.reason?.name
 
 // ---------------------------------------------------------------------------------------------------
 // Destination registry — Swift reads name/slot for label/icon + selection (View concern, ADR-0013)
@@ -477,12 +514,26 @@ fun acceptInboxDraft(component: InboxComponent, draft: BrainDumpDraft) = compone
 fun dismissInboxDraft(component: InboxComponent, draft: BrainDumpDraft) = component.onDismiss(draft.id)
 fun clearInboxNote(component: InboxComponent, draft: BrainDumpDraft) = component.onClearNote(draft.id)
 
+// The gentle row note, typed for Swift (#327): the fixed Offline arm localizes ("Reconnect to save"),
+// a server-authored message renders verbatim, and no note = neither.
+fun inboxNoteIsOffline(row: InboxRow): Boolean = row.noteKind is InboxNote.Offline
+fun inboxNoteServerMessage(row: InboxRow): String? = (row.noteKind as? InboxNote.ServerMessage)?.text
+
 /** A draft's deadline subtitle (LocalDate + optional LocalTime), or empty when undated. */
 fun inboxDraftDeadlineLabel(draft: BrainDumpDraft): String {
     val date = draft.completeBy?.toString() ?: return ""
     val time = draft.deadlineTimeOfDay?.let { " ${it}" } ?: ""
     return date + time
 }
+
+// The typed feed summary + source, cracked open for Swift to localize (#327). [activitySummaryVerb] is
+// the coarse verb as a stable enum-name token ("Created" / "UpdatedTask" / …); [activitySummaryKindToken]
+// is the lowercase item-kind it acted on ("task" / "chore" / "habit" / "event") for the kind-qualified
+// verbs, else null; [activitySourceName] is the "who" as a stable token ("Mobile" / "Website" / "Mcp" /
+// "Unknown"). The View maps these to the shared string catalog.
+fun activitySummaryVerb(row: ActivityFeedRow): String = row.summaryInfo.verb.name
+fun activitySummaryKindToken(row: ActivityFeedRow): String? = row.summaryInfo.kindToken
+fun activitySourceName(row: ActivityFeedRow): String = row.source.name
 
 /** A render-ready "when" label for an Activity row (Instant → local "yyyy-MM-dd HH:mm"). */
 fun activityWhenLabel(row: ActivityFeedRow): String {
@@ -522,9 +573,10 @@ fun brainDumpPhaseName(state: BrainDumpState): String = when (state.phase) {
 // only ShakeOutcome is sealed, so Swift reads the confirm operation through this discriminator.
 // ---------------------------------------------------------------------------------------------------
 
-/** The operation a device-shake offers to undo, or null when the shake had nothing to undo. */
+/** The operation a device-shake offers to undo, as a stable token ("reorder" / "indent" / "outdent")
+ *  the View localizes into "Undo […]?", or null when the shake had nothing to undo (#327). */
 fun shakeConfirmOperation(outcome: ShakeOutcome): String? =
-    (outcome as? ShakeOutcome.Confirm)?.operation
+    (outcome as? ShakeOutcome.Confirm)?.operationKind?.token
 
 // ---------------------------------------------------------------------------------------------------
 // New form — deadline time-of-day (#348) + dictation (#92). LocalTime/DictationStatus aren't built or

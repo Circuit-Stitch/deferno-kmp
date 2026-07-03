@@ -135,7 +135,7 @@ struct ItemTreeView: View {
             // through the single `undoLastMove` path. Auto-dismisses; hidden in move mode.
             if let undo = value.lastMove, !inMoveMode {
                 UndoSnackbar(
-                    operation: undo.operation,
+                    operation: L.moveOperation(undo.operationKind.token),
                     // Re-arm the auto-dismiss whenever a *new* move is recorded (key on the move id).
                     moveKey: Int(undo.id),
                     onUndo: { component.undoLastMove() }

@@ -6,7 +6,6 @@ import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivitySummary
 import com.circuitstitch.deferno.core.data.activity.itemId
-import com.circuitstitch.deferno.core.data.activity.summary
 import com.circuitstitch.deferno.core.data.activity.summaryInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -20,14 +19,11 @@ import kotlin.time.Instant
 /**
  * One row of the Activity feed — a render-ready projection of an [ActivityEntry] (#260): what changed
  * ([summaryInfo], typed for locale-aware rendering), who made it ([source]), and when ([recordedAt]).
- * [itemId] is the thing it touched (a future tap-to-open target; the v1 feed is read-only).
- * [summary]/[sourceLabel] keep the English rendering for the SwiftUI bridges — the Compose View
- * renders from the typed fields instead.
+ * [itemId] is the thing it touched (a future tap-to-open target; the v1 feed is read-only). Every
+ * platform View localizes from the typed [summaryInfo] / [source] (#327).
  */
 data class ActivityFeedRow(
     val seq: Long,
-    val summary: String,
-    val sourceLabel: String,
     val recordedAt: Instant,
     val itemId: String?,
     val summaryInfo: ActivitySummary,
@@ -68,18 +64,8 @@ class DefaultActivityComponent(
 private fun ActivityEntry.toRow(): ActivityFeedRow =
     ActivityFeedRow(
         seq = seq,
-        summary = summary(),
-        sourceLabel = source.label(),
         recordedAt = recordedAt,
         itemId = itemId(),
         summaryInfo = summaryInfo(),
         source = source,
     )
-
-/** The human "who" chip: a local write reads "Mobile app"; remote writes name their surface. */
-private fun ActivitySource.label(): String = when (this) {
-    ActivitySource.Mobile -> "Mobile app"
-    ActivitySource.Website -> "via Website"
-    ActivitySource.Mcp -> "via MCP agent"
-    ActivitySource.Unknown -> "Unknown"
-}

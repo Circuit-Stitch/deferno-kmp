@@ -101,7 +101,7 @@ struct ItemTreeView: View {
             // through the single `undoLastMove` path. Auto-dismisses; hidden in move mode.
             if let undo = value.lastMove, !inMoveMode {
                 UndoSnackbar(
-                    operation: undo.operation,
+                    operation: L.moveOperation(undo.operationKind.token),
                     moveKey: Int(undo.id),
                     onUndo: { component.undoLastMove() }
                 )

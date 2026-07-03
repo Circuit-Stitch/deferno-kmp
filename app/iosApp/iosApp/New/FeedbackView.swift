@@ -102,10 +102,10 @@ struct FeedbackView: View {
     @ViewBuilder
     private func statusMessage(_ value: FeedbackState) -> some View {
         if ShellBridgeKt.feedbackStatusIsOffline(state: value) {
-            Text("You're offline — reconnect to send. Nothing was queued.")
+            Text(L.string("feedback_offline_note"))
                 .font(.footnote).foregroundStyle(colors.inkMuted)
-                .accessibilityLabel("Reconnect to send")
-        } else if let message = ShellBridgeKt.feedbackStatusFailedMessage(state: value) {
+                .accessibilityLabel(L.string("feedback_offline_note"))
+        } else if let message = L.feedbackFailure(value) {
             Text(message).font(.footnote).foregroundStyle(colors.error)
         }
     }

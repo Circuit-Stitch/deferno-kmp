@@ -270,7 +270,7 @@ class DefaultAssistantComponentTest {
         component.onComposerChanged("go"); component.onSend(); advanceUntilIdle()
 
         val s = component.state.value
-        assertEquals("connection dropped", s.error)
+        assertEquals(AssistantError.ServerMessage("connection dropped"), s.errorKind)
         assertFalse(s.streaming)
         // The partial reply is preserved (never waste the work).
         assertTrue(s.messages.any { it.text == "partial" })

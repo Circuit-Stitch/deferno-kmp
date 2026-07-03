@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
 import com.circuitstitch.deferno.feature.assistant.AssistantComponent
+import com.circuitstitch.deferno.feature.assistant.AssistantError
 import com.circuitstitch.deferno.feature.assistant.AssistantState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
@@ -23,6 +24,7 @@ import com.circuitstitch.deferno.macos.TasksRoot
 import com.circuitstitch.deferno.shell.AuthShellComponent
 import com.circuitstitch.deferno.shell.ChromeActionKind
 import com.circuitstitch.deferno.shell.ChromeSpec
+import com.circuitstitch.deferno.shell.ChromeTitle
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.DictationField
 import com.circuitstitch.deferno.shell.DictationStatus
@@ -67,9 +69,18 @@ import kotlin.time.Instant
 // type or invokes a Kotlin lambda property directly.
 // ---------------------------------------------------------------------------------------------------
 
-fun chromeTitle(spec: ChromeSpec): String = spec.title
 fun chromeDrilled(spec: ChromeSpec): Boolean = spec.drilled
 fun chromeActionCount(spec: ChromeSpec): Int = spec.actions.size
+
+// The top-bar title, as the typed [ChromeTitle] cracked open for Swift (#327): the View localizes a
+// Destination / Settings-category screen name (via destinationName / settingsCategoryName + the string
+// catalog) and the Task-detail fallback, but renders user-authored [Verbatim] text as-is (never translated).
+fun chromeTitleDestination(spec: ChromeSpec): Destination? =
+    (spec.titleSpec as? ChromeTitle.ForDestination)?.destination
+fun chromeTitleSettingsCategory(spec: ChromeSpec): SettingsCategory? =
+    (spec.titleSpec as? ChromeTitle.ForSettingsCategory)?.category
+fun chromeTitleVerbatim(spec: ChromeSpec): String? = (spec.titleSpec as? ChromeTitle.Verbatim)?.text
+fun chromeTitleIsTaskFallback(spec: ChromeSpec): Boolean = spec.titleSpec is ChromeTitle.TaskFallback
 
 /** The trailing action's kind at [index], as a stable String the View maps to a glyph + a11y label. */
 fun chromeActionKind(spec: ChromeSpec, index: Int): String = when (spec.actions[index].kind) {
@@ -148,6 +159,20 @@ fun assistantSelectConversation(component: AssistantComponent, conversation: Con
 /** The open Conversation's id as a String (to highlight the active switcher row), or null for a fresh chat. */
 fun assistantActiveConversationKey(state: AssistantState): String? = state.activeConversationId?.value
 
+// The turn error, typed for Swift (#327): [assistantErrorKind] is a stable enum-name token
+// ("TurnFailed" / "EnableFailed" / "ApplyFailed" / "ServerMessage") the View localizes for the fixed
+// arms, or null when there's no error; [assistantErrorServerMessage] is the server-authored prose the
+// View renders verbatim for the ServerMessage arm.
+fun assistantErrorKind(state: AssistantState): String? = when (state.errorKind) {
+    is AssistantError.TurnFailed -> "TurnFailed"
+    is AssistantError.EnableFailed -> "EnableFailed"
+    is AssistantError.ApplyFailed -> "ApplyFailed"
+    is AssistantError.ServerMessage -> "ServerMessage"
+    null -> null
+}
+fun assistantErrorServerMessage(state: AssistantState): String? =
+    (state.errorKind as? AssistantError.ServerMessage)?.text
+
 /** Whether a [ChatMessage] is the person's prompt (the View right-aligns it) vs the Assistant's reply. */
 fun chatMessageIsUser(message: ChatMessage): Boolean = message.role == ChatRole.User
 
@@ -189,6 +214,14 @@ fun feedbackAddAttachment(
 // FeedbackStatus is a sealed type; Swift reads these instead of casting Kotlin/Native class names (as New does).
 fun feedbackStatusIsSubmitting(state: FeedbackState): Boolean = state.status is FeedbackStatus.Submitting
 fun feedbackStatusIsOffline(state: FeedbackState): Boolean = state.status is FeedbackStatus.Offline
+// The failed-send note, typed for Swift to localize (#327): [reason] is a stable enum-name token
+// ("PrepareAttachments" / "UploadFailed" / "SendFailed" / "AppOutOfDate" / "ServerMessage"); [statusCode]
+// fills the upload/send codes (-1 when absent); [message] is the server-authored prose the View renders
+// verbatim ONLY for the ServerMessage reason.
+fun feedbackStatusFailedReason(state: FeedbackState): String? =
+    (state.status as? FeedbackStatus.Failed)?.reason?.name
+fun feedbackStatusFailedStatusCode(state: FeedbackState): Int =
+    (state.status as? FeedbackStatus.Failed)?.statusCode ?: -1
 fun feedbackStatusFailedMessage(state: FeedbackState): String? = (state.status as? FeedbackStatus.Failed)?.message
 
 // The ordered categories the chip picker renders (Swift reads label + equality without naming the enum).
@@ -224,7 +257,9 @@ fun profileIsUnavailable(state: ProfileState): Boolean = state is ProfileState.U
 
 fun newStatusIsSubmitting(state: NewState): Boolean = state.status is NewStatus.Submitting
 fun newStatusIsOffline(state: NewState): Boolean = state.status is NewStatus.Offline
-fun newStatusFailedMessage(state: NewState): String? = (state.status as? NewStatus.Failed)?.message
+/** The create-failure reason as a stable enum-name token ("CouldNotSaveRetry" / "CouldNotSave") the
+ *  View localizes, or null when the surface isn't in a Failed state (#327). */
+fun newStatusFailedReason(state: NewState): String? = (state.status as? NewStatus.Failed)?.reason?.name
 
 // Dictation (#92, ADR-0018 / ADR-0029 Phase 2) — Swift reads the lifecycle off the sealed DictationStatus
 // without naming its subclasses, and toggles the mic per field.

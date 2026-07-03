@@ -39,18 +39,19 @@ class DraftTasksBridge internal constructor(
 
     /**
      * Extract draft Tasks from [transcript]. [onResult] receives the proposed drafts (empty for empty
-     * or garbled input); [onFailure] receives a short, content-free [InferenceResult.Failure.detail]
-     * when no engine is configured or the model output couldn't be validated.
+     * or garbled input); [onFailure] receives the typed [InferenceResult.Failure.reason] as a stable
+     * token (`"NotConfigured"` / `"MalformedOutput"` / `"Transport"`) the View maps to a localized
+     * message, plus the content-free [InferenceResult.Failure.detail] for logs only (#327).
      */
     fun extract(
         transcript: String,
         onResult: (List<DraftPreview>) -> Unit,
-        onFailure: (String) -> Unit,
+        onFailure: (reason: String, detail: String) -> Unit,
     ) {
         scope.launch {
             when (val result = extractor.extract(Transcript(transcript), today, timeZone)) {
                 is InferenceResult.Success -> onResult(result.value.drafts.map { it.preview() })
-                is InferenceResult.Failure -> onFailure(result.detail)
+                is InferenceResult.Failure -> onFailure(result.reason.name, result.detail)
             }
         }
     }

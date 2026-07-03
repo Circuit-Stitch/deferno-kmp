@@ -40,7 +40,7 @@ struct MainShellView: View {
     }
 
     private var active: MainShellComponentDestinationChild { destinations.value }
-    private var activeName: String { ShellBridgeKt.destinationName(destination: ShellBridgeKt.destinationOf(child: active)) }
+    private var activeName: String { L.destinationLabel(ShellBridgeKt.destinationName(destination: ShellBridgeKt.destinationOf(child: active))) }
 
     // The single adaptive chrome (Cand 1), computed in the shell. `drilled` swaps the leading affordance
     // (sidebar/account ↔ ← back) and hides the create actions; `barTitle` is the foreground surface title,
@@ -48,7 +48,7 @@ struct MainShellView: View {
     // chrome.title is empty — the documented carve-out).
     private var drilled: Bool { ShellBridgeKt.chromeDrilled(spec: chrome.value) }
     private var barTitle: String {
-        let title = ShellBridgeKt.chromeTitle(spec: chrome.value)
+        let title = L.chromeTitle(chrome.value)
         return title.isEmpty ? activeName : title
     }
 

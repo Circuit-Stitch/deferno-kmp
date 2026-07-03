@@ -86,8 +86,10 @@ struct DraftExtractorView: View {
                     : "\(result.count) draft\(result.count == 1 ? "" : "s") proposed."
                 running = false
             },
-            onFailure: { detail in
-                status = "Couldn't extract: \(detail)"
+            onFailure: { reason, detail in
+                // `detail` is a content-free diagnostic — kept for logs, never shown (#327).
+                _ = detail
+                status = L.draftExtractError(reason)
                 running = false
             }
         )

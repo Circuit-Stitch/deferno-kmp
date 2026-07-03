@@ -119,7 +119,7 @@ struct AssistantView: View {
             if s.usageExhausted {
                 banner("You've used this month's Assistant quota. It resets next month.", tint: colors.error)
             }
-            if let error = s.error {
+            if let error = L.assistantError(s) {
                 banner(error, tint: colors.error) { component.onDismissError() }
             }
             messageList

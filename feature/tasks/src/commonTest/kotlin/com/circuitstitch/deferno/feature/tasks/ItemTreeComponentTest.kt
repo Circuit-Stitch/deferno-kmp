@@ -266,7 +266,7 @@ class ItemTreeComponentTest {
         assertEquals(Triple<String, String?, Int>("b", "a", 0), moves.single(), "the forward indent")
         val undo = c.state.value.lastMove!!
         assertTrue(undo.structural, "indent is structural → the 'Moved · Undo' snackbar")
-        assertEquals("indent", undo.operation)
+        assertEquals(MoveOperation.Indent, undo.operationKind)
 
         c.undoLastMove()
         advanceUntilIdle()
@@ -290,7 +290,7 @@ class ItemTreeComponentTest {
 
         val undo = c.state.value.lastMove!!
         assertFalse(undo.structural, "a same-level reorder records an undoable but shows no snackbar")
-        assertEquals("reorder", undo.operation)
+        assertEquals(MoveOperation.Reorder, undo.operationKind)
     }
 
     @Test
@@ -300,7 +300,7 @@ class ItemTreeComponentTest {
         advanceUntilIdle()
         c.onEnterMoveMode("b"); c.onIndent(); advanceUntilIdle()
 
-        assertEquals(ShakeOutcome.Confirm("indent", MoveOperation.Indent), c.onShake())
+        assertEquals(ShakeOutcome.Confirm(MoveOperation.Indent), c.onShake())
     }
 
     @Test

@@ -46,7 +46,14 @@ class ActivityLedgerTest {
         assertEquals(3, feed.size)
         assertEquals(listOf(t2, t1, t0), feed.map { it.recordedAt })
         assertTrue(feed.all { it.source == ActivitySource.Mobile })
-        assertEquals(listOf("Deleted a task", "Created a task", "Updated a task"), feed.map { it.summary() })
+        assertEquals(
+            listOf(
+                ActivitySummary(ActivityVerb.DeletedTask),
+                ActivitySummary(ActivityVerb.Created, "task"),
+                ActivitySummary(ActivityVerb.UpdatedTask),
+            ),
+            feed.map { it.summaryInfo() },
+        )
 
         // The outbox queue itself is unaffected — the decorator delegated the real enqueue.
         assertEquals(3L, outbox.count())
@@ -67,15 +74,15 @@ class ActivityLedgerTest {
         fun entry(target: String, method: OutboxMethod) =
             ActivityEntry(seq = 1, recordedAt = t0, source = ActivitySource.Mobile, target = target, method = method, path = emptyList())
 
-        assertEquals("Updated a task", entry("task:abc", OutboxMethod.Patch).summary())
-        assertEquals("Deleted a task", entry("task:abc", OutboxMethod.Delete).summary())
-        assertEquals("Created a habit", entry("create:Habit:h1", OutboxMethod.Post).summary())
-        assertEquals("Moved an item", entry("item:i1", OutboxMethod.Patch).summary())
-        assertEquals("Updated your plan", entry("plan:2026-06-21:UTC", OutboxMethod.Post).summary())
-        assertEquals("Changed settings", entry("settings", OutboxMethod.Patch).summary())
-        assertEquals("Updated a event occurrence", entry("occurrence:Event:s1:2026-06-21", OutboxMethod.Patch).summary())
-        assertEquals("Cleared a event occurrence", entry("occurrence:Event:s1:2026-06-21", OutboxMethod.Delete).summary())
-        assertEquals("Updated an item", entry("weird:thing", OutboxMethod.Patch).summary())
+        assertEquals(ActivitySummary(ActivityVerb.UpdatedTask), entry("task:abc", OutboxMethod.Patch).summaryInfo())
+        assertEquals(ActivitySummary(ActivityVerb.DeletedTask), entry("task:abc", OutboxMethod.Delete).summaryInfo())
+        assertEquals(ActivitySummary(ActivityVerb.Created, "habit"), entry("create:Habit:h1", OutboxMethod.Post).summaryInfo())
+        assertEquals(ActivitySummary(ActivityVerb.MovedItem), entry("item:i1", OutboxMethod.Patch).summaryInfo())
+        assertEquals(ActivitySummary(ActivityVerb.UpdatedPlan), entry("plan:2026-06-21:UTC", OutboxMethod.Post).summaryInfo())
+        assertEquals(ActivitySummary(ActivityVerb.ChangedSettings), entry("settings", OutboxMethod.Patch).summaryInfo())
+        assertEquals(ActivitySummary(ActivityVerb.UpdatedOccurrence, "event"), entry("occurrence:Event:s1:2026-06-21", OutboxMethod.Patch).summaryInfo())
+        assertEquals(ActivitySummary(ActivityVerb.ClearedOccurrence, "event"), entry("occurrence:Event:s1:2026-06-21", OutboxMethod.Delete).summaryInfo())
+        assertEquals(ActivitySummary(ActivityVerb.UpdatedItem), entry("weird:thing", OutboxMethod.Patch).summaryInfo())
 
         assertEquals("abc", entry("task:abc", OutboxMethod.Patch).itemId())
         assertEquals("i1", entry("item:i1", OutboxMethod.Patch).itemId())

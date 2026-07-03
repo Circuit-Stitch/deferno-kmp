@@ -50,7 +50,7 @@ struct InboxView: View {
                     DraftCard(
                         draft: row.draft,
                         accepting: row.accepting,
-                        note: row.note,
+                        note: L.inboxNote(row),
                         deadlineLabel: ShellBridgeKt.inboxDraftDeadlineLabel(draft: row.draft),
                         onAccept: { ShellBridgeKt.acceptInboxDraft(component: component, draft: row.draft) },
                         onDismiss: { ShellBridgeKt.dismissInboxDraft(component: component, draft: row.draft) },

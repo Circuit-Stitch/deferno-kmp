@@ -77,8 +77,8 @@ sealed interface FeedbackStatus {
     /** Offline (ADR-0016): the gentle "reconnect to send"; nothing was queued. */
     data object Offline : FeedbackStatus
 
-    /** A server/upload rejection — a typed [reason] the View localizes; [message] keeps the
-     *  English words for the SwiftUI bridges. */
+    /** A server/upload rejection — every platform View localizes from the typed [reason] (+ [statusCode]);
+     *  [message] is the server-authored prose, rendered verbatim only for [FeedbackResult.Failed.Reason.ServerMessage]. */
     data class Failed(
         val message: String,
         val reason: FeedbackResult.Failed.Reason = FeedbackResult.Failed.Reason.ServerMessage,

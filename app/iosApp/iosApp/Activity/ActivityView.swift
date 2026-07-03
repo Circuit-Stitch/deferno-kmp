@@ -23,8 +23,8 @@ struct ActivityView: View {
             header(count: rows.count)
             if rows.isEmpty {
                 EmptyStateView(
-                    title: "Nothing yet",
-                    message: "Every change you make — and every change synced from elsewhere — shows up here, newest first."
+                    title: L.string("activity_empty_title"),
+                    message: L.string("activity_empty_body")
                 )
             } else {
                 List {
@@ -42,11 +42,11 @@ struct ActivityView: View {
 
     private func header(count: Int) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Activity")
+            Text(L.string("shell_destination_activity"))
                 .font(.defernoMono(22, weight: .semibold))
                 .foregroundColor(colors.onSurface)
                 .accessibilityAddTraits(.isHeader)
-            MonoMeta(count == 1 ? "1 change" : "\(count) changes")
+            MonoMeta(L.plural("activity_change_count", count))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Layout.gutter)
@@ -63,11 +63,11 @@ private struct ActivityRowView: View {
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(row.summary)
+                Text(L.activitySummary(row))
                     .font(.defernoMono(15))
                     .foregroundColor(colors.onSurface)
                     .fixedSize(horizontal: false, vertical: true)
-                TreeChip(text: row.sourceLabel, tone: .neutral)
+                TreeChip(text: L.activitySource(row), tone: .neutral)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             MonoMeta(ShellBridgeKt.activityWhenLabel(row: row))

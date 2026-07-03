@@ -19,12 +19,11 @@ import com.circuitstitch.deferno.feature.settings.SettingsCategory
  * Refresh) at a Destination root, empty when drilled into a detail.
  */
 data class ChromeSpec(
-    val title: String,
+    /** What the top bar's title IS — every platform View localizes screen names from this and renders
+     *  user text (a drilled task's own title) verbatim. */
+    val titleSpec: ChromeTitle = ChromeTitle.None,
     val drilled: Boolean = false,
     val actions: List<ChromeAction> = emptyList(),
-    /** The typed twin of [title] for locale-aware rendering — the Compose Views render from this;
-     *  [title] keeps the English words for the SwiftUI bridges until their own localization pass. */
-    val titleSpec: ChromeTitle = ChromeTitle.Verbatim(title),
 )
 
 /** What the top bar's title IS — so the View can localize screen names while user text stays verbatim. */

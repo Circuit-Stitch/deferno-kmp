@@ -206,10 +206,10 @@ struct NewItemView: View {
     @ViewBuilder
     private func statusMessage(_ value: NewState) -> some View {
         if ShellBridgeKt.doNewStatusIsOffline(state: value) {
-            Text("You're offline — reconnect to save. Nothing was queued.")
+            Text(L.string("new_offline_note"))
                 .font(.footnote).foregroundStyle(colors.inkMuted)
-                .accessibilityLabel("Reconnect to save")
-        } else if let message = ShellBridgeKt.doNewStatusFailedMessage(state: value) {
+                .accessibilityLabel(L.string("common_reconnect_to_save"))
+        } else if let message = L.newFailure(value) {
             Text(message).font(.footnote).foregroundStyle(colors.error)
         }
     }

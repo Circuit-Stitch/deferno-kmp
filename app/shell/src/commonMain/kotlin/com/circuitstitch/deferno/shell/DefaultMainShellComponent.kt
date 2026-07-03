@@ -703,11 +703,11 @@ class DefaultMainShellComponent(
                         // No bar title — the Plan dashboard body carries the big "Today" header itself,
                         // so a bar title would duplicate it (#260 chrome restyle). Just ☰ + Refresh.
                         is MainShellComponent.PlanChild.Dashboard ->
-                            flowOf(rootChrome("", ChromeTitle.None, onRefresh = child.component::onRefresh))
+                            flowOf(rootChrome(ChromeTitle.None, onRefresh = child.component::onRefresh))
                         is MainShellComponent.PlanChild.Detail ->
                             child.component.state.map { s ->
                                 val t = s.task?.title
-                                drilledChrome(t ?: "Task", if (t != null) ChromeTitle.Verbatim(t) else ChromeTitle.TaskFallback)
+                                drilledChrome(if (t != null) ChromeTitle.Verbatim(t) else ChromeTitle.TaskFallback)
                             }
                     }
                 }
@@ -718,48 +718,46 @@ class DefaultMainShellComponent(
             // Drop the capture actions (→ no FAB pair) while the Item tree is in move mode: the FABs sit
             // bottom-centre now and would cover the modal move bar's ↑↓‹›/Done controls otherwise.
             is MainShellComponent.DestinationChild.Tasks ->
-                active.component.tree.state.map { rootChrome("", ChromeTitle.None, capture = it.moveMode == null) }
+                active.component.tree.state.map { rootChrome(ChromeTitle.None, capture = it.moveMode == null) }
 
             // Settings is a tier-3 stack: the category list ("Settings") or a drilled category (its title).
             is MainShellComponent.DestinationChild.Settings ->
                 active.component.stack.asFlow().map { ss ->
                     when (val child = ss.active.instance) {
                         is SettingsComponent.SettingsChild.List ->
-                            rootChrome("Settings", ChromeTitle.ForDestination(Destination.Settings))
+                            rootChrome(ChromeTitle.ForDestination(Destination.Settings))
                         is SettingsComponent.SettingsChild.Detail ->
-                            drilledChrome(child.category.chromeTitle(), ChromeTitle.ForSettingsCategory(child.category))
+                            drilledChrome(ChromeTitle.ForSettingsCategory(child.category))
                     }
                 }
 
             // The Calendar New pre-dates to its selected day (#74) — wire that as this root's New handler.
             is MainShellComponent.DestinationChild.Calendar ->
-                flowOf(rootChrome("Calendar", ChromeTitle.ForDestination(Destination.Calendar), onNew = active.component::onNewForSelectedDay))
+                flowOf(rootChrome(ChromeTitle.ForDestination(Destination.Calendar), onNew = active.component::onNewForSelectedDay))
 
             // The Assistant chat (ADR-0040): on iOS the SwiftUI View owns its own chrome; the shared bar is
             // only rendered on the deferred Android/desktop Views, so a plain titled root bar suffices.
             is MainShellComponent.DestinationChild.Assistant ->
-                flowOf(rootChrome("Assistant", ChromeTitle.ForDestination(Destination.Assistant)))
+                flowOf(rootChrome(ChromeTitle.ForDestination(Destination.Assistant)))
             is MainShellComponent.DestinationChild.Inbox ->
-                flowOf(rootChrome("Inbox", ChromeTitle.ForDestination(Destination.Inbox)))
+                flowOf(rootChrome(ChromeTitle.ForDestination(Destination.Inbox)))
             // Profile is a drill-down from Settings → Account (no drawer row): ← back, returning to Settings.
             is MainShellComponent.DestinationChild.Profile ->
-                flowOf(drilledChrome("Profile", ChromeTitle.ForDestination(Destination.Profile)))
+                flowOf(drilledChrome(ChromeTitle.ForDestination(Destination.Profile)))
             is MainShellComponent.DestinationChild.Activity ->
-                flowOf(rootChrome("Activity", ChromeTitle.ForDestination(Destination.Activity)))
+                flowOf(rootChrome(ChromeTitle.ForDestination(Destination.Activity)))
             is MainShellComponent.DestinationChild.Placeholder ->
-                flowOf(rootChrome(active.destination.name, ChromeTitle.ForDestination(active.destination)))
+                flowOf(rootChrome(ChromeTitle.ForDestination(active.destination)))
         }
 
     /** A Destination-root chrome: ☰ menu + title + a per-screen Refresh (if any) and the global create
      *  actions (Brain dump, New). New defaults to the undated overlay; the Calendar root pre-dates it. */
     private fun rootChrome(
-        title: String,
         titleSpec: ChromeTitle,
         onRefresh: (() -> Unit)? = null,
         onNew: () -> Unit = { openOverlay(OverlayRoute.New()) },
         capture: Boolean = true,
     ): ChromeSpec = ChromeSpec(
-        title = title,
         titleSpec = titleSpec,
         drilled = false,
         actions = buildList {
@@ -774,25 +772,8 @@ class DefaultMainShellComponent(
     )
 
     /** A drilled-detail chrome: ← back + the detail's own title, no create actions (those belong to roots). */
-    private fun drilledChrome(title: String, titleSpec: ChromeTitle): ChromeSpec =
-        ChromeSpec(title = title, drilled = true, titleSpec = titleSpec)
-
-    /** The shell-chrome title for a drilled Settings category (shell presentation, like the root titles). */
-    private fun SettingsCategory.chromeTitle(): String = when (this) {
-        SettingsCategory.Appearance -> "Appearance"
-        SettingsCategory.TaskBehavior -> "Task behavior"
-        SettingsCategory.SpeechEngine -> "Speech engine"
-        SettingsCategory.Agent -> "Agent"
-        SettingsCategory.Assistant -> "Assistant"
-        SettingsCategory.Storage -> "Storage"
-        SettingsCategory.DataPrivacy -> "Data & Privacy"
-        SettingsCategory.HelpFeedback -> "Help & Feedback"
-        SettingsCategory.AppPermissions -> "App Permissions"
-        SettingsCategory.Legal -> "Legal"
-        SettingsCategory.Account -> "Account"
-        SettingsCategory.Security2FA -> "Security & 2FA"
-        SettingsCategory.Integrations -> "Integrations"
-    }
+    private fun drilledChrome(titleSpec: ChromeTitle): ChromeSpec =
+        ChromeSpec(titleSpec = titleSpec, drilled = true)
 
     private fun createOverlay(
         route: OverlayRoute,

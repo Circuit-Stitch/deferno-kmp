@@ -80,22 +80,6 @@ fun ActivityEntry.summaryInfo(): ActivitySummary {
     }
 }
 
-/** The English one-liner over [summaryInfo] — kept for the SwiftUI bridges (localized rendering lives in the Compose View). */
-fun ActivityEntry.summary(): String {
-    val info = summaryInfo()
-    return when (info.verb) {
-        ActivityVerb.ChangedSettings -> "Changed settings"
-        ActivityVerb.Created -> "Created a ${info.kindToken}"
-        ActivityVerb.MovedItem -> "Moved an item"
-        ActivityVerb.UpdatedPlan -> "Updated your plan"
-        ActivityVerb.DeletedTask -> "Deleted a task"
-        ActivityVerb.UpdatedTask -> "Updated a task"
-        ActivityVerb.ClearedOccurrence -> "Cleared a ${info.kindToken} occurrence"
-        ActivityVerb.UpdatedOccurrence -> "Updated a ${info.kindToken} occurrence"
-        ActivityVerb.UpdatedItem -> "Updated an item"
-    }
-}
-
 /** The item id this change touched for deep-linking, or null where there is no single item (plan/settings). */
 fun ActivityEntry.itemId(): String? {
     val parts = target.split(":")
