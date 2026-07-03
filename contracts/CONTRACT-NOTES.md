@@ -53,6 +53,40 @@ SSO all happen in the system browser (RFC 8252: Custom Tabs / `ASWebAuthenticati
 - The app still **does not** call `/auth/sign-in` (ROPC, rejected in the backend ADR; it requires
   `X-Requested-With` + an in-flight `auth_request` and is the web login's internal leg).
 
+### Security & 2FA: the first-party MFA management surface
+
+The Settings → Security & 2FA screen's contract — the same endpoints the webui SecurityPane drives.
+**Served but deliberately not in `openapi-0.1.json`** (registered as undocumented `.route(...)`s in
+the backend router). Shapes below derived from the backend source (`handlers/auth_mfa.rs`,
+`handlers/step_up.rs`, `handlers/auth.rs`, backend main @ 2026-07-02) — capture fixtures on the next
+`contracts/refresh.sh` session with the backend up. All are authenticated (bearer PAT works) and
+wrapped in the standard `version: 0.1` envelope unless noted.
+
+- `GET /auth/mfa/status` → `{mfa_enabled, email_backup}` — factor summary off Zitadel's
+  authentication-methods list (the same list sign-in challenges read). Never step-up gated.
+- **Step-up freshness** gates every MFA *mutation*: they 403 with
+  `error: {code: "step_up_required", message, step_up_required: true}` unless the **cookie session**
+  carries a fresh (≤300 s) stamp. `POST /auth/step-up {password}` → `{stepped_up_at}` re-verifies the
+  password against the IdP and stamps the session — the stamp rides the response's `Set-Cookie`,
+  which a bearer client must echo back on the gated calls (the client's `KtorSecurityRemoteSource`
+  holds it per Account session; bearer requests are exempt from the CSRF header check). Step-up's
+  `401 invalid credentials` means **wrong password** (or attempt budget exhausted — deliberately
+  indistinguishable), *not* an expired PAT. It also 503s when the IdP integration is unconfigured.
+- `POST /auth/mfa/enroll/start` (no body) → `{secret, uri}` — begins/replaces TOTP enrollment
+  (re-enroll removes + re-adds server-side). `POST /auth/mfa/enroll/verify {code}` →
+  `{mfa_enabled: true, primary: "totp", recovery_codes: [10 × "xxxxx-xxxxx"]}` — codes shown exactly
+  once (server stores hashes); `400 invalid code` on a bad/expired code.
+- `POST /auth/mfa/backup/add` → `{backup: "email"}` / `POST /auth/mfa/backup/remove` →
+  `{backup: "removed"}` (idempotent) — the opt-in email-OTP backup factor.
+- `POST /auth/mfa/disable` → `{mfa_enabled: false}` — removes TOTP + email backup + recovery codes;
+  idempotent, removals run before the local code-clear so a mid-way 5xx retry converges.
+- `GET /auth/connected-devices` → `[ApiTokenView]` — the native installs' bearer tokens (#299), the
+  "devices" list; revoke goes through the shared `DELETE /auth/tokens/{id}` (as the Active Account's
+  bearer — distinct from sign-out's self-revoke). `GET /auth/tokens` (all kinds) + `PATCH
+  /auth/tokens/{id} {name}` (rename) exist but the native client doesn't consume them yet.
+- The `/auth/mfa/challenge/*` endpoints remain sign-in-time-only (browser leg) — see above; the
+  native app never calls them.
+
 ## Envelope & error model (ADR-0005)
 
 - Success: `{ "version": "0.1", "data": <T> }`. Error: `{ "version": "0.1", "error": { "code":

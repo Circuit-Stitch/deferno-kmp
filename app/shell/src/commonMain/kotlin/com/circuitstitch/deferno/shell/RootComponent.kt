@@ -411,6 +411,9 @@ class DefaultRootComponent(
                         authRepository = authRepository,
                         settingsRepository = session.settingsRepository,
                         settingsEditor = session.settingsEditor,
+                        // Settings → Security & 2FA: this Account session's MFA/devices seam (the
+                        // step-up cookie lives in the AccountScope source, discarded on switch).
+                        securityRepository = session.securityRepository,
                         account = account,
                         today = today,
                         timeZone = timeZone,

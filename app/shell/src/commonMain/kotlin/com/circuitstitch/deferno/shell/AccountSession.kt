@@ -9,6 +9,7 @@ import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.outbox.FlushResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
+import com.circuitstitch.deferno.core.data.security.SecurityRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
@@ -110,6 +111,14 @@ interface AccountSession {
      * **live theme** (the theme StateFlow the root derives from this drives `DefernoTheme`).
      */
     val settingsRepository: SettingsRepository
+
+    /**
+     * The Security & 2FA seam (Settings → Security, #72 follow-through): 2FA status/enrollment +
+     * connected devices over the first-party backend contract, with the step-up cookie held per
+     * Account session. Defaulted to the inert repository (every call Unavailable) so test fakes
+     * build without it; production backs it with the Account component's [SecurityRepository].
+     */
+    val securityRepository: SecurityRepository get() = SecurityRepository.Inert
 
     /**
      * The User-setting write seam the Settings Destination drives (#72, #173): each backed-category
@@ -267,6 +276,7 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     // #314: the on-device import/restore over this Account's outbox (ADR-0041).
     override suspend fun importBackup(bytes: ByteArray): ImportResult = component.backupImporter.import(bytes)
     override val settingsRepository: SettingsRepository get() = component.settingsRepository
+    override val securityRepository: SecurityRepository get() = component.securityRepository
     override val calendarRepository: CalendarRepository get() = component.calendarRepository
     override val conversationStore: ConversationStore get() = component.conversationStore
 
