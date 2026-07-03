@@ -1461,6 +1461,9 @@ private fun SettingsCategory.rowSummary(
     }
     // The Storage row reflects the selected provider — "On-device" by default (#210).
     this == SettingsCategory.Storage -> storageProviderLabel(storageProvider.selected)
+    // `backed` is the cross-platform baseline (the SwiftUI bridges still stub Security & 2FA), but
+    // THIS View renders the real screen for it — so no coming-soon subtext on Android.
+    this == SettingsCategory.Security2FA -> null
     !backed -> stringResource(Res.string.settings_coming_soon_title)
     else -> null
 }

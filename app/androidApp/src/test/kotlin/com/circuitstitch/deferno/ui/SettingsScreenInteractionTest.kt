@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -96,6 +97,8 @@ class SettingsScreenInteractionTest {
         composeRule.onNodeWithText("Data & Privacy").assertIsDisplayed()
         composeRule.onNodeWithText("Security & 2FA").assertIsDisplayed()
         composeRule.onNodeWithText("Integrations").assertIsDisplayed()
+        // Security & 2FA is a real screen on Android now — only Integrations still reads Coming soon.
+        composeRule.onAllNodesWithText("Coming soon").assertCountEquals(1)
     }
 
     @Test
