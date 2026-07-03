@@ -30,6 +30,7 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.feedback.FeedbackResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
+import com.circuitstitch.deferno.core.data.security.SecurityRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.task.SearchSeed
 import com.circuitstitch.deferno.core.data.task.SearchSort
@@ -129,6 +130,9 @@ class DefaultMainShellComponent(
     // The Settings Destination's User-setting write seam (#72/#173): command-backed in production
     // (AccountSession routes each intent through the command executor, ADR-0007).
     private val settingsEditor: SettingsEditor,
+    // The Security & 2FA seam (Settings → Security): defaulted inert so the many shell tests build
+    // without supplying it (the category then renders its unavailable state, never a crash).
+    private val securityRepository: SecurityRepository = SecurityRepository.Inert,
     private val account: Account,
     private val today: LocalDate,
     private val timeZone: String,
@@ -596,6 +600,10 @@ class DefaultMainShellComponent(
                         componentContext = childContext,
                         settingsRepository = settingsRepository,
                         settingsEditor = settingsEditor,
+                        // The Security & 2FA category (#72 follow-through): the per-Account MFA/devices
+                        // seam + this Account's own token id (marks "this device"; its revoke is withheld).
+                        securityRepository = securityRepository,
+                        activeTokenId = account.tokenId,
                         output = ::onSettingsOutput,
                         // The device-local speech-engine App setting (#93) + the device locale its
                         // availability is queried for — sourced from AppScope, not this Account's settings.

@@ -1,6 +1,8 @@
 package com.circuitstitch.deferno.core.di
 
+import com.circuitstitch.deferno.core.data.account.AccountContext
 import com.circuitstitch.deferno.core.data.account.AccountManager
+import com.circuitstitch.deferno.core.data.account.ReauthRequester
 import com.circuitstitch.deferno.core.data.account.ReauthRequests
 import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
@@ -33,6 +35,7 @@ import com.circuitstitch.deferno.core.speech.DictationPermissionSettings
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.core.scopes.PlatformContext
+import io.ktor.client.HttpClient
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.MergeComponent
@@ -186,6 +189,21 @@ abstract class AppComponent(
      * auto-propagate a parent's contributed @Provides — see the re-exposed bindings below).
      */
     abstract val attachmentBytesStore: AttachmentBytesStore
+
+    /**
+     * The one shared Deferno [HttpClient] (ADR-0005/0014). Re-exposed so the child AccountScope can
+     * consume it (same reason as [attachmentBytesStore]) — the per-Account `SecurityRemoteSource`
+     * wraps this shared client while keeping its step-up cookie Account-scoped.
+     */
+    abstract val httpClient: HttpClient
+
+    /**
+     * The read-only Active-Account resolver + the per-Account re-auth raiser (ADR-0002). Re-exposed
+     * (like [attachmentBytesStore]) so the child AccountScope's `SecurityRepository` can route a PAT
+     * 401 to re-auth exactly as the AppScope `DefaultAuthRepository` does.
+     */
+    abstract val accountContext: AccountContext
+    abstract val reauthRequester: ReauthRequester
 
     /**
      * The app-facing **inference engine** the propose-only Agent runs through (ADR-0027): the AppScope

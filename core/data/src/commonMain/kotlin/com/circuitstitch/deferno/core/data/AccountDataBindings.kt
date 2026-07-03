@@ -55,6 +55,12 @@ import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.plan.PlanWriter
 import com.circuitstitch.deferno.core.data.plan.SqlDelightPlanLocalStore
+import com.circuitstitch.deferno.core.data.account.AccountContext
+import com.circuitstitch.deferno.core.data.account.ReauthRequester
+import com.circuitstitch.deferno.core.data.security.DefaultSecurityRepository
+import com.circuitstitch.deferno.core.data.security.KtorSecurityRemoteSource
+import com.circuitstitch.deferno.core.data.security.SecurityRemoteSource
+import com.circuitstitch.deferno.core.data.security.SecurityRepository
 import com.circuitstitch.deferno.core.data.settings.OfflineSettingsRepository
 import com.circuitstitch.deferno.core.data.settings.OutboxSettingsWriter
 import com.circuitstitch.deferno.core.data.settings.SettingsLocalStore
@@ -71,6 +77,7 @@ import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskWriter
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.scopes.AccountScope
+import io.ktor.client.HttpClient
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
@@ -377,6 +384,28 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun settingsWriter(localStore: SettingsLocalStore, outbox: OutboxStore): SettingsWriter =
         OutboxSettingsWriter(localStore, outbox)
+
+    /**
+     * The Security & 2FA network port (Settings → Security, #72 follow-through). Deliberately
+     * **AccountScope**, unlike the other remote sources (AppScope): the source holds the step-up
+     * session cookie in memory, and the step-up stamp is not user-bound server-side — scoping the
+     * source to the Account session (torn down on switch) is what keeps a fresh stamp from leaking
+     * across accounts. The [HttpClient] it wraps is the shared AppScope client (bearer follows the
+     * Active Account per request, ADR-0014).
+     */
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun securityRemoteSource(client: HttpClient): SecurityRemoteSource = KtorSecurityRemoteSource(client)
+
+    // The seam the Settings slice drives: remote calls + the per-Account re-auth raise on a PAT 401
+    // (the same AppScope AccountContext/ReauthRequester pair the auth repository uses, ADR-0002).
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun securityRepository(
+        remoteSource: SecurityRemoteSource,
+        accountContext: AccountContext,
+        reauth: ReauthRequester,
+    ): SecurityRepository = DefaultSecurityRepository(remoteSource, accountContext, reauth)
 
     /**
      * The outbox replay engine (#23), driven by the app on session activation + periodically while a

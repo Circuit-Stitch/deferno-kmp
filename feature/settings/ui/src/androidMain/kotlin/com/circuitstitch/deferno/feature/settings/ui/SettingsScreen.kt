@@ -100,7 +100,6 @@ import com.circuitstitch.deferno.core.designsystem.resources.settings_category_s
 import com.circuitstitch.deferno.core.designsystem.resources.settings_category_task_behavior
 import com.circuitstitch.deferno.core.designsystem.resources.settings_coming_soon_assistant_body
 import com.circuitstitch.deferno.core.designsystem.resources.settings_coming_soon_integrations_body
-import com.circuitstitch.deferno.core.designsystem.resources.settings_coming_soon_security_body
 import com.circuitstitch.deferno.core.designsystem.resources.settings_coming_soon_title
 import com.circuitstitch.deferno.core.designsystem.resources.settings_data_export_button
 import com.circuitstitch.deferno.core.designsystem.resources.settings_data_export_description
@@ -132,7 +131,6 @@ import com.circuitstitch.deferno.core.designsystem.resources.settings_permission
 import com.circuitstitch.deferno.core.designsystem.resources.settings_privacy_analytics_description
 import com.circuitstitch.deferno.core.designsystem.resources.settings_privacy_analytics_label
 import com.circuitstitch.deferno.core.designsystem.resources.settings_row_summary_unavailable
-import com.circuitstitch.deferno.core.designsystem.resources.settings_security_open_console_button
 import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_engine_android_native
 import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_engine_automatic
 import com.circuitstitch.deferno.core.designsystem.resources.settings_speech_engine_whisper_on_device
@@ -180,17 +178,20 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Minimum height for a tappable row/control — design-principles.md "≥44–48dp" touch targets. */
-private val MinTouchTarget = 48.dp
+/** Minimum height for a tappable row/control — design-principles.md "≥44–48dp" touch targets.
+ *  Internal: shared with the sibling per-detail files (SecuritySettingsDetail). */
+internal val MinTouchTarget = 48.dp
 
 /**
  * The **Settings** Destination View (#72, ADR-0013 / ADR-0007 tier 3): a thin renderer of the
  * [SettingsComponent]'s drill-down (ADR-0003: holds no logic). It renders the category **list** at the
  * root and a **per-category detail** when one is open, switching on the component's [SettingsComponent.stack].
  *
- * Every wireframe category is listed; the backed ones are functional over the live [UserSettings],
- * the two unbacked ones (Security & 2FA, Integrations) open a gentle coming-soon stub (no dead taps,
- * ADR-0015). Appearance writes apply **live** because the same settings `Flow` drives the app theme.
+ * Every wireframe category is listed; most are functional over the live [UserSettings] (Security &
+ * 2FA renders the real screen — [SecurityDetail] — even though its cross-platform `backed` baseline
+ * is still false); the categories in [stubbedOnAndroid] open a gentle coming-soon stub (no dead
+ * taps, ADR-0015). Appearance writes apply **live** because the same settings `Flow` drives the
+ * app theme.
  */
 @Composable
 fun SettingsScreen(component: SettingsComponent, modifier: Modifier = Modifier) {
@@ -335,11 +336,7 @@ private fun CategoryDetail(
             SettingsCategory.AppPermissions -> AppPermissionsDetail(component)
             SettingsCategory.Legal -> LegalDetail(component)
             SettingsCategory.Account -> AccountDetail(component)
-            SettingsCategory.Security2FA -> ComingSoonDetail(
-                body = stringResource(Res.string.settings_coming_soon_security_body),
-                action = stringResource(Res.string.settings_security_open_console_button),
-                onAction = component::onOpenConsole,
-            )
+            SettingsCategory.Security2FA -> SecurityDetail(component)
 
             SettingsCategory.Integrations -> ComingSoonDetail(
                 body = stringResource(Res.string.settings_coming_soon_integrations_body),
@@ -822,8 +819,9 @@ private fun ComingSoonDetail(body: String, action: String? = null, onAction: (()
 // --- shared atoms ---
 
 
+/** Internal: shared with the sibling per-detail files (SecuritySettingsDetail). */
 @Composable
-private fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleMedium,
@@ -987,9 +985,18 @@ private fun SettingsCategory.rowSummary(
     }
     // The Storage row reflects the selected provider — "On-device" by default (#210).
     this == SettingsCategory.Storage -> storageProviderLabel(storageProvider.selected)
-    !backed -> stringResource(Res.string.settings_coming_soon_title)
+    stubbedOnAndroid -> stringResource(Res.string.settings_coming_soon_title)
     else -> null
 }
+
+/**
+ * The categories THIS View still stubs. `SettingsCategory.backed` is the **cross-platform baseline**
+ * (the SwiftUI bridges key their stubs off it), and Android has since landed real screens for some
+ * of it (Security & 2FA) — so which rows read "Coming soon" is a View-local opinion, kept here in
+ * one place; [CategoryDetail]'s per-category dispatch renders the matching [ComingSoonDetail].
+ */
+private val SettingsCategory.stubbedOnAndroid: Boolean
+    get() = this == SettingsCategory.Integrations
 
 /** The human label for an engine id (View concern, like the nav-suite labels) — `Automatic` leads the row. */
 @Composable

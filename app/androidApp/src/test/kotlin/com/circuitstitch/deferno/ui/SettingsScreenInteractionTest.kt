@@ -1,11 +1,13 @@
 package com.circuitstitch.deferno.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -15,8 +17,13 @@ import com.circuitstitch.deferno.core.agent.FakeRelayEntitlement
 import com.circuitstitch.deferno.core.agent.InMemoryInferenceEnginePreference
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.agent.InferenceEngineId
+import com.circuitstitch.deferno.core.data.security.SecurityRepository
+import com.circuitstitch.deferno.core.data.security.SecurityResult
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.core.model.ConnectedDevice
+import com.circuitstitch.deferno.core.model.MfaStatus
 import com.circuitstitch.deferno.core.model.ThemeFamily
+import com.circuitstitch.deferno.core.model.TotpEnrollment
 import com.circuitstitch.deferno.core.speech.SpeechAvailability
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineId
@@ -26,6 +33,7 @@ import com.circuitstitch.deferno.feature.settings.DefaultSettingsComponent
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.ui.SettingsScreen
 import kotlinx.coroutines.Dispatchers
+import kotlin.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -53,12 +61,16 @@ class SettingsScreenInteractionTest {
         editor: FakeSettingsEditor = FakeSettingsEditor(repo),
         speechEngineCatalog: SpeechEngineCatalog = FakeSpeechEngineCatalog(),
         inferenceEngineCatalog: InferenceEngineCatalog = InferenceEngineCatalog.Inert,
+        security: SecurityRepository = SecurityRepository.Inert,
+        activeTokenId: String? = null,
     ) = DefaultSettingsComponent(
         componentContext = DefaultComponentContext(LifecycleRegistry()),
         settingsRepository = repo,
         settingsEditor = editor,
         speechEngineCatalog = speechEngineCatalog,
         inferenceEngineCatalog = inferenceEngineCatalog,
+        securityRepository = security,
+        activeTokenId = activeTokenId,
         coroutineContext = Dispatchers.Unconfined,
     )
 
@@ -85,6 +97,8 @@ class SettingsScreenInteractionTest {
         composeRule.onNodeWithText("Data & Privacy").assertIsDisplayed()
         composeRule.onNodeWithText("Security & 2FA").assertIsDisplayed()
         composeRule.onNodeWithText("Integrations").assertIsDisplayed()
+        // Security & 2FA is a real screen on Android now — only Integrations still reads Coming soon.
+        composeRule.onAllNodesWithText("Coming soon").assertCountEquals(1)
     }
 
     @Test
@@ -264,5 +278,107 @@ class SettingsScreenInteractionTest {
         // The cloud option is a disabled, unselected radio — it cannot be chosen, so no inference is attempted.
         composeRule.onNodeWithText("Deferno cloud AI").assertIsNotEnabled()
         assertEquals(InferenceEngineId.Off, catalog.selected())
+    }
+
+    // --- Security & 2FA (the real screen, #72 follow-through) ---
+
+    @Test
+    fun security_unwiredHost_rendersUnavailableWithRetry_neverADeadTap() {
+        // The component's default seam is SecurityRepository.Inert — the unwired-host case.
+        setContent { SettingsScreen(component()) }
+
+        composeRule.onNodeWithText("Security & 2FA").performClick()
+
+        // The copy appears once per section (the 2FA summary AND the devices list are both unavailable).
+        composeRule.onAllNodesWithText("Security settings couldn’t be loaded", substring = true)[0].assertIsDisplayed()
+        composeRule.onNodeWithText("Retry").assertIsDisplayed().assertIsEnabled()
+    }
+
+    @Test
+    fun security_enrolledSummary_offersBackupReplaceAndTurnOff_andDisableAsksFirst() {
+        val security = ScriptedSecurityRepository(
+            status = SecurityResult.Success(MfaStatus(totpEnabled = true, emailBackup = false)),
+        )
+        setContent { SettingsScreen(component(security = security)) }
+
+        composeRule.onNodeWithText("Security & 2FA").performClick()
+        composeRule.onNodeWithText("Authenticator app is on").assertIsDisplayed()
+        composeRule.onNodeWithText("Add email backup").assertIsDisplayed()
+
+        // Turn off is destructive: it must confirm BEFORE dispatching anything.
+        composeRule.onNodeWithText("Turn off two-factor authentication").performClick()
+        composeRule.onNodeWithText("Turn off two-factor authentication?").assertIsDisplayed()
+        assertEquals(0, security.disableCalls)
+
+        composeRule.onNodeWithText("Turn off").performClick()
+        assertEquals(1, security.disableCalls)
+    }
+
+    // NOT UI-tested here: the enroll / step-up / recovery-codes dialog flows. A Compose dialog whose
+    // content holds a text field never reports idle under Robolectric (the field's cursor-blink is
+    // an infinite animation the RobolectricIdlingStrategy keeps waiting on — mainClock.autoAdvance
+    // doesn't bypass it), so every sync after such a dialog opens dies in AppNotIdleException.
+    // The full step machine — enroll → code entry → recovery codes → enrolled, step-up interrupt +
+    // exact-pending-action resume, wrong code/password — is pinned in SecuritySettingsComponentTest;
+    // the dialogs' one-liner field→intent wiring is the only thing left uncovered.
+
+    @Test
+    fun security_connectedDevices_markThisDevice_andRevokeConfirmsFirst() {
+        val security = ScriptedSecurityRepository(
+            status = SecurityResult.Success(MfaStatus(totpEnabled = false, emailBackup = false)),
+            devices = SecurityResult.Success(
+                listOf(
+                    ConnectedDevice("tok-this", "Deferno Android — Pixel 10", Instant.parse("2026-06-15T10:30:00Z"), null),
+                    ConnectedDevice("tok-other", "Deferno Desktop — newton", Instant.parse("2026-06-20T08:00:00Z"), null),
+                ),
+            ),
+        )
+        setContent { SettingsScreen(component(security = security, activeTokenId = "tok-this")) }
+
+        composeRule.onNodeWithText("Security & 2FA").performClick()
+
+        // This install's row is labeled, not revocable; the sibling offers Sign out behind a confirm.
+        composeRule.onNodeWithText("This device").assertIsDisplayed()
+        composeRule.onNodeWithText("Sign out").performClick()
+        composeRule.onNodeWithText("Sign out this device?").assertIsDisplayed()
+        assertEquals(emptyList<String>(), security.revokedTokenIds)
+
+        // Confirm inside the dialog (two "Sign out" nodes exist now — pick the dialog's via its sibling title).
+        composeRule.onAllNodesWithText("Sign out")[1].performClick()
+        assertEquals(listOf("tok-other"), security.revokedTokenIds)
+    }
+}
+
+/** A scriptable [SecurityRepository] for the View tests — results are flippable mid-test. */
+private class ScriptedSecurityRepository(
+    var status: SecurityResult<MfaStatus> = SecurityResult.Unavailable,
+    var devices: SecurityResult<List<ConnectedDevice>> = SecurityResult.Success(emptyList()),
+    var stepUp: SecurityResult<Unit> = SecurityResult.Unavailable,
+    var enrollStart: SecurityResult<TotpEnrollment> = SecurityResult.Unavailable,
+    var enrollVerify: SecurityResult<List<String>> = SecurityResult.Unavailable,
+) : SecurityRepository {
+    var disableCalls = 0
+    var lastStepUpPassword: String? = null
+    val revokedTokenIds = mutableListOf<String>()
+
+    override suspend fun status(): SecurityResult<MfaStatus> = status
+    override suspend fun stepUp(password: String): SecurityResult<Unit> {
+        lastStepUpPassword = password
+        return stepUp
+    }
+
+    override suspend fun enrollStart(): SecurityResult<TotpEnrollment> = enrollStart
+    override suspend fun enrollVerify(code: String): SecurityResult<List<String>> = enrollVerify
+    override suspend fun addEmailBackup(): SecurityResult<Unit> = SecurityResult.Unavailable
+    override suspend fun removeEmailBackup(): SecurityResult<Unit> = SecurityResult.Unavailable
+    override suspend fun disableMfa(): SecurityResult<Unit> {
+        disableCalls++
+        return SecurityResult.Success(Unit)
+    }
+
+    override suspend fun connectedDevices(): SecurityResult<List<ConnectedDevice>> = devices
+    override suspend fun revokeDevice(tokenId: String): SecurityResult<Unit> {
+        revokedTokenIds += tokenId
+        return SecurityResult.Success(Unit)
     }
 }

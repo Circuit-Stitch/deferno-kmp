@@ -37,6 +37,7 @@ import com.circuitstitch.deferno.core.speech.SpeechEngineId
 import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import com.circuitstitch.deferno.core.data.security.SecurityRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -48,10 +49,15 @@ import kotlin.coroutines.CoroutineContext
 
 /**
  * The Settings Destination's category catalog (#72, ADR-0007 tier 3 / ADR-0015). Every wireframe
- * category is listed — the **backed** ones are functional, the two **unbacked** ones ([Security2FA],
- * [Integrations]) render gentle coming-soon stubs (a deliberate, scoped exception to "no dead ends": a
- * settings list missing obvious rows reads as broken). The View renders one row per entry; tapping one
- * drills into [SettingsChild] for it.
+ * category is listed — the **backed** ones are functional, the **unbacked** ones render gentle
+ * coming-soon stubs (a deliberate, scoped exception to "no dead ends": a settings list missing
+ * obvious rows reads as broken). The View renders one row per entry; tapping one drills into
+ * [SettingsChild] for it.
+ *
+ * `backed` is the **cross-platform baseline** the SwiftUI bridges key their stubs off — [Security2FA]
+ * stays `backed = false` because iOS/macOS/desktop still stub it, even though the Android View (and
+ * the component's [security] read model here) now render the real screen over the first-party MFA
+ * contract. [Integrations] is stubbed everywhere (no client API).
  *
  * Most backed categories are driven by the Active Account's synced `UserSettings`; [SpeechEngine] is the
  * exception — a **device-local [[App setting]]** (#93, ADR-0018) over the [SettingsComponent.speechEngine]
@@ -244,6 +250,15 @@ interface SettingsComponent {
     val storageUsage: StateFlow<StorageUsage>
 
     /**
+     * The **Security & 2FA** category's state ([SettingsCategory.Security2FA]) — the 2FA summary,
+     * the connected-devices list, and the in-progress enroll/step-up flow. Server truth via the
+     * [com.circuitstitch.deferno.core.data.security.SecurityRepository] seam, fetched fresh on each
+     * drill-in (online-only — factors and device tokens have no local cache). Hosts that don't wire
+     * the seam get [SecuritySettings.Overview.Unavailable], never a crash.
+     */
+    val security: StateFlow<SecuritySettings>
+
+    /**
      * The device-local **"keep brain-dump recordings"** choice (#211) — whether a brain-dump's source
      * recording is retained as an on-device Task attachment (#210) when a draft is accepted in the Inbox.
      * An **[[App setting]]**, sourced from the AppScope preference, **not** the synced [settings]; it never
@@ -341,6 +356,47 @@ interface SettingsComponent {
      * (the opt-in is the consent); a denial is handled there and leaves the setting reflecting reality.
      */
     fun onBrainDumpNotificationsChanged(enabled: Boolean)
+
+    // --- Security & 2FA intents (server calls via the SecurityRepository seam; #72 follow-through) ---
+    // The step machine mirrors the web SecurityPane: a gated mutation the server refuses with the
+    // 403 step-up freshness error opens the StepUp flow, and a successful password re-verification
+    // resumes the exact pending action (including re-verifying the same code, same secret).
+
+    /** Re-fetch the 2FA summary + connected devices (the drill-in fetch, and the Unavailable retry). */
+    fun onSecurityRetry()
+
+    /** Begin (or replace) TOTP enrollment — on success the [SecuritySettings.Flow.EnterCode] step opens. */
+    fun onEnrollTotp()
+
+    /**
+     * Fully disable 2FA (TOTP + email backup + recovery codes). The View confirms destructively
+     * *before* calling this — the intent itself dispatches.
+     */
+    fun onDisableMfa()
+
+    /** Opt into the email-OTP backup factor. */
+    fun onAddEmailBackup()
+
+    /** Remove only the email backup factor (TOTP + recovery codes stay). */
+    fun onRemoveEmailBackup()
+
+    /** Submit the password for the open [SecuritySettings.Flow.StepUp], then resume its pending action. */
+    fun onStepUpSubmit(password: String)
+
+    /** Dismiss the step-up sheet — abandons the pending action (nothing was mutated server-side). */
+    fun onStepUpDismiss()
+
+    /** Submit the authenticator's 6-digit code for the open [SecuritySettings.Flow.EnterCode]. */
+    fun onEnrollCodeSubmit(code: String)
+
+    /** Dismiss the code-entry step — abandons enrollment (a later enroll restarts with a fresh secret). */
+    fun onEnrollDismiss()
+
+    /** Explicitly acknowledge the one-shot recovery codes — the only exit from that step. */
+    fun onRecoveryCodesAcknowledged()
+
+    /** Revoke [tokenId]'s device (signs that device out). The active device's row never offers this. */
+    fun onRevokeDevice(tokenId: String)
 
     // --- host-routed intents (Output up to the shell) ---
 
@@ -511,6 +567,14 @@ class DefaultSettingsComponent(
     // The device-local shake-to-undo preference (#230). Defaulted to an in-memory (on) preference so existing
     // Settings tests build without supplying it (like the keep-recordings default).
     private val shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
+    // The Security & 2FA seam (#72 follow-through): the first-party MFA management + connected-devices
+    // calls, AccountScope (the step-up cookie lives in the per-Account source). Defaulted to the inert
+    // repository (every call Unavailable) so existing Settings tests and unwired hosts build + render
+    // the category's unavailable state safely.
+    private val securityRepository: SecurityRepository = SecurityRepository.Inert,
+    // The Active Account's own token id (`Account.tokenId`, present for browser-minted sign-ins) —
+    // marks "this device" in the connected-devices list and withholds its revoke (sign-out owns that).
+    private val activeTokenId: String? = null,
     coroutineContext: CoroutineContext = Dispatchers.Default,
 ) : SettingsComponent, ComponentContext by componentContext {
 
@@ -591,6 +655,11 @@ class DefaultSettingsComponent(
     private val _shakeToUndo = MutableStateFlow(shakeToUndoPreference.enabled())
     override val shakeToUndo: StateFlow<Boolean> = _shakeToUndo.asStateFlow()
 
+    // The Security & 2FA step machine (#72 follow-through): the category's whole read model + intent
+    // handling live in [SecuritySettingsMachine]; this component delegates 1:1.
+    private val securityMachine = SecuritySettingsMachine(scope, securityRepository, activeTokenId)
+    override val security: StateFlow<SecuritySettings> = securityMachine.state
+
     init {
         scope.launch {
             _speechEngine.value = SpeechEngineSettings(
@@ -621,6 +690,9 @@ class DefaultSettingsComponent(
     @OptIn(DelicateDecomposeApi::class)
     override fun openCategory(category: SettingsCategory) {
         navigation.push(Config.Category(category))
+        // Security & 2FA reads fresh on every drill-in (the webui does the same deliberately — a
+        // stale "2FA off" summary for an enrolled user is the bug the status endpoint exists to fix).
+        if (category == SettingsCategory.Security2FA) securityMachine.refresh()
     }
 
     override fun onBack(): Boolean =
@@ -714,6 +786,30 @@ class DefaultSettingsComponent(
     override fun onOpenAppPermissions() = output(SettingsComponent.Output.OpenOsAppSettings)
 
     override fun onOpenConsole() = output(SettingsComponent.Output.OpenConsoleUrl)
+
+    // --- Security & 2FA (#72 follow-through): delegated 1:1 to the step machine ---
+
+    override fun onSecurityRetry() = securityMachine.refresh()
+
+    override fun onEnrollTotp() = securityMachine.enrollTotp()
+
+    override fun onDisableMfa() = securityMachine.disableMfa()
+
+    override fun onAddEmailBackup() = securityMachine.addEmailBackup()
+
+    override fun onRemoveEmailBackup() = securityMachine.removeEmailBackup()
+
+    override fun onEnrollCodeSubmit(code: String) = securityMachine.submitEnrollCode(code)
+
+    override fun onStepUpSubmit(password: String) = securityMachine.submitStepUp(password)
+
+    override fun onStepUpDismiss() = securityMachine.dismissStepUp()
+
+    override fun onEnrollDismiss() = securityMachine.dismissEnroll()
+
+    override fun onRecoveryCodesAcknowledged() = securityMachine.acknowledgeRecoveryCodes()
+
+    override fun onRevokeDevice(tokenId: String) = securityMachine.revokeDevice(tokenId)
 
     override fun onOpenProfile() = output(SettingsComponent.Output.OpenProfile)
 

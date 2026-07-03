@@ -15,6 +15,7 @@ import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
+import com.circuitstitch.deferno.core.data.security.SecurityRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
@@ -80,6 +81,14 @@ abstract class AccountComponent(
      * chain's compile-time validation.
      */
     abstract val settingsRepository: SettingsRepository
+
+    /**
+     * The Security & 2FA seam (Settings → Security): the first-party MFA management + connected-
+     * devices calls, with the step-up cookie held per Account session (see AccountDataBindings —
+     * AccountScope deliberately, so an Account switch discards the step-up freshness stamp).
+     * Exposing it anchors anvil's compile-time validation and gives the shell its accessor.
+     */
+    abstract val securityRepository: SecurityRepository
 
     /**
      * The recurring-kind read seams (#71): the local stores are the read interface — reads are local
