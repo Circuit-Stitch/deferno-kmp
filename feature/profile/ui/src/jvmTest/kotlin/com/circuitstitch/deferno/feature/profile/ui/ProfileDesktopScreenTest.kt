@@ -67,7 +67,7 @@ class ProfileDesktopScreenTest {
         val fake = FakeProfileComponent(ProfileState.Unavailable)
         setContent { Themed { ProfileDesktopScreen(fake) } }
 
-        onNodeWithText("Can’t reach Deferno").assertExists()
+        onNodeWithText("Can't reach Deferno").assertExists()
         // Sign-out works offline (ADR-0009): the Account controls render even when /auth/me failed.
         onNodeWithText("Sign out").assertExists()
 

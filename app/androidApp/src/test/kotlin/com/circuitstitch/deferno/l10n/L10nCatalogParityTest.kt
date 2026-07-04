@@ -7,15 +7,17 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Keeps the two localization catalogs in lockstep so a user-facing string can't silently drift onto
- * one platform only:
- *  - Compose (the source of truth): core/designsystem/.../composeResources/values/strings.xml
+ * Keeps the localization catalogs in lockstep so a user-facing string can't silently drift onto
+ * one platform (or one locale) only:
+ *  - Compose (the source of truth): core/designsystem/.../composeResources/values{,-es,-de,-hi,-pt}/strings.xml
  *  - Apple SwiftUI:                 app/shared-l10n/Localizable.xcstrings (symlinked into iosApp + macosApp)
  *
  * A key in one catalog but not the other fails the test unless it is listed in
  * `app/shared-l10n/l10n-parity-overrides.txt` as a deliberate platform-only string. Stale override
  * entries (the divergence they cover is gone) also fail, so the grandfathered baseline shrinks as gaps
- * get reconciled instead of rotting.
+ * get reconciled instead of rotting. Within Compose, the four translated locale files must carry
+ * exactly the English key set (no overrides — Compose falls back to English silently, so a hole
+ * here is invisible at runtime).
  *
  * Pure file IO + set math (no Android/Robolectric) so it runs on the JVM-fast `check` path CI already
  * invokes. Reads the xcstrings with a real JSON parser, not indentation-regex, so reformatting the
@@ -28,14 +30,17 @@ class L10nCatalogParityTest {
             .firstOrNull { File(it, "settings.gradle.kts").exists() }
             ?: error("repo root (settings.gradle.kts) not found from ${System.getProperty("user.dir")}")
 
-    /** Keys in the English Compose catalog (`<string>` / `<plurals>` names) — the source of truth. */
-    private val composeKeys: Set<String> =
-        repoRoot.resolve("core/designsystem/src/commonMain/composeResources/values/strings.xml")
+    /** Keys (`<string>` / `<plurals>` names) in one Compose locale dir, e.g. `values` or `values-hi`. */
+    private fun composeKeysOf(valuesDir: String): Set<String> =
+        repoRoot.resolve("core/designsystem/src/commonMain/composeResources/$valuesDir/strings.xml")
             .readText()
             .let { xml ->
                 Regex("""<(?:string|plurals)\s+name="([^"]+)"""")
                     .findAll(xml).map { it.groupValues[1] }.toSet()
             }
+
+    /** Keys in the English Compose catalog — the source of truth. */
+    private val composeKeys: Set<String> = composeKeysOf("values")
 
     /** Top-level keys in the Apple xcstrings catalog. */
     private val appleKeys: Set<String> =
@@ -78,6 +83,21 @@ class L10nCatalogParityTest {
                 "app/shared-l10n/Localizable.xcstrings, or mark 'android <key>' in " +
                 "app/shared-l10n/l10n-parity-overrides.txt:\n" + missing.joinToString("\n"),
             missing.isEmpty(),
+        )
+    }
+
+    @Test
+    fun composeLocalesStayInLockstep() {
+        val drift = listOf("es", "de", "hi", "pt").flatMap { locale ->
+            val keys = composeKeysOf("values-$locale")
+            (composeKeys - keys).sorted().map { "values-$locale is missing $it" } +
+                (keys - composeKeys).sorted().map { "values-$locale has $it with no English source" }
+        }
+        assertTrue(
+            "Compose locale files out of lockstep with values/strings.xml — every key must exist in " +
+                "all 5 locales (Compose silently falls back to English on a hole):\n" +
+                drift.joinToString("\n"),
+            drift.isEmpty(),
         )
     }
 
