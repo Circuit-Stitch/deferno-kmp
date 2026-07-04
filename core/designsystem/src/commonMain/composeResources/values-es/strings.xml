@@ -765,6 +765,9 @@ Gracias.</string>
     <string name="common_pause">Pausar</string>
     <string name="common_pinned">Fijada</string>
     <string name="draft_extract_button">Extraer</string>
+    <string name="draft_extract_error_malformed">No se pudo leer la respuesta del modelo. Inténtalo de nuevo.</string>
+    <string name="draft_extract_error_not_configured">El modelo en el dispositivo aún no está configurado.</string>
+    <string name="draft_extract_error_transport">No se pudo contactar con el modelo. Inténtalo de nuevo.</string>
     <string name="draft_extract_intro">En el dispositivo (Apple Intelligence). Los borradores son propuestas — no se guarda nada.</string>
     <string name="draft_extract_menu_item">Extraer borradores de tareas…</string>
     <string name="draft_extract_menu_section">Apple Intelligence</string>

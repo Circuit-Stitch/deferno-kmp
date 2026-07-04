@@ -233,6 +233,9 @@ dependencies {
     // seam typed in core:domain (CreateItem / CommandResult), so name it for the test classpath only.
     testImplementation(project(":core:domain"))
     testImplementation(libs.junit)
+    // L10nCatalogParityTest parses the Apple Localizable.xcstrings (JSON) to diff its keys against the
+    // Compose catalog — a real parser, not indentation-regex, so reformatting the catalog can't fool it.
+    testImplementation(libs.kotlinx.serialization.json)
     testImplementation(libs.robolectric)
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)

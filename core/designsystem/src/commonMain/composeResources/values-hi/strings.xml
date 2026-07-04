@@ -785,6 +785,9 @@
     <string name="common_pause">रोकें</string>
     <string name="common_pinned">पिन किया गया</string>
     <string name="draft_extract_button">निकालें</string>
+    <string name="draft_extract_error_malformed">मॉडल की प्रतिक्रिया नहीं पढ़ी जा सकी। फिर से प्रयास करें।</string>
+    <string name="draft_extract_error_not_configured">डिवाइस पर मॉडल अभी सेट अप नहीं है।</string>
+    <string name="draft_extract_error_transport">मॉडल तक नहीं पहुँचा जा सका। फिर से प्रयास करें।</string>
     <string name="draft_extract_intro">डिवाइस पर (Apple Intelligence)। ड्राफ़्ट सिर्फ़ प्रस्ताव हैं — कुछ भी सेव नहीं होता।</string>
     <string name="draft_extract_menu_item">ड्राफ़्ट कार्य निकालें…</string>
     <string name="draft_extract_menu_section">Apple Intelligence</string>

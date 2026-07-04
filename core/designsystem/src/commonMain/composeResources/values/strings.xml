@@ -80,8 +80,8 @@
     <string name="auth_browser_signed_in_body">You can close this tab and return to the app.</string>
     <!-- Served as HTML over a loopback socket (JVM + macOS duplicates share this) — needs an injected-string localization path, not Compose resources -->
     <string name="auth_browser_signed_in_title">You're signed in to Deferno.</string>
-    <string name="auth_error_invalid_token">That token isn’t valid. Check it and try again.</string>
-    <string name="auth_error_unavailable">Couldn’t reach Deferno. Check your connection and try again.</string>
+    <string name="auth_error_invalid_token">That token isn't valid. Check it and try again.</string>
+    <string name="auth_error_unavailable">Couldn't reach Deferno. Check your connection and try again.</string>
     <string name="auth_retry_prompt">Need to try again?</string>
     <!-- Merged with the Profile variant ('…to refresh your details.') — trivially different phrasing -->
     <string name="auth_session_expired_body">Your sign-in for this account has ended. Sign in again to continue.</string>
@@ -101,7 +101,7 @@
     <string name="auth_token_show">Show</string>
     <string name="auth_unavailable_body">Check your connection and try again.</string>
     <!-- Curly apostrophe; keep the brand name -->
-    <string name="auth_unavailable_title">Can’t reach Deferno</string>
+    <string name="auth_unavailable_title">Can't reach Deferno</string>
     <!-- Developer-only affordance -->
     <string name="auth_use_token_instead">Use a token instead</string>
 
@@ -486,10 +486,10 @@
     <string name="profile_org_personal_chip">Personal</string>
     <!-- Profile ReauthRequired notice body — differs from auth_session_expired_body ('…to continue.'); used by ProfileScreen.kt (androidMain) and ProfileDesktopScreen.kt (jvmMain) -->
     <string name="profile_session_expired_body">Your sign-in for this account has ended. Sign in again to refresh your details.</string>
-    <string name="profile_sign_out_confirm_body">This removes this account and its data from this device. You’ll need to sign in again to use it here.</string>
+    <string name="profile_sign_out_confirm_body">This removes this account and its data from this device. You'll need to sign in again to use it here.</string>
     <!-- Arg = account label -->
     <string name="profile_sign_out_confirm_title">Sign out of %1$s?</string>
-    <string name="profile_unavailable_body">Your profile details couldn’t load. Check your connection and try again.</string>
+    <string name="profile_unavailable_body">Your profile details couldn't load. Check your connection and try again.</string>
 
     <!-- ── search ─────────────────────────────────────────────── -->
     <string name="search_add_tag_button">Add tag</string>
@@ -545,9 +545,9 @@
     <string name="settings_agent_engine_off">Off</string>
     <string name="settings_agent_engine_on_device_basics">On-device basics</string>
     <!-- AI-consent copy (AC1) — legally sensitive: translations must preserve the on-device vs off-device distinction exactly; get legal review per locale -->
-    <string name="settings_agent_intro">The Agent can turn a brain dump into draft tasks and suggest changes to your plan. Choose which engine it uses — or turn it off. An on-device engine keeps your text on this device; Deferno’s cloud AI sends it off your device to generate proposals (you always review before anything is saved). It’s off by default, and this choice stays on this device, not synced to your account.</string>
+    <string name="settings_agent_intro">The Agent can turn a brain dump into draft tasks and suggest changes to your plan. Choose which engine it uses — or turn it off. An on-device engine keeps your text on this device; Deferno's cloud AI sends it off your device to generate proposals (you always review before anything is saved). It's off by default, and this choice stays on this device, not synced to your account.</string>
     <!-- Consent-relevant — keep precise -->
-    <string name="settings_agent_note_cloud">Sends your text off-device to Deferno’s hosted AI</string>
+    <string name="settings_agent_note_cloud">Sends your text off-device to Deferno's hosted AI</string>
     <string name="settings_agent_note_on_device">Runs on this device</string>
     <string name="settings_agent_note_premium">Premium — not available for your account yet</string>
     <string name="settings_agent_off_note">The Agent stays off. Nothing is sent anywhere.</string>
@@ -570,9 +570,9 @@
     <string name="settings_category_speech_engine">Speech engine</string>
     <string name="settings_category_storage">Storage</string>
     <string name="settings_category_task_behavior">Task behavior</string>
-    <string name="settings_coming_soon_assistant_body">The Assistant is available on iPhone for now. It’s coming to Android soon.</string>
+    <string name="settings_coming_soon_assistant_body">The Assistant is available on iPhone for now. It's coming to Android soon.</string>
     <string name="settings_coming_soon_integrations_body">Connect Deferno with the other tools you use. Integrations are on the way.</string>
-    <string name="settings_coming_soon_security_body">Two-factor authentication and security are managed by your identity provider. We’ll bring these controls into the app soon.</string>
+    <string name="settings_coming_soon_security_body">Two-factor authentication and security are managed by your identity provider. We'll bring these controls into the app soon.</string>
     <!-- ComingSoonDetail title + category-row summary -->
     <string name="settings_coming_soon_title">Coming soon</string>
     <string name="settings_data_export_button">Export your data</string>
@@ -582,7 +582,7 @@
     <string name="settings_data_export_menu_full_backup">Full backup — coming soon</string>
     <string name="settings_data_export_web_button">Export or import your data</string>
     <!-- Desktop-only variant (#313 web-redirect) -->
-    <string name="settings_data_export_web_description">Export and import run in the Deferno web app — there’s no in-app endpoint yet. Open the web app to manage your data.</string>
+    <string name="settings_data_export_web_description">Export and import run in the Deferno web app — there's no in-app endpoint yet. Open the web app to manage your data.</string>
     <string name="settings_data_your_data_section">Your data</string>
     <string name="settings_done_visibility_always">Always</string>
     <string name="settings_done_visibility_dashboard">On the dashboard</string>
@@ -614,7 +614,7 @@ Thank you.</string>
     <string name="settings_legal_view_privacy_button">View Privacy Policy</string>
     <string name="settings_legal_view_terms_button">View Terms of Service</string>
     <!-- Android-only -->
-    <string name="settings_permissions_intro">Manage Deferno’s notifications, storage, and other permissions in your device settings.</string>
+    <string name="settings_permissions_intro">Manage Deferno's notifications, storage, and other permissions in your device settings.</string>
     <string name="settings_permissions_open_button">Open app settings</string>
     <string name="settings_privacy_analytics_description">Help improve Deferno by sharing anonymous usage data.</string>
     <string name="settings_privacy_analytics_label">Analytics &amp; tracking</string>
@@ -623,7 +623,7 @@ Thank you.</string>
     <string name="settings_security_open_console_button">Open security console</string>
     <!-- Security & 2FA (the native SecurityPane port) -->
     <string name="settings_security_2fa_section">Two-factor authentication</string>
-    <string name="settings_security_action_failed">That didn’t go through. Check your connection and try again.</string>
+    <string name="settings_security_action_failed">That didn't go through. Check your connection and try again.</string>
     <!-- Arg = localized date (settings_security_device_date_pattern) -->
     <string name="settings_security_device_added">Added %1$s</string>
     <!-- java.time pattern for device dates -->
@@ -651,9 +651,9 @@ Thank you.</string>
     <string name="settings_security_enroll_open_app">Open authenticator app</string>
     <string name="settings_security_enroll_title">Set up your authenticator</string>
     <string name="settings_security_enroll_verify">Verify</string>
-    <string name="settings_security_enroll_wrong_code">That code didn’t match. Enter the current code from your app.</string>
+    <string name="settings_security_enroll_wrong_code">That code didn't match. Enter the current code from your app.</string>
     <string name="settings_security_off_body">Protect your account with an authenticator app: each sign-in will also ask for a 6-digit code.</string>
-    <string name="settings_security_recovery_ack">I’ve saved these codes</string>
+    <string name="settings_security_recovery_ack">I've saved these codes</string>
     <string name="settings_security_recovery_body">If you lose your authenticator, a recovery code is the only way back into your account. Each code works once. Store them somewhere safe.</string>
     <string name="settings_security_recovery_copy">Copy all</string>
     <string name="settings_security_recovery_title">Save your recovery codes</string>
@@ -663,12 +663,12 @@ Thank you.</string>
     <string name="settings_security_stepup_body">Enter your account password to continue.</string>
     <string name="settings_security_stepup_continue">Continue</string>
     <string name="settings_security_stepup_password_label">Password</string>
-    <string name="settings_security_stepup_title">Confirm it’s you</string>
-    <string name="settings_security_stepup_wrong">That password didn’t match. Try again.</string>
+    <string name="settings_security_stepup_title">Confirm it's you</string>
+    <string name="settings_security_stepup_wrong">That password didn't match. Try again.</string>
     <string name="settings_security_totp_on">Authenticator app is on</string>
     <string name="settings_security_totp_replace">Replace authenticator app</string>
     <string name="settings_security_totp_replace_note">Replacing also regenerates your recovery codes.</string>
-    <string name="settings_security_unavailable_body">Security settings couldn’t be loaded. Check your connection and try again.</string>
+    <string name="settings_security_unavailable_body">Security settings couldn't be loaded. Check your connection and try again.</string>
     <string name="settings_speech_engine_android_native">Android (on-device)</string>
     <string name="settings_speech_engine_automatic">Automatic</string>
     <!-- Desktop Sidecar engine -->
@@ -677,17 +677,17 @@ Thank you.</string>
     <string name="settings_speech_engine_whisper">Whisper</string>
     <!-- 'Whisper' is a model name — keep; Android wording -->
     <string name="settings_speech_engine_whisper_on_device">Whisper (on-device)</string>
-    <string name="settings_speech_intro">Choose how dictation turns your voice into text. This stays on this device and isn’t synced to your account.</string>
+    <string name="settings_speech_intro">Choose how dictation turns your voice into text. This stays on this device and isn't synced to your account.</string>
     <string name="settings_speech_note_automatic">Use the best engine available on this device</string>
     <string name="settings_speech_note_downloading">Downloading…</string>
     <string name="settings_speech_note_no_engine">Not available on this device</string>
     <string name="settings_speech_note_preparing">Preparing…</string>
     <string name="settings_speech_note_unsupported_locale">Not available for your language</string>
-    <string name="settings_storage_intro">Choose where your attachments are stored. On-device keeps the files on this device and works offline. This choice stays on this device and isn’t synced to your account. (Feedback you send the team is always uploaded to Deferno so we can see it.)</string>
+    <string name="settings_storage_intro">Choose where your attachments are stored. On-device keeps the files on this device and works offline. This choice stays on this device and isn't synced to your account. (Feedback you send the team is always uploaded to Deferno so we can see it.)</string>
     <string name="settings_storage_keep_recordings_description">Save the original voice recording on this device when you accept a brain dump, so you can listen back later.</string>
     <string name="settings_storage_keep_recordings_label">Keep brain dump recordings</string>
     <string name="settings_storage_note_coming_later">Coming later</string>
-    <string name="settings_storage_note_deferno_backend">Stores files on Deferno’s servers</string>
+    <string name="settings_storage_note_deferno_backend">Stores files on Deferno's servers</string>
     <string name="settings_storage_note_on_device">Keeps files on this device; works offline</string>
     <string name="settings_storage_provider_deferno_backend">Deferno backend</string>
     <!-- Brand — translatable=false -->
@@ -697,7 +697,7 @@ Thank you.</string>
     <string name="settings_storage_provider_on_device">On-device</string>
     <string name="settings_task_behavior_drag_drop_description">Reorder tasks by dragging. This is still being polished.</string>
     <string name="settings_task_behavior_drag_drop_label">Drag and drop (experimental)</string>
-    <string name="settings_task_behavior_shake_undo_description">Shake your phone to undo the last task move. You’ll be asked to confirm first.</string>
+    <string name="settings_task_behavior_shake_undo_description">Shake your phone to undo the last task move. You'll be asked to confirm first.</string>
     <!-- Android-only -->
     <string name="settings_task_behavior_shake_undo_label">Shake to undo</string>
     <!-- Theme name — brand, translatable=false -->
@@ -1011,6 +1011,9 @@ Thank you.</string>
     <string name="common_pause">Pause</string>
     <string name="common_pinned">Pinned</string>
     <string name="draft_extract_button">Extract</string>
+    <string name="draft_extract_error_malformed">Couldn't read the model's response. Try again.</string>
+    <string name="draft_extract_error_not_configured">The on-device model isn't set up yet.</string>
+    <string name="draft_extract_error_transport">Couldn't reach the model. Try again.</string>
     <string name="draft_extract_intro">On-device (Apple Intelligence). Drafts are proposals — nothing is saved.</string>
     <string name="draft_extract_menu_item">Extract Draft Tasks…</string>
     <string name="draft_extract_menu_section">Apple Intelligence</string>
