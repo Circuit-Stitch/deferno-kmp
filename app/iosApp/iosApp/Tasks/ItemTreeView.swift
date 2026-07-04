@@ -40,7 +40,7 @@ struct ItemTreeView: View {
     ///  - **All** (2) → everything (terminal rows still show, de-emphasized).
     @State private var filterIndex: Int = 2
 
-    private static let filters = ["In today", "Active", "All"]
+    private static let filters = [L.string("tasks_filter_in_today"), L.string("tasks_filter_active"), L.string("tasks_filter_all")]
 
     init(
         component: ItemTreeComponent,
@@ -74,7 +74,7 @@ struct ItemTreeView: View {
                     }
 
                     if value.isRefreshing {
-                        LoadingStrip(label: "Refreshing…")
+                        LoadingStrip(label: L.string("tasks_tree_refreshing"))
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
@@ -104,7 +104,7 @@ struct ItemTreeView: View {
 
                     // "Add a tree" footer (#231) — only outside move mode (the list is calm during a move).
                     if !inMoveMode {
-                        DashedAddButton(title: "Add a tree", action: onAdd)
+                        DashedAddButton(title: L.string("tasks_tree_add_tree"), action: onAdd)
                             .padding(.horizontal, Layout.gutter)
                             .padding(.vertical, 12)
                             .listRowInsets(EdgeInsets())
@@ -159,11 +159,11 @@ struct ItemTreeView: View {
         VStack(alignment: .leading, spacing: 12) {
             // iPad column identity — compact gets this from the large nav title instead.
             if showsColumnTitle {
-                Text("Everything")
+                Text(L.string("tasks_tree_title"))
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(colors.onSurface)
             }
-            MonoMeta(treeCount == 1 ? "1 tree" : "\(treeCount) trees")
+            MonoMeta(L.plural("tasks_tree_count", treeCount))
             HStack(spacing: 10) {
                 SegmentedFilter(
                     options: Self.filters,
@@ -176,14 +176,14 @@ struct ItemTreeView: View {
                 // them (still marked). Flips `showBlocked` on the shared component, never a client-side filter
                 // (that would dangle the filigree rails). Same capsule language as the segment pills.
                 Button { component.onSetShowBlocked(show: !showBlocked) } label: {
-                    Text("Show blocked")
+                    Text(L.string("tasks_tree_show_blocked"))
                         .font(.footnote.weight(showBlocked ? .semibold : .regular))
                         .foregroundStyle(showBlocked ? colors.onPrimary : colors.inkMuted)
                         .padding(.horizontal, 14).padding(.vertical, 7)
                         .background(showBlocked ? colors.primary : colors.surfaceVariant, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Show blocked")
+                .accessibilityLabel(L.string("tasks_tree_show_blocked"))
                 .accessibilityAddTraits(showBlocked ? [.isButton, .isSelected] : .isButton)
             }
         }
@@ -231,12 +231,12 @@ struct ItemTreeView: View {
     @ViewBuilder
     private func emptyState(allEmpty: Bool, searching: Bool) -> some View {
         EmptyStateView(
-            title: allEmpty ? "No trees yet" : (searching ? "No matches" : "Nothing to show here"),
+            title: allEmpty ? L.string("tasks_tree_empty_title") : (searching ? L.string("search_no_matches_title") : L.string("tasks_tree_filtered_empty_title")),
             message: allEmpty
-                ? "When you add a tree, it shows up here. One small step at a time."
+                ? L.string("tasks_tree_empty_body")
                 : (searching
-                    ? "No tree matches your search. Clear it to see them all."
-                    : "Everything here is done. Switch to “All” to see it again.")
+                    ? L.string("tasks_tree_search_empty_body")
+                    : L.string("tasks_tree_filtered_empty_body"))
         )
     }
 
@@ -296,10 +296,10 @@ private struct TreeRow: View {
         .contextMenu { if !inMoveMode { rowMenu } }
         // Add subtask (#231): a calm inline title prompt — Add forwards a trimmed, non-empty title (always a
         // Task child) and clears. Driven by the menu's `@State` flag (a context menu can't present this itself).
-        .alert("Add a subtask", isPresented: $showingAddSubtask) {
-            TextField("Subtask of \(row.item.title)", text: $addSubtaskText)
-            Button("Cancel", role: .cancel) { addSubtaskText = "" }
-            Button("Add") {
+        .alert(L.string("tasks_add_subtask_dialog_title"), isPresented: $showingAddSubtask) {
+            TextField(L.format("tasks_add_subtask_placeholder", row.item.title), text: $addSubtaskText)
+            Button(L.string("common_cancel"), role: .cancel) { addSubtaskText = "" }
+            Button(L.string("common_add")) {
                 let trimmed = addSubtaskText.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmed.isEmpty { component.onAddSubtask(parentId: row.item.id, title: trimmed) }
                 addSubtaskText = ""
@@ -307,16 +307,16 @@ private struct TreeRow: View {
         }
         // The destructive Delete, gated behind a confirmation (mirrors the Task-detail kebab's confirm).
         .confirmationDialog(
-            "Delete “\(row.item.title)”?",
+            L.format("tasks_delete_item_confirm_title", row.item.title),
             isPresented: $confirmingDelete,
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) { component.onDelete(id: row.item.id) }
-            Button("Cancel", role: .cancel) {}
+            Button(L.string("common_delete"), role: .destructive) { component.onDelete(id: row.item.id) }
+            Button(L.string("common_cancel"), role: .cancel) {}
         } message: {
-            Text("This can't be undone.")
+            Text(L.string("common_cannot_be_undone"))
         }
-        .accessibilityHint(inMoveMode ? "" : "Long press for actions")
+        .accessibilityHint(inMoveMode ? "" : L.string("tasks_row_long_press_hint"))
     }
 
     /// The menu body — mirrors the Compose `ItemTreeRow` DropdownMenu order exactly. Destructive entries use
@@ -329,21 +329,21 @@ private struct TreeRow: View {
         // 1. Open — Task only (the other kinds have no detail surface yet).
         if isTask {
             Button { component.onOpenDetail(id: item.id, kind: item.kind) } label: {
-                Label("Open", systemImage: "chevron.right")
+                Label(L.string("tasks_menu_open"), systemImage: "chevron.right")
             }
         }
         // 2. Add subtask (any kind — the child is always a Task).
         Button { addSubtaskText = ""; showingAddSubtask = true } label: {
-            Label("Add subtask", systemImage: "plus")
+            Label(L.string("tasks_menu_add_subtask"), systemImage: "plus")
         }
         // 3. Move (enter modal move mode).
         Button { component.onEnterMoveMode(id: item.id) } label: {
-            Label("Move", systemImage: "arrow.up.arrow.down")
+            Label(L.string("tasks_menu_move"), systemImage: "arrow.up.arrow.down")
         }
         // 4. Undo move — only when a move is undoable.
         if canUndo {
             Button { component.undoLastMove() } label: {
-                Label("Undo move", systemImage: "arrow.uturn.backward")
+                Label(L.string("tasks_menu_undo_move"), systemImage: "arrow.uturn.backward")
             }
         }
 
@@ -351,23 +351,23 @@ private struct TreeRow: View {
             // 5/6. Pin↔Unpin + plan toggle — need the joined values, so they render once menuState is present.
             if let menuState {
                 Button { component.onSetPinned(id: item.id, pinned: !menuState.pinned) } label: {
-                    Label(menuState.pinned ? "Unpin" : "Pin",
+                    Label(menuState.pinned ? L.string("tasks_menu_unpin") : L.string("tasks_menu_pin"),
                           systemImage: menuState.pinned ? "pin.slash" : "pin")
                 }
                 Button { component.onSetInPlan(id: item.id, inPlan: !menuState.inPlan) } label: {
-                    Label(menuState.inPlan ? "Remove from today's plan" : "Add to today's plan",
+                    Label(menuState.inPlan ? L.string("tasks_menu_remove_from_plan") : L.string("tasks_menu_add_to_plan"),
                           systemImage: menuState.inPlan ? "calendar.badge.minus" : "calendar.badge.plus")
                 }
                 // 7/8. Status block: the Task working-state verbs, hiding the one it's already in.
                 Divider()
                 if menuState.workingState != WorkingState.inProgress {
                     Button { component.onSetWorkingState(id: item.id, target: WorkingState.inProgress) } label: {
-                        Label("Start working", systemImage: "play")
+                        Label(L.string("tasks_menu_start_working"), systemImage: "play")
                     }
                 }
                 if menuState.workingState != WorkingState.done {
                     Button { component.onSetWorkingState(id: item.id, target: WorkingState.done) } label: {
-                        Label("Mark done", systemImage: "checkmark")
+                        Label(L.string("tasks_menu_mark_done"), systemImage: "checkmark")
                     }
                 }
                 // The app's word for WorkingState.Dropped is "Set aside" (one term per concept).
@@ -375,14 +375,14 @@ private struct TreeRow: View {
                     Button(role: .destructive) {
                         component.onSetWorkingState(id: item.id, target: WorkingState.dropped)
                     } label: {
-                        Label("Set aside", systemImage: "minus.circle")
+                        Label(L.string("tasks_set_aside"), systemImage: "minus.circle")
                     }
                 }
             }
             // 9/10. Destructive Delete (the row confirms first). Needs only the id, so it rides the kind gate.
             Divider()
             Button(role: .destructive) { confirmingDelete = true } label: {
-                Label("Delete (Permanent!)", systemImage: "trash")
+                Label(L.string("tasks_menu_delete_permanent"), systemImage: "trash")
             }
         } else if let definitionState = item.definitionState {
             // Non-Task status block (#299): Activate / Send to review / Archive on the recurring kind's
@@ -391,19 +391,19 @@ private struct TreeRow: View {
             Divider()
             if definitionState != DefinitionState.active {
                 Button { component.onSetDefinitionState(id: item.id, target: DefinitionState.active) } label: {
-                    Label("Activate", systemImage: "tray.and.arrow.up")
+                    Label(L.string("tasks_menu_activate"), systemImage: "tray.and.arrow.up")
                 }
             }
             if definitionState != DefinitionState.inReview {
                 Button { component.onSetDefinitionState(id: item.id, target: DefinitionState.inReview) } label: {
-                    Label("Send to review", systemImage: "eye")
+                    Label(L.string("tasks_menu_send_to_review"), systemImage: "eye")
                 }
             }
             if definitionState != DefinitionState.archived {
                 Button(role: .destructive) {
                     component.onSetDefinitionState(id: item.id, target: DefinitionState.archived)
                 } label: {
-                    Label("Archive", systemImage: "archivebox")
+                    Label(L.string("tasks_menu_archive"), systemImage: "archivebox")
                 }
             }
         }
@@ -426,13 +426,13 @@ private struct MoveModeBar: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            MoveControl(icon: .moveUp, label: "Move up", enabled: move.canMoveUp, action: onMoveUp)
-            MoveControl(icon: .moveDown, label: "Move down", enabled: move.canMoveDown, action: onMoveDown)
-            MoveControl(icon: .outdent, label: "Outdent", enabled: move.canOutdent, action: onOutdent)
-            MoveControl(icon: .indent, label: "Indent", enabled: move.canIndent, action: onIndent)
+            MoveControl(icon: .moveUp, label: L.string("tasks_move_up"), enabled: move.canMoveUp, action: onMoveUp)
+            MoveControl(icon: .moveDown, label: L.string("tasks_move_down"), enabled: move.canMoveDown, action: onMoveDown)
+            MoveControl(icon: .outdent, label: L.string("tasks_move_outdent"), enabled: move.canOutdent, action: onOutdent)
+            MoveControl(icon: .indent, label: L.string("tasks_move_indent"), enabled: move.canIndent, action: onIndent)
             Spacer(minLength: 8)
             Button(action: onDone) {
-                Text("Done")
+                Text(L.string("calendar_action_done"))
                     .font(.body.weight(.semibold))
                     .foregroundStyle(colors.primary)
                     .frame(minHeight: Layout.minTouchTarget)
@@ -486,7 +486,7 @@ private struct UndoSnackbar: View {
         Group {
             if !dismissed {
                 HStack(spacing: 12) {
-                    Text("Moved")
+                    Text(L.string("tasks_moved_snackbar"))
                         .font(.subheadline)
                         .foregroundStyle(colors.onSurface)
                     Spacer(minLength: 8)
@@ -496,7 +496,7 @@ private struct UndoSnackbar: View {
                     } label: {
                         HStack(spacing: 6) {
                             DefernoIcon.undo.image(size: 14)
-                            Text("Undo \(operation)")
+                            Text(L.format("tasks_undo_operation_confirm_title", operation))
                         }
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(colors.primary)
@@ -514,7 +514,7 @@ private struct UndoSnackbar: View {
                 )
                 .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel("Moved. Undo \(operation) available.")
+                .accessibilityLabel(L.format("tasks_moved_undo_available", operation))
             }
         }
         // Re-arm whenever a new move is recorded; auto-dismiss after a calm interval.

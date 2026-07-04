@@ -25,9 +25,9 @@ struct NewItemView: View {
         let value = state.value
         VStack(spacing: 0) {
             HStack {
-                Text("New").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                Text(L.string("shell_new")).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
                 Spacer()
-                Button("Cancel") { component.dismiss() }
+                Button(L.string("common_cancel")) { component.dismiss() }
             }
             .padding(.horizontal, Layout.gutter)
             .frame(minHeight: 56)
@@ -65,31 +65,31 @@ struct NewItemView: View {
             ForEach(ShellBridgeKt.itemKinds().indices, id: \.self) { i in
                 let kind = ShellBridgeKt.itemKinds()[i]
                 let selected = ShellBridgeKt.itemKindsEqual(a: value.selectedKind, b: kind)
-                Button(kind.name) { component.selectKind(kind: kind) }
+                Button(L.kindLabel(kind.name)) { component.selectKind(kind: kind) }
                     .font(.subheadline)
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(selected ? colors.primary : colors.surfaceVariant, in: Capsule())
                     .foregroundStyle(selected ? colors.onPrimary : colors.onSurface)
             }
         }
-        .accessibilityLabel("Kind picker")
+        .accessibilityLabel(L.string("new_kind_picker_cd"))
     }
 
     private func titleField(_ value: NewState) -> some View {
         HStack(spacing: 8) {
-            TextField("Title", text: Binding(get: { state.value.title }, set: { component.setTitle(title: $0) }))
+            TextField(L.string("new_title_label"), text: Binding(get: { state.value.title }, set: { component.setTitle(title: $0) }))
                 .textFieldStyle(.roundedBorder)
-                .accessibilityLabel("Title")
+                .accessibilityLabel(L.string("new_title_label"))
             micButton(.title, value)
         }
     }
 
     private func notesField(_ value: NewState) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            TextField("Notes", text: Binding(get: { state.value.notes }, set: { component.setNotes(notes: $0) }), axis: .vertical)
+            TextField(L.string("new_notes_label"), text: Binding(get: { state.value.notes }, set: { component.setNotes(notes: $0) }), axis: .vertical)
                 .lineLimit(2...5)
                 .textFieldStyle(.roundedBorder)
-                .accessibilityLabel("Notes")
+                .accessibilityLabel(L.string("new_notes_label"))
             micButton(.notes, value)
         }
     }
@@ -108,7 +108,7 @@ struct NewItemView: View {
                     .foregroundStyle(listening ? colors.primary : colors.inkMuted)
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel(listening ? "Stop dictation" : "Dictate")
+            .accessibilityLabel(listening ? L.string("new_mic_stop_dictation_cd") : L.string("new_mic_dictate_cd"))
         }
     }
 
@@ -122,11 +122,11 @@ struct NewItemView: View {
     }
 
     private var dateField: some View {
-        TextField("Date (optional, e.g. 2026-06-08)", text: $dateText)
+        TextField(L.string("new_date_label"), text: $dateText)
             .textFieldStyle(.roundedBorder)
             .autocorrectionDisabled(true)
             .onChange(of: dateText) { _ in component.setDate(date: ShellBridgeKt.parseLocalDate(text: dateText)) }
-            .accessibilityLabel("Date")
+            .accessibilityLabel(L.string("new_date_cd"))
     }
 
     /// The deadline time-of-day row (#348) — shown for the non-Event kinds alongside the date, mirroring
@@ -140,7 +140,7 @@ struct NewItemView: View {
         let minute = Int(ShellBridgeKt.doNewDeadlineTimeMinute(state: value))
         let hasTime = hour >= 0 && minute >= 0
         HStack(spacing: 8) {
-            Text("Time")
+            Text(L.string("tasks_detail_property_time"))
                 .font(.subheadline)
                 .foregroundStyle(colors.onSurfaceVariant)
             Spacer()
@@ -151,14 +151,14 @@ struct NewItemView: View {
                     displayedComponents: .hourAndMinute
                 )
                 .labelsHidden()
-                .accessibilityLabel("Deadline time")
-                Button("Clear") { ShellBridgeKt.clearNewDeadlineTime(component: component) }
+                .accessibilityLabel(L.string("new_deadline_time_cd"))
+                Button(L.string("common_clear")) { ShellBridgeKt.clearNewDeadlineTime(component: component) }
                     .font(.footnote)
-                    .accessibilityLabel("Clear deadline time")
+                    .accessibilityLabel(L.string("new_deadline_time_clear_a11y"))
             } else {
-                Button("Add") { ShellBridgeKt.setNewDeadlineTime(component: component, hour: 9, minute: 0) }
+                Button(L.string("common_add")) { ShellBridgeKt.setNewDeadlineTime(component: component, hour: 9, minute: 0) }
                     .font(.subheadline)
-                    .accessibilityLabel("Add deadline time")
+                    .accessibilityLabel(L.string("new_deadline_time_add_a11y"))
             }
         }
         .frame(minHeight: Layout.minTouchTarget)
@@ -190,16 +190,16 @@ struct NewItemView: View {
 
     private var eventFields: some View {
         VStack(spacing: 8) {
-            TextField("Starts (e.g. 2026-06-08T09:00:00Z)", text: $startText)
+            TextField(L.string("new_event_start_label"), text: $startText)
                 .textFieldStyle(.roundedBorder)
                 .autocorrectionDisabled(true)
                 .onChange(of: startText) { _ in component.setStart(start: ShellBridgeKt.parseInstant(text: startText)) }
-                .accessibilityLabel("Event start")
-            TextField("Ends (optional)", text: $endText)
+                .accessibilityLabel(L.string("new_event_start_cd"))
+            TextField(L.string("new_event_end_label"), text: $endText)
                 .textFieldStyle(.roundedBorder)
                 .autocorrectionDisabled(true)
                 .onChange(of: endText) { _ in component.setEnd(end: ShellBridgeKt.parseInstant(text: endText)) }
-                .accessibilityLabel("Event end")
+                .accessibilityLabel(L.string("new_event_end_cd"))
         }
     }
 
@@ -216,7 +216,7 @@ struct NewItemView: View {
 
     private func createButton(_ value: NewState) -> some View {
         Button { component.submit() } label: {
-            Text(ShellBridgeKt.doNewStatusIsSubmitting(state: value) ? "Saving…" : "Create")
+            Text(ShellBridgeKt.doNewStatusIsSubmitting(state: value) ? L.string("new_submit_saving") : L.string("new_submit_create"))
                 .frame(maxWidth: .infinity).frame(minHeight: Layout.minTouchTarget)
         }
         .buttonStyle(.borderedProminent)

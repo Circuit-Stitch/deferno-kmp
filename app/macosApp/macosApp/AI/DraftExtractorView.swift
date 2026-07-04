@@ -24,8 +24,8 @@ struct DraftExtractorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Extract draft Tasks").font(.title2.bold())
-            Text("On-device (Apple Intelligence). Drafts are proposals — nothing is saved.")
+            Text(L.string("draft_extract_title")).font(.title2.bold())
+            Text(L.string("draft_extract_intro"))
                 .font(.caption).foregroundStyle(.secondary)
 
             TextEditor(text: $transcript)
@@ -34,16 +34,16 @@ struct DraftExtractorView: View {
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
 
             HStack {
-                Button(running ? "Extracting…" : "Extract", action: run)
+                Button(running ? L.string("draft_extract_running") : L.string("draft_extract_button"), action: run)
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(running || !available || transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 if running { ProgressView().controlSize(.small) }
                 Spacer()
-                Button("Done") { dismiss() }
+                Button(L.string("calendar_action_done")) { dismiss() }
             }
 
             if !available {
-                Label("Apple Intelligence isn't available on this Mac.", systemImage: "exclamationmark.triangle")
+                Label(L.string("draft_extract_unavailable"), systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if let status {
@@ -82,8 +82,8 @@ struct DraftExtractorView: View {
             onResult: { result in
                 drafts = result
                 status = result.isEmpty
-                    ? "No tasks found in that transcript."
-                    : "\(result.count) draft\(result.count == 1 ? "" : "s") proposed."
+                    ? L.string("draft_extract_none")
+                    : L.plural("draft_extract_proposed", result.count)
                 running = false
             },
             onFailure: { reason, detail in

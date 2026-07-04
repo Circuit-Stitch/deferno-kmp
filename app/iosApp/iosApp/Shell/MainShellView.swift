@@ -172,7 +172,7 @@ struct MainShellView: View {
         } else if let activity = ShellBridgeKt.destActivity(child: child) {
             ActivityView(component: activity)
         } else {
-            EmptyStateView(title: "\(activeName) is coming soon", message: "This area is on the way.")
+            EmptyStateView(title: L.format("shell_coming_soon_title", L.destinationLabel(activeName)), message: L.string("shell_coming_soon_body_brief"))
         }
     }
 
@@ -184,31 +184,31 @@ struct MainShellView: View {
                 // Brand wordmark (mirrors Android's ShellDrawer header).
                 HStack(spacing: 8) {
                     Brandmark(height: 24)
-                    Text("Deferno").font(.title3.weight(.bold)).foregroundStyle(colors.onSurface)
+                    Text(L.string("common_app_name")).font(.title3.weight(.bold)).foregroundStyle(colors.onSurface)
                 }
                 .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 4)
 
                 // "Add something" — the two capture affordances (parity with Android's drawer).
-                SectionLabel("Add something").padding(.horizontal, 16).padding(.top, 8)
-                PrimaryActionButton(title: "New task", subtitle: "Fill in the details", icon: .plus) {
+                SectionLabel(L.string("shell_drawer_add_something")).padding(.horizontal, 16).padding(.top, 8)
+                PrimaryActionButton(title: L.string("shell_drawer_new_task"), subtitle: L.string("shell_drawer_new_task_subtitle"), icon: .plus) {
                     setDrawer(false)
                     ShellBridgeKt.openNewOverlay(component: component)
                 }
                 .padding(.horizontal, 16).padding(.top, 4)
-                TonalActionButton(title: "Brain dump", subtitle: "Speak or type — sorts to Inbox", icon: .waveform) {
+                TonalActionButton(title: L.string("braindump_title"), subtitle: L.string("shell_drawer_brain_dump_subtitle"), icon: .waveform) {
                     setDrawer(false)
                     ShellBridgeKt.openBrainDumpOverlay(component: component)
                 }
                 .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 8)
 
-                drawerRow(label: "Search", system: "magnifyingglass", selected: false) {
+                drawerRow(label: L.string("common_search"), system: "magnifyingglass", selected: false) {
                     setDrawer(false)
                     ShellBridgeKt.openSearchOverlay(component: component)
                 }
                 ForEach(navDestinations.destinations) { dest in
                     let name = ShellBridgeKt.destinationName(destination: dest)
                     let badge: String? = name == "Inbox"
-                        ? (inboxBadge.value.intValue > 0 ? "\(inboxBadge.value.intValue)" : "empty")
+                        ? (inboxBadge.value.intValue > 0 ? "\(inboxBadge.value.intValue)" : L.string("shell_inbox_badge_empty"))
                         : nil
                     drawerRow(label: L.destinationLabel(name), system: icon(name), selected: name == activeName, badge: badge) {
                         setDrawer(false)
@@ -237,14 +237,14 @@ struct MainShellView: View {
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Text(accounts.active?.label ?? "Select account").font(.headline)
+                    Text(accounts.active?.label ?? L.string("shell_select_account")).font(.headline)
                     Image(systemName: "chevron.down").font(.caption2)
                 }
                 .foregroundStyle(colors.onSurface)
             }
-            .accessibilityLabel("Switch account")
+            .accessibilityLabel(L.string("shell_switch_account_cd"))
         } else {
-            Text(accounts.active?.label ?? "Deferno")
+            Text(accounts.active?.label ?? L.string("common_app_name"))
                 .font(.headline)
                 .foregroundStyle(colors.onSurface)
                 .accessibilityAddTraits(.isHeader)
@@ -393,10 +393,10 @@ struct ChromeToolbar: ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
             if ShellBridgeKt.chromeDrilled(spec: spec) {
                 Button { onBack() } label: { Image(systemName: "chevron.backward") }
-                    .accessibilityLabel("Back")
+                    .accessibilityLabel(L.string("common_back"))
             } else {
                 Button { onMenu() } label: { Image(systemName: "line.3.horizontal") }
-                    .accessibilityLabel("Menu")
+                    .accessibilityLabel(L.string("shell_menu_cd"))
             }
         }
         ToolbarItemGroup(placement: .navigationBarTrailing) {
@@ -407,7 +407,7 @@ struct ChromeToolbar: ToolbarContent {
                     Button { ShellBridgeKt.chromeInvoke(spec: spec, index: index) } label: {
                         Image(systemName: glyph)
                     }
-                    .accessibilityLabel(kind == "BrainDump" ? "Brain dump" : kind)
+                    .accessibilityLabel(kind == "BrainDump" ? L.string("braindump_title") : kind == "Refresh" ? L.string("common_refresh") : L.string("shell_drawer_new_task"))
                 }
             }
         }

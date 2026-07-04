@@ -19,6 +19,23 @@ enum L {
         String(format: string(key), locale: .current, arguments: args)
     }
 
+    /// A localized, plural-agreed count string (backed by the catalog's `plural` variations).
+    static func plural(_ key: String, _ count: Int) -> String {
+        String.localizedStringWithFormat(string(key), count)
+    }
+
+
+    /// A localized Item-kind label from its bridge enum name ("Task" → common_kind_task).
+    static func kindLabel(_ name: String) -> String {
+        switch name {
+        case "Task": return string("common_kind_task")
+        case "Chore": return string("common_kind_chore")
+        case "Habit": return string("common_kind_habit")
+        case "Event": return string("common_kind_event")
+        default: return name
+        }
+    }
+
     // MARK: Chrome title (typed ChromeTitle)
 
     /// The top-bar title for a `ChromeSpec`: user-authored text renders verbatim; a Destination /

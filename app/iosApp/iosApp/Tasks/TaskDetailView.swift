@@ -34,7 +34,7 @@ struct TaskDetailView: View {
 
     var body: some View {
         let value = state.value
-        let title = value.task?.title ?? "Task"
+        let title = value.task?.title ?? L.string("common_kind_task")
         VStack(spacing: 0) {
             if showsHeader {
                 // In single-pane the leading control returns to the list, so it reads as "Back".
@@ -45,12 +45,12 @@ struct TaskDetailView: View {
             // full-width strip flashing over an already-rendered task just shoves the body down and back
             // (the "loading blip" on content update).
             if value.isHydrating && value.task == nil {
-                LoadingStrip(label: "Loading details…")
+                LoadingStrip(label: L.string("tasks_detail_loading"))
             }
             if value.task == nil && !value.isHydrating {
                 EmptyStateView(
-                    title: "Task not found",
-                    message: "This task may have been removed. Head back to your list."
+                    title: L.string("tasks_detail_not_found_title"),
+                    message: L.string("tasks_detail_not_found_body")
                 )
             } else if let task = value.task {
                 taskBody(for: task, state: value)
@@ -80,13 +80,13 @@ struct TaskDetailView: View {
                 if let description = task.description_, !description.isEmpty {
                     Text(description).font(.body)
                 } else if !value.isHydrating {
-                    Text("No description yet.")
+                    Text(L.string("tasks_detail_no_description"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
 
                 Button { component.onAddToPlanClicked() } label: {
-                    Text("Add to today's plan").frame(maxWidth: .infinity)
+                    Text(L.string("tasks_menu_add_to_plan")).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -109,10 +109,10 @@ struct TaskDetailView: View {
         }
         // The kebab's "Add subtask" prompt: a calm inline title entry, mirroring the always-present
         // add-subtask field below — Add forwards a trimmed, non-empty title and clears.
-        .alert("Add subtask", isPresented: $showingAddSubtask) {
-            TextField("Subtask title", text: $kebabSubtask)
-            Button("Cancel", role: .cancel) { kebabSubtask = "" }
-            Button("Add") {
+        .alert(L.string("tasks_menu_add_subtask"), isPresented: $showingAddSubtask) {
+            TextField(L.string("tasks_detail_subtask_title_label"), text: $kebabSubtask)
+            Button(L.string("common_cancel"), role: .cancel) { kebabSubtask = "" }
+            Button(L.string("common_add")) {
                 let trimmed = kebabSubtask.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmed.isEmpty { component.onAddSubtask(title: trimmed) }
                 kebabSubtask = ""
@@ -120,14 +120,14 @@ struct TaskDetailView: View {
         }
         // The destructive Delete, gated behind a confirmation (the kebab item is destructive).
         .confirmationDialog(
-            "Delete this task?",
+            L.string("tasks_detail_delete_confirm_title"),
             isPresented: $confirmingDelete,
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) { component.onDelete() }
-            Button("Cancel", role: .cancel) {}
+            Button(L.string("common_delete"), role: .destructive) { component.onDelete() }
+            Button(L.string("common_cancel"), role: .cancel) {}
         } message: {
-            Text("This can't be undone.")
+            Text(L.string("common_cannot_be_undone"))
         }
     }
 
@@ -139,7 +139,7 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func detailTitleBlock(_ task: Task, state value: TaskDetailState) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            TreeChip(text: "Task", tone: .accent)
+            TreeChip(text: L.string("common_kind_task"), tone: .accent)
             Text(task.title)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(colors.onSurface)
@@ -155,8 +155,8 @@ struct TaskDetailView: View {
                 MonoMeta(meta.joined(separator: "  ·  "))
             }
             if value.subtaskTotal > 0 {
-                MonoMeta("\(value.subtaskDone) of \(value.subtaskTotal) done")
-                    .accessibilityLabel("\(value.subtaskDone) of \(value.subtaskTotal) subtasks done")
+                MonoMeta(L.format("tasks_progress_done", Int(value.subtaskDone), Int(value.subtaskTotal)))
+                    .accessibilityLabel(L.format("tasks_detail_subtask_progress_a11y", Int(value.subtaskDone), Int(value.subtaskTotal)))
                 ProgressBarThin(fraction: Double(value.subtaskDone) / Double(value.subtaskTotal))
                     .accessibilityHidden(true)
             }
@@ -168,18 +168,18 @@ struct TaskDetailView: View {
     private var overflowMenu: some View {
         Menu {
             // The on-device impediment flow (Deferno#525) — "what's stopping you?" over this stuck Task.
-            Button("Break this down") { component.onBreakdownClicked() }
-            Button("Add subtask") { kebabSubtask = ""; showingAddSubtask = true }
+            Button(L.string("tasks_menu_break_this_down")) { component.onBreakdownClicked() }
+            Button(L.string("tasks_menu_add_subtask")) { kebabSubtask = ""; showingAddSubtask = true }
             // The app's word for WorkingState.Dropped is "Set aside" (the chip editor below), so the kebab
             // uses the same term rather than web's "Drop" — one term per concept.
-            Button("Set aside") { component.onSetWorkingState(target: WorkingState.dropped) }
-            Button("Delete", role: .destructive) { confirmingDelete = true }
+            Button(L.string("tasks_set_aside")) { component.onSetWorkingState(target: WorkingState.dropped) }
+            Button(L.string("common_delete"), role: .destructive) { confirmingDelete = true }
         } label: {
             DefernoIcon.moreVert.image
                 .foregroundStyle(colors.onSurfaceVariant)
                 .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
         }
-        .accessibilityLabel("More actions")
+        .accessibilityLabel(L.string("tasks_detail_more_actions"))
     }
 
     // MARK: - Properties (Due · Time · Labels · Owner)
@@ -187,11 +187,11 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func propertiesSection(_ task: Task) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionTitle("Properties")
+            SectionTitle(L.string("tasks_detail_section_properties"))
             dueRow(task)
-            propertyRow(label: "Time", value: BridgeKt.taskTimeLabel(task: task))
+            propertyRow(label: L.string("tasks_detail_property_time"), value: BridgeKt.taskTimeLabel(task: task))
             labelsRow(task)
-            propertyRow(label: "Owner", value: BridgeKt.taskOwnerLabel(task: task))
+            propertyRow(label: L.string("tasks_detail_property_owner"), value: BridgeKt.taskOwnerLabel(task: task))
         }
     }
 
@@ -212,7 +212,7 @@ struct TaskDetailView: View {
         HStack {
             if hasDue {
                 DatePicker(
-                    "Due",
+                    L.string("tasks_detail_property_due"),
                     selection: Binding(
                         get: { Date(timeIntervalSince1970: BridgeKt.taskDeadlineEpochSeconds(task: task)) },
                         set: { BridgeKt.setTaskDeadline(component: component, epochSeconds: $0.timeIntervalSince1970) }
@@ -220,16 +220,16 @@ struct TaskDetailView: View {
                     displayedComponents: .date
                 )
                 .datePickerStyle(.compact)
-                Button("Clear") { BridgeKt.clearTaskDeadline(component: component) }
+                Button(L.string("common_clear")) { BridgeKt.clearTaskDeadline(component: component) }
                     .font(.subheadline)
-                    .accessibilityLabel("Clear due date")
+                    .accessibilityLabel(L.string("tasks_detail_clear_due_date_a11y"))
             } else {
-                Text("Due").font(.subheadline).foregroundStyle(.secondary).frame(width: 72, alignment: .leading)
+                Text(L.string("tasks_detail_property_due")).font(.subheadline).foregroundStyle(.secondary).frame(width: 72, alignment: .leading)
                 Text("—").foregroundStyle(.secondary)
                 Spacer()
-                Button("Set") { BridgeKt.setTaskDeadline(component: component, epochSeconds: Date().timeIntervalSince1970) }
+                Button(L.string("common_set")) { BridgeKt.setTaskDeadline(component: component, epochSeconds: Date().timeIntervalSince1970) }
                     .font(.subheadline)
-                    .accessibilityLabel("Set due date")
+                    .accessibilityLabel(L.string("tasks_detail_set_due_date"))
             }
         }
         .frame(minHeight: Layout.minTouchTarget)
@@ -238,7 +238,7 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func labelsRow(_ task: Task) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Labels").font(.subheadline).foregroundStyle(.secondary)
+            Text(L.string("common_labels")).font(.subheadline).foregroundStyle(.secondary)
             if !task.labels.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -251,7 +251,7 @@ struct TaskDetailView: View {
                                     Image(systemName: "xmark.circle.fill").font(.caption)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel("Remove label \(label)")
+                                .accessibilityLabel(L.format("tasks_detail_remove_label_a11y", label))
                             }
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .background(Color(.secondarySystemFill), in: Capsule())
@@ -259,7 +259,7 @@ struct TaskDetailView: View {
                     }
                 }
             }
-            addField(placeholder: "Add a label…", text: $newLabel) { entry in
+            addField(placeholder: L.string("tasks_detail_add_label_placeholder"), text: $newLabel) { entry in
                 component.onSetLabels(labels: normalize(task.labels + [entry]))
             }
         }
@@ -277,15 +277,15 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func subtasksSection(_ value: TaskDetailState) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionTitle("Subtasks", trailing: value.subtaskTotal > 0 ? "\(value.subtaskDone)/\(value.subtaskTotal)" : nil)
+            SectionTitle(L.string("tasks_detail_section_subtasks"), trailing: value.subtaskTotal > 0 ? "\(value.subtaskDone)/\(value.subtaskTotal)" : nil)
             if value.subtaskTotal > 0 {
                 ProgressView(value: Double(value.subtaskDone), total: Double(value.subtaskTotal))
-                    .accessibilityLabel("\(value.subtaskDone) of \(value.subtaskTotal) subtasks done")
+                    .accessibilityLabel(L.format("tasks_detail_subtask_progress_a11y", Int(value.subtaskDone), Int(value.subtaskTotal)))
             }
             ForEach(value.subtaskRows, id: \.task.stableKey) { row in
                 subtaskRow(row)
             }
-            addField(placeholder: "Add a subtask…", text: $newSubtask) { component.onAddSubtask(title: $0) }
+            addField(placeholder: L.string("tasks_detail_add_subtask_placeholder"), text: $newSubtask) { component.onAddSubtask(title: $0) }
         }
     }
 
@@ -303,7 +303,7 @@ struct TaskDetailView: View {
                         .font(.caption).foregroundStyle(.secondary).frame(width: 16)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(row.isExpanded ? "Collapse \(task.title)" : "Expand \(task.title)")
+                .accessibilityLabel(row.isExpanded ? L.format("common_collapse_named_cd", task.title) : L.format("common_expand_named_cd", task.title))
             } else {
                 Spacer().frame(width: 16)
             }
@@ -312,7 +312,7 @@ struct TaskDetailView: View {
                     .font(.title3)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(done ? "Mark \(task.title) not done" : "Mark \(task.title) done")
+            .accessibilityLabel(done ? L.format("common_mark_not_done_cd", task.title) : L.format("common_mark_done_cd", task.title))
             Button { BridgeKt.openSubtask(component: component, subtask: task) } label: {
                 Text(task.title)
                     // Blocked mutes (but doesn't strike) like the tree row — "blocked, not finished" (#290/#292).
@@ -321,10 +321,10 @@ struct TaskDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open \(task.title)")
+            .accessibilityLabel(L.format("common_open_named_cd", task.title))
             // The "Blocked" pill is its own VoiceOver element (the row isn't combined).
             if task.blocked {
-                TreeChip(text: "Blocked", tone: .neutral)
+                TreeChip(text: L.string("common_blocked"), tone: .neutral)
             }
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
         }
@@ -338,12 +338,12 @@ struct TaskDetailView: View {
     private func attachmentsSection(_ value: TaskDetailState) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // The count is synced + on-device combined (the brain-dump recording is on-device only — #272).
-            SectionTitle("Attachments", trailing: "\(value.attachments.count + value.onDeviceAttachments.count)")
-            Button(value.isUploadingAttachment ? "Uploading…" : "Add file") { importing = true }
+            SectionTitle(L.string("tasks_detail_section_attachments"), trailing: "\(value.attachments.count + value.onDeviceAttachments.count)")
+            Button(value.isUploadingAttachment ? L.string("tasks_detail_uploading") : L.string("tasks_detail_add_file")) { importing = true }
                 .font(.subheadline)
                 .disabled(value.isUploadingAttachment)
             if value.attachments.isEmpty && value.onDeviceAttachments.isEmpty {
-                Text("No attachments.").font(.subheadline).foregroundStyle(.secondary)
+                Text(L.string("tasks_detail_no_attachments")).font(.subheadline).foregroundStyle(.secondary)
             } else {
                 ForEach(value.attachments, id: \.id) { attachment in
                     AttachmentRow(
@@ -403,14 +403,14 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func commentsSection(_ value: TaskDetailState) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionTitle("Activity", trailing: "\(value.comments.count)")
+            SectionTitle(L.string("shell_destination_activity"), trailing: "\(value.comments.count)")
             commentComposer(isPosting: value.isPostingComment)
             if value.commentsLoading && value.comments.isEmpty {
-                MutedLine("Loading…")
+                MutedLine(L.string("common_loading"))
             } else if value.commentsError && value.comments.isEmpty {
-                MutedLine("Couldn't load comments. Pull to refresh later.")
+                MutedLine(L.string("tasks_detail_comments_error"))
             } else if value.comments.isEmpty {
-                MutedLine("No comments yet.")
+                MutedLine(L.string("tasks_detail_no_comments"))
             } else {
                 ForEach(value.comments, id: \.id) { comment in
                     CommentRow(
@@ -428,16 +428,16 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func commentComposer(isPosting: Bool) -> some View {
         VStack(alignment: .trailing, spacing: 4) {
-            TextField("Add a comment…", text: $commentDraft, axis: .vertical)
+            TextField(L.string("tasks_detail_add_comment_placeholder"), text: $commentDraft, axis: .vertical)
                 .lineLimit(2...5)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isPosting)
-                .accessibilityLabel("Comment body")
+                .accessibilityLabel(L.string("tasks_detail_comment_body_label"))
             Button {
                 let trimmed = commentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmed.isEmpty { component.onPostComment(body: trimmed); commentDraft = "" }
             } label: {
-                Text(isPosting ? "Posting…" : "Post")
+                Text(isPosting ? L.string("tasks_detail_posting") : L.string("tasks_detail_post"))
             }
             .buttonStyle(.borderedProminent)
             .disabled(isPosting || commentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -453,7 +453,7 @@ struct TaskDetailView: View {
                 .textFieldStyle(.roundedBorder)
                 .submitLabel(.done)
                 .onSubmit { submit(text, onAdd) }
-            Button("Add") { submit(text, onAdd) }
+            Button(L.string("common_add")) { submit(text, onAdd) }
                 .disabled(text.wrappedValue.trimmingCharacters(in: .whitespaces).isEmpty)
         }
     }
@@ -503,7 +503,7 @@ private struct AttachmentRow: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(attachment.filename).font(.body).lineLimit(1).truncationMode(.middle)
-                        Text("\(byteLabel(attachment.size)) · \(attachment.mime)")
+                        Text(L.format("tasks_detail_attachment_meta", byteLabel(attachment.size), attachment.mime))
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         if let caption = attachment.caption, !caption.isEmpty {
                             Text(caption).font(.subheadline)
@@ -512,17 +512,17 @@ private struct AttachmentRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Open \(attachment.filename)")
-                Button("Delete") { onDelete(attachment.id) }
+                .accessibilityLabel(L.format("common_open_named_cd", attachment.filename))
+                Button(L.string("common_delete")) { onDelete(attachment.id) }
                     .font(.subheadline)
-                    .accessibilityLabel("Delete \(attachment.filename)")
+                    .accessibilityLabel(L.format("tasks_detail_delete_attachment_a11y", attachment.filename))
             }
             if editing {
-                TextField("Caption", text: $draft).textFieldStyle(.roundedBorder)
+                TextField(L.string("tasks_detail_caption_placeholder"), text: $draft).textFieldStyle(.roundedBorder)
                 HStack {
                     Spacer()
-                    Button("Cancel") { editing = false }
-                    Button("Save") {
+                    Button(L.string("common_cancel")) { editing = false }
+                    Button(L.string("common_save")) {
                         let trimmed = draft.trimmingCharacters(in: .whitespaces)
                         if !trimmed.isEmpty { onSetCaption(attachment.id, trimmed) }
                         editing = false
@@ -530,12 +530,12 @@ private struct AttachmentRow: View {
                     .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             } else {
-                Button(attachment.caption?.isEmpty == false ? "Edit caption" : "Add caption") {
+                Button(attachment.caption?.isEmpty == false ? L.string("tasks_detail_edit_caption") : L.string("tasks_detail_add_caption")) {
                     draft = attachment.caption ?? ""
                     editing = true
                 }
                 .font(.subheadline)
-                .accessibilityLabel("Edit caption for \(attachment.filename)")
+                .accessibilityLabel(L.format("tasks_detail_edit_caption_a11y", attachment.filename))
             }
         }
         .padding(.vertical, 6)
@@ -561,7 +561,7 @@ private struct OnDeviceAttachmentRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(attachment.filename).font(.body).lineLimit(1).truncationMode(.middle)
-                Text("\(byteLabel(attachment.size)) · \(attachment.mime) · On device")
+                Text(L.format("tasks_detail_attachment_meta_on_device", byteLabel(attachment.size), attachment.mime))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 if let caption = attachment.caption, !caption.isEmpty {
                     Text(caption).font(.subheadline)
@@ -569,13 +569,13 @@ private struct OnDeviceAttachmentRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if attachment.isAudio {
-                Button(isPlayingThis ? "Pause" : "Play") { onPlayToggle(attachment) }
+                Button(isPlayingThis ? L.string("common_pause") : L.string("tasks_detail_play")) { onPlayToggle(attachment) }
                     .font(.subheadline)
                     .accessibilityLabel("\(isPlayingThis ? "Pause" : "Play") \(attachment.filename)")
             }
-            Button("Delete") { onDelete(attachment.id) }
+            Button(L.string("common_delete")) { onDelete(attachment.id) }
                 .font(.subheadline)
-                .accessibilityLabel("Delete \(attachment.filename)")
+                .accessibilityLabel(L.format("tasks_detail_delete_attachment_a11y", attachment.filename))
         }
         .padding(.vertical, 6)
     }
@@ -639,17 +639,17 @@ private struct CommentRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Text(isMine ? "You" : "Member").font(.caption.weight(.medium))
+                Text(isMine ? L.string("tasks_detail_comment_author_you") : L.string("tasks_detail_comment_author_member")).font(.caption.weight(.medium))
                 Text(dateLabel).font(.caption2).foregroundStyle(.secondary)
             }
             if editing {
-                TextField("Comment", text: $draft, axis: .vertical)
+                TextField(L.string("tasks_detail_comment_button"), text: $draft, axis: .vertical)
                     .lineLimit(2...5)
                     .textFieldStyle(.roundedBorder)
                 HStack {
                     Spacer()
-                    Button("Cancel") { editing = false }
-                    Button("Save") {
+                    Button(L.string("common_cancel")) { editing = false }
+                    Button(L.string("common_save")) {
                         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
                         if !trimmed.isEmpty { onEdit(comment.id, trimmed) }
                         editing = false
@@ -657,11 +657,11 @@ private struct CommentRow: View {
                     .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             } else {
-                Text(comment.body ?? "🔒 Encrypted comment").font(.subheadline)
+                Text(comment.body ?? L.string("tasks_detail_encrypted_comment")).font(.subheadline)
                 if isMine {
                     HStack {
-                        Button("Edit") { draft = comment.body ?? ""; editing = true }
-                        Button("Delete") { onDelete(comment.id) }
+                        Button(L.string("common_edit")) { draft = comment.body ?? ""; editing = true }
+                        Button(L.string("common_delete")) { onDelete(comment.id) }
                     }
                     .font(.subheadline)
                 }
@@ -681,7 +681,7 @@ private struct WorkingStateEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Working state")
+            Text(L.string("tasks_detail_working_state_heading"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .accessibilityAddTraits(.isHeader)
@@ -710,6 +710,6 @@ private struct WorkingStateEditorView: View {
                 .foregroundStyle(selected ? Color.white : Color.primary)
         }
         .frame(minHeight: Layout.minTouchTarget)
-        .accessibilityLabel(selected ? "\(state.label), current working state" : "Set to \(state.label)")
+        .accessibilityLabel(selected ? L.format("tasks_detail_working_state_current_a11y", state.label) : L.format("tasks_detail_set_working_state_a11y", state.label))
     }
 }

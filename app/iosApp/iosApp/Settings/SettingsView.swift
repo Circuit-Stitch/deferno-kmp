@@ -87,7 +87,7 @@ struct SettingsView: View {
                             Text(title(category)).foregroundStyle(colors.onSurface)
                             Spacer()
                             if !ShellBridgeKt.settingsCategoryBacked(category: category) {
-                                Text("Coming soon").font(.subheadline).foregroundStyle(colors.inkMuted)
+                                Text(L.string("settings_coming_soon_title")).font(.subheadline).foregroundStyle(colors.inkMuted)
                             }
                             Image(systemName: "chevron.right").font(.caption).foregroundStyle(colors.inkMuted)
                         }
@@ -127,11 +127,11 @@ struct SettingsView: View {
         case "Assistant": assistantDetail
         case "Storage": storageDetail
         case "DataPrivacy": dataPrivacyDetail
-        case "HelpFeedback": linkDetail(text: "Tell us what's working and what isn't.", action: "Send feedback") { component.onOpenSubmitFeedback() }
-        case "AppPermissions": linkDetail(text: "Manage microphone and notification access in iOS Settings.", action: "Open app settings") { component.onOpenAppPermissions() }
+        case "HelpFeedback": linkDetail(text: L.string("settings_help_row_subtitle"), action: L.string("feedback_title")) { component.onOpenSubmitFeedback() }
+        case "AppPermissions": linkDetail(text: L.string("settings_permissions_intro"), action: L.string("settings_permissions_open_button")) { component.onOpenAppPermissions() }
         case "Legal": legalDetail
         case "Account": accountDetail
-        case "Security2FA": comingSoon(action: "Open security console") { component.onOpenConsole() }
+        case "Security2FA": comingSoon(action: L.string("settings_security_open_console_button")) { component.onOpenConsole() }
         default: comingSoon(action: nil, perform: nil)
         }
     }
@@ -139,14 +139,14 @@ struct SettingsView: View {
     private var appearanceDetail: some View {
         let value = settings.value
         return List {
-            Section("Theme") {
-                checkRow("Deferno", selected: value.themeFamily == ThemeFamily.deferno) { component.onThemeFamilyChanged(family: ThemeFamily.deferno) }
-                checkRow("Mono", selected: value.themeFamily == ThemeFamily.mono) { component.onThemeFamilyChanged(family: ThemeFamily.mono) }
+            Section(L.string("settings_appearance_theme_section")) {
+                checkRow(L.string("common_app_name"), selected: value.themeFamily == ThemeFamily.deferno) { component.onThemeFamilyChanged(family: ThemeFamily.deferno) }
+                checkRow(L.string("settings_theme_family_mono"), selected: value.themeFamily == ThemeFamily.mono) { component.onThemeFamilyChanged(family: ThemeFamily.mono) }
             }
-            Section("Mode") {
-                checkRow("Light", selected: value.themeMode == ThemeMode.light) { component.onThemeModeChanged(mode: ThemeMode.light) }
-                checkRow("Dark", selected: value.themeMode == ThemeMode.dark) { component.onThemeModeChanged(mode: ThemeMode.dark) }
-                checkRow("Follow system", selected: value.themeMode == ThemeMode.auto) { component.onThemeModeChanged(mode: ThemeMode.auto) }
+            Section(L.string("settings_appearance_mode_section")) {
+                checkRow(L.string("settings_theme_mode_light"), selected: value.themeMode == ThemeMode.light) { component.onThemeModeChanged(mode: ThemeMode.light) }
+                checkRow(L.string("settings_theme_mode_dark"), selected: value.themeMode == ThemeMode.dark) { component.onThemeModeChanged(mode: ThemeMode.dark) }
+                checkRow(L.string("settings_theme_mode_follow_system"), selected: value.themeMode == ThemeMode.auto) { component.onThemeModeChanged(mode: ThemeMode.auto) }
             }
         }
     }
@@ -156,18 +156,18 @@ struct SettingsView: View {
         return List {
             Section {
                 Toggle(isOn: Binding(get: { value.dragAndDropEnabled }, set: { component.onDragAndDropChanged(enabled: $0) })) {
-                    Text("Drag and drop").foregroundStyle(colors.onSurface)
+                    Text(L.string("settings_task_behavior_drag_drop_label")).foregroundStyle(colors.onSurface)
                 }
                 .listRowBackground(colors.surfaceCard)
             } footer: {
-                Text("Experimental — reorder tasks by dragging.")
+                Text(L.string("settings_task_behavior_drag_drop_description"))
             }
-            Section("Keep done items visible — everywhere") {
+            Section(L.string("settings_show_done_everywhere_label")) {
                 doneVisibilityPicker(current: Int(ShellBridgeKt.doneVisibilityGlobalSeconds(settings: value))) { seconds in
                     ShellBridgeKt.setGlobalDoneVisibility(component: component, settings: value, seconds: Int64(seconds))
                 }
             }
-            Section("Keep done items visible — on the dashboard") {
+            Section(L.string("settings_show_done_dashboard_label")) {
                 doneVisibilityPicker(current: Int(ShellBridgeKt.doneVisibilityDashboardSeconds(settings: value))) { seconds in
                     ShellBridgeKt.setDashboardDoneVisibility(component: component, settings: value, seconds: Int64(seconds))
                 }
@@ -178,7 +178,7 @@ struct SettingsView: View {
     private var speechDetail: some View {
         List {
             Section {
-                Text("Dictation uses an on-device speech engine. There isn't one available on this device yet.")
+                Text(L.string("settings_speech_none_body"))
                     .foregroundStyle(colors.inkMuted)
                     .listRowBackground(colors.surfaceCard)
             }
@@ -191,7 +191,7 @@ struct SettingsView: View {
             Section {
                 // "Off" is always offered first (the default); then each engine registered on this device.
                 // A cloud engine the Account isn't entitled to shows disabled, never selectable.
-                agentRow(label: "Off", note: "The agent stays off. Nothing is sent anywhere.",
+                agentRow(label: L.string("settings_agent_engine_off"), note: L.string("settings_agent_off_note"),
                          selected: ShellBridgeKt.inferenceOffSelected(state: value), locked: false) {
                     ShellBridgeKt.inferenceSelectOff(component: component)
                 }
@@ -205,19 +205,19 @@ struct SettingsView: View {
                     }
                 }
             } header: {
-                Text("Engine")
+                Text(L.string("settings_speech_engine_label"))
             } footer: {
-                Text("The agent can turn a brain dump into draft tasks and suggest changes to your plan. Choose where it runs — or keep it off.")
+                Text(L.string("settings_agent_intro"))
             }
             Section {
                 Toggle(isOn: Binding(get: { brainDumpNotifications }, set: { setBrainDumpNotifications($0) })) {
-                    Text("Notify me when a brain dump is ready").foregroundStyle(colors.onSurface)
+                    Text(L.string("settings_notify_braindump_label")).foregroundStyle(colors.onSurface)
                 }
                 .listRowBackground(colors.surfaceCard)
             } header: {
-                Text("Notifications")
+                Text(L.string("settings_notifications_section"))
             } footer: {
-                Text("Get a notification when your drafts are ready to review — tapping it opens the Inbox.")
+                Text(L.string("settings_notify_braindump_description"))
             }
         }
     }
@@ -229,12 +229,12 @@ struct SettingsView: View {
         return List {
             Section {
                 Toggle(isOn: Binding(get: { value.enabled }, set: { component.onAssistantEnablementChanged(enabled: $0) })) {
-                    Text("Enable the Assistant").foregroundStyle(colors.onSurface)
+                    Text(L.string("settings_assistant_enable_label")).foregroundStyle(colors.onSurface)
                 }
                 .listRowBackground(colors.surfaceCard)
                 .disabled(value.busy)
             } header: {
-                Text("Assistant")
+                Text(L.string("settings_category_assistant"))
             } footer: {
                 Text(value.disclosure)
             }
@@ -267,21 +267,21 @@ struct SettingsView: View {
         return List {
             Section {
                 Toggle(isOn: Binding(get: { value.trackingEnabled }, set: { component.onTrackingChanged(enabled: $0) })) {
-                    Text("Analytics & tracking").foregroundStyle(colors.onSurface)
+                    Text(L.string("settings_privacy_analytics_label")).foregroundStyle(colors.onSurface)
                 }
                 .listRowBackground(colors.surfaceCard)
             }
             Section {
-                Button("Export or import your data") { showExportDialog = true }
+                Button(L.string("settings_data_export_web_button")) { showExportDialog = true }
                     .listRowBackground(colors.surfaceCard)
             } footer: {
-                Text("Export your tasks and lists as a backup file you can save or share — or import one to restore them.")
+                Text(L.string("settings_data_export_import_description"))
             }
-            .confirmationDialog("Your data", isPresented: $showExportDialog, titleVisibility: .visible) {
-                Button("Export") { runExport() }
-                Button("Full backup — coming soon") {}.disabled(true)
-                Button("Import a backup") { showImportPicker = true }
-                Button("Cancel", role: .cancel) {}
+            .confirmationDialog(L.string("settings_data_your_data_section"), isPresented: $showExportDialog, titleVisibility: .visible) {
+                Button(L.string("settings_data_export_menu_export")) { runExport() }
+                Button(L.string("settings_data_export_menu_full_backup")) {}.disabled(true)
+                Button(L.string("settings_import_button")) { showImportPicker = true }
+                Button(L.string("common_cancel"), role: .cancel) {}
             }
         }
         .sheet(item: $exportFile) { file in
@@ -291,8 +291,8 @@ struct SettingsView: View {
         .fileImporter(isPresented: $showImportPicker, allowedContentTypes: [.zip], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first { runImport(url) }
         }
-        .alert("Import", isPresented: $showImportResult) {
-            Button("OK", role: .cancel) {}
+        .alert(L.string("common_import"), isPresented: $showImportResult) {
+            Button(L.string("common_ok"), role: .cancel) {}
         } message: {
             Text(importResultText)
         }
@@ -306,7 +306,7 @@ struct SettingsView: View {
         return List {
             Section {
                 HStack {
-                    Text("Brain-dump recordings").foregroundStyle(colors.onSurface)
+                    Text(L.string("settings_storage_recordings_section")).foregroundStyle(colors.onSurface)
                     Spacer()
                     Text(storageSummary(count: Int(usage.count), bytes: usage.totalBytes))
                         .foregroundStyle(colors.inkMuted)
@@ -318,7 +318,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Recording").foregroundStyle(colors.onSurface)
+                                Text(L.string("braindump_recording_status")).foregroundStyle(colors.onSurface)
                                 Text(recordingDate(rec.createdAtEpochMs)).font(.caption).foregroundStyle(colors.inkMuted)
                             }
                             Spacer()
@@ -330,9 +330,9 @@ struct SettingsView: View {
                     .listRowBackground(colors.surfaceCard)
                 }
             } header: {
-                Text("On this device")
+                Text(L.string("settings_storage_on_device_section"))
             } footer: {
-                Text("Recordings you kept when accepting a brain dump. Tap one to open its task — or the Inbox if it's still to review.")
+                Text(L.string("settings_storage_recordings_description"))
             }
 
             // Logical attachments across ALL items (#311) — distinct from the on-device bytes above:
@@ -343,7 +343,7 @@ struct SettingsView: View {
                     component.onOpenBiggestAttachments()
                 } label: {
                     HStack {
-                        Text("Biggest attachments").foregroundStyle(colors.onSurface)
+                        Text(L.string("search_sort_biggest_attachments")).foregroundStyle(colors.onSurface)
                         Spacer()
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(colors.inkMuted)
                     }
@@ -351,31 +351,31 @@ struct SettingsView: View {
                 }
                 .listRowBackground(colors.surfaceCard)
             } header: {
-                Text("All items")
+                Text(L.string("settings_storage_all_items_section"))
             } footer: {
-                Text("Find the items with the largest attachments, across everything — searched on this device.")
+                Text(L.string("settings_storage_all_items_description"))
             }
 
             Section {
-                labeledRow("Storage provider", ShellBridgeKt.storageActiveProviderName(state: provider.value))
-                comingLaterRow("Deferno-hosted")
-                comingLaterRow("Dropbox")
-                comingLaterRow("Google Drive")
+                labeledRow(L.string("settings_storage_provider_label"), ShellBridgeKt.storageActiveProviderName(state: provider.value))
+                comingLaterRow(L.string("settings_storage_provider_deferno_backend"))
+                comingLaterRow(L.string("settings_storage_provider_dropbox"))
+                comingLaterRow(L.string("settings_storage_provider_google_drive"))
             } header: {
-                Text("Storage provider")
+                Text(L.string("settings_storage_provider_label"))
             } footer: {
-                Text("New attachments are kept on this device. Other providers are coming later.")
+                Text(L.string("settings_storage_ios_note"))
             }
 
             Section {
                 Toggle(isOn: Binding(get: { keepRecordings }, set: { setKeepRecordings($0) })) {
-                    Text("Keep recordings on this device").foregroundStyle(colors.onSurface)
+                    Text(L.string("settings_storage_keep_recordings_label")).foregroundStyle(colors.onSurface)
                 }
                 .listRowBackground(colors.surfaceCard)
             } header: {
-                Text("Brain dump")
+                Text(L.string("braindump_title"))
             } footer: {
-                Text("When you accept a draft, its source recording is kept as a task attachment.")
+                Text(L.string("settings_storage_keep_recordings_description"))
             }
         }
         .onAppear {
@@ -414,7 +414,7 @@ struct SettingsView: View {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         guard let data = try? Data(contentsOf: url) else {
-            importResultText = "Couldn't read this file — it doesn't look like a Deferno backup."
+            importResultText = L.string("settings_import_error_unreadable")
             showImportResult = true
             return
         }
@@ -423,14 +423,14 @@ struct SettingsView: View {
             case "restored":
                 let n = Int(truncating: count) // count crosses as a boxed KotlinInt (NSNumber)
                 importResultText = n == 0
-                    ? "That backup had no items to import."
-                    : "Restored \(n) item\(n == 1 ? "" : "s"). They'll sync when you're back online."
+                    ? L.string("settings_import_error_empty")
+                    : L.plural("settings_import_restored", n)
             case "force_upgrade":
-                importResultText = "This backup needs a newer version of Deferno. Update the app to import it."
+                importResultText = L.string("settings_import_error_too_new")
             case "unsupported":
-                importResultText = "This backup is too old to import."
+                importResultText = L.string("settings_import_error_too_old")
             default:
-                importResultText = "Couldn't read this file — it doesn't look like a Deferno backup."
+                importResultText = L.string("settings_import_error_unreadable")
             }
             showImportResult = true
         }
@@ -439,12 +439,12 @@ struct SettingsView: View {
     private var legalDetail: some View {
         List {
             Section {
-                Button("Terms of Service") { legalPage = LegalPage(title: "Terms of Service", url: Self.termsURL) }
+                Button(L.string("settings_legal_terms_section")) { legalPage = LegalPage(title: L.string("settings_legal_terms_section"), url: Self.termsURL) }
                     .foregroundStyle(colors.onSurface).listRowBackground(colors.surfaceCard)
-                Button("Privacy Policy") { legalPage = LegalPage(title: "Privacy Policy", url: Self.privacyURL) }
+                Button(L.string("settings_legal_privacy_policy_title")) { legalPage = LegalPage(title: L.string("settings_legal_privacy_policy_title"), url: Self.privacyURL) }
                     .foregroundStyle(colors.onSurface).listRowBackground(colors.surfaceCard)
             } footer: {
-                Text("Deferno is open source under the Apache 2.0 license.")
+                Text(L.string("settings_legal_open_source_apache_body"))
             }
         }
         .sheet(item: $legalPage) { page in
@@ -461,7 +461,7 @@ struct SettingsView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { legalPage = nil }
+                        Button(L.string("calendar_action_done")) { legalPage = nil }
                     }
                 }
             }
@@ -502,13 +502,13 @@ struct SettingsView: View {
                     .accessibilityAddTraits(isActive ? [.isSelected] : [])
                 }
             } header: {
-                Text("Signed in")
+                Text(L.string("shell_signed_in"))
             } footer: {
-                Text("Tap the active account to view its profile, or another to switch. Each account's data stays separate on this device.")
+                Text(L.string("settings_accounts_intro"))
             }
             Section {
                 Button { component.onAddAccount() } label: {
-                    Label("Add another account", systemImage: "plus")
+                    Label(L.string("auth_add_another_account"), systemImage: "plus")
                 }
                 .listRowBackground(colors.surfaceCard)
             }
@@ -528,7 +528,7 @@ struct SettingsView: View {
     private func comingSoon(action: String?, perform: (() -> Void)?) -> some View {
         List {
             Section {
-                Text("This is on the way. Thanks for your patience.")
+                Text(L.string("settings_coming_soon_generic_body"))
                     .foregroundStyle(colors.inkMuted)
                     .listRowBackground(colors.surfaceCard)
                 if let action, let perform {
@@ -579,8 +579,13 @@ struct SettingsView: View {
     }
 
     private func doneVisibilityPicker(current: Int, onSelect: @escaping (Int) -> Void) -> some View {
-        let options: [(String, Int)] = [("1 day", 86400), ("3 days", 259200), ("1 week", 604800), ("Always", -1)]
-        return Picker("Show for", selection: Binding(get: { current }, set: { onSelect($0) })) {
+        let options: [(String, Int)] = [
+            (L.string("settings_done_visibility_one_day"), 86400),
+            (L.string("settings_done_visibility_three_days"), 259200),
+            (L.string("settings_done_visibility_one_week"), 604800),
+            (L.string("settings_done_visibility_always"), -1),
+        ]
+        return Picker(L.string("settings_show_for_label"), selection: Binding(get: { current }, set: { onSelect($0) })) {
             ForEach(options, id: \.1) { Text($0.0).tag($0.1) }
         }
         .listRowBackground(colors.surfaceCard)
@@ -600,15 +605,15 @@ struct SettingsView: View {
         HStack {
             Text(label).foregroundStyle(colors.inkMuted)
             Spacer()
-            Text("Coming later").font(.subheadline).foregroundStyle(colors.inkMuted)
+            Text(L.string("settings_storage_note_coming_later")).font(.subheadline).foregroundStyle(colors.inkMuted)
         }
         .listRowBackground(colors.surfaceCard)
     }
 
     /// "3 items · 4.2 MB", or "None" when nothing is on the device.
     private func storageSummary(count: Int, bytes: Int64) -> String {
-        guard count > 0 else { return "None" }
-        let items = count == 1 ? "1 item" : "\(count) items"
+        guard count > 0 else { return L.string("common_none") }
+        let items = L.plural("calendar_day_item_count", count)
         return "\(items) · \(formatBytes(bytes))"
     }
 
@@ -621,22 +626,7 @@ struct SettingsView: View {
     }
 
     private func title(_ category: SettingsCategory) -> String {
-        switch ShellBridgeKt.settingsCategoryName(category: category) {
-        case "Appearance": return "Appearance"
-        case "TaskBehavior": return "Task behavior"
-        case "SpeechEngine": return "Speech engine"
-        case "Agent": return "Agent"
-        case "Assistant": return "Assistant"
-        case "Storage": return "Storage"
-        case "DataPrivacy": return "Data & Privacy"
-        case "HelpFeedback": return "Help & Feedback"
-        case "AppPermissions": return "App Permissions"
-        case "Legal": return "Legal"
-        case "Account": return "Account"
-        case "Security2FA": return "Security & 2FA"
-        case "Integrations": return "Integrations"
-        default: return ShellBridgeKt.settingsCategoryName(category: category)
-        }
+        L.settingsCategoryLabel(ShellBridgeKt.settingsCategoryName(category: category))
     }
 }
 
@@ -739,16 +729,8 @@ private func accountRemovalMailtoURL() -> URL? {
     components.scheme = "mailto"
     components.path = "accounts@defernowork.com"
     components.queryItems = [
-        URLQueryItem(name: "subject", value: "Account removal request"),
-        URLQueryItem(name: "body", value: """
-            Hello,
-
-            I'd like to request removal of my Deferno account and its associated data.
-
-            Account email:
-
-            Thank you.
-            """),
+        URLQueryItem(name: "subject", value: L.string("settings_legal_account_removal_email_subject")),
+        URLQueryItem(name: "body", value: L.string("settings_legal_account_removal_email_body")),
     ]
     return components.url
 }

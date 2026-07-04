@@ -23,11 +23,11 @@ extension WorkingState {
     /// `WorkingState` bridges (via SKIE) as a Swift value-type enum, so we match the cases by value
     /// equality rather than a `switch`.
     var label: String {
-        if self == WorkingState.open { return "Open" }
-        if self == WorkingState.inProgress { return "In progress" }
-        if self == WorkingState.inReview { return "In review" }
-        if self == WorkingState.done { return "Done" }
-        if self == WorkingState.dropped { return "Set aside" }
+        if self == WorkingState.open { return L.string("tasks_menu_open") }
+        if self == WorkingState.inProgress { return L.string("common_status_in_progress") }
+        if self == WorkingState.inReview { return L.string("common_status_in_review") }
+        if self == WorkingState.done { return L.string("calendar_action_done") }
+        if self == WorkingState.dropped { return L.string("tasks_set_aside") }
         return name
     }
 

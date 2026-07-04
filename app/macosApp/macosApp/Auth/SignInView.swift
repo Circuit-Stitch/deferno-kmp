@@ -33,16 +33,16 @@ struct SignInView: View {
             colors.background.ignoresSafeArea()
             VStack(spacing: 16) {
                 Brandmark(height: 56)
-                Text("Deferno")
+                Text(L.string("common_app_name"))
                     .font(.largeTitle.weight(.semibold))
                     .foregroundStyle(colors.onSurface)
-                Text("Sign in to your account")
+                Text(L.string("auth_subtitle_sign_in"))
                     .font(.subheadline)
                     .foregroundStyle(colors.inkMuted)
                     .multilineTextAlignment(.center)
 
                 browserSignInButton(value)
-                Text("A secure browser window opens to finish signing in.")
+                Text(L.string("auth_browser_hint"))
                     .font(.footnote)
                     .foregroundStyle(colors.inkMuted)
                     .multilineTextAlignment(.center)
@@ -50,10 +50,10 @@ struct SignInView: View {
                 // The external browser gives no close event (ADR-0026), so a started-then-abandoned
                 // sign-in can't auto-cancel — offer an explicit restart while the leg is in flight.
                 if value.canRetryBrowser {
-                    Text("Need to try again?")
+                    Text(L.string("auth_retry_prompt"))
                         .font(.footnote)
                         .foregroundStyle(colors.inkMuted)
-                    Button("Sign in") { component.onRetry() }
+                    Button(L.string("auth_sign_in")) { component.onRetry() }
                         .font(.footnote)
                 }
 
@@ -66,7 +66,7 @@ struct SignInView: View {
                     if value.showTokenEntry {
                         tokenEntry(value)
                     } else {
-                        Button("Use a token instead") { component.onUseTokenInstead() }
+                        Button(L.string("auth_use_token_instead")) { component.onUseTokenInstead() }
                             .font(.footnote)
                     }
                 }
@@ -83,7 +83,7 @@ struct SignInView: View {
     @ViewBuilder
     private func browserSignInButton(_ value: SignInState) -> some View {
         Button { component.onSignInClick() } label: {
-            Text(value.isBusy ? "Signing in…" : "Sign in")
+            Text(value.isBusy ? L.string("common_signing_in") : L.string("auth_sign_in"))
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: Layout.minTouchTarget)
         }
@@ -99,7 +99,7 @@ struct SignInView: View {
             errorText(error)
         }
         tokenSubmitButton(value)
-        Text("Create a token in Deferno on the web: Settings → Tokens.")
+        Text(L.string("auth_token_help"))
             .font(.footnote)
             .foregroundStyle(colors.inkMuted)
             .multilineTextAlignment(.center)
@@ -110,18 +110,18 @@ struct SignInView: View {
         HStack(spacing: 8) {
             Group {
                 if revealed {
-                    TextField("Personal access token", text: tokenBinding)
+                    TextField(L.string("auth_token_field_label"), text: tokenBinding)
                 } else {
-                    SecureField("Personal access token", text: tokenBinding)
+                    SecureField(L.string("auth_token_field_label"), text: tokenBinding)
                 }
             }
             .autocorrectionDisabled(true)
             .disabled(value.isBusy)
             .foregroundStyle(colors.onSurface)
 
-            Button(revealed ? "Hide" : "Show") { revealed.toggle() }
+            Button(revealed ? L.string("auth_token_hide") : L.string("auth_token_show")) { revealed.toggle() }
                 .font(.footnote)
-                .accessibilityLabel(revealed ? "Hide token" : "Show token")
+                .accessibilityLabel(revealed ? L.string("auth_token_hide_a11y") : L.string("auth_token_show_a11y"))
         }
         .padding(12)
         .frame(minHeight: Layout.minTouchTarget)
@@ -135,7 +135,7 @@ struct SignInView: View {
     @ViewBuilder
     private func tokenSubmitButton(_ value: SignInState) -> some View {
         Button { component.onSubmit() } label: {
-            Text(value.isBusy ? "Signing in…" : "Sign in with token")
+            Text(value.isBusy ? L.string("common_signing_in") : L.string("auth_sign_in_with_token"))
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: Layout.minTouchTarget)
         }
@@ -146,8 +146,8 @@ struct SignInView: View {
     @ViewBuilder
     private func errorText(_ error: SignInError) -> some View {
         Text(error == SignInError.invalidToken
-             ? "That token isn't valid. Check it and try again."
-             : "Couldn't reach Deferno. Check your connection and try again.")
+             ? L.string("auth_error_invalid_token")
+             : L.string("auth_error_unavailable"))
             .font(.footnote)
             .foregroundStyle(colors.error)
             .frame(maxWidth: .infinity, alignment: .leading)

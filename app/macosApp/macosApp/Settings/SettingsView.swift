@@ -57,7 +57,7 @@ struct SettingsView: View {
                         Text(title(category)).foregroundStyle(colors.onSurface)
                         Spacer()
                         if !ShellBridgeKt.settingsCategoryBacked(category: category) {
-                            Text("Coming soon").font(.caption).foregroundStyle(colors.inkMuted)
+                            Text(L.string("settings_coming_soon_title")).font(.caption).foregroundStyle(colors.inkMuted)
                         }
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(colors.inkMuted)
                     }
@@ -79,11 +79,11 @@ struct SettingsView: View {
         case "SpeechEngine": speechDetail
         case "Assistant": assistantDetail
         case "DataPrivacy": dataPrivacyDetail
-        case "HelpFeedback": linkDetail(text: "Tell us what's working and what isn't.", action: "Send feedback") { component.onOpenSubmitFeedback() }
-        case "AppPermissions": linkDetail(text: "Manage microphone and notification access in iOS Settings.", action: "Open app settings") { component.onOpenAppPermissions() }
+        case "HelpFeedback": linkDetail(text: L.string("settings_help_row_subtitle"), action: L.string("feedback_title")) { component.onOpenSubmitFeedback() }
+        case "AppPermissions": linkDetail(text: L.string("settings_permissions_intro"), action: L.string("settings_permissions_open_button")) { component.onOpenAppPermissions() }
         case "Legal": legalDetail
         case "Account": accountDetail
-        case "Security2FA": comingSoon(action: "Open security console") { component.onOpenConsole() }
+        case "Security2FA": comingSoon(action: L.string("settings_security_open_console_button")) { component.onOpenConsole() }
         default: comingSoon(action: nil, perform: nil)
         }
     }
@@ -91,14 +91,14 @@ struct SettingsView: View {
     private var appearanceDetail: some View {
         let value = settings.value
         return VStack(alignment: .leading, spacing: 16) {
-            section("Theme") {
-                radioRow("Deferno", selected: value.themeFamily == ThemeFamily.deferno) { component.onThemeFamilyChanged(family: ThemeFamily.deferno) }
-                radioRow("Mono", selected: value.themeFamily == ThemeFamily.mono) { component.onThemeFamilyChanged(family: ThemeFamily.mono) }
+            section(L.string("settings_appearance_theme_section")) {
+                radioRow(L.string("common_app_name"), selected: value.themeFamily == ThemeFamily.deferno) { component.onThemeFamilyChanged(family: ThemeFamily.deferno) }
+                radioRow(L.string("settings_theme_family_mono"), selected: value.themeFamily == ThemeFamily.mono) { component.onThemeFamilyChanged(family: ThemeFamily.mono) }
             }
-            section("Mode") {
-                radioRow("Light", selected: value.themeMode == ThemeMode.light) { component.onThemeModeChanged(mode: ThemeMode.light) }
-                radioRow("Dark", selected: value.themeMode == ThemeMode.dark) { component.onThemeModeChanged(mode: ThemeMode.dark) }
-                radioRow("Follow system", selected: value.themeMode == ThemeMode.auto) { component.onThemeModeChanged(mode: ThemeMode.auto) }
+            section(L.string("settings_appearance_mode_section")) {
+                radioRow(L.string("settings_theme_mode_light"), selected: value.themeMode == ThemeMode.light) { component.onThemeModeChanged(mode: ThemeMode.light) }
+                radioRow(L.string("settings_theme_mode_dark"), selected: value.themeMode == ThemeMode.dark) { component.onThemeModeChanged(mode: ThemeMode.dark) }
+                radioRow(L.string("settings_theme_mode_follow_system"), selected: value.themeMode == ThemeMode.auto) { component.onThemeModeChanged(mode: ThemeMode.auto) }
             }
         }
     }
@@ -107,14 +107,14 @@ struct SettingsView: View {
         let value = settings.value
         return VStack(alignment: .leading, spacing: 16) {
             Toggle(isOn: Binding(get: { value.dragAndDropEnabled }, set: { component.onDragAndDropChanged(enabled: $0) })) {
-                Text("Drag and drop (experimental)").foregroundStyle(colors.onSurface)
+                Text(L.string("settings_task_behavior_drag_drop_label")).foregroundStyle(colors.onSurface)
             }
-            section("Keep done items visible — everywhere") {
+            section(L.string("settings_show_done_everywhere_label")) {
                 doneVisibilityRow(current: Int(ShellBridgeKt.doneVisibilityGlobalSeconds(settings: value))) { seconds in
                     ShellBridgeKt.setGlobalDoneVisibility(component: component, settings: value, seconds: Int64(seconds))
                 }
             }
-            section("Keep done items visible — on the dashboard") {
+            section(L.string("settings_show_done_dashboard_label")) {
                 doneVisibilityRow(current: Int(ShellBridgeKt.doneVisibilityDashboardSeconds(settings: value))) { seconds in
                     ShellBridgeKt.setDashboardDoneVisibility(component: component, settings: value, seconds: Int64(seconds))
                 }
@@ -124,7 +124,7 @@ struct SettingsView: View {
 
     private var speechDetail: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Dictation uses an on-device speech engine. There isn't one available on this device yet.")
+            Text(L.string("settings_speech_none_body"))
                 .font(.subheadline).foregroundStyle(colors.inkMuted)
         }
     }
@@ -135,7 +135,7 @@ struct SettingsView: View {
         let value = assistant.value
         return VStack(alignment: .leading, spacing: 16) {
             Toggle(isOn: Binding(get: { value.enabled }, set: { component.onAssistantEnablementChanged(enabled: $0) })) {
-                Text("Enable the Assistant").foregroundStyle(colors.onSurface)
+                Text(L.string("settings_assistant_enable_label")).foregroundStyle(colors.onSurface)
             }
             .disabled(value.busy)
             Text(value.disclosure)
@@ -148,12 +148,12 @@ struct SettingsView: View {
         let value = settings.value
         return VStack(alignment: .leading, spacing: 16) {
             Toggle(isOn: Binding(get: { value.trackingEnabled }, set: { component.onTrackingChanged(enabled: $0) })) {
-                Text("Analytics & tracking").foregroundStyle(colors.onSurface)
+                Text(L.string("settings_privacy_analytics_label")).foregroundStyle(colors.onSurface)
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text("Your data is yours. Export or import it anytime on the web.")
+                Text(L.string("settings_data_web_note"))
                     .font(.subheadline).foregroundStyle(colors.inkMuted)
-                Button("Export or import your data") { component.onOpenDataExportImport() }
+                Button(L.string("settings_data_export_web_button")) { component.onOpenDataExportImport() }
                     .buttonStyle(.bordered)
             }
         }
@@ -161,9 +161,9 @@ struct SettingsView: View {
 
     private var legalDetail: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Terms of Service").font(.headline).foregroundStyle(colors.onSurface)
-            Text("Privacy Policy").font(.headline).foregroundStyle(colors.onSurface)
-            Text("Deferno is open source under the Apache 2.0 license.")
+            Text(L.string("settings_legal_terms_section")).font(.headline).foregroundStyle(colors.onSurface)
+            Text(L.string("settings_legal_privacy_policy_title")).font(.headline).foregroundStyle(colors.onSurface)
+            Text(L.string("settings_legal_open_source_apache_body"))
                 .font(.subheadline).foregroundStyle(colors.inkMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -172,9 +172,9 @@ struct SettingsView: View {
     private var accountDetail: some View {
         let value = settings.value
         return VStack(alignment: .leading, spacing: 12) {
-            labeledRow("Username", value.username ?? "—")
-            labeledRow("Time zone", value.timeZone ?? "Device default")
-            Button("View profile") { component.onOpenProfile() }
+            labeledRow(L.string("profile_username_label"), value.username ?? "—")
+            labeledRow(L.string("profile_account_time_zone_label"), value.timeZone ?? L.string("profile_account_time_zone_default"))
+            Button(L.string("profile_view_button")) { component.onOpenProfile() }
                 .buttonStyle(.bordered)
         }
     }
@@ -189,7 +189,7 @@ struct SettingsView: View {
 
     private func comingSoon(action: String?, perform: (() -> Void)?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("This is on the way. Thanks for your patience.")
+            Text(L.string("settings_coming_soon_generic_body"))
                 .font(.subheadline).foregroundStyle(colors.inkMuted)
             if let action, let perform {
                 Button(action, action: perform).buttonStyle(.bordered)
@@ -224,7 +224,12 @@ struct SettingsView: View {
     }
 
     private func doneVisibilityRow(current: Int, onSelect: @escaping (Int) -> Void) -> some View {
-        let options: [(String, Int)] = [("1 day", 86400), ("3 days", 259200), ("1 week", 604800), ("Always", -1)]
+        let options: [(String, Int)] = [
+            (L.string("settings_done_visibility_one_day"), 86400),
+            (L.string("settings_done_visibility_three_days"), 259200),
+            (L.string("settings_done_visibility_one_week"), 604800),
+            (L.string("settings_done_visibility_always"), -1)
+        ]
         return HStack(spacing: 8) {
             ForEach(options, id: \.1) { option in
                 SelectableChip(label: option.0, selected: option.1 == current, prominence: .low, compact: true) {
@@ -244,19 +249,6 @@ struct SettingsView: View {
     }
 
     private func title(_ category: SettingsCategory) -> String {
-        switch ShellBridgeKt.settingsCategoryName(category: category) {
-        case "Appearance": return "Appearance"
-        case "TaskBehavior": return "Task behavior"
-        case "SpeechEngine": return "Speech engine"
-        case "Assistant": return "Assistant"
-        case "DataPrivacy": return "Data & Privacy"
-        case "HelpFeedback": return "Help & Feedback"
-        case "AppPermissions": return "App Permissions"
-        case "Legal": return "Legal"
-        case "Account": return "Account"
-        case "Security2FA": return "Security & 2FA"
-        case "Integrations": return "Integrations"
-        default: return ShellBridgeKt.settingsCategoryName(category: category)
-        }
+        L.settingsCategoryLabel(ShellBridgeKt.settingsCategoryName(category: category))
     }
 }

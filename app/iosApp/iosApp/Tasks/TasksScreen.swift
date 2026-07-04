@@ -74,7 +74,7 @@ struct TasksScreen: View {
             // detail brings its own bar (back chevron + title) via `paneNavigationTitle`.
             NavigationStack(path: $compactPath) {
                 ItemTreeView(component: root.tree, onAdd: onAdd, query: query)
-                    .navigationTitle("Everything")
+                    .navigationTitle(L.string("tasks_tree_title"))
                     .navigationBarTitleDisplayMode(.large)
                     .toolbar { ChromeToolbar(spec: chromeSpec, onMenu: onMenu) }
                     // iOS 26 defaults iPhone search to a floating bottom pill that overlaps the list; pin it
@@ -83,7 +83,7 @@ struct TasksScreen: View {
                     .searchable(
                         text: $query,
                         placement: .navigationBarDrawer(displayMode: .automatic),
-                        prompt: "Search your trees"
+                        prompt: L.string("search_initial_title")
                     )
                     .navigationDestination(for: TaskRoute.self, destination: pushedPane)
             }
@@ -120,10 +120,10 @@ struct TasksScreen: View {
                 secondaryPane()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .navigationTitle("Tasks")
+            .navigationTitle(L.string("shell_destination_tasks"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ChromeToolbar(spec: chromeSpec, onMenu: onMenu) }
-            .searchable(text: $query, prompt: "Search your trees")
+            .searchable(text: $query, prompt: L.string("search_initial_title"))
         }
     }
 
@@ -151,8 +151,8 @@ struct TasksScreen: View {
             TaskDetailView(component: detail).id(BridgeKt.detailKey(component: detail))
         } else {
             EmptyStateView(
-                title: "Nothing open",
-                message: "Pick a task on the left to see its details here."
+                title: L.string("tasks_detail_pane_empty_title"),
+                message: L.string("tasks_detail_pane_empty_body")
             )
         }
     }

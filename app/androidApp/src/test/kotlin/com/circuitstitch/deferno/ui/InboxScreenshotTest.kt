@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.core.model.BrainDumpDraftId
+import com.circuitstitch.deferno.feature.braindumps.InboxNote
 import com.circuitstitch.deferno.feature.braindumps.InboxRow
 import com.circuitstitch.deferno.feature.braindumps.InboxState
 import com.circuitstitch.deferno.feature.braindumps.ui.InboxScreen
@@ -61,7 +62,7 @@ class InboxScreenshotTest {
                 title = "Draft the retro notes",
                 createdAt = Instant.parse("2026-06-14T09:01:00Z"),
             ),
-            note = "Reconnect to save",
+            noteKind = InboxNote.Offline,
         ),
         InboxRow(
             BrainDumpDraft(

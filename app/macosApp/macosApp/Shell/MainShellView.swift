@@ -40,7 +40,10 @@ struct MainShellView: View {
     }
 
     private var active: MainShellComponentDestinationChild { destinations.value }
-    private var activeName: String { L.destinationLabel(ShellBridgeKt.destinationName(destination: ShellBridgeKt.destinationOf(child: active))) }
+    /// The raw bridge token of the active Destination — for identity comparisons only.
+    private var activeRawName: String { ShellBridgeKt.destinationName(destination: ShellBridgeKt.destinationOf(child: active)) }
+    /// The localized label of the active Destination — for display.
+    private var activeName: String { L.destinationLabel(activeRawName) }
 
     // The single adaptive chrome (Cand 1), computed in the shell. `drilled` swaps the leading affordance
     // (sidebar/account ↔ ← back) and hides the create actions; `barTitle` is the foreground surface title,
@@ -101,15 +104,15 @@ struct MainShellView: View {
             } label: {
                 Image(systemName: "sidebar.leading")
             }
-            .help("Toggle Sidebar")
+            .help(L.string("shell_toggle_sidebar"))
         }
         // Drilled into a tier-3 detail (Plan task / Settings category): a ← back that pops via the shell's
         // onBack, mirroring the iOS/Android chrome's leading affordance.
         if drilled {
             ToolbarItem(placement: .navigation) {
                 Button { _ = component.onBack() } label: { Image(systemName: "chevron.backward") }
-                    .help("Back")
-                    .accessibilityLabel("Back")
+                    .help(L.string("common_back"))
+                    .accessibilityLabel(L.string("common_back"))
             }
         }
         if accounts.accounts.count > 1 {
@@ -119,17 +122,17 @@ struct MainShellView: View {
             Button { ShellBridgeKt.openSearchOverlay(component: component) } label: {
                 Image(systemName: "magnifyingglass")
             }
-            .help("Search")
+            .help(L.string("common_search"))
             // Create actions belong to a Destination root, not a drilled detail (matches ChromeSpec.actions).
             if !drilled {
                 Button(action: onBrainDump) {
                     Image(systemName: "brain.head.profile")
                 }
-                .help("Brain dump")
+                .help(L.string("braindump_title"))
                 Button(action: onNewTapped) {
                     Image(systemName: "plus")
                 }
-                .help("New task")
+                .help(L.string("shell_drawer_new_task"))
             }
         }
     }
@@ -164,7 +167,7 @@ struct MainShellView: View {
             } else if let settings = ShellBridgeKt.destSettings(child: child) {
                 SettingsView(component: settings)
             } else {
-                EmptyStateView(title: "\(activeName) is coming soon", message: "This area is on the way.")
+                EmptyStateView(title: L.format("shell_coming_soon_title", activeName), message: L.string("shell_coming_soon_body_brief"))
             }
         }
         // The Active Account's session has expired (#297): every read surface banners it. Profile is
@@ -185,7 +188,7 @@ struct MainShellView: View {
                     Image(systemName: "chevron.backward").font(.title3).foregroundStyle(colors.onSurface)
                 }
                 .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
-                .accessibilityLabel("Back")
+                .accessibilityLabel(L.string("common_back"))
             } else if accounts.accounts.count > 1 {
                 accountSwitcher
             }
@@ -202,7 +205,7 @@ struct MainShellView: View {
                     .foregroundStyle(colors.onSurface)
             }
             .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
-            .accessibilityLabel("Search")
+            .accessibilityLabel(L.string("common_search"))
         }
         .padding(.horizontal, 12)
         .frame(minHeight: 48)
@@ -216,13 +219,13 @@ struct MainShellView: View {
             }
         } label: {
             HStack(spacing: 4) {
-                Text(accounts.active?.label ?? "Select account")
+                Text(accounts.active?.label ?? L.string("shell_select_account"))
                     .font(.subheadline.weight(.medium))
                 Image(systemName: "chevron.down").font(.caption2)
             }
             .foregroundStyle(colors.onSurface)
         }
-        .accessibilityLabel("Switch account")
+        .accessibilityLabel(L.string("shell_switch_account_cd"))
     }
 
     private var newFab: some View {
@@ -234,7 +237,7 @@ struct MainShellView: View {
                 .background(colors.primary, in: Circle())
                 .shadow(radius: 4, y: 2)
         }
-        .accessibilityLabel("New")
+        .accessibilityLabel(L.string("shell_new"))
     }
 
     private func onNewTapped() {
@@ -263,7 +266,7 @@ struct MainShellView: View {
     @ViewBuilder
     private func barItem(_ dest: Destination) -> some View {
         let name = ShellBridgeKt.destinationName(destination: dest)
-        let selected = name == activeName
+        let selected = name == activeRawName
         Button { component.selectDestination(destination: dest) } label: {
             navItemLabel(name: L.destinationLabel(name), system: icon(name), selected: selected)
         }
@@ -274,10 +277,10 @@ struct MainShellView: View {
     private var moreItem: some View {
         let selected = !ShellBridgeKt.destinationIsPrimary(destination: ShellBridgeKt.destinationOf(child: active))
         return Button { showMore = true } label: {
-            navItemLabel(name: "More", system: "ellipsis", selected: selected)
+            navItemLabel(name: L.string("shell_more"), system: "ellipsis", selected: selected)
         }
-        .accessibilityLabel("More")
-        .confirmationDialog("More", isPresented: $showMore, titleVisibility: .visible) {
+        .accessibilityLabel(L.string("shell_more"))
+        .confirmationDialog(L.string("shell_more"), isPresented: $showMore, titleVisibility: .visible) {
             ForEach(secondaryDestinations) { dest in
                 Button(L.destinationLabel(ShellBridgeKt.destinationName(destination: dest))) {
                     component.selectDestination(destination: dest)
@@ -305,7 +308,7 @@ struct MainShellView: View {
         List {
             ForEach(allDestinations) { dest in
                 let name = ShellBridgeKt.destinationName(destination: dest)
-                let selected = name == activeName
+                let selected = name == activeRawName
                 Button { component.selectDestination(destination: dest) } label: {
                     Label(L.destinationLabel(name), systemImage: icon(name))
                         .foregroundStyle(selected ? colors.primary : colors.onSurface)

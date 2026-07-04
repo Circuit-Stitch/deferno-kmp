@@ -28,11 +28,11 @@ struct ProfileView: View {
             .padding(.vertical, 12)
         }
         .background(colors.background)
-        .alert("Sign out of \(component.account.label)?", isPresented: $confirmSignOut) {
-            Button("Sign out", role: .destructive) { component.onSignOut() }
-            Button("Cancel", role: .cancel) {}
+        .alert(L.format("profile_sign_out_confirm_title", component.account.label), isPresented: $confirmSignOut) {
+            Button(L.string("common_sign_out"), role: .destructive) { component.onSignOut() }
+            Button(L.string("common_cancel"), role: .cancel) {}
         } message: {
-            Text("Your tasks stay safe in Deferno. You can sign back in with your token anytime.")
+            Text(L.string("profile_sign_out_reassure_body"))
         }
     }
 
@@ -42,19 +42,19 @@ struct ProfileView: View {
         if ShellBridgeKt.profileIsLoading(state: value) {
             HStack(spacing: 12) {
                 ProgressView()
-                Text("Loading your profile…").foregroundStyle(colors.inkMuted)
+                Text(L.string("profile_loading")).foregroundStyle(colors.inkMuted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } else if let user = ShellBridgeKt.profileUser(state: value) {
             signedInCard(user)
         } else if ShellBridgeKt.profileIsReauthRequired(state: value) {
-            inlineNotice(title: "Session expired",
-                         message: "Your token needs a refresh. Sign in again to continue.",
-                         action: "Sign in again")
+            inlineNotice(title: L.string("auth_session_expired_title"),
+                         message: L.string("profile_token_refresh_body"),
+                         action: L.string("common_sign_in_again"))
         } else {
-            inlineNotice(title: "Can't reach Deferno",
-                         message: "Check your connection and try again — nothing was lost.",
-                         action: "Retry")
+            inlineNotice(title: L.string("auth_unavailable_title"),
+                         message: L.string("profile_unavailable_reassure_body"),
+                         action: L.string("common_retry"))
         }
     }
 
@@ -66,13 +66,13 @@ struct ProfileView: View {
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(colors.onSurface)
                     .accessibilityAddTraits(.isHeader)
-                Text("@\(user.username)")
+                Text(L.format("common_username_handle", user.username))
                     .font(.subheadline.monospaced())
                     .foregroundStyle(colors.inkMuted)
                 HStack(spacing: 8) {
-                    chip(user.orgSlug.isEmpty ? "Personal" : user.orgSlug, background: colors.secondaryContainer)
+                    chip(user.orgSlug.isEmpty ? L.string("profile_org_personal_chip") : user.orgSlug, background: colors.secondaryContainer)
                     if user.isAdmin {
-                        chip("Admin", background: colors.tertiaryContainer)
+                        chip(L.string("profile_admin_chip"), background: colors.tertiaryContainer)
                     }
                 }
             }
@@ -94,16 +94,16 @@ struct ProfileView: View {
 
     private var accountSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Account").font(.headline).foregroundStyle(colors.onSurface)
+            Text(L.string("common_account")).font(.headline).foregroundStyle(colors.onSurface)
                 .accessibilityAddTraits(.isHeader)
-            labeledRow("Active account", component.account.label)
+            labeledRow(L.string("profile_account_active_label"), component.account.label)
             // Time zone moved into Profile (#72) — offline-first, from the local settings cache.
-            labeledRow("Time zone", ShellBridgeKt.profileTimeZone(component: component) ?? "Device default")
-            labeledRow("Credential", "Personal access token")
-            Text("Stored only on this device.")
+            labeledRow(L.string("profile_account_time_zone_label"), ShellBridgeKt.profileTimeZone(component: component) ?? L.string("profile_account_time_zone_default"))
+            labeledRow(L.string("profile_account_credential_label"), L.string("auth_token_field_label"))
+            Text(L.string("profile_account_stored_on_device"))
                 .font(.caption).foregroundStyle(colors.inkMuted)
             Button(role: .destructive) { confirmSignOut = true } label: {
-                Text("Sign out").frame(maxWidth: .infinity).frame(minHeight: Layout.minTouchTarget)
+                Text(L.string("common_sign_out")).frame(maxWidth: .infinity).frame(minHeight: Layout.minTouchTarget)
             }
             .buttonStyle(.bordered)
             .tint(colors.error)

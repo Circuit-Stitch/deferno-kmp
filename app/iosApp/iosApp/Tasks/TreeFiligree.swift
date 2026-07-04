@@ -99,7 +99,7 @@ struct TreeNode: View {
                     .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isExpanded ? "Collapse" : "Expand")
+                .accessibilityLabel(isExpanded ? L.string("common_collapse") : L.string("common_expand"))
             } else {
                 ZStack {
                     Circle().fill(colors.surface).frame(width: Tree.leafDot + 4, height: Tree.leafDot + 4)

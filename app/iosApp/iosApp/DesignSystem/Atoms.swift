@@ -117,8 +117,8 @@ struct CheckDot: View {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .accessibilityAddTraits(.isButton)
-        .accessibilityValue(checked ? "Done" : "Not done")
-        .accessibilityLabel("Mark done")
+        .accessibilityValue(checked ? L.string("calendar_action_done") : L.string("common_state_not_done"))
+        .accessibilityLabel(L.string("tasks_menu_mark_done"))
     }
 }
 
@@ -204,7 +204,7 @@ struct TonalActionButton: View {
 
 /// The amber "▶ Start" pill (Compose `StartPill`) — the suggestion card's act.
 struct StartPill: View {
-    var title: String = "Start"
+    var title: String = L.string("common_start")
     let action: () -> Void
     @Environment(\.defernoColors) private var colors
 
@@ -270,7 +270,7 @@ struct DashedAddButton: View {
 /// A calm, display-only search well that opens the global Search overlay on tap (Compose
 /// `SearchBarDisplay`) — "Search all your trees…".
 struct SearchBarDisplay: View {
-    var placeholder: String = "Search all your trees…"
+    var placeholder: String = L.string("search_placeholder_trees")
     let onTap: () -> Void
     @Environment(\.defernoColors) private var colors
 
@@ -286,7 +286,7 @@ struct SearchBarDisplay: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Search")
+        .accessibilityLabel(L.string("common_search"))
         .accessibilityAddTraits(.isSearchField)
     }
 }
