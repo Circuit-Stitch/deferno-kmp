@@ -71,12 +71,12 @@ struct PlanView: View {
     /// deadline instants on iOS, so we count un-finished tasks as the calmest available proxy.
     private func attentionLabel(_ tasks: [Task]) -> String {
         let open = tasks.filter { !$0.workingState.isTerminal }.count
-        return open == 0 ? "All caught up" : "\(open) still open"
+        return open == 0 ? L.string("plan_all_caught_up") : L.plural("plan_still_open", open)
     }
 
     private var headerDate: String {
         let f = DateFormatter()
-        f.dateFormat = "EEE, MMM d"
+        f.dateFormat = L.string("plan_header_date_pattern")
         return f.string(from: Date())
     }
 
@@ -87,16 +87,16 @@ struct PlanView: View {
 
         Group {
             if value.isRefreshing && tasks.isEmpty {
-                LoadingStrip(label: "Refreshing your plan…")
+                LoadingStrip(label: L.string("plan_refreshing"))
             } else if tasks.isEmpty {
                 EmptyStateView(
-                    title: "Your plan is clear",
-                    message: "Nothing scheduled for today. Add something when you're ready — no pressure."
+                    title: L.string("plan_empty_title"),
+                    message: L.string("plan_empty_body")
                 )
             } else {
                 ScrollView {
                     if value.isRefreshing {
-                        LoadingStrip(label: "Refreshing your plan…")
+                        LoadingStrip(label: L.string("plan_refreshing"))
                     }
                     LazyVStack(alignment: .leading, spacing: 0) {
                         header(count: tasks.count)
@@ -107,7 +107,7 @@ struct PlanView: View {
                                 .padding(.bottom, 20)
                         }
 
-                        SectionLabel("Your day")
+                        SectionLabel(L.string("plan_your_day_section"))
                             .padding(.horizontal, 20)
                             .padding(.vertical, 8)
 
@@ -120,7 +120,7 @@ struct PlanView: View {
                             }
                         }
 
-                        DashedAddButton(title: "Add from the forest") {
+                        DashedAddButton(title: L.string("plan_add_from_forest")) {
                             // ponytail: no "add from forest" intent on PlanComponent — surface the
                             // decision helper as the gentlest available "where do I start" affordance.
                             showWhatNext = true
@@ -129,7 +129,7 @@ struct PlanView: View {
                         .padding(.vertical, 16)
 
                         HStack {
-                            TextLink(title: "See everything", trailingChevron: true) {
+                            TextLink(title: L.string("plan_see_everything"), trailingChevron: true) {
                                 // No "see everything" intent on PlanComponent; the Tasks tab is the full
                                 // forest. Left as a no-op until the shell routes it (noted in summary).
                             }
@@ -164,7 +164,7 @@ struct PlanView: View {
             HStack(alignment: .center) {
                 HStack(spacing: 10) {
                     Brandmark()
-                    Text("Today")
+                    Text(L.string("plan_today_title"))
                         .font(.title.weight(.semibold))
                         .foregroundStyle(colors.onSurface)
                         .accessibilityAddTraits(.isHeader)
@@ -172,7 +172,7 @@ struct PlanView: View {
                 Spacer()
                 MonoMeta(headerDate)
             }
-            Text("\(count) trees you picked. Start wherever feels right.")
+            Text(L.plural("plan_today_subtitle", count))
                 .font(.subheadline)
                 .foregroundStyle(colors.onSurfaceVariant)
         }
@@ -187,7 +187,7 @@ struct PlanView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 DefernoIcon.sparkle.image(size: 16).foregroundStyle(colors.primary)
-                Eyebrow("If you're not sure, start here")
+                Eyebrow(L.string("plan_suggestion_eyebrow"))
             }
             Text(task.title)
                 .font(.title3.weight(.semibold))
@@ -241,7 +241,7 @@ struct PlanView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     if task.blocked {
-                        TreeChip(text: "Blocked", tone: .neutral)
+                        TreeChip(text: L.string("common_blocked"), tone: .neutral)
                     }
                 }
                 MonoMeta(BridgeKt.taskTimeLabel(task: task))
@@ -263,6 +263,6 @@ struct PlanView: View {
         .onTapGesture { component.onTaskClicked(id: task.id) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(task.blocked ? "\(task.title), blocked, \(task.workingState.label)" : "\(task.title), \(task.workingState.label)")
-        .accessibilityHint("Opens this tree")
+        .accessibilityHint(L.string("plan_row_opens_tree_hint"))
     }
 }

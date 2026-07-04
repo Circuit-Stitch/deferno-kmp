@@ -23,9 +23,9 @@ struct SearchView: View {
         let value = state.value
         VStack(spacing: 0) {
             HStack {
-                Text("Search").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                Text(L.string("common_search")).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
                 Spacer()
-                Button("Close") { component.onDismiss() }
+                Button(L.string("common_close")) { component.onDismiss() }
             }
             .padding(.horizontal, Layout.gutter)
             .frame(minHeight: 56)
@@ -54,12 +54,12 @@ struct SearchView: View {
 
     private var queryField: some View {
         HStack(spacing: 8) {
-            TextField("Search tasks", text: Binding(get: { state.value.query }, set: { component.onQueryChanged(query: $0) }))
+            TextField(L.string("search_field_label"), text: Binding(get: { state.value.query }, set: { component.onQueryChanged(query: $0) }))
                 .textFieldStyle(.roundedBorder)
                 .submitLabel(.search)
                 .onSubmit { component.onSubmit() }
             // A visible submit affordance — the keyboard's Search key alone is undiscoverable (#73).
-            Button("Search") { component.onSubmit() }
+            Button(L.string("common_search")) { component.onSubmit() }
                 .buttonStyle(.borderedProminent)
                 .tint(colors.primary)
                 .disabled(!state.value.canSearch || state.value.isSearching)
@@ -67,7 +67,7 @@ struct SearchView: View {
     }
 
     private func statusFilter(_ value: SearchState) -> some View {
-        filterSection("Status") {
+        filterSection(L.string("search_section_status")) {
             wrap(WorkingState.ordered.map { ("\($0.label)", $0) }) { status in
                 chip(status.0, selected: ShellBridgeKt.searchHasStatus(state: value, status: status.1)) {
                     component.onStatusToggled(status: status.1)
@@ -77,10 +77,10 @@ struct SearchView: View {
     }
 
     private func tagsFilter(_ value: SearchState) -> some View {
-        filterSection("Tags") {
+        filterSection(L.string("search_filter_tags")) {
             HStack {
-                TextField("Add a tag", text: $newTag).textFieldStyle(.roundedBorder)
-                Button("Add") {
+                TextField(L.string("search_add_tag_label"), text: $newTag).textFieldStyle(.roundedBorder)
+                Button(L.string("common_add")) {
                     let trimmed = newTag.trimmingCharacters(in: .whitespaces)
                     if !trimmed.isEmpty { component.onLabelToggled(label: trimmed); newTag = "" }
                 }
@@ -96,10 +96,10 @@ struct SearchView: View {
     }
 
     private var dateRangeFilter: some View {
-        filterSection("Date range") {
+        filterSection(L.string("search_filter_date_range")) {
             HStack(spacing: 8) {
-                dateField("From (YYYY-MM-DD)", text: $fromText)
-                dateField("To (YYYY-MM-DD)", text: $toText)
+                dateField(L.string("search_date_from_label"), text: $fromText)
+                dateField(L.string("search_date_to_label"), text: $toText)
             }
         }
     }
@@ -107,8 +107,8 @@ struct SearchView: View {
     // The "has attachment" filter (#311) — a single toggle chip. A bare attachment filter searches with no
     // text, so it runs on its own (the Settings → Storage "biggest attachments" deep-link relies on it).
     private func attachmentFilter(_ value: SearchState) -> some View {
-        filterSection("Attachments") {
-            chip("Has attachment", selected: value.hasAttachment) { component.onHasAttachmentToggled() }
+        filterSection(L.string("tasks_detail_section_attachments")) {
+            chip(L.string("search_filter_has_attachment"), selected: value.hasAttachment) { component.onHasAttachmentToggled() }
         }
     }
 
@@ -124,7 +124,7 @@ struct SearchView: View {
 
     private func sortFilter(_ value: SearchState) -> some View {
         let current = ShellBridgeKt.searchCurrentSortKey(state: value)
-        return filterSection("Sort") {
+        return filterSection(L.string("search_filter_sort")) {
             wrap(ShellBridgeKt.searchSortValues().map { (sortLabel(ShellBridgeKt.searchSortKey(sort: $0)), $0) }) { sort in
                 chip(sort.0, selected: ShellBridgeKt.searchSortKey(sort: sort.1) == current) {
                     ShellBridgeKt.setSearchSort(component: component, sort: sort.1)
@@ -147,16 +147,16 @@ struct SearchView: View {
                 }
             }
         } else if value.isSearching {
-            LoadingStrip(label: "Searching…")
+            LoadingStrip(label: L.string("search_searching"))
         } else if value.sessionExpired {
             // The banner above already explains the expired session — don't double up (#297).
             EmptyView()
         } else if value.hasSearched {
-            EmptyStateView(title: "No matches",
-                           message: "Nothing matched your search. Try a different word or fewer filters.")
+            EmptyStateView(title: L.string("search_no_matches_title"),
+                           message: L.string("search_no_matches_body"))
         } else {
-            EmptyStateView(title: "Search your tasks",
-                           message: "Type at least two characters to find tasks by title or description.")
+            EmptyStateView(title: L.string("search_initial_title_desktop"),
+                           message: L.string("search_initial_body_desktop"))
         }
     }
 
@@ -183,10 +183,10 @@ struct SearchView: View {
 
     private func sortLabel(_ key: String) -> String {
         switch key {
-        case "Relevance": return "Best match"
-        case "TitleAsc": return "Title (A–Z)"
-        case "DeadlineAsc": return "Soonest due"
-        case "AttachmentSizeDesc": return "Biggest attachments"
+        case "Relevance": return L.string("search_sort_best_match")
+        case "TitleAsc": return L.string("search_sort_title_asc")
+        case "DeadlineAsc": return L.string("search_sort_soonest_due")
+        case "AttachmentSizeDesc": return L.string("search_sort_biggest_attachments")
         default: return key
         }
     }
@@ -195,7 +195,7 @@ struct SearchView: View {
 /// Formats an attachment-size rollup as "N files · 1.2 MB" for a search hit (#311); empty when none.
 func attachmentSummary(count: Int32, totalSize: Int64) -> String? {
     guard count > 0 else { return nil }
-    let files = count == 1 ? "1 file" : "\(count) files"
+    let files = L.plural("search_file_count", Int(count))
     let size = ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
     return "\(files) · \(size)"
 }
@@ -231,7 +231,7 @@ private struct SearchHitRow: View {
                 // Blocked search hits are still returned, just flagged so they aren't mistaken
                 // for actionable — the tree's blocked marking (#290/#292).
                 if hit.blocked {
-                    DependencyBadge(text: "Blocked", tone: .neutral, semanticLabel: "Blocked")
+                    DependencyBadge(text: L.string("common_blocked"), tone: .neutral, semanticLabel: L.string("common_blocked"))
                 }
                 Text("›").font(.title3).foregroundStyle(.secondary)
             }
@@ -244,6 +244,6 @@ private struct SearchHitRow: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(hit.blocked ? "\(hit.title), blocked" : hit.title)
-        .accessibilityHint("Open")
+        .accessibilityHint(L.string("tasks_menu_open"))
     }
 }

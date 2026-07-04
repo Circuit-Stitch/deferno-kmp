@@ -28,7 +28,7 @@ struct DefernoApp: App {
         // re-entering via the custom scheme must NOT spawn a second window — it has to land on the live
         // shell so the in-flight sign-in's inbox receives it (#189). The explicit title also names the
         // window "Deferno" regardless of the bundle name.
-        Window("Deferno", id: "main") {
+        Window(L.string("common_app_name"), id: "main") {
             RootView(root: host.root, onBrainDump: { showExtractor = true })
                 // No global minWidth (#194): the window's floor is *dynamic* — it tracks the panes
                 // currently open (sidebar + list + detail each carry their own `minWidth`, summed by
@@ -67,19 +67,19 @@ struct DefernoApp: App {
             // ⌘N opens the New-task overlay on the foreground Destination (pre-dated on Calendar, #74) —
             // the standard File → New slot, routed through the root since commands fire outside the View.
             CommandGroup(replacing: .newItem) {
-                Button("New Task") { ShellBridgeKt.openNewOnActiveShell(root: host.root) }
+                Button(L.string("shell_drawer_new_task")) { ShellBridgeKt.openNewOnActiveShell(root: host.root) }
                     .keyboardShortcut("n", modifiers: .command)
             }
             // Refresh the foreground Destination (⌘R) — the menu home for what used to be each pane's
             // "Refresh" button (the desktop twin of the Compose menu bar's View → Refresh).
-            CommandMenu("View") {
-                Button("Refresh") { ShellBridgeKt.refreshActiveDestination(root: host.root) }
+            CommandMenu(L.string("shell_menu_view")) {
+                Button(L.string("common_refresh")) { ShellBridgeKt.refreshActiveDestination(root: host.root) }
                     .keyboardShortcut("r", modifiers: .command)
             }
             // The Phase-3 demo trigger lives in a menu (⌘⇧E), not the shared shell — it's a macOS-app
             // dev surface for exercising the on-device Extractor, not a shipped product flow yet.
-            CommandMenu("Apple Intelligence") {
-                Button("Extract Draft Tasks…") { showExtractor = true }
+            CommandMenu(L.string("draft_extract_menu_section")) {
+                Button(L.string("draft_extract_menu_item")) { showExtractor = true }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
             }
         }

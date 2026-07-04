@@ -42,12 +42,12 @@ struct PlanView: View {
         // No PaneHeader: the single adaptive shell bar (MainShellView) titles "Today".
         VStack(spacing: 0) {
             if value.isRefreshing {
-                LoadingStrip(label: "Refreshing your plan…")
+                LoadingStrip(label: L.string("plan_refreshing"))
             }
             if value.tasks.isEmpty && !value.isRefreshing {
                 EmptyStateView(
-                    title: "Your plan is clear",
-                    message: "Nothing scheduled for today. Add something when you're ready — no pressure."
+                    title: L.string("plan_empty_title"),
+                    message: L.string("plan_empty_body")
                 )
             } else {
                 List {

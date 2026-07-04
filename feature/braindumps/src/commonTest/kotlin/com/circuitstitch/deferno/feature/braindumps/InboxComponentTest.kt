@@ -112,7 +112,7 @@ class InboxComponentTest {
 
         val row = states.last().rows.single()
         assertEquals(BrainDumpDraftId("a"), row.draft.id)
-        assertEquals("Reconnect to save", row.note)
+        assertEquals(InboxNote.Offline, row.noteKind)
         assertEquals(false, row.accepting)
     }
 
@@ -126,7 +126,7 @@ class InboxComponentTest {
         component.onAccept(BrainDumpDraftId("a"))
         advanceUntilIdle()
 
-        assertEquals("Server said no", states.last().rows.single().note)
+        assertEquals(InboxNote.ServerMessage("Server said no"), states.last().rows.single().noteKind)
     }
 
     @Test
@@ -170,11 +170,11 @@ class InboxComponentTest {
 
         component.onAccept(BrainDumpDraftId("a"))
         advanceUntilIdle()
-        assertEquals("Reconnect to save", states.last().rows.single().note)
+        assertEquals(InboxNote.Offline, states.last().rows.single().noteKind)
 
         component.onClearNote(BrainDumpDraftId("a"))
         advanceUntilIdle()
-        assertNull(states.last().rows.single().note)
+        assertNull(states.last().rows.single().noteKind)
     }
 
     @Test

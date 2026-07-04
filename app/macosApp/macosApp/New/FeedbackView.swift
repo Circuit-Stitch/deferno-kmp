@@ -26,9 +26,9 @@ struct FeedbackView: View {
         let value = state.value
         VStack(spacing: 0) {
             HStack {
-                Text("Send feedback").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                Text(L.string("feedback_title")).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
                 Spacer()
-                Button("Cancel") { component.dismiss() }
+                Button(L.string("common_cancel")) { component.dismiss() }
             }
             .padding(.horizontal, Layout.gutter)
             .frame(minHeight: 56)
@@ -36,13 +36,13 @@ struct FeedbackView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     categoryPicker(value)
-                    TextField("Subject", text: Binding(get: { state.value.subject }, set: { component.setSubject(subject: $0) }))
+                    TextField(L.string("feedback_subject_label"), text: Binding(get: { state.value.subject }, set: { component.setSubject(subject: $0) }))
                         .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("Subject")
-                    TextField("What's going on?", text: Binding(get: { state.value.body }, set: { component.setBody(body: $0) }), axis: .vertical)
+                        .accessibilityLabel(L.string("feedback_subject_label"))
+                    TextField(L.string("feedback_body_label"), text: Binding(get: { state.value.body }, set: { component.setBody(body: $0) }), axis: .vertical)
                         .lineLimit(4...8)
                         .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("Feedback body")
+                        .accessibilityLabel(L.string("feedback_body_cd"))
                     attachments(value)
                     statusMessage(value)
                     sendButton(value)
@@ -58,18 +58,18 @@ struct FeedbackView: View {
 
     @ViewBuilder
     private func attachments(_ value: FeedbackState) -> some View {
-        Button("Attach files") { importing = true }
+        Button(L.string("common_attach_files")) { importing = true }
             .font(.subheadline)
-            .accessibilityLabel("Attach files")
+            .accessibilityLabel(L.string("common_attach_files"))
         ForEach(value.attachments.indices, id: \.self) { i in
             HStack {
                 Text(value.attachments[i].filename)
                     .font(.subheadline).lineLimit(1).truncationMode(.middle)
-                    .accessibilityLabel("Attachment \(value.attachments[i].filename)")
+                    .accessibilityLabel(L.format("feedback_attachment_cd", value.attachments[i].filename))
                 Spacer()
-                Button("Remove") { component.removeAttachment(index: Int32(i)) }
+                Button(L.string("common_remove")) { component.removeAttachment(index: Int32(i)) }
                     .font(.subheadline)
-                    .accessibilityLabel("Remove \(value.attachments[i].filename)")
+                    .accessibilityLabel(L.format("common_remove_named_cd", value.attachments[i].filename))
             }
         }
     }
@@ -94,23 +94,23 @@ struct FeedbackView: View {
                 ) { component.setCategory(category: category) }
             }
         }
-        .accessibilityLabel("Category")
+        .accessibilityLabel(L.string("feedback_category_cd"))
     }
 
     @ViewBuilder
     private func statusMessage(_ value: FeedbackState) -> some View {
         if ShellBridgeKt.feedbackStatusIsOffline(state: value) {
-            Text("You're offline — reconnect to send. Nothing was queued.")
+            Text(L.string("feedback_offline_note"))
                 .font(.footnote).foregroundStyle(colors.inkMuted)
-                .accessibilityLabel("Reconnect to send")
-        } else if let message = ShellBridgeKt.feedbackStatusFailedMessage(state: value) {
+                .accessibilityLabel(L.string("feedback_offline_note"))
+        } else if let message = L.feedbackFailure(value) {
             Text(message).font(.footnote).foregroundStyle(colors.error)
         }
     }
 
     private func sendButton(_ value: FeedbackState) -> some View {
         Button { component.submit() } label: {
-            Text(ShellBridgeKt.feedbackStatusIsSubmitting(state: value) ? "Sending…" : "Send")
+            Text(ShellBridgeKt.feedbackStatusIsSubmitting(state: value) ? L.string("feedback_submit_sending") : L.string("common_send"))
                 .frame(maxWidth: .infinity).frame(minHeight: Layout.minTouchTarget)
         }
         .buttonStyle(.borderedProminent)

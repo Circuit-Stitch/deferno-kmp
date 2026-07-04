@@ -25,8 +25,8 @@ struct InboxView: View {
         VStack(spacing: 0) {
             if value.rows.isEmpty {
                 EmptyStateView(
-                    title: "Inbox zero",
-                    message: "Brain-dump drafts land here for you to review. Speak a brain dump and Deferno turns it into draft tasks for this list."
+                    title: L.string("inbox_empty_title"),
+                    message: L.string("inbox_empty_body")
                 )
             } else {
                 draftList(value)
@@ -44,13 +44,13 @@ struct InboxView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header(count: value.rows.count)
-                SectionLabel("Waiting for you")
+                SectionLabel(L.string("inbox_section_waiting"))
                     .padding(.horizontal, 20)
                 ForEach(value.rows, id: \.bridgeKey) { row in
                     DraftCard(
                         draft: row.draft,
                         accepting: row.accepting,
-                        note: row.note,
+                        note: L.inboxNote(row),
                         deadlineLabel: ShellBridgeKt.inboxDraftDeadlineLabel(draft: row.draft),
                         onAccept: { ShellBridgeKt.acceptInboxDraft(component: component, draft: row.draft) },
                         onDismiss: { ShellBridgeKt.dismissInboxDraft(component: component, draft: row.draft) },
@@ -67,14 +67,14 @@ struct InboxView: View {
     private func header(count: Int) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Inbox")
+                Text(L.string("shell_destination_inbox"))
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(colors.onSurface)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 12)
                 MonoMeta(draftCount(count))
             }
-            Text("Review each one — add it as a task, or dismiss it. Nothing's deleted.")
+            Text(L.string("inbox_header_subtitle"))
                 .font(.subheadline)
                 .foregroundStyle(colors.onSurfaceVariant)
         }
@@ -83,7 +83,7 @@ struct InboxView: View {
     }
 
     private var footer: some View {
-        Text("Triage at your pace — nothing's lost.")
+        Text(L.string("inbox_footer_reassurance"))
             .font(.footnote)
             .foregroundStyle(colors.inkMuted)
             .frame(maxWidth: .infinity)
@@ -96,12 +96,12 @@ struct InboxView: View {
 
     private func undoBanner(_ dismissed: BrainDumpDraft) -> some View {
         HStack(spacing: 12) {
-            Text("Dismissed “\(dismissed.title)”")
+            Text(L.format("inbox_dismissed_snackbar", dismissed.title))
                 .font(.subheadline)
                 .foregroundStyle(colors.onSurface)
                 .lineLimit(1)
             Spacer(minLength: 8)
-            TextLink(title: "Undo") { component.onUndoDismiss() }
+            TextLink(title: L.string("common_undo")) { component.onUndoDismiss() }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -111,7 +111,7 @@ struct InboxView: View {
     }
 
     /// "1 draft" / "N drafts" — the quiet count beside the header.
-    private func draftCount(_ n: Int) -> String { n == 1 ? "1 draft" : "\(n) drafts" }
+    private func draftCount(_ n: Int) -> String { L.plural("inbox_draft_count", n) }
 }
 
 private extension InboxRow {
@@ -137,10 +137,10 @@ private struct DraftCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Eyebrow("Drafted")
+                Eyebrow(L.string("inbox_draft_eyebrow"))
                 Spacer(minLength: 8)
                 if !accepting {
-                    TextLink(title: "Dismiss", action: onDismiss)
+                    TextLink(title: L.string("common_dismiss"), action: onDismiss)
                 }
             }
             Spacer().frame(height: 4)
@@ -167,14 +167,14 @@ private struct DraftCard: View {
                         .foregroundStyle(colors.error)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
-                    TextLink(title: "Clear", action: onClearNote)
+                    TextLink(title: L.string("common_clear"), action: onClearNote)
                 }
             }
             Spacer().frame(height: 14)
             if accepting {
-                LoadingStrip(label: "Adding task…")
+                LoadingStrip(label: L.string("inbox_adding_task"))
             } else {
-                PrimaryActionButton(title: "Accept", icon: .check, action: onAccept)
+                PrimaryActionButton(title: L.string("inbox_accept_button"), icon: .check, action: onAccept)
             }
         }
         .padding(16)

@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.shell.AccountSession
 import com.circuitstitch.deferno.shell.AuthShellComponent
 import com.circuitstitch.deferno.shell.Destination
 import com.circuitstitch.deferno.shell.ChromeSpec
+import com.circuitstitch.deferno.shell.ChromeTitle
 import com.circuitstitch.deferno.shell.MainShellComponent
 import com.circuitstitch.deferno.shell.OverlayRoute
 import com.circuitstitch.deferno.shell.RootComponent
@@ -106,7 +107,7 @@ private class FakeMainShell : MainShellComponent {
     override val accounts: StateFlow<List<Account>> = MutableStateFlow(emptyList())
     override val activeAccount: StateFlow<Account?> = MutableStateFlow(null)
     override val inboxReadyCount: StateFlow<Int> = MutableStateFlow(0)
-    override val chrome: StateFlow<ChromeSpec> = MutableStateFlow(ChromeSpec(title = ""))
+    override val chrome: StateFlow<ChromeSpec> = MutableStateFlow(ChromeSpec(titleSpec = ChromeTitle.None))
     override val sessionExpired: StateFlow<Boolean> = MutableStateFlow(false)
 
     override fun openOverlay(route: OverlayRoute) = Unit

@@ -25,7 +25,11 @@ struct ItemTreeView: View {
     /// to "non-terminal" and All shows everything (terminal rows de-emphasized).
     @State private var filterIndex: Int = 2
 
-    private static let filters = ["In today", "Active", "All"]
+    private static let filters = [
+        L.string("tasks_filter_in_today"),
+        L.string("tasks_filter_active"),
+        L.string("tasks_filter_all")
+    ]
 
     init(component: ItemTreeComponent) {
         self.component = component
@@ -51,7 +55,7 @@ struct ItemTreeView: View {
                     }
 
                     if value.isRefreshing {
-                        LoadingStrip(label: "Refreshing…")
+                        LoadingStrip(label: L.string("tasks_tree_refreshing"))
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
@@ -101,7 +105,7 @@ struct ItemTreeView: View {
             // through the single `undoLastMove` path. Auto-dismisses; hidden in move mode.
             if let undo = value.lastMove, !inMoveMode {
                 UndoSnackbar(
-                    operation: undo.operation,
+                    operation: L.moveOperation(undo.operationKind.token),
                     moveKey: Int(undo.id),
                     onUndo: { component.undoLastMove() }
                 )
@@ -120,7 +124,7 @@ struct ItemTreeView: View {
     @ViewBuilder
     private func metaFilterBar(treeCount: Int, showBlocked: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            MonoMeta(treeCount == 1 ? "1 tree" : "\(treeCount) trees")
+            MonoMeta(L.plural("tasks_tree_count", treeCount))
             HStack(spacing: 6) {
                 ForEach(Array(Self.filters.enumerated()), id: \.offset) { i, label in
                     SelectableChip(
@@ -136,7 +140,7 @@ struct ItemTreeView: View {
                 // them (still marked). Flips `showBlocked` on the shared component, never a client-side filter
                 // (that would dangle the filigree rails).
                 SelectableChip(
-                    label: "Show blocked",
+                    label: L.string("tasks_tree_show_blocked"),
                     selected: showBlocked,
                     prominence: .low,
                     compact: true
@@ -160,10 +164,10 @@ struct ItemTreeView: View {
     @ViewBuilder
     private func emptyState(allEmpty: Bool) -> some View {
         EmptyStateView(
-            title: allEmpty ? "No trees yet" : "Nothing to show here",
+            title: allEmpty ? L.string("tasks_tree_empty_title") : L.string("tasks_tree_filtered_empty_title"),
             message: allEmpty
-                ? "When you add a tree, it shows up here. One small step at a time."
-                : "Everything here is done. Switch to “All” to see it again."
+                ? L.string("tasks_tree_empty_body")
+                : L.string("tasks_tree_filtered_empty_body")
         )
     }
 
@@ -225,26 +229,26 @@ private struct ItemRowContainer: View {
         .contextMenu { rowMenu() }
         // Delete confirm (destructive, #231) — mirrors the Task-detail kebab's confirm.
         .confirmationDialog(
-            "Delete “\(row.item.title)”?",
+            L.format("tasks_delete_item_confirm_title", row.item.title),
             isPresented: $confirmDelete,
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) { component.onDelete(id: row.item.id) }
-            Button("Cancel", role: .cancel) {}
+            Button(L.string("common_delete"), role: .destructive) { component.onDelete(id: row.item.id) }
+            Button(L.string("common_cancel"), role: .cancel) {}
         } message: {
-            Text("This can't be undone.")
+            Text(L.string("common_cannot_be_undone"))
         }
         // Add subtask (#231): a native title prompt — the tree has no inline add field (that's the detail's).
         // The child is always a Task (only Tasks carry a parent). A blank title is gated out (Add disabled).
-        .alert("Add subtask", isPresented: $addSubtaskOpen) {
-            TextField("Title", text: $newSubtaskTitle)
-            Button("Add") {
+        .alert(L.string("tasks_menu_add_subtask"), isPresented: $addSubtaskOpen) {
+            TextField(L.string("new_title_label"), text: $newSubtaskTitle)
+            Button(L.string("common_add")) {
                 component.onAddSubtask(parentId: row.item.id, title: newSubtaskTitle)
             }
             .disabled(newSubtaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            Button("Cancel", role: .cancel) {}
+            Button(L.string("common_cancel"), role: .cancel) {}
         } message: {
-            Text("New subtask under “\(row.item.title)”.")
+            Text(L.format("tasks_new_subtask_under_a11y", row.item.title))
         }
         .onChange(of: addSubtaskOpen) { open in
             if open { newSubtaskTitle = "" } // fresh prompt each time
@@ -258,18 +262,18 @@ private struct ItemRowContainer: View {
             // Open routes to the Task-only detail surface (the other kinds have no detail yet).
             if isTask {
                 Button { component.onOpenDetail(id: row.item.id, kind: row.item.kind) } label: {
-                    Label("Open", systemImage: "arrow.up.right.square")
+                    Label(L.string("tasks_menu_open"), systemImage: "arrow.up.right.square")
                 }
             }
             Button { addSubtaskOpen = true } label: {
-                Label("Add subtask", systemImage: "plus")
+                Label(L.string("tasks_menu_add_subtask"), systemImage: "plus")
             }
             Button { component.onEnterMoveMode(id: row.item.id) } label: {
-                Label("Move", systemImage: "arrow.up.arrow.down")
+                Label(L.string("tasks_menu_move"), systemImage: "arrow.up.arrow.down")
             }
             if canUndo {
                 Button { component.undoLastMove() } label: {
-                    Label("Undo move", systemImage: "arrow.uturn.backward")
+                    Label(L.string("tasks_menu_undo_move"), systemImage: "arrow.uturn.backward")
                 }
             }
 
@@ -280,36 +284,36 @@ private struct ItemRowContainer: View {
                 if let menu = menuState {
                     Divider()
                     Button { component.onSetPinned(id: row.item.id, pinned: !menu.pinned) } label: {
-                        Label(menu.pinned ? "Unpin" : "Pin",
+                        Label(menu.pinned ? L.string("tasks_menu_unpin") : L.string("tasks_menu_pin"),
                               systemImage: menu.pinned ? "pin.slash" : "pin")
                     }
                     Button { component.onSetInPlan(id: row.item.id, inPlan: !menu.inPlan) } label: {
-                        Label(menu.inPlan ? "Remove from today's plan" : "Add to today's plan",
+                        Label(menu.inPlan ? L.string("tasks_menu_remove_from_plan") : L.string("tasks_menu_add_to_plan"),
                               systemImage: menu.inPlan ? "calendar.badge.minus" : "calendar.badge.plus")
                     }
                     Divider()
                     // The status block: each verb hidden when the Task is already in that state.
                     if menu.workingState != WorkingState.inProgress {
                         Button { component.onSetWorkingState(id: row.item.id, target: WorkingState.inProgress) } label: {
-                            Label("Start working", systemImage: "play")
+                            Label(L.string("tasks_menu_start_working"), systemImage: "play")
                         }
                     }
                     if menu.workingState != WorkingState.done {
                         Button { component.onSetWorkingState(id: row.item.id, target: WorkingState.done) } label: {
-                            Label("Mark done", systemImage: "checkmark")
+                            Label(L.string("tasks_menu_mark_done"), systemImage: "checkmark")
                         }
                     }
                     if menu.workingState != WorkingState.dropped {
                         Button(role: .destructive) {
                             component.onSetWorkingState(id: row.item.id, target: WorkingState.dropped)
                         } label: {
-                            Label("Set aside", systemImage: "xmark.circle")
+                            Label(L.string("tasks_set_aside"), systemImage: "xmark.circle")
                         }
                     }
                 }
                 Divider()
                 Button(role: .destructive) { confirmDelete = true } label: {
-                    Label("Delete (Permanent!)", systemImage: "trash")
+                    Label(L.string("tasks_menu_delete_permanent"), systemImage: "trash")
                 }
             } else if let definition = row.item.definitionState {
                 // The non-Task definition-state block (#299): Activate / Send to review / Archive, hiding the
@@ -318,19 +322,19 @@ private struct ItemRowContainer: View {
                 Divider()
                 if definition != DefinitionState.active {
                     Button { component.onSetDefinitionState(id: row.item.id, target: DefinitionState.active) } label: {
-                        Label("Activate", systemImage: "tray.and.arrow.up")
+                        Label(L.string("tasks_menu_activate"), systemImage: "tray.and.arrow.up")
                     }
                 }
                 if definition != DefinitionState.inReview {
                     Button { component.onSetDefinitionState(id: row.item.id, target: DefinitionState.inReview) } label: {
-                        Label("Send to review", systemImage: "eye")
+                        Label(L.string("tasks_menu_send_to_review"), systemImage: "eye")
                     }
                 }
                 if definition != DefinitionState.archived {
                     Button(role: .destructive) {
                         component.onSetDefinitionState(id: row.item.id, target: DefinitionState.archived)
                     } label: {
-                        Label("Archive", systemImage: "archivebox")
+                        Label(L.string("tasks_menu_archive"), systemImage: "archivebox")
                     }
                 }
             }
@@ -354,13 +358,13 @@ private struct MoveModeBar: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            MoveControl(icon: .moveUp, label: "Move up", enabled: move.canMoveUp, action: onMoveUp)
-            MoveControl(icon: .moveDown, label: "Move down", enabled: move.canMoveDown, action: onMoveDown)
-            MoveControl(icon: .outdent, label: "Outdent", enabled: move.canOutdent, action: onOutdent)
-            MoveControl(icon: .indent, label: "Indent", enabled: move.canIndent, action: onIndent)
+            MoveControl(icon: .moveUp, label: L.string("tasks_move_up"), enabled: move.canMoveUp, action: onMoveUp)
+            MoveControl(icon: .moveDown, label: L.string("tasks_move_down"), enabled: move.canMoveDown, action: onMoveDown)
+            MoveControl(icon: .outdent, label: L.string("tasks_move_outdent"), enabled: move.canOutdent, action: onOutdent)
+            MoveControl(icon: .indent, label: L.string("tasks_move_indent"), enabled: move.canIndent, action: onIndent)
             Spacer(minLength: 8)
             Button(action: onDone) {
-                Text("Done")
+                Text(L.string("calendar_action_done"))
                     .font(.body.weight(.semibold))
                     .foregroundStyle(colors.primary)
                     .frame(minHeight: Layout.minTouchTarget)
@@ -413,7 +417,7 @@ private struct UndoSnackbar: View {
         Group {
             if !dismissed {
                 HStack(spacing: 12) {
-                    Text("Moved")
+                    Text(L.string("tasks_moved_snackbar"))
                         .font(.subheadline)
                         .foregroundStyle(colors.onSurface)
                     Spacer(minLength: 8)
@@ -423,7 +427,7 @@ private struct UndoSnackbar: View {
                     } label: {
                         HStack(spacing: 6) {
                             DefernoIcon.undo.image(size: 14)
-                            Text("Undo \(operation)")
+                            Text(L.format("tasks_undo_operation_confirm_title", operation))
                         }
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(colors.primary)
@@ -441,7 +445,7 @@ private struct UndoSnackbar: View {
                 )
                 .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel("Moved. Undo \(operation) available.")
+                .accessibilityLabel(L.format("tasks_moved_undo_available", operation))
             }
         }
         .onChange(of: moveKey) { dismissed = false; scheduleDismiss() }

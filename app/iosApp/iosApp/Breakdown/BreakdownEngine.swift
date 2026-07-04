@@ -75,7 +75,7 @@ final class BreakdownEngine: ObservableObject {
         } catch {
             // A transient on-device failure: never strand the person — let them rephrase (availability is
             // checked before the engine is built, so this is a generation hiccup, not "no Apple Intelligence").
-            append(.assistant, "I couldn't quite work that out on-device. Want to say it a different way?")
+            append(.assistant, L.string("breakdown_msg_classifier_retry"))
             current = node
             phase = .asking
             return
@@ -91,10 +91,10 @@ final class BreakdownEngine: ObservableObject {
         if yes {
             await moves.drop(node.id)
             if node.id == rootID { rootDropped = true }
-            append(.assistant, "Done — taking “\(node.title)” off your list. You can recover it from history.")
+            append(.assistant, L.format("breakdown_msg_dropped", node.title))
             advance()
         } else {
-            append(.assistant, "Kept it. So — what's stopping you from “\(node.title)”?")
+            append(.assistant, L.format("breakdown_msg_kept_reask", node.title))
             current = node
             phase = .asking
         }
@@ -104,7 +104,7 @@ final class BreakdownEngine: ObservableObject {
     func addRootToPlan() async {
         guard case .finished(.ready) = phase else { return }
         await moves.addToPlan(rootID)
-        append(.assistant, "Added to today's plan.")
+        append(.assistant, L.string("breakdown_msg_added_to_plan"))
     }
 
     /// Leave at any point (PRD #22) — never trapped in a long interrogation.
@@ -120,12 +120,12 @@ final class BreakdownEngine: ObservableObject {
         case .tooBig:
             let created = await capture(c.subtaskTitles, under: node)
             if created.isEmpty {
-                append(.assistant, "Let's name the first small piece — what's one part you could start on?")
+                append(.assistant, L.string("breakdown_msg_name_first_piece"))
                 current = node
                 phase = .asking
                 return
             }
-            append(.assistant, "Broke it into " + listed(created.map(\.title)) + ".")
+            append(.assistant, L.format("breakdown_msg_broke_into", listed(created.map(\.title))))
             stack.append(contentsOf: created.reversed()) // depth-first into the new parts
             advance()
 
@@ -133,32 +133,32 @@ final class BreakdownEngine: ObservableObject {
             let title = (c.prerequisiteTitle?.trimmingCharacters(in: .whitespacesAndNewlines))
                 .flatMap { $0.isEmpty ? nil : $0 } ?? defaultPrerequisite(for: c.kind)
             if let id = await moves.captureSubtask(under: node.id, title: title) {
-                append(.assistant, "Added a prerequisite to do first: “\(title)”.")
+                append(.assistant, L.format("breakdown_msg_added_prerequisite", title))
                 stack.append(Node(id: id, title: title))
             }
             advance()
 
         case .persistentAvoidance:
             pendingDrop = node
-            append(.assistant, "Sounds like you keep putting it off. Do you actually need this? I can take “\(node.title)” off your list — just say yes.")
+            append(.assistant, L.format("breakdown_msg_confirm_drop", node.title))
             phase = .confirmingDrop
 
         case .transientObstacle:
-            append(.assistant, "That's temporary — it's okay to skip it for now. It still mattered to you, so it'll be here when you're ready.")
+            append(.assistant, L.string("breakdown_msg_transient_obstacle"))
             advance()
 
         case .somethingMoreUrgent:
             // Degraded until the priority model (#526) lands — record the tension, don't bury the item.
-            append(.assistant, "Something more pressing right now — noted. (Lowering its priority is coming soon; for now it stays put.)")
+            append(.assistant, L.string("breakdown_msg_more_urgent"))
             advance()
 
         case .waitingOnDependency:
             // Degraded until set_blocked_by lands — acknowledge, don't fake an edge.
-            append(.assistant, "Sounds like it's blocked by something else — noted. (Linking that blocker is coming soon.)")
+            append(.assistant, L.string("breakdown_msg_waiting_dependency"))
             advance()
 
         case .nothingStopping:
-            append(.assistant, "Then “\(node.title)” is ready to go.")
+            append(.assistant, L.format("breakdown_msg_ready_to_go", node.title))
             advance()
         }
     }
@@ -179,7 +179,7 @@ final class BreakdownEngine: ObservableObject {
 
     private func ask(_ node: Node) {
         current = node
-        append(.assistant, "What's stopping you from “\(node.title)”?")
+        append(.assistant, L.format("breakdown_msg_whats_stopping", node.title))
         phase = .asking
     }
 
@@ -189,9 +189,9 @@ final class BreakdownEngine: ObservableObject {
         } else {
             current = nil
             let outcome: Outcome = rootDropped ? .dropped : .ready
-            append(.assistant, outcome == .dropped
-                ? "All set — we cleared what you didn't need."
-                : "Everything's broken down and ready. Nice work.")
+            append(.assistant, L.string(outcome == .dropped
+                ? "breakdown_msg_finished_dropped"
+                : "breakdown_msg_finished_ready"))
             phase = .finished(outcome)
         }
     }
@@ -214,8 +214,8 @@ final class BreakdownEngine: ObservableObject {
 
     private func defaultPrerequisite(for kind: ImpedimentClass) -> String {
         switch kind {
-        case .scaredOfDoingItWrong: return "Define what “done” looks like, and decide if I'm the right person or should delegate"
-        default: return "Figure out how to do this"
+        case .scaredOfDoingItWrong: return L.string("breakdown_prereq_define_done")
+        default: return L.string("breakdown_prereq_figure_out")
         }
     }
 }

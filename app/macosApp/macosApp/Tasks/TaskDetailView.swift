@@ -35,17 +35,17 @@ struct TaskDetailView: View {
             // Plan tier-3 host (#51), where the shell bar shows the title + back.
             if showsHeader {
                 PaneHeader(
-                    title: value.task?.title ?? "Task",
+                    title: value.task?.title ?? L.string("common_kind_task"),
                     onBack: hidesBackControl ? nil : { component.onCloseClicked() }
                 )
             }
             if value.isHydrating && value.task == nil {
-                LoadingStrip(label: "Loading details…")
+                LoadingStrip(label: L.string("tasks_detail_loading"))
             }
             if value.task == nil && !value.isHydrating {
                 EmptyStateView(
-                    title: "Task not found",
-                    message: "This task may have been removed. Head back to your list."
+                    title: L.string("tasks_detail_not_found_title"),
+                    message: L.string("tasks_detail_not_found_body")
                 )
             } else if let task = value.task {
                 taskBody(for: task, state: value)
@@ -71,13 +71,13 @@ struct TaskDetailView: View {
                 if let description = task.description_, !description.isEmpty {
                     Text(description).font(.body)
                 } else if !value.isHydrating {
-                    Text("No description yet.")
+                    Text(L.string("tasks_detail_no_description"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
 
                 Button { component.onAddToPlanClicked() } label: {
-                    Text("Add to today's plan").frame(maxWidth: .infinity)
+                    Text(L.string("tasks_menu_add_to_plan")).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -98,11 +98,11 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func propertiesSection(_ task: Task) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionTitle("Properties")
+            SectionTitle(L.string("tasks_detail_section_properties"))
             dueRow(task)
-            propertyRow(label: "Time", value: BridgeKt.taskTimeLabel(task: task))
+            propertyRow(label: L.string("tasks_detail_property_time"), value: BridgeKt.taskTimeLabel(task: task))
             labelsRow(task)
-            propertyRow(label: "Owner", value: BridgeKt.taskOwnerLabel(task: task))
+            propertyRow(label: L.string("tasks_detail_property_owner"), value: BridgeKt.taskOwnerLabel(task: task))
         }
     }
 
@@ -126,7 +126,7 @@ struct TaskDetailView: View {
         HStack {
             if hasDue {
                 DatePicker(
-                    "Due",
+                    L.string("tasks_detail_property_due"),
                     selection: Binding(
                         get: { Date(timeIntervalSince1970: BridgeKt.taskDeadlineEpochSeconds(task: task)) },
                         set: { BridgeKt.setTaskDeadline(component: component, epochSeconds: $0.timeIntervalSince1970) }
@@ -134,16 +134,16 @@ struct TaskDetailView: View {
                     displayedComponents: .date
                 )
                 .datePickerStyle(.field)
-                Button("Clear") { BridgeKt.clearTaskDeadline(component: component) }
+                Button(L.string("common_clear")) { BridgeKt.clearTaskDeadline(component: component) }
                     .font(.subheadline)
-                    .accessibilityLabel("Clear due date")
+                    .accessibilityLabel(L.string("tasks_detail_clear_due_date_a11y"))
             } else {
-                Text("Due").font(.subheadline).foregroundStyle(.secondary).frame(width: 72, alignment: .leading)
+                Text(L.string("tasks_detail_property_due")).font(.subheadline).foregroundStyle(.secondary).frame(width: 72, alignment: .leading)
                 Text("—").foregroundStyle(.secondary)
                 Spacer()
-                Button("Set") { BridgeKt.setTaskDeadline(component: component, epochSeconds: Date().timeIntervalSince1970) }
+                Button(L.string("common_set")) { BridgeKt.setTaskDeadline(component: component, epochSeconds: Date().timeIntervalSince1970) }
                     .font(.subheadline)
-                    .accessibilityLabel("Set due date")
+                    .accessibilityLabel(L.string("tasks_detail_set_due_date"))
             }
         }
         .frame(minHeight: Layout.minTouchTarget)
@@ -152,7 +152,7 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func labelsRow(_ task: Task) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Labels").font(.subheadline).foregroundStyle(.secondary)
+            Text(L.string("common_labels")).font(.subheadline).foregroundStyle(.secondary)
             if !task.labels.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -165,7 +165,7 @@ struct TaskDetailView: View {
                                     Image(systemName: "xmark.circle.fill").font(.caption)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel("Remove label \(label)")
+                                .accessibilityLabel(L.format("tasks_detail_remove_label_a11y", label))
                             }
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .background(Color(.secondarySystemFill), in: Capsule())
@@ -179,10 +179,10 @@ struct TaskDetailView: View {
 
     private var addLabelField: some View {
         HStack {
-            TextField("Add a label…", text: $newLabel)
+            TextField(L.string("tasks_detail_add_label_placeholder"), text: $newLabel)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit { submitLabel() }
-            Button("Add") { submitLabel() }
+            Button(L.string("common_add")) { submitLabel() }
                 .disabled(newLabel.trimmingCharacters(in: .whitespaces).isEmpty)
         }
     }
@@ -206,10 +206,10 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func subtasksSection(_ value: TaskDetailState) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionTitle("Subtasks", trailing: value.subtaskTotal > 0 ? "\(value.subtaskDone)/\(value.subtaskTotal)" : nil)
+            SectionTitle(L.string("tasks_detail_section_subtasks"), trailing: value.subtaskTotal > 0 ? "\(value.subtaskDone)/\(value.subtaskTotal)" : nil)
             if value.subtaskTotal > 0 {
                 ProgressView(value: Double(value.subtaskDone), total: Double(value.subtaskTotal))
-                    .accessibilityLabel("\(value.subtaskDone) of \(value.subtaskTotal) subtasks done")
+                    .accessibilityLabel(L.format("tasks_detail_subtask_progress_a11y", Int(value.subtaskDone), Int(value.subtaskTotal)))
                 ForEach(value.subtaskRows, id: \.task.stableKey) { row in
                     SubtaskOutlineRow(
                         row: row,
@@ -219,7 +219,7 @@ struct TaskDetailView: View {
                     )
                 }
             } else {
-                Text("No smaller steps yet.").font(.subheadline).foregroundStyle(.secondary)
+                Text(L.string("tasks_detail_no_subtasks_body")).font(.subheadline).foregroundStyle(.secondary)
             }
         }
     }
@@ -246,7 +246,7 @@ private struct SubtaskOutlineRow: View {
                         .font(.caption2).foregroundStyle(.secondary).frame(width: 14)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(row.isExpanded ? "Collapse \(task.title)" : "Expand \(task.title)")
+                .accessibilityLabel(row.isExpanded ? L.format("common_collapse_named_cd", task.title) : L.format("common_expand_named_cd", task.title))
             } else {
                 Spacer().frame(width: 14)
             }
@@ -254,7 +254,7 @@ private struct SubtaskOutlineRow: View {
                 Image(systemName: done ? "checkmark.square.fill" : "square").font(.title3)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(done ? "Mark \(task.title) not done" : "Mark \(task.title) done")
+            .accessibilityLabel(done ? L.format("common_mark_not_done_cd", task.title) : L.format("common_mark_done_cd", task.title))
             Button { onOpen(task) } label: {
                 Text(task.title)
                     // Blocked mutes (but doesn't strike) like the tree row — "blocked, not finished" (#290/#292).
@@ -263,9 +263,9 @@ private struct SubtaskOutlineRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open \(task.title)")
+            .accessibilityLabel(L.format("common_open_named_cd", task.title))
             if task.blocked {
-                DependencyBadge(text: "Blocked", tone: .neutral, semanticLabel: "Blocked")
+                DependencyBadge(text: L.string("common_blocked"), tone: .neutral, semanticLabel: L.string("common_blocked"))
             }
             WorkingStateBadge(state: task.workingState)
         }
@@ -299,7 +299,7 @@ private struct WorkingStateEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Working state")
+            Text(L.string("tasks_detail_working_state_heading"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .accessibilityAddTraits(.isHeader)
@@ -319,7 +319,7 @@ private struct WorkingStateEditorView: View {
         SelectableChip(
             label: state.label,
             selected: selected,
-            accessibilityLabel: selected ? "\(state.label), current working state" : "Set to \(state.label)"
+            accessibilityLabel: selected ? L.format("tasks_detail_working_state_current_a11y", state.label) : L.format("tasks_detail_set_working_state_a11y", state.label)
         ) { onSet(state) }
     }
 }

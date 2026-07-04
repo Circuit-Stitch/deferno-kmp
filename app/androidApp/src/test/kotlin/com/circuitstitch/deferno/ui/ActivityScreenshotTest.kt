@@ -42,24 +42,22 @@ class ActivityScreenshotTest {
     }
 
     private val rows = listOf(
-        row(5, ActivityVerb.Created, "task", "Created a task", ActivitySource.Mobile, "Mobile app", "2026-06-21T09:45:00Z", "t5"),
-        row(4, ActivityVerb.UpdatedTask, null, "Updated a task", ActivitySource.Mobile, "Mobile app", "2026-06-21T09:31:00Z", "t4"),
-        row(3, ActivityVerb.UpdatedPlan, null, "Updated your plan", ActivitySource.Mobile, "Mobile app", "2026-06-21T08:12:00Z", null),
-        row(2, ActivityVerb.UpdatedTask, null, "Updated a task", ActivitySource.Website, "via Website", "2026-06-20T21:05:00Z", "t2"),
-        row(1, ActivityVerb.Created, "habit", "Created a habit", ActivitySource.Mcp, "via MCP agent", "2026-06-20T18:40:00Z", "h1"),
+        row(5, ActivityVerb.Created, "task", ActivitySource.Mobile, "2026-06-21T09:45:00Z", "t5"),
+        row(4, ActivityVerb.UpdatedTask, null, ActivitySource.Mobile, "2026-06-21T09:31:00Z", "t4"),
+        row(3, ActivityVerb.UpdatedPlan, null, ActivitySource.Mobile, "2026-06-21T08:12:00Z", null),
+        row(2, ActivityVerb.UpdatedTask, null, ActivitySource.Website, "2026-06-20T21:05:00Z", "t2"),
+        row(1, ActivityVerb.Created, "habit", ActivitySource.Mcp, "2026-06-20T18:40:00Z", "h1"),
     )
 
-    // The View renders the typed fields (summaryInfo/source); the strings mirror them for the bridges.
+    // The View renders the typed fields (summaryInfo/source) — the only fields the row now carries.
     private fun row(
         seq: Long,
         verb: ActivityVerb,
         kindToken: String?,
-        summary: String,
         source: ActivitySource,
-        sourceLabel: String,
         at: String,
         itemId: String?,
-    ) = ActivityFeedRow(seq, summary, sourceLabel, Instant.parse(at), itemId, ActivitySummary(verb, kindToken), source)
+    ) = ActivityFeedRow(seq, Instant.parse(at), itemId, ActivitySummary(verb, kindToken), source)
 
     private fun capture(name: String, content: @Composable () -> Unit) {
         composeRule.setContent {

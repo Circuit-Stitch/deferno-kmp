@@ -52,10 +52,8 @@ data class ItemTreeState(
  */
 data class MoveUndo(
     val id: Int,
-    /** The legacy lowercase label the SwiftUI bridges render — [operationKind]'s token. */
-    val operation: String,
     val structural: Boolean,
-    /** Typed for locale-aware rendering in the Compose View. */
+    /** Typed for locale-aware rendering — every platform View localizes the confirm from this (#327). */
     val operationKind: MoveOperation,
 )
 
@@ -65,9 +63,8 @@ data class MoveUndo(
  * already emitted its tracking event). The View renders the confirm and, on accept, calls [ItemTreeComponent.undoLastMove].
  */
 sealed interface ShakeOutcome {
-    /** [operation] keeps the legacy lowercase label for the SwiftUI bridges; the Compose View
-     *  localizes from [operationKind]. */
-    data class Confirm(val operation: String, val operationKind: MoveOperation) : ShakeOutcome
+    /** Every platform View localizes the confirm ("Undo [operation]?") from the typed [operationKind] (#327). */
+    data class Confirm(val operationKind: MoveOperation) : ShakeOutcome
     data object Nothing : ShakeOutcome
 }
 
@@ -265,7 +262,7 @@ class DefaultItemTreeComponent(
             menuStates,
         ) { core, undoable, menus ->
             core.copy(
-                lastMove = undoable?.let { MoveUndo(it.id, it.operation.token, it.structural, it.operation) },
+                lastMove = undoable?.let { MoveUndo(it.id, it.structural, it.operation) },
                 menuStates = menus,
             )
         }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ItemTreeState())
@@ -344,7 +341,7 @@ class DefaultItemTreeComponent(
         if (!shakeToUndoPreference.enabled()) return ShakeOutcome.Nothing
         val entry = lastUndoable.current.value
             ?: return ShakeOutcome.Nothing.also { trackEvent("shake_undo_no_target") }
-        return ShakeOutcome.Confirm(entry.operation.token, entry.operation)
+        return ShakeOutcome.Confirm(entry.operation)
     }
 
     // --- Kind-aware command menu writes (ADR-0034 decision 7, #231). Each is a thin dispatch to its

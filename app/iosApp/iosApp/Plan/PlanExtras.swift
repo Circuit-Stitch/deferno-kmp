@@ -40,29 +40,29 @@ struct WhatNextView: View {
 
     /// The derived "why" line for the current idea (mirrors `PlanScreen.whyLine`).
     private func whyLine(_ task: Task) -> String {
-        if task.pinned { return "You said this one matters" }
-        if !task.workingState.isTerminal { return "A quick win, if you want momentum" }
-        return "Already wrapped up — pick another?"
+        if task.pinned { return L.string("plan_why_pinned") }
+        if !task.workingState.isTerminal { return L.string("plan_why_quick_win") }
+        return L.string("plan_picker_already_done")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Eyebrow("What's next")
+                Eyebrow(L.string("plan_whats_next_title"))
                 Spacer()
-                TextLink(title: "Close") { dismiss() }
+                TextLink(title: L.string("common_close")) { dismiss() }
             }
             .padding(.horizontal, 20)
             .padding(.top, 20)
 
-            Text("What's next?")
+            Text(L.string("plan_whats_next_title"))
                 .font(.title.weight(.semibold))
                 .foregroundStyle(colors.onSurface)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
 
-            Text("You're in charge. Here's one idea at a time — keep what feels doable, skip the rest.")
+            Text(L.string("plan_picker_subtitle"))
                 .font(.subheadline)
                 .foregroundStyle(colors.onSurfaceVariant)
                 .padding(.horizontal, 20)
@@ -74,7 +74,7 @@ struct WhatNextView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         DefernoIcon.sparkle.image(size: 16).foregroundStyle(colors.primary)
-                        SectionLabel("How about")
+                        SectionLabel(L.string("plan_picker_how_about"))
                     }
                     Text(task.title)
                         .font(.title2.weight(.semibold))
@@ -99,10 +99,10 @@ struct WhatNextView: View {
                 Spacer(minLength: 24)
 
                 VStack(spacing: 10) {
-                    PrimaryActionButton(title: "This one", icon: .check) {
+                    PrimaryActionButton(title: L.string("plan_picker_this_one"), icon: .check) {
                         onPick(task)
                     }
-                    TonalActionButton(title: "Something else", icon: .refresh) {
+                    TonalActionButton(title: L.string("plan_picker_something_else"), icon: .refresh) {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             index = (index + 1) % max(1, candidates.count)
                         }
@@ -112,8 +112,8 @@ struct WhatNextView: View {
                 .padding(.bottom, 20)
             } else {
                 EmptyStateView(
-                    title: "Nothing waiting",
-                    message: "Your plan is clear — there's nothing to pick right now."
+                    title: L.string("plan_picker_empty_title"),
+                    message: L.string("plan_picker_empty_body")
                 )
                 Spacer()
             }
@@ -139,7 +139,7 @@ struct FocusView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                TextLink(title: "Exit focus") { dismiss() }
+                TextLink(title: L.string("plan_exit_focus")) { dismiss() }
                 Spacer()
             }
             .padding(.horizontal, 24)
@@ -157,7 +157,7 @@ struct FocusView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
 
-            Text("Just this. The rest is put away.")
+            Text(L.string("plan_focus_subtitle"))
                 .font(.subheadline)
                 .foregroundStyle(colors.inkMuted)
                 .multilineTextAlignment(.center)
@@ -167,8 +167,8 @@ struct FocusView: View {
             Spacer()
 
             VStack(spacing: 8) {
-                PrimaryActionButton(title: "Done — next step", icon: .check) { dismiss() }
-                TextLink(title: "Pause · take a break whenever you need") { dismiss() }
+                PrimaryActionButton(title: L.string("plan_focus_done"), icon: .check) { dismiss() }
+                TextLink(title: L.string("plan_focus_pause")) { dismiss() }
                     .padding(.top, 4)
             }
             .padding(.horizontal, 24)

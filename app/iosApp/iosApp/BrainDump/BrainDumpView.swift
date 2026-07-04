@@ -32,9 +32,9 @@ struct BrainDumpView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Brain dump").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                Text(L.string("braindump_title")).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
                 Spacer()
-                Button("Close") { stopTimer(); component.dismiss() }
+                Button(L.string("common_close")) { stopTimer(); component.dismiss() }
             }
             .padding(.horizontal, Layout.gutter).frame(minHeight: 56)
 
@@ -58,33 +58,33 @@ struct BrainDumpView: View {
                     .frame(width: 50, height: 30)
                 MonoMeta(text: timeLabel(elapsed))
                 stopButton
-                Text("Listening…").font(.subheadline).foregroundStyle(colors.inkMuted)
+                Text(L.string("braindump_listening")).font(.subheadline).foregroundStyle(colors.inkMuted)
             }
         case "Enqueued":
             VStack(spacing: 16) {
                 DefernoIcon.check.image(size: 40).foregroundStyle(colors.success)
-                Text("Sorting to your Inbox").font(.headline).foregroundStyle(colors.onSurface)
-                Text("We'll transcribe this in the background and drop the results in your Inbox.")
+                Text(L.string("braindump_sorting_title")).font(.headline).foregroundStyle(colors.onSurface)
+                Text(L.string("braindump_sorting_body"))
                     .font(.subheadline).foregroundStyle(colors.inkMuted)
                     .multilineTextAlignment(.center).padding(.horizontal, 32)
-                PrimaryActionButton(title: "Done", icon: .check) { component.dismiss() }
+                PrimaryActionButton(title: L.string("calendar_action_done"), icon: .check) { component.dismiss() }
                     .padding(.horizontal, 48)
             }
         case "Failed":
             VStack(spacing: 16) {
-                Text("Couldn't record").font(.headline).foregroundStyle(colors.onSurface)
-                Text("Something went wrong reaching the microphone. Try again.")
+                Text(L.string("braindump_error_title")).font(.headline).foregroundStyle(colors.onSurface)
+                Text(L.string("braindump_error_body"))
                     .font(.subheadline).foregroundStyle(colors.inkMuted).multilineTextAlignment(.center)
                 micButton
             }.padding(.horizontal, 32)
         case "PermissionDenied", "PermissionPermanentlyDenied":
             VStack(spacing: 16) {
                 DefernoIcon.mic.image(size: 36).foregroundStyle(colors.inkMuted)
-                Text("Needs microphone access").font(.headline).foregroundStyle(colors.onSurface)
-                Text("Allow Deferno to use the microphone to capture a brain dump by voice.")
+                Text(L.string("braindump_mic_needed_title")).font(.headline).foregroundStyle(colors.onSurface)
+                Text(L.string("braindump_mic_needed_body"))
                     .font(.subheadline).foregroundStyle(colors.inkMuted).multilineTextAlignment(.center)
                 if phase == "PermissionPermanentlyDenied" {
-                    PrimaryActionButton(title: "Open Settings") { component.openDictationPermissionSettings() }
+                    PrimaryActionButton(title: L.string("common_open_settings")) { component.openDictationPermissionSettings() }
                         .padding(.horizontal, 48)
                 } else {
                     micButton
@@ -92,8 +92,8 @@ struct BrainDumpView: View {
             }.padding(.horizontal, 32)
         default: // Idle
             VStack(spacing: 20) {
-                Text("Speak your mind").font(.title3.weight(.semibold)).foregroundStyle(colors.onSurface)
-                Text("Tap to record. We'll sort what you say into your Inbox.")
+                Text(L.string("braindump_idle_title")).font(.title3.weight(.semibold)).foregroundStyle(colors.onSurface)
+                Text(L.string("braindump_idle_body"))
                     .font(.subheadline).foregroundStyle(colors.inkMuted)
                     .multilineTextAlignment(.center).padding(.horizontal, 40)
                 micButton
@@ -110,7 +110,7 @@ struct BrainDumpView: View {
             .frame(width: 96, height: 96)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Record")
+        .accessibilityLabel(L.string("braindump_record_a11y"))
     }
 
     private var stopButton: some View {
@@ -122,7 +122,7 @@ struct BrainDumpView: View {
             .frame(width: 80, height: 80)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Stop recording")
+        .accessibilityLabel(L.string("braindump_stop_recording_a11y"))
     }
 
     private func requestThenRecord() {

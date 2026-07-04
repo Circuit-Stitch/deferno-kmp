@@ -24,11 +24,11 @@ struct BreakdownView: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(colors.background)
-                .navigationTitle("Break it down")
+                .navigationTitle(L.string("breakdown_title"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
-                        Button("Close") { component.onClose() }
+                        Button(L.string("common_close")) { component.onClose() }
                     }
                 }
         }
@@ -53,10 +53,10 @@ struct BreakdownView: View {
     private var unavailable: some View {
         VStack(spacing: 16) {
             Image(systemName: "sparkles").font(.system(size: 40)).foregroundStyle(colors.primary)
-            Text("Breakdown needs Apple Intelligence")
+            Text(L.string("breakdown_needs_ai_title"))
                 .font(.title3.weight(.semibold)).foregroundStyle(colors.onSurface)
                 .multilineTextAlignment(.center)
-            Text("Turn on Apple Intelligence in Settings to break a stuck task into smaller steps, all on-device.")
+            Text(L.string("breakdown_needs_ai_body"))
                 .font(.subheadline).foregroundStyle(colors.inkMuted)
                 .multilineTextAlignment(.center).padding(.horizontal, 24)
         }
@@ -89,7 +89,7 @@ private struct BreakdownChat: View {
             messageList
             footer
         }
-        .navigationTitle(engine.focusTitle ?? "Break it down")
+        .navigationTitle(engine.focusTitle ?? L.string("breakdown_title"))
     }
 
     private var messageList: some View {
@@ -123,7 +123,7 @@ private struct BreakdownChat: View {
 
     private var composer: some View {
         HStack(spacing: 10) {
-            TextField("What's stopping you?", text: $draft, axis: .vertical)
+            TextField(L.string("breakdown_composer_placeholder"), text: $draft, axis: .vertical)
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 14).padding(.vertical, 10)
@@ -132,7 +132,7 @@ private struct BreakdownChat: View {
             Button { send() } label: {
                 Image(systemName: "arrow.up.circle.fill").font(.system(size: 30))
             }
-            .accessibilityLabel("Send")
+            .accessibilityLabel(L.string("common_send"))
             .foregroundStyle(canSend ? colors.primary : colors.inkMuted)
             .disabled(!canSend)
         }
@@ -143,9 +143,9 @@ private struct BreakdownChat: View {
     /// The one destructive move (PRD #26): an explicit yes/no before a drop, never a swipe-by.
     private var dropConfirm: some View {
         HStack(spacing: 10) {
-            Button { confirmDrop(false) } label: { Text("Keep it").frame(maxWidth: .infinity) }
+            Button { confirmDrop(false) } label: { Text(L.string("breakdown_keep_it")).frame(maxWidth: .infinity) }
                 .buttonStyle(.bordered)
-            Button { confirmDrop(true) } label: { Text("Let it go").frame(maxWidth: .infinity) }
+            Button { confirmDrop(true) } label: { Text(L.string("breakdown_let_it_go")).frame(maxWidth: .infinity) }
                 .buttonStyle(.borderedProminent)
         }
         .padding(.horizontal, Layout.gutter).padding(.vertical, 8)
@@ -159,12 +159,12 @@ private struct BreakdownChat: View {
                     addedToPlan = true
                     _Concurrency.Task { await engine.addRootToPlan() }
                 } label: {
-                    Text("Add to today's plan").frame(maxWidth: .infinity)
+                    Text(L.string("tasks_menu_add_to_plan")).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(addedToPlan)
             }
-            Button { component.onClose() } label: { Text("Done").frame(maxWidth: .infinity) }
+            Button { component.onClose() } label: { Text(L.string("calendar_action_done")).frame(maxWidth: .infinity) }
                 .buttonStyle(.bordered)
         }
         .padding(.horizontal, Layout.gutter).padding(.vertical, 8)
@@ -209,7 +209,7 @@ private struct BreakdownChat: View {
     private var typingIndicator: some View {
         HStack(spacing: 6) {
             ProgressView().controlSize(.small)
-            Text("Thinking…").font(.footnote).foregroundStyle(colors.inkMuted)
+            Text(L.string("breakdown_thinking")).font(.footnote).foregroundStyle(colors.inkMuted)
         }
         .padding(.vertical, 4)
     }

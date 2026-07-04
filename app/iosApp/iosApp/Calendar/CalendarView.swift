@@ -12,10 +12,27 @@ struct CalendarView: View {
     /// The agenda item awaiting a new day (the local reschedule mode), or nil.
     @State private var rescheduling: CalendarItem?
 
-    private static let monthNames = ["January", "February", "March", "April", "May", "June",
-                                     "July", "August", "September", "October", "November", "December"]
-    private static let weekdayShort = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    private static let weekdayLong = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    // Locale-aware date rendering: the shared per-locale patterns (calendar_*_pattern) drive the
+    // formats, and the system supplies month/weekday names — no hand-rolled name tables (#327).
+    private static let monthYearFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = L.string("calendar_month_year_pattern")
+        return f
+    }()
+    private static let agendaHeadingFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = L.string("calendar_agenda_heading_pattern")
+        return f
+    }()
+    /// Monday-first, matching the ISO grid the shell provides (system symbols are Sunday-first).
+    private static let weekdayShort: [String] = {
+        let symbols = DateFormatter().shortStandaloneWeekdaySymbols ?? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        return Array(symbols[1...]) + [symbols[0]]
+    }()
+
+    private static func date(year: Int, month: Int, day: Int) -> Date {
+        DateComponents(calendar: .current, year: year, month: month, day: day).date ?? Date()
+    }
 
     init(component: CalendarComponent) {
         self.component = component
@@ -44,7 +61,7 @@ struct CalendarView: View {
         HStack {
             Button { component.onShowPreviousMonth() } label: { Image(systemName: "chevron.left") }
                 .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
-                .accessibilityLabel("Previous month")
+                .accessibilityLabel(L.string("calendar_previous_month"))
             Spacer()
             Text(monthLabel(value.visibleMonth))
                 .font(.title2.weight(.semibold))
@@ -53,7 +70,7 @@ struct CalendarView: View {
             Spacer()
             Button { component.onShowNextMonth() } label: { Image(systemName: "chevron.right") }
                 .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
-                .accessibilityLabel("Next month")
+                .accessibilityLabel(L.string("calendar_next_month"))
         }
         .padding(.horizontal, 12)
         .frame(minHeight: 56)
@@ -121,9 +138,9 @@ struct CalendarView: View {
 
     private func rescheduleBanner(_ item: CalendarItem) -> some View {
         HStack {
-            Text("Pick a new day for “\(item.title)”").font(.subheadline)
+            Text(L.format("calendar_reschedule_pick_day", item.title)).font(.subheadline)
             Spacer()
-            Button("Cancel") { rescheduling = nil }
+            Button(L.string("common_cancel")) { rescheduling = nil }
         }
         .padding(.horizontal, Layout.gutter)
         .padding(.vertical, 8)
@@ -141,8 +158,8 @@ struct CalendarView: View {
                 .padding(.horizontal, Layout.gutter)
                 .padding(.vertical, 8)
             if value.agenda.isEmpty {
-                EmptyStateView(title: "Nothing on this day",
-                               message: "A clear day. Add something when you're ready — no pressure.")
+                EmptyStateView(title: L.string("calendar_empty_title"),
+                               message: L.string("calendar_empty_body"))
             } else {
                 List {
                     ForEach(value.agenda, id: \.id) { item in
@@ -177,15 +194,15 @@ struct CalendarView: View {
         let canReschedule = ShellBridgeKt.calendarItemIsEvent(item: item)
         HStack(spacing: 8) {
             if !isHabit {
-                actionChip("Start") { component.onMark(itemId: item.id, action: OccurrenceAction.start) }
+                actionChip(L.string("common_start")) { component.onMark(itemId: item.id, action: OccurrenceAction.start) }
             }
-            actionChip("Done") { component.onMark(itemId: item.id, action: OccurrenceAction.complete) }
+            actionChip(L.string("calendar_action_done")) { component.onMark(itemId: item.id, action: OccurrenceAction.complete) }
             if !isHabit {
-                actionChip("Skip") { component.onMark(itemId: item.id, action: OccurrenceAction.skip) }
+                actionChip(L.string("calendar_action_skip")) { component.onMark(itemId: item.id, action: OccurrenceAction.skip) }
             }
-            actionChip("Clear") { component.onClear(itemId: item.id) }
+            actionChip(L.string("common_clear")) { component.onClear(itemId: item.id) }
             if canReschedule {
-                actionChip("Reschedule") { rescheduling = item }
+                actionChip(L.string("calendar_action_reschedule")) { rescheduling = item }
             }
         }
     }
@@ -212,31 +229,31 @@ struct CalendarView: View {
     // MARK: Labels (gentle vocabulary)
 
     private func agendaStatusLabel(_ status: WorkingState) -> String {
-        if status == WorkingState.open { return "Scheduled" }
-        if status == WorkingState.inProgress { return "In progress" }
-        if status == WorkingState.inReview { return "In review" }
-        if status == WorkingState.done { return "Done" }
-        if status == WorkingState.dropped { return "Skipped" }
+        if status == WorkingState.open { return L.string("common_status_scheduled") }
+        if status == WorkingState.inProgress { return L.string("common_status_in_progress") }
+        if status == WorkingState.inReview { return L.string("common_status_in_review") }
+        if status == WorkingState.done { return L.string("common_status_done") }
+        if status == WorkingState.dropped { return L.string("common_status_skipped") }
         return status.label
     }
 
     private func monthLabel(_ date: LocalDate) -> String {
         let month = Int(ShellBridgeKt.localDateMonthNumber(date: date))
         let year = Int(ShellBridgeKt.localDateYear(date: date))
-        return "\(Self.monthNames[month - 1]) \(year)"
+        return Self.monthYearFormatter.string(from: Self.date(year: year, month: month, day: 1))
     }
 
     private func dayHeading(_ date: LocalDate) -> String {
-        let weekday = Int(ShellBridgeKt.localDateIsoDayOfWeek(date: date))
+        let year = Int(ShellBridgeKt.localDateYear(date: date))
         let month = Int(ShellBridgeKt.localDateMonthNumber(date: date))
         let day = Int(ShellBridgeKt.localDateDay(date: date))
-        return "\(Self.weekdayLong[weekday - 1]), \(Self.monthNames[month - 1]) \(day)"
+        return Self.agendaHeadingFormatter.string(from: Self.date(year: year, month: month, day: day))
     }
 
     private func dayAccessibilityLabel(number: Int, count: Int, selected: Bool) -> String {
-        var parts = ["Day \(number)"]
-        if count == 1 { parts.append("1 item") } else if count > 1 { parts.append("\(count) items") }
-        if selected { parts.append("selected") }
+        var parts = [L.format("calendar_day_number_a11y", number)]
+        if count > 0 { parts.append(L.plural("calendar_day_item_count", count)) }
+        if selected { parts.append(L.string("calendar_day_selected")) }
         return parts.joined(separator: ", ")
     }
 }

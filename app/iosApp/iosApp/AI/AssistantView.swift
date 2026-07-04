@@ -32,20 +32,20 @@ struct AssistantView: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(colors.background)
-                .navigationTitle("Assistant")
+                .navigationTitle(L.string("settings_category_assistant"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button { onMenu() } label: { Image(systemName: "line.3.horizontal") }
-                            .accessibilityLabel("Menu")
+                            .accessibilityLabel(L.string("shell_menu_cd"))
                     }
                     // The chat affordances only make sense once the Assistant is on.
                     if s.available {
                         ToolbarItemGroup(placement: .navigationBarTrailing) {
                             Button { showSwitcher = true } label: { Image(systemName: "clock.arrow.circlepath") }
-                                .accessibilityLabel("Conversations")
+                                .accessibilityLabel(L.string("assistant_conversations_title"))
                             Button { component.onNewConversation() } label: { Image(systemName: "square.and.pencil") }
-                                .accessibilityLabel("New chat")
+                                .accessibilityLabel(L.string("assistant_new_chat_title"))
                         }
                     }
                 }
@@ -74,11 +74,11 @@ struct AssistantView: View {
     private var enableCTA: some View {
         VStack(spacing: 16) {
             Image(systemName: "sparkles").font(.system(size: 40)).foregroundStyle(colors.primary)
-            Text("Turn on the Assistant").font(.title3.weight(.semibold)).foregroundStyle(colors.onSurface)
+            Text(L.string("assistant_turn_on_title")).font(.title3.weight(.semibold)).foregroundStyle(colors.onSurface)
             Text(s.disclosure)
                 .font(.subheadline).foregroundStyle(colors.inkMuted)
                 .multilineTextAlignment(.center).padding(.horizontal, 24)
-            PrimaryActionButton(title: "Enable Assistant", icon: .check) { component.onEnableRequested() }
+            PrimaryActionButton(title: L.string("assistant_enable_button"), icon: .check) { component.onEnableRequested() }
                 .padding(.horizontal, 48).padding(.top, 8)
                 .disabled(s.enabling)
             if s.enabling { ProgressView() }
@@ -93,15 +93,15 @@ struct AssistantView: View {
         VStack(spacing: 20) {
             Capsule().fill(colors.outlineVariant).frame(width: 36, height: 5).padding(.top, 10)
             Image(systemName: "lock.shield").font(.system(size: 36)).foregroundStyle(colors.primary)
-            Text("Before you enable").font(.title3.weight(.semibold)).foregroundStyle(colors.onSurface)
+            Text(L.string("assistant_before_enable_title")).font(.title3.weight(.semibold)).foregroundStyle(colors.onSurface)
             Text(s.disclosure)
                 .font(.subheadline).foregroundStyle(colors.inkMuted)
                 .multilineTextAlignment(.center).padding(.horizontal, 24)
             Spacer()
             VStack(spacing: 10) {
-                PrimaryActionButton(title: "I understand — enable", icon: .check) { component.onConsentAccepted() }
+                PrimaryActionButton(title: L.string("assistant_consent_accept"), icon: .check) { component.onConsentAccepted() }
                     .disabled(s.enabling)
-                Button("Not now") { component.onConsentDeclined() }
+                Button(L.string("assistant_consent_not_now")) { component.onConsentDeclined() }
                     .foregroundStyle(colors.inkMuted)
             }
             .padding(.horizontal, 24).padding(.bottom, 24)
@@ -115,11 +115,11 @@ struct AssistantView: View {
 
     private var chat: some View {
         VStack(spacing: 0) {
-            if !s.online { banner("You're offline — reconnect to continue the conversation.", tint: colors.inkMuted) }
+            if !s.online { banner(L.string("assistant_offline_note"), tint: colors.inkMuted) }
             if s.usageExhausted {
-                banner("You've used this month's Assistant quota. It resets next month.", tint: colors.error)
+                banner(L.string("assistant_quota_note"), tint: colors.error)
             }
-            if let error = s.error {
+            if let error = L.assistantError(s) {
                 banner(error, tint: colors.error) { component.onDismissError() }
             }
             messageList
@@ -158,8 +158,8 @@ struct AssistantView: View {
     private var emptyChat: some View {
         VStack(spacing: 8) {
             Image(systemName: "sparkles").font(.system(size: 32)).foregroundStyle(colors.primary)
-            Text("Ask me about your tasks").font(.headline).foregroundStyle(colors.onSurface)
-            Text("I can find things, make changes, and help you plan.")
+            Text(L.string("assistant_empty_title")).font(.headline).foregroundStyle(colors.onSurface)
+            Text(L.string("assistant_empty_body"))
                 .font(.subheadline).foregroundStyle(colors.inkMuted).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity).padding(.top, 48)
@@ -213,7 +213,7 @@ struct AssistantView: View {
     private var typingIndicator: some View {
         HStack(spacing: 6) {
             ProgressView().controlSize(.small)
-            Text("Thinking…").font(.footnote).foregroundStyle(colors.inkMuted)
+            Text(L.string("breakdown_thinking")).font(.footnote).foregroundStyle(colors.inkMuted)
         }
         .padding(.vertical, 4)
     }
@@ -224,17 +224,17 @@ struct AssistantView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.seal").foregroundStyle(colors.primary)
-                Text("Confirm this change").font(.subheadline.weight(.semibold)).foregroundStyle(colors.onSurface)
+                Text(L.string("assistant_confirm_change_title")).font(.subheadline.weight(.semibold)).foregroundStyle(colors.onSurface)
             }
             Text(proposal.summary).font(.body).foregroundStyle(colors.onSurface)
             HStack(spacing: 10) {
                 Button { component.onConfirmProposal() } label: {
-                    Text("Apply").frame(maxWidth: .infinity)
+                    Text(L.string("assistant_apply_button")).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(s.applyingProposal)
                 Button { component.onRejectProposal() } label: {
-                    Text("Dismiss").frame(maxWidth: .infinity)
+                    Text(L.string("common_dismiss")).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .disabled(s.applyingProposal)
@@ -248,7 +248,7 @@ struct AssistantView: View {
 
     private var composer: some View {
         HStack(spacing: 10) {
-            TextField("Message", text: composerText, axis: .vertical)
+            TextField(L.string("assistant_message_placeholder"), text: composerText, axis: .vertical)
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 14).padding(.vertical, 10)
@@ -258,13 +258,13 @@ struct AssistantView: View {
                 Button { component.onCancelTurn() } label: {
                     Image(systemName: "stop.circle.fill").font(.system(size: 30))
                 }
-                .accessibilityLabel("Stop")
+                .accessibilityLabel(L.string("braindump_stop"))
                 .foregroundStyle(colors.error)
             } else {
                 Button { component.onSend() } label: {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 30))
                 }
-                .accessibilityLabel("Send")
+                .accessibilityLabel(L.string("common_send"))
                 .foregroundStyle(s.canSend ? colors.primary : colors.inkMuted)
                 .disabled(!s.canSend)
             }
@@ -281,21 +281,21 @@ struct AssistantView: View {
                 Button {
                     component.onNewConversation(); showSwitcher = false
                 } label: {
-                    Label("New conversation", systemImage: "square.and.pencil")
+                    Label(L.string("assistant_new_chat_title"), systemImage: "square.and.pencil")
                 }
                 if !s.conversations.isEmpty {
-                    Section("Recent") {
+                    Section(L.string("assistant_recent_section")) {
                         ForEach(Array(s.conversations.enumerated()), id: \.offset) { _, conversation in
                             conversationRow(conversation)
                         }
                     }
                 }
             }
-            .navigationTitle("Conversations")
+            .navigationTitle(L.string("assistant_conversations_title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { showSwitcher = false }
+                    Button(L.string("calendar_action_done")) { showSwitcher = false }
                 }
             }
         }
@@ -334,7 +334,7 @@ struct AssistantView: View {
             Spacer()
             if let onDismiss {
                 Button { onDismiss() } label: { Image(systemName: "xmark").font(.caption) }
-                    .foregroundStyle(tint).accessibilityLabel("Dismiss")
+                    .foregroundStyle(tint).accessibilityLabel(L.string("common_dismiss"))
             }
         }
         .padding(.horizontal, Layout.gutter).padding(.vertical, 8)

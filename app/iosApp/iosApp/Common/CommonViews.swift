@@ -10,8 +10,8 @@ import SwiftUI
 /// an authenticated request `401`s, so a dead token can't masquerade as a stale cache; `onSignIn` routes
 /// toward re-auth (Profile), and the next successful sync clears the flag.
 struct SessionExpiredBanner: View {
-    var message: String = "Session expired — sign in again to refresh."
-    var action: String = "Sign in again"
+    var message: String = L.string("common_session_expired_message")
+    var action: String = L.string("common_sign_in_again")
     let onSignIn: () -> Void
     @Environment(\.defernoColors) private var colors
 
@@ -89,7 +89,7 @@ struct ItemRowView: View {
                     // "blocked, not finished" read (mirrors Compose `ItemTreeRow`, #290).
                     .foregroundStyle((row.item.isTerminal || row.item.blocked) ? colors.inkMuted : colors.onSurface)
                 if let progress {
-                    MonoMeta("\(progress.done) of \(progress.total)")
+                    MonoMeta(L.format("tasks_progress_fraction", progress.done, progress.total))
                         .padding(.top, 2)
                     if progress.total > 0 {
                         ProgressBarThin(fraction: Double(progress.done) / Double(progress.total))
@@ -108,14 +108,14 @@ struct ItemRowView: View {
             // on, else they're pruned in the shared flatten) and an amber "Blocker" badge marking a row that
             // gates ≥1 other. Each clears its own label so VoiceOver reads one phrase, not the uppercased text.
             if row.item.blocked {
-                TreeChip(text: "Blocked", tone: .neutral)
+                TreeChip(text: L.string("common_blocked"), tone: .neutral)
                     .padding(.horizontal, 4)
-                    .accessibilityLabel("Blocked")
+                    .accessibilityLabel(L.string("common_blocked"))
             }
             if row.item.isBlocker {
-                TreeChip(text: "Blocker", tone: .accent)
+                TreeChip(text: L.string("tasks_badge_blocker"), tone: .accent)
                     .padding(.horizontal, 4)
-                    .accessibilityLabel("Blocks other items")
+                    .accessibilityLabel(L.string("tasks_badge_blocker_a11y"))
             }
 
             // External-provenance mark (GitHub / Google), ahead of the chevron — the mirror of the Android
@@ -135,7 +135,7 @@ struct ItemRowView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Open \(row.item.title)")
+                .accessibilityLabel(L.format("common_open_named_cd", row.item.title))
             }
         }
         .padding(.horizontal, Layout.gutter)
@@ -164,13 +164,13 @@ struct SourceMark: View {
                 .scaledToFit()
                 .frame(width: Self.size, height: Self.size)
                 .foregroundStyle(colors.inkMuted)
-                .accessibilityLabel("From GitHub")
+                .accessibilityLabel(L.string("tasks_source_from_github"))
         } else {
             Image("ic_source_google")
                 .resizable()
                 .scaledToFit()
                 .frame(width: Self.size, height: Self.size)
-                .accessibilityLabel("From Google Calendar")
+                .accessibilityLabel(L.string("tasks_source_from_google_calendar"))
         }
     }
 }
@@ -195,7 +195,7 @@ struct PaneHeader<Trailing: View>: View {
     var body: some View {
         HStack(spacing: 8) {
             if let onBack {
-                Button("Back", action: onBack)
+                Button(L.string("common_back"), action: onBack)
                     .frame(minHeight: Layout.minTouchTarget)
             }
             if showsBrand {
@@ -233,7 +233,7 @@ struct Brandmark: View {
             .resizable()
             .scaledToFit()
             .frame(width: height, height: height)
-            .accessibilityLabel("Deferno")
+            .accessibilityLabel(L.string("common_app_name"))
     }
 }
 

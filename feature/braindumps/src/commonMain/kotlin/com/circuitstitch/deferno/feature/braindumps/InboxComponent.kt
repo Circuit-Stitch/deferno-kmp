@@ -44,21 +44,13 @@ sealed interface InboxNote {
     data class ServerMessage(val text: String) : InboxNote
 }
 
-/** The English rendering [InboxRow.note] keeps for the SwiftUI bridges. */
-internal fun InboxNote.legacyText(): String = when (this) {
-    InboxNote.Offline -> "Reconnect to save"
-    is InboxNote.ServerMessage -> text
-}
-
 /** One Ready draft as rendered in the Inbox, with any transient accept state. */
 data class InboxRow(
     val draft: BrainDumpDraft,
     /** The accept create is in flight (the row shows progress, taps are ignored). */
     val accepting: Boolean = false,
-    /** A gentle note after a non-accepting outcome (offline / server error), else null. The typed
-     *  twin of [noteKind]'s English rendering — kept for the SwiftUI bridges. */
-    val note: String? = null,
-    /** The typed note the Compose View localizes; mirrors [note]. */
+    /** A gentle, typed note after a non-accepting outcome (offline / server error), else null —
+     *  every platform View localizes the fixed arm and renders server prose verbatim (#327). */
     val noteKind: InboxNote? = null,
 )
 
@@ -133,7 +125,7 @@ class DefaultInboxComponent(
         combine(ready, accepting, notes, dismissed) { rows, inFlight, msgs, justDismissed ->
             InboxState(
                 rows = rows.map {
-                    InboxRow(it, accepting = it.id in inFlight, note = msgs[it.id]?.legacyText(), noteKind = msgs[it.id])
+                    InboxRow(it, accepting = it.id in inFlight, noteKind = msgs[it.id])
                 },
                 recentlyDismissed = justDismissed,
             )

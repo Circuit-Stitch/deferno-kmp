@@ -93,9 +93,9 @@ final class MacAssistantTransport: NativeAssistantTransport {
         guard ns.domain == NSURLErrorDomain else { return ns.localizedDescription }
         switch ns.code {
         case NSURLErrorTimedOut:
-            return "The reply timed out — it was taking too long to respond."
+            return L.string("assistant_error_timeout")
         case NSURLErrorNetworkConnectionLost, NSURLErrorCannotConnectToHost, NSURLErrorNotConnectedToInternet:
-            return "The connection dropped before the reply finished."
+            return L.string("assistant_error_stream_dropped")
         default:
             return ns.localizedDescription
         }
