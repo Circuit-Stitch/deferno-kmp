@@ -265,9 +265,9 @@ struct MainShellView: View {
         let name = ShellBridgeKt.destinationName(destination: dest)
         let selected = name == activeName
         Button { component.selectDestination(destination: dest) } label: {
-            navItemLabel(name: name, system: icon(name), selected: selected)
+            navItemLabel(name: L.destinationLabel(name), system: icon(name), selected: selected)
         }
-        .accessibilityLabel(name)
+        .accessibilityLabel(L.destinationLabel(name))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -279,7 +279,7 @@ struct MainShellView: View {
         .accessibilityLabel("More")
         .confirmationDialog("More", isPresented: $showMore, titleVisibility: .visible) {
             ForEach(secondaryDestinations) { dest in
-                Button(ShellBridgeKt.destinationName(destination: dest)) {
+                Button(L.destinationLabel(ShellBridgeKt.destinationName(destination: dest))) {
                     component.selectDestination(destination: dest)
                 }
             }
@@ -307,10 +307,10 @@ struct MainShellView: View {
                 let name = ShellBridgeKt.destinationName(destination: dest)
                 let selected = name == activeName
                 Button { component.selectDestination(destination: dest) } label: {
-                    Label(name, systemImage: icon(name))
+                    Label(L.destinationLabel(name), systemImage: icon(name))
                         .foregroundStyle(selected ? colors.primary : colors.onSurface)
                 }
-                .help(name)
+                .help(L.destinationLabel(name))
                 .listRowBackground(selected ? colors.primaryContainer : Color.clear)
             }
         }

@@ -210,7 +210,7 @@ struct MainShellView: View {
                     let badge: String? = name == "Inbox"
                         ? (inboxBadge.value.intValue > 0 ? "\(inboxBadge.value.intValue)" : "empty")
                         : nil
-                    drawerRow(label: name, system: icon(name), selected: name == activeName, badge: badge) {
+                    drawerRow(label: L.destinationLabel(name), system: icon(name), selected: name == activeName, badge: badge) {
                         setDrawer(false)
                         component.selectDestination(destination: dest)
                     }
