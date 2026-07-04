@@ -691,7 +691,7 @@ class DefaultMainShellComponent(
     override val chrome: StateFlow<ChromeSpec> =
         stack.asFlow()
             .flatMapLatest { st -> chromeFor(st.active.instance) }
-            .stateIn(overlayScope, SharingStarted.WhileSubscribed(5_000L), rootChrome("", ChromeTitle.None))
+            .stateIn(overlayScope, SharingStarted.WhileSubscribed(5_000L), rootChrome(ChromeTitle.None))
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun chromeFor(active: MainShellComponent.DestinationChild): Flow<ChromeSpec> =
