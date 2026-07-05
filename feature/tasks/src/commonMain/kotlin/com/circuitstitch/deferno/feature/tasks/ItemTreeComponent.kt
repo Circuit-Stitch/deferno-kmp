@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
+import com.circuitstitch.deferno.core.data.task.BlockedByResult
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
@@ -42,7 +43,47 @@ data class ItemTreeState(
     // entry (the write layer is Task-centric). The View reads it to label Pin↔Unpin / Add↔Remove-from-plan
     // and to swap the status block; a non-Task row (no entry) gets the cross-kind subset (Add subtask · Move).
     val menuStates: Map<String, TaskMenuState> = emptyMap(),
+    // The "Blocked by…" picker (#291), non-null while open. Component-owned (not View-local like the
+    // simple confirms): its candidates come from the UNFILTERED item set (the ready-only rows prune
+    // exactly the blocked items a blocker chain needs) with the would-be-cycle ids already excluded.
+    val blockedByPicker: BlockedByPickerState? = null,
+    // The last blockedBy write failure (#291), typed for locale-aware rendering — non-null until the
+    // View acknowledges it. The write is online-only (server-validated), so a verdict can arrive after
+    // the picker closed; the data layer already reverted the optimistic apply when this is set.
+    val blockedByError: BlockedByEditError? = null,
+    // blocker id → its direct dependents' titles (#291), from the cached edge lists over the unfiltered
+    // set. The destructive-unblock confirm (Set aside / Delete on an `isBlocker` row) names these.
+    val dependents: Map<String, List<String>> = emptyMap(),
 )
+
+/**
+ * The open "Blocked by…" picker (#291): the edited row ([itemId]/[itemTitle]), its current blocker ids
+ * ([current], the pre-checked entries — order preserved from the cached edge list), and the
+ * cycle-safe [candidates] (every other cached item minus the edited row and its dependent closure —
+ * same org by construction, the `/items` set is the account's own). The View renders a checkbox list
+ * and submits the full target set via [ItemTreeComponent.onSetBlockedBy].
+ */
+data class BlockedByPickerState(
+    val itemId: String,
+    val itemTitle: String,
+    val current: List<String>,
+    val candidates: List<BlockedByCandidate>,
+)
+
+/** One pickable blocker row (#291): any cached item outside the would-be-cycle set. */
+data class BlockedByCandidate(val id: String, val title: String, val kind: ItemKind)
+
+/**
+ * Why a blockedBy write snapped back (#291), typed so every platform View localizes the message. The
+ * server's raw prose (e.g. "cannot add a blocked_by edge that would form a cycle") is logged, not shown.
+ */
+enum class BlockedByEditError {
+    /** No connectivity — the edge write is online-only (server-validated); nothing was changed. */
+    Offline,
+
+    /** The server rejected the edge set (a 400 — dependency cycle or cross-org); the edit was reverted. */
+    Rejected,
+}
 
 /**
  * The View's projection of the [LastUndoable] register (ADR-0034 decision 8, #230). [structural] gates the
@@ -187,6 +228,30 @@ interface ItemTreeComponent {
     /** Delete Task [id] permanently (the menu's destructive Delete — the View confirms first, #231). */
     fun onDelete(id: String)
 
+    // --- "Blocked by…" dependency edges (#291): Task-only, online-only (server-validated) writes. ---
+
+    /**
+     * Open the "Blocked by…" picker for Task [id] (the menu entry). Computes the picker payload off the
+     * current unfiltered item cache — current blockers pre-checked, the edited row + its dependent
+     * closure excluded (choosing one of those would close a cycle the server 400s) — and surfaces it as
+     * [ItemTreeState.blockedByPicker]. A no-op if the row isn't in the current cache.
+     */
+    fun onOpenBlockedByPicker(id: String)
+
+    /** Close the picker without writing (the dialog's dismiss). */
+    fun onDismissBlockedByPicker()
+
+    /**
+     * Replace Task [id]'s blocker list with the raw item ids [blockers] (empty clears every edge) and
+     * close the picker. Advisory only — declaring an edge never moves or locks anything. The write is
+     * **online-only** (the server alone validates cycles/orgs): it applies optimistically underneath,
+     * and a failure verdict both reverts it (data layer) and lands on [ItemTreeState.blockedByError].
+     */
+    fun onSetBlockedBy(id: String, blockers: List<String>)
+
+    /** Acknowledge the surfaced write failure (the View's snackbar/dialog dismiss). */
+    fun onDismissBlockedByError()
+
     sealed interface Output {
         data class ItemSelected(val id: TaskId) : Output
     }
@@ -216,6 +281,9 @@ class DefaultItemTreeComponent(
     // The non-Task status seam (#299): set a recurring definition's DefinitionState. Defaults to no-op so the
     // existing read/move/navigation tests construct the component without it (like [workingStateEditor]).
     private val definitionStateEditor: DefinitionStateEditor = DefinitionStateEditor.NONE,
+    // The dependency-edge seam (#291): online-only (server-validated), returns the verdict this component
+    // surfaces as [ItemTreeState.blockedByError]. Defaults to the always-Applied NONE like its siblings.
+    private val blockedByEditor: BlockedByEditor = BlockedByEditor.NONE,
     private val setPinned: suspend (TaskId, Boolean) -> Unit = { _, _ -> },
     // The "Add subtask" create seam: [TaskId] is the parent's raw id (any kind — the child is always a Task).
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
@@ -237,6 +305,10 @@ class DefaultItemTreeComponent(
     // The single-level last-undoable register (ADR-0034 decision 8, #230): each move records its inverse here.
     private val lastUndoable = LastUndoable()
 
+    // The open "Blocked by…" picker + the last write failure (#291), surfaced on the state.
+    private val blockedByPicker = MutableStateFlow<BlockedByPickerState?>(null)
+    private val blockedByError = MutableStateFlow<BlockedByEditError?>(null)
+
     override val state: StateFlow<ItemTreeState> =
         combine(
             combine(itemRepository.observeItems(), foldStore.overrides, refreshing, liftedId, showBlocked) { items, ov, isRefreshing, lifted, showBlockedNow ->
@@ -256,14 +328,20 @@ class DefaultItemTreeComponent(
                         )
                     },
                     showBlocked = showBlockedNow,
+                    // Over the UNFILTERED items — a dependent is blocked, so pruned rows are the norm (#291).
+                    dependents = dependentTitles(items),
                 )
             },
             lastUndoable.current,
             menuStates,
-        ) { core, undoable, menus ->
+            blockedByPicker,
+            blockedByError,
+        ) { core, undoable, menus, picker, edgeError ->
             core.copy(
                 lastMove = undoable?.let { MoveUndo(it.id, it.structural, it.operation) },
                 menuStates = menus,
+                blockedByPicker = picker,
+                blockedByError = edgeError,
             )
         }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ItemTreeState())
 
@@ -378,6 +456,50 @@ class DefaultItemTreeComponent(
 
     override fun onDelete(id: String) {
         scope.launch { deleteTask(TaskId(id)) }
+    }
+
+    // --- "Blocked by…" dependency edges (#291) ---
+
+    override fun onOpenBlockedByPicker(id: String) {
+        scope.launch {
+            val items = itemRepository.observeItems().first()
+            val target = items.firstOrNull { it.id == id } ?: return@launch
+            // Exclude the edited row + everything that (transitively) depends on it: choosing one of
+            // those closes a dependency cycle the server rejects — the Move pattern's greyed-out guard.
+            val excluded = dependentClosure(items, id) + id
+            blockedByPicker.value = BlockedByPickerState(
+                itemId = id,
+                itemTitle = target.title,
+                current = target.blockedBy.map { it.item },
+                candidates = items.filterNot { it.id in excluded }
+                    .map { BlockedByCandidate(it.id, it.title, it.kind) },
+            )
+        }
+    }
+
+    override fun onDismissBlockedByPicker() {
+        blockedByPicker.value = null
+    }
+
+    override fun onSetBlockedBy(id: String, blockers: List<String>) {
+        blockedByPicker.value = null
+        scope.launch {
+            when (val result = blockedByEditor.setBlockedBy(TaskId(id), blockers)) {
+                is BlockedByResult.Applied ->
+                    // Pull the recomputed derived flags now (the blocker's own `is_blocker` badge, a
+                    // dependent chain's inherited `blocked`) — the write just proved we're online.
+                    itemRepository.refresh()
+                is BlockedByResult.Offline -> blockedByError.value = BlockedByEditError.Offline
+                is BlockedByResult.Failed -> {
+                    Logger("ItemTreeBlockedBy").i { "blockedBy write rejected: ${result.message}" }
+                    blockedByError.value = BlockedByEditError.Rejected
+                }
+            }
+        }
+    }
+
+    override fun onDismissBlockedByError() {
+        blockedByError.value = null
     }
 }
 

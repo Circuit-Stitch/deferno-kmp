@@ -7,7 +7,10 @@ import com.circuitstitch.deferno.core.data.definition.DefinitionWriter
 import com.circuitstitch.deferno.core.data.item.ItemWriter
 import com.circuitstitch.deferno.core.data.plan.PlanWriter
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
+import com.circuitstitch.deferno.core.data.task.BlockedByResult
+import com.circuitstitch.deferno.core.data.task.BlockedByWriter
 import com.circuitstitch.deferno.core.data.task.TaskWriter
+import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 
@@ -39,6 +42,7 @@ class CommandExecutor(
     private val settingsWriter: SettingsWriter,
     private val itemWriter: ItemWriter,
     private val definitionWriter: DefinitionWriter,
+    private val blockedByWriter: BlockedByWriter,
 ) {
     /**
      * Run [command], first gating on [CommandKind.enabledFor].
@@ -91,6 +95,11 @@ class CommandExecutor(
             // Recurring-definition "light switch" (#299): optimistic per-kind apply + outbox enqueue,
             // offline-first. Carries itemKind so the writer routes to the right per-kind store/endpoint.
             is SetDefinitionState -> definitionWriter.setDefinitionState(command.itemId, command.itemKind, command.target)
+            // Dependency edges (#291) are online-only like convert: the writer's own verdict comes back
+            // (optimistic apply + PATCH + revert-on-400), so the menu can surface the server's message.
+            is SetTaskBlockedBy ->
+                return blockedByWriter.setBlockedBy(command.taskId, command.blockers.map { BlockedByRef(it) })
+                    .toCommandResult(command.kind)
         }
         return CommandResult.Accepted(command.kind)
     }
@@ -115,4 +124,11 @@ private fun CreateResult.toCommandResult(kind: CommandKind): CommandResult = whe
     is CreateResult.Created -> CommandResult.Accepted(kind, itemId = id)
     is CreateResult.Offline -> CommandResult.Offline(kind)
     is CreateResult.Failed -> CommandResult.Failed(kind, message)
+}
+
+/** Maps the [BlockedByWriter]'s verdict for the online-only dependency-edge path (#291) — same shape. */
+private fun BlockedByResult.toCommandResult(kind: CommandKind): CommandResult = when (this) {
+    is BlockedByResult.Applied -> CommandResult.Accepted(kind)
+    is BlockedByResult.Offline -> CommandResult.Offline(kind)
+    is BlockedByResult.Failed -> CommandResult.Failed(kind, message)
 }

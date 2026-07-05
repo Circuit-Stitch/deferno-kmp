@@ -610,6 +610,9 @@ Agradeço.</string>
     <!-- Chip: este item bloqueia outros -->
     <string name="tasks_badge_blocker">Bloqueador</string>
     <string name="tasks_badge_blocker_a11y">Bloqueia outros itens</string>
+    <string name="tasks_blocked_by_dialog_title">O que está bloqueando “%1$s”?</string>
+    <string name="tasks_blocked_by_error_offline">Você está offline — os bloqueios não podem ser alterados agora.</string>
+    <string name="tasks_blocked_by_error_rejected">A alteração foi rejeitada — ela criaria um ciclo de dependências ou cruzaria organizações.</string>
     <string name="tasks_delete_item_confirm_title">Excluir “%1$s”?</string>
     <string name="tasks_detail_add_caption">Adicionar legenda</string>
     <string name="tasks_detail_add_comment_placeholder">Adicionar um comentário…</string>
@@ -684,6 +687,7 @@ Agradeço.</string>
     <string name="tasks_menu_add_subtask">Adicionar subtarefa</string>
     <string name="tasks_menu_add_to_plan">Adicionar ao plano de hoje</string>
     <string name="tasks_menu_archive">Arquivar</string>
+    <string name="tasks_menu_blocked_by">Bloqueado por…</string>
     <string name="tasks_menu_break_this_down">Dividir em partes</string>
     <string name="tasks_menu_delete_permanent">Excluir (permanente!)</string>
     <string name="tasks_menu_mark_done">Marcar como concluída</string>
@@ -707,6 +711,7 @@ Agradeço.</string>
     <string name="tasks_progress_fraction">%1$d de %2$d</string>
     <!-- Vocabulário gentil para WorkingState.Dropped — nunca 'abandonar/largar' -->
     <string name="tasks_set_aside">Deixar de lado</string>
+    <string name="tasks_set_aside_confirm_title">Deixar “%1$s” de lado?</string>
     <string name="tasks_source_from_github">Do GitHub</string>
     <string name="tasks_source_from_google_calendar">Do Google Calendar</string>
     <string name="tasks_tree_actions_for_item">Ações para %1$s</string>
@@ -723,6 +728,8 @@ Agradeço.</string>
     <string name="tasks_tree_filtered_empty_title">Nada para mostrar aqui</string>
     <string name="tasks_tree_refreshing">Atualizando…</string>
     <string name="tasks_tree_show_blocked">Mostrar bloqueadas</string>
+    <string name="tasks_unblock_confirm_releases">Isso também desbloqueia: %1$s</string>
+    <string name="tasks_unblock_confirm_releases_unknown">Isso também desbloqueia os itens que ele bloqueia atualmente.</string>
     <string name="tasks_tree_title">Tudo</string>
     <string name="tasks_undo_operation_confirm_title">Desfazer %1$s?</string>
     <!-- ADJETIVO de estado (ainda não iniciada) — distinto do verbo Abrir -->

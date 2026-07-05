@@ -1,0 +1,11 @@
+-- Migration 12 -> 13: persist the ordered blockedBy edge list on the Task cache (#291).
+--
+-- The `/items` snapshot now ships each Task's `blocked_by` edges (`[{item, occurrence?}]`, ADR-0034
+-- #289) alongside the derived `blocked`/`is_blocker` flags the 9->10 migration cached. The Tasks tree's
+-- "Blocked by…" picker (current edges) and the destructive-unblock confirmation (dependents scan) read
+-- them off the cached rows, so they must round-trip the DB. Encoded as a newline-joined TEXT of
+-- `item` or `item|occurrence` pairs (UUIDs/dates contain neither separator). Task-only: edges are held
+-- by Tasks (the blocker side may be any kind). Plain ADD COLUMN appends a nullable column; existing
+-- rows get NULL (decoded as empty) and are repopulated on the next refresh. Never edit a released
+-- migration or snapshot — ADR-0022 runbook.
+ALTER TABLE taskEntity ADD COLUMN blocked_by TEXT;

@@ -81,6 +81,8 @@ private fun Task.toItem() = Item(
     descendantTotal = descendantTotal,
     blocked = blocked,
     isBlocker = isBlocker,
+    // The ordered edge list itself (#291): the tree's "Blocked by…" picker + dependents scan read it.
+    blockedBy = blockedBy,
     // External provenance for the tree-row mark + `[GitHub#N]` ref prefix; null = native item.
     source = external?.source,
     externalRef = external?.id,

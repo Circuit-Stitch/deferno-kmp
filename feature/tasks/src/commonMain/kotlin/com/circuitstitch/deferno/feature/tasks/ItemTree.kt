@@ -135,6 +135,39 @@ fun moveOptions(items: List<Item>, liftedId: String): MoveOptions {
 }
 
 /**
+ * blocker id → the titles of its **direct dependents** (#291): every item whose own `blockedBy` edges
+ * name it — the rows a destructive unblock (Set aside / Delete on an `isBlocker` row) would release,
+ * named in that confirm. Built over the **unfiltered** item set (a dependent is by definition
+ * `blocked`, so the ready-only pruned rows can't be the source); edges are Task-held, so dependents
+ * are always Task rows. One pass; an id with no dependents simply has no entry.
+ */
+fun dependentTitles(items: List<Item>): Map<String, List<String>> {
+    val titles = mutableMapOf<String, MutableList<String>>()
+    for (item in items) for (edge in item.blockedBy) titles.getOrPut(edge.item) { mutableListOf() }.add(item.title)
+    return titles
+}
+
+/**
+ * Every item that transitively depends on [id] through the cached `blockedBy` edges — [id]'s
+ * dependent **closure** (#291). The "Blocked by…" picker excludes these (plus [id] itself) from its
+ * candidates: choosing one as a blocker of [id] would close a dependency cycle, which the server
+ * rejects with a 400. The walk is the client-side "illegal targets greyed out" guard (the Move
+ * pattern) — the server verdict stays authoritative for the races the cache can't see.
+ */
+fun dependentClosure(items: List<Item>, id: String): Set<String> {
+    val dependentsOf = buildMap<String, MutableList<String>> {
+        for (item in items) for (edge in item.blockedBy) getOrPut(edge.item) { mutableListOf() } += item.id
+    }
+    val closure = mutableSetOf<String>()
+    val frontier = ArrayDeque(dependentsOf[id].orEmpty())
+    while (frontier.isNotEmpty()) {
+        val next = frontier.removeFirst()
+        if (closure.add(next)) frontier += dependentsOf[next].orEmpty()
+    }
+    return closure
+}
+
+/**
  * The lifted item's **current slot** (ADR-0034 decision 8, #230): its present parent ([MoveTarget.newParentId])
  * + its index among that parent's children — the exact `(newParentId, position)` pair an inverse [MoveTarget]
  * restores it to. Captured *before* a move so undo can move it straight back. Mirrors [moveOptions]'s grouping

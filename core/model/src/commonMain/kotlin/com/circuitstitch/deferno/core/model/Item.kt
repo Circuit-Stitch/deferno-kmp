@@ -31,8 +31,10 @@ package com.circuitstitch.deferno.core.model
  * truth — the client never re-derives the readiness rules. [blocked] is `true` when this item has an
  * unresolved blocker *or* an ancestor is blocked (the flag inherits down the tree); [isBlocker] is
  * `true` when this item currently gates at least one other (a reverse-index flag). Both default `false`
- * so a payload omitting them decodes cleanly. The ordered `blockedBy` edge list lives on the full
- * single-item record (the per-kind detail model), not this collapsed-row projection.
+ * so a payload omitting them decodes cleanly. [blockedBy] is the ordered edge list itself (#291):
+ * populated for a Task (edges are Task-held; the `/items` snapshot now ships them per row), always
+ * empty for the recurring kinds. The tree's "Blocked by…" picker and the destructive-unblock
+ * confirmation's dependents scan read it; readiness itself still comes from the server flags.
  */
 data class Item(
     val id: String,
@@ -47,6 +49,7 @@ data class Item(
     val externalRef: String? = null,
     val blocked: Boolean = false,
     val isBlocker: Boolean = false,
+    val blockedBy: List<BlockedByRef> = emptyList(),
     // The recurring-kind "light switch" (#299): `null` for a Task (its lifecycle is [WorkingState]),
     // populated for a Habit/Chore/Event so the Item-tree command menu can set it (Archive / Restore).
     // [isTerminal] is still kept (an Archived definition is de-emphasized) — this carries the full state.

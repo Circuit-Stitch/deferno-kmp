@@ -5,6 +5,8 @@ import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
+import com.circuitstitch.deferno.core.data.task.BlockedByResult
+import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -41,6 +43,7 @@ class ItemTreeComponentTest {
         menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
         workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
         definitionStateEditor: DefinitionStateEditor = DefinitionStateEditor.NONE,
+        blockedByEditor: BlockedByEditor = BlockedByEditor.NONE,
         setPinned: suspend (TaskId, Boolean) -> Unit = { _, _ -> },
         createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
         deleteTask: suspend (TaskId) -> Unit = { _ -> },
@@ -57,6 +60,7 @@ class ItemTreeComponentTest {
         menuStates = menuStates,
         workingStateEditor = workingStateEditor,
         definitionStateEditor = definitionStateEditor,
+        blockedByEditor = blockedByEditor,
         setPinned = setPinned,
         createSubtask = createSubtask,
         deleteTask = deleteTask,
@@ -459,5 +463,105 @@ class ItemTreeComponentTest {
         advanceUntilIdle()
 
         assertEquals(listOf(TaskId("root")), deleted)
+    }
+
+    // --- "Blocked by…" dependency edges (#291) ---
+
+    /** a ← b (b is blocked by a), plus an unrelated c and a chore d — the edge-picker fixture. */
+    private fun withEdges() = FakeItemRepository(
+        listOf(
+            Item(id = "a", kind = ItemKind.Task, title = "a", sequence = 0, isBlocker = true),
+            Item(id = "b", kind = ItemKind.Task, title = "b", sequence = 1, blocked = true, blockedBy = listOf(BlockedByRef("a"))),
+            Item(id = "c", kind = ItemKind.Task, title = "c", sequence = 2),
+            Item(id = "d", kind = ItemKind.Chore, title = "d", sequence = 3),
+        ),
+    )
+
+    @Test
+    fun openBlockedByPickerExcludesTheRowAndItsDependentClosure() = runTest {
+        // Editing a: its dependent b would close a cycle, so candidates are only c + d (any kind).
+        val c = component(withEdges())
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onOpenBlockedByPicker("a")
+        advanceUntilIdle()
+
+        val picker = c.state.value.blockedByPicker
+        assertEquals("a", picker?.itemId)
+        assertEquals(emptyList(), picker?.current)
+        assertEquals(listOf("c", "d"), picker?.candidates?.map { it.id })
+    }
+
+    @Test
+    fun openBlockedByPickerPreChecksTheCurrentEdgesInOrder() = runTest {
+        // Editing b: its existing blocker a is the pre-checked current set; blocked items stay pickable
+        // (a chain b←c is legal), so candidates span every other item — even though the ready-only rows
+        // pruned b itself from the visible tree.
+        val c = component(withEdges())
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onOpenBlockedByPicker("b")
+        advanceUntilIdle()
+
+        val picker = c.state.value.blockedByPicker
+        assertEquals(listOf("a"), picker?.current)
+        assertEquals(listOf("a", "c", "d"), picker?.candidates?.map { it.id })
+        c.onDismissBlockedByPicker()
+        advanceUntilIdle()
+        assertEquals(null, c.state.value.blockedByPicker)
+    }
+
+    @Test
+    fun setBlockedByDispatchesTheEditorClosesThePickerAndRefreshesOnApplied() = runTest {
+        val calls = mutableListOf<Pair<TaskId, List<String>>>()
+        val repo = withEdges()
+        val c = component(repo, blockedByEditor = { id, blockers -> calls += id to blockers; BlockedByResult.Applied })
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onOpenBlockedByPicker("c")
+        advanceUntilIdle()
+        c.onSetBlockedBy("c", listOf("a", "d"))
+        advanceUntilIdle()
+
+        assertEquals(listOf(TaskId("c") to listOf("a", "d")), calls)
+        assertEquals(null, c.state.value.blockedByPicker, "save closes the picker")
+        assertEquals(null, c.state.value.blockedByError)
+        // A confirmed edge write pulls the recomputed derived flags (badges) right away.
+        assertEquals(1, repo.refreshCount)
+    }
+
+    @Test
+    fun blockedByVerdictsSurfaceAsTypedErrorsAndDismissClears() = runTest {
+        var result: BlockedByResult = BlockedByResult.Offline
+        val c = component(withEdges(), blockedByEditor = { _, _ -> result })
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onSetBlockedBy("c", listOf("a"))
+        advanceUntilIdle()
+        assertEquals(BlockedByEditError.Offline, c.state.value.blockedByError)
+
+        c.onDismissBlockedByError()
+        advanceUntilIdle()
+        assertEquals(null, c.state.value.blockedByError)
+
+        result = BlockedByResult.Failed("cannot add a blocked_by edge that would form a cycle")
+        c.onSetBlockedBy("c", listOf("a"))
+        advanceUntilIdle()
+        assertEquals(BlockedByEditError.Rejected, c.state.value.blockedByError)
+    }
+
+    @Test
+    fun dependentsMapNamesEachBlockersDirectDependents() = runTest {
+        // Computed over the UNFILTERED items: b is blocked (pruned from the resting rows) yet still named.
+        val c = component(withEdges())
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(mapOf("a" to listOf("b")), c.state.value.dependents)
+        assertFalse(c.state.value.rows.any { it.item.id == "b" }, "b itself is pruned ready-only")
     }
 }

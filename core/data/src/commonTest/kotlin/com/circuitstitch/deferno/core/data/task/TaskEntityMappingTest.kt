@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.database.sql.TaskEntity
+import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemSource
@@ -126,6 +127,19 @@ class TaskEntityMappingTest {
         val decoded = sampleEntity().toDomain()
         assertEquals(false, decoded.blocked)
         assertEquals(false, decoded.isBlocker)
+    }
+
+    @Test
+    fun blockedByEdgesRoundTripAndNullColumnDecodesToEmpty() {
+        // #291: the ordered edge list round-trips (item-only and occurrence-narrowed entries, order kept)...
+        val edges = listOf(BlockedByRef("b-1"), BlockedByRef("b-2", occurrence = "2026-07-01"))
+        val task = sampleTask(pinned = false).copy(blockedBy = edges)
+        assertEquals(task, task.toEntity().toDomain())
+        assertEquals("b-1\nb-2|2026-07-01", task.toEntity().blocked_by)
+        // ...an empty list encodes to the empty string...
+        assertEquals("", sampleTask(pinned = false).toEntity().blocked_by)
+        // ...and a pre-migration NULL column (sampleEntity leaves it null) decodes to empty, not a crash.
+        assertEquals(emptyList(), sampleEntity().toDomain().blockedBy)
     }
 
     @Test
@@ -256,5 +270,6 @@ class TaskEntityMappingTest {
         external_url = externalUrl,
         attachment_count = null,
         attachment_total_size = null,
+        blocked_by = null,
     )
 }

@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.data.outbox.FlushResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.security.SecurityRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
+import com.circuitstitch.deferno.core.data.task.BlockedByResult
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.AddToPlan
@@ -27,6 +28,7 @@ import com.circuitstitch.deferno.core.domain.command.RescheduleOccurrence
 import com.circuitstitch.deferno.core.domain.command.SetDefinitionState
 import com.circuitstitch.deferno.core.domain.command.SetDoneVisibility
 import com.circuitstitch.deferno.core.domain.command.SetDragAndDrop
+import com.circuitstitch.deferno.core.domain.command.SetTaskBlockedBy
 import com.circuitstitch.deferno.core.domain.command.SetTaskDeadline
 import com.circuitstitch.deferno.core.domain.command.SetTaskLabels
 import com.circuitstitch.deferno.core.domain.command.SetTaskPinned
@@ -48,6 +50,7 @@ import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
+import com.circuitstitch.deferno.feature.tasks.BlockedByEditor
 import com.circuitstitch.deferno.feature.tasks.DefinitionStateEditor
 import com.circuitstitch.deferno.feature.tasks.MoveEditor
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
@@ -182,6 +185,14 @@ interface AccountSession {
      * outbox enqueue), so the feature layer never touches the registry directly (mirrors [workingStateEditor]).
      */
     val moveEditor: MoveEditor
+
+    /**
+     * The Item-tree "Blocked by…" dependency-edge seam (#291): maps the picker's target blocker set to
+     * the ONLINE-ONLY `SetTaskBlockedBy` Command and dispatches it through the command executor,
+     * returning the data-layer verdict (Applied / Offline / Failed) the tree surfaces — unlike the
+     * fire-and-forget offline-first editors. Defaulted to the always-Applied NONE so test fakes build.
+     */
+    val blockedByEditor: BlockedByEditor get() = BlockedByEditor.NONE
 
     /** The Calendar Destination's windowed feed read source (#74) — the month grid + day agenda observe it. */
     val calendarRepository: CalendarRepository
@@ -346,6 +357,9 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val moveEditor: MoveEditor =
         commandMoveEditor(component.commandExecutor)
 
+    override val blockedByEditor: BlockedByEditor =
+        commandBlockedByEditor(component.commandExecutor)
+
     override val occurrenceEditor: OccurrenceEditor =
         commandOccurrenceEditor(component.commandExecutor)
 
@@ -427,6 +441,23 @@ internal fun commandSetPinned(executor: CommandExecutor): suspend (TaskId, Boole
  */
 internal fun commandMoveEditor(executor: CommandExecutor): MoveEditor =
     MoveEditor { id, newParentId, position -> executor.execute(MoveItem(id, newParentId, position)) }
+
+/**
+ * The "Blocked by…" dependency-edge seam backed by a [CommandExecutor] (#291): dispatches the
+ * ONLINE-ONLY [SetTaskBlockedBy] and maps the [CommandResult] back to the data-layer verdict the tree
+ * component surfaces (Accepted → Applied, Offline → Offline, Failed → Failed with the server message).
+ * A [CommandResult.Rejected] can't occur (the kind has no enablement rule) but maps to Failed so the
+ * mapping stays total. Shared by production and tests so the mapping isn't duplicated.
+ */
+internal fun commandBlockedByEditor(executor: CommandExecutor): BlockedByEditor =
+    BlockedByEditor { id, blockers ->
+        when (val result = executor.execute(SetTaskBlockedBy(id, blockers))) {
+            is CommandResult.Accepted -> BlockedByResult.Applied
+            is CommandResult.Offline -> BlockedByResult.Offline
+            is CommandResult.Failed -> BlockedByResult.Failed(result.message)
+            is CommandResult.Rejected -> BlockedByResult.Failed(result.reason.name)
+        }
+    }
 
 /**
  * An [OccurrenceEditor] backed by a [CommandExecutor] (#74): each act maps to its occurrence Command

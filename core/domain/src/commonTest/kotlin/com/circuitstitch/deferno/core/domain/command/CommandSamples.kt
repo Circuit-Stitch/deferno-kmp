@@ -52,6 +52,7 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.SetDoneVisibility -> SetDoneVisibility(259200L, 86400L)
     CommandKind.MoveItem -> MoveItem("item-1", newParentId = "p1", position = 2)
     CommandKind.SetDefinitionState -> SetDefinitionState("h1", ItemKind.Habit, DefinitionState.Archived)
+    CommandKind.SetTaskBlockedBy -> SetTaskBlockedBy(TaskId("t1"), listOf("b1", "b2"))
 }
 
 /** Concise [Task] fixture for the enablement tests. */

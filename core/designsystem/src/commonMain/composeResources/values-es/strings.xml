@@ -594,6 +594,9 @@ Gracias.</string>
     <string name="tasks_add_subtask_placeholder">Subtarea de %1$s</string>
     <string name="tasks_badge_blocker">Bloqueante</string>
     <string name="tasks_badge_blocker_a11y">Bloquea otros elementos</string>
+    <string name="tasks_blocked_by_dialog_title">¿Qué está bloqueando «%1$s»?</string>
+    <string name="tasks_blocked_by_error_offline">Sin conexión: los bloqueos no se pueden cambiar ahora.</string>
+    <string name="tasks_blocked_by_error_rejected">El cambio fue rechazado: crearía un ciclo de dependencias o cruzaría organizaciones.</string>
     <string name="tasks_delete_item_confirm_title">¿Eliminar «%1$s»?</string>
     <string name="tasks_detail_add_caption">Agregar leyenda</string>
     <string name="tasks_detail_add_comment_placeholder">Agrega un comentario…</string>
@@ -666,6 +669,7 @@ Gracias.</string>
     <string name="tasks_menu_add_subtask">Agregar subtarea</string>
     <string name="tasks_menu_add_to_plan">Agregar al plan de hoy</string>
     <string name="tasks_menu_archive">Archivar</string>
+    <string name="tasks_menu_blocked_by">Bloqueado por…</string>
     <string name="tasks_menu_break_this_down">Desglosar esto</string>
     <string name="tasks_menu_delete_permanent">Eliminar (¡permanente!)</string>
     <string name="tasks_menu_mark_done">Marcar como hecha</string>
@@ -688,6 +692,7 @@ Gracias.</string>
     <string name="tasks_progress_fraction">%1$d de %2$d</string>
     <!-- Registro suave para WorkingState.Dropped — nunca «abandonar/descartar» -->
     <string name="tasks_set_aside">Apartar</string>
+    <string name="tasks_set_aside_confirm_title">¿Apartar «%1$s»?</string>
     <string name="tasks_source_from_github">De GitHub</string>
     <string name="tasks_source_from_google_calendar">De Google Calendar</string>
     <string name="tasks_tree_actions_for_item">Acciones para %1$s</string>
@@ -702,6 +707,8 @@ Gracias.</string>
     <string name="tasks_tree_filtered_empty_title">Nada que mostrar aquí</string>
     <string name="tasks_tree_refreshing">Actualizando…</string>
     <string name="tasks_tree_show_blocked">Mostrar bloqueados</string>
+    <string name="tasks_unblock_confirm_releases">Esto también desbloquea: %1$s</string>
+    <string name="tasks_unblock_confirm_releases_unknown">Esto también desbloquea los elementos que ahora retiene.</string>
     <string name="tasks_tree_title">Todo</string>
     <string name="tasks_undo_operation_confirm_title">¿Deshacer la acción de %1$s?</string>
     <!-- Adjetivo de estado (aún no empezada) — distinto del verbo Abrir -->

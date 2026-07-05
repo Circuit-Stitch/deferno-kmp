@@ -170,6 +170,19 @@ internal class FakeItemTreeComponent(initial: ItemTreeState = ItemTreeState()) :
     override fun onSetWorkingState(id: String, target: WorkingState) { workingStatesSet += id to target }
     override fun onSetDefinitionState(id: String, target: DefinitionState) { definitionStatesSet += id to target }
     override fun onDelete(id: String) { deleted += id }
+
+    // "Blocked by…" dependency edges (#291).
+    val blockedByPickersOpened = mutableListOf<String>()
+    val blockedBySet = mutableListOf<Pair<String, List<String>>>()
+    var blockedByPickerDismissals = 0
+        private set
+    var blockedByErrorDismissals = 0
+        private set
+
+    override fun onOpenBlockedByPicker(id: String) { blockedByPickersOpened += id }
+    override fun onDismissBlockedByPicker() { blockedByPickerDismissals++ }
+    override fun onSetBlockedBy(id: String, blockers: List<String>) { blockedBySet += id to blockers }
+    override fun onDismissBlockedByError() { blockedByErrorDismissals++ }
 }
 
 /** Builds an [ItemRow] for the tree screenshot fixtures (the View renders rows verbatim, no re-flatten). */

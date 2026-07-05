@@ -76,6 +76,7 @@ class SqlDelightTaskLocalStore(
             external_url = e.external_url,
             attachment_count = e.attachment_count,
             attachment_total_size = e.attachment_total_size,
+            blocked_by = e.blocked_by,
         )
     }
 

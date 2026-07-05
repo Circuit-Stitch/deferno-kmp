@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.database.sql.TaskEntity
+import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemSource
@@ -59,6 +60,8 @@ fun TaskEntity.toDomain(): Task = Task(
     // Server-derived dependency flags (#290): NULL (pre-migration / omitted) decodes to false.
     blocked = blocked == 1L,
     isBlocker = is_blocker == 1L,
+    // The ordered blockedBy edge list (#291): NULL (pre-migration) decodes to empty.
+    blockedBy = blocked_by.decodeBlockedBy(),
     external = decodeExternalRef(external_source, external_id, external_url),
     // Attachment rollup (#311): NULL (pre-migration / omitted) decodes to 0.
     attachmentCount = (attachment_count ?: 0L).toInt(),
@@ -97,6 +100,7 @@ fun Task.toEntity(): TaskEntity = TaskEntity(
     external_url = external?.url,
     attachment_count = attachmentCount.toLong(),
     attachment_total_size = attachmentTotalSize,
+    blocked_by = blockedBy.encodeBlockedBy(),
 )
 
 /**
@@ -111,6 +115,23 @@ private fun decodeExternalRef(source: String?, id: String?, url: String?): Exter
     val refId = id ?: return null
     return ExternalRef(source = itemSource, id = refId, url = url)
 }
+
+/**
+ * The blockedBy edge list (#291) <-> a `\n`-joined TEXT of `item` or `item|occurrence` entries.
+ * UUIDs and occurrence dates contain neither separator, so the join is lossless; `[]` <-> `""`/NULL.
+ */
+private fun List<BlockedByRef>.encodeBlockedBy(): String =
+    joinToString("\n") { ref -> if (ref.occurrence == null) ref.item else "${ref.item}|${ref.occurrence}" }
+
+private fun String?.decodeBlockedBy(): List<BlockedByRef> =
+    if (isNullOrEmpty()) {
+        emptyList()
+    } else {
+        split("\n").map { entry ->
+            val bar = entry.indexOf('|')
+            if (bar < 0) BlockedByRef(entry) else BlockedByRef(entry.take(bar), entry.substring(bar + 1))
+        }
+    }
 
 /** `[]` -> `""`, else the elements joined with `\n` (the list columns never contain newlines). */
 private fun List<String>.encodeNewlineList(): String = joinToString("\n")

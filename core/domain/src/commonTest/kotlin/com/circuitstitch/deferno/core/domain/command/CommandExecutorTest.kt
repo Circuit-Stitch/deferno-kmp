@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.core.domain.command
 
+import com.circuitstitch.deferno.core.data.task.BlockedByResult
+import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
@@ -29,7 +31,8 @@ class CommandExecutorTest {
         settings: FakeSettingsWriter = FakeSettingsWriter(),
         item: FakeItemWriter = FakeItemWriter(),
         definition: FakeDefinitionWriter = FakeDefinitionWriter(),
-    ) = CommandExecutor(task, plan, create, occurrence, settings, item, definition)
+        blockedBy: FakeBlockedByWriter = FakeBlockedByWriter(),
+    ) = CommandExecutor(task, plan, create, occurrence, settings, item, definition, blockedBy)
 
     @Test
     fun bindsEveryTaskCommandToTheRightWriterCallAndArgs() = runTest {
@@ -220,8 +223,9 @@ class CommandExecutorTest {
             val sw = FakeSettingsWriter()
             val iw = FakeItemWriter()
             val dw = FakeDefinitionWriter()
+            val bw = FakeBlockedByWriter()
 
-            val result = executor(tw, pw, cw, ow, sw, iw, dw).execute(sampleCommand(kind)) // null current → gate skipped
+            val result = executor(tw, pw, cw, ow, sw, iw, dw, bw).execute(sampleCommand(kind)) // null current → gate skipped
 
             // Create/convert surface the created id (#211); every other kind has no new id (itemId = null).
             val expectedId = if (kind in CommandKind.createKinds) "server-${kind.name}" else null
@@ -232,9 +236,10 @@ class CommandExecutorTest {
             val isSettings = kind in CommandKind.settingsKinds
             val isMove = kind in CommandKind.moveKinds
             val isDefinition = kind in CommandKind.definitionKinds
+            val isBlockedBy = kind == CommandKind.SetTaskBlockedBy
             assertEquals(if (isPlan) 1 else 0, pw.calls.size, "kind $kind plan-writer calls")
             assertEquals(
-                if (isPlan || isCreate || isOccurrence || isSettings || isMove || isDefinition) 0 else 1,
+                if (isPlan || isCreate || isOccurrence || isSettings || isMove || isDefinition || isBlockedBy) 0 else 1,
                 tw.calls.size,
                 "kind $kind task-writer calls",
             )
@@ -243,7 +248,37 @@ class CommandExecutorTest {
             assertEquals(if (isSettings) 1 else 0, sw.calls.size, "kind $kind settings-writer calls")
             assertEquals(if (isMove) 1 else 0, iw.calls.size, "kind $kind item-writer calls")
             assertEquals(if (isDefinition) 1 else 0, dw.calls.size, "kind $kind definition-writer calls")
+            assertEquals(if (isBlockedBy) 1 else 0, bw.calls.size, "kind $kind blockedBy-writer calls")
         }
+    }
+
+    @Test
+    fun setTaskBlockedByRoutesToTheBlockedByWriterAndSurfacesItsVerdict() = runTest {
+        // #291: the dependency-edge write is online-only (the convert posture) — the executor returns
+        // the writer's own verdict, mapping ids → item-only BlockedByRefs (occurrence is a follow-up).
+        val tw = FakeTaskWriter()
+        val bw = FakeBlockedByWriter()
+        val ex = executor(tw, FakePlanWriter(), blockedBy = bw)
+
+        assertEquals(
+            CommandResult.Accepted(CommandKind.SetTaskBlockedBy),
+            ex.execute(SetTaskBlockedBy(id, listOf("b1", "b2"))),
+        )
+        assertEquals(
+            listOf(FakeBlockedByWriter.Call(id, listOf(BlockedByRef("b1"), BlockedByRef("b2")))),
+            bw.calls,
+        )
+        assertTrue(tw.calls.isEmpty(), "a blockedBy set must not touch the outbox task writer")
+
+        // Offline → structured Offline (nothing applied or enqueued)…
+        bw.result = BlockedByResult.Offline
+        assertEquals(CommandResult.Offline(CommandKind.SetTaskBlockedBy), ex.execute(SetTaskBlockedBy(id, emptyList())))
+        // …and a server 400 (cycle / cross-org) surfaces its message as Failed, never a blind Accepted.
+        bw.result = BlockedByResult.Failed("cannot add a blocked_by edge that would form a cycle")
+        assertEquals(
+            CommandResult.Failed(CommandKind.SetTaskBlockedBy, "cannot add a blocked_by edge that would form a cycle"),
+            ex.execute(SetTaskBlockedBy(id, listOf("b1"))),
+        )
     }
 
     @Test

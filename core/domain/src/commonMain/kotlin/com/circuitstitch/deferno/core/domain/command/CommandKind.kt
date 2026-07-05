@@ -151,6 +151,13 @@ enum class CommandKind(
     // reorder/rename existing entries). Offline-first (optimistic apply + enqueue), so NOT onlineOnly; it
     // targets a recurring definition, not a Task row, so no [enabledFor] rule applies.
     SetDefinitionState(CommandId("definition.set-state"), CommandCategory.Definition),
+
+    // The dependency-edge write (#291): replace a Task's ordered blockedBy list from the tree menu's
+    // "Blocked by…" picker. Organize (it structures work, like labels/pinning) and ONLINE-ONLY (the
+    // ConvertItem posture): the server alone validates the edge set — a cycle or cross-org edge is a
+    // 400 verdict the executor returns as Failed(message) so the menu can surface it, never a silent
+    // outbox drop. Appended at the end (CommandIds are a public contract — never reorder/rename).
+    SetTaskBlockedBy(CommandId("task.set-blocked-by"), CommandCategory.Organize, onlineOnly = true),
     ;
 
     /**

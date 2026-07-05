@@ -68,6 +68,8 @@ import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.settings.SqlDelightSettingsLocalStore
+import com.circuitstitch.deferno.core.data.task.BlockedByWriter
+import com.circuitstitch.deferno.core.data.task.KtorBlockedByWriter
 import com.circuitstitch.deferno.core.data.task.OfflineTaskRepository
 import com.circuitstitch.deferno.core.data.task.OutboxTaskWriter
 import com.circuitstitch.deferno.core.data.task.SqlDelightTaskLocalStore
@@ -340,6 +342,17 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun taskWriter(localStore: TaskLocalStore, outbox: OutboxStore): TaskWriter =
         OutboxTaskWriter(localStore, outbox)
+
+    // The dependency-edge write seam (#291): ONLINE-ONLY (the convert posture, ADR-0016) — optimistic
+    // apply, immediate `PATCH tasks/{id} {"blocked_by":…}`, revert on the server's 400 verdict. The
+    // client + connectivity are AppScope (shared, bearer follows the Active Account); the store is this scope.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun blockedByWriter(
+        client: HttpClient,
+        connectivity: Connectivity,
+        localStore: TaskLocalStore,
+    ): BlockedByWriter = KtorBlockedByWriter(client, connectivity, localStore)
 
     // The recurring-definition write seam (#299): optimistic per-kind apply (Habit/Chore/Event) + outbox
     // enqueue of `PATCH {kind}/{id} {"status":…}`. Offline-first like the Task writer (it targets an
