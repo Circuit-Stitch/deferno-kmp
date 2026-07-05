@@ -13959,6 +13959,108 @@
         }
       }
     },
+    "tasks_blocked_by_dialog_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What is blocking “%1$@”?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué está bloqueando «%1$@»?"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was blockiert „%1$@“?"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@” को क्या रोक रहा है?"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que está bloqueando “%1$@”?"
+          }
+        }
+      }
+    },
+    "tasks_blocked_by_error_offline": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You're offline — blockers can't be changed right now."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conexión: los bloqueos no se pueden cambiar ahora."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline — Blocker können gerade nicht geändert werden."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आप ऑफ़लाइन हैं — अभी अवरोधक बदले नहीं जा सकते।"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você está offline — os bloqueios não podem ser alterados agora."
+          }
+        }
+      }
+    },
+    "tasks_blocked_by_error_rejected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That change was rejected — it would create a dependency cycle or cross organizations."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cambio fue rechazado: crearía un ciclo de dependencias o cruzaría organizaciones."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Änderung wurde abgelehnt — sie würde einen Abhängigkeitszyklus erzeugen oder Organisationen überschreiten."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "वह बदलाव अस्वीकार हुआ — इससे निर्भरता-चक्र बनता या यह संगठनों के पार जाता।"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A alteração foi rejeitada — ela criaria um ciclo de dependências ou cruzaria organizações."
+          }
+        }
+      }
+    },
     "tasks_delete_item_confirm_title": {
       "localizations": {
         "en": {
@@ -15796,6 +15898,40 @@
         }
       }
     },
+    "tasks_menu_blocked_by": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blocked by…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloqueado por…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blockiert durch…"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसके द्वारा अवरुद्ध…"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloqueado por…"
+          }
+        }
+      }
+    },
     "tasks_menu_break_this_down": {
       "localizations": {
         "en": {
@@ -16649,6 +16785,40 @@
         }
       }
     },
+    "tasks_set_aside_confirm_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set aside “%1$@”?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Apartar «%1$@»?"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%1$@“ beiseitelegen?"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@” अलग रखें?"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deixar “%1$@” de lado?"
+          }
+        }
+      }
+    },
     "tasks_source_from_github": {
       "localizations": {
         "en": {
@@ -17113,6 +17283,74 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tudo"
+          }
+        }
+      }
+    },
+    "tasks_unblock_confirm_releases": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This also unblocks: %1$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto también desbloquea: %1$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Damit wird die Blockierung aufgehoben für: %1$@"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इससे ये भी अनवरुद्ध होंगे: %1$@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Isso também desbloqueia: %1$@"
+          }
+        }
+      }
+    },
+    "tasks_unblock_confirm_releases_unknown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This also unblocks the items it currently gates."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto también desbloquea los elementos que ahora retiene."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Damit wird die Blockierung der davon abhängigen Einträge aufgehoben."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इससे वे आइटम भी अनवरुद्ध होंगे जिन्हें यह रोक रहा है।"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Isso também desbloqueia os itens que ele bloqueia atualmente."
           }
         }
       }

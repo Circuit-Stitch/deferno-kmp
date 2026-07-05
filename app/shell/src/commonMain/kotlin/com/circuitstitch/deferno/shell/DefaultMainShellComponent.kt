@@ -95,6 +95,7 @@ import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import com.circuitstitch.deferno.feature.tasks.TaskMenuState
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
+import com.circuitstitch.deferno.feature.tasks.BlockedByEditor
 import com.circuitstitch.deferno.feature.tasks.DefinitionStateEditor
 import com.circuitstitch.deferno.feature.tasks.MoveEditor
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
@@ -150,6 +151,9 @@ class DefaultMainShellComponent(
     // The Tasks Item-tree move seam (#228), threaded into the Tasks Destination so its modal move mode can
     // issue Move Commands. Defaults to a no-op so the many shell tests build without it.
     private val moveEditor: MoveEditor = MoveEditor.NONE,
+    // The Tasks Item-tree dependency-edge seam (#291), threaded into the Tasks Destination so its command
+    // menu can set/remove "Blocked by…". Defaults to the always-Applied NONE so shell tests build without it.
+    private val blockedByEditor: BlockedByEditor = BlockedByEditor.NONE,
     // The Task detail's online-only comments + attachments source, threaded into the detail (overlay +
     // Tasks Destination). Defaulted to the no-op so the many shell tests build without supplying it.
     private val taskDetailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
@@ -519,6 +523,7 @@ class DefaultMainShellComponent(
                         output = ::onTasksOutput,
                         workingStateEditor = workingStateEditor,
                         definitionStateEditor = definitionStateEditor,
+                        blockedByEditor = blockedByEditor,
                         moveEditor = moveEditor,
                         shakeToUndoPreference = shakeToUndoPreference,
                         taskDetailRepository = taskDetailRepository,

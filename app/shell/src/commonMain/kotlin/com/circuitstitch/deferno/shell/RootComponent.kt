@@ -425,6 +425,9 @@ class DefaultRootComponent(
                         definitionStateEditor = session.definitionStateEditor,
                         // The Tasks Item-tree modal move seam (#228), routed through this Account's executor.
                         moveEditor = session.moveEditor,
+                        // The Item-tree "Blocked by…" dependency-edge seam (#291), online-only via this
+                        // Account's executor — the verdict (400 cycle / offline) surfaces on the tree state.
+                        blockedByEditor = session.blockedByEditor,
                         taskDetailRepository = session.taskDetailRepository,
                         // The Task detail's editable-PROPERTIES write seams (DUE date + LABELS), each
                         // routed through this Account's command executor (Set/ClearTaskDeadline, SetTaskLabels).

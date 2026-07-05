@@ -80,3 +80,14 @@ data class ConvertItemPayload(
     @SerialName("end_time") val endTime: String? = null,
     val recurrence: RecurrenceDto? = null,
 )
+
+/**
+ * `PATCH /tasks/{id}` body replacing the ordered dependency-edge list (#291): always-present
+ * `blocked_by` (an empty array clears every edge — never absent, ADR-0011). Each entry is the
+ * blocker's raw item UUID, optionally narrowed to one [BlockedByRefDto.occurrence] of a recurring
+ * blocker (a deferred follow-up — the tree picker sends item-only edges).
+ */
+@Serializable
+data class SetBlockedByPayload(
+    @SerialName("blocked_by") val blockedBy: List<BlockedByRefDto>,
+)

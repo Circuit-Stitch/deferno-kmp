@@ -161,6 +161,21 @@ data class SetTaskPinned(override val taskId: TaskId, val pinned: Boolean) : Tas
 }
 
 /**
+ * Replace the Task's ordered dependency-edge list — who it is **blocked by** (#291, ADR-0034). An
+ * empty list clears every edge (always present, never absent — the [SetTaskLabels] shape). Like
+ * [SetTaskPinned], one set-command rather than add/remove verbs: the picker composes the full target
+ * list and the server validates it as a set. **Online-only** ([CommandKind.onlineOnly], the
+ * [ConvertItem] posture): the server is the sole validator (a dependency cycle or cross-org edge is a
+ * `400` the user must see now), so the executor returns the writer's own verdict — [CommandResult.Failed]
+ * carrying the server message, or [CommandResult.Offline] — never a blind Accepted. Advisory only:
+ * declaring an edge never moves or locks anything (the optional "file under blocker" reparent is a
+ * separate, explicit [MoveItem]).
+ */
+data class SetTaskBlockedBy(override val taskId: TaskId, val blockers: List<String>) : TaskCommand {
+    override val kind: CommandKind get() = CommandKind.SetTaskBlockedBy
+}
+
+/**
  * Soft-delete the Task (reversible — the server tombstones it). Flagged [CommandKind.destructive] so a
  * binding surface can confirm / offer undo (docs/design-principles.md: forgiving, no destructive
  * surprises). It carries **no timestamp** by design: the optimistic tombstone's `deletedAt` is the

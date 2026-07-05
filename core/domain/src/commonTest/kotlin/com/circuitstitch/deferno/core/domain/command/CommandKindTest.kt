@@ -51,21 +51,23 @@ class CommandKindTest {
                 CommandKind.SetDoneVisibility to "settings.set-done-visibility",
                 CommandKind.MoveItem to "item.move",
                 CommandKind.SetDefinitionState to "definition.set-state",
+                CommandKind.SetTaskBlockedBy to "task.set-blocked-by",
             ),
             CommandKind.entries.associateWith { it.id.value },
         )
     }
 
     @Test
-    fun convertIsTheOnlyOnlineOnlyKind() {
+    fun convertAndBlockedByAreTheOnlyOnlineOnlyKinds() {
         // #185: create became offline-first (the backend dedupes on the client-supplied id), so only
-        // convert keeps the ADR-0016 online-only flag (the signal the agent / OS-intent layer reads);
-        // every offline-first create/edit/status/plan kind is not.
+        // convert keeps the ADR-0016 online-only flag — joined by the dependency-edge write (#291),
+        // whose 400 cycle/cross-org verdict must come back synchronously; every offline-first
+        // create/edit/status/plan kind is not.
         assertEquals(
-            setOf(CommandKind.ConvertItem),
+            setOf(CommandKind.ConvertItem, CommandKind.SetTaskBlockedBy),
             CommandKind.entries.filter { it.onlineOnly }.toSet(),
         )
-        // Both still group under the Create category / createKinds catalog.
+        // Create + convert still group under the Create category / createKinds catalog.
         assertEquals(setOf(CommandKind.CreateItem, CommandKind.ConvertItem), CommandKind.createKinds.toSet())
     }
 

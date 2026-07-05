@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.data.definition.DefinitionWriter
 import com.circuitstitch.deferno.core.data.item.ItemWriter
 import com.circuitstitch.deferno.core.data.plan.PlanWriter
 import com.circuitstitch.deferno.core.data.settings.SettingsWriter
+import com.circuitstitch.deferno.core.data.task.BlockedByWriter
 import com.circuitstitch.deferno.core.data.task.TaskWriter
 import com.circuitstitch.deferno.core.scopes.AccountScope
 import me.tatarka.inject.annotations.Provides
@@ -30,6 +31,7 @@ interface CommandBindings {
         settingsWriter: SettingsWriter,
         itemWriter: ItemWriter,
         definitionWriter: DefinitionWriter,
+        blockedByWriter: BlockedByWriter,
     ): CommandExecutor =
-        CommandExecutor(taskWriter, planWriter, createWriter, occurrenceWriter, settingsWriter, itemWriter, definitionWriter)
+        CommandExecutor(taskWriter, planWriter, createWriter, occurrenceWriter, settingsWriter, itemWriter, definitionWriter, blockedByWriter)
 }

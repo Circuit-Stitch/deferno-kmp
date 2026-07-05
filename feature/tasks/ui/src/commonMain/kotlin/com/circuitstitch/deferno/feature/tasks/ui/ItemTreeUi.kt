@@ -26,9 +26,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -60,10 +62,12 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
@@ -85,13 +89,18 @@ import com.circuitstitch.deferno.core.designsystem.resources.common_collapse_nam
 import com.circuitstitch.deferno.core.designsystem.resources.common_delete
 import com.circuitstitch.deferno.core.designsystem.resources.common_done
 import com.circuitstitch.deferno.core.designsystem.resources.common_expand_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_ok
 import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd
 import com.circuitstitch.deferno.core.designsystem.resources.common_refresh
+import com.circuitstitch.deferno.core.designsystem.resources.common_save
 import com.circuitstitch.deferno.core.designsystem.resources.search_placeholder_trees
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_add_subtask_dialog_title
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_add_subtask_placeholder
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_badge_blocker
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_badge_blocker_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_blocked_by_dialog_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_blocked_by_error_offline
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_blocked_by_error_rejected
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_delete_item_confirm_title
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_filter_active
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_filter_all
@@ -100,6 +109,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_activate
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_add_subtask
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_add_to_plan
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_archive
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_blocked_by
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_delete_permanent
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_mark_done
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_move
@@ -116,6 +126,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_move_up
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_progress_done
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_progress_fraction
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_set_aside
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_set_aside_confirm_title
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_source_from_github
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_source_from_google_calendar
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_actions_for_item
@@ -127,12 +138,17 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_filtered
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_filtered_empty_title
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_refreshing
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_show_blocked
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_unblock_confirm_releases
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_unblock_confirm_releases_unknown
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_title
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.feature.tasks.BlockedByCandidate
+import com.circuitstitch.deferno.feature.tasks.BlockedByEditError
+import com.circuitstitch.deferno.feature.tasks.BlockedByPickerState
 import com.circuitstitch.deferno.feature.tasks.ItemRow
 import com.circuitstitch.deferno.feature.tasks.MoveMode
 import com.circuitstitch.deferno.feature.tasks.TaskMenuState
@@ -226,6 +242,16 @@ internal fun ItemTreeContent(
     // Defaulted inert so read-only callers / tests render without wiring it; the component resolves the kind.
     onSetDefinitionState: (id: String, target: DefinitionState) -> Unit = { _, _ -> },
     onDelete: (id: String) -> Unit = {},
+    // "Blocked by…" dependency edges (#291): the component-owned picker + write-failure notice + the
+    // blocker→dependent-titles map the destructive-unblock confirms name. All defaulted inert so
+    // read-only callers / tests render without wiring them.
+    blockedByPicker: BlockedByPickerState? = null,
+    blockedByError: BlockedByEditError? = null,
+    dependents: Map<String, List<String>> = emptyMap(),
+    onOpenBlockedByPicker: (id: String) -> Unit = {},
+    onDismissBlockedByPicker: () -> Unit = {},
+    onSetBlockedBy: (id: String, blockers: List<String>) -> Unit = { _, _ -> },
+    onDismissBlockedByError: () -> Unit = {},
 ) {
     // Route the move keystrokes (Alt+↑/↓, Tab/Shift-Tab) to the column while an item is lifted: focus it on
     // entry so its onPreviewKeyEvent sees them before focus traversal would consume Tab (#228). The column is
@@ -353,6 +379,8 @@ internal fun ItemTreeContent(
                         onSetWorkingState = onSetWorkingState,
                         onSetDefinitionState = onSetDefinitionState,
                         onDelete = onDelete,
+                        dependentTitles = if (row.item.isBlocker) dependents[row.item.id].orEmpty() else emptyList(),
+                        onOpenBlockedByPicker = onOpenBlockedByPicker,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
@@ -378,6 +406,31 @@ internal fun ItemTreeContent(
                 onDone = onExitMoveMode,
             )
         }
+    }
+
+    // The "Blocked by…" picker + the write-failure notice (#291) — component-owned state, so they render
+    // at the content level (unlike the per-row confirms): the picker's candidates span the whole
+    // unfiltered item set, and an online-only verdict can arrive after its row's menu is long gone.
+    blockedByPicker?.let { picker ->
+        BlockedByPickerDialog(picker = picker, onSave = onSetBlockedBy, onDismiss = onDismissBlockedByPicker)
+    }
+    blockedByError?.let { error ->
+        AlertDialog(
+            onDismissRequest = onDismissBlockedByError,
+            text = {
+                Text(
+                    stringResource(
+                        when (error) {
+                            BlockedByEditError.Offline -> Res.string.tasks_blocked_by_error_offline
+                            BlockedByEditError.Rejected -> Res.string.tasks_blocked_by_error_rejected
+                        },
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = onDismissBlockedByError) { Text(stringResource(Res.string.common_ok)) }
+            },
+        )
     }
 }
 
@@ -487,6 +540,10 @@ private fun ItemTreeRow(
     onSetWorkingState: (id: String, target: WorkingState) -> Unit,
     onSetDefinitionState: (id: String, target: DefinitionState) -> Unit,
     onDelete: (id: String) -> Unit,
+    // The direct dependents this row currently gates (#291) — empty unless [ItemRow.item.isBlocker].
+    // Names the destructive-unblock confirms (Set aside / Delete release them; completing warns nothing).
+    dependentTitles: List<String> = emptyList(),
+    onOpenBlockedByPicker: (id: String) -> Unit = {},
 ) {
     val item = row.item
     // Three distinct row states (#290): a terminal (Done/Dropped/Archived) item strikes + mutes the title;
@@ -496,9 +553,11 @@ private fun ItemTreeRow(
     val titleColor =
         if (item.isTerminal || item.blocked) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface
     var menuOpen by remember { mutableStateOf(false) }
-    // The two menu-spawned dialogs (#231): the destructive-Delete confirm and the Add-subtask title prompt.
+    // The menu-spawned dialogs (#231/#291): the destructive-Delete confirm, the Add-subtask title
+    // prompt, and the destructive-unblock Set-aside confirm (only reached when the row is a blocker).
     var confirmDelete by remember { mutableStateOf(false) }
     var addSubtaskOpen by remember { mutableStateOf(false) }
+    var confirmSetAside by remember { mutableStateOf(false) }
 
     // The lifted row is highlighted; the rest of the list calms (dimmed) while a move is in progress.
     val rowColor =
@@ -666,6 +725,13 @@ private fun ItemTreeRow(
                     )
                 }
                 if (isTask) {
+                    // "Blocked by…" (#291): open the dependency-edge picker. Needs only the id (the
+                    // component computes current edges + cycle-safe candidates off its cache), so it
+                    // rides the kind gate alone, like Delete. Advisory only — never moves anything.
+                    DropdownMenuItem(
+                        text = { Text(stringResource(Res.string.tasks_menu_blocked_by)) },
+                        onClick = { menuOpen = false; onOpenBlockedByPicker(item.id) },
+                    )
                     // Pin/plan/status need the joined per-row state (label direction + which verb to hide), so
                     // they appear once it's present; Delete needs only the id, so it rides the kind gate alone.
                     if (menuState != null) {
@@ -709,9 +775,14 @@ private fun ItemTreeRow(
                             )
                         }
                         if (menuState.workingState != WorkingState.Dropped) {
+                            // A blocker's Set aside detours through a confirm naming the dependents it
+                            // releases (#291); completing is the happy path and warns nothing.
                             DropdownMenuItem(
                                 text = { Text(stringResource(Res.string.tasks_set_aside), color = MaterialTheme.colorScheme.error) },
-                                onClick = { menuOpen = false; onSetWorkingState(item.id, WorkingState.Dropped) },
+                                onClick = {
+                                    menuOpen = false
+                                    if (item.isBlocker) confirmSetAside = true else onSetWorkingState(item.id, WorkingState.Dropped)
+                                },
                             )
                         }
                     }
@@ -745,11 +816,19 @@ private fun ItemTreeRow(
     }
 
     // Delete confirm (destructive, #231) — mirrors the Task-detail kebab's confirm (TaskDetailContent).
+    // A blocker's confirm additionally names the dependents the delete releases (#291).
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(Res.string.tasks_delete_item_confirm_title, item.title)) },
-            text = { Text(stringResource(Res.string.common_cannot_be_undone)) },
+            text = {
+                Text(
+                    listOfNotNull(
+                        unblockReleasesLine(isBlocker = item.isBlocker, dependentTitles = dependentTitles),
+                        stringResource(Res.string.common_cannot_be_undone),
+                    ).joinToString("\n\n"),
+                )
+            },
             confirmButton = {
                 TextButton(onClick = { confirmDelete = false; onDelete(item.id) }) {
                     Text(stringResource(Res.string.common_delete), color = MaterialTheme.colorScheme.error)
@@ -757,6 +836,24 @@ private fun ItemTreeRow(
             },
             dismissButton = {
                 TextButton(onClick = { confirmDelete = false }) { Text(stringResource(Res.string.common_cancel)) }
+            },
+        )
+    }
+
+    // Destructive-unblock Set-aside confirm (#291): only reached for a blocker row — dropping it
+    // releases its dependents, so the confirm names them before the write dispatches.
+    if (confirmSetAside) {
+        AlertDialog(
+            onDismissRequest = { confirmSetAside = false },
+            title = { Text(stringResource(Res.string.tasks_set_aside_confirm_title, item.title)) },
+            text = { Text(unblockReleasesLine(isBlocker = true, dependentTitles = dependentTitles).orEmpty()) },
+            confirmButton = {
+                TextButton(onClick = { confirmSetAside = false; onSetWorkingState(item.id, WorkingState.Dropped) }) {
+                    Text(stringResource(Res.string.tasks_set_aside), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmSetAside = false }) { Text(stringResource(Res.string.common_cancel)) }
             },
         )
     }
@@ -807,6 +904,78 @@ private fun AddSubtaskDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
         },
     )
+}
+
+/**
+ * The "this also unblocks …" confirm line (#291): the dependents by name, or the generic fallback when
+ * the row is flagged a blocker but the cached edges haven't synced yet. `null` for a non-blocker (the
+ * plain Delete confirm shows only its usual body).
+ */
+@Composable
+private fun unblockReleasesLine(isBlocker: Boolean, dependentTitles: List<String>): String? = when {
+    !isBlocker -> null
+    dependentTitles.isEmpty() -> stringResource(Res.string.tasks_unblock_confirm_releases_unknown)
+    else -> stringResource(Res.string.tasks_unblock_confirm_releases, dependentTitles.joinToString(", "))
+}
+
+/**
+ * The "Blocked by…" picker (#291): a checkbox list over the component-computed cycle-safe candidates,
+ * pre-checked with the current blockers. Save submits the full target set (empty = clear every edge);
+ * the write is advisory + online-only — the component surfaces a failure verdict separately. Each row
+ * is one toggleable target (checkbox + title) so TalkBack reads it as a single switch.
+ */
+@Composable
+private fun BlockedByPickerDialog(
+    picker: BlockedByPickerState,
+    onSave: (id: String, blockers: List<String>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selected by remember(picker.itemId) { mutableStateOf(picker.current.toSet()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.tasks_blocked_by_dialog_title, picker.itemTitle)) },
+        text = {
+            LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                items(picker.candidates, key = { it.id }) { candidate ->
+                    val checked = candidate.id in selected
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .toggleable(
+                                value = checked,
+                                role = Role.Checkbox,
+                                onValueChange = { now -> selected = if (now) selected + candidate.id else selected - candidate.id },
+                            )
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = checked, onCheckedChange = null)
+                        Spacer(Modifier.size(8.dp))
+                        Text(candidate.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(picker.itemId, orderedBlockerSelection(picker, selected)) }) {
+                Text(stringResource(Res.string.common_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
+        },
+    )
+}
+
+/**
+ * Orders the picker's checked set into the submitted blocker list (#291): kept blockers preserve their
+ * existing edge order, newly-checked ones append in candidate (tree) order — so an untouched selection
+ * round-trips the server's ordered list unchanged.
+ */
+internal fun orderedBlockerSelection(picker: BlockedByPickerState, selected: Set<String>): List<String> {
+    val kept = picker.current.filter { it in selected }
+    val existing = picker.current.toSet()
+    return kept + picker.candidates.map { it.id }.filter { it in selected && it !in existing }
 }
 
 /** ~16dp glyph for a small source mark. */

@@ -98,6 +98,8 @@ class DefaultTasksComponent(
     // its per-row Task state (Pin/plan/status labels) joined off the Task list + today's plan by the shell,
     // the pin toggle, and the add/remove-from-plan toggle. All default to inert so existing tests build.
     private val menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
+    // The dependency-edge seam (#291), threaded into the tree pane (online-only, returns the verdict).
+    private val blockedByEditor: BlockedByEditor = BlockedByEditor.NONE,
     private val setPinned: suspend (TaskId, Boolean) -> Unit = { _, _ -> },
     private val addToPlan: suspend (TaskId) -> Unit = { _ -> },
     private val removeFromPlan: suspend (TaskId) -> Unit = { _ -> },
@@ -130,6 +132,7 @@ class DefaultTasksComponent(
             menuStates = menuStates,
             workingStateEditor = workingStateEditor,
             definitionStateEditor = definitionStateEditor,
+            blockedByEditor = blockedByEditor,
             setPinned = setPinned,
             createSubtask = createSubtask,
             deleteTask = deleteTask,

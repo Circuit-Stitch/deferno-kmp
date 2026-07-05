@@ -785,6 +785,12 @@ Thank you.</string>
     <!-- Chip: this item blocks others -->
     <string name="tasks_badge_blocker">Blocker</string>
     <string name="tasks_badge_blocker_a11y">Blocks other items</string>
+    <!-- Blocked-by picker (#291); arg = the edited item's title -->
+    <string name="tasks_blocked_by_dialog_title">What is blocking “%1$s”?</string>
+    <!-- Edge writes are online-only (server-validated) -->
+    <string name="tasks_blocked_by_error_offline">You're offline — blockers can't be changed right now.</string>
+    <!-- Server 400 verdict, typed (the raw prose is logged, not shown) -->
+    <string name="tasks_blocked_by_error_rejected">That change was rejected — it would create a dependency cycle or cross organizations.</string>
     <!-- Curly quotes — adapt quote style per locale -->
     <string name="tasks_delete_item_confirm_title">Delete “%1$s”?</string>
     <string name="tasks_detail_add_caption">Add caption</string>
@@ -892,6 +898,8 @@ Thank you.</string>
     <string name="tasks_menu_add_to_plan">Add to today's plan</string>
     <!-- Verb -->
     <string name="tasks_menu_archive">Archive</string>
+    <!-- Opens the dependency-edge picker (#291) -->
+    <string name="tasks_menu_blocked_by">Blocked by…</string>
     <!-- Opens the Breakdown impediment chat -->
     <string name="tasks_menu_break_this_down">Break this down</string>
     <!-- Destructive; the word itself carries the warning (a11y) -->
@@ -924,6 +932,8 @@ Thank you.</string>
     <string name="tasks_progress_fraction">%1$d of %2$d</string>
     <!-- App vocabulary for WorkingState.Dropped — VERB phrase ('put aside for now', deliberately gentle, never 'drop/abandon'). One key for menu entries AND the working-state chip label -->
     <string name="tasks_set_aside">Set aside</string>
+    <!-- Destructive-unblock confirm for an isBlocker row; arg = title -->
+    <string name="tasks_set_aside_confirm_title">Set aside “%1$s”?</string>
     <!-- Sole TalkBack provenance cue; brand name stays -->
     <string name="tasks_source_from_github">From GitHub</string>
     <string name="tasks_source_from_google_calendar">From Google Calendar</string>
@@ -943,6 +953,10 @@ Thank you.</string>
     <string name="tasks_tree_refreshing">Refreshing…</string>
     <!-- FilterChip — 'blocked' items toggle -->
     <string name="tasks_tree_show_blocked">Show blocked</string>
+    <!-- Arg = comma-joined dependent titles the drop/delete releases -->
+    <string name="tasks_unblock_confirm_releases">This also unblocks: %1$s</string>
+    <!-- Fallback when the cached edges haven't synced yet -->
+    <string name="tasks_unblock_confirm_releases_unknown">This also unblocks the items it currently gates.</string>
     <!-- Pane heading over the full tree list -->
     <string name="tasks_tree_title">Everything</string>
     <!-- Arg = localized move-operation label (via MoveOperation enum refactor) -->

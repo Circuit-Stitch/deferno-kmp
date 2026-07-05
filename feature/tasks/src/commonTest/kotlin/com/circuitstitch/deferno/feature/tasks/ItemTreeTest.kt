@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.feature.tasks
 
+import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
 import kotlin.test.Test
@@ -22,6 +23,7 @@ class ItemTreeTest {
         descendantTotal: Long? = null,
         blocked: Boolean = false,
         isBlocker: Boolean = false,
+        blockedBy: List<BlockedByRef> = emptyList(),
     ) = Item(
         id = id,
         kind = kind,
@@ -32,6 +34,7 @@ class ItemTreeTest {
         descendantTotal = descendantTotal,
         blocked = blocked,
         isBlocker = isBlocker,
+        blockedBy = blockedBy,
     )
 
     /** id -> row, for terse assertions on a flattened forest. */
@@ -274,5 +277,47 @@ class ItemTreeTest {
     fun moveOptionsForAnAbsentIdOffersNothing() {
         val o = moveOptions(family(), "ghost")
         assertEquals(MoveOptions(null, null, null, null), o)
+    }
+
+    // --- dependency edges (#291): the dependents map + the picker's cycle guard ---
+
+    @Test
+    fun dependentTitlesMapsEachBlockerToItsDirectDependents() {
+        val items = listOf(
+            item("a", isBlocker = true),
+            item("b", blocked = true, blockedBy = listOf(BlockedByRef("a"))),
+            item("c", blocked = true, blockedBy = listOf(BlockedByRef("a"), BlockedByRef("x"))),
+            item("d"),
+        )
+        assertEquals(
+            mapOf("a" to listOf("title-b", "title-c"), "x" to listOf("title-c")),
+            dependentTitles(items),
+        )
+    }
+
+    @Test
+    fun dependentClosureWalksTransitivelyAndOnlyDownstream() {
+        // a ← b ← c (c depends on b depends on a), d unrelated: everything downstream of a is {b, c};
+        // b's own closure is just {c}; a leaf's is empty — its blockers are upstream, never dependents.
+        val items = listOf(
+            item("a"),
+            item("b", blockedBy = listOf(BlockedByRef("a"))),
+            item("c", blockedBy = listOf(BlockedByRef("b"))),
+            item("d"),
+        )
+        assertEquals(setOf("b", "c"), dependentClosure(items, "a"))
+        assertEquals(setOf("c"), dependentClosure(items, "b"))
+        assertEquals(emptySet(), dependentClosure(items, "c"))
+        assertEquals(emptySet(), dependentClosure(items, "d"))
+    }
+
+    @Test
+    fun dependentClosureTerminatesOnDefensiveCycles() {
+        // The server prevents cycles, but the walk must stay total on weird cached data (LWW races).
+        val items = listOf(
+            item("a", blockedBy = listOf(BlockedByRef("b"))),
+            item("b", blockedBy = listOf(BlockedByRef("a"))),
+        )
+        assertEquals(setOf("a", "b"), dependentClosure(items, "a"))
     }
 }

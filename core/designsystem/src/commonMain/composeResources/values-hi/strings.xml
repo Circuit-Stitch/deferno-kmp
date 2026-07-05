@@ -608,6 +608,9 @@
     <string name="tasks_add_subtask_placeholder">%1$s का उपकार्य</string>
     <string name="tasks_badge_blocker">अवरोधक</string>
     <string name="tasks_badge_blocker_a11y">अन्य आइटम को रोकता है</string>
+    <string name="tasks_blocked_by_dialog_title">“%1$s” को क्या रोक रहा है?</string>
+    <string name="tasks_blocked_by_error_offline">आप ऑफ़लाइन हैं — अभी अवरोधक बदले नहीं जा सकते।</string>
+    <string name="tasks_blocked_by_error_rejected">वह बदलाव अस्वीकार हुआ — इससे निर्भरता-चक्र बनता या यह संगठनों के पार जाता।</string>
     <string name="tasks_delete_item_confirm_title">“%1$s” हटाएँ?</string>
     <string name="tasks_detail_add_caption">कैप्शन जोड़ें</string>
     <string name="tasks_detail_add_comment_placeholder">टिप्पणी जोड़ें…</string>
@@ -682,6 +685,7 @@
     <string name="tasks_menu_add_subtask">उपकार्य जोड़ें</string>
     <string name="tasks_menu_add_to_plan">आज की योजना में जोड़ें</string>
     <string name="tasks_menu_archive">संग्रहित करें</string>
+    <string name="tasks_menu_blocked_by">किसके द्वारा अवरुद्ध…</string>
     <string name="tasks_menu_break_this_down">इसे छोटे हिस्सों में बाँटें</string>
     <string name="tasks_menu_delete_permanent">हटाएँ (स्थायी!)</string>
     <string name="tasks_menu_mark_done">पूर्ण चिह्नित करें</string>
@@ -706,6 +710,7 @@
     <string name="tasks_progress_fraction">%2$d में से %1$d</string>
     <!-- सौम्य 'अलग रखें' — कभी 'छोड़ा/त्यागा' नहीं -->
     <string name="tasks_set_aside">अलग रखें</string>
+    <string name="tasks_set_aside_confirm_title">“%1$s” अलग रखें?</string>
     <string name="tasks_source_from_github">GitHub से</string>
     <string name="tasks_source_from_google_calendar">Google Calendar से</string>
     <string name="tasks_tree_actions_for_item">%1$s के लिए क्रियाएँ</string>
@@ -722,6 +727,8 @@
     <string name="tasks_tree_filtered_empty_title">यहाँ दिखाने को कुछ नहीं</string>
     <string name="tasks_tree_refreshing">रीफ़्रेश हो रहा है…</string>
     <string name="tasks_tree_show_blocked">अवरुद्ध दिखाएँ</string>
+    <string name="tasks_unblock_confirm_releases">इससे ये भी अनवरुद्ध होंगे: %1$s</string>
+    <string name="tasks_unblock_confirm_releases_unknown">इससे वे आइटम भी अनवरुद्ध होंगे जिन्हें यह रोक रहा है।</string>
     <string name="tasks_tree_title">सब कुछ</string>
     <string name="tasks_undo_operation_confirm_title">%1$s पूर्ववत करें?</string>
     <!-- स्थिति-विशेषण (अभी शुरू नहीं) — tasks_menu_open क्रिया से अलग -->

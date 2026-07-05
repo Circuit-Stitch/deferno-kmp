@@ -607,6 +607,9 @@ Vielen Dank.</string>
     <string name="tasks_add_subtask_placeholder">Unteraufgabe von %1$s</string>
     <string name="tasks_badge_blocker">Blocker</string>
     <string name="tasks_badge_blocker_a11y">Blockiert andere Elemente</string>
+    <string name="tasks_blocked_by_dialog_title">Was blockiert „%1$s“?</string>
+    <string name="tasks_blocked_by_error_offline">Offline — Blocker können gerade nicht geändert werden.</string>
+    <string name="tasks_blocked_by_error_rejected">Die Änderung wurde abgelehnt — sie würde einen Abhängigkeitszyklus erzeugen oder Organisationen überschreiten.</string>
     <!-- Deutsche Anführungszeichen „…“ -->
     <string name="tasks_delete_item_confirm_title">„%1$s“ löschen?</string>
     <string name="tasks_detail_add_caption">Beschriftung hinzufügen</string>
@@ -681,6 +684,7 @@ Vielen Dank.</string>
     <string name="tasks_menu_add_subtask">Unteraufgabe hinzufügen</string>
     <string name="tasks_menu_add_to_plan">Zum heutigen Plan hinzufügen</string>
     <string name="tasks_menu_archive">Archivieren</string>
+    <string name="tasks_menu_blocked_by">Blockiert durch…</string>
     <string name="tasks_menu_break_this_down">In Schritte zerlegen</string>
     <string name="tasks_menu_delete_permanent">Löschen (endgültig!)</string>
     <string name="tasks_menu_mark_done">Als erledigt markieren</string>
@@ -705,6 +709,7 @@ Vielen Dank.</string>
     <string name="tasks_progress_fraction">%1$d von %2$d</string>
     <!-- Sanftes Beiseitelegen — VERB, nie „fallen lassen/aufgeben“ -->
     <string name="tasks_set_aside">Beiseitelegen</string>
+    <string name="tasks_set_aside_confirm_title">„%1$s“ beiseitelegen?</string>
     <string name="tasks_source_from_github">Von GitHub</string>
     <string name="tasks_source_from_google_calendar">Von Google Calendar</string>
     <string name="tasks_tree_actions_for_item">Aktionen für %1$s</string>
@@ -720,6 +725,8 @@ Vielen Dank.</string>
     <string name="tasks_tree_filtered_empty_title">Hier gibt es gerade nichts zu sehen</string>
     <string name="tasks_tree_refreshing">Wird aktualisiert…</string>
     <string name="tasks_tree_show_blocked">Blockierte anzeigen</string>
+    <string name="tasks_unblock_confirm_releases">Damit wird die Blockierung aufgehoben für: %1$s</string>
+    <string name="tasks_unblock_confirm_releases_unknown">Damit wird die Blockierung der davon abhängigen Einträge aufgehoben.</string>
     <string name="tasks_tree_title">Alles</string>
     <string name="tasks_undo_operation_confirm_title">%1$s rückgängig machen?</string>
     <!-- ZUSTANDS-Adjektiv (noch nicht begonnen) — anders als das Verb „Öffnen“ -->
