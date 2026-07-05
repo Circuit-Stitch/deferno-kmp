@@ -185,6 +185,8 @@ struct PaneHeader<Trailing: View>: View {
     let showsBrand: Bool
     let trailing: () -> Trailing
 
+    @Environment(\.defernoColors) private var colors
+
     init(title: String, onBack: (() -> Void)? = nil, showsBrand: Bool = false, @ViewBuilder trailing: @escaping () -> Trailing) {
         self.title = title
         self.onBack = onBack
@@ -210,7 +212,7 @@ struct PaneHeader<Trailing: View>: View {
         }
         .padding(.horizontal, 8)
         .frame(minHeight: 56)
-        .background(Color(.systemBackground))
+        .background(colors.surface)
     }
 }
 
@@ -223,8 +225,9 @@ extension PaneHeader where Trailing == EmptyView {
 /// The Deferno brand mark: the flame logo — the shared `core/designsystem/brand/flame.svg` rasterized
 /// into the `Flame` image asset by `scripts/generate-brand-assets.sh`, the same flame as the app icon
 /// and launch screen. Sized to sit beside a `PaneHeader` title; spoken as "Deferno" for VoiceOver. The
-/// flame is red line-art over white; on the header's `systemBackground` the white reads as the surface,
-/// so it shows as a clean red mark in light mode and the full red/white flame in dark mode.
+/// flame is red line-art over an opaque white body; on the header's warm `surface` token the white no
+/// longer dissolves into the background — the mark reads as the full red/white flame over the paper
+/// surface in both light and dark, the same presentation as the app icon and launch screen.
 struct Brandmark: View {
     var height: CGFloat = 28
 
@@ -242,12 +245,14 @@ struct EmptyStateView: View {
     let title: String
     let message: String
 
+    @Environment(\.defernoColors) private var colors
+
     var body: some View {
         VStack(spacing: 8) {
             Text(title).font(.title3.weight(.semibold))
             Text(message)
                 .font(.body)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(colors.onSurfaceVariant)
                 .multilineTextAlignment(.center)
         }
         .padding(32)
@@ -260,14 +265,16 @@ struct EmptyStateView: View {
 struct LoadingStrip: View {
     let label: String
 
+    @Environment(\.defernoColors) private var colors
+
     var body: some View {
         Text(label)
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(colors.onSurfaceVariant)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-            .background(Color(.secondarySystemBackground))
+            .background(colors.surfaceVariant)
             .accessibilityElement()
             .accessibilityLabel(label)
     }
