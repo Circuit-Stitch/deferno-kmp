@@ -290,7 +290,7 @@ class SettingsScreenInteractionTest {
         composeRule.onNodeWithText("Security & 2FA").performClick()
 
         // The copy appears once per section (the 2FA summary AND the devices list are both unavailable).
-        composeRule.onAllNodesWithText("Security settings couldn’t be loaded", substring = true)[0].assertIsDisplayed()
+        composeRule.onAllNodesWithText("Security settings couldn't be loaded", substring = true)[0].assertIsDisplayed()
         composeRule.onNodeWithText("Retry").assertIsDisplayed().assertIsEnabled()
     }
 

@@ -786,6 +786,9 @@ Agradeço.</string>
     <string name="common_pause">Pausar</string>
     <string name="common_pinned">Fixada</string>
     <string name="draft_extract_button">Extrair</string>
+    <string name="draft_extract_error_malformed">Não foi possível ler a resposta do modelo. Tente novamente.</string>
+    <string name="draft_extract_error_not_configured">O modelo no dispositivo ainda não está configurado.</string>
+    <string name="draft_extract_error_transport">Não foi possível acessar o modelo. Tente novamente.</string>
     <string name="draft_extract_intro">No dispositivo (Apple Intelligence). Rascunhos são propostas — nada é salvo.</string>
     <string name="draft_extract_menu_item">Extrair rascunhos de tarefas…</string>
     <string name="draft_extract_menu_section">Apple Intelligence</string>

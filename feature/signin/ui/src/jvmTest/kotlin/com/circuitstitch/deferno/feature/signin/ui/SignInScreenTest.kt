@@ -79,7 +79,7 @@ class SignInScreenTest {
         val state = SignInState(error = SignInError.Unavailable)
         setContent { Themed { SignInScreen(FakeSignInComponent(state)) } }
 
-        onNodeWithText("Couldn’t reach Deferno", substring = true).assertExists()
+        onNodeWithText("Couldn't reach Deferno", substring = true).assertExists()
     }
 
     // --- developer paste fallback (only when showDeveloperOptions) ---

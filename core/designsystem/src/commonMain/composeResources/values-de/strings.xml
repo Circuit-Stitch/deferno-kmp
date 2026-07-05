@@ -783,6 +783,9 @@ Vielen Dank.</string>
     <string name="common_pause">Pause</string>
     <string name="common_pinned">Angepinnt</string>
     <string name="draft_extract_button">Erstellen</string>
+    <string name="draft_extract_error_malformed">Die Antwort des Modells konnte nicht gelesen werden. Versuche es erneut.</string>
+    <string name="draft_extract_error_not_configured">Das Modell auf dem Gerät ist noch nicht eingerichtet.</string>
+    <string name="draft_extract_error_transport">Das Modell konnte nicht erreicht werden. Versuche es erneut.</string>
     <string name="draft_extract_intro">Auf dem Gerät (Apple Intelligence). Entwürfe sind Vorschläge — nichts wird gespeichert.</string>
     <string name="draft_extract_menu_item">Aufgaben-Entwürfe erstellen…</string>
     <string name="draft_extract_menu_section">Apple Intelligence</string>
