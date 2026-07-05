@@ -32,6 +32,18 @@ class PaletteTest {
     }
 
     @Test
+    fun darkCardsCarryATonalStepAboveTheBackground() {
+        // #335: the canonical dark card tone is the iOS surfaceCard value; a card slot equal to the
+        // background left dark mode with no elevation cue (Android is deliberately shadowless).
+        assertEquals(Color(0xFF3A352D), DefernoDarkColorScheme.surfaceContainerLow, "dark card = --paper-card")
+        assertNotEquals(
+            DefernoDarkColorScheme.background, DefernoDarkColorScheme.surfaceContainerLow,
+            "dark cards must not render flat against the background",
+        )
+        assertEquals(Color(0xFFF2ECDC), DefernoLightColorScheme.surfaceContainerLow, "light card unchanged")
+    }
+
+    @Test
     fun monoPalettesAreGrayscale() {
         for (c in listOf(
             MonoLightColorScheme.primary, MonoLightColorScheme.secondary, MonoLightColorScheme.tertiary,

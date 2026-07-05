@@ -38,7 +38,9 @@ private object DefLight {
 
 private object DefDark {
     val paper = Color(0xFF2A2620); val paper2 = Color(0xFF1F1B16); val paper3 = Color(0xFF3A352D)
-    val paperCard = Color(0xFF2A2620); val paperCardHi = Color(0xFF3A352D)
+    // paperCard == paperCardHi mirrors the light palette; the canonical dark card tone is the iOS
+    // surfaceCard value (#335) — a flat card (== paper) left dark mode with no elevation cue.
+    val paperCard = Color(0xFF3A352D); val paperCardHi = Color(0xFF3A352D)
     val ink = Color(0xFFF0E2C2); val ink2 = Color(0xFFD8CBA8); val inkMute = Color(0xFFC0B496)
     val amber = Color(0xFFE8B870); val amberDeep = Color(0xFFF0CE92); val amberSoft = Color(0xFF4A3A22)
     val onAccent = Color(0xFF1F1B14); val onDanger = Color(0xFF1F1B14)
@@ -103,7 +105,9 @@ private fun scheme(
     surfaceDim = if (dark) paper2 else paper3,
     surfaceBright = if (dark) paper3 else paperCardHi,
     surfaceContainerLowest = if (dark) paper2 else paperCardHi,
-    surfaceContainerLow = if (dark) paper else paperCard,
+    // The card slot reads paperCard in BOTH modes — the design system's cards sit on
+    // surfaceContainerLow, and the dark tonal step is their only elevation cue (#335).
+    surfaceContainerLow = paperCard,
     surfaceContainer = if (dark) paperCard else paper,
     surfaceContainerHigh = if (dark) paper3 else paper2,
     surfaceContainerHighest = if (dark) paperCardHi else paper3,
