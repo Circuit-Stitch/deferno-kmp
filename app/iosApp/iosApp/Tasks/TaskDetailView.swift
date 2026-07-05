@@ -58,7 +58,7 @@ struct TaskDetailView: View {
                 Spacer() // brief hydrating gap before the row is observed; the strip above shows it
             }
         }
-        .background(Color(.systemBackground))
+        .background(colors.background)
         .paneNavigationTitle(showsHeader ? nil : title)
     }
 
@@ -254,7 +254,8 @@ struct TaskDetailView: View {
                                 .accessibilityLabel(L.format("tasks_detail_remove_label_a11y", label))
                             }
                             .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(Color(.secondarySystemFill), in: Capsule())
+                            .foregroundStyle(colors.onSurfaceVariant)
+                            .background(colors.surfaceVariant, in: Capsule())
                         }
                     }
                 }
@@ -679,6 +680,8 @@ private struct WorkingStateEditorView: View {
     let current: WorkingState
     let onSet: (WorkingState) -> Void
 
+    @Environment(\.defernoColors) private var colors
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(L.string("tasks_detail_working_state_heading"))
@@ -704,10 +707,10 @@ private struct WorkingStateEditorView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(
-                    selected ? Color.accentColor : Color(.secondarySystemFill),
+                    selected ? Color.accentColor : colors.surfaceVariant,
                     in: Capsule()
                 )
-                .foregroundStyle(selected ? Color.white : Color.primary)
+                .foregroundStyle(selected ? colors.onPrimary : colors.onSurfaceVariant)
         }
         .frame(minHeight: Layout.minTouchTarget)
         .accessibilityLabel(selected ? L.format("tasks_detail_working_state_current_a11y", state.label) : L.format("tasks_detail_set_working_state_a11y", state.label))
