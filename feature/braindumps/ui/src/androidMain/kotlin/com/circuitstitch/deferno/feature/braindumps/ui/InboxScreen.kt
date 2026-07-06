@@ -3,7 +3,6 @@ package com.circuitstitch.deferno.feature.braindumps.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,11 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
@@ -39,7 +34,6 @@ import com.circuitstitch.deferno.core.designsystem.resources.inbox_draft_count
 import com.circuitstitch.deferno.core.designsystem.resources.inbox_footer_reassurance
 import com.circuitstitch.deferno.core.designsystem.resources.inbox_header_subtitle
 import com.circuitstitch.deferno.core.designsystem.resources.inbox_section_waiting_caps
-import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_inbox
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.feature.braindumps.InboxComponent
 import org.jetbrains.compose.resources.pluralStringResource
@@ -78,20 +72,10 @@ fun InboxScreen(component: InboxComponent, modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(InboxCardSpacing),
             ) {
                 item(key = "header") {
+                    // ponytail: title lives in the shell top bar (chromeFor → ForDestination(Inbox)); the body
+                    // shows only the count + subtitle so "Inbox" isn't rendered twice. Matches Settings/Calendar.
                     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = stringResource(Res.string.shell_destination_inbox),
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.semantics { heading() },
-                            )
-                            MonoMeta(text = draftCount(state.rows.size))
-                        }
+                        MonoMeta(text = draftCount(state.rows.size))
                         Spacer(Modifier.height(6.dp))
                         Text(
                             text = stringResource(Res.string.inbox_header_subtitle),
