@@ -114,6 +114,32 @@ longer **global** window (all lists) and a shorter **dashboard** window, each se
 client honors it by syncing the **server-windowed** [[Item]] snapshot rather than re-deriving it.
 _Avoid_: archive, retention, auto-delete (the item is only *hidden*, never removed).
 
+### Activity: comments vs item history (disambiguation)
+
+The Task-detail **ACTIVITY** section and the global **Activity** Destination share a word but are three
+distinct surfaces; ADR-0043 makes the two per-item ones offline-first and keeps them separate from the
+Destination's ledger.
+
+**Comment thread** *(client)*:
+A [[Task]]'s user-authored discussion — the read **and write** half of the Task-detail ACTIVITY section.
+Offline-first (ADR-0043): rendered from a local cache as a `Flow` (refreshed on detail open), posting mints
+a client id and rides the outbox optimistically, edit/delete are idempotent outbox [[Mutation]]s. Task-scoped
+in v1. Interleaved chronologically with [[Item history]] into one ACTIVITY feed.
+_Avoid_: [[Item history]] (the read-only, server-authored half beside it), Activity ledger / Activity
+Destination (the *global local* change feed — a different store), "comments are absent" (they exist; ADR-0043
+makes them offline-first, it does not build them).
+
+**Item history** *(client; server-authored, read-only)*:
+The **per-item, complete audit log** the server derives — an `actions[]` list of
+Created / Updated / Moved / ParentAssigned / Split / FoldedInto / Merged\* / StatusChanged events, the
+read-only half of the ACTIVITY feed. Cached **free by construction** (it already rides the `/items` snapshot
+the tolerant reader dropped; ADR-0042/0043), reconciled by replacing an item's rows on each hydrate. Carries
+**no stable event id** (identity is synthesized; reconcile is wholesale-replace, not merge).
+_Avoid_: **Activity ledger** (#260 — the app's *own* global, device-local, outbox-derived journal of writes,
+source Mobile/Website/Mcp, wiped on sign-out; different cardinality, source of truth, and lifecycle — it can
+never be item history's source of truth), [[Comment thread]] (the writable, user-authored half), the
+**Activity** Destination (where the ledger renders — the ACTIVITY *section* is per-item, not that Destination).
+
 ### Credentials
 
 **Personal access token (PAT)**:
@@ -559,9 +585,10 @@ macOS Helper's audio archive), "the export" (that is the *act* — this is the f
 **On-device export** *(client)*:
 Building a [[Backup file]] **locally and entirely offline** from the local source-of-truth DB —
 **only what the device actually holds**: items (a never-opened, un-hydrated item exports without its
-`description`) plus [[On-device attachment]] bytes. It **omits** comments and item history (never
-cached locally) and references no backend-hosted attachment (only a [[Full extract]] can include
-those). Immediate; handed to the OS share sheet. The offline-first half of export — always works with
+`description`) plus [[On-device attachment]] bytes. It **omits** comments and item history and references
+no backend-hosted attachment (only a [[Full extract]] can include those). (ADR-0043 now caches Task
+[[Comment thread]]s + [[Item history]] locally, so an on-device export *could* later gather them; wiring that
+into the export is a follow-up, not done here.) Immediate; handed to the OS share sheet. The offline-first half of export — always works with
 no network, at the cost of being a partial snapshot.
 _Avoid_: [[Full extract]] (the online, server-built counterpart), "backup" unqualified (name which of
 the two export modes).
