@@ -287,8 +287,11 @@ struct TaskDetailView: View {
             } else if value.activity.isEmpty {
                 MutedLine(L.string("tasks_detail_no_comments"))
             } else {
-                ForEach(0..<value.activity.count, id: \.self) { i in
-                    let item = value.activity[i]
+                // Key on the bridge's stable id (comment id / "history:<index>"), NOT the position — else
+                // a CommentRow's edit @State would bind to a slot, so an optimistic delete above an
+                // in-progress edit would shift the draft onto the wrong comment (ADR-0043).
+                ForEach(value.activity.map(ActivityRow.init)) { row in
+                    let item = row.item
                     if let comment = BridgeKt.activityItemComment(item: item) {
                         CommentRow(
                             comment: comment,
@@ -445,6 +448,19 @@ private struct CommentRow: View {
             }
         }
         .padding(.vertical, 6)
+    }
+}
+
+/// A stable-identity wrapper for one ACTIVITY row. The sealed `ActivityItem` bridges to a Swift protocol
+/// (an existential with no id-KeyPath), so `ForEach` keys on the bridge's stable id — the comment id or
+/// "history:<index>" — instead of a positional index, keeping a CommentRow's edit `@State` bound to its
+/// own comment across feed shifts (ADR-0043).
+private struct ActivityRow: Identifiable {
+    let id: String
+    let item: ActivityItem
+    init(_ item: ActivityItem) {
+        self.id = BridgeKt.activityItemId(item: item)
+        self.item = item
     }
 }
 
