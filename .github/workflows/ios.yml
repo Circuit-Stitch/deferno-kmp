@@ -66,7 +66,16 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null
-          "$SDKMANAGER" "ndk;30.0.14904198" "cmake;3.22.1"
+          # Retry: a transient corrupt mirror download ("Error on ZipFile unknown archive") otherwise
+          # fails the whole gate (see memory ci-ndk-probe-flake — a no-code re-run went green).
+          # sdkmanager is idempotent, so a retry only re-fetches the missing/corrupt package.
+          for attempt in 1 2 3; do
+            "$SDKMANAGER" "ndk;30.0.14904198" "cmake;3.22.1" && exit 0
+            echo "::warning::sdkmanager install attempt $attempt failed; retrying in 10s…" >&2
+            sleep 10
+          done
+          echo "::error::sdkmanager NDK/CMake install failed after 3 attempts." >&2
+          exit 1
 
       # Match the iOS 17 SDK the app is developed against (the dev machine is pinned to Xcode 15.2).
       # Pick the newest Xcode 15.x on the image; fall back to the runner default if the image has
