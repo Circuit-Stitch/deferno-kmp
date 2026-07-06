@@ -71,6 +71,7 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineOrigin
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderAvailability
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderOption
+import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.auth_add_another_account
 import com.circuitstitch.deferno.core.designsystem.resources.common_account
@@ -115,6 +116,12 @@ import com.circuitstitch.deferno.core.designsystem.resources.settings_done_visib
 import com.circuitstitch.deferno.core.designsystem.resources.settings_done_visibility_section
 import com.circuitstitch.deferno.core.designsystem.resources.settings_done_visibility_three_days
 import com.circuitstitch.deferno.core.designsystem.resources.settings_help_feedback_intro
+import com.circuitstitch.deferno.core.designsystem.resources.settings_import_button
+import com.circuitstitch.deferno.core.designsystem.resources.settings_import_error_empty
+import com.circuitstitch.deferno.core.designsystem.resources.settings_import_error_too_new
+import com.circuitstitch.deferno.core.designsystem.resources.settings_import_error_too_old
+import com.circuitstitch.deferno.core.designsystem.resources.settings_import_error_unreadable
+import com.circuitstitch.deferno.core.designsystem.resources.settings_import_restored
 import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_account_removal_email_body
 import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_account_removal_email_subject
 import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_open_source_body
@@ -176,6 +183,7 @@ import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
 import com.circuitstitch.deferno.feature.settings.StorageProviderSettings
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /** Minimum height for a tappable row/control — design-principles.md "≥44–48dp" touch targets.
@@ -514,6 +522,7 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
+    var importResult by remember { mutableStateOf<ImportResult?>(null) }
     val saveBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri ->
@@ -521,6 +530,20 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
             scope.launch {
                 val zip = component.buildBackupZip()
                 context.contentResolver.openOutputStream(uri)?.use { it.write(zip) }
+            }
+        }
+    }
+    // On-device import/restore (#314, ADR-0041): the inverse of export — pick a Backup zip via SAF, read its
+    // bytes, and hand them to the shared importer (an id-preserving, idempotent replay onto the offline
+    // outbox). The picker filters to zip; SAF providers sometimes report a `.zip` as `application/octet-stream`,
+    // so both MIME types are accepted. Mirrors iOS's ShellBridge.importBackup result mapping (parity).
+    val openBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                importResult = component.importBackup(bytes ?: ByteArray(0))
             }
         }
     }
@@ -540,6 +563,34 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
             text = { Text(stringResource(Res.string.settings_data_export_menu_full_backup)) },
             enabled = false,
             onClick = {},
+        )
+    }
+    TextButton(
+        onClick = { openBackup.launch(arrayOf("application/zip", "application/octet-stream")) },
+        modifier = Modifier.heightIn(min = MinTouchTarget),
+    ) { Text(stringResource(Res.string.settings_import_button)) }
+    // The outcome, surfaced inline (idempotent import needs no destructive-confirm): the count restored, or
+    // why the file was refused. Errors read in the error color; an empty-but-valid backup stays informational.
+    importResult?.let { result ->
+        val message = when (result) {
+            is ImportResult.Restored ->
+                if (result.count == 0) {
+                    stringResource(Res.string.settings_import_error_empty)
+                } else {
+                    pluralStringResource(Res.plurals.settings_import_restored, result.count, result.count)
+                }
+            ImportResult.ForceUpgrade -> stringResource(Res.string.settings_import_error_too_new)
+            ImportResult.Unsupported -> stringResource(Res.string.settings_import_error_too_old)
+            ImportResult.Malformed -> stringResource(Res.string.settings_import_error_unreadable)
+        }
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (result is ImportResult.Restored) {
+                MaterialTheme.defernoColors.inkMuted
+            } else {
+                MaterialTheme.colorScheme.error
+            },
         )
     }
 }
