@@ -75,6 +75,20 @@ import com.circuitstitch.deferno.core.designsystem.resources.shell_shortcut_refr
 import com.circuitstitch.deferno.core.designsystem.resources.shell_shortcut_search
 import com.circuitstitch.deferno.core.designsystem.resources.shell_toolbar_new
 import com.circuitstitch.deferno.core.designsystem.resources.shell_window_title_destination
+import com.circuitstitch.deferno.core.designsystem.resources.update_badge_available
+import com.circuitstitch.deferno.core.designsystem.resources.update_check_action
+import com.circuitstitch.deferno.core.designsystem.resources.update_check_failed_fallback
+import com.circuitstitch.deferno.core.designsystem.resources.update_checking
+import com.circuitstitch.deferno.core.designsystem.resources.update_installing_status
+import com.circuitstitch.deferno.core.designsystem.resources.update_restart_to_update
+import com.circuitstitch.deferno.core.designsystem.resources.update_unsupported_not_packaged
+import com.circuitstitch.deferno.core.designsystem.resources.update_unsupported_other
+import com.circuitstitch.deferno.core.designsystem.resources.update_unsupported_package_manager
+import com.circuitstitch.deferno.core.designsystem.resources.update_up_to_date
+import com.circuitstitch.deferno.core.designsystem.resources.update_updating
+import com.circuitstitch.deferno.core.designsystem.resources.update_version_available
+import com.circuitstitch.deferno.core.designsystem.resources.update_version_line
+import com.circuitstitch.deferno.core.designsystem.resources.update_view_releases
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.di.AppComponent
@@ -94,6 +108,7 @@ import com.circuitstitch.deferno.desktop.update.ConveyorUpdateBackend
 import com.circuitstitch.deferno.desktop.update.UpdateAction
 import com.circuitstitch.deferno.desktop.update.UpdateManager
 import com.circuitstitch.deferno.desktop.update.UpdateState
+import com.circuitstitch.deferno.desktop.update.UpdateStringKey
 import com.circuitstitch.deferno.desktop.update.presentUpdate
 import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
@@ -547,9 +562,17 @@ private fun DefernoMenuBar(
                 // Self-update (#103, ADR-0021): the running version, then a single state-driven row —
                 // "Check for updates…" / "Restart to update…" / "View all releases…" depending on the
                 // update state, plus an optional status line (up to date, available, error).
-                MenuRow(text = update.versionLine, enabled = false) {}
+                val versionLine = stringResource(
+                    Res.string.update_version_line,
+                    stringResource(Res.string.common_app_name),
+                    update.currentVersion,
+                )
+                MenuRow(text = versionLine, enabled = false) {}
                 HorizontalDivider()
-                MenuRow(text = update.actionLabel, enabled = update.actionEnabled) {
+                MenuRow(
+                    text = update.actionLabel.resolve(update.versionArg),
+                    enabled = update.actionEnabled,
+                ) {
                     dismiss()
                     when (update.action) {
                         UpdateAction.CHECK -> onCheckForUpdates()
@@ -558,7 +581,9 @@ private fun DefernoMenuBar(
                         UpdateAction.NONE -> Unit
                     }
                 }
-                update.statusLine?.let { status -> MenuRow(text = status, enabled = false) {} }
+                update.statusLine?.let { status ->
+                    MenuRow(text = status.resolve(update.versionArg), enabled = false) {}
+                }
             }
 
             // Always-visible desktop-class affordances (ADR-0007, #86/#87): a search control and a
@@ -569,7 +594,7 @@ private fun DefernoMenuBar(
             // primary accent so it stands out; clicking it applies an available update (inert while
             // "Updating…"). The full controls live in the Help menu.
             update.badge?.let { badge ->
-                ToolbarAction(text = badge, color = MaterialTheme.colorScheme.primary) {
+                ToolbarAction(text = badge.resolve(update.versionArg), color = MaterialTheme.colorScheme.primary) {
                     if (update.action == UpdateAction.INSTALL) onInstallUpdate()
                 }
             }
@@ -577,6 +602,25 @@ private fun DefernoMenuBar(
             ToolbarAction(text = stringResource(Res.string.shell_toolbar_new)) { main.openNew() }
         }
     }
+}
+
+/** Resolve a typed update line to its localized `update_*` string (#325); [versionArg] fills the arg keys. */
+@Composable
+private fun UpdateStringKey.resolve(versionArg: String?): String = when (this) {
+    UpdateStringKey.CHECK -> stringResource(Res.string.update_check_action)
+    UpdateStringKey.CHECKING -> stringResource(Res.string.update_checking)
+    UpdateStringKey.RESTART_TO_UPDATE -> stringResource(Res.string.update_restart_to_update, versionArg.orEmpty())
+    UpdateStringKey.UPDATING -> stringResource(Res.string.update_updating)
+    UpdateStringKey.VIEW_RELEASES -> stringResource(Res.string.update_view_releases)
+    UpdateStringKey.UP_TO_DATE -> stringResource(Res.string.update_up_to_date)
+    UpdateStringKey.VERSION_AVAILABLE -> stringResource(Res.string.update_version_available, versionArg.orEmpty())
+    UpdateStringKey.INSTALLING -> stringResource(Res.string.update_installing_status, versionArg.orEmpty())
+    UpdateStringKey.CHECK_FAILED -> stringResource(Res.string.update_check_failed_fallback)
+    UpdateStringKey.UNSUPPORTED_PACKAGE_MANAGER -> stringResource(Res.string.update_unsupported_package_manager)
+    UpdateStringKey.UNSUPPORTED_NOT_PACKAGED -> stringResource(Res.string.update_unsupported_not_packaged)
+    UpdateStringKey.UNSUPPORTED_OTHER -> stringResource(Res.string.update_unsupported_other)
+    UpdateStringKey.BADGE_AVAILABLE -> stringResource(Res.string.update_badge_available)
+    UpdateStringKey.BADGE_UPDATING -> stringResource(Res.string.update_updating)
 }
 
 /**

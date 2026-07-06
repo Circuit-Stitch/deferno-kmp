@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import software.amazon.app.kmplogger.Logger
 
 /**
  * Drives the desktop self-update [UpdateState] over an [UpdateBackend] (#103, ADR-0021): exposes a
@@ -68,7 +69,9 @@ class UpdateManager(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                UpdateState.Failed(version, e.message ?: "Update check failed")
+                // The raw cause is unlocalizable, so it's logged only; the UI shows a localized reason (#325).
+                Logger("UpdateManager").w(throwable = e) { "Update check failed" }
+                UpdateState.Failed(version)
             }
         }
     }
