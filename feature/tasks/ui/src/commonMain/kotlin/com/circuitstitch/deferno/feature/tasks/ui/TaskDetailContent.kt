@@ -103,6 +103,7 @@ internal fun TaskDetailContent(
     onToggleSubtaskExpand: (id: String, currentlyExpanded: Boolean) -> Unit = { _, _ -> },
     onOpenSubtask: (Task) -> Unit,
     onAddSubtask: (String) -> Unit,
+    onSetHideDoneSubtasks: (Boolean) -> Unit = {},
     onPostComment: (String) -> Unit,
     onEditComment: (String, String) -> Unit,
     onDeleteComment: (String) -> Unit,
@@ -150,6 +151,7 @@ internal fun TaskDetailContent(
                     onToggleSubtaskExpand = onToggleSubtaskExpand,
                     onOpenSubtask = onOpenSubtask,
                     onAddSubtask = onAddSubtask,
+                    onSetHideDoneSubtasks = onSetHideDoneSubtasks,
                     onPostComment = onPostComment,
                     onEditComment = onEditComment,
                     onDeleteComment = onDeleteComment,
@@ -178,6 +180,7 @@ private fun TaskBody(
     onToggleSubtaskExpand: (id: String, currentlyExpanded: Boolean) -> Unit,
     onOpenSubtask: (Task) -> Unit,
     onAddSubtask: (String) -> Unit,
+    onSetHideDoneSubtasks: (Boolean) -> Unit,
     onPostComment: (String) -> Unit,
     onEditComment: (String, String) -> Unit,
     onDeleteComment: (String) -> Unit,
@@ -251,6 +254,8 @@ private fun TaskBody(
             onToggleExpand = onToggleSubtaskExpand,
             onOpen = onOpenSubtask,
             onAddSubtask = onAddSubtask,
+            hideDone = state.hideDoneSubtasks,
+            onSetHideDone = onSetHideDoneSubtasks,
             addSubtaskFocus = addSubtaskFocus,
         )
 

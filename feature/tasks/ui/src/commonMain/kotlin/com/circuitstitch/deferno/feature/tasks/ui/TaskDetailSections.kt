@@ -18,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
@@ -102,6 +103,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_remove
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_activity
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_attachments
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_properties
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_filter_hide_done
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_subtasks
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_set_due_date
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_source_open_in
@@ -404,6 +406,10 @@ internal fun SubtasksSection(
     onOpen: (Task) -> Unit,
     onAddSubtask: (String) -> Unit,
     modifier: Modifier = Modifier,
+    // The "Hide done" filter (#197): drops Done rows from the outline; defaults off so other callers/tests
+    // needn't wire it. The progress count above is unaffected (it still spans the whole subtree).
+    hideDone: Boolean = false,
+    onSetHideDone: (Boolean) -> Unit = {},
     // The kebab's "Add subtask" requests focus on the add field via this — null when no kebab drives it.
     addSubtaskFocus: FocusRequester? = null,
 ) {
@@ -417,6 +423,25 @@ internal fun SubtasksSection(
                 fraction = done.toFloat() / total,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                FilterChip(
+                    selected = hideDone,
+                    onClick = { onSetHideDone(!hideDone) },
+                    label = { Text(stringResource(Res.string.tasks_detail_filter_hide_done)) },
+                )
+                if (hideDone) {
+                    // Shown/total (the hidden Done rows are total − done) — the filter's "(n/m)".
+                    Text(
+                        text = stringResource(Res.string.tasks_progress_fraction, total - done, total),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.defernoColors.inkMuted,
+                    )
+                }
+            }
         }
         rows.forEach { row -> SubtaskRowView(row, onToggleDone, onToggleExpand, onOpen) }
         AddSubtaskField(onAddSubtask, addSubtaskFocus)

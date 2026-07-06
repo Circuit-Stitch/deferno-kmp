@@ -282,6 +282,22 @@ struct TaskDetailView: View {
             if value.subtaskTotal > 0 {
                 ProgressView(value: Double(value.subtaskDone), total: Double(value.subtaskTotal))
                     .accessibilityLabel(L.format("tasks_detail_subtask_progress_a11y", Int(value.subtaskDone), Int(value.subtaskTotal)))
+                // "Hide done" filter (#197): drops Done rows from the outline; the progress bar keeps the full count.
+                Toggle(isOn: Binding(
+                    get: { value.hideDoneSubtasks },
+                    set: { component.onSetHideDoneSubtasks(hide: $0) }
+                )) {
+                    HStack(spacing: 8) {
+                        Text(L.string("tasks_detail_filter_hide_done"))
+                        if value.hideDoneSubtasks {
+                            // Shown/total — redundant compact badge, hidden from VoiceOver (the toggle carries it).
+                            Text("\(value.subtaskTotal - value.subtaskDone)/\(value.subtaskTotal)")
+                                .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                }
+                .font(.subheadline)
             }
             ForEach(value.subtaskRows, id: \.task.stableKey) { row in
                 subtaskRow(row)
