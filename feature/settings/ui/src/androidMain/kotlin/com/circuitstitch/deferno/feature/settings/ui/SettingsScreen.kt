@@ -181,7 +181,9 @@ import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
 import com.circuitstitch.deferno.feature.settings.StorageProviderSettings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
@@ -527,9 +529,13 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
         ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri ->
         if (uri != null) {
+            // Off the main thread: buildBackupZip serializes every item + embeds on-device attachment bytes
+            // (#315), and the write streams that multi-MB zip out — both block. rememberCoroutineScope is Main.
             scope.launch {
-                val zip = component.buildBackupZip()
-                context.contentResolver.openOutputStream(uri)?.use { it.write(zip) }
+                withContext(Dispatchers.IO) {
+                    val zip = component.buildBackupZip()
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(zip) }
+                }
             }
         }
     }
@@ -541,9 +547,14 @@ private fun DataPrivacyDetail(settings: UserSettings, component: SettingsCompone
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri != null) {
+            // Off the main thread: the SAF read pulls the whole zip (with embedded audio bytes, #315) into
+            // memory and import() replays every item as a synchronous SQLCipher write — both block. The
+            // importResult assignment resumes on the launch continuation (Main), so it stays snapshot-safe.
             scope.launch {
-                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                importResult = component.importBackup(bytes ?: ByteArray(0))
+                importResult = withContext(Dispatchers.IO) {
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    component.importBackup(bytes ?: ByteArray(0))
+                }
             }
         }
     }

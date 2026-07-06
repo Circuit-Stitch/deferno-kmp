@@ -276,6 +276,40 @@ class TaskDetailComponentTest {
     }
 
     @Test
+    fun hideDoneRerootsAnOpenChildOfAHiddenDoneParentToTheTop() = runTest {
+        // The load-bearing subtlety of the filter (the combine drops Done nodes *before* the flatten): hiding
+        // a Done PARENT re-roots its still-open child to depth 0 rather than hiding it along with the parent —
+        // so open work never vanishes just because its parent is done. foldFlatten's include= gate would
+        // subtree-prune instead; this pins the deliberate pre-filter choice so a later switch can't regress it.
+        val repo = FakeTaskRepository(
+            listOf(
+                task("a"),
+                task("b", parentId = "a", sequence = 1, workingState = WorkingState.Done),
+                task("d", parentId = "b", sequence = 1, workingState = WorkingState.Open),
+            ),
+        )
+        val component = taskDetailComponent(TaskId("a"), repo)
+
+        component.state.test {
+            var item = awaitItem()
+            while (item.subtaskTotal != 2) item = awaitItem()
+            // Unfiltered: the Done parent b at depth 0 with its open child d nested under it at depth 1.
+            assertEquals(listOf(TaskId("b"), TaskId("d")), item.subtaskRows.map { it.task.id })
+            assertEquals(listOf(0, 1), item.subtaskRows.map { it.depth })
+
+            component.onSetHideDoneSubtasks(true)
+            var filtered = awaitItem()
+            while (filtered.subtaskRows.size != 1) filtered = awaitItem()
+            val row = filtered.subtaskRows.single()
+            assertEquals(TaskId("d"), row.task.id, "the open child survives its hidden Done parent")
+            assertEquals(0, row.depth, "and re-roots to the top instead of vanishing with the parent")
+            assertEquals(1, filtered.subtaskDone, "progress still counts the hidden Done parent")
+            assertEquals(2, filtered.subtaskTotal)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun collapsingASubtaskHidesItsChildrenAndPersistsToTheSharedStore() = runTest {
         val repo = FakeTaskRepository(
             listOf(
