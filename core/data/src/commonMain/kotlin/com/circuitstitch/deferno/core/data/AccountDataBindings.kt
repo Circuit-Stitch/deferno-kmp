@@ -42,6 +42,20 @@ import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
 import com.circuitstitch.deferno.core.data.activity.SqlDelightActivityLedgerStore
+import com.circuitstitch.deferno.core.data.comment.CommentLocalStore
+import com.circuitstitch.deferno.core.data.comment.CommentRemoteSource
+import com.circuitstitch.deferno.core.data.comment.CommentRepository
+import com.circuitstitch.deferno.core.data.comment.CommentWriter
+import com.circuitstitch.deferno.core.data.comment.DefaultCommentReplayListener
+import com.circuitstitch.deferno.core.data.comment.DefaultCommentRepository
+import com.circuitstitch.deferno.core.data.comment.OutboxCommentWriter
+import com.circuitstitch.deferno.core.data.comment.SqlDelightCommentLocalStore
+import com.circuitstitch.deferno.core.data.history.DefaultItemHistoryRepository
+import com.circuitstitch.deferno.core.data.history.ItemHistoryLocalStore
+import com.circuitstitch.deferno.core.data.history.ItemHistoryRemoteSource
+import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
+import com.circuitstitch.deferno.core.data.history.SqlDelightItemHistoryLocalStore
+import com.circuitstitch.deferno.core.data.outbox.CommentReplayListener
 import com.circuitstitch.deferno.core.data.outbox.CreateReplayListener
 import com.circuitstitch.deferno.core.data.outbox.LedgerRecordingOutboxStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
@@ -78,6 +92,8 @@ import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskWriter
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
+import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.scopes.AccountScope
 import io.ktor.client.HttpClient
 import me.tatarka.inject.annotations.Provides
@@ -109,6 +125,16 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun settingsLocalStore(db: DefernoDatabase): SettingsLocalStore = SqlDelightSettingsLocalStore(db)
+
+    /** The offline-first comment cache (ADR-0043) — source of truth for the Task detail's ACTIVITY thread. */
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun commentLocalStore(db: DefernoDatabase): CommentLocalStore = SqlDelightCommentLocalStore(db)
+
+    /** The cached server item-history (ADR-0043) — read-only, wholesale-replaced on open. */
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun itemHistoryLocalStore(db: DefernoDatabase): ItemHistoryLocalStore = SqlDelightItemHistoryLocalStore(db)
 
     // The offline-first activity ledger (#260): a durable, append-only journal of every applied write,
     // read reverse-chronologically by the Activity destination. The read side here; the write side is
@@ -338,10 +364,25 @@ interface AccountDataBindings {
     ): CreateReplayListener =
         DefaultCreateReplayListener(healer, pendingCreateStore, taskStore, habitStore, choreStore, eventStore)
 
+    // The comment-create replay seam (ADR-0043): the second listener beside [createReplayListener], keyed
+    // on the `comment-create:` target. Rekeys the optimistic comment row + re-points its queued edits.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun commentReplayListener(localStore: CommentLocalStore, outbox: OutboxStore): CommentReplayListener =
+        DefaultCommentReplayListener(localStore, outbox)
+
     @Provides
     @SingleIn(AccountScope::class)
     fun taskWriter(localStore: TaskLocalStore, outbox: OutboxStore): TaskWriter =
         OutboxTaskWriter(localStore, outbox)
+
+    // The offline-first comment write path (ADR-0043): optimistic apply to the comment cache + enqueue.
+    // [author] stamps an optimistic post with the Active Account's user id (device-local; Account.id ==
+    // User.id for a signed-in account, so "You" + edit/delete work with no live /auth/me).
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun commentWriter(localStore: CommentLocalStore, outbox: OutboxStore, account: Account): CommentWriter =
+        OutboxCommentWriter(localStore, outbox, author = { UserId(account.id.value) })
 
     // The dependency-edge write seam (#291): ONLINE-ONLY (the convert posture, ADR-0016) — optimistic
     // apply, immediate `PATCH tasks/{id} {"blocked_by":…}`, revert on the server's 400 verdict. The
@@ -398,6 +439,24 @@ interface AccountDataBindings {
     fun settingsWriter(localStore: SettingsLocalStore, outbox: OutboxStore): SettingsWriter =
         OutboxSettingsWriter(localStore, outbox)
 
+    // The comment reconcile reads the outbox so an on-open refresh can't clobber an un-synced comment
+    // write (#143), mirroring [settingsRepository]. The remoteSource is AppScope (via AppComponent accessor).
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun commentRepository(
+        localStore: CommentLocalStore,
+        remoteSource: CommentRemoteSource,
+        outbox: OutboxStore,
+    ): CommentRepository = DefaultCommentRepository(localStore, remoteSource, outbox)
+
+    // Item history is read-only + server-authored, so the refresh is a wholesale replace — no outbox guard.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun itemHistoryRepository(
+        localStore: ItemHistoryLocalStore,
+        remoteSource: ItemHistoryRemoteSource,
+    ): ItemHistoryRepository = DefaultItemHistoryRepository(localStore, remoteSource)
+
     /**
      * The Security & 2FA network port (Settings → Security, #72 follow-through). Deliberately
      * **AccountScope**, unlike the other remote sources (AppScope): the source holds the step-up
@@ -433,6 +492,7 @@ interface AccountDataBindings {
         store: OutboxStore,
         sender: OutboxRequestSender,
         createListener: CreateReplayListener,
+        commentListener: CommentReplayListener,
         taskRepository: TaskRepository,
         calendarRepository: CalendarRepository,
         settingsRepository: SettingsRepository,
@@ -440,6 +500,7 @@ interface AccountDataBindings {
         store = store,
         sender = sender,
         createListener = createListener,
+        commentListener = commentListener,
         // After a successful flush, LWW-reconcile the Task snapshot, re-pull the last Calendar window
         // (so an occurrence mark/reschedule converges on server truth, #74), and re-pull the settings
         // bag (so a flushed settings PATCH converges, #143 — its refresh skips the upsert if more

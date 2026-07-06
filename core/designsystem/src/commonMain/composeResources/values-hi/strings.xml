@@ -44,6 +44,7 @@
     <string name="activity_summary_deleted_task">एक कार्य हटाया</string>
     <string name="activity_summary_moved_item">एक आइटम मूव किया</string>
     <string name="activity_summary_updated_item">एक आइटम अपडेट किया</string>
+    <string name="activity_summary_commented">एक आइटम पर टिप्पणी की</string>
     <string name="activity_summary_updated_occurrence_chore">काम की एक बारी अपडेट की</string>
     <string name="activity_summary_updated_occurrence_event">इवेंट की एक बारी अपडेट की</string>
     <string name="activity_summary_updated_occurrence_habit">आदत की एक बारी अपडेट की</string>

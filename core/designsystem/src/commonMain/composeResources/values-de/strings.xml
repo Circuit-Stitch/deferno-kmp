@@ -43,6 +43,7 @@
     <string name="activity_summary_deleted_task">Aufgabe gelöscht</string>
     <string name="activity_summary_moved_item">Element verschoben</string>
     <string name="activity_summary_updated_item">Element aktualisiert</string>
+    <string name="activity_summary_commented">Element kommentiert</string>
     <string name="activity_summary_updated_occurrence_chore">Pflicht-Termin aktualisiert</string>
     <string name="activity_summary_updated_occurrence_event">Ereignis-Termin aktualisiert</string>
     <string name="activity_summary_updated_occurrence_habit">Gewohnheits-Termin aktualisiert</string>

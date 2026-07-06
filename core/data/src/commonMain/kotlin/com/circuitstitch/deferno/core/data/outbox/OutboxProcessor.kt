@@ -44,7 +44,10 @@ data class FlushResult(
  * id is needed to confirm the pending-create row and to heal a divergent canonical id), and resolves
  * through the [CreateReplayListener] — confirm on success, undo the optimistic insert on terminal
  * rejection. If a heal re-points queued entries, the pass stops (its `pending()` snapshot is stale) and
- * the next flush re-reads. Every other entry is a fire-and-forget edit via [OutboxRequestSender.send].
+ * the next flush re-reads. A `comment-create:<taskId>:<clientId>` entry (ADR-0043) replays through the
+ * **same** response-bearing path but resolves through the [CommentReplayListener] — the backend never
+ * honours the client comment id, so *every* comment-create rekeys the row and re-points its queued edits;
+ * when it does, the pass stops too. Every other entry is a fire-and-forget edit via [OutboxRequestSender.send].
  *
  * [flush] is guarded by a [Mutex] so two concurrent triggers can't double-dispatch the same entry.
  */
@@ -56,6 +59,8 @@ class OutboxProcessor(
     private val backoff: (Int) -> Duration = ::exponentialBackoff,
     // The offline-create replay seam (#185); default no-op so the engine's own tests need no wiring.
     private val createListener: CreateReplayListener = CreateReplayListener.NoOp,
+    // The offline comment-create replay seam (ADR-0043); default no-op, beside [createListener].
+    private val commentListener: CommentReplayListener = CommentReplayListener.NoOp,
 ) {
     private val mutex = Mutex()
 
@@ -93,6 +98,39 @@ class OutboxProcessor(
                         val attempts = entry.attempts + 1
                         if (attempts >= maxAttempts) {
                             createListener.onRejected(create.clientId, create.kind)
+                            store.delete(entry.seq)
+                            dropped++
+                        } else {
+                            store.markRetry(entry.seq, attempts, now + backoff(attempts))
+                            retried++
+                            break
+                        }
+                    }
+                }
+                continue
+            }
+
+            // A comment-create (ADR-0043) replays through the same response-bearing path — the server id
+            // rekeys the optimistic comment row and re-points its queued edits — but resolves through the
+            // comment listener (no ItemKind). A re-point stales the `pending()` snapshot, so the pass stops.
+            val commentCreate = CommentTargets.parseCreate(entry.target)
+            if (commentCreate != null) {
+                when (val outcome = sender.sendCreate(entry.request)) {
+                    is CreateSendOutcome.Created -> {
+                        val healed = commentListener.onReplayed(commentCreate.taskId, commentCreate.clientId, outcome.serverId)
+                        store.delete(entry.seq)
+                        succeeded++
+                        if (healed) break
+                    }
+                    CreateSendOutcome.Terminal -> {
+                        commentListener.onRejected(commentCreate.taskId, commentCreate.clientId)
+                        store.delete(entry.seq)
+                        dropped++
+                    }
+                    CreateSendOutcome.Retryable -> {
+                        val attempts = entry.attempts + 1
+                        if (attempts >= maxAttempts) {
+                            commentListener.onRejected(commentCreate.taskId, commentCreate.clientId)
                             store.delete(entry.seq)
                             dropped++
                         } else {

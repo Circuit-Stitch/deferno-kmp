@@ -51,6 +51,7 @@
     <string name="activity_summary_deleted_task">Deleted a task</string>
     <string name="activity_summary_moved_item">Moved an item</string>
     <string name="activity_summary_updated_item">Updated an item</string>
+    <string name="activity_summary_commented">Commented on an item</string>
     <string name="activity_summary_updated_occurrence_chore">Updated a chore occurrence</string>
     <string name="activity_summary_updated_occurrence_event">Updated an event occurrence</string>
     <string name="activity_summary_updated_occurrence_habit">Updated a habit occurrence</string>

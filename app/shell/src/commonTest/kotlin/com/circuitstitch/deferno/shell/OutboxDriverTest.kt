@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.shell
 
 import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
+import com.circuitstitch.deferno.core.data.outbox.FlushResult
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.model.UserSettings
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,6 +74,41 @@ class OutboxDriverTest {
 
         advanceTimeBy(30.seconds)
         assertEquals(3, session.flushes.size)
+    }
+
+    @Test
+    fun driveDrainsTheOutboxToQuiescence_notOnePerTick() = runTest {
+        // A comment-create heal breaks each flush pass on replay (ADR-0043: the rekey stales the engine's
+        // pending() snapshot), so a burst of offline comments would otherwise drain one-per-30s-tick. The
+        // driver loops flush() while a pass made progress AND work remains — draining fully in one activation.
+        val session = FakeAccountSession(
+            flushResults = ArrayDeque(
+                listOf(
+                    FlushResult(succeeded = 1, dropped = 0, retried = 0, remaining = 2),
+                    FlushResult(succeeded = 1, dropped = 0, retried = 0, remaining = 1),
+                    FlushResult(succeeded = 1, dropped = 0, retried = 0, remaining = 0),
+                ),
+            ),
+        )
+
+        driver().drive(session)
+        runCurrent()
+
+        assertEquals(3, session.flushes.size, "the single activation looped flush() to quiescence (remaining hit 0)")
+    }
+
+    @Test
+    fun quiescenceLoopStopsWhenAPassMakesNoProgress_evenWithWorkRemaining() = runTest {
+        // A pass that only retries/drops (succeeded == 0) must halt the loop even if remaining > 0 — else a
+        // permanently-backed-off head would hot-spin the loop. It waits for the next tick / reconnect instead.
+        val session = FakeAccountSession(
+            flushResults = ArrayDeque(listOf(FlushResult(succeeded = 0, dropped = 0, retried = 1, remaining = 5))),
+        )
+
+        driver().drive(session)
+        runCurrent()
+
+        assertEquals(1, session.flushes.size, "no progress halts the loop despite remaining work")
     }
 
     @Test

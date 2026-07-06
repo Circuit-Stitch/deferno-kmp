@@ -446,6 +446,41 @@
         }
       }
     },
+    "activity_summary_commented": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commented on an item"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comentó en un elemento"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Element kommentiert"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक आइटम पर टिप्पणी की"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comentou em um item"
+          }
+        }
+      }
+    },
     "activity_summary_created_chore": {
       "extractionState": "manual",
       "localizations": {

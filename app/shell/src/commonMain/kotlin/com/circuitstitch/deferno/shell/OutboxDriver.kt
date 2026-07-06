@@ -54,21 +54,33 @@ class OutboxDriver(
         job?.cancel()
         job = scope.launch(flushContext) {
             val online = connectivity.online
-            if (online.value) guarded { session.flushOutbox(now()) }
+            if (online.value) guarded { flushToQuiescence(session) }
             guarded { session.settingsRepository.refresh() }
             launch {
                 // The reconnect edge: `online` is distinct-until-changed, so after dropping the current
                 // value every `true` is an offline→online transition.
                 online.drop(1).filter { it }.collect {
-                    guarded { session.flushOutbox(now()) }
+                    guarded { flushToQuiescence(session) }
                     guarded { session.settingsRepository.refresh() }
                 }
             }
             while (true) {
                 delay(flushPeriod)
-                if (online.value) guarded { session.flushOutbox(now()) }
+                if (online.value) guarded { flushToQuiescence(session) }
             }
         }
+    }
+
+    /**
+     * Flush the outbox repeatedly until a pass makes no progress or drains the queue (ADR-0043): an
+     * offline comment-create heal breaks each pass on replay (the rekey stales the engine's `pending()`
+     * snapshot), so without this loop a burst of offline comments would drain one-per-tick. `succeeded > 0`
+     * means the last pass advanced; `remaining > 0` means there is still work — loop only while both hold.
+     */
+    private suspend fun flushToQuiescence(session: AccountSession) {
+        do {
+            val result = session.flushOutbox(now())
+        } while (result.succeeded > 0 && result.remaining > 0)
     }
 
     /** Stop driving (sign-out / no Active Account): the prior Account's outbox is never flushed again. */

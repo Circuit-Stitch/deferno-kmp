@@ -14,9 +14,11 @@ import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPrefer
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpSalvageCounter
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
+import com.circuitstitch.deferno.core.data.comment.CommentRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
+import com.circuitstitch.deferno.core.data.history.ItemHistoryRemoteSource
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
@@ -267,6 +269,10 @@ abstract class AppComponent(
     // The windowed Calendar feed source (#74): the OfflineCalendarRepository (AccountScope) refreshes through it.
     abstract val calendarRemoteSource: CalendarRemoteSource
     abstract val settingsRemoteSource: SettingsRemoteSource
+    // The offline-first comment refresh + cached item-history sources (ADR-0043): the AccountScope
+    // comment/history repositories reconcile the cache through them on task-detail open.
+    abstract val commentRemoteSource: CommentRemoteSource
+    abstract val itemHistoryRemoteSource: ItemHistoryRemoteSource
     abstract val outboxRequestSender: OutboxRequestSender
     abstract val accountDatabaseFactory: AccountDatabaseFactory
     // The online-only create flow (#71, ADR-0016): the CreateWriter (AccountScope) gates on this

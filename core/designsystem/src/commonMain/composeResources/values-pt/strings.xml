@@ -44,6 +44,7 @@
     <string name="activity_summary_deleted_task">Excluiu uma tarefa</string>
     <string name="activity_summary_moved_item">Moveu um item</string>
     <string name="activity_summary_updated_item">Atualizou um item</string>
+    <string name="activity_summary_commented">Comentou em um item</string>
     <string name="activity_summary_updated_occurrence_chore">Atualizou uma ocorrência de afazer</string>
     <string name="activity_summary_updated_occurrence_event">Atualizou uma ocorrência de evento</string>
     <string name="activity_summary_updated_occurrence_habit">Atualizou uma ocorrência de hábito</string>
