@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.backup
 
+import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.create.PendingCreateStore
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
@@ -16,6 +17,7 @@ import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.Envelope
 import com.circuitstitch.deferno.core.network.SupportedApiVersions
 import com.circuitstitch.deferno.core.network.dto.ItemView
+import com.circuitstitch.deferno.core.network.dto.LocalAttachmentDto
 import com.circuitstitch.deferno.core.network.mapper.asChoreOrNull
 import com.circuitstitch.deferno.core.network.mapper.asEventOrNull
 import com.circuitstitch.deferno.core.network.mapper.asHabitOrNull
@@ -27,7 +29,7 @@ import kotlin.time.Instant
 
 /**
  * The on-device import/restore engine (#314, ADR-0041): the inverse of [BackupExporter]. It parses a
- * [Backup file][import] (a zip whose `manifest.json` **is** the REST `{ version, data }` envelope),
+ * [Backup file][import] (a zip whose `items.json` **is** the REST `{ version, data }` envelope),
  * version-gates it against ADR-0005's window, and replays each item as an **id-preserving create** on the
  * existing offline outbox — an optimistic local upsert (full read-side fidelity) plus a `POST /{kind}`
  * carrying the item's **original id**. Because the backend honors and dedupes on that id (ADR-0034) the
@@ -35,10 +37,16 @@ import kotlin.time.Instant
  * replay happens when online). Items land in the active account's personal org — the create payloads
  * carry no org, so the server re-homes regardless of the file's `owner_org_id`.
  *
+ * Embedded on-device attachment bytes (#315) restore as **local on-device attachments** re-linked to the
+ * owning Task ([localAttachments]`.save`, provider = on-device) — no backend upload (offline-pure; matches
+ * the #210/#211 model). Idempotent by construction: `save` is an `INSERT OR REPLACE` keyed on the
+ * attachment id + an overwrite of its bytes, so re-import replaces rather than duplicates.
+ *
  * Shared KMP core so Android/desktop inherit it; iOS contributes only the document picker. Mirrors
- * [BackupExporter]'s constructor (the four per-kind stores) plus the outbox + pending-create side table
- * the create path writes — the same two lines [com.circuitstitch.deferno.core.data.create.OfflineCreateWriter]
- * uses, kept local here rather than coupling the importer to that writer's id-minting create methods.
+ * [BackupExporter]'s constructor (the four per-kind stores + the optional [localAttachments] repository)
+ * plus the outbox + pending-create side table the create path writes — the same two lines
+ * [com.circuitstitch.deferno.core.data.create.OfflineCreateWriter] uses, kept local here rather than
+ * coupling the importer to that writer's id-minting create methods.
  */
 class BackupImporter(
     private val taskStore: TaskLocalStore,
@@ -47,6 +55,7 @@ class BackupImporter(
     private val eventStore: EventLocalStore,
     private val outbox: OutboxStore,
     private val pendingCreateStore: PendingCreateStore,
+    private val localAttachments: LocalAttachmentRepository? = null,
     private val json: Json = DefernoJson,
     private val now: () -> Instant = { Clock.System.now() },
 ) {
@@ -56,35 +65,40 @@ class BackupImporter(
      * for a version outside ADR-0005's window, or [ImportResult.Restored] with the count enqueued.
      *
      * **No partial corruption.** Parse + version-gate + map *all* items to their domain rows + create
-     * intents — all pure, no writes — before the first store/outbox write; any failure short-circuits to
-     * [ImportResult.Malformed] with nothing written.
+     * intents + resolve their embedded attachment bytes — all pure, no writes — before the first
+     * store/outbox write; any failure (bad timestamp, a nested attachment whose `attachments/<id>` bytes are
+     * missing) short-circuits to [ImportResult.Malformed] with nothing written.
      */
     suspend fun import(bytes: ByteArray): ImportResult {
-        val manifest = runCatching { unzipStored(bytes)[BackupExporter.ITEMS_ENTRY] }.getOrNull()
-            ?: return ImportResult.Malformed
+        val entries = runCatching { unzipStored(bytes) }.getOrNull() ?: return ImportResult.Malformed
+        val manifest = entries[BackupExporter.ITEMS_ENTRY] ?: return ImportResult.Malformed
         val envelope = runCatching {
             json.decodeFromString(Envelope.serializer(ListSerializer(ItemView.serializer())), manifest.decodeToString())
         }.getOrNull() ?: return ImportResult.Malformed
 
         versionGate(envelope.version)?.let { return it }
 
-        // Pure pass: map every item to its (upsert, create) — a throw (e.g. a bad timestamp) means malformed
-        // and writes nothing. Only after every item maps do we touch the stores/outbox.
-        val ops = runCatching { envelope.data.map(::restoreOp) }.getOrNull() ?: return ImportResult.Malformed
+        // Pure pass: map every item to its (upsert, create, attachment restores) — a throw (a bad timestamp,
+        // a missing attachment blob) means malformed and writes nothing. Only after every item maps do we
+        // touch the stores/outbox/attachment store.
+        val ops = runCatching { envelope.data.map { restoreOp(it, entries) } }.getOrNull()
+            ?: return ImportResult.Malformed
         ops.forEach { it() }
         return ImportResult.Restored(ops.size)
     }
 
     /**
-     * Builds the per-item restore: the read-side mapping (`asXOrNull()`, the one step that can throw on a
-     * corrupt timestamp) runs *now* during the pure pass, while the returned [suspend] closure defers the
-     * store/outbox writes to the apply pass. The `!!` is sound — the `when` already matched the kind.
+     * Builds the per-item restore: the read-side mapping (`asXOrNull()`) and the embedded-attachment resolve
+     * (both can throw — a corrupt timestamp, a missing blob) run *now* during the pure pass, while the
+     * returned [suspend] closure defers the store/outbox/attachment writes to the apply pass. The `!!` is
+     * sound — the `when` already matched the kind.
      */
-    private fun restoreOp(item: ItemView): suspend () -> Unit = when (item) {
+    private fun restoreOp(item: ItemView, entries: Map<String, ByteArray>): suspend () -> Unit = when (item) {
         is ItemView.Task -> {
             val row = item.asTaskOrNull()!!
             val mutation = CreateTaskItem(item.id, item.toCreatePayload())
-            suspend { taskStore.upsert(row); enqueueCreate(mutation) }
+            val attachments = resolveAttachments(item.localAttachments, entries)
+            suspend { taskStore.upsert(row); enqueueCreate(mutation); restoreAttachments(item.id, attachments) }
         }
         is ItemView.Habit -> {
             val row = item.asHabitOrNull()!!
@@ -102,6 +116,42 @@ class BackupImporter(
             suspend { eventStore.upsert(row); enqueueCreate(mutation) }
         }
     }
+
+    /**
+     * Pure pass for a Task's embedded on-device attachments: pair each metadata DTO with its
+     * `attachments/<id>` bytes from the zip and parse its timestamp — a missing blob or a bad timestamp
+     * throws here (→ malformed, nothing written). Skipped entirely when there is no attachment store to
+     * restore into (an items-only importer): the items still restore; the bytes are simply not carried.
+     */
+    private fun resolveAttachments(
+        dtos: List<LocalAttachmentDto>,
+        entries: Map<String, ByteArray>,
+    ): List<ResolvedAttachment> {
+        if (localAttachments == null || dtos.isEmpty()) return emptyList()
+        return dtos.map { dto ->
+            val bytes = entries["${BackupExporter.ATTACHMENTS_DIR}/${dto.id}"]
+                ?: error("missing attachment blob ${dto.id}")
+            ResolvedAttachment(dto, bytes, Instant.parse(dto.createdAt))
+        }
+    }
+
+    /** Apply pass: write each resolved attachment as a local on-device attachment re-linked to [taskId]. */
+    private suspend fun restoreAttachments(taskId: String, attachments: List<ResolvedAttachment>) {
+        val repo = localAttachments ?: return
+        for (a in attachments) {
+            repo.save(
+                id = a.dto.id,
+                taskId = taskId,
+                filename = a.dto.filename,
+                mime = a.dto.mime,
+                bytes = a.bytes,
+                createdAt = a.createdAt,
+                caption = a.dto.caption,
+            )
+        }
+    }
+
+    private class ResolvedAttachment(val dto: LocalAttachmentDto, val bytes: ByteArray, val createdAt: Instant)
 
     /** Records the pending create + enqueues its replayable id-preserving outbox entry (ADR-0001/0034). */
     private suspend fun enqueueCreate(mutation: CreateMutation) {
@@ -131,6 +181,6 @@ sealed interface ImportResult {
     /** Manifest `version` is below [SupportedApiVersions.MIN] — too old to import; refused. */
     data object Unsupported : ImportResult
 
-    /** Not a readable Backup file: not a zip, no `manifest.json`, or an unparseable/invalid manifest. */
+    /** Not a readable Backup file: not a zip, no `items.json`, an unparseable manifest, or a missing attachment blob. */
     data object Malformed : ImportResult
 }

@@ -67,6 +67,12 @@ sealed interface ItemView {
         // DTO→domain mapper can roll it up to `attachment_count` + `attachment_total_size` for offline
         // attachment search/sort (ADR-0042). Absent/empty → no attachments.
         val attachments: List<AttachmentSizeDto> = emptyList(),
+        // On-device (brain-dump recording) attachment metadata carried by the offline Backup file (#315,
+        // ADR-0041) — distinct from the size-only backend-hosted `attachments` rollup above. The bytes ride
+        // the zip at `attachments/<id>`; a real API response never carries this key (defaults empty, the
+        // reader ignores it), so it is inert outside a Backup file. Task-only: on-device attachments link to
+        // a Task (`local_attachment.task_id`, brain-dump → Task); the other kinds carry no local attachments.
+        @SerialName("local_attachments") val localAttachments: List<LocalAttachmentDto> = emptyList(),
     ) : ItemView
 
     /** The `habit` variant — a recurring definition with no extra kind-specific fields. */

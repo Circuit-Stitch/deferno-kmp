@@ -246,6 +246,9 @@ dependencies {
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    // #315/#342 backup round-trip instrumented test: real SQLCipher DefernoDatabase over the Android driver
+    // (core:database is only a transitive `implementation` of core:data, so androidTest needs it directly).
+    androidTestImplementation(project(":core:database"))
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
 
