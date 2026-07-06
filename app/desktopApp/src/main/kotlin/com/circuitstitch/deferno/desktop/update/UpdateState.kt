@@ -39,11 +39,8 @@ sealed interface UpdateState {
         val latestVersion: String,
     ) : UpdateState
 
-    /** The last check failed (e.g. offline); [message] is a short reason. */
-    data class Failed(
-        override val currentVersion: String,
-        val message: String,
-    ) : UpdateState
+    /** The last check failed (e.g. offline). The raw cause is logged, not surfaced (#325). */
+    data class Failed(override val currentVersion: String) : UpdateState
 }
 
 /** Why self-update is [UpdateState.Unsupported] — selects the Help-menu message. */

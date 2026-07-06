@@ -70,7 +70,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    fun check_failure_becomesFailedWithMessage() = runTest {
+    fun check_failure_becomesFailed() = runTest {
         val backend = FakeUpdateBackend(currentVersion = "1.0.0").apply {
             error = IOException("offline")
         }
@@ -78,7 +78,7 @@ class UpdateManagerTest {
 
         manager.checkForUpdates()
         advanceUntilIdle()
-        assertEquals(UpdateState.Failed("1.0.0", "offline"), manager.state.value)
+        assertEquals(UpdateState.Failed("1.0.0"), manager.state.value)
     }
 
     @Test
