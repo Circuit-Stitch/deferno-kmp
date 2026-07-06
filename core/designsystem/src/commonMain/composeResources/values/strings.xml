@@ -1115,4 +1115,14 @@ Thank you.</string>
     <string name="settings_help_row_subtitle">Tell us what's working and what isn't.</string>
     <string name="tasks_menu_send_to_review">Send to review</string>
     <string name="inbox_accept_button">Accept</string>
+    <string name="activity_history_created">Created this task</string>
+    <string name="activity_history_updated">Edited this task</string>
+    <string name="activity_history_status_changed">Changed the status</string>
+    <string name="activity_history_moved">Moved this task</string>
+    <string name="activity_history_parent_assigned">Changed the parent</string>
+    <string name="activity_history_split">Split off a task</string>
+    <string name="activity_history_folded_into">Folded into another task</string>
+    <string name="activity_history_merged_child">Merged in a task</string>
+    <string name="activity_history_merged_into_parent">Merged into the parent</string>
+    <string name="activity_history_unknown">Made a change</string>
 </resources>

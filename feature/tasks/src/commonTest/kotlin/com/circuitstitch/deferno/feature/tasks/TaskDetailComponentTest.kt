@@ -3,11 +3,16 @@ package com.circuitstitch.deferno.feature.tasks
 import app.cash.turbine.test
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.data.comment.CommentRepository
+import com.circuitstitch.deferno.core.data.comment.CommentWriter
+import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -37,6 +42,9 @@ private fun TestScope.taskDetailComponent(
     editor: WorkingStateEditor = WorkingStateEditor.NONE,
     initialTask: Task? = null,
     detail: TaskDetailRepository = TaskDetailRepository.NONE,
+    comments: FakeComments = FakeComments(),
+    history: ItemHistoryRepository = ItemHistoryRepository.NONE,
+    currentUserId: UserId? = null,
     createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
     setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
     setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
@@ -51,6 +59,10 @@ private fun TestScope.taskDetailComponent(
     workingStateEditor = editor,
     initialTask = initialTask,
     detailRepository = detail,
+    commentRepository = comments,
+    historyRepository = history,
+    commentWriter = comments,
+    currentUserId = currentUserId,
     createSubtask = createSubtask,
     setDeadline = setDeadline,
     setLabels = setLabels,
@@ -74,28 +86,17 @@ private class FakeOnDeviceAttachments(
     override suspend fun bytes(id: String): ByteArray? = bytesById[id]
 }
 
-/** In-memory [TaskDetailRepository] for the detail-section tests; records writes, re-serves reads. */
+/** In-memory attachments [TaskDetailRepository] for the detail-section tests; records writes, re-serves reads. */
 private class FakeTaskDetailRepository(
-    var commentsResult: List<Comment>? = emptyList(),
     var attachmentsResult: List<Attachment>? = emptyList(),
     var uploadResult: Boolean = true,
-    private val userId: UserId? = UserId("me"),
 ) : TaskDetailRepository {
-    var commentsCalls = 0
-        private set
     var attachmentsCalls = 0
         private set
-    val posted = mutableListOf<Pair<TaskId, String>>()
-    val edited = mutableListOf<Pair<String, String>>()
-    val deleted = mutableListOf<String>()
     val uploaded = mutableListOf<Pair<TaskId, List<AttachmentUpload>>>()
     val deletedAttachments = mutableListOf<Pair<TaskId, String>>()
     val captioned = mutableListOf<Pair<String, String?>>()
 
-    override suspend fun comments(taskId: TaskId): List<Comment>? { commentsCalls++; return commentsResult }
-    override suspend fun postComment(taskId: TaskId, body: String): Boolean { posted += taskId to body; return true }
-    override suspend fun editComment(commentId: String, body: String): Boolean { edited += commentId to body; return true }
-    override suspend fun deleteComment(commentId: String): Boolean { deleted += commentId; return true }
     override suspend fun attachments(taskId: TaskId): List<Attachment>? { attachmentsCalls++; return attachmentsResult }
     override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>): Boolean {
         uploaded += taskId to files
@@ -109,7 +110,36 @@ private class FakeTaskDetailRepository(
         captioned += attachmentId to caption
         return true
     }
-    override suspend fun currentUserId(): UserId? = userId
+}
+
+/**
+ * In-memory [CommentRepository] + [CommentWriter] over one `MutableStateFlow` (ADR-0043): observe re-emits
+ * the cache, and each write applies optimistically to that flow (as the real outbox writer does) so the
+ * component's `activity` feed updates with no re-fetch. Records the writes + refresh calls for assertions.
+ */
+private class FakeComments(initial: List<Comment> = emptyList()) : CommentRepository, CommentWriter {
+    val comments = MutableStateFlow(initial)
+    val posted = mutableListOf<Pair<TaskId, String>>()
+    val edited = mutableListOf<Pair<String, String>>()
+    val deleted = mutableListOf<String>()
+    var refreshCalls = 0
+        private set
+
+    override fun observe(taskId: TaskId): Flow<List<Comment>> = comments
+    override suspend fun refresh(taskId: TaskId) { refreshCalls++ }
+
+    override suspend fun post(taskId: TaskId, body: String) {
+        posted += taskId to body
+        comments.update { it + comment("posted-${it.size}", body) } // optimistic add → Flow re-emits
+    }
+    override suspend fun edit(commentId: String, body: String) {
+        edited += commentId to body
+        comments.update { list -> list.map { if (it.id == commentId) it.copy(body = body) else it } }
+    }
+    override suspend fun delete(commentId: String) {
+        deleted += commentId
+        comments.update { list -> list.filterNot { it.id == commentId } }
+    }
 }
 
 private fun comment(id: String, body: String, by: String = "me") = Comment(
@@ -305,47 +335,58 @@ class TaskDetailComponentTest {
     }
 
     @Test
-    fun loadsCommentsAttachmentsAndIdentityOnCreation() = runTest {
+    fun observesActivityAndAttachmentsAndDeviceIdentityOnCreation() = runTest {
         val att = Attachment(
             id = "att1", filename = "f.pdf", mime = "application/pdf", size = 1L,
             url = "u", createdBy = UserId("me"), createdAt = Instant.parse("2026-04-17T10:00:00Z"),
         )
-        val detail = FakeTaskDetailRepository(
-            commentsResult = listOf(comment("c1", "hi")),
-            attachmentsResult = listOf(att),
+        val detail = FakeTaskDetailRepository(attachmentsResult = listOf(att))
+        val comments = FakeComments(listOf(comment("c1", "hi")))
+        val component = taskDetailComponent(
+            TaskId("a"), FakeTaskRepository(listOf(task("a"))),
+            detail = detail, comments = comments, currentUserId = UserId("me"),
         )
-        val component = taskDetailComponent(TaskId("a"), FakeTaskRepository(listOf(task("a"))), detail = detail)
 
         component.state.test {
             var item = awaitItem()
-            while (item.comments.isEmpty() || item.attachments.isEmpty() || item.currentUserId == null) item = awaitItem()
-            assertEquals("hi", item.comments.single().body)
+            while (item.activity.isEmpty() || item.attachments.isEmpty()) item = awaitItem()
+            val commentRow = item.activity.filterIsInstance<ActivityItem.Comment>().single()
+            assertEquals("hi", commentRow.comment.body)
             assertEquals("f.pdf", item.attachments.single().filename)
-            assertEquals(UserId("me"), item.currentUserId)
+            assertEquals(UserId("me"), item.currentUserId) // device-local, no live /auth/me
+            assertEquals(1, comments.refreshCalls) // the best-effort on-open refresh fired
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun postEditDeleteForwardAndReloadTheThread() = runTest {
-        val detail = FakeTaskDetailRepository(commentsResult = emptyList())
-        val component = taskDetailComponent(TaskId("a"), FakeTaskRepository(listOf(task("a"))), detail = detail)
-        advanceUntilIdle() // the init comment load (commentsCalls == 1)
+    fun postEditDeleteApplyOptimisticallyToTheActivityFeed() = runTest {
+        val comments = FakeComments()
+        val component = taskDetailComponent(TaskId("a"), FakeTaskRepository(listOf(task("a"))), comments = comments)
 
-        component.onPostComment("  ") // blank — ignored, no write
-        component.onPostComment("hello")
-        advanceUntilIdle()
+        // A subscriber keeps the WhileSubscribed combine running so the optimistic writes re-emit.
+        component.state.test {
+            fun commentRows(item: TaskDetailState) = item.activity.filterIsInstance<ActivityItem.Comment>()
+            awaitItem()
 
-        assertEquals(listOf(TaskId("a") to "hello"), detail.posted)
-        assertEquals(2, detail.commentsCalls) // initial load + reload after the post
+            component.onPostComment("  ") // blank — ignored, no write
+            component.onPostComment("hello")
+            var item = awaitItem()
+            while (commentRows(item).isEmpty()) item = awaitItem()
+            val posted = commentRows(item).single()
+            assertEquals("hello", posted.comment.body)
+            assertEquals(listOf(TaskId("a") to "hello"), comments.posted) // forwarded, no re-fetch
 
-        component.onEditComment("c1", "fixed")
-        component.onDeleteComment("c1")
-        advanceUntilIdle()
+            component.onEditComment(posted.id, "fixed")
+            while (commentRows(item).singleOrNull()?.comment?.body != "fixed") item = awaitItem()
+            assertEquals(listOf(posted.id to "fixed"), comments.edited)
 
-        assertEquals(listOf("c1" to "fixed"), detail.edited)
-        assertEquals(listOf("c1"), detail.deleted)
-        assertEquals(4, detail.commentsCalls) // + reload after edit + reload after delete
+            component.onDeleteComment(posted.id)
+            while (item.activity.isNotEmpty()) item = awaitItem()
+            assertEquals(listOf(posted.id), comments.deleted) // optimistic tombstone dropped it from the feed
+
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test

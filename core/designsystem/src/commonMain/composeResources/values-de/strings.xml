@@ -880,4 +880,14 @@ Vielen Dank.</string>
     <string name="settings_help_row_subtitle">Sag uns, was funktioniert und was nicht.</string>
     <string name="tasks_menu_send_to_review">Zur Durchsicht senden</string>
     <string name="inbox_accept_button">Übernehmen</string>
+    <string name="activity_history_created">Diese Aufgabe erstellt</string>
+    <string name="activity_history_updated">Diese Aufgabe bearbeitet</string>
+    <string name="activity_history_status_changed">Status geändert</string>
+    <string name="activity_history_moved">Diese Aufgabe verschoben</string>
+    <string name="activity_history_parent_assigned">Übergeordnete Aufgabe geändert</string>
+    <string name="activity_history_split">Eine Aufgabe abgespalten</string>
+    <string name="activity_history_folded_into">In eine andere Aufgabe eingefügt</string>
+    <string name="activity_history_merged_child">Eine Aufgabe zusammengeführt</string>
+    <string name="activity_history_merged_into_parent">Mit der übergeordneten Aufgabe zusammengeführt</string>
+    <string name="activity_history_unknown">Eine Änderung vorgenommen</string>
 </resources>

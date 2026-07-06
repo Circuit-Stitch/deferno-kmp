@@ -12,6 +12,9 @@ import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.security.SecurityRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.task.BlockedByResult
+import com.circuitstitch.deferno.core.data.comment.CommentRepository
+import com.circuitstitch.deferno.core.data.comment.CommentWriter
+import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.AddToPlan
@@ -47,6 +50,7 @@ import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
+import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.calendar.OccurrenceEditor
 import com.circuitstitch.deferno.feature.settings.SettingsEditor
@@ -79,8 +83,19 @@ interface AccountSession {
     val itemRepository: ItemRepository
     val foldStore: ItemFoldStore
 
-    /** The Task detail's online-only comments + attachments source (the web-parity detail sections). */
+    /** The Task detail's online-only attachments source (comments + history are now offline-first, ADR-0043). */
     val taskDetailRepository: TaskDetailRepository
+
+    /**
+     * The offline-first Task-detail ACTIVITY feed (ADR-0043): the comment thread + cached server item
+     * history observed from the cache, the [commentWriter] optimistic post/edit/delete seam, and the
+     * device-local [currentUserId] (the Active Account's user id) that gates own-comment affordances with
+     * NO live /auth/me. Defaulted to the empty/no-op instances so test fakes build without them.
+     */
+    val commentRepository: CommentRepository get() = CommentRepository.NONE
+    val itemHistoryRepository: ItemHistoryRepository get() = ItemHistoryRepository.NONE
+    val commentWriter: CommentWriter get() = CommentWriter.NONE
+    val currentUserId: UserId? get() = null
 
     /**
      * The Task detail's **on-device** attachment seam (#210/#211) — this Account's locally-stored
@@ -264,6 +279,12 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val itemRepository: ItemRepository get() = component.itemRepository
     override val foldStore: ItemFoldStore get() = component.foldStore
     override val taskDetailRepository: TaskDetailRepository get() = component.taskDetailRepository
+    override val commentRepository: CommentRepository get() = component.commentRepository
+    override val itemHistoryRepository: ItemHistoryRepository get() = component.itemHistoryRepository
+    override val commentWriter: CommentWriter get() = component.commentWriter
+    // Device-local identity (ADR-0043): Account.id == User.id for a signed-in account, so own-comment
+    // affordances + "You" attribution work with NO live /auth/me (offline-first invariant).
+    override val currentUserId: UserId? get() = UserId(component.activeAccount.id.value)
     override val planRepository: PlanRepository get() = component.planRepository
 
     // #211: map this Account's LocalAttachment rows → the detail's OnDeviceAttachment projection.

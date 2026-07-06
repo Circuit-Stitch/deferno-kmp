@@ -34,6 +34,9 @@ import com.circuitstitch.deferno.core.data.security.SecurityRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
 import com.circuitstitch.deferno.core.data.task.SearchSeed
 import com.circuitstitch.deferno.core.data.task.SearchSort
+import com.circuitstitch.deferno.core.data.comment.CommentRepository
+import com.circuitstitch.deferno.core.data.comment.CommentWriter
+import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
@@ -64,6 +67,7 @@ import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
 import com.circuitstitch.deferno.core.speech.SpeechToText
@@ -154,9 +158,16 @@ class DefaultMainShellComponent(
     // The Tasks Item-tree dependency-edge seam (#291), threaded into the Tasks Destination so its command
     // menu can set/remove "Blocked by…". Defaults to the always-Applied NONE so shell tests build without it.
     private val blockedByEditor: BlockedByEditor = BlockedByEditor.NONE,
-    // The Task detail's online-only comments + attachments source, threaded into the detail (overlay +
-    // Tasks Destination). Defaulted to the no-op so the many shell tests build without supplying it.
+    // The Task detail's online-only attachments source, threaded into the detail (overlay + Tasks
+    // Destination). Defaulted to the no-op so the many shell tests build without supplying it.
     private val taskDetailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
+    // The offline-first Task-detail ACTIVITY feed (ADR-0043): comment thread + item history (observed
+    // from the cache), the optimistic comment write seam, and the device-local user id (own-comment
+    // affordances). Threaded into the detail (overlay + Tasks Destination). Empty/no-op defaults.
+    private val commentRepository: CommentRepository = CommentRepository.NONE,
+    private val itemHistoryRepository: ItemHistoryRepository = ItemHistoryRepository.NONE,
+    private val commentWriter: CommentWriter = CommentWriter.NONE,
+    private val currentUserId: UserId? = null,
     // The Task detail's editable-PROPERTIES write seams (DUE date + LABELS), threaded into the detail
     // (overlay + Tasks Destination). Defaulted to no-ops so the many shell tests build without them.
     private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
@@ -468,6 +479,10 @@ class DefaultMainShellComponent(
                                     output = ::onPlanDetailOutput,
                                     workingStateEditor = workingStateEditor,
                                     detailRepository = taskDetailRepository,
+                                    commentRepository = commentRepository,
+                                    historyRepository = itemHistoryRepository,
+                                    commentWriter = commentWriter,
+                                    currentUserId = currentUserId,
                                     createSubtask = createSubtask,
                                     setDeadline = setDeadline,
                                     setLabels = setLabels,
@@ -527,6 +542,10 @@ class DefaultMainShellComponent(
                         moveEditor = moveEditor,
                         shakeToUndoPreference = shakeToUndoPreference,
                         taskDetailRepository = taskDetailRepository,
+                        commentRepository = commentRepository,
+                        itemHistoryRepository = itemHistoryRepository,
+                        commentWriter = commentWriter,
+                        currentUserId = currentUserId,
                         createSubtask = createSubtask,
                         setDeadline = setDeadline,
                         setLabels = setLabels,

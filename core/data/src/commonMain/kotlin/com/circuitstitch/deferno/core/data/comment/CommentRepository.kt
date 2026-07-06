@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.data.outbox.OutboxStore
 import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * The offline-first Task-comment repository (ADR-0043, #197). It promotes the last online-only surface
@@ -25,6 +26,14 @@ interface CommentRepository {
 
     /** Best-effort on-open refresh; reconciles the server thread into the cache, or no-ops if unreachable. */
     suspend fun refresh(taskId: TaskId)
+
+    companion object {
+        /** An empty repository (no comments, no-op refresh) — the default a component/shell builds over. */
+        val NONE: CommentRepository = object : CommentRepository {
+            override fun observe(taskId: TaskId): Flow<List<Comment>> = flowOf(emptyList())
+            override suspend fun refresh(taskId: TaskId) {}
+        }
+    }
 }
 
 /**

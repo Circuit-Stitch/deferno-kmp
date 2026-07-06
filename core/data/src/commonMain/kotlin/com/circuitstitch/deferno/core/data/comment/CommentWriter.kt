@@ -28,6 +28,15 @@ interface CommentWriter {
 
     /** Tombstone comment [commentId] optimistically and enqueue the idempotent DELETE. */
     suspend fun delete(commentId: String)
+
+    companion object {
+        /** A no-op writer — the default a component/shell builds over (tests, offline construction). */
+        val NONE: CommentWriter = object : CommentWriter {
+            override suspend fun post(taskId: TaskId, body: String) {}
+            override suspend fun edit(commentId: String, body: String) {}
+            override suspend fun delete(commentId: String) {}
+        }
+    }
 }
 
 /**

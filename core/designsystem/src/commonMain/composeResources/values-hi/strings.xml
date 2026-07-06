@@ -882,4 +882,14 @@
     <string name="settings_help_row_subtitle">हमें बताएँ कि क्या ठीक चल रहा है और क्या नहीं।</string>
     <string name="tasks_menu_send_to_review">समीक्षा में भेजें</string>
     <string name="inbox_accept_button">स्वीकारें</string>
+    <string name="activity_history_created">यह कार्य बनाया</string>
+    <string name="activity_history_updated">यह कार्य संपादित किया</string>
+    <string name="activity_history_status_changed">स्थिति बदली</string>
+    <string name="activity_history_moved">यह कार्य स्थानांतरित किया</string>
+    <string name="activity_history_parent_assigned">मूल कार्य बदला</string>
+    <string name="activity_history_split">एक कार्य अलग किया</string>
+    <string name="activity_history_folded_into">दूसरे कार्य में मिला दिया</string>
+    <string name="activity_history_merged_child">एक कार्य विलय किया</string>
+    <string name="activity_history_merged_into_parent">मूल कार्य में विलय किया</string>
+    <string name="activity_history_unknown">एक बदलाव किया</string>
 </resources>

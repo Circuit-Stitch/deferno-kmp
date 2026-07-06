@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.network.dto.TaskActionDto
 import com.circuitstitch.deferno.core.network.dto.TaskActionKind
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
@@ -28,6 +29,14 @@ interface ItemHistoryRepository {
 
     /** Best-effort on-open refresh; replaces the item's cached history, or no-ops if unreachable. */
     suspend fun refresh(itemId: String)
+
+    companion object {
+        /** An empty repository (no history, no-op refresh) — the default a component/shell builds over. */
+        val NONE: ItemHistoryRepository = object : ItemHistoryRepository {
+            override fun observe(itemId: String): Flow<List<ItemHistoryEvent>> = flowOf(emptyList())
+            override suspend fun refresh(itemId: String) {}
+        }
+    }
 }
 
 /** The production [ItemHistoryRepository] over the local cache + the best-effort remote source. */

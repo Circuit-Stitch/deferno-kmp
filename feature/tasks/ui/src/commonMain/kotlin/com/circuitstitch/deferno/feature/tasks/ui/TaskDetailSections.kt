@@ -29,6 +29,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,6 +54,16 @@ import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.format.formatTime
 import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_created
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_folded_into
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_merged_child
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_merged_into_parent
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_moved
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_parent_assigned
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_split
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_status_changed
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_unknown
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_updated
 import com.circuitstitch.deferno.core.designsystem.resources.common_add
 import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
 import com.circuitstitch.deferno.core.designsystem.resources.common_clear
@@ -116,11 +127,13 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_progress_frac
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.SubtaskRow
 import kotlinx.datetime.LocalDate
@@ -752,18 +765,19 @@ private fun AttachmentRow(
     }
 }
 
-// --- Activity / Comments ---
+// --- Activity feed (comments + server item history) ---
 
 /**
- * The Activity thread (web parity, comments only): a composer to post, then the comment list. The
- * current user's own comments offer inline Edit / Delete (the server enforces the real authorization).
+ * The ACTIVITY feed (ADR-0043): a composer to post, then the merged, chronological feed of user comments
+ * and server-authored item history. Reads from the cache (offline-first) — there is no error state.
+ * [loading] flags an in-flight best-effort on-open refresh (only shown while the feed is still empty). The
+ * current user's own comments offer inline Edit / Delete; history events are read-only.
  */
 @Composable
 internal fun CommentsSection(
-    comments: List<Comment>,
+    activity: List<ActivityItem>,
     currentUserId: UserId?,
     loading: Boolean,
-    error: Boolean,
     isPosting: Boolean,
     onPost: (String) -> Unit,
     onEdit: (String, String) -> Unit,
@@ -771,18 +785,61 @@ internal fun CommentsSection(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SectionHeader(stringResource(Res.string.tasks_detail_section_activity), trailing = comments.size.toString())
+        SectionHeader(stringResource(Res.string.tasks_detail_section_activity), trailing = activity.size.toString())
         CommentComposer(isPosting = isPosting, onPost = onPost)
         when {
-            loading && comments.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
-            error && comments.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_comments_error))
-            comments.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_no_comments))
-            else -> comments.forEach { c ->
-                CommentRow(c, isMine = currentUserId != null && c.createdBy == currentUserId, onEdit, onDelete)
+            loading && activity.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
+            activity.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_no_comments))
+            else -> activity.forEach { item ->
+                key(item.id) {
+                    when (item) {
+                        is ActivityItem.Comment -> CommentRow(
+                            item.comment,
+                            isMine = currentUserId != null && item.comment.createdBy == currentUserId,
+                            onEdit, onDelete,
+                        )
+                        is ActivityItem.HistoryEvent -> HistoryEventRow(item.event)
+                    }
+                }
             }
         }
     }
 }
+
+/** A read-only server-history row — a coarse, localized one-liner for the event (ADR-0043, v1 Task-only). */
+@Composable
+private fun HistoryEventRow(event: ItemHistoryEvent) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = event.label(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.defernoColors.inkMuted,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = event.recordedAt.toDisplayDate(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.defernoColors.inkMuted,
+        )
+    }
+}
+
+/** Maps a history event to its localized verb label (the typed-code → resource mapping, ADR-0043). */
+@Composable
+private fun ItemHistoryEvent.label(): String = stringResource(
+    when (this) {
+        is ItemHistoryEvent.Created -> Res.string.activity_history_created
+        is ItemHistoryEvent.Updated -> Res.string.activity_history_updated
+        is ItemHistoryEvent.StatusChanged -> Res.string.activity_history_status_changed
+        is ItemHistoryEvent.Moved -> Res.string.activity_history_moved
+        is ItemHistoryEvent.ParentAssigned -> Res.string.activity_history_parent_assigned
+        is ItemHistoryEvent.Split -> Res.string.activity_history_split
+        is ItemHistoryEvent.FoldedInto -> Res.string.activity_history_folded_into
+        is ItemHistoryEvent.MergedChild -> Res.string.activity_history_merged_child
+        is ItemHistoryEvent.MergedIntoParent -> Res.string.activity_history_merged_into_parent
+        is ItemHistoryEvent.Unknown -> Res.string.activity_history_unknown
+    },
+)
 
 @Composable
 private fun CommentComposer(isPosting: Boolean, onPost: (String) -> Unit) {

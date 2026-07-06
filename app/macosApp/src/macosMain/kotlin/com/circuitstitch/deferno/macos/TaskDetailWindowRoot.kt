@@ -59,6 +59,10 @@ fun openTaskDetailWindow(root: RootComponent, idValue: String): TaskDetailWindow
         taskRepository = session.taskRepository,
         workingStateEditor = session.workingStateEditor,
         detailRepository = session.taskDetailRepository,
+        commentRepository = session.commentRepository,
+        itemHistoryRepository = session.itemHistoryRepository,
+        commentWriter = session.commentWriter,
+        currentUserId = session.currentUserId,
         setDeadline = session.setDeadline,
         setLabels = session.setLabels,
     )

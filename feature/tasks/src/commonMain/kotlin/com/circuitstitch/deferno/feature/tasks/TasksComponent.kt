@@ -15,10 +15,14 @@ import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
+import com.circuitstitch.deferno.core.data.comment.CommentRepository
+import com.circuitstitch.deferno.core.data.comment.CommentWriter
+import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.UserId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -82,9 +86,15 @@ class DefaultTasksComponent(
     // The device-local shake-to-undo App setting (#230), threaded into the tree pane so a shake gates on
     // it. Defaulted to an in-memory (on) preference so existing tests build without supplying it.
     private val shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
-    // The detail's online-only comments + attachments source + its "add subtask" create seam, threaded
-    // down into the detail slot. Both default to no-ops so existing tests build without supplying them.
+    // The detail's online-only attachments source + its "add subtask" create seam, threaded down into
+    // the detail slot. Both default to no-ops so existing tests build without supplying them.
     private val taskDetailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
+    // The offline-first ACTIVITY feed (ADR-0043): comment thread + item history + the comment write seam
+    // + the device-local user id, threaded down into the detail slot. Empty/no-op defaults.
+    private val commentRepository: CommentRepository = CommentRepository.NONE,
+    private val itemHistoryRepository: ItemHistoryRepository = ItemHistoryRepository.NONE,
+    private val commentWriter: CommentWriter = CommentWriter.NONE,
+    private val currentUserId: UserId? = null,
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
     // The detail's editable-PROPERTIES write seams (DUE date + LABELS), threaded down into the detail
     // slot. Both default to no-ops so existing tests/callers build without supplying them.
@@ -156,6 +166,10 @@ class DefaultTasksComponent(
                 workingStateEditor = workingStateEditor,
                 initialTask = config.initialTask,
                 detailRepository = taskDetailRepository,
+                commentRepository = commentRepository,
+                historyRepository = itemHistoryRepository,
+                commentWriter = commentWriter,
+                currentUserId = currentUserId,
                 createSubtask = createSubtask,
                 setDeadline = setDeadline,
                 setLabels = setLabels,
