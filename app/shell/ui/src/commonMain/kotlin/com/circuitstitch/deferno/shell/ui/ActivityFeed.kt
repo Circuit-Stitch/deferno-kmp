@@ -58,7 +58,6 @@ import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_up
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_plan
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_task
 import com.circuitstitch.deferno.core.designsystem.resources.activity_when_pattern
-import com.circuitstitch.deferno.core.designsystem.resources.shell_destination_activity
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.shell.ActivityComponent
 import com.circuitstitch.deferno.shell.ActivityFeedRow
@@ -83,11 +82,8 @@ fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) 
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(
-                    text = stringResource(Res.string.shell_destination_activity),
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.semantics { heading() },
-                )
+                // ponytail: title lives in the shell top bar (chromeFor → ForDestination(Activity)); the body
+                // carries only the count so the screen doesn't show "Activity" twice. Matches Settings/Calendar.
                 MonoMeta(text = pluralStringResource(Res.plurals.activity_change_count, state.rows.size, state.rows.size))
             }
         }
