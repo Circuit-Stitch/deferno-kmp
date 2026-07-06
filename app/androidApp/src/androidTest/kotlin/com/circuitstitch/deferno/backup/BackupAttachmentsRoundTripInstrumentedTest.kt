@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.backup
 
 import androidx.test.platform.app.InstrumentationRegistry
+import app.cash.sqldelight.db.SqlDriver
 import com.circuitstitch.deferno.core.data.attachment.FileAttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.backup.BackupExporter
@@ -50,20 +51,29 @@ class BackupAttachmentsRoundTripInstrumentedTest {
     private val created = Instant.parse("2026-05-20T16:11:42Z")
     private val audio = ByteArray(64 * 1024) { (it * 31 + 7).toByte() } // high-bit bytes → CRC/binary fidelity
 
+    // Every opened driver is tracked so @After can close it before the file is deleted (an open SQLCipher
+    // connection outliving its file is what strands -wal/-shm sidecars on a repeated connectedAndroidTest run).
+    private val drivers = mutableListOf<SqlDriver>()
+
     private fun db(account: AccountId) =
-        DefernoDatabase(AndroidSqlDriverFactory(ctx, account, keyProvider).create())
+        DefernoDatabase(AndroidSqlDriverFactory(ctx, account, keyProvider).create().also { drivers += it })
 
     @After
     fun cleanup() {
+        drivers.forEach { it.close() }
+        drivers.clear()
         srcBytesDir.deleteRecursively()
         dstBytesDir.deleteRecursively()
-        ctx.getDatabasePath(databaseFileName(srcAccount)).delete()
-        ctx.getDatabasePath(databaseFileName(dstAccount)).delete()
+        // deleteDatabase removes the main file plus its -wal/-shm/-journal sidecars in one call.
+        ctx.deleteDatabase(databaseFileName(srcAccount))
+        ctx.deleteDatabase(databaseFileName(dstAccount))
     }
 
     @Test
     fun exportedOnDeviceAttachment_restoresByteIdentical_intoWipedAccount() = runBlocking {
+        // Start clean too (symmetric with @After), so an aborted prior run can't leave a stale src DB behind.
         srcBytesDir.deleteRecursively(); dstBytesDir.deleteRecursively()
+        ctx.deleteDatabase(databaseFileName(srcAccount)); ctx.deleteDatabase(databaseFileName(dstAccount))
 
         // --- Source account: a Task with one kept on-device recording linked to it. ---
         val srcDb = db(srcAccount)
