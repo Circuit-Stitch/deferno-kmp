@@ -111,4 +111,49 @@ class TaskActionDtoTest {
 
         assertEquals(TaskActionKind.Unknown, dto.kind)
     }
+
+    // --- encode (the cache-payload round-trip, ADR-0043 slice 5) ---
+
+    private fun encode(kind: TaskActionKind): String =
+        DefernoJson.encodeToString(TaskActionKind.serializer(), kind)
+
+    @Test
+    fun aUnitVariantEncodesToItsBareString() {
+        assertEquals("\"Created\"", encode(TaskActionKind.Created))
+        assertEquals("\"MergedIntoParent\"", encode(TaskActionKind.MergedIntoParent))
+    }
+
+    @Test
+    fun aDataVariantEncodesToItsSingleKeyObject() {
+        assertEquals(
+            """{"StatusChanged":{"from":"open","to":"done"}}""",
+            encode(TaskActionKind.StatusChanged(TaskStatusWire.Open, TaskStatusWire.Done)),
+        )
+        assertEquals("""{"Split":{"child_id":"c-1"}}""", encode(TaskActionKind.Split("c-1")))
+    }
+
+    @Test
+    fun everyKindRoundTripsThroughTheCachePayload() {
+        // The item-history cache stores the encoded kind in `itemHistoryEntry.payload` and decodes it
+        // back on read — every variant, including a degraded Unknown and an out-of-vocab status, must
+        // survive encode→decode unchanged.
+        val kinds = listOf(
+            TaskActionKind.Created,
+            TaskActionKind.MergedIntoParent,
+            TaskActionKind.Unknown,
+            TaskActionKind.Updated(listOf("title", "desire")),
+            TaskActionKind.Updated(emptyList()),
+            TaskActionKind.Moved("p-1", "p-2", 3),
+            TaskActionKind.Moved(fromParentId = null, toParentId = "p-2", position = null),
+            TaskActionKind.ParentAssigned("p-1"),
+            TaskActionKind.Split("c-1"),
+            TaskActionKind.FoldedInto("n-1"),
+            TaskActionKind.MergedChild("c-2"),
+            TaskActionKind.StatusChanged(TaskStatusWire.Open, TaskStatusWire.Done),
+            TaskActionKind.StatusChanged(TaskStatusWire.Unknown, TaskStatusWire.Unknown),
+        )
+        for (kind in kinds) {
+            assertEquals(kind, DefernoJson.decodeFromString(TaskActionKind.serializer(), encode(kind)), "round-trip $kind")
+        }
+    }
 }
