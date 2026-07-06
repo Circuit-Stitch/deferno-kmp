@@ -157,6 +157,17 @@ class SettingsScreenInteractionTest {
     }
 
     @Test
+    fun dataPrivacy_offersImportABackup() {
+        // #314: the in-app import (restore) action. The actual pick+restore runs through the system
+        // document picker (OpenDocument) — not drivable here, like export — so this only guards that the
+        // reachable Import button renders; the restore engine + result mapping are covered in core:data.
+        setContent { SettingsScreen(component()) }
+
+        composeRule.onNodeWithText("Data & Privacy").performClick()
+        composeRule.onNodeWithText("Import a backup").assertIsDisplayed()
+    }
+
+    @Test
     fun helpFeedback_submitButton_forwardsTheReachableWebAction() {
         // AC #4: submit-feedback must be a REACHABLE action (a real button → Output), not static prose.
         val outputs = mutableListOf<SettingsComponent.Output>()
