@@ -64,7 +64,16 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null
-          "$SDKMANAGER" "ndk;30.0.14904198"
+          # Retry: a transient corrupt mirror download ("Error on ZipFile unknown archive") otherwise
+          # fails the whole gate (see memory ci-ndk-probe-flake — a no-code re-run went green).
+          # sdkmanager is idempotent, so a retry only re-fetches the missing/corrupt package.
+          for attempt in 1 2 3; do
+            "$SDKMANAGER" "ndk;30.0.14904198" && exit 0
+            echo "::warning::sdkmanager install attempt $attempt failed; retrying in 10s…" >&2
+            sleep 10
+          done
+          echo "::error::sdkmanager NDK install failed after 3 attempts." >&2
+          exit 1
 
       # Guard the single source of truth: Conveyor names the Release after app.version (=
       # ProjectConfig.APP_VERSION via project.version), NOT after the git tag. Fail fast if the pushed
