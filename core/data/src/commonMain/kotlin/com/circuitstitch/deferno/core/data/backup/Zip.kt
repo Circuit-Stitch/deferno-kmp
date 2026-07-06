@@ -4,16 +4,18 @@ package com.circuitstitch.deferno.core.data.backup
  * A minimal, dependency-free zip writer (#313, ADR-0041). The Backup file is a zip, but no zip library
  * is on the KMP classpath and the catalog has none — so rather than add a dependency (or split an
  * expect/actual across `java.util.zip` + Foundation) for what is a few lines, this writes the format by
- * hand in commonMain so every target inherits it. Entries are **STORED** (uncompressed): `items.json`
- * is small text and a STORED single-entry zip is a fixed, well-understood layout (local header → data →
- * central directory → end-of-central-directory, all little-endian).
+ * hand in commonMain so every target inherits it. Entries are **STORED** (uncompressed): the layout is a
+ * fixed, well-understood one (local header → data → central directory → end-of-central-directory, all
+ * little-endian).
  *
- * ponytail: STORED + in-memory `ByteArray`, fine for the items-only export (KBs). When attachment
- * bytes join the zip (a later ADR-0041 slice), switch to DEFLATE + a streaming sink so megabytes don't
- * all sit in memory.
+ * ponytail: STORED (not DEFLATE) — on-device attachments are brain-dump audio (#315), already compressed,
+ * so DEFLATE would add a commonMain inflate/deflate implementation for ~0 size win. The whole zip is still
+ * built in memory as one `ByteArray` (the share sheet / document takes it whole anyway); the accumulator is
+ * a growable `ByteArray` [ByteBuf], **not** an `ArrayList<Byte>`, so a few MB of audio doesn't balloon to
+ * ~16× via boxing. If a single backup ever outgrows a comfortable heap, switch to a streaming sink.
  */
 internal fun zipStored(entries: List<Pair<String, ByteArray>>): ByteArray {
-    val out = ArrayList<Byte>()
+    val out = ByteBuf()
     val central = ArrayList<CentralEntry>(entries.size)
 
     for ((name, data) in entries) {
@@ -112,18 +114,41 @@ private const val END_OF_CENTRAL_DIR = 0x06054b50
 private const val VERSION = 20 // 2.0 — the floor that supports STORED entries
 private const val DOS_DATE_1980 = 0x21 // (year 1980<<9)|(month 1<<5)|(day 1)
 
-private fun MutableList<Byte>.u16(v: Int) {
-    add((v and 0xFF).toByte())
-    add(((v ushr 8) and 0xFF).toByte())
-}
+/**
+ * A growable little-endian byte accumulator for [zipStored] — a `ByteArray` that doubles on overflow, so
+ * embedding MB-sized attachment bytes (#315) stays ~1× rather than the ~16× an `ArrayList<Byte>` would cost
+ * by boxing every byte. Only what the zip writer needs: [u16]/[u32] (little-endian) + raw [bytes].
+ */
+private class ByteBuf {
+    private var buf = ByteArray(1024)
+    var size: Int = 0
+        private set
 
-private fun MutableList<Byte>.u32(v: Int) {
-    u16(v and 0xFFFF)
-    u16((v ushr 16) and 0xFFFF)
-}
+    private fun ensure(extra: Int) {
+        if (size + extra <= buf.size) return
+        var cap = buf.size
+        while (cap < size + extra) cap = cap shl 1
+        buf = buf.copyOf(cap)
+    }
 
-private fun MutableList<Byte>.bytes(b: ByteArray) {
-    for (x in b) add(x)
+    fun u16(v: Int) {
+        ensure(2)
+        buf[size++] = (v and 0xFF).toByte()
+        buf[size++] = ((v ushr 8) and 0xFF).toByte()
+    }
+
+    fun u32(v: Int) {
+        u16(v and 0xFFFF)
+        u16((v ushr 16) and 0xFFFF)
+    }
+
+    fun bytes(b: ByteArray) {
+        ensure(b.size)
+        b.copyInto(buf, size)
+        size += b.size
+    }
+
+    fun toByteArray(): ByteArray = buf.copyOf(size)
 }
 
 /**

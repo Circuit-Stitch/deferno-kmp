@@ -170,9 +170,10 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun eventLocalStore(db: DefernoDatabase): EventLocalStore = SqlDelightEventLocalStore(db)
 
-    // The on-device export engine (#313, ADR-0041): reads the four per-kind local stores and serializes
-    // the Backup zip. AccountScope — the same stores the create/sync path composes, so it reads exactly
-    // this Account's source-of-truth rows (per-account isolation, ADR-0002). `json` defaults to DefernoJson.
+    // The on-device export engine (#313/#315, ADR-0041): reads the four per-kind local stores + the
+    // on-device attachment repository and serializes the Backup zip (items + embedded attachment bytes).
+    // AccountScope — the same stores the create/sync path composes, so it reads exactly this Account's
+    // source-of-truth rows (per-account isolation, ADR-0002). `json` defaults to DefernoJson.
     @Provides
     @SingleIn(AccountScope::class)
     fun backupExporter(
@@ -180,12 +181,14 @@ interface AccountDataBindings {
         habitStore: HabitLocalStore,
         choreStore: ChoreLocalStore,
         eventStore: EventLocalStore,
-    ): BackupExporter = BackupExporter(taskStore, habitStore, choreStore, eventStore)
+        localAttachments: LocalAttachmentRepository,
+    ): BackupExporter = BackupExporter(taskStore, habitStore, choreStore, eventStore, localAttachments)
 
-    // The on-device import/restore engine (#314, ADR-0041): the inverse of [backupExporter]. Parses a
+    // The on-device import/restore engine (#314/#315, ADR-0041): the inverse of [backupExporter]. Parses a
     // Backup zip, version-gates it, and replays each item as an id-preserving create on this Account's
-    // outbox (optimistic upsert into the four stores + a `create:<kind>:<id>` enqueue). Same AccountScope
-    // stores/outbox/pending-create the create path composes, so a restore is per-account isolated (ADR-0002).
+    // outbox (optimistic upsert into the four stores + a `create:<kind>:<id>` enqueue), restoring embedded
+    // attachment bytes as local on-device attachments. Same AccountScope stores/outbox/pending-create/
+    // attachment repo the create path composes, so a restore is per-account isolated (ADR-0002).
     @Provides
     @SingleIn(AccountScope::class)
     fun backupImporter(
@@ -195,7 +198,9 @@ interface AccountDataBindings {
         eventStore: EventLocalStore,
         outbox: OutboxStore,
         pendingCreateStore: PendingCreateStore,
-    ): BackupImporter = BackupImporter(taskStore, habitStore, choreStore, eventStore, outbox, pendingCreateStore)
+        localAttachments: LocalAttachmentRepository,
+    ): BackupImporter =
+        BackupImporter(taskStore, habitStore, choreStore, eventStore, outbox, pendingCreateStore, localAttachments)
 
     // The Occurrence (firing-level) local store (#71, AC #4): the per-Account SQLDelight cache an
     // occurrence read from the kind-scoped endpoint seeds into, so it joins the observe Flow (ADR-0001).

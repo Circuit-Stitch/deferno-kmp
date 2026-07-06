@@ -22,6 +22,26 @@ data class AttachmentViewDto(
 )
 
 /**
+ * The **on-device (local) attachment** metadata nested per item in a Backup file's `items.json` (#315,
+ * ADR-0041). It mirrors the shared keys of the API's [AttachmentViewDto] (`id`/`filename`/`mime`/`size`/
+ * `caption`/`created_at`, all snake_case) so the file stays web-API-shaped, but drops the two fields a
+ * *device-local* attachment genuinely lacks: `url` (its bytes live at `attachments/<id>` **inside the
+ * zip**, not behind a signed URL) and `created_by` (there is no creator user id on the device). Carries
+ * exactly what round-trips a `core:data` `LocalAttachment` through export→import. It **never appears on a
+ * real API response** — there it defaults empty and the tolerant reader ignores it, so the item read path
+ * is untouched.
+ */
+@Serializable
+data class LocalAttachmentDto(
+    val id: String,
+    val filename: String,
+    val mime: String,
+    val size: Long,
+    val caption: String? = null,
+    @SerialName("created_at") val createdAt: String,
+)
+
+/**
  * The size-only projection of the `attachments` block nested per item on the `/items` snapshot and the
  * `/tasks/{id}` detail (#311). The full backend-hosted attachment object carries `id`/`filename`/`mime`/
  * `url`/… but the offline-search rollup only needs [size]; the tolerant reader

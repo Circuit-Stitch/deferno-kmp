@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.backup
 
+import com.circuitstitch.deferno.core.data.attachment.LocalAttachment
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Event
@@ -10,6 +11,7 @@ import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.network.dto.DefStatusWire
 import com.circuitstitch.deferno.core.network.dto.ItemView
+import com.circuitstitch.deferno.core.network.dto.LocalAttachmentDto
 import com.circuitstitch.deferno.core.network.dto.RecurrenceDto
 import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
 
@@ -108,6 +110,21 @@ internal fun Event.toItemView(): ItemView.Event = ItemView.Event(
     endTime = endTime?.toString(),
     startTimeOfDay = startTimeOfDay?.toString(),
     endTimeOfDay = endTimeOfDay?.toString(),
+)
+
+/**
+ * An on-device [LocalAttachment] → the [LocalAttachmentDto] nested under its owning Task in a Backup file
+ * (#315, ADR-0041). Only the fields that round-trip through export→import are carried: `provider`/`locator`/
+ * `taskId` are re-derived on restore (provider = on-device, locator = id, taskId = the owning item), and a
+ * device-local attachment has no `url`/`created_by`. The raw bytes go into the zip at `attachments/<id>`.
+ */
+internal fun LocalAttachment.toDto(): LocalAttachmentDto = LocalAttachmentDto(
+    id = id,
+    filename = filename,
+    mime = mime,
+    size = size,
+    caption = caption,
+    createdAt = createdAt.toString(),
 )
 
 /** [WorkingState] → wire `TaskStatus` enum — the write-side inverse of `TaskStatusWire.toWorkingState()`. */

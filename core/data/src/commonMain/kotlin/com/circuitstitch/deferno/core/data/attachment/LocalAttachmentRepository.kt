@@ -43,7 +43,8 @@ class LocalAttachmentRepository(
     /**
      * Store [bytes] on-device and record the attachment, returning the saved record. The bytes are written
      * first (under locator = [id]) so a recorded row always has its bytes; [provider] defaults to
-     * [StorageProviderId.OnDevice].
+     * [StorageProviderId.OnDevice]. [caption] defaults to null (brain-dump recordings carry none); a Backup
+     * restore passes the round-tripped caption (#315).
      */
     suspend fun save(
         id: String,
@@ -53,6 +54,7 @@ class LocalAttachmentRepository(
         bytes: ByteArray,
         createdAt: Instant,
         provider: StorageProviderId = StorageProviderId.OnDevice,
+        caption: String? = null,
     ): LocalAttachment {
         bytesStore.write(id, bytes)
         val record = LocalAttachment(
@@ -63,7 +65,7 @@ class LocalAttachmentRepository(
             filename = filename,
             mime = mime,
             size = bytes.size.toLong(),
-            caption = null,
+            caption = caption,
             createdAt = createdAt,
         )
         queries.insertOrReplace(
