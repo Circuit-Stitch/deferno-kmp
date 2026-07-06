@@ -1,11 +1,15 @@
 package com.circuitstitch.deferno.macos.bridge
 
+import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
+import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
+import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 
 /**
  * The **Decompose half of the bridge** the SwiftUI Views observe (#51). SKIE (ADR-0003) bridges each
@@ -57,3 +61,50 @@ fun clearTaskDeadline(component: TaskDetailComponent) = component.onSetDeadline(
 /** Read-only PROPERTIES labels for the Swift view — the opaque-typed fields it can't format itself. */
 fun taskTimeLabel(task: Task): String = task.deadlineTimeOfDay?.toString() ?: "—"
 fun taskOwnerLabel(task: Task): String = task.ownerOrgId?.value ?: "—"
+
+// ---------------------------------------------------------------------------------------------------
+// ACTIVITY feed (ADR-0043) — the macOS twin of the iOS bridge's comment/activity seam. macOS newly gains
+// the ACTIVITY section, so these are added here (kept IDENTICAL to app/iosApp .../ios/bridge/Bridge.kt).
+// The sealed [ActivityItem] is cracked open with the app's manual-discriminator idiom: Swift keys ForEach
+// on [activityItemId], unwraps a comment via [activityItemComment] (nil ⇒ history), and renders a history
+// row from the verb token + date label. UserId is header-erased (Swift can't ==) and Instant can't be
+// formatted in Swift, so those stay here.
+// ---------------------------------------------------------------------------------------------------
+
+/** Whether [comment] is the current user's (gates inline Edit/Delete) — both ids are erased [UserId]s. */
+fun commentIsMine(state: TaskDetailState, comment: Comment): Boolean {
+    val me = state.currentUserId ?: return false
+    return comment.createdBy == me
+}
+
+/** A comment's display date (e.g. "2026-04-17 (edited)") — Instant formatting Swift can't do directly. */
+fun commentDateLabel(comment: Comment): String =
+    comment.createdAt.toString().substringBefore('T') + if (comment.editedAt != null) " (edited)" else ""
+
+/** A stable Swift-visible row id for `ForEach(id:)` — the comment id, or "history:<index>". */
+fun activityItemId(item: ActivityItem): String = item.id
+
+/** The comment an [item] wraps, or `nil` for a history row (the `as?` discriminator). */
+fun activityItemComment(item: ActivityItem): Comment? = (item as? ActivityItem.Comment)?.comment
+
+/** A history row's typed verb token (Swift maps it to a localized label), or `nil` for a comment row. */
+fun activityHistoryVerb(item: ActivityItem): String? =
+    (item as? ActivityItem.HistoryEvent)?.event?.let(::historyVerbToken)
+
+/** A history row's display date ("2026-04-17"), or `nil` for a comment — Instant formatting Swift can't do. */
+fun activityHistoryDateLabel(item: ActivityItem): String? =
+    (item as? ActivityItem.HistoryEvent)?.event?.recordedAt?.toString()?.substringBefore('T')
+
+/** The stable verb token per history variant — kept in sync with the Compose `label()` mapping (ADR-0043). */
+private fun historyVerbToken(event: ItemHistoryEvent): String = when (event) {
+    is ItemHistoryEvent.Created -> "Created"
+    is ItemHistoryEvent.Updated -> "Updated"
+    is ItemHistoryEvent.StatusChanged -> "StatusChanged"
+    is ItemHistoryEvent.Moved -> "Moved"
+    is ItemHistoryEvent.ParentAssigned -> "ParentAssigned"
+    is ItemHistoryEvent.Split -> "Split"
+    is ItemHistoryEvent.FoldedInto -> "FoldedInto"
+    is ItemHistoryEvent.MergedChild -> "MergedChild"
+    is ItemHistoryEvent.MergedIntoParent -> "MergedIntoParent"
+    is ItemHistoryEvent.Unknown -> "Unknown"
+}
