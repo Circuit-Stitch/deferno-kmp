@@ -4,11 +4,12 @@ import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.dto.TaskActionDto
-import com.circuitstitch.deferno.core.network.dto.TaskActionKind
+import com.circuitstitch.deferno.core.network.dto.toTaskActionKind
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlin.time.Instant
 
 /**
  * The offline-first Item-history repository (ADR-0043, #197). History is **read-only, server-authored,
@@ -18,9 +19,10 @@ import kotlinx.coroutines.flow.map
  * append-only server-derived history makes a whole replace dedup-free (there is no stable event id). A
  * permanently-gone server degrades this to "no new history arrives" — the cache stands. v1 is Task-only.
  *
- * The repo owns the `payload` ↔ [TaskActionKind] codec (ADR-0043): a fetched [TaskActionDto] serializes
- * its kind into [StoredHistoryRow.payload] for the cache, and a cached row deserializes back and condenses
- * to the domain [ItemHistoryEvent] — keeping [ItemHistoryLocalStore] free of any serialization coupling.
+ * The repo owns the `payload` ↔ domain boundary (ADR-0043): a fetched [TaskActionDto]'s **raw wire kind**
+ * is stored verbatim into [StoredHistoryRow.payload] for the cache, and a cached row decodes that raw
+ * element back to a kind and condenses to the domain [ItemHistoryEvent] — keeping [ItemHistoryLocalStore]
+ * free of any serialization coupling, and keeping an unknown kind recoverable (the server's bytes are kept).
  */
 interface ItemHistoryRepository {
 
@@ -57,10 +59,11 @@ class DefaultItemHistoryRepository(
     }
 }
 
-/** Serialize a fetched action's kind into the opaque cache payload (the write half of the codec). */
+/** Store the fetched action's raw wire kind verbatim — no re-encode (ADR-0043; the client never writes
+ *  history, so the cache keeps the server's own bytes and an unknown kind stays recoverable). */
 private fun TaskActionDto.toStoredRow(): StoredHistoryRow =
-    StoredHistoryRow(recordedAt = recordedAt, payload = DefernoJson.encodeToString(TaskActionKind.serializer(), kind))
+    StoredHistoryRow(recordedAt = recordedAt, payload = kind.toString())
 
-/** Decode a cached row's payload back to a kind and condense to the domain event (the read half). */
+/** Decode a cached row's raw payload back to a kind and condense to the domain event. */
 private fun StoredHistoryRow.toEvent(): ItemHistoryEvent =
-    TaskActionDto(kind = DefernoJson.decodeFromString(TaskActionKind.serializer(), payload), recordedAt = recordedAt).toDomain()
+    DefernoJson.parseToJsonElement(payload).toTaskActionKind(DefernoJson).toDomain(Instant.parse(recordedAt))

@@ -5,9 +5,8 @@ import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.dto.TaskActionDto
-import com.circuitstitch.deferno.core.network.dto.TaskActionKind
-import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -36,7 +35,10 @@ class DefaultItemHistoryRepositoryTest {
         override suspend fun fetchHistory(itemId: String) = snapshot
     }
 
-    private fun action(kind: TaskActionKind, at: Instant) = TaskActionDto(kind = kind, recordedAt = at.toString())
+    // The kind is the raw wire JSON (a bare string for a unit variant, a single-key object for a data
+    // variant) — the cache stores it verbatim, exactly as a server fetch would carry it (ADR-0043).
+    private fun action(kindJson: String, at: Instant) =
+        TaskActionDto(kind = DefernoJson.parseToJsonElement(kindJson), recordedAt = at.toString())
 
     @Test
     fun refreshCachesActionsThatObserveDecodesToDomainEvents() = runTest {
@@ -44,8 +46,8 @@ class DefaultItemHistoryRepositoryTest {
         val remote = FakeRemote(
             RemoteSnapshot.Available(
                 listOf(
-                    action(TaskActionKind.Created, t0),
-                    action(TaskActionKind.StatusChanged(TaskStatusWire.Open, TaskStatusWire.Done), t1),
+                    action("\"Created\"", t0),
+                    action("""{"StatusChanged":{"from":"open","to":"done"}}""", t1),
                 ),
             ),
         )
@@ -61,13 +63,13 @@ class DefaultItemHistoryRepositoryTest {
     @Test
     fun refreshReplacesTheCachedHistoryWholesale() = runTest {
         val store = newStore()
-        val remote = FakeRemote(RemoteSnapshot.Available(listOf(action(TaskActionKind.Created, t0))))
+        val remote = FakeRemote(RemoteSnapshot.Available(listOf(action("\"Created\"", t0))))
         val repo = DefaultItemHistoryRepository(store, remote)
         repo.refresh("t-1")
 
         // A second, fuller fetch replaces the item's rows — never appends/duplicates.
         remote.snapshot = RemoteSnapshot.Available(
-            listOf(action(TaskActionKind.Created, t0), action(TaskActionKind.Updated(listOf("title")), t1)),
+            listOf(action("\"Created\"", t0), action("""{"Updated":{"fields":["title"]}}""", t1)),
         )
         repo.refresh("t-1")
 
@@ -79,7 +81,7 @@ class DefaultItemHistoryRepositoryTest {
     @Test
     fun refreshLeavesTheCacheIntactWhenUnavailable() = runTest {
         val store = newStore()
-        val remote = FakeRemote(RemoteSnapshot.Available(listOf(action(TaskActionKind.Created, t0))))
+        val remote = FakeRemote(RemoteSnapshot.Available(listOf(action("\"Created\"", t0))))
         val repo = DefaultItemHistoryRepository(store, remote)
         repo.refresh("t-1")
 

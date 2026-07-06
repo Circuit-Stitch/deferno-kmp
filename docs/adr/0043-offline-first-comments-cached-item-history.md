@@ -69,10 +69,13 @@ gap is filed (**Circuit-Stitch/Deferno#559**), but the client is correct without
   needs its own per-item fetch + table (above). "No new backend work" still holds (the endpoint exists);
   "free by construction" does not.
 - **Faithful, Unknown-tolerant history DTO (ADR-0011).** `TaskActionKind` is a Serde **externally-tagged**
-  enum — bare strings (`"Created"`, `"MergedIntoParent"`) for unit variants, single-key objects
-  (`{"StatusChanged": {"from":…, "to":…}}`) for data variants, **no discriminator** — decoded by a
-  hand-written `JsonContentPolymorphicSerializer`. Its unit-variant and `Unknown` strategies must accept a
-  **bare `JsonPrimitive`** (not the generated object serializer, which throws "Expected JsonObject" on a
+  union — bare strings (`"Created"`, `"MergedIntoParent"`) for unit variants, single-key objects
+  (`{"StatusChanged": {"from":…, "to":…}}`) for data variants, **no discriminator**. `TaskActionDto` carries
+  `kind` as the **raw wire `JsonElement`**, decoded lazily off the cache by a hand-written `toTaskActionKind`
+  shape-dispatch — no `KSerializer`, and crucially **no encoder**: the client never writes history, so the
+  cache stores the server's own bytes verbatim (`kind.toString()`), which also keeps an additive/unknown kind
+  **recoverable** once the client learns to decode it, instead of freezing it to `"Unknown"`. The decoder must
+  accept a **bare `JsonPrimitive`** (not an object serializer, which throws "Expected JsonObject" on a
   string), and `Unknown` must accept **both** a primitive (unknown unit variant) and an object (unknown data
   variant) so additive server kinds degrade instead of crashing. `StatusChanged.from/to` decode as
   `TaskStatusWire` **with an `= TaskStatusWire.Unknown` default** — the wire field is required and
@@ -125,9 +128,9 @@ seam (`(taskId, clientId, serverId)`, no `ItemKind`; a **second** listener const
 `OutboxProcessor` beside the existing `CreateReplayListener`, reusing the shared `sendCreate` envelope
 parser) — **rekeys** the optimistic row's `comment_id` clientId→serverId (the established
 `pendingItemCreate.rekey` in-place `UPDATE`; no FK hazard, the schema has none) **and re-points any
-already-queued `comment:<clientId>` edit/delete** to the server id (a narrow substring re-point like
-`ItemIdHealer.healOutbox`; a UUID substring is collision-safe). It **returns `healed=true` so the processor
-breaks the now-stale `pending()` pass** — load-bearing, not optional: without the break the processor replays
+already-queued `comment:<clientId>` edit/delete** to the server id (the shared `OutboxStore.repointId`
+outbox sweep, also used by `ItemIdHealer`; a UUID substring is collision-safe). It **returns `healed=true`
+so the processor breaks the now-stale `pending()` pass** — load-bearing, not optional: without the break the processor replays
 the queued edit against the dead client id, gets a 404 → `Success` → drops it, **silently losing the edit**.
 Because that break fires on *every* comment-create, **`OutboxDriver` loops `flush()` while a pass made
 progress and work remains** (`do { r = flush() } while (r.succeeded > 0 && r.remaining > 0)`) so a burst of
@@ -177,9 +180,10 @@ backfill, only this device, only since migration 8). They stay **two separate st
 with no network, queues every write, and shows server history on open. New substrate: **two tables** —
 `commentEntity` and `itemHistoryEntry` (**migration `13.sqm` → `databases/14.db`**, ADR-0022; schema
 v13 → v14, plain `CREATE`, verified by `verifyCommonMainDefernoDatabaseMigration`) — a `CommentRepository`
-observing a `Flow` with an **outbox-aware** refresh, the `TaskActionDto` + its `JsonContentPolymorphicSerializer`
-+ `TaskActionKind`→domain mapper, `PostComment`/`EditComment`/`DeleteComment` outbox intents, a
-`CommentReplayListener` + comment id-heal + the processor's **second response-bearing route**, the
+observing a `Flow` with an **outbox-aware** refresh, the `TaskActionDto` (raw-wire `kind`) + its
+`toTaskActionKind` decoder + `TaskActionKind`→domain mapper, `PostComment`/`EditComment`/`DeleteComment`
+outbox intents, a `CommentReplayListener` + the shared `OutboxStore.repointId` id-heal + the processor's
+**shared response-bearing route** (`routeFor`, bound to either replay listener), the
 **`OutboxDriver` flush-to-quiescence loop**, the `ActivityVerb.Commented` ledger case, the per-Account
 `currentUserId` cache, and the macOS ACTIVITY View. `TaskDetailRepository.comments()` drops its `?`;
 `commentsError` leaves `TaskDetailState`, and `comments: List<Comment>` becomes `activity: List<ActivityItem>`

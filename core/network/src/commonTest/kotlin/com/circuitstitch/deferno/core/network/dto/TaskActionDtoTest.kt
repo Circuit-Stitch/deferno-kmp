@@ -3,58 +3,60 @@ package com.circuitstitch.deferno.core.network.dto
 import com.circuitstitch.deferno.core.network.DefernoJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Decode tests for [TaskActionDto] / [TaskActionKind] — the server-authored per-item history
  * (`actions[]`, `GET /items/{id}/history`). `TaskActionKind` is Serde's **externally-tagged** enum:
  * unit variants are bare JSON strings (`"Created"`), data variants are single-key objects
- * (`{"StatusChanged": {…}}`). These pin the hand-written serializer against that wire shape through
- * the shipping tolerant reader ([DefernoJson]), incl. the Unknown-degrade for additive server kinds.
+ * (`{"StatusChanged": {…}}`). The DTO carries `kind` as the raw wire element (the cache stores it
+ * verbatim); these pin [toTaskActionKind] against that wire shape through the shipping tolerant reader
+ * ([DefernoJson]), incl. the Unknown-degrade for additive server kinds.
  */
 class TaskActionDtoTest {
 
     private fun decode(json: String): TaskActionDto =
         DefernoJson.decodeFromString(TaskActionDto.serializer(), json)
 
+    /** Decode a full history entry and crack its raw wire kind — the lazy read path the cache uses. */
+    private fun kind(json: String): TaskActionKind = decode(json).kind.toTaskActionKind(DefernoJson)
+
     @Test
     fun createdDecodesFromABareString() {
         val dto = decode("""{"kind":"Created","recorded_at":"2026-01-02T03:04:05Z"}""")
 
-        assertEquals(TaskActionKind.Created, dto.kind)
+        assertEquals(TaskActionKind.Created, dto.kind.toTaskActionKind(DefernoJson))
         assertEquals("2026-01-02T03:04:05Z", dto.recordedAt)
     }
 
     @Test
     fun anUnknownBareStringKindDegradesToUnknown() {
         // An additive server unit-variant token must not crash the tolerant reader.
-        val dto = decode("""{"kind":"Vaporized","recorded_at":"2026-01-02T03:04:05Z"}""")
-
-        assertEquals(TaskActionKind.Unknown, dto.kind)
+        assertEquals(TaskActionKind.Unknown, kind("""{"kind":"Vaporized","recorded_at":"2026-01-02T03:04:05Z"}"""))
     }
 
     @Test
     fun mergedIntoParentDecodesFromTheSecondBareString() {
-        val dto = decode("""{"kind":"MergedIntoParent","recorded_at":"2026-01-02T03:04:05Z"}""")
-
-        assertEquals(TaskActionKind.MergedIntoParent, dto.kind)
+        assertEquals(
+            TaskActionKind.MergedIntoParent,
+            kind("""{"kind":"MergedIntoParent","recorded_at":"2026-01-02T03:04:05Z"}"""),
+        )
     }
 
     @Test
     fun updatedDecodesItsFieldsFromASingleKeyObject() {
-        val dto = decode(
-            """{"kind":{"Updated":{"fields":["title","desire"]}},"recorded_at":"2026-01-02T03:04:05Z"}""",
+        assertEquals(
+            TaskActionKind.Updated(listOf("title", "desire")),
+            kind("""{"kind":{"Updated":{"fields":["title","desire"]}},"recorded_at":"2026-01-02T03:04:05Z"}"""),
         )
-
-        assertEquals(TaskActionKind.Updated(listOf("title", "desire")), dto.kind)
     }
 
     @Test
     fun statusChangedDecodesFromAndToWorkingStatuses() {
-        val dto = decode(
-            """{"kind":{"StatusChanged":{"from":"open","to":"done"}},"recorded_at":"2026-01-02T03:04:05Z"}""",
+        assertEquals(
+            TaskActionKind.StatusChanged(TaskStatusWire.Open, TaskStatusWire.Done),
+            kind("""{"kind":{"StatusChanged":{"from":"open","to":"done"}},"recorded_at":"2026-01-02T03:04:05Z"}"""),
         )
-
-        assertEquals(TaskActionKind.StatusChanged(TaskStatusWire.Open, TaskStatusWire.Done), dto.kind)
     }
 
     @Test
@@ -62,35 +64,33 @@ class TaskActionDtoTest {
         // /items/{id}/history serves all kinds; a recurring item's StatusChanged carries DefStatus
         // tokens (active/archived) TaskStatusWire can't name. The required-no-default wire field would
         // throw and abort the whole array — the Unknown default must rescue it (ADR-0043).
-        val dto = decode(
-            """{"kind":{"StatusChanged":{"from":"active","to":"archived"}},"recorded_at":"2026-01-02T03:04:05Z"}""",
+        assertEquals(
+            TaskActionKind.StatusChanged(TaskStatusWire.Unknown, TaskStatusWire.Unknown),
+            kind("""{"kind":{"StatusChanged":{"from":"active","to":"archived"}},"recorded_at":"2026-01-02T03:04:05Z"}"""),
         )
-
-        assertEquals(TaskActionKind.StatusChanged(TaskStatusWire.Unknown, TaskStatusWire.Unknown), dto.kind)
     }
 
     @Test
     fun parentAssignedDecodesItsParentId() {
-        val dto = decode(
-            """{"kind":{"ParentAssigned":{"parent_id":"p-1"}},"recorded_at":"2026-01-02T03:04:05Z"}""",
+        assertEquals(
+            TaskActionKind.ParentAssigned("p-1"),
+            kind("""{"kind":{"ParentAssigned":{"parent_id":"p-1"}},"recorded_at":"2026-01-02T03:04:05Z"}"""),
         )
-
-        assertEquals(TaskActionKind.ParentAssigned("p-1"), dto.kind)
     }
 
     @Test
     fun splitAndFoldedIntoAndMergedChildDecodeTheirPeerIds() {
         assertEquals(
             TaskActionKind.Split("c-1"),
-            decode("""{"kind":{"Split":{"child_id":"c-1"}},"recorded_at":"2026-01-02T03:04:05Z"}""").kind,
+            kind("""{"kind":{"Split":{"child_id":"c-1"}},"recorded_at":"2026-01-02T03:04:05Z"}"""),
         )
         assertEquals(
             TaskActionKind.FoldedInto("n-1"),
-            decode("""{"kind":{"FoldedInto":{"next_task_id":"n-1"}},"recorded_at":"2026-01-02T03:04:05Z"}""").kind,
+            kind("""{"kind":{"FoldedInto":{"next_task_id":"n-1"}},"recorded_at":"2026-01-02T03:04:05Z"}"""),
         )
         assertEquals(
             TaskActionKind.MergedChild("c-2"),
-            decode("""{"kind":{"MergedChild":{"child_id":"c-2"}},"recorded_at":"2026-01-02T03:04:05Z"}""").kind,
+            kind("""{"kind":{"MergedChild":{"child_id":"c-2"}},"recorded_at":"2026-01-02T03:04:05Z"}"""),
         )
     }
 
@@ -98,62 +98,28 @@ class TaskActionDtoTest {
     fun movedDecodesItsNullablePeerIdsAndPosition() {
         // Only to_parent_id present → from_parent_id + position default to null (all Moved fields are
         // nullable on the wire).
-        val dto = decode(
-            """{"kind":{"Moved":{"to_parent_id":"p-2"}},"recorded_at":"2026-01-02T03:04:05Z"}""",
+        assertEquals(
+            TaskActionKind.Moved(fromParentId = null, toParentId = "p-2", position = null),
+            kind("""{"kind":{"Moved":{"to_parent_id":"p-2"}},"recorded_at":"2026-01-02T03:04:05Z"}"""),
         )
-
-        assertEquals(TaskActionKind.Moved(fromParentId = null, toParentId = "p-2", position = null), dto.kind)
     }
 
     @Test
     fun anUnknownSingleKeyObjectKindDegradesToUnknown() {
-        val dto = decode("""{"kind":{"Teleported":{"whither":"void"}},"recorded_at":"2026-01-02T03:04:05Z"}""")
-
-        assertEquals(TaskActionKind.Unknown, dto.kind)
-    }
-
-    // --- encode (the cache-payload round-trip, ADR-0043 slice 5) ---
-
-    private fun encode(kind: TaskActionKind): String =
-        DefernoJson.encodeToString(TaskActionKind.serializer(), kind)
-
-    @Test
-    fun aUnitVariantEncodesToItsBareString() {
-        assertEquals("\"Created\"", encode(TaskActionKind.Created))
-        assertEquals("\"MergedIntoParent\"", encode(TaskActionKind.MergedIntoParent))
-    }
-
-    @Test
-    fun aDataVariantEncodesToItsSingleKeyObject() {
         assertEquals(
-            """{"StatusChanged":{"from":"open","to":"done"}}""",
-            encode(TaskActionKind.StatusChanged(TaskStatusWire.Open, TaskStatusWire.Done)),
+            TaskActionKind.Unknown,
+            kind("""{"kind":{"Teleported":{"whither":"void"}},"recorded_at":"2026-01-02T03:04:05Z"}"""),
         )
-        assertEquals("""{"Split":{"child_id":"c-1"}}""", encode(TaskActionKind.Split("c-1")))
     }
 
     @Test
-    fun everyKindRoundTripsThroughTheCachePayload() {
-        // The item-history cache stores the encoded kind in `itemHistoryEntry.payload` and decodes it
-        // back on read — every variant, including a degraded Unknown and an out-of-vocab status, must
-        // survive encode→decode unchanged.
-        val kinds = listOf(
-            TaskActionKind.Created,
-            TaskActionKind.MergedIntoParent,
-            TaskActionKind.Unknown,
-            TaskActionKind.Updated(listOf("title", "desire")),
-            TaskActionKind.Updated(emptyList()),
-            TaskActionKind.Moved("p-1", "p-2", 3),
-            TaskActionKind.Moved(fromParentId = null, toParentId = "p-2", position = null),
-            TaskActionKind.ParentAssigned("p-1"),
-            TaskActionKind.Split("c-1"),
-            TaskActionKind.FoldedInto("n-1"),
-            TaskActionKind.MergedChild("c-2"),
-            TaskActionKind.StatusChanged(TaskStatusWire.Open, TaskStatusWire.Done),
-            TaskActionKind.StatusChanged(TaskStatusWire.Unknown, TaskStatusWire.Unknown),
-        )
-        for (kind in kinds) {
-            assertEquals(kind, DefernoJson.decodeFromString(TaskActionKind.serializer(), encode(kind)), "round-trip $kind")
-        }
+    fun theCacheStoresTheRawWireKindVerbatimSoAnUnknownStaysRecoverable() {
+        // The cache payload is the raw wire kind (kind.toString()), not a re-encoded/degraded value: an
+        // additive server kind keeps its original bytes, and re-parsing decodes identically (Unknown for
+        // now, but a future client that learns the kind can recover it — the ADR-0043 raw-cache win).
+        val raw = decode("""{"kind":{"Teleported":{"whither":"void"}},"recorded_at":"2026-01-02T03:04:05Z"}""").kind.toString()
+
+        assertTrue(raw.contains("Teleported"), "raw kind bytes preserved, not frozen to \"Unknown\": $raw")
+        assertEquals(TaskActionKind.Unknown, DefernoJson.parseToJsonElement(raw).toTaskActionKind(DefernoJson))
     }
 }

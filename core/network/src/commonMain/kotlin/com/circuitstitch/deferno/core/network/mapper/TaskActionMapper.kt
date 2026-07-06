@@ -1,21 +1,19 @@
 package com.circuitstitch.deferno.core.network.mapper
 
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
-import com.circuitstitch.deferno.core.network.dto.TaskActionDto
 import com.circuitstitch.deferno.core.network.dto.TaskActionKind
 import kotlin.time.Instant
 
 /**
- * The DTO→domain mapping for the item-history feed — the "condense at the edge" boundary of ADR-0011.
- * The wire's RFC3339 [TaskActionDto.recordedAt] string becomes a typed [Instant], the wire statuses of
- * [TaskActionKind.StatusChanged] condense through the existing [TaskStatusWire.toWorkingState], and the
- * raw peer id strings pass through (the View resolves their titles). An unrecognised
- * [TaskActionKind.Unknown] stays a bare timestamped [ItemHistoryEvent.Unknown] so the feed neither
- * crashes nor drops an additive server action kind.
+ * The kind→domain condense for the item-history feed — the "condense at the edge" boundary of ADR-0011.
+ * The wire statuses of [TaskActionKind.StatusChanged] condense through the existing
+ * [TaskStatusWire.toWorkingState], and the raw peer id strings pass through (the View resolves their
+ * titles). An unrecognised [TaskActionKind.Unknown] stays a bare timestamped [ItemHistoryEvent.Unknown]
+ * so the feed neither crashes nor drops an additive server action kind. [at] is the entry's already-parsed
+ * `recorded_at` instant (the caller owns the RFC3339 parse off the cache row).
  */
-fun TaskActionDto.toDomain(): ItemHistoryEvent {
-    val at = Instant.parse(recordedAt)
-    return when (val k = kind) {
+fun TaskActionKind.toDomain(at: Instant): ItemHistoryEvent {
+    return when (val k = this) {
         TaskActionKind.Created -> ItemHistoryEvent.Created(at)
         is TaskActionKind.Updated -> ItemHistoryEvent.Updated(at, k.fields)
         is TaskActionKind.Moved -> ItemHistoryEvent.Moved(at, k.fromParentId, k.toParentId, k.position)

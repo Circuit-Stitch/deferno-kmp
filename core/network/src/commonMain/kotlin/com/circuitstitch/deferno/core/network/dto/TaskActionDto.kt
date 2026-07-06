@@ -1,42 +1,35 @@
 package com.circuitstitch.deferno.core.network.dto
 
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.descriptors.buildClassSerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * The **item-history** wire DTOs (`GET /items/{id}/history` → `Envelope<List<TaskAction>>`): the
+ * The **item-history** wire DTO (`GET /items/{id}/history` → `Envelope<List<TaskAction>>`): the
  * server-authored, read-only audit log the Task detail's ACTIVITY feed renders (ADR-0043). One entry
  * is a [kind] + the RFC3339 [recordedAt] instant it was applied.
  *
- * [TaskActionKind] is Serde's **externally-tagged** enum, which kotlinx's discriminator-based
- * polymorphism (as used by [ItemView]) cannot decode: unit variants are **bare JSON strings**
- * (`"Created"`, `"MergedIntoParent"`) and data variants are **single-key objects**
- * (`{"StatusChanged": {…}}`), with no `type` discriminator. So it carries a hand-written
- * [TaskActionKindSerializer] that routes on the JSON shape and degrades any unrecognised token to
- * [TaskActionKind.Unknown] (the tolerant-reader contract, ADR-0011).
+ * [kind] is kept as the **raw wire [JsonElement]**, not an eagerly-typed value: the kind is Serde's
+ * externally-tagged union (bare strings like `"Created"`, single-key objects like `{"StatusChanged":{…}}`,
+ * with no `type` discriminator — which kotlinx's discriminator polymorphism, as used by [ItemView], can't
+ * decode). The item-history cache stores the server's own bytes verbatim (ADR-0043) and decodes lazily on
+ * read via [toTaskActionKind], so an additive/unknown kind stays recoverable once the client learns to
+ * decode it — and no encoder is needed, since the client never writes history (it is server-authored).
  */
 @Serializable
 data class TaskActionDto(
-    val kind: TaskActionKind,
+    val kind: JsonElement,
     @SerialName("recorded_at") val recordedAt: String,
 )
 
 /**
- * The externally-tagged history-action union (see [TaskActionDto]); decoded by
- * [TaskActionKindSerializer]. Faithful to the wire (raw String peer ids, [TaskStatusWire] statuses);
- * the DTO→domain condense lives in `mapper/TaskActionMapper.kt` (ADR-0011).
+ * The externally-tagged history-action union, decoded from a raw wire [JsonElement] by [toTaskActionKind]
+ * and condensed to the domain `ItemHistoryEvent` by `mapper/TaskActionMapper.kt` (ADR-0011). Faithful to
+ * the wire (raw String peer ids, [TaskStatusWire] statuses).
  */
-@Serializable(with = TaskActionKindSerializer::class)
 sealed interface TaskActionKind {
 
     /** `"Created"` (bare string). */
@@ -100,81 +93,43 @@ private class StatusChangedPayload(
 )
 
 /**
- * Hand-written codec for the externally-tagged [TaskActionKind]. **Decode** (server → domain): a bare
- * `JsonPrimitive` string selects a unit variant; a `JsonObject`'s single key selects a data variant
- * whose value decodes through the same tolerant reader; anything unrecognised (or of an unexpected JSON
- * shape) degrades to [TaskActionKind.Unknown]. **Encode** (kind → cache payload): the symmetric inverse
- * — a unit variant writes its bare string, a data variant its single-key object — so the item-history
- * cache can round-trip a kind through the `itemHistoryEntry.payload` TEXT column (ADR-0043; this is a
- * *local* round-trip, not a wire write — the server authors history, this client never POSTs it).
- * `Unknown` encodes to the bare `"Unknown"`, which decodes straight back to [TaskActionKind.Unknown].
+ * Decode a raw wire [JsonElement] into a [TaskActionKind] (server → domain), lazily off the cached
+ * payload: a bare `JsonPrimitive` string selects a unit variant; a `JsonObject`'s single key selects a
+ * data variant whose value decodes through [json] (the tolerant reader); anything unrecognised (or of an
+ * unexpected JSON shape) degrades to [TaskActionKind.Unknown] (the tolerant-reader contract, ADR-0011).
+ *
+ * There is no inverse encoder: the item-history cache stores the server's raw bytes verbatim (ADR-0043),
+ * so a kind is only ever decoded, never re-serialized — the client never POSTs history.
  */
-object TaskActionKindSerializer : KSerializer<TaskActionKind> {
-
-    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("TaskActionKind")
-
-    override fun deserialize(decoder: Decoder): TaskActionKind {
-        val input = decoder as? JsonDecoder
-            ?: error("TaskActionKind can only be read from JSON")
-        return when (val element = input.decodeJsonElement()) {
-            is JsonPrimitive -> when (element.content) {
-                "Created" -> TaskActionKind.Created
-                "MergedIntoParent" -> TaskActionKind.MergedIntoParent
-                else -> TaskActionKind.Unknown
-            }
-            is JsonObject -> {
-                val entry = element.entries.singleOrNull() ?: return TaskActionKind.Unknown
-                val json = input.json
-                when (entry.key) {
-                    "Updated" ->
-                        TaskActionKind.Updated(json.decodeFromJsonElement(UpdatedPayload.serializer(), entry.value).fields)
-                    "Moved" ->
-                        json.decodeFromJsonElement(MovedPayload.serializer(), entry.value)
-                            .let { TaskActionKind.Moved(it.fromParentId, it.toParentId, it.position) }
-                    "ParentAssigned" ->
-                        TaskActionKind.ParentAssigned(json.decodeFromJsonElement(ParentAssignedPayload.serializer(), entry.value).parentId)
-                    "Split" ->
-                        TaskActionKind.Split(json.decodeFromJsonElement(ChildIdPayload.serializer(), entry.value).childId)
-                    "FoldedInto" ->
-                        TaskActionKind.FoldedInto(json.decodeFromJsonElement(FoldedIntoPayload.serializer(), entry.value).nextTaskId)
-                    "MergedChild" ->
-                        TaskActionKind.MergedChild(json.decodeFromJsonElement(ChildIdPayload.serializer(), entry.value).childId)
-                    "StatusChanged" ->
-                        json.decodeFromJsonElement(StatusChangedPayload.serializer(), entry.value)
-                            .let { TaskActionKind.StatusChanged(it.from, it.to) }
-                    else -> TaskActionKind.Unknown
-                }
-            }
+fun JsonElement.toTaskActionKind(json: Json): TaskActionKind {
+    return when (this) {
+        is JsonPrimitive -> when (content) {
+            "Created" -> TaskActionKind.Created
+            "MergedIntoParent" -> TaskActionKind.MergedIntoParent
             else -> TaskActionKind.Unknown
         }
-    }
-
-    override fun serialize(encoder: Encoder, value: TaskActionKind) {
-        val output = encoder as? JsonEncoder
-            ?: error("TaskActionKind can only be written to JSON")
-        val json = output.json
-        val element: JsonElement = when (value) {
-            TaskActionKind.Created -> JsonPrimitive("Created")
-            TaskActionKind.MergedIntoParent -> JsonPrimitive("MergedIntoParent")
-            TaskActionKind.Unknown -> JsonPrimitive("Unknown")
-            is TaskActionKind.Updated ->
-                tagged("Updated", json.encodeToJsonElement(UpdatedPayload.serializer(), UpdatedPayload(value.fields)))
-            is TaskActionKind.Moved ->
-                tagged("Moved", json.encodeToJsonElement(MovedPayload.serializer(), MovedPayload(value.fromParentId, value.toParentId, value.position)))
-            is TaskActionKind.ParentAssigned ->
-                tagged("ParentAssigned", json.encodeToJsonElement(ParentAssignedPayload.serializer(), ParentAssignedPayload(value.parentId)))
-            is TaskActionKind.Split ->
-                tagged("Split", json.encodeToJsonElement(ChildIdPayload.serializer(), ChildIdPayload(value.childId)))
-            is TaskActionKind.FoldedInto ->
-                tagged("FoldedInto", json.encodeToJsonElement(FoldedIntoPayload.serializer(), FoldedIntoPayload(value.nextTaskId)))
-            is TaskActionKind.MergedChild ->
-                tagged("MergedChild", json.encodeToJsonElement(ChildIdPayload.serializer(), ChildIdPayload(value.childId)))
-            is TaskActionKind.StatusChanged ->
-                tagged("StatusChanged", json.encodeToJsonElement(StatusChangedPayload.serializer(), StatusChangedPayload(value.from, value.to)))
+        is JsonObject -> {
+            val entry = entries.singleOrNull() ?: return TaskActionKind.Unknown
+            when (entry.key) {
+                "Updated" ->
+                    TaskActionKind.Updated(json.decodeFromJsonElement(UpdatedPayload.serializer(), entry.value).fields)
+                "Moved" ->
+                    json.decodeFromJsonElement(MovedPayload.serializer(), entry.value)
+                        .let { TaskActionKind.Moved(it.fromParentId, it.toParentId, it.position) }
+                "ParentAssigned" ->
+                    TaskActionKind.ParentAssigned(json.decodeFromJsonElement(ParentAssignedPayload.serializer(), entry.value).parentId)
+                "Split" ->
+                    TaskActionKind.Split(json.decodeFromJsonElement(ChildIdPayload.serializer(), entry.value).childId)
+                "FoldedInto" ->
+                    TaskActionKind.FoldedInto(json.decodeFromJsonElement(FoldedIntoPayload.serializer(), entry.value).nextTaskId)
+                "MergedChild" ->
+                    TaskActionKind.MergedChild(json.decodeFromJsonElement(ChildIdPayload.serializer(), entry.value).childId)
+                "StatusChanged" ->
+                    json.decodeFromJsonElement(StatusChangedPayload.serializer(), entry.value)
+                        .let { TaskActionKind.StatusChanged(it.from, it.to) }
+                else -> TaskActionKind.Unknown
+            }
         }
-        output.encodeJsonElement(element)
+        else -> TaskActionKind.Unknown
     }
-
-    /** The externally-tagged single-key object `{"<tag>": <payload>}` a data variant encodes to. */
-    private fun tagged(tag: String, payload: JsonElement): JsonObject = JsonObject(mapOf(tag to payload))
 }

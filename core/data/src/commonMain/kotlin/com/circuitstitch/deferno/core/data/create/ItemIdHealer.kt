@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
+import com.circuitstitch.deferno.core.data.outbox.repointId
 import com.circuitstitch.deferno.core.data.plan.PlanLocalStore
 import com.circuitstitch.deferno.core.data.task.TaskLocalStore
 import com.circuitstitch.deferno.core.model.ChoreId
@@ -61,7 +62,7 @@ class ItemIdHealer(
             ItemKind.Chore -> healChore(clientId, canonicalId)
             ItemKind.Event -> healEvent(clientId, canonicalId)
         }
-        healOutbox(clientId, canonicalId)
+        outbox.repointId(clientId, canonicalId)
         return true
     }
 
@@ -104,16 +105,5 @@ class ItemIdHealer(
         val row = eventStore.get(EventId(clientId)) ?: return
         eventStore.upsert(row.copy(id = EventId(canonicalId)))
         eventStore.delete(EventId(clientId))
-    }
-
-    private suspend fun healOutbox(clientId: String, canonicalId: String) {
-        for (entry in outbox.pending()) {
-            val newTarget = entry.target.replace(clientId, canonicalId)
-            val newPath = entry.request.path.map { it.replace(clientId, canonicalId) }
-            val newBody = entry.request.body?.replace(clientId, canonicalId)
-            if (newTarget != entry.target || newPath != entry.request.path || newBody != entry.request.body) {
-                outbox.update(entry.seq, newTarget, entry.request.copy(path = newPath, body = newBody))
-            }
-        }
     }
 }

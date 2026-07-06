@@ -1,8 +1,10 @@
 package com.circuitstitch.deferno.core.data.history
 
 import com.circuitstitch.deferno.core.data.RemoteSnapshot
+import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.dto.TaskActionKind
 import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
+import com.circuitstitch.deferno.core.network.dto.toTaskActionKind
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -24,8 +26,9 @@ import kotlin.test.assertTrue
 
 /**
  * Behaviour of [KtorItemHistoryRemoteSource] (ADR-0043, #197) over Ktor's MockEngine (ADR-0006). Proves
- * the refresh hits `/items/{id}/history`, decodes the externally-tagged `actions[]` envelope through the
- * shipping serializer, and is [RemoteSnapshot.Unavailable] on failure so a failed refresh leaves the cache.
+ * the refresh hits `/items/{id}/history`, decodes the `actions[]` envelope (each entry carrying its kind
+ * as the raw wire element, cracked lazily via [toTaskActionKind]), and is [RemoteSnapshot.Unavailable] on
+ * failure so a failed refresh leaves the cache.
  */
 class KtorItemHistoryRemoteSourceTest {
 
@@ -45,8 +48,12 @@ class KtorItemHistoryRemoteSourceTest {
 
         assertTrue(captured?.url?.encodedPath?.endsWith("/items/t-1/history") == true)
         val actions = (snapshot as RemoteSnapshot.Available).value
-        assertEquals(TaskActionKind.Created, actions[0].kind)
-        assertEquals(TaskActionKind.StatusChanged(from = openWire(), to = doneWire()), actions[1].kind)
+        // The DTO carries `kind` as the raw wire element; decode it lazily (the cache's read path).
+        assertEquals(TaskActionKind.Created, actions[0].kind.toTaskActionKind(DefernoJson))
+        assertEquals(
+            TaskActionKind.StatusChanged(from = openWire(), to = doneWire()),
+            actions[1].kind.toTaskActionKind(DefernoJson),
+        )
     }
 
     @Test
