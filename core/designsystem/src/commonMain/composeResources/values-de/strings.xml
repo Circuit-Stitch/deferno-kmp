@@ -654,6 +654,7 @@ Vielen Dank.</string>
     <string name="tasks_detail_section_attachments">Anhänge</string>
     <string name="tasks_detail_section_properties">Eigenschaften</string>
     <string name="tasks_detail_section_subtasks">Unteraufgaben</string>
+    <string name="tasks_detail_filter_hide_done">Erledigte ausblenden</string>
     <string name="tasks_detail_set_due_date">Fälligkeitsdatum festlegen</string>
     <string name="tasks_detail_set_working_state_a11y">Auf %1$s setzen</string>
     <string name="tasks_detail_source_open_in">In %1$s öffnen</string>

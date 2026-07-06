@@ -654,6 +654,7 @@
     <string name="tasks_detail_section_attachments">अटैचमेंट</string>
     <string name="tasks_detail_section_properties">गुण</string>
     <string name="tasks_detail_section_subtasks">उपकार्य</string>
+    <string name="tasks_detail_filter_hide_done">पूर्ण छिपाएँ</string>
     <string name="tasks_detail_set_due_date">नियत तिथि सेट करें</string>
     <string name="tasks_detail_set_working_state_a11y">%1$s पर सेट करें</string>
     <string name="tasks_detail_source_open_in">%1$s में खोलें</string>

@@ -6,7 +6,8 @@ import SwiftUI
 /// editable PROPERTIES (Due / Labels) and the nested SUBTASKS outline (checkbox + progress + drill).
 /// The component hydrates on creation (summary → full, #22); this View just reflects its state. The
 /// detail component is shared with the inline pane and the (future) detached window (#196), so this
-/// upgrades both surfaces at once. Attachments + Activity + Add-subtask are #197 (not built here).
+/// upgrades both surfaces at once. The subtasks section also hosts Add-subtask + a "Hide done" filter
+/// (#197b/c); Attachments + the ACTIVITY/comments feed (#197a) are still deferred (not built here).
 struct TaskDetailView: View {
     let component: TaskDetailComponent
     /// Hide the header's Back control. Set at a detached window's root entry (#196, depth 1) — it has
@@ -19,6 +20,7 @@ struct TaskDetailView: View {
     var showsHeader: Bool = true
     @StateObject private var state: StateFlowObserver<TaskDetailState>
     @State private var newLabel = ""
+    @State private var newSubtask = ""
 
     init(component: TaskDetailComponent, hidesBackControl: Bool = false, showsHeader: Bool = true) {
         self.component = component
@@ -205,23 +207,62 @@ struct TaskDetailView: View {
 
     @ViewBuilder
     private func subtasksSection(_ value: TaskDetailState) -> some View {
+        // With "Hide done" on, the component drops Done rows from subtaskRows; the shown count is the
+        // remainder (total − done). The progress bar below keeps counting the whole subtree.
+        let shown = value.hideDoneSubtasks ? value.subtaskTotal - value.subtaskDone : value.subtaskTotal
         VStack(alignment: .leading, spacing: 6) {
             SectionTitle(L.string("tasks_detail_section_subtasks"), trailing: value.subtaskTotal > 0 ? "\(value.subtaskDone)/\(value.subtaskTotal)" : nil)
             if value.subtaskTotal > 0 {
+                HStack {
+                    Toggle(L.string("tasks_detail_filter_hide_done"), isOn: Binding(
+                        get: { value.hideDoneSubtasks },
+                        set: { component.onSetHideDoneSubtasks(hide: $0) }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .controlSize(.small)
+                    Spacer()
+                    if value.hideDoneSubtasks {
+                        // Redundant compact badge — the toggle + progress bar carry the semantics for VoiceOver.
+                        Text("\(shown)/\(value.subtaskTotal)")
+                            .font(.footnote).foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+                }
                 ProgressView(value: Double(value.subtaskDone), total: Double(value.subtaskTotal))
                     .accessibilityLabel(L.format("tasks_detail_subtask_progress_a11y", Int(value.subtaskDone), Int(value.subtaskTotal)))
-                ForEach(value.subtaskRows, id: \.task.stableKey) { row in
-                    SubtaskOutlineRow(
-                        row: row,
-                        onToggleExpand: { component.onToggleSubtaskExpand(id: $0, currentlyExpanded: $1) },
-                        onToggleDone: { component.onToggleSubtaskDone(subtask: $0) },
-                        onOpen: { BridgeKt.openSubtask(component: component, subtask: $0) }
-                    )
-                }
-            } else {
+            }
+            ForEach(value.subtaskRows, id: \.task.stableKey) { row in
+                SubtaskOutlineRow(
+                    row: row,
+                    onToggleExpand: { component.onToggleSubtaskExpand(id: $0, currentlyExpanded: $1) },
+                    onToggleDone: { component.onToggleSubtaskDone(subtask: $0) },
+                    onOpen: { BridgeKt.openSubtask(component: component, subtask: $0) }
+                )
+            }
+            if value.subtaskTotal == 0 {
                 Text(L.string("tasks_detail_no_subtasks_body")).font(.subheadline).foregroundStyle(.secondary)
             }
+            addSubtaskField
         }
+    }
+
+    // The always-present "+ Add subtask" field (#197b) — mirrors the labels add field. Forwards through the
+    // component's onAddSubtask create seam (offline-first: the child appears optimistically in the outline).
+    private var addSubtaskField: some View {
+        HStack {
+            TextField(L.string("tasks_detail_add_subtask_placeholder"), text: $newSubtask)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { submitSubtask() }
+            Button(L.string("common_add")) { submitSubtask() }
+                .disabled(newSubtask.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+    }
+
+    private func submitSubtask() {
+        let entry = newSubtask.trimmingCharacters(in: .whitespaces)
+        guard !entry.isEmpty else { return }
+        component.onAddSubtask(title: entry)
+        newSubtask = ""
     }
 }
 

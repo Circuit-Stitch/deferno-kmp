@@ -849,6 +849,7 @@ Thank you.</string>
     <!-- Section header — uppercase via style, not .uppercase() (locale-insensitive) -->
     <string name="tasks_detail_section_properties">Properties</string>
     <string name="tasks_detail_section_subtasks">Subtasks</string>
+    <string name="tasks_detail_filter_hide_done">Hide done</string>
     <string name="tasks_detail_set_due_date">Set due date</string>
     <!-- Test-pinned 'Set to Done' -->
     <string name="tasks_detail_set_working_state_a11y">Set to %1$s</string>
