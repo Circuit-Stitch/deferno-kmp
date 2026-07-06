@@ -198,6 +198,7 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
         onToggleSubtaskExpand = component::onToggleSubtaskExpand,
         onOpenSubtask = { component.onSubtaskClicked(it.id) },
         onAddSubtask = component::onAddSubtask,
+        onSetHideDoneSubtasks = component::onSetHideDoneSubtasks,
         onPostComment = component::onPostComment,
         onEditComment = component::onEditComment,
         onDeleteComment = component::onDeleteComment,

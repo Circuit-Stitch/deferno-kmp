@@ -249,6 +249,33 @@ class TaskDetailComponentTest {
     }
 
     @Test
+    fun hideDoneSubtasksDropsDoneRowsButProgressStillCountsThem() = runTest {
+        val repo = FakeTaskRepository(
+            listOf(
+                task("a"),
+                task("b", parentId = "a", sequence = 1, workingState = WorkingState.Done),
+                task("c", parentId = "a", sequence = 2, workingState = WorkingState.Open),
+            ),
+        )
+        val component = taskDetailComponent(TaskId("a"), repo)
+
+        component.state.test {
+            var item = awaitItem()
+            while (item.subtaskTotal != 2) item = awaitItem()
+            assertEquals(listOf(TaskId("b"), TaskId("c")), item.subtaskRows.map { it.task.id })
+
+            component.onSetHideDoneSubtasks(true)
+            var filtered = awaitItem()
+            while (filtered.subtaskRows.size != 1) filtered = awaitItem()
+            assertEquals(listOf(TaskId("c")), filtered.subtaskRows.map { it.task.id }, "the Done row is hidden")
+            assertTrue(filtered.hideDoneSubtasks)
+            assertEquals(1, filtered.subtaskDone, "progress still counts the hidden Done subtask")
+            assertEquals(2, filtered.subtaskTotal)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun collapsingASubtaskHidesItsChildrenAndPersistsToTheSharedStore() = runTest {
         val repo = FakeTaskRepository(
             listOf(

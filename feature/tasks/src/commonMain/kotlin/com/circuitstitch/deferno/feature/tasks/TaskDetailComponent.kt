@@ -61,6 +61,9 @@ data class TaskDetailState(
     val subtaskRows: List<SubtaskRow> = emptyList(),
     val subtaskDone: Int = 0,
     val subtaskTotal: Int = 0,
+    // The "Hide done" subtask filter (#197c): when set, Done subtasks are dropped from [subtaskRows]
+    // (progress still counts them). The count shown vs. total = (subtaskTotal - subtaskDone) / subtaskTotal.
+    val hideDoneSubtasks: Boolean = false,
     val comments: List<Comment> = emptyList(),
     val commentsLoading: Boolean = false,
     val commentsError: Boolean = false,
@@ -167,6 +170,13 @@ interface TaskDetailComponent {
 
     /** Toggle a subtask between Done and Open (the tree's checkbox) — reuses the working-state write seam. */
     fun onToggleSubtaskDone(subtask: Task)
+
+    /**
+     * Show or hide Done subtasks in the outline (the "Hide done" filter, #197c). Pure local view state —
+     * it drops Done rows before the tree flatten so depth/spine recompute cleanly; the done/total progress
+     * is unaffected. Default no-op body so fakes/other impls needn't override it.
+     */
+    fun onSetHideDoneSubtasks(hide: Boolean) {}
 
     /** Open a subtask's own detail (tapping the row, web's chevron) — re-keys the detail to that child. */
     fun onSubtaskClicked(id: TaskId)
@@ -276,17 +286,22 @@ class DefaultTaskDetailComponent(
             foldStore.overrides,
         ) { task, all, ex, isHydrating, overrides ->
             val descendants = descendantsOf(taskId, all)
+            // "Hide done" drops Done nodes before the flatten so depth/spine recompute cleanly (a hidden
+            // Done parent's non-done children re-root to the top). Progress below still counts the whole
+            // subtree, so the bar reflects true completion regardless of the filter.
+            val visible = if (ex.hideDoneSubtasks) descendants.filterNot { it.workingState == WorkingState.Done } else descendants
             TaskDetailState(
                 task = task,
                 isHydrating = isHydrating,
+                hideDoneSubtasks = ex.hideDoneSubtasks,
                 subtaskRows = foldFlatten(
-                    nodes = descendants,
+                    nodes = visible,
                     expandedOverrides = overrides,
                     id = { it.id.value },
                     parentId = { it.parentId?.value },
                     siblingOrder = SUBTASK_ORDER,
                 ) { node, depth, spine, hasChildren, isExpanded -> SubtaskRow(node, depth, hasChildren, isExpanded, spine) },
-                // Progress counts the whole subtree, independent of which nodes are folded away.
+                // Progress counts the whole subtree, independent of which nodes are folded away or filtered.
                 subtaskDone = descendants.count { it.workingState == WorkingState.Done },
                 subtaskTotal = descendants.size,
                 comments = ex.comments,
@@ -393,6 +408,10 @@ class DefaultTaskDetailComponent(
         scope.launch { workingStateEditor.setWorkingState(subtask.id, target, subtask) }
     }
 
+    override fun onSetHideDoneSubtasks(hide: Boolean) {
+        extras.update { it.copy(hideDoneSubtasks = hide) }
+    }
+
     override fun onSubtaskClicked(id: TaskId) {
         output(TaskDetailComponent.Output.SubtaskSelected(id))
     }
@@ -470,6 +489,8 @@ class DefaultTaskDetailComponent(
         val isUploadingAttachment: Boolean = false,
         val onDeviceAttachments: List<OnDeviceAttachment> = emptyList(),
         val currentUserId: UserId? = null,
+        // The "Hide done" subtask filter toggle (#197c) — folded through the combine so flipping it re-derives the rows.
+        val hideDoneSubtasks: Boolean = false,
     )
 }
 

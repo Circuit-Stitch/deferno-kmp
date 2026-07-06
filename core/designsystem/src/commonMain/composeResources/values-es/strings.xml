@@ -640,6 +640,7 @@ Gracias.</string>
     <string name="tasks_detail_section_attachments">Archivos adjuntos</string>
     <string name="tasks_detail_section_properties">Propiedades</string>
     <string name="tasks_detail_section_subtasks">Subtareas</string>
+    <string name="tasks_detail_filter_hide_done">Ocultar completadas</string>
     <string name="tasks_detail_set_due_date">Establecer fecha de vencimiento</string>
     <string name="tasks_detail_set_working_state_a11y">Cambiar a %1$s</string>
     <string name="tasks_detail_source_open_in">Abrir en %1$s</string>

@@ -657,6 +657,7 @@ Agradeço.</string>
     <string name="tasks_detail_section_attachments">Anexos</string>
     <string name="tasks_detail_section_properties">Propriedades</string>
     <string name="tasks_detail_section_subtasks">Subtarefas</string>
+    <string name="tasks_detail_filter_hide_done">Ocultar concluídas</string>
     <string name="tasks_detail_set_due_date">Definir prazo</string>
     <string name="tasks_detail_set_working_state_a11y">Definir como %1$s</string>
     <string name="tasks_detail_source_open_in">Abrir em %1$s</string>
