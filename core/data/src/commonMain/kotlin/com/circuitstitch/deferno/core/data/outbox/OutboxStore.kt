@@ -56,3 +56,25 @@ interface OutboxStore {
     /** The number of pending entries — the size of the unsynced-writes queue. */
     suspend fun count(): Long
 }
+
+/**
+ * Re-point every queued entry mentioning [from] to [to] **in place** (preserving FIFO [OutboxEntry.seq]),
+ * so a queued mutation addressing an offline-minted client id lands on the server's canonical id once the
+ * two diverge — the #185 item-create id-heal and the ADR-0043 comment-create rekey are the same substring
+ * re-point. A UUID substring replace is collision-safe (ids never appear as substrings of unrelated
+ * content). Returns `true` if any entry changed, so a caller walking a `pending()` snapshot knows the
+ * queue moved and its snapshot is now stale.
+ */
+internal suspend fun OutboxStore.repointId(from: String, to: String): Boolean {
+    var changed = false
+    for (entry in pending()) {
+        val newTarget = entry.target.replace(from, to)
+        val newPath = entry.request.path.map { it.replace(from, to) }
+        val newBody = entry.request.body?.replace(from, to)
+        if (newTarget != entry.target || newPath != entry.request.path || newBody != entry.request.body) {
+            update(entry.seq, newTarget, entry.request.copy(path = newPath, body = newBody))
+            changed = true
+        }
+    }
+    return changed
+}

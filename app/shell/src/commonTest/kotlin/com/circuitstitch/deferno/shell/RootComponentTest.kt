@@ -663,6 +663,9 @@ internal class FakeAccountSession(
     /** Hook for the driver tests — runs inside [flushOutbox] before it returns (suspend so it can read the
      *  coroutine context the flush is dispatched on). */
     private val onFlush: suspend () -> Unit = {},
+    /** Scripted [FlushResult]s consumed one per [flushOutbox] (for the flush-to-quiescence loop test);
+     *  once empty, the default quiescent result stops the driver's loop. */
+    private val flushResults: ArrayDeque<FlushResult> = ArrayDeque(),
 ) : AccountSession {
     val addedToPlan = mutableListOf<TaskId>()
     val flushes = mutableListOf<Instant>()
@@ -670,7 +673,7 @@ internal class FakeAccountSession(
     override suspend fun flushOutbox(now: Instant): FlushResult {
         flushes += now
         onFlush()
-        return FlushResult(succeeded = 0, dropped = 0, retried = 0, remaining = 0)
+        return if (flushResults.isNotEmpty()) flushResults.removeFirst() else FlushResult(succeeded = 0, dropped = 0, retried = 0, remaining = 0)
     }
     val workingStateSets = mutableListOf<Pair<TaskId, com.circuitstitch.deferno.core.model.WorkingState>>()
     val created = mutableListOf<com.circuitstitch.deferno.core.domain.command.CreateItem.Payload>()

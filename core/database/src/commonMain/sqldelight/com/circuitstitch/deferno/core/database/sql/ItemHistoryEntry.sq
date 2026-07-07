@@ -1,0 +1,37 @@
+-- Cached server item-history (issue #197, ADR-0043): the read-only, server-authored per-item audit log
+-- (`actions[]`, `GET /items/{id}/history`) the Task detail's ACTIVITY feed interleaves with user
+-- comments. NOT the #260 `activityLedgerEntry` — that is the app's OWN global, device-local write
+-- journal (source Mobile/Website/Mcp, wiped on sign-out). This is per-item, complete, server-authored,
+-- and durable; the two are distinct stores (ADR-0043).
+--
+-- A task-detail open fires a best-effort history fetch that REPLACES that item's rows (delete-by-item
+-- then insert-each): server history is append-only + server-derived, so a wholesale replace is
+-- dedup-free even though `TaskAction` has no stable event id. `seq` is a plain rowid surrogate — the
+-- feed sorts by `recorded_at` (with insertion order, i.e. the server array order, as the same-instant
+-- tiebreak), so AUTOINCREMENT's never-reuse guarantee is deliberately NOT needed. `payload` is the raw
+-- wire `kind` (the externally-tagged action), decoded to a domain `ItemHistoryEvent` on read — the
+-- action kind lives in the payload, so there is no separate `kind` column.
+CREATE TABLE itemHistoryEntry (
+    seq         INTEGER PRIMARY KEY,
+    item_id     TEXT NOT NULL,
+    recorded_at TEXT NOT NULL,
+    payload     TEXT NOT NULL
+);
+
+CREATE INDEX itemHistoryEntry_item_id ON itemHistoryEntry(item_id);
+
+-- Append one history entry (the replace reconcile's insert step; seq auto-assigns).
+insert:
+INSERT INTO itemHistoryEntry(item_id, recorded_at, payload)
+VALUES (?, ?, ?);
+
+-- An item's history, oldest-first (the View interleaves with comments and sorts the merged feed).
+selectByItem:
+SELECT * FROM itemHistoryEntry WHERE item_id = ? ORDER BY recorded_at, seq;
+
+-- Drop an item's cached history (the replace reconcile's delete step).
+deleteByItem:
+DELETE FROM itemHistoryEntry WHERE item_id = ?;
+
+deleteAll:
+DELETE FROM itemHistoryEntry;

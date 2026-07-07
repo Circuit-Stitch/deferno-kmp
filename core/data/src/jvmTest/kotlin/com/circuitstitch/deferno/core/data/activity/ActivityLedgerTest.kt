@@ -83,12 +83,19 @@ class ActivityLedgerTest {
         assertEquals(ActivitySummary(ActivityVerb.UpdatedOccurrence, "event"), entry("occurrence:Event:s1:2026-06-21", OutboxMethod.Patch).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.ClearedOccurrence, "event"), entry("occurrence:Event:s1:2026-06-21", OutboxMethod.Delete).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.UpdatedItem), entry("weird:thing", OutboxMethod.Patch).summaryInfo())
+        // Comment writes (ADR-0043): post/edit (comment-create: / comment:) and delete all read "Commented".
+        assertEquals(ActivitySummary(ActivityVerb.Commented), entry("comment-create:t1:c1", OutboxMethod.Post).summaryInfo())
+        assertEquals(ActivitySummary(ActivityVerb.Commented), entry("comment:c1", OutboxMethod.Patch).summaryInfo())
+        assertEquals(ActivitySummary(ActivityVerb.Commented), entry("comment:c1", OutboxMethod.Delete).summaryInfo())
 
         assertEquals("abc", entry("task:abc", OutboxMethod.Patch).itemId())
         assertEquals("i1", entry("item:i1", OutboxMethod.Patch).itemId())
         assertEquals("h1", entry("create:Habit:h1", OutboxMethod.Post).itemId())
         assertNull(entry("plan:2026-06-21:UTC", OutboxMethod.Post).itemId())
         assertNull(entry("settings", OutboxMethod.Patch).itemId())
+        // Comment ledger rows are non-deep-linking (the edit/delete target carries the comment id, not the task).
+        assertNull(entry("comment:c1", OutboxMethod.Patch).itemId())
+        assertNull(entry("comment-create:t1:c1", OutboxMethod.Post).itemId())
     }
 
     @Test

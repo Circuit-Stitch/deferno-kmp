@@ -429,6 +429,13 @@ class DefaultRootComponent(
                         // Account's executor — the verdict (400 cycle / offline) surfaces on the tree state.
                         blockedByEditor = session.blockedByEditor,
                         taskDetailRepository = session.taskDetailRepository,
+                        // The offline-first Task-detail ACTIVITY feed (ADR-0043): comment thread + item
+                        // history from this Account's cache, its optimistic comment write seam, and the
+                        // device-local user id (Account.id == User.id) — own-comment affordances, no /auth/me.
+                        commentRepository = session.commentRepository,
+                        itemHistoryRepository = session.itemHistoryRepository,
+                        commentWriter = session.commentWriter,
+                        currentUserId = session.currentUserId,
                         // The Task detail's editable-PROPERTIES write seams (DUE date + LABELS), each
                         // routed through this Account's command executor (Set/ClearTaskDeadline, SetTaskLabels).
                         setDeadline = session.setDeadline,

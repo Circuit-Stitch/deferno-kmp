@@ -273,10 +273,9 @@ private fun TaskBody(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         CommentsSection(
-            comments = state.comments,
+            activity = state.activity,
             currentUserId = state.currentUserId,
             loading = state.commentsLoading,
-            error = state.commentsError,
             isPosting = state.isPostingComment,
             onPost = onPostComment,
             onEdit = onEditComment,

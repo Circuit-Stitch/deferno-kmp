@@ -141,4 +141,24 @@ enum L {
         default: return string("draft_extract_error_transport")
         }
     }
+
+    // MARK: Item-history verb (typed history token, ADR-0043)
+
+    /// The localized ACTIVITY-feed history line for a typed verb token from
+    /// `BridgeKt.activityHistoryVerb(item:)` ("Created"/"StatusChanged"/…). No server-authored English —
+    /// the bridge hands a stable token, this maps it to a catalog key; unknown tokens fall back to Unknown.
+    static func activityHistory(_ token: String) -> String {
+        switch token {
+        case "Created": return string("activity_history_created")
+        case "Updated": return string("activity_history_updated")
+        case "StatusChanged": return string("activity_history_status_changed")
+        case "Moved": return string("activity_history_moved")
+        case "ParentAssigned": return string("activity_history_parent_assigned")
+        case "Split": return string("activity_history_split")
+        case "FoldedInto": return string("activity_history_folded_into")
+        case "MergedChild": return string("activity_history_merged_child")
+        case "MergedIntoParent": return string("activity_history_merged_into_parent")
+        default: return string("activity_history_unknown")
+        }
+    }
 }

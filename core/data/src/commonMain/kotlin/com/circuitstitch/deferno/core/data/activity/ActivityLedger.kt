@@ -49,6 +49,7 @@ enum class ActivityVerb {
     ClearedOccurrence,
     UpdatedOccurrence,
     UpdatedItem,
+    Commented,
 }
 
 /**
@@ -76,6 +77,10 @@ fun ActivityEntry.summaryInfo(): ActivitySummary {
             if (method == OutboxMethod.Delete) ActivityVerb.ClearedOccurrence else ActivityVerb.UpdatedOccurrence,
             parts.getOrElse(1) { "event" }.lowercase(),
         )
+        // ponytail: one coarse "Commented on an item" verb covers post/edit/delete — the ledger is
+        // deliberately coarse (its own KDoc) and comment rows don't deep-link, so a delete-specific verb
+        // earns nothing yet. Split it off if the Activity feed ever needs to distinguish them.
+        "comment", "comment-create" -> ActivitySummary(ActivityVerb.Commented)
         else -> ActivitySummary(ActivityVerb.UpdatedItem)
     }
 }

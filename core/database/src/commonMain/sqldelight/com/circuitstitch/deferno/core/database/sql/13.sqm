@@ -1,0 +1,30 @@
+-- Migration 13 -> 14: offline-first Task comments + cached server item-history (ADR-0043, #197).
+--
+-- Two new, additive tables — no existing table changes — so existing installs gain empty caches that
+-- fill on the next task-detail open. `commentEntity` promotes the Task detail's ACTIVITY thread from
+-- online-only to the offline-first source of truth (observed as a Flow, written through the outbox);
+-- `itemHistoryEntry` caches the server-authored per-item audit log (`actions[]`) the feed interleaves.
+-- Plain CREATE (the v1 IF-NOT-EXISTS ambiguity is behind us). The CREATE statements mirror
+-- CommentEntity.sq / ItemHistoryEntry.sq exactly (verifyCommonMainDefernoDatabaseMigration checks it).
+-- Never edit a released migration or snapshot — ADR-0022 runbook.
+CREATE TABLE commentEntity (
+    comment_id  TEXT NOT NULL PRIMARY KEY,
+    task_id     TEXT NOT NULL,
+    body        TEXT,
+    created_by  TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    edited_at   TEXT,
+    deleted_at  TEXT,
+    is_private  INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX commentEntity_task_id ON commentEntity(task_id);
+
+CREATE TABLE itemHistoryEntry (
+    seq         INTEGER PRIMARY KEY,
+    item_id     TEXT NOT NULL,
+    recorded_at TEXT NOT NULL,
+    payload     TEXT NOT NULL
+);
+
+CREATE INDEX itemHistoryEntry_item_id ON itemHistoryEntry(item_id);

@@ -39,6 +39,7 @@
     <string name="activity_summary_deleted_task">Se eliminó una tarea</string>
     <string name="activity_summary_moved_item">Se movió un elemento</string>
     <string name="activity_summary_updated_item">Se actualizó un elemento</string>
+    <string name="activity_summary_commented">Comentó en un elemento</string>
     <string name="activity_summary_updated_occurrence_chore">Se actualizó una ocurrencia de quehacer</string>
     <string name="activity_summary_updated_occurrence_event">Se actualizó una ocurrencia de evento</string>
     <string name="activity_summary_updated_occurrence_habit">Se actualizó una ocurrencia de hábito</string>
@@ -861,4 +862,14 @@ Gracias.</string>
     <string name="settings_help_row_subtitle">Cuéntanos qué funciona y qué no.</string>
     <string name="tasks_menu_send_to_review">Enviar a revisión</string>
     <string name="inbox_accept_button">Aceptar</string>
+    <string name="activity_history_created">Creó esta tarea</string>
+    <string name="activity_history_updated">Editó esta tarea</string>
+    <string name="activity_history_status_changed">Cambió el estado</string>
+    <string name="activity_history_moved">Movió esta tarea</string>
+    <string name="activity_history_parent_assigned">Cambió la tarea principal</string>
+    <string name="activity_history_split">Separó una tarea</string>
+    <string name="activity_history_folded_into">Fusionó con otra tarea</string>
+    <string name="activity_history_merged_child">Combinó una tarea</string>
+    <string name="activity_history_merged_into_parent">Combinó con la tarea principal</string>
+    <string name="activity_history_unknown">Hizo un cambio</string>
 </resources>

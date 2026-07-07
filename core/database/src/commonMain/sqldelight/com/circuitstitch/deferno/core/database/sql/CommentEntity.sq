@@ -1,0 +1,64 @@
+-- Offline-first Task comments (issue #197, ADR-0043): the local cache of the Task detail's ACTIVITY
+-- thread, promoted from the old online-only read to the offline-first source of truth. The thread is
+-- observed as a Flow over this table (ADR-0001); a task-detail open fires a best-effort refresh that
+-- reconciles a task's rows, and every write (post/edit/delete) applies optimistically here and replays
+-- through the outbox. A permanently-gone server never empties or errors the thread — the cache stands.
+--
+-- `comment_id` is the id edit/delete address. For a comment posted offline it starts as a client-minted
+-- UUID and is re-keyed to the server id when the create replays (`rekey`, mirroring pendingItemCreate);
+-- the outbox — not a column here — is the pending-state oracle the refresh consults (#143), so there is
+-- no pending flag. `body` is nullable: an encrypted-only comment (wire `body_enc`) has no plaintext and
+-- renders as a redacted placeholder. `created_at`/`edited_at`/`deleted_at` are RFC3339; `deleted_at` is
+-- the soft-delete tombstone (a deleted comment is filtered from the live thread but kept until the
+-- reconcile drops it). `is_private` is the 0/1 visibility flag (server enforces the real authorization).
+CREATE TABLE commentEntity (
+    comment_id  TEXT NOT NULL PRIMARY KEY,
+    task_id     TEXT NOT NULL,
+    body        TEXT,
+    created_by  TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    edited_at   TEXT,
+    deleted_at  TEXT,
+    is_private  INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX commentEntity_task_id ON commentEntity(task_id);
+
+-- Insert-or-replace one comment (the reconcile upsert + the optimistic-post insert).
+upsert:
+INSERT OR REPLACE INTO commentEntity(comment_id, task_id, body, created_by, created_at, edited_at, deleted_at, is_private)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+-- The live thread for a task: not-yet-deleted, oldest-first (the feed order per the API).
+selectByTask:
+SELECT * FROM commentEntity WHERE task_id = ? AND deleted_at IS NULL ORDER BY created_at, comment_id;
+
+-- One comment by id (post-write lookups / tests).
+selectById:
+SELECT * FROM commentEntity WHERE comment_id = ?;
+
+-- Optimistic edit: swap the body and stamp edited_at.
+setBody:
+UPDATE commentEntity SET body = ?, edited_at = ? WHERE comment_id = ?;
+
+-- Optimistic delete: write the tombstone (kept until the reconcile drops the row).
+softDelete:
+UPDATE commentEntity SET deleted_at = ? WHERE comment_id = ?;
+
+-- Re-key a client-minted id to the server id when the create replays (the id-heal path).
+rekey:
+UPDATE commentEntity SET comment_id = ? WHERE comment_id = ?;
+
+-- Hard-remove one comment (undo an optimistic post the server terminally rejected).
+deleteById:
+DELETE FROM commentEntity WHERE comment_id = ?;
+
+-- All cached comment ids for a task (the reconcile diffs these against the server thread).
+selectIdsByTask:
+SELECT comment_id FROM commentEntity WHERE task_id = ?;
+
+deleteByTask:
+DELETE FROM commentEntity WHERE task_id = ?;
+
+deleteAll:
+DELETE FROM commentEntity;

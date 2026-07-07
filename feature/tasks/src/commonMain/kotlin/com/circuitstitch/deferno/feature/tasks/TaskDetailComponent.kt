@@ -2,6 +2,9 @@ package com.circuitstitch.deferno.feature.tasks
 
 import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.common.componentScope
+import com.circuitstitch.deferno.core.data.comment.CommentRepository
+import com.circuitstitch.deferno.core.data.comment.CommentWriter
+import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
@@ -9,6 +12,7 @@ import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
@@ -51,9 +55,11 @@ data class SubtaskRow(
  * Beyond the core Task, it carries the three web-parity detail sections (#27 follow-up):
  * - the [subtaskRows] outline (the subtree flattened with the shared fold mechanism) + its done/total
  *   progress (counted over the whole subtree, independent of fold);
- * - the online-only [comments] thread (the web "Activity" feed) with its load/post flags;
+ * - the offline-first [activity] feed (ADR-0043) — user comments interleaved with server-authored item
+ *   history, merged + sorted by instant, read from the cache (never the network);
  * - the online-only read-only [attachments] list.
- * [currentUserId] gates which comments offer edit/delete affordances (the server enforces the rest).
+ * [currentUserId] gates which comments offer edit/delete affordances (the server enforces the rest); it
+ * is device-local (the Active Account's user id), so own-comment controls work with the server gone.
  */
 data class TaskDetailState(
     val task: Task? = null,
@@ -64,9 +70,11 @@ data class TaskDetailState(
     // The "Hide done" subtask filter (#197c): when set, Done subtasks are dropped from [subtaskRows]
     // (progress still counts them). The count shown vs. total = (subtaskTotal - subtaskDone) / subtaskTotal.
     val hideDoneSubtasks: Boolean = false,
-    val comments: List<Comment> = emptyList(),
+    // The merged comments + item-history feed, oldest-first (ADR-0043). Read from the cache as a Flow;
+    // [commentsLoading] flags an in-flight best-effort on-open refresh (never gates render — the cache
+    // always shows). There is no error state: a local read can't fail.
+    val activity: List<ActivityItem> = emptyList(),
     val commentsLoading: Boolean = false,
-    val commentsError: Boolean = false,
     val isPostingComment: Boolean = false,
     val attachments: List<Attachment> = emptyList(),
     val isUploadingAttachment: Boolean = false,
@@ -119,8 +127,9 @@ interface OnDeviceAttachments {
  * The Task detail component (ADR-0007: the co-resident detail pane). Observes one Task from the
  * repository and, on creation, requests a [TaskRepository.hydrate] to upgrade the summary row to the
  * full detail (description, ownerOrgId, nextTaskId — #22). It also builds the recursive subtask tree
- * from the cached Task list and loads the online-only comments + attachments (the web-parity detail
- * sections). Navigation actions are emitted as [Output] intents; the parent owns the co-resident slots.
+ * from the cached Task list and observes the offline-first ACTIVITY feed (comments + item history, ADR-0043)
+ * plus the online-only attachments. Navigation actions are emitted as [Output] intents; the parent owns
+ * the co-resident slots.
  */
 interface TaskDetailComponent {
     val taskId: TaskId
@@ -191,13 +200,14 @@ interface TaskDetailComponent {
     /** Create a new direct child of this Task (the tree's "add subtask" field) — online-only create. */
     fun onAddSubtask(title: String)
 
-    /** Post a new comment to this Task's Activity thread, then re-fetch it. No-op on a blank body. */
+    /** Post a new comment (offline-first, ADR-0043): optimistic insert + outbox enqueue; the cache Flow
+     *  re-emits it into [TaskDetailState.activity]. No-op on a blank body. */
     fun onPostComment(body: String)
 
-    /** Edit one of this user's comments, then re-fetch the thread. No-op on a blank body. */
+    /** Edit one of this user's comments — optimistic apply + outbox enqueue. No-op on a blank body. */
     fun onEditComment(commentId: String, body: String)
 
-    /** Delete one of this user's comments, then re-fetch the thread. */
+    /** Delete one of this user's comments — optimistic tombstone + outbox enqueue. */
     fun onDeleteComment(commentId: String)
 
     /** Upload [files] to this Task (presign → PUT → commit), then re-fetch the list. No-op on empty. */
@@ -245,9 +255,18 @@ class DefaultTaskDetailComponent(
     // placeholder until `observeTask` first emits a cycle later (the title "pop-in"). Null when the
     // opener has no row to hand over (e.g. a Plan-overlay tap) — then it falls back to the empty start.
     initialTask: Task? = null,
-    // The online-only comments + attachments source. Defaults to an empty no-op so tests that don't
-    // care about the detail sections (and offline construction) build without supplying it.
+    // The online-only attachments source (ADR-0043 left attachments online-only). Defaults to an empty
+    // no-op so tests that don't care about attachments (and offline construction) build without it.
     private val detailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
+    // The offline-first ACTIVITY feed sources (ADR-0043): the comment thread + server item-history, both
+    // observed from the cache as Flows and refreshed best-effort on open. Empty NONE defaults.
+    private val commentRepository: CommentRepository = CommentRepository.NONE,
+    private val historyRepository: ItemHistoryRepository = ItemHistoryRepository.NONE,
+    // The offline-first comment write seam (ADR-0043): optimistic apply to the cache + outbox enqueue.
+    private val commentWriter: CommentWriter = CommentWriter.NONE,
+    // The device-local signed-in user id (the Active Account's user id) — gates own-comment edit/delete
+    // and "You" attribution with NO live /auth/me, so it works with the server permanently gone (ADR-0043).
+    private val currentUserId: UserId? = null,
     // The online-only create seam for "add subtask" (parent, title) — wired from the shell's create
     // command. Defaults to a no-op for the same reason as the editors above.
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
@@ -304,14 +323,13 @@ class DefaultTaskDetailComponent(
                 // Progress counts the whole subtree, independent of which nodes are folded away or filtered.
                 subtaskDone = descendants.count { it.workingState == WorkingState.Done },
                 subtaskTotal = descendants.size,
-                comments = ex.comments,
+                activity = mergeActivity(ex.comments, ex.history),
                 commentsLoading = ex.commentsLoading,
-                commentsError = ex.commentsError,
                 isPostingComment = ex.isPostingComment,
                 attachments = ex.attachments,
                 isUploadingAttachment = ex.isUploadingAttachment,
                 onDeviceAttachments = ex.onDeviceAttachments,
-                currentUserId = ex.currentUserId,
+                currentUserId = currentUserId,
             )
             // initialTask seeds the title/body on the very first frame so the pane doesn't flash a "Task"
             // placeholder before observeTask first emits (the title "pop-in").
@@ -325,10 +343,10 @@ class DefaultTaskDetailComponent(
                 hydrating.value = false
             }
         }
-        scope.launch { extras.update { it.copy(currentUserId = detailRepository.currentUserId()) } }
         loadAttachments()
         refreshOnDeviceAttachments()
-        loadComments()
+        observeActivity()
+        refreshActivity()
     }
 
     private fun loadAttachments() {
@@ -346,18 +364,25 @@ class DefaultTaskDetailComponent(
         }
     }
 
-    private fun loadComments() {
+    /** Observe the cache (ADR-0001): the comment thread and the item history each fold into [extras] as
+     *  they emit, and the combine re-merges them into the [activity] feed. Never gates render, never errors. */
+    private fun observeActivity() {
+        scope.launch { commentRepository.observe(taskId).collect { comments -> extras.update { it.copy(comments = comments) } } }
+        scope.launch { historyRepository.observe(taskId.value).collect { history -> extras.update { it.copy(history = history) } } }
+    }
+
+    /** Best-effort on-open refresh (ADR-0043): reconcile the comment thread (outbox-aware) + replace the
+     *  cached history. Failure is invisible — the cache stands; [commentsLoading] flags the comment fetch. */
+    private fun refreshActivity() {
         scope.launch {
             extras.update { it.copy(commentsLoading = true) }
-            val comments = detailRepository.comments(taskId)
-            extras.update {
-                it.copy(
-                    comments = comments ?: it.comments,
-                    commentsLoading = false,
-                    commentsError = comments == null,
-                )
+            try {
+                commentRepository.refresh(taskId)
+            } finally {
+                extras.update { it.copy(commentsLoading = false) }
             }
         }
+        scope.launch { historyRepository.refresh(taskId.value) }
     }
 
     override fun onCloseClicked() {
@@ -429,22 +454,27 @@ class DefaultTaskDetailComponent(
     override fun onPostComment(body: String) {
         val trimmed = body.trim()
         if (trimmed.isEmpty()) return
+        // Optimistic + offline-first (ADR-0043): the writer inserts the row + enqueues; the cache Flow
+        // re-emits it into [activity] with no re-fetch. isPostingComment brackets the enqueue so the
+        // composer disables briefly (it resolves the instant the local write commits, offline or on).
         scope.launch {
             extras.update { it.copy(isPostingComment = true) }
-            val ok = detailRepository.postComment(taskId, trimmed)
-            extras.update { it.copy(isPostingComment = false) }
-            if (ok) loadComments()
+            try {
+                commentWriter.post(taskId, trimmed)
+            } finally {
+                extras.update { it.copy(isPostingComment = false) }
+            }
         }
     }
 
     override fun onEditComment(commentId: String, body: String) {
         val trimmed = body.trim()
         if (trimmed.isEmpty()) return
-        scope.launch { if (detailRepository.editComment(commentId, trimmed)) loadComments() }
+        scope.launch { commentWriter.edit(commentId, trimmed) }
     }
 
     override fun onDeleteComment(commentId: String) {
-        scope.launch { if (detailRepository.deleteComment(commentId)) loadComments() }
+        scope.launch { commentWriter.delete(commentId) }
     }
 
     override fun onAddAttachments(files: List<AttachmentUpload>) {
@@ -479,16 +509,16 @@ class DefaultTaskDetailComponent(
     override suspend fun onDeviceAttachmentBytes(attachmentId: String): ByteArray? =
         onDeviceAttachments.bytes(attachmentId)
 
-    /** The mutable extras the [state] combine folds in — the online-only sections + identity. */
+    /** The mutable extras the [state] combine folds in — the ACTIVITY feed sources + attachments. */
     private data class Extras(
+        // The cached comment thread + item history (ADR-0043), merged into [activity] by the combine.
         val comments: List<Comment> = emptyList(),
+        val history: List<ItemHistoryEvent> = emptyList(),
         val commentsLoading: Boolean = false,
-        val commentsError: Boolean = false,
         val isPostingComment: Boolean = false,
         val attachments: List<Attachment> = emptyList(),
         val isUploadingAttachment: Boolean = false,
         val onDeviceAttachments: List<OnDeviceAttachment> = emptyList(),
-        val currentUserId: UserId? = null,
         // The "Hide done" subtask filter toggle (#197c) — folded through the combine so flipping it re-derives the rows.
         val hideDoneSubtasks: Boolean = false,
     )

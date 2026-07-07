@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
@@ -18,6 +19,7 @@ import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
+import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.ItemTreeState
 import com.circuitstitch.deferno.feature.tasks.SubtaskRow
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
@@ -86,14 +88,22 @@ class ScreenshotTest {
         ),
         subtaskDone = 1,
         subtaskTotal = 3,
-        comments = listOf(
-            Comment(
-                id = "c1", taskId = TaskId("1"), body = "Kicking this off — aiming for end of week.",
-                createdBy = UserId("me"), createdAt = Instant.parse("2026-04-17T10:00:00Z"),
+        activity = listOf(
+            ActivityItem.HistoryEvent(
+                id = "history:0",
+                event = ItemHistoryEvent.Created(Instant.parse("2026-04-17T09:30:00Z")),
             ),
-            Comment(
-                id = "c2", taskId = TaskId("1"), body = "Sounds good, I'll cover the social copy.",
-                createdBy = UserId("other"), createdAt = Instant.parse("2026-04-17T11:30:00Z"),
+            ActivityItem.Comment(
+                Comment(
+                    id = "c1", taskId = TaskId("1"), body = "Kicking this off — aiming for end of week.",
+                    createdBy = UserId("me"), createdAt = Instant.parse("2026-04-17T10:00:00Z"),
+                ),
+            ),
+            ActivityItem.Comment(
+                Comment(
+                    id = "c2", taskId = TaskId("1"), body = "Sounds good, I'll cover the social copy.",
+                    createdBy = UserId("other"), createdAt = Instant.parse("2026-04-17T11:30:00Z"),
+                ),
             ),
         ),
         currentUserId = UserId("me"),

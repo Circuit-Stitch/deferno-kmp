@@ -44,6 +44,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_ch
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cleared_occurrence_chore
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cleared_occurrence_event
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cleared_occurrence_habit
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_commented
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_chore
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_event
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_habit
@@ -147,6 +148,7 @@ private val ActivitySummary.text: String
             else -> stringResource(Res.string.activity_summary_updated_occurrence_event)
         }
         ActivityVerb.UpdatedItem -> stringResource(Res.string.activity_summary_updated_item)
+        ActivityVerb.Commented -> stringResource(Res.string.activity_summary_commented)
     }
 
 /** The localized "who" chip: a local write reads "Mobile app"; remote writes name their surface. */

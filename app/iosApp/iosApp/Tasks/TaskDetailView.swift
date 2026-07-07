@@ -417,26 +417,39 @@ struct TaskDetailView: View {
 
     // MARK: - Activity / Comments
 
+    /// The single chronological ACTIVITY feed (ADR-0043): user comments and read-only server history,
+    /// merged and sorted in the component. Swift can't pattern-match the Kotlin `ActivityItem` sealed
+    /// type, so each row branches through the bridge — `activityItemComment` unwraps a comment (nil ⇒ a
+    /// history row). A local read can't fail, so there's no error branch; an empty feed is a valid state.
     @ViewBuilder
     private func commentsSection(_ value: TaskDetailState) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionTitle(L.string("shell_destination_activity"), trailing: "\(value.comments.count)")
+            SectionTitle(L.string("shell_destination_activity"), trailing: "\(value.activity.count)")
             commentComposer(isPosting: value.isPostingComment)
-            if value.commentsLoading && value.comments.isEmpty {
+            if value.commentsLoading && value.activity.isEmpty {
                 MutedLine(L.string("common_loading"))
-            } else if value.commentsError && value.comments.isEmpty {
-                MutedLine(L.string("tasks_detail_comments_error"))
-            } else if value.comments.isEmpty {
+            } else if value.activity.isEmpty {
                 MutedLine(L.string("tasks_detail_no_comments"))
             } else {
-                ForEach(value.comments, id: \.id) { comment in
-                    CommentRow(
-                        comment: comment,
-                        isMine: BridgeKt.commentIsMine(state: value, comment: comment),
-                        dateLabel: BridgeKt.commentDateLabel(comment: comment),
-                        onEdit: { component.onEditComment(commentId: $0, body: $1) },
-                        onDelete: { component.onDeleteComment(commentId: $0) }
-                    )
+                // Key on the bridge's stable id (comment id / "history:<index>"), NOT the position —
+                // otherwise a CommentRow's edit @State would bind to a slot, so an optimistic delete above
+                // an in-progress edit would shift the draft onto the wrong comment (ADR-0043).
+                ForEach(value.activity.map(ActivityRow.init)) { row in
+                    let item = row.item
+                    if let comment = BridgeKt.activityItemComment(item: item) {
+                        CommentRow(
+                            comment: comment,
+                            isMine: BridgeKt.commentIsMine(state: value, comment: comment),
+                            dateLabel: BridgeKt.commentDateLabel(comment: comment),
+                            onEdit: { component.onEditComment(commentId: $0, body: $1) },
+                            onDelete: { component.onDeleteComment(commentId: $0) }
+                        )
+                    } else if let verb = BridgeKt.activityHistoryVerb(item: item) {
+                        HistoryRow(
+                            label: L.activityHistory(verb),
+                            dateLabel: BridgeKt.activityHistoryDateLabel(item: item) ?? ""
+                        )
+                    }
                 }
             }
         }
@@ -683,6 +696,35 @@ private struct CommentRow: View {
                     .font(.subheadline)
                 }
             }
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+/// A stable-identity wrapper for one ACTIVITY row. The sealed `ActivityItem` bridges to a Swift protocol
+/// (an existential with no id-KeyPath), so `ForEach` keys on the bridge's stable id — the comment id or
+/// "history:<index>" — instead of a positional index, keeping a CommentRow's edit `@State` bound to its
+/// own comment across feed shifts (ADR-0043).
+private struct ActivityRow: Identifiable {
+    let id: String
+    let item: ActivityItem
+    init(_ item: ActivityItem) {
+        self.id = BridgeKt.activityItemId(item: item)
+        self.item = item
+    }
+}
+
+/// One read-only ACTIVITY history entry (ADR-0043): a localized change label over its muted date. Mirrors
+/// `CommentRow`'s muted styling and vertical rhythm, minus the author line and the edit / delete
+/// affordances — server-authored history is never editable.
+private struct HistoryRow: View {
+    let label: String
+    let dateLabel: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.subheadline).foregroundStyle(.secondary)
+            Text(dateLabel).font(.caption2).foregroundStyle(.secondary)
         }
         .padding(.vertical, 6)
     }

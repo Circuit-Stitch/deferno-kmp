@@ -44,7 +44,12 @@ data class FlushResult(
  * id is needed to confirm the pending-create row and to heal a divergent canonical id), and resolves
  * through the [CreateReplayListener] — confirm on success, undo the optimistic insert on terminal
  * rejection. If a heal re-points queued entries, the pass stops (its `pending()` snapshot is stale) and
- * the next flush re-reads. Every other entry is a fire-and-forget edit via [OutboxRequestSender.send].
+ * the next flush re-reads. A `comment-create:<taskId>:<clientId>` entry (ADR-0043) replays through the
+ * **same** response-bearing path but resolves through the [CommentReplayListener] — the backend never
+ * honours the client comment id, so *every* comment-create rekeys the row and re-points its queued edits;
+ * when it does, the pass stops too. Both schemes run one policy: [routeFor] parses the target and binds
+ * whichever listener applies to a single [ReplayRoute]. Every other entry is a fire-and-forget edit via
+ * [OutboxRequestSender.send].
  *
  * [flush] is guarded by a [Mutex] so two concurrent triggers can't double-dispatch the same entry.
  */
@@ -56,6 +61,8 @@ class OutboxProcessor(
     private val backoff: (Int) -> Duration = ::exponentialBackoff,
     // The offline-create replay seam (#185); default no-op so the engine's own tests need no wiring.
     private val createListener: CreateReplayListener = CreateReplayListener.NoOp,
+    // The offline comment-create replay seam (ADR-0043); default no-op, beside [createListener].
+    private val commentListener: CommentReplayListener = CommentReplayListener.NoOp,
 ) {
     private val mutex = Mutex()
 
@@ -70,14 +77,15 @@ class OutboxProcessor(
             // pass, preserving strict FIFO — nothing behind it may overtake it.
             if (entry.nextAttemptAt > now) break
 
-            // A create entry (#185) replays through the response-bearing path: we need the server id to
-            // confirm the pending-create row and to heal a divergent canonical id. Every other entry is
-            // a fire-and-forget edit against an existing id.
-            val create = CreateTarget.parse(entry.target)
-            if (create != null) {
+            // A response-bearing create replay (item-create #185 or comment-create ADR-0043): we need the
+            // server id to confirm/rekey the optimistic row and to heal a divergent id. Both schemes share
+            // one policy — only the parse + which listener resolves it differ ([routeFor]). Every other
+            // entry is a fire-and-forget edit against an existing id (the plain send below).
+            val route = routeFor(entry)
+            if (route != null) {
                 when (val outcome = sender.sendCreate(entry.request)) {
                     is CreateSendOutcome.Created -> {
-                        val healed = createListener.onReplayed(create.clientId, create.kind, outcome.serverId)
+                        val healed = route.onReplayed(outcome.serverId)
                         store.delete(entry.seq)
                         succeeded++
                         // A heal re-pointed queued entries in the store; the in-flight `pending()`
@@ -85,14 +93,14 @@ class OutboxProcessor(
                         if (healed) break
                     }
                     CreateSendOutcome.Terminal -> {
-                        createListener.onRejected(create.clientId, create.kind)
+                        route.onRejected()
                         store.delete(entry.seq)
                         dropped++
                     }
                     CreateSendOutcome.Retryable -> {
                         val attempts = entry.attempts + 1
                         if (attempts >= maxAttempts) {
-                            createListener.onRejected(create.clientId, create.kind)
+                            route.onRejected()
                             store.delete(entry.seq)
                             dropped++
                         } else {
@@ -143,6 +151,38 @@ class OutboxProcessor(
 
         FlushResult(succeeded = succeeded, dropped = dropped, retried = retried, remaining = store.count())
     }
+
+    /**
+     * The response-bearing replay route for [entry], or `null` for a plain fire-and-forget edit. The two
+     * create-target schemes are disjoint by prefix (`create:` vs `comment-create:` — the latter is not a
+     * `create:` prefix-match), so each entry resolves to at most one route regardless of order. Binds the
+     * matched target to its listener so [flush] runs one policy for both.
+     */
+    private fun routeFor(entry: OutboxEntry): ReplayRoute? {
+        CreateTarget.parse(entry.target)?.let { create ->
+            return ReplayRoute(
+                onReplayed = { serverId -> createListener.onReplayed(create.clientId, create.kind, serverId) },
+                onRejected = { createListener.onRejected(create.clientId, create.kind) },
+            )
+        }
+        CommentTargets.parseCreate(entry.target)?.let { commentCreate ->
+            return ReplayRoute(
+                onReplayed = { serverId -> commentListener.onReplayed(commentCreate.taskId, commentCreate.clientId, serverId) },
+                onRejected = { commentListener.onRejected(commentCreate.taskId, commentCreate.clientId) },
+            )
+        }
+        return null
+    }
+
+    /**
+     * A resolved response-bearing create replay: [onReplayed] heals the optimistic row and returns whether
+     * it re-pointed queued entries (so the pass must stop, its `pending()` snapshot being stale);
+     * [onRejected] undoes the optimism on a terminal/exhausted rejection.
+     */
+    private class ReplayRoute(
+        val onReplayed: suspend (serverId: String) -> Boolean,
+        val onRejected: suspend () -> Unit,
+    )
 
     companion object {
         /**

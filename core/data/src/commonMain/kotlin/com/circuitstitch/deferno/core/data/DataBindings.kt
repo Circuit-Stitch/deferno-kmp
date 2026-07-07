@@ -28,10 +28,14 @@ import com.circuitstitch.deferno.core.data.attachment.StorageProviderCatalog
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.calendar.KtorCalendarRemoteSource
+import com.circuitstitch.deferno.core.data.comment.CommentRemoteSource
+import com.circuitstitch.deferno.core.data.comment.KtorCommentRemoteSource
 import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.create.KtorItemRemoteSource
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.feedback.KtorFeedbackRepository
+import com.circuitstitch.deferno.core.data.history.ItemHistoryRemoteSource
+import com.circuitstitch.deferno.core.data.history.KtorItemHistoryRemoteSource
 import com.circuitstitch.deferno.core.data.outbox.KtorOutboxRequestSender
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.KtorPlanRemoteSource
@@ -209,6 +213,16 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun settingsRemoteSource(client: HttpClient): SettingsRemoteSource = KtorSettingsRemoteSource(client)
+
+    /** The offline-first Task-comment refresh source (`GET /tasks/{id}/comments`, ADR-0043). */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun commentRemoteSource(client: HttpClient): CommentRemoteSource = KtorCommentRemoteSource(client)
+
+    /** The cached item-history source (`GET /items/{id}/history`, ADR-0043). */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun itemHistoryRemoteSource(client: HttpClient): ItemHistoryRemoteSource = KtorItemHistoryRemoteSource(client)
 
     /**
      * The server-mediated [[Assistant]] request/response client (#282, ADR-0040) over the shared client —

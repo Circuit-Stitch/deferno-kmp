@@ -1,23 +1,16 @@
 package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.model.Attachment
-import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.TaskId
-import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.UploadHttpClient
 import com.circuitstitch.deferno.core.network.dto.AttachmentIntentDto
 import com.circuitstitch.deferno.core.network.dto.AttachmentPresignBatchRequestDto
 import com.circuitstitch.deferno.core.network.dto.AttachmentPresignBatchResponseDto
 import com.circuitstitch.deferno.core.network.dto.AttachmentViewDto
-import com.circuitstitch.deferno.core.network.dto.AuthenticatedUserDto
-import com.circuitstitch.deferno.core.network.dto.CommentDto
-import com.circuitstitch.deferno.core.network.dto.CommentListResponseDto
 import com.circuitstitch.deferno.core.network.dto.CommitAttachmentsPayload
-import com.circuitstitch.deferno.core.network.dto.CreateCommentPayload
 import com.circuitstitch.deferno.core.network.dto.PresignRequestDto
 import com.circuitstitch.deferno.core.network.dto.PresignResponseDto
-import com.circuitstitch.deferno.core.network.dto.UpdateCommentPayload
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import com.circuitstitch.deferno.core.network.requestApi
 import io.ktor.client.HttpClient
@@ -48,45 +41,6 @@ class KtorTaskDetailRepository(
     // tests can still construct the repo with just `client`.
     private val uploadClient: UploadHttpClient? = null,
 ) : TaskDetailRepository {
-
-    override suspend fun comments(taskId: TaskId): List<Comment>? {
-        val result = client.requestApi<CommentListResponseDto> {
-            url { appendPathSegments("tasks", taskId.value, "comments") }
-        }
-        return when (result) {
-            // Drop server-side soft-deleted comments before they reach the UI.
-            is ApiResult.Success -> result.data.comments.filter { it.deletedAt == null }.map { it.toDomain() }
-            is ApiResult.Failure -> null
-        }
-    }
-
-    override suspend fun postComment(taskId: TaskId, body: String): Boolean {
-        val result = client.requestApi<CommentDto> {
-            method = HttpMethod.Post
-            url { appendPathSegments("tasks", taskId.value, "comments") }
-            contentType(ContentType.Application.Json)
-            setBody(CreateCommentPayload(body = body))
-        }
-        return result is ApiResult.Success
-    }
-
-    override suspend fun editComment(commentId: String, body: String): Boolean {
-        val result = client.requestApi<CommentDto> {
-            method = HttpMethod.Patch
-            url { appendPathSegments("comments", commentId) }
-            contentType(ContentType.Application.Json)
-            setBody(UpdateCommentPayload(body = body))
-        }
-        return result is ApiResult.Success
-    }
-
-    override suspend fun deleteComment(commentId: String): Boolean {
-        val result = client.requestApi<CommentDto> {
-            method = HttpMethod.Delete
-            url { appendPathSegments("comments", commentId) }
-        }
-        return result is ApiResult.Success
-    }
 
     override suspend fun attachments(taskId: TaskId): List<Attachment>? {
         val result = client.requestApi<List<AttachmentViewDto>> {
@@ -179,15 +133,5 @@ class KtorTaskDetailRepository(
         response.status.isSuccess()
     } catch (t: Throwable) {
         false
-    }
-
-    override suspend fun currentUserId(): UserId? {
-        val result = client.requestApi<AuthenticatedUserDto> {
-            url { appendPathSegments("auth", "me") }
-        }
-        return when (result) {
-            is ApiResult.Success -> result.data.toDomain().id
-            is ApiResult.Failure -> null
-        }
     }
 }

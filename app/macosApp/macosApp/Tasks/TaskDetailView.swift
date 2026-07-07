@@ -7,7 +7,8 @@ import SwiftUI
 /// The component hydrates on creation (summary → full, #22); this View just reflects its state. The
 /// detail component is shared with the inline pane and the (future) detached window (#196), so this
 /// upgrades both surfaces at once. The subtasks section also hosts Add-subtask + a "Hide done" filter
-/// (#197b/c); Attachments + the ACTIVITY/comments feed (#197a) are still deferred (not built here).
+/// (#197b/c) and the ACTIVITY feed — comments + read-only item history (#197a / ADR-0043). Attachments
+/// are still deferred (not built here).
 struct TaskDetailView: View {
     let component: TaskDetailComponent
     /// Hide the header's Back control. Set at a detached window's root entry (#196, depth 1) — it has
@@ -21,6 +22,7 @@ struct TaskDetailView: View {
     @StateObject private var state: StateFlowObserver<TaskDetailState>
     @State private var newLabel = ""
     @State private var newSubtask = ""
+    @State private var commentDraft = ""
 
     init(component: TaskDetailComponent, hidesBackControl: Bool = false, showsHeader: Bool = true) {
         self.component = component
@@ -89,6 +91,8 @@ struct TaskDetailView: View {
                 propertiesSection(task)
                 Divider()
                 subtasksSection(value)
+                Divider()
+                activitySection(value)
             }
             .padding(.horizontal, Layout.gutter)
             .padding(.vertical, 12)
@@ -264,6 +268,69 @@ struct TaskDetailView: View {
         component.onAddSubtask(title: entry)
         newSubtask = ""
     }
+
+    // MARK: - Activity (comments + read-only item history)
+
+    /// The ACTIVITY feed (#197a, ADR-0043): the composer, then a merged chronological list of comments
+    /// (own-comment Edit/Delete gated by the bridge) plus read-only item-history rows. Swift can't
+    /// pattern-match the sealed `ActivityItem`, so each row is cracked open with the hand-written `BridgeKt`
+    /// discriminators — `activityItemComment` yields a Comment (else nil ⇒ a history verb token). The header
+    /// uses `shell_destination_activity` to match iOS (the Compose `tasks_detail_section_activity` divergence
+    /// is deliberate, ADR-0043). An empty feed is a valid terminal state — there is no error branch.
+    @ViewBuilder
+    private func activitySection(_ value: TaskDetailState) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionTitle(L.string("shell_destination_activity"), trailing: "\(value.activity.count)")
+            commentComposer(isPosting: value.isPostingComment)
+            if value.commentsLoading && value.activity.isEmpty {
+                MutedLine(L.string("common_loading"))
+            } else if value.activity.isEmpty {
+                MutedLine(L.string("tasks_detail_no_comments"))
+            } else {
+                // Key on the bridge's stable id (comment id / "history:<index>"), NOT the position — else
+                // a CommentRow's edit @State would bind to a slot, so an optimistic delete above an
+                // in-progress edit would shift the draft onto the wrong comment (ADR-0043).
+                ForEach(value.activity.map(ActivityRow.init)) { row in
+                    let item = row.item
+                    if let comment = BridgeKt.activityItemComment(item: item) {
+                        CommentRow(
+                            comment: comment,
+                            isMine: BridgeKt.commentIsMine(state: value, comment: comment),
+                            dateLabel: BridgeKt.commentDateLabel(comment: comment),
+                            onEdit: { component.onEditComment(commentId: $0, body: $1) },
+                            onDelete: { component.onDeleteComment(commentId: $0) }
+                        )
+                    } else if let verb = BridgeKt.activityHistoryVerb(item: item) {
+                        HistoryRow(
+                            label: L.activityHistory(verb),
+                            dateLabel: BridgeKt.activityHistoryDateLabel(item: item) ?? ""
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /// The comment composer (unchanged write seam): a multi-line entry + Post, forwarding a trimmed,
+    /// non-empty body through `onPostComment` then clearing. Disabled while a post is in flight.
+    @ViewBuilder
+    private func commentComposer(isPosting: Bool) -> some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            TextField(L.string("tasks_detail_add_comment_placeholder"), text: $commentDraft, axis: .vertical)
+                .lineLimit(2...5)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isPosting)
+                .accessibilityLabel(L.string("tasks_detail_comment_body_label"))
+            Button {
+                let trimmed = commentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { component.onPostComment(body: trimmed); commentDraft = "" }
+            } label: {
+                Text(isPosting ? L.string("tasks_detail_posting") : L.string("tasks_detail_post"))
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isPosting || commentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
 }
 
 /// One depth-indented row of the subtask outline: a completion checkbox, a tappable title (opens the
@@ -327,6 +394,89 @@ private struct SectionTitle: View {
             Spacer()
             if let trailing { Text(trailing).font(.footnote).foregroundStyle(.secondary) }
         }
+    }
+}
+
+/// A single muted line — the empty / loading placeholder inside a section.
+private struct MutedLine: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View { Text(text).font(.subheadline).foregroundStyle(.secondary) }
+}
+
+/// One Activity comment (ADR-0043): author + date, the body (or the encrypted placeholder), and — for the
+/// current user's own comment — inline Edit / Delete. The server enforces the real authorization; `isMine`
+/// (from the bridge) only chooses which affordances to show. Editing state is local so each row toggles alone.
+private struct CommentRow: View {
+    let comment: Comment
+    let isMine: Bool
+    let dateLabel: String
+    let onEdit: (String, String) -> Void
+    let onDelete: (String) -> Void
+    @State private var editing = false
+    @State private var draft = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Text(isMine ? L.string("tasks_detail_comment_author_you") : L.string("tasks_detail_comment_author_member")).font(.caption.weight(.medium))
+                Text(dateLabel).font(.caption2).foregroundStyle(.secondary)
+            }
+            if editing {
+                TextField(L.string("tasks_detail_comment_button"), text: $draft, axis: .vertical)
+                    .lineLimit(2...5)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Spacer()
+                    Button(L.string("common_cancel")) { editing = false }
+                    Button(L.string("common_save")) {
+                        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty { onEdit(comment.id, trimmed) }
+                        editing = false
+                    }
+                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            } else {
+                Text(comment.body ?? L.string("tasks_detail_encrypted_comment")).font(.subheadline)
+                if isMine {
+                    HStack {
+                        Button(L.string("common_edit")) { draft = comment.body ?? ""; editing = true }
+                        Button(L.string("common_delete")) { onDelete(comment.id) }
+                    }
+                    .font(.subheadline)
+                }
+            }
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+/// A stable-identity wrapper for one ACTIVITY row. The sealed `ActivityItem` bridges to a Swift protocol
+/// (an existential with no id-KeyPath), so `ForEach` keys on the bridge's stable id — the comment id or
+/// "history:<index>" — instead of a positional index, keeping a CommentRow's edit `@State` bound to its
+/// own comment across feed shifts (ADR-0043).
+private struct ActivityRow: Identifiable {
+    let id: String
+    let item: ActivityItem
+    init(_ item: ActivityItem) {
+        self.id = BridgeKt.activityItemId(item: item)
+        self.item = item
+    }
+}
+
+/// One read-only item-history row (ADR-0043): a localized verb line + its date. History is server-recorded
+/// and immutable — no affordances; it sits beside comments in the merged chronological feed.
+private struct HistoryRow: View {
+    let label: String
+    let dateLabel: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Text(dateLabel).font(.caption2).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
     }
 }
 

@@ -2,8 +2,10 @@ package com.circuitstitch.deferno.ios.bridge
 
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import kotlinx.cinterop.BetaInteropApi
@@ -79,6 +81,40 @@ fun commentIsMine(state: TaskDetailState, comment: Comment): Boolean {
 /** A comment's display date (e.g. "2026-04-17 (edited)") — Instant formatting Swift can't do directly. */
 fun commentDateLabel(comment: Comment): String =
     comment.createdAt.toString().substringBefore('T') + if (comment.editedAt != null) " (edited)" else ""
+
+// --- ACTIVITY feed (ADR-0043): the sealed [ActivityItem] cracked open for Swift with the app's
+// manual-discriminator idiom (Swift can't match a Kotlin sealed type or format an Instant — same seam as
+// ShellBridge's inboxNote*/activitySummary*). The View keys ForEach on [activityItemId], unwraps a
+// comment via [activityItemComment] (nil ⇒ history), and renders a history row from the verb token +
+// date label. commentIsMine/commentDateLabel keep taking the unwrapped [Comment].
+
+/** A stable Swift-visible row id for `ForEach(id:)` — the comment id, or "history:<index>". */
+fun activityItemId(item: ActivityItem): String = item.id
+
+/** The comment an [item] wraps, or `nil` for a history row (the `as?` discriminator). */
+fun activityItemComment(item: ActivityItem): Comment? = (item as? ActivityItem.Comment)?.comment
+
+/** A history row's typed verb token (Swift maps it to a localized label), or `nil` for a comment row. */
+fun activityHistoryVerb(item: ActivityItem): String? =
+    (item as? ActivityItem.HistoryEvent)?.event?.let(::historyVerbToken)
+
+/** A history row's display date ("2026-04-17"), or `nil` for a comment — Instant formatting Swift can't do. */
+fun activityHistoryDateLabel(item: ActivityItem): String? =
+    (item as? ActivityItem.HistoryEvent)?.event?.recordedAt?.toString()?.substringBefore('T')
+
+/** The stable verb token per history variant — kept in sync with the Compose `label()` mapping (ADR-0043). */
+private fun historyVerbToken(event: ItemHistoryEvent): String = when (event) {
+    is ItemHistoryEvent.Created -> "Created"
+    is ItemHistoryEvent.Updated -> "Updated"
+    is ItemHistoryEvent.StatusChanged -> "StatusChanged"
+    is ItemHistoryEvent.Moved -> "Moved"
+    is ItemHistoryEvent.ParentAssigned -> "ParentAssigned"
+    is ItemHistoryEvent.Split -> "Split"
+    is ItemHistoryEvent.FoldedInto -> "FoldedInto"
+    is ItemHistoryEvent.MergedChild -> "MergedChild"
+    is ItemHistoryEvent.MergedIntoParent -> "MergedIntoParent"
+    is ItemHistoryEvent.Unknown -> "Unknown"
+}
 
 /**
  * Upload a file the iOS picker resolved to this Task (#207). Swift can't build an [AttachmentUpload]

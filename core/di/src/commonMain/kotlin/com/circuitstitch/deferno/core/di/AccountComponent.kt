@@ -8,8 +8,11 @@ import com.circuitstitch.deferno.core.data.backup.BackupImporter
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
+import com.circuitstitch.deferno.core.data.comment.CommentRepository
+import com.circuitstitch.deferno.core.data.comment.CommentWriter
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
@@ -62,9 +65,17 @@ abstract class AccountComponent(
      * (DB → driver → key/Context/databasesDir, repositories → AppScope remote sources).
      */
     abstract val taskRepository: TaskRepository
-    // Online-only Task detail extras (comments + attachments); an AppScope binding resolved through here.
+    // Online-only Task detail extras (attachments); an AppScope binding resolved through here. Comments
+    // moved to the offline-first [commentRepository] below (ADR-0043).
     abstract val taskDetailRepository: TaskDetailRepository
     abstract val planRepository: PlanRepository
+
+    // The offline-first Task-comment thread + cached server item-history (ADR-0043): the Task detail's
+    // ACTIVITY feed observes these from the cache and refreshes them best-effort on open. [commentWriter]
+    // is the optimistic post/edit/delete seam (its writes ride the ledger via the outbox choke-point).
+    abstract val commentRepository: CommentRepository
+    abstract val itemHistoryRepository: ItemHistoryRepository
+    abstract val commentWriter: CommentWriter
 
     /**
      * The cross-kind Item read (ADR-0034, #226/#227): the Tasks Item tree observes the windowed `/items`

@@ -127,6 +127,23 @@ enum L {
         }
     }
 
+    /// The localized label for a Task-detail ACTIVITY history row (ADR-0043), from its typed verb token
+    /// (`BridgeKt.activityHistoryVerb`). Read-only; an unrecognized token degrades to the generic line.
+    static func activityHistory(_ token: String) -> String {
+        switch token {
+        case "Created": return string("activity_history_created")
+        case "Updated": return string("activity_history_updated")
+        case "StatusChanged": return string("activity_history_status_changed")
+        case "Moved": return string("activity_history_moved")
+        case "ParentAssigned": return string("activity_history_parent_assigned")
+        case "Split": return string("activity_history_split")
+        case "FoldedInto": return string("activity_history_folded_into")
+        case "MergedChild": return string("activity_history_merged_child")
+        case "MergedIntoParent": return string("activity_history_merged_into_parent")
+        default: return string("activity_history_unknown")
+        }
+    }
+
     // MARK: New / Feedback failure (typed reasons)
 
     /// The localized create-failure note, or nil when New isn't in a Failed state.

@@ -9,10 +9,14 @@ import com.arkivanov.decompose.router.stack.pop
 import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.common.asStateFlow
 import com.circuitstitch.deferno.core.common.componentScope
+import com.circuitstitch.deferno.core.data.comment.CommentRepository
+import com.circuitstitch.deferno.core.data.comment.CommentWriter
+import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.UserId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.coroutines.CoroutineContext
@@ -51,6 +55,12 @@ class DefaultTaskDetailStackComponent(
     private val initialTask: Task? = null,
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
     private val detailRepository: TaskDetailRepository = TaskDetailRepository.NONE,
+    // The offline-first ACTIVITY feed (ADR-0043): comment thread + item history + the comment write seam
+    // + the device-local user id, threaded into every detail page of the macOS window stack.
+    private val commentRepository: CommentRepository = CommentRepository.NONE,
+    private val itemHistoryRepository: ItemHistoryRepository = ItemHistoryRepository.NONE,
+    private val commentWriter: CommentWriter = CommentWriter.NONE,
+    private val currentUserId: UserId? = null,
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
     private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
@@ -82,6 +92,10 @@ class DefaultTaskDetailStackComponent(
                     workingStateEditor = workingStateEditor,
                     initialTask = config.initialTask,
                     detailRepository = detailRepository,
+                    commentRepository = commentRepository,
+                    historyRepository = itemHistoryRepository,
+                    commentWriter = commentWriter,
+                    currentUserId = currentUserId,
                     createSubtask = createSubtask,
                     setDeadline = setDeadline,
                     setLabels = setLabels,
