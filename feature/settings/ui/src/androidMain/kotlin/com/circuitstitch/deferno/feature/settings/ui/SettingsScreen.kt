@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.feature.settings.ui
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -638,11 +639,28 @@ private fun AppPermissionsDetail(component: SettingsComponent) {
     // Status is read from the framework directly (the *Compat wrappers are pure overhead at minSdk 27) and
     // re-read whenever the person returns from an OS settings screen a row launched.
     val context = LocalContext.current
+    val activity = context as? Activity
     var micGranted by remember { mutableStateOf(isMicrophoneGranted(context)) }
     var notificationsEnabled by remember { mutableStateOf(areNotificationsEnabled(context)) }
+    // Returning from an OS settings screen a row deep-linked to → re-read live status.
     val settingsReturn = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         micGranted = isMicrophoneGranted(context)
         notificationsEnabled = areNotificationsEnabled(context)
+    }
+    // The mic runtime prompt — the direct grant path. Only when the OS won't show it anymore (permanent
+    // "don't ask again" denial) do we bounce to app-info, the same fallback NewScreen/BrainDumpScreen use.
+    val requestMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        micGranted = granted
+        val permanentlyDenied = activity == null ||
+            !activity.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+        if (!granted && permanentlyDenied) {
+            settingsReturn.launch(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", context.packageName, null),
+                ),
+            )
+        }
     }
 
     Text(
@@ -654,16 +672,8 @@ private fun AppPermissionsDetail(component: SettingsComponent) {
         label = stringResource(Res.string.settings_permissions_microphone),
         rationale = stringResource(Res.string.settings_permissions_microphone_rationale),
         granted = micGranted,
-        // A permanently-denied RECORD_AUDIO can't be re-prompted from here (the OS suppresses the dialog),
-        // so app-info is the one reliable path to toggle it.
-        onFix = {
-            settingsReturn.launch(
-                Intent(
-                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.fromParts("package", context.packageName, null),
-                ),
-            )
-        },
+        // Ask via the OS dialog; the callback bounces to app-info only if it's permanently denied.
+        onFix = { requestMic.launch(Manifest.permission.RECORD_AUDIO) },
     )
     PermissionRow(
         label = stringResource(Res.string.settings_notifications_section),
