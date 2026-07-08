@@ -468,6 +468,11 @@ Vielen Dank.</string>
     <string name="settings_legal_view_privacy_button">Datenschutzerklärung ansehen</string>
     <string name="settings_legal_view_terms_button">Nutzungsbedingungen ansehen</string>
     <string name="settings_permissions_intro">Verwalte Benachrichtigungen, Speicher und weitere Berechtigungen von Deferno in den Einstellungen deines Geräts.</string>
+    <string name="settings_permissions_microphone">Mikrofon</string>
+    <string name="settings_permissions_microphone_rationale">Diktat, um Aufgaben per Sprache zu erfassen. Audio wird auf dem Gerät erkannt.</string>
+    <string name="settings_permissions_notifications_rationale">Benachrichtigt dich, wenn ein Braindump im Hintergrund fertig verarbeitet wurde.</string>
+    <string name="settings_permissions_status_granted">Erteilt</string>
+    <string name="settings_permissions_status_not_granted">Nicht erteilt</string>
     <string name="settings_permissions_open_button">App-Einstellungen öffnen</string>
     <string name="settings_privacy_analytics_description">Hilf mit, Deferno zu verbessern, indem du anonyme Nutzungsdaten teilst.</string>
     <string name="settings_privacy_analytics_label">Analyse &amp; Tracking</string>
