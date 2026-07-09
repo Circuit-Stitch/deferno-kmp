@@ -653,14 +653,7 @@ private fun AppPermissionsDetail(component: SettingsComponent) {
         micGranted = granted
         val permanentlyDenied = activity == null ||
             !activity.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
-        if (!granted && permanentlyDenied) {
-            settingsReturn.launch(
-                Intent(
-                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.fromParts("package", context.packageName, null),
-                ),
-            )
-        }
+        if (!granted && permanentlyDenied) settingsReturn.launch(appDetailsIntent(context))
     }
 
     Text(
@@ -672,14 +665,19 @@ private fun AppPermissionsDetail(component: SettingsComponent) {
         label = stringResource(Res.string.settings_permissions_microphone),
         rationale = stringResource(Res.string.settings_permissions_microphone_rationale),
         granted = micGranted,
-        // Ask via the OS dialog; the callback bounces to app-info only if it's permanently denied.
-        onFix = { requestMic.launch(Manifest.permission.RECORD_AUDIO) },
+        // Granted → app-info, the only place the OS lets a person revoke RECORD_AUDIO (no self-revoke API
+        // below 33, and 33+'s revokeSelfPermissionOnKill kills the app). Not granted → the OS grant dialog.
+        onManage = {
+            if (micGranted) settingsReturn.launch(appDetailsIntent(context))
+            else requestMic.launch(Manifest.permission.RECORD_AUDIO)
+        },
     )
     PermissionRow(
         label = stringResource(Res.string.settings_notifications_section),
         rationale = stringResource(Res.string.settings_permissions_notifications_rationale),
         granted = notificationsEnabled,
-        onFix = {
+        // Notification settings both enable and disable — the one screen that handles the channel too.
+        onManage = {
             settingsReturn.launch(
                 Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                     .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
@@ -694,11 +692,12 @@ private fun AppPermissionsDetail(component: SettingsComponent) {
 }
 
 /**
- * One runtime-permission row: name + one-line rationale + live status. A **not-granted** row is the
- * tappable affordance (opens the OS screen to grant it via [onFix]); a granted row is inert (nothing to do).
+ * One runtime-permission row: name + one-line rationale + live status. The whole row is tappable and
+ * opens the OS screen to **manage** the permission via [onManage] — grant it when it's off, revoke it
+ * when it's on (Android only lets a person revoke from its own settings screen).
  */
 @Composable
-private fun PermissionRow(label: String, rationale: String, granted: Boolean, onFix: () -> Unit) {
+private fun PermissionRow(label: String, rationale: String, granted: Boolean, onManage: () -> Unit) {
     val status = stringResource(
         if (granted) Res.string.settings_permissions_status_granted
         else Res.string.settings_permissions_status_not_granted,
@@ -707,7 +706,7 @@ private fun PermissionRow(label: String, rationale: String, granted: Boolean, on
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
-            .then(if (granted) Modifier else Modifier.clickable(onClickLabel = status, onClick = onFix)),
+            .clickable(onClickLabel = stringResource(Res.string.common_open_named_cd, label), onClick = onManage),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Row(
@@ -722,7 +721,7 @@ private fun PermissionRow(label: String, rationale: String, granted: Boolean, on
                     style = MaterialTheme.typography.labelMedium,
                     color = if (granted) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.primary,
                 )
-                if (!granted) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
             }
         }
         Text(
@@ -732,6 +731,10 @@ private fun PermissionRow(label: String, rationale: String, granted: Boolean, on
         )
     }
 }
+
+// This app's OS app-info screen — the canonical place to grant or revoke a runtime permission.
+private fun appDetailsIntent(context: Context): Intent =
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
 
 // RECORD_AUDIO grant: Context.checkSelfPermission is API 23+ (minSdk 27), so no ContextCompat needed.
 private fun isMicrophoneGranted(context: Context): Boolean =
