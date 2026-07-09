@@ -1,10 +1,15 @@
 package com.circuitstitch.deferno.feature.settings.ui
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.provider.Settings
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -133,8 +138,14 @@ import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_term
 import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_terms_section
 import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_view_privacy_button
 import com.circuitstitch.deferno.core.designsystem.resources.settings_legal_view_terms_button
+import com.circuitstitch.deferno.core.designsystem.resources.settings_notifications_section
 import com.circuitstitch.deferno.core.designsystem.resources.settings_permissions_intro
+import com.circuitstitch.deferno.core.designsystem.resources.settings_permissions_microphone
+import com.circuitstitch.deferno.core.designsystem.resources.settings_permissions_microphone_rationale
+import com.circuitstitch.deferno.core.designsystem.resources.settings_permissions_notifications_rationale
 import com.circuitstitch.deferno.core.designsystem.resources.settings_permissions_open_button
+import com.circuitstitch.deferno.core.designsystem.resources.settings_permissions_status_granted
+import com.circuitstitch.deferno.core.designsystem.resources.settings_permissions_status_not_granted
 import com.circuitstitch.deferno.core.designsystem.resources.settings_privacy_analytics_description
 import com.circuitstitch.deferno.core.designsystem.resources.settings_privacy_analytics_label
 import com.circuitstitch.deferno.core.designsystem.resources.settings_row_summary_unavailable
@@ -622,16 +633,118 @@ private fun HelpFeedbackDetail(component: SettingsComponent) {
 
 @Composable
 private fun AppPermissionsDetail(component: SettingsComponent) {
+    // The two runtime permissions a person can reason about + control — Microphone (dictation, #92) and
+    // Notifications (brain-dump completion, #150). The install-time/library permissions (INTERNET,
+    // WAKE_LOCK, FOREGROUND_SERVICE, …) aren't listed: Android's own permission manager hides them too.
+    // Status is read from the framework directly (the *Compat wrappers are pure overhead at minSdk 27) and
+    // re-read whenever the person returns from an OS settings screen a row launched.
+    val context = LocalContext.current
+    val activity = context as? Activity
+    var micGranted by remember { mutableStateOf(isMicrophoneGranted(context)) }
+    var notificationsEnabled by remember { mutableStateOf(areNotificationsEnabled(context)) }
+    // Returning from an OS settings screen a row deep-linked to → re-read live status.
+    val settingsReturn = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        micGranted = isMicrophoneGranted(context)
+        notificationsEnabled = areNotificationsEnabled(context)
+    }
+    // The mic runtime prompt — the direct grant path. Only when the OS won't show it anymore (permanent
+    // "don't ask again" denial) do we bounce to app-info, the same fallback NewScreen/BrainDumpScreen use.
+    val requestMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        micGranted = granted
+        val permanentlyDenied = activity == null ||
+            !activity.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+        if (!granted && permanentlyDenied) settingsReturn.launch(appDetailsIntent(context))
+    }
+
     Text(
         text = stringResource(Res.string.settings_permissions_intro),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.defernoColors.inkMuted,
     )
+    PermissionRow(
+        label = stringResource(Res.string.settings_permissions_microphone),
+        rationale = stringResource(Res.string.settings_permissions_microphone_rationale),
+        granted = micGranted,
+        // Granted → app-info, the only place the OS lets a person revoke RECORD_AUDIO (no self-revoke API
+        // below 33, and 33+'s revokeSelfPermissionOnKill kills the app). Not granted → the OS grant dialog.
+        onManage = {
+            if (micGranted) settingsReturn.launch(appDetailsIntent(context))
+            else requestMic.launch(Manifest.permission.RECORD_AUDIO)
+        },
+    )
+    PermissionRow(
+        label = stringResource(Res.string.settings_notifications_section),
+        rationale = stringResource(Res.string.settings_permissions_notifications_rationale),
+        granted = notificationsEnabled,
+        // Notification settings both enable and disable — the one screen that handles the channel too.
+        onManage = {
+            settingsReturn.launch(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+            )
+        },
+    )
+    // Catch-all for the install-time/library permissions the rows above deliberately omit.
     TextButton(
         onClick = component::onOpenAppPermissions,
         modifier = Modifier.heightIn(min = MinTouchTarget),
     ) { Text(stringResource(Res.string.settings_permissions_open_button)) }
 }
+
+/**
+ * One runtime-permission row: name + one-line rationale + live status. The whole row is tappable and
+ * opens the OS screen to **manage** the permission via [onManage] — grant it when it's off, revoke it
+ * when it's on (Android only lets a person revoke from its own settings screen).
+ */
+@Composable
+private fun PermissionRow(label: String, rationale: String, granted: Boolean, onManage: () -> Unit) {
+    val status = stringResource(
+        if (granted) Res.string.settings_permissions_status_granted
+        else Res.string.settings_permissions_status_not_granted,
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTouchTarget)
+            .clickable(onClickLabel = stringResource(Res.string.common_open_named_cd, label), onClick = onManage),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = status,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (granted) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.primary,
+                )
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+            }
+        }
+        Text(
+            text = rationale,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.defernoColors.inkMuted,
+        )
+    }
+}
+
+// This app's OS app-info screen — the canonical place to grant or revoke a runtime permission.
+private fun appDetailsIntent(context: Context): Intent =
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+
+// RECORD_AUDIO grant: Context.checkSelfPermission is API 23+ (minSdk 27), so no ContextCompat needed.
+private fun isMicrophoneGranted(context: Context): Boolean =
+    context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+// The honest "will a notification actually show" check: the person can disable notifications without ever
+// touching POST_NOTIFICATIONS (and on Android <13 there is no permission at all). areNotificationsEnabled
+// is API 24+ (minSdk 27). ponytail: framework call over NotificationManagerCompat — no dep for one line.
+private fun areNotificationsEnabled(context: Context): Boolean =
+    context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
 
 @Composable
 private fun LegalDetail(component: SettingsComponent) {

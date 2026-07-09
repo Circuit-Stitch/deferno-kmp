@@ -471,6 +471,11 @@ Agradeço.</string>
     <string name="settings_legal_view_privacy_button">Ver Política de Privacidade</string>
     <string name="settings_legal_view_terms_button">Ver Termos de Serviço</string>
     <string name="settings_permissions_intro">Gerencie notificações, armazenamento e outras permissões do Deferno nas configurações do dispositivo.</string>
+    <string name="settings_permissions_microphone">Microfone</string>
+    <string name="settings_permissions_microphone_rationale">Ditado para capturar tarefas por voz. O áudio é reconhecido no dispositivo.</string>
+    <string name="settings_permissions_notifications_rationale">Avisa você quando um despejo de ideias termina de ser processado em segundo plano.</string>
+    <string name="settings_permissions_status_granted">Concedida</string>
+    <string name="settings_permissions_status_not_granted">Não concedida</string>
     <string name="settings_permissions_open_button">Abrir configurações do app</string>
     <string name="settings_privacy_analytics_description">Ajude a melhorar o Deferno compartilhando dados de uso anônimos.</string>
     <string name="settings_privacy_analytics_label">Análises e rastreamento</string>
