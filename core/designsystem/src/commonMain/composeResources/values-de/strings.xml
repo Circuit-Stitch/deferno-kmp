@@ -689,7 +689,7 @@ Vielen Dank.</string>
     <string name="tasks_detail_tab_info">Info</string>
     <string name="tasks_detail_tab_comments">Kommentare</string>
     <string name="tasks_detail_tab_history">Verlauf</string>
-    <string name="tasks_detail_tab_trail">Verlauf</string>
+    <string name="tasks_detail_tab_trail">Pfad</string>
     <string name="tasks_detail_section_history">Verlauf</string>
     <string name="tasks_detail_property_when">Wann</string>
     <string name="tasks_detail_property_status">Status</string>
