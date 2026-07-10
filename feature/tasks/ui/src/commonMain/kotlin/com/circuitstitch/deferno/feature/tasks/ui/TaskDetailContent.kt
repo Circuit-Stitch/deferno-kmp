@@ -69,9 +69,8 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_no_des
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_not_found_body
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_not_found_title
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_subtask_progress_a11y
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_tab_comments
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_tab_history
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_tab_info
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_tab_trail
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_add_subtask
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_add_to_plan
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_menu_break_this_down
@@ -81,7 +80,6 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_set_aside
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
-import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.ParentSummary
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
@@ -93,7 +91,8 @@ import org.jetbrains.compose.resources.stringResource
  * of the Task detail. A thin, stateless renderer of [TaskDetailState] + the
  * [com.circuitstitch.deferno.feature.tasks.TaskDetailComponent] write seams. Since ADR-0044 the screen has a
  * **single heading** — the [ConnectedParentHeader] (the immediate parent node drawn thread-connected above
- * the current item's title block) — and the body is **three tabs**: `Info` · `Comments` · `History`. The
+ * the current item's title block) — and the body is **two tabs** (ADR-0046): `Info` · `Trail` (the merged
+ * reverse-chronological comments + enriched-history feed). The
  * redundant `PaneHeader("Details")` is gone; back is owned by the shell (compact) / the two-pane close
  * affordance (a later slice), not this body.
  *
@@ -190,8 +189,8 @@ internal fun TaskDetailContent(
     }
 }
 
-/** The Task detail's three body tabs (ADR-0044): Info (default) · Comments · History. */
-private enum class DetailTab { Info, Comments, History }
+/** The Task detail's two body tabs (ADR-0046): Info (default) · Trail (the merged comments + history feed). */
+private enum class DetailTab { Info, Trail }
 
 @Composable
 private fun TaskBody(
@@ -228,7 +227,7 @@ private fun TaskBody(
     // overflow's reveal token) request focus on it, which auto-scrolls it into view and pops the keyboard.
     val addSubtaskFocus = remember(task.id) { FocusRequester() }
     // The comment composer's focus target (the twin of [addSubtaskFocus]): the Android FAB's "Add comment"
-    // (via the component's revealCommentComposer token) switches to the Comments tab and requests focus here.
+    // (via the component's revealCommentComposer token) switches to the Trail tab and requests focus here.
     val commentFocus = remember(task.id) { FocusRequester() }
     var confirmDelete by remember { mutableStateOf(false) }
     var tab by remember(task.id) { mutableStateOf(DetailTab.Info) }
@@ -242,10 +241,11 @@ private fun TaskBody(
     LaunchedEffect(state.revealAddSubtaskComposer) {
         if (state.revealAddSubtaskComposer > 0) tab = DetailTab.Info
     }
-    // Its comment twin (ADR-0044): the FAB's "Add comment" bumps revealCommentComposer → switch to the
-    // Comments tab so the always-composed composer is present for the focus request in that branch (skip 0).
+    // Its comment twin (ADR-0046): the FAB's "Add comment" bumps revealCommentComposer → switch to the
+    // Trail tab so the always-composed inline composer (first slot) is present for the focus request in that
+    // branch (skip 0).
     LaunchedEffect(state.revealCommentComposer) {
-        if (state.revealCommentComposer > 0) tab = DetailTab.Comments
+        if (state.revealCommentComposer > 0) tab = DetailTab.Trail
     }
     // The status-picker twin (ADR-0044): the FAB's "Change status" bumps revealStatusPicker → open the same
     // status picker sheet the STATUS row opens on tap (skip the initial 0 so it never opens unbidden).
@@ -282,8 +282,7 @@ private fun TaskBody(
         )
         val tabs = listOf(
             DetailTab.Info to stringResource(Res.string.tasks_detail_tab_info),
-            DetailTab.Comments to stringResource(Res.string.tasks_detail_tab_comments),
-            DetailTab.History to stringResource(Res.string.tasks_detail_tab_history),
+            DetailTab.Trail to stringResource(Res.string.tasks_detail_tab_trail),
         )
         TabRow(selectedTabIndex = tab.ordinal) {
             tabs.forEach { (t, label) ->
@@ -361,15 +360,17 @@ private fun TaskBody(
                         addSubtaskFocus = addSubtaskFocus,
                     )
                 }
-                DetailTab.Comments -> {
-                    // Reveal the composer on request (the FAB's "Add comment"): focus it once the Comments tab
-                    // is composed. This effect lives in the branch so the composer is present for the focus
-                    // request; the initial 0 is skipped so opening the tab never pops the keyboard.
+                DetailTab.Trail -> {
+                    // Reveal the composer on request (the FAB's "Add comment"): focus it once the Trail tab is
+                    // composed. This effect lives in the branch so the inline composer (first slot) is present
+                    // for the focus request; the initial 0 is skipped so opening the tab never pops the keyboard.
                     LaunchedEffect(state.revealCommentComposer) {
                         if (state.revealCommentComposer > 0) commentFocus.requestFocus()
                     }
-                    CommentsSection(
-                        comments = state.activity.filterIsInstance<ActivityItem.Comment>(),
+                    // The full merged, reverse-chronological feed (ADR-0046): comments + enriched history, one
+                    // interleaved list, no filterIsInstance split — the component already sorted it newest-first.
+                    TrailSection(
+                        activity = state.activity,
                         currentUserId = state.currentUserId,
                         loading = state.commentsLoading,
                         isPosting = state.isPostingComment,
@@ -379,10 +380,6 @@ private fun TaskBody(
                         commentFocus = commentFocus,
                     )
                 }
-                DetailTab.History -> HistorySection(
-                    history = state.activity.filterIsInstance<ActivityItem.HistoryEvent>(),
-                    loading = state.commentsLoading,
-                )
             }
             // When the Android FAB overlays the content, pad the tail so it never covers the last row.
             if (externalAddActions) {

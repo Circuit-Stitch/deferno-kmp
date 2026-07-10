@@ -890,6 +890,7 @@ Thank you.</string>
     <string name="tasks_detail_tab_info">Info</string>
     <string name="tasks_detail_tab_comments">Comments</string>
     <string name="tasks_detail_tab_history">History</string>
+    <string name="tasks_detail_tab_trail">Trail</string>
     <string name="tasks_detail_section_history">History</string>
     <string name="tasks_detail_property_when">When</string>
     <string name="tasks_detail_property_status">Status</string>
@@ -1164,4 +1165,20 @@ Thank you.</string>
     <string name="activity_history_merged_child">Merged in a task</string>
     <string name="activity_history_merged_into_parent">Merged into the parent</string>
     <string name="activity_history_unknown">Made a change</string>
+    <!-- Trail (ADR-0046): the enriched, payload-rendered history rows. The peer-title verbs take a resolved item title (or "another item"); the status transition takes the two editor state labels. -->
+    <string name="activity_history_status_transition">Status: %1$s → %2$s</string>
+    <string name="activity_history_split_peer">Split off: %1$s</string>
+    <string name="activity_history_moved_peer">Moved under: %1$s</string>
+    <string name="activity_history_parent_peer">Parent set: %1$s</string>
+    <string name="activity_history_folded_peer">Folded into: %1$s</string>
+    <string name="activity_history_merged_peer">Merged in: %1$s</string>
+    <!-- Stand-in title for a structural peer that has aged out of the local cache (history never fetches to render). -->
+    <string name="activity_history_peer_unknown">another item</string>
+    <!-- Updated event: the humanized, comma-joined changed field names (no old→new values exist on the wire). -->
+    <string name="activity_history_updated_fields">Edited: %1$s</string>
+    <!-- Humanized field names for the Updated event's changed-field list. -->
+    <string name="activity_field_title">Title</string>
+    <string name="activity_field_deadline">Deadline</string>
+    <!-- Empty Trail (no comments and no history yet). -->
+    <string name="tasks_detail_trail_empty">No activity yet</string>
 </resources>

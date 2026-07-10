@@ -207,9 +207,10 @@ class TaskScreenInteractionTest {
         // The inline subtask checkbox (Info tab, the default) forwards a done-toggle for that child. The Info
         // tab is taller (title block + properties + subtask tree), so scroll the row into view before tapping.
         composeRule.onNodeWithContentDescription("Mark “Draft the announcement” done").performScrollTo().performClick()
-        // ADR-0044 split the feed into tabs: the comment composer now lives under the Comments tab, so switch
-        // to it before posting. Then the composer forwards the posted comment text.
-        composeRule.onNodeWithText("Comments").performClick()
+        // ADR-0046 re-merged the Comments/History tabs into one reverse-chronological Trail; the inline comment
+        // composer now lives at the top of the Trail tab, so switch to it before posting. Then the composer
+        // forwards the posted comment text.
+        composeRule.onNodeWithText("Trail").performClick()
         composeRule.onNodeWithText("Add a comment…").performScrollTo().performTextInput("Looks good")
         composeRule.onNodeWithText("Post").performScrollTo().performClick()
 

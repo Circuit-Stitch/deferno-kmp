@@ -931,4 +931,16 @@
     <string name="activity_history_merged_child">एक कार्य विलय किया</string>
     <string name="activity_history_merged_into_parent">मूल कार्य में विलय किया</string>
     <string name="activity_history_unknown">एक बदलाव किया</string>
+    <string name="tasks_detail_tab_trail">पगडंडी</string>
+    <string name="activity_history_status_transition">स्थिति: %1$s → %2$s</string>
+    <string name="activity_history_split_peer">अलग किया गया: %1$s</string>
+    <string name="activity_history_moved_peer">इसके अंतर्गत ले जाया गया: %1$s</string>
+    <string name="activity_history_parent_peer">मूल कार्य सेट किया: %1$s</string>
+    <string name="activity_history_folded_peer">इसमें मिलाया गया: %1$s</string>
+    <string name="activity_history_merged_peer">इसमें विलय किया: %1$s</string>
+    <string name="activity_history_peer_unknown">दूसरा आइटम</string>
+    <string name="activity_history_updated_fields">संपादित किया: %1$s</string>
+    <string name="activity_field_title">शीर्षक</string>
+    <string name="activity_field_deadline">समय-सीमा</string>
+    <string name="tasks_detail_trail_empty">अभी तक कोई गतिविधि नहीं</string>
 </resources>

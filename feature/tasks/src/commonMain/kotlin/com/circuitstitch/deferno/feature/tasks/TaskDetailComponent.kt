@@ -7,11 +7,13 @@ import com.circuitstitch.deferno.core.data.comment.CommentWriter
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
+import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -301,6 +303,11 @@ class DefaultTaskDetailComponent(
     // observed from the cache as Flows and refreshed best-effort on open. Empty NONE defaults.
     private val commentRepository: CommentRepository = CommentRepository.NONE,
     private val historyRepository: ItemHistoryRepository = ItemHistoryRepository.NONE,
+    // The cross-kind Item read (ADR-0034) — the local cache the Trail resolves history peer titles from
+    // (Split child, Moved destination, …), any-kind since the tree spans kinds (ADR-0046). Observed as a
+    // Flow and folded into the ACTIVITY feed at merge time; render never fetches. Null (the default) leaves
+    // every peer unresolved — the View then shows "another item" — so tests/offline callers build without it.
+    private val itemRepository: ItemRepository? = null,
     // The offline-first comment write seam (ADR-0043): optimistic apply to the cache + outbox enqueue.
     private val commentWriter: CommentWriter = CommentWriter.NONE,
     // The device-local signed-in user id (the Active Account's user id) — gates own-comment edit/delete
@@ -367,7 +374,11 @@ class DefaultTaskDetailComponent(
                 // Progress counts the whole subtree, independent of which nodes are folded away or filtered.
                 subtaskDone = descendants.count { it.workingState == WorkingState.Done },
                 subtaskTotal = descendants.size,
-                activity = mergeActivity(ex.comments, ex.history),
+                // Resolve each history peer id to a title off the cached item forest (ADR-0046) — no fetch;
+                // an unresolved/aged-out peer stays null and the View shows "another item".
+                activity = mergeActivity(ex.comments, ex.history) { peerId ->
+                    ex.items.firstOrNull { it.id == peerId }?.title
+                },
                 commentsLoading = ex.commentsLoading,
                 isPostingComment = ex.isPostingComment,
                 attachments = ex.attachments,
@@ -420,6 +431,9 @@ class DefaultTaskDetailComponent(
     private fun observeActivity() {
         scope.launch { commentRepository.observe(taskId).collect { comments -> extras.update { it.copy(comments = comments) } } }
         scope.launch { historyRepository.observe(taskId.value).collect { history -> extras.update { it.copy(history = history) } } }
+        // The cross-kind item cache the Trail resolves history peer titles from (ADR-0046) — folded into
+        // [extras] like comments/history so the combine re-resolves peers as the forest changes. Never fetches.
+        itemRepository?.let { repo -> scope.launch { repo.observeItems().collect { items -> extras.update { it.copy(items = items) } } } }
     }
 
     /** Best-effort on-open refresh (ADR-0043): reconcile the comment thread (outbox-aware) + replace the
@@ -579,6 +593,8 @@ class DefaultTaskDetailComponent(
         // The cached comment thread + item history (ADR-0043), merged into [activity] by the combine.
         val comments: List<Comment> = emptyList(),
         val history: List<ItemHistoryEvent> = emptyList(),
+        // The cross-kind item cache (ADR-0046) the combine resolves history peer titles against.
+        val items: List<Item> = emptyList(),
         val commentsLoading: Boolean = false,
         val isPostingComment: Boolean = false,
         val attachments: List<Attachment> = emptyList(),

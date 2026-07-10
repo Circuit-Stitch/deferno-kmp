@@ -911,4 +911,16 @@ Gracias.</string>
     <string name="activity_history_merged_child">Combinó una tarea</string>
     <string name="activity_history_merged_into_parent">Combinó con la tarea principal</string>
     <string name="activity_history_unknown">Hizo un cambio</string>
+    <string name="tasks_detail_tab_trail">Recorrido</string>
+    <string name="activity_history_status_transition">Estado: %1$s → %2$s</string>
+    <string name="activity_history_split_peer">Separada de: %1$s</string>
+    <string name="activity_history_moved_peer">Movida bajo: %1$s</string>
+    <string name="activity_history_parent_peer">Tarea principal asignada: %1$s</string>
+    <string name="activity_history_folded_peer">Fusionada con: %1$s</string>
+    <string name="activity_history_merged_peer">Combinada con: %1$s</string>
+    <string name="activity_history_peer_unknown">otro elemento</string>
+    <string name="activity_history_updated_fields">Editado: %1$s</string>
+    <string name="activity_field_title">Título</string>
+    <string name="activity_field_deadline">Fecha límite</string>
+    <string name="tasks_detail_trail_empty">Aún no hay actividad</string>
 </resources>

@@ -481,6 +481,7 @@ class DefaultMainShellComponent(
                                     detailRepository = taskDetailRepository,
                                     commentRepository = commentRepository,
                                     historyRepository = itemHistoryRepository,
+                                    itemRepository = itemRepository,
                                     commentWriter = commentWriter,
                                     currentUserId = currentUserId,
                                     createSubtask = createSubtask,

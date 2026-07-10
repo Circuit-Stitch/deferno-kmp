@@ -27,22 +27,71 @@ sealed interface ActivityItem {
         override val at: Instant get() = comment.createdAt // editedAt does not reorder the feed
     }
 
-    /** A server-authored history entry — read-only, keyed by its position in the (append-only) history. */
-    data class HistoryEvent(override val id: String, val event: ItemHistoryEvent) : ActivityItem {
+    /**
+     * A server-authored history entry — read-only, keyed by its position in the (append-only) history.
+     *
+     * [peerTitle] is the render-time-resolved title of the event's structural peer (the [Split] child,
+     * the [Moved] destination parent, …), looked up from the local item cache by [mergeActivity] and left
+     * `null` when the event has no peer or the peer has aged out of the window (the View then shows
+     * "another item"). It is resolved once, off the item cache the component already holds — the feed
+     * never fetches to render (ADR-0046).
+     */
+    data class HistoryEvent(
+        override val id: String,
+        val event: ItemHistoryEvent,
+        val peerTitle: String? = null,
+    ) : ActivityItem {
         override val at: Instant get() = event.recordedAt
     }
 }
 
 /**
+ * The structural **peer id** an [ItemHistoryEvent] references — the other item in a split/move/reparent/
+ * fold/merge — or `null` for events with no peer (Created, Updated, StatusChanged, MergedIntoParent,
+ * Unknown). [mergeActivity] resolves this id to a title off the local item cache; it never fetches. A
+ * [ItemHistoryEvent.Moved] prefers its destination ([Moved.toParentId]) and falls back to the origin
+ * ([Moved.fromParentId]) so a move to/from the root (both `null`) resolves to nothing.
+ */
+fun ItemHistoryEvent.peerId(): String? = when (this) {
+    is ItemHistoryEvent.Split -> childId
+    is ItemHistoryEvent.Moved -> toParentId ?: fromParentId
+    is ItemHistoryEvent.ParentAssigned -> parentId
+    is ItemHistoryEvent.FoldedInto -> nextTaskId
+    is ItemHistoryEvent.MergedChild -> childId
+    is ItemHistoryEvent.Created,
+    is ItemHistoryEvent.Updated,
+    is ItemHistoryEvent.StatusChanged,
+    is ItemHistoryEvent.MergedIntoParent,
+    is ItemHistoryEvent.Unknown,
+    -> null
+}
+
+/**
  * Merge a Task's cached [comments] (already non-deleted, oldest-first) and [history] (oldest-first) into
- * one chronological [ActivityItem] feed. Kotlin's `sortedBy` is stable, so same-instant rows keep their
- * source order (comments before history, history in server-array order) — the ADR's tiebreak.
+ * one **reverse-chronological** (newest first) [ActivityItem] feed — the Trail (ADR-0046). Kotlin's
+ * `sortedByDescending` is stable, so same-instant rows keep their source order (comments before history,
+ * history in server-array order) — the ADR's tiebreak.
+ *
+ * [peerTitle] resolves a history event's structural [peerId] (split child, move destination, …) to a
+ * title off the local item cache the caller holds; it returns `null` for an unresolved/aged-out peer (the
+ * View then renders "another item"). Resolution happens here, at merge time — the feed never fetches to
+ * render.
  *
  * History rows key off their **position**, not the store's `seq`: `ItemHistoryLocalStore.replaceForItem`
  * re-inserts wholesale on every refresh, so the SQLite `seq` churns — but server history is append-only,
  * so an existing event keeps its index across refreshes, making the index the *stabler* surrogate id.
  */
-fun mergeActivity(comments: List<CommentModel>, history: List<ItemHistoryEvent>): List<ActivityItem> =
+fun mergeActivity(
+    comments: List<CommentModel>,
+    history: List<ItemHistoryEvent>,
+    peerTitle: (peerId: String) -> String? = { null },
+): List<ActivityItem> =
     (comments.map { ActivityItem.Comment(it) } +
-        history.mapIndexed { index, event -> ActivityItem.HistoryEvent("history:$index", event) })
-        .sortedBy { it.at }
+        history.mapIndexed { index, event ->
+            ActivityItem.HistoryEvent(
+                id = "history:$index",
+                event = event,
+                peerTitle = event.peerId()?.let(peerTitle),
+            )
+        })
+        .sortedByDescending { it.at }
