@@ -623,6 +623,12 @@ Agradeço.</string>
     <string name="tasks_detail_add_caption">Adicionar legenda</string>
     <string name="tasks_detail_add_comment_placeholder">Adicionar um comentário…</string>
     <string name="tasks_detail_add_file">Adicionar arquivo</string>
+    <plurals name="tasks_detail_attachment_count">
+        <item quantity="one">%1$d anexo</item>
+        <item quantity="other">%1$d anexos</item>
+    </plurals>
+    <string name="tasks_detail_attachments_total">%1$s no total</string>
+    <string name="tasks_detail_attachments_view">Ver</string>
     <string name="tasks_detail_add_label_placeholder">Adicionar uma etiqueta…</string>
     <string name="tasks_detail_add_subtask_placeholder">Adicionar uma subtarefa…</string>
     <string name="tasks_detail_attachment_meta">%1$s · %2$s</string>

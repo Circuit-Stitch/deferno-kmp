@@ -802,6 +802,12 @@ Thank you.</string>
     <string name="tasks_detail_add_caption">Add caption</string>
     <string name="tasks_detail_add_comment_placeholder">Add a comment…</string>
     <string name="tasks_detail_add_file">Add file</string>
+    <plurals name="tasks_detail_attachment_count">
+        <item quantity="one">%1$d attachment</item>
+        <item quantity="other">%1$d attachments</item>
+    </plurals>
+    <string name="tasks_detail_attachments_total">%1$s total</string>
+    <string name="tasks_detail_attachments_view">View</string>
     <!-- Also the Search sheet label field -->
     <string name="tasks_detail_add_label_placeholder">Add a label…</string>
     <string name="tasks_detail_add_subtask_placeholder">Add a subtask…</string>

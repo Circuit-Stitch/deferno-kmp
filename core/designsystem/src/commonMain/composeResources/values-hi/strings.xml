@@ -621,6 +621,12 @@
     <string name="tasks_detail_add_caption">कैप्शन जोड़ें</string>
     <string name="tasks_detail_add_comment_placeholder">टिप्पणी जोड़ें…</string>
     <string name="tasks_detail_add_file">फ़ाइल जोड़ें</string>
+    <plurals name="tasks_detail_attachment_count">
+        <item quantity="one">%1$d अटैचमेंट</item>
+        <item quantity="other">%1$d अटैचमेंट</item>
+    </plurals>
+    <string name="tasks_detail_attachments_total">कुल %1$s</string>
+    <string name="tasks_detail_attachments_view">देखें</string>
     <string name="tasks_detail_add_label_placeholder">लेबल जोड़ें…</string>
     <string name="tasks_detail_add_subtask_placeholder">उपकार्य जोड़ें…</string>
     <string name="tasks_detail_attachment_meta">%1$s · %2$s</string>

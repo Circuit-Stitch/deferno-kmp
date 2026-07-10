@@ -305,6 +305,14 @@ private fun TaskBody(
                         onSetLabels = onSetLabels,
                         onStatusRowClick = { showStatusPicker = true },
                         ownerGroupCount = state.ownerGroupCount,
+                        attachments = state.attachments,
+                        isUploadingAttachment = state.isUploadingAttachment,
+                        onAddAttachment = onAddAttachment,
+                        onDeleteAttachment = onDeleteAttachment,
+                        onSetAttachmentCaption = onSetAttachmentCaption,
+                        onDeviceAttachments = state.onDeviceAttachments,
+                        onDeleteOnDeviceAttachment = onDeleteOnDeviceAttachment,
+                        onPlayOnDeviceAttachment = onPlayOnDeviceAttachment,
                     )
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -319,18 +327,6 @@ private fun TaskBody(
                         hideDone = state.hideDoneSubtasks,
                         onSetHideDone = onSetHideDoneSubtasks,
                         addSubtaskFocus = addSubtaskFocus,
-                    )
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    AttachmentsSection(
-                        attachments = state.attachments,
-                        isUploading = state.isUploadingAttachment,
-                        onAddClick = onAddAttachment,
-                        onDelete = onDeleteAttachment,
-                        onSetCaption = onSetAttachmentCaption,
-                        onDeviceAttachments = state.onDeviceAttachments,
-                        onDeleteOnDevice = onDeleteOnDeviceAttachment,
-                        onPlayOnDevice = onPlayOnDeviceAttachment,
                     )
                 }
                 DetailTab.Comments -> CommentsSection(

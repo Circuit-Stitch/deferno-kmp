@@ -621,6 +621,12 @@ Vielen Dank.</string>
     <string name="tasks_detail_add_caption">Beschriftung hinzufügen</string>
     <string name="tasks_detail_add_comment_placeholder">Kommentar hinzufügen…</string>
     <string name="tasks_detail_add_file">Datei hinzufügen</string>
+    <plurals name="tasks_detail_attachment_count">
+        <item quantity="one">%1$d Anhang</item>
+        <item quantity="other">%1$d Anhänge</item>
+    </plurals>
+    <string name="tasks_detail_attachments_total">%1$s insgesamt</string>
+    <string name="tasks_detail_attachments_view">Anzeigen</string>
     <string name="tasks_detail_add_label_placeholder">Label hinzufügen…</string>
     <string name="tasks_detail_add_subtask_placeholder">Unteraufgabe hinzufügen…</string>
     <string name="tasks_detail_attachment_meta">%1$s · %2$s</string>

@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -103,8 +105,11 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_co
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_file
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_label_placeholder
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_subtask_placeholder
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachment_count
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachment_meta
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachment_meta_on_device
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachments_total
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachments_view
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_caption_placeholder
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_clear_due_date_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_comment_author_member
@@ -221,6 +226,16 @@ internal fun PropertiesSection(
     onSetLabels: (List<String>) -> Unit,
     onStatusRowClick: () -> Unit,
     ownerGroupCount: Int,
+    // ATTACHMENTS now rides as the table's last row (rather than its own section below) — the file list +
+    // "Add file" affordance in the content cell, the label column supplying the "ATTACHMENTS" heading.
+    attachments: List<Attachment>,
+    isUploadingAttachment: Boolean,
+    onAddAttachment: () -> Unit,
+    onDeleteAttachment: (String) -> Unit,
+    onSetAttachmentCaption: (String, String?) -> Unit,
+    onDeviceAttachments: List<OnDeviceAttachment> = emptyList(),
+    onDeleteOnDeviceAttachment: (String) -> Unit = {},
+    onPlayOnDeviceAttachment: (OnDeviceAttachment) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val statusLabel = journeyLabelText(journeyStatus(task.workingState, task.blocked).label)
@@ -277,6 +292,23 @@ internal fun PropertiesSection(
                 }
             }
         }
+        add {
+            // ATTACHMENTS: always present (it holds the "Add file" affordance even with no files yet). A
+            // compact summary — the count + combined size + View/Add buttons — matching the other rows'
+            // columnar label|value shape; the full list (playback + delete) opens in the View sheet.
+            PropertyTableRow(label = stringResource(Res.string.tasks_detail_section_attachments)) {
+                AttachmentsCell(
+                    attachments = attachments,
+                    isUploading = isUploadingAttachment,
+                    onAddClick = onAddAttachment,
+                    onDelete = onDeleteAttachment,
+                    onSetCaption = onSetAttachmentCaption,
+                    onDeviceAttachments = onDeviceAttachments,
+                    onDeleteOnDevice = onDeleteOnDeviceAttachment,
+                    onPlayOnDevice = onPlayOnDeviceAttachment,
+                )
+            }
+        }
     }
     Column(
         modifier
@@ -291,8 +323,8 @@ internal fun PropertiesSection(
     }
 }
 
-/** The fixed left label column of the properties table. */
-private val PropLabelWidth = 92.dp
+/** The fixed left label column of the properties table — wide enough for the longest label ("ATTACHMENTS"). */
+private val PropLabelWidth = 116.dp
 
 /**
  * One properties-table row: a tinted small-caps label cell ruled off from the content cell. When [onClick] is
@@ -946,36 +978,52 @@ private fun AddSubtaskField(onAdd: (String) -> Unit, focusRequester: FocusReques
 // --- Attachments ---
 
 /**
- * The attachment list: filename + size/type + optional caption, tapping a row opens the signed URL in
- * the platform. An "Add file" affordance launches the platform file picker ([onAddClick]; the picker +
- * byte read are the host's androidMain glue), and each row offers Delete + an inline caption editor.
- * [isUploading] disables Add while a PUT is in flight.
+ * The ATTACHMENTS cell (ADR-0044): the value half of the properties table's attachments row — a **compact
+ * summary** (the count + combined size) over two actions: **View** (opens the [AttachmentsSheet] with the full
+ * list — playback, delete, caption edit) and **Add file** (the platform file picker; the picker + byte read
+ * are the host's androidMain glue). [isUploading] disables Add while a PUT is in flight. Keeping the list off
+ * the row lets the attachments live in the narrow value column like the other properties (LABELS / SOURCE).
  */
 @Composable
-internal fun AttachmentsSection(
+private fun AttachmentsCell(
     attachments: List<Attachment>,
     isUploading: Boolean,
     onAddClick: () -> Unit,
     onDelete: (String) -> Unit,
     onSetCaption: (String, String?) -> Unit,
-    modifier: Modifier = Modifier,
-    // On-device attachments (#211, e.g. a retained brain-dump recording). Rendered below the synced
-    // attachments: they have no signed URL, so audio is played locally rather than opened in a browser.
-    // Empty on platforms without on-device capture (desktop/iOS) — then this section is unchanged.
+    // On-device attachments (#211, e.g. a retained brain-dump recording). Folded into the count + size and
+    // shown in the View sheet (they have no signed URL, so audio plays locally). Empty on platforms without
+    // on-device capture (desktop/iOS).
     onDeviceAttachments: List<OnDeviceAttachment> = emptyList(),
     onDeleteOnDevice: (String) -> Unit = {},
     onPlayOnDevice: (OnDeviceAttachment) -> Unit = {},
 ) {
-    Column(modifier.fillMaxWidth()) {
-        SectionHeader(
-            stringResource(Res.string.tasks_detail_section_attachments),
-            trailing = (attachments.size + onDeviceAttachments.size).toString(),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(onClick = onAddClick, enabled = !isUploading) {
+    var showSheet by remember { mutableStateOf(false) }
+    val count = attachments.size + onDeviceAttachments.size
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (count == 0) {
+            Text(
+                stringResource(Res.string.tasks_detail_no_attachments),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.defernoColors.inkMuted,
+            )
+        } else {
+            // Count over combined size, stacked — the narrow value column can't hold both side by side.
+            val totalBytes = attachments.sumOf { it.size } + onDeviceAttachments.sumOf { it.size }
+            Text(
+                text = pluralStringResource(Res.plurals.tasks_detail_attachment_count, count, count),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            MonoMeta(text = stringResource(Res.string.tasks_detail_attachments_total, formatBytes(totalBytes)))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (count > 0) {
+                TextButton(onClick = { showSheet = true }) {
+                    Text(stringResource(Res.string.tasks_detail_attachments_view))
+                }
+            }
+            TextButton(onClick = onAddClick, enabled = !isUploading) {
                 Text(
                     if (isUploading) {
                         stringResource(Res.string.tasks_detail_uploading)
@@ -985,13 +1033,50 @@ internal fun AttachmentsSection(
                 )
             }
         }
-        if (attachments.isEmpty() && onDeviceAttachments.isEmpty()) {
+    }
+    if (showSheet) {
+        AttachmentsSheet(
+            attachments = attachments,
+            onDeviceAttachments = onDeviceAttachments,
+            onDelete = onDelete,
+            onSetCaption = onSetCaption,
+            onDeleteOnDevice = onDeleteOnDevice,
+            onPlayOnDevice = onPlayOnDevice,
+            onDismiss = { showSheet = false },
+        )
+    }
+}
+
+/**
+ * The **View attachments** sheet (ADR-0044): a modal bottom sheet with the full attachment list the compact
+ * cell summarises — each synced file (open / delete / caption) and each on-device recording (play / delete).
+ * Adding a file stays on the row (its picker is the host's glue); this sheet is view + manage only.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AttachmentsSheet(
+    attachments: List<Attachment>,
+    onDeviceAttachments: List<OnDeviceAttachment>,
+    onDelete: (String) -> Unit,
+    onSetCaption: (String, String?) -> Unit,
+    onDeleteOnDevice: (String) -> Unit,
+    onPlayOnDevice: (OnDeviceAttachment) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 22.dp)
+                .padding(bottom = 28.dp),
+        ) {
             Text(
-                stringResource(Res.string.tasks_detail_no_attachments),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.defernoColors.inkMuted,
+                text = stringResource(Res.string.tasks_detail_section_attachments),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(bottom = 8.dp).semantics { heading() },
             )
-        } else {
             attachments.forEach { a -> AttachmentRow(a, onDelete, onSetCaption) }
             onDeviceAttachments.forEach { a -> OnDeviceAttachmentRow(a, onDeleteOnDevice, onPlayOnDevice) }
         }
