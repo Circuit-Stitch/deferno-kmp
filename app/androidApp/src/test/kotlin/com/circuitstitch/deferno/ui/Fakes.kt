@@ -73,11 +73,13 @@ internal fun sampleTask(
     completeBy: Instant? = null,
     deadlineTimeOfDay: kotlinx.datetime.LocalTime? = null,
     ownerOrgId: OrgId? = null,
+    blocked: Boolean = false,
 ): Task = Task(
     id = TaskId(id),
     orgSlug = "u-deferno",
     title = title,
     workingState = workingState,
+    blocked = blocked,
     labels = labels,
     ref = ref,
     parentId = parentId?.let(::TaskId),

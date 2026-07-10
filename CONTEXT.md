@@ -63,8 +63,13 @@ casing). The client names them distinctly and condenses them in the DTO→domain
 DTOs stay faithful, the domain types are clean.
 
 **Working state**:
-A [[Task]]'s progress through its own lifecycle — Open, In-progress, In-review, Done, Dropped.
-_Avoid_: status, task status.
+A [[Task]]'s progress through its own lifecycle — Open, In-progress, In-review, Done, Dropped. These
+are the canonical state names; the interactive editor labels Dropped **"Set aside"** (gentle, no-shame
+— one term per concept). A **read-only status indicator** renders a separate **display-only "journey
+vocabulary"** as a *reading* over these states — TO-DO (Open) · IN-PROGRESS · IN-REVIEW · DONE · **NOT
+DOING** (Dropped) — plus **BLOCKED**, surfaced from the orthogonal [[Blocked / blocker]] flag. The
+journey labels live only in that indicator; they are not the state's name anywhere else.
+_Avoid_: status, task status; using the journey labels (TO-DO, NOT DOING) as a state name outside the indicator.
 
 **Definition state**:
 The "light switch" on a recurring definition ([[Habit]]/[[Chore]]/[[Event]]) — whether it is live or
@@ -87,13 +92,22 @@ invent one (no P0–P3 enum, no priority labels): anything that extracts or rank
 or reads those three attributes.
 _Avoid_: priority as a stored field, priority labels ("p1"), importance (use the specific attribute).
 
-**Dependency** *(client, disambiguation — say sequence or decomposition)*:
-The domain has **no blocks/blocked-by edge**. What look like "dependencies" are two existing
-relations: a **sequence** (an ordered chain via `nextTaskId` — "first X, then Y", the chain
-`fold`/promote manipulate) and a **decomposition** (a parent/child tree via `parentId` — "Y is part
-of Z", the backend's [[Subtask/Child]]). Anything extracting or displaying "dependencies" uses these
-two; a true cross-chain blocker relation does not exist and must not be faked with labels or notes.
-_Avoid_: dependency, blocker, blocked-by, prerequisite (name the relation: sequence or decomposition).
+**Blocked / blocker** *(client — server-derived, read-only)*:
+A real dependency edge exists (ADR-0034, #289/#291/#292): a [[Task]]'s ordered **`blockedBy`** list
+names the items gating it. The server derives two read-only flags the client never re-computes —
+**`blocked`** (an unresolved blocker, *or* a blocked ancestor: the flag inherits **down** the
+decomposition tree) and **`isBlocker`** (this item gates at least one other). The client *shows*
+blocked-ness (the status reading, the tree's de-emphasis, the "Blocked by…" picker + destructive
+unblock) but treats readiness as server truth. Blocked is **orthogonal to [[Working state]]** — an
+Open or In-progress item may also be blocked; it is **not** a sixth WorkingState.
+_Avoid_: re-deriving readiness on the client; a "Blocked" WorkingState; faking a blocker with labels/notes.
+
+**Sequence vs decomposition** *(client, disambiguation)*:
+Two *other* relations that also read as "dependencies": a **sequence** (an ordered chain via
+`nextTaskId` — "first X, then Y", what `fold`/promote manipulate) and a **decomposition** (a
+parent/child tree via `parentId` — "Y is part of Z", the backend's [[Subtask/Child]]). Name the
+specific relation rather than the generic "dependency".
+_Avoid_: dependency, prerequisite (name the relation: blocked, sequence, or decomposition).
 
 **Item tree** *(client)*:
 The Tasks [[Destination]]'s rendering of the [[Subtask/Child]] **decomposition** as one nested,

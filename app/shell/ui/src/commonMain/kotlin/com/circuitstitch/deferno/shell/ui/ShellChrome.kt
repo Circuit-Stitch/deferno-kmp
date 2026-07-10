@@ -180,6 +180,10 @@ fun ShellChrome(
     // supply its own leading control. The Tasks destination puts a Files-style search pill (☰ inside it +
     // trailing magnifier) here so search reads as the native top bar. Ignored when drilled. Null = ☰ + title.
     topBarCenter: (@Composable () -> Unit)? = null,
+    // Whether the bottom-centre capture FAB pair is offered (ADR-0044). Defaults on; the caller suppresses
+    // it where capture doesn't apply — e.g. a compact Tasks detail whose top bar OWNS the drilled ← + overflow
+    // and shouldn't float a New/Brain-dump pair over a read surface. Still gated on `chrome.actions` too.
+    showCaptureFabs: Boolean = true,
     body: @Composable () -> Unit,
 ) {
     val chrome by component.chrome.collectAsState()
@@ -307,15 +311,19 @@ fun ShellChrome(
                 }
                 // The capture FAB pair floats bottom-centre, clear of the nav bar — the native thumb-reach
                 // home for the primary actions, leaving the top bar free for a full-width search pill.
-                ShellCaptureFabs(
-                    actions = chrome.actions,
-                    brainDumpIcon = brainDumpIcon,
-                    newIcon = newIcon,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(bottom = 16.dp),
-                )
+                // Suppressed on a compact Tasks detail (showCaptureFabs = false): its drilled bar owns the
+                // ← + overflow, so no capture pair floats over the read surface (ADR-0044).
+                if (showCaptureFabs) {
+                    ShellCaptureFabs(
+                        actions = chrome.actions,
+                        brainDumpIcon = brainDumpIcon,
+                        newIcon = newIcon,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                            .padding(bottom = 16.dp),
+                    )
+                }
                 // When open, the slid-aside content is the dismiss target: tap to close, or drag it back
                 // toward the edge (finger-tracking) to close.
                 if (drawerOpen) {

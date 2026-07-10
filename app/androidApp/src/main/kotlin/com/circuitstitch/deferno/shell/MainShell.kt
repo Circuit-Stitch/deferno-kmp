@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -22,6 +24,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -41,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.circuitstitch.deferno.R
 import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_back
 import com.circuitstitch.deferno.core.designsystem.resources.common_dismiss
 import com.circuitstitch.deferno.core.designsystem.resources.common_search
 import com.circuitstitch.deferno.core.designsystem.resources.shell_coming_soon_body
@@ -54,7 +60,9 @@ import com.circuitstitch.deferno.feature.calendar.ui.CalendarScreen
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.profile.ui.ProfileScreen
 import com.circuitstitch.deferno.feature.settings.ui.SettingsScreen
+import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.feature.tasks.ui.SearchScreen
+import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailOverflowMenu
 import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TasksScreen
 import com.circuitstitch.deferno.shell.ui.ActivityScreen
@@ -85,6 +93,13 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
 
     val openSearch = { component.openOverlay(OverlayRoute.Search()) }
 
+    // ADR-0044: a COMPACT Tasks detail (single-pane, with a detail foreground) makes the shell top bar a
+    // drilled bar — ← back + a contextual overflow, no title, no search pill — computed HERE in the View so
+    // the Compose-free `MainShellComponent`/`ChromeSpec` stay window-blind (§7 View-resolved). The predicate
+    // is byte-identical to the one TasksScreen's ListDetailPaneScaffold uses, so the bar and the panes agree.
+    val tasksComponent = (active as? MainShellComponent.DestinationChild.Tasks)?.component
+    val compactDetail = rememberTasksCompactDetail(active)
+
     Box(modifier.fillMaxSize()) {
         ShellChrome(
             component = component,
@@ -95,14 +110,22 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
             // composeResources; the real app loads these fine either way) — see ShellChrome's KDoc.
             brainDumpIcon = painterResource(R.drawable.ic_voice_chat),
             newIcon = painterResource(R.drawable.ic_add_task),
-            // Tasks makes the search bar the native top chrome (Files-style: ☰ inside the pill, magnifier
-            // trailing). It owns the bar, so its inline search band is dropped (TaskListScreen). end padding
-            // keeps the pill clear of the trailing capture FAB pair.
-            topBarCenter = if (active.destination == Destination.Tasks) {
-                { TasksSearchBar(onMenu = { drawerOpen = !drawerOpen }, onSearch = openSearch) }
-            } else {
-                null
+            // A compact Tasks detail drills the bar (← + overflow); else Tasks makes the search bar the
+            // native top chrome (Files-style: ☰ inside the pill, magnifier trailing) — it owns the bar, so
+            // its inline search band is dropped (TaskListScreen). Two-pane keeps the search pill (the detail
+            // sits beside the tree, not drilled over it). Every other Destination = ☰ + title (null).
+            topBarCenter = when {
+                compactDetail && tasksComponent != null -> {
+                    { TasksDetailDrilledBar(shell = component, tasks = tasksComponent) }
+                }
+                active.destination == Destination.Tasks -> {
+                    { TasksSearchBar(onMenu = { drawerOpen = !drawerOpen }, onSearch = openSearch) }
+                }
+                else -> null
             },
+            // The drilled bar owns the ← + overflow, so suppress the bottom-centre capture FAB pair over the
+            // read surface; every other surface keeps it (ADR-0044).
+            showCaptureFabs = !compactDetail,
             body = { DestinationBody(active, openSearch, Modifier.fillMaxSize()) },
         )
 
@@ -165,6 +188,45 @@ private fun TasksSearchBar(onMenu: () -> Unit, onSearch: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+/**
+ * Whether the active surface is a **compact Tasks detail** (ADR-0044): the Tasks Destination is foreground,
+ * a detail is open, AND the window collapses to a single pane. The single-pane test is **byte-identical** to
+ * the one `TasksScreen`'s `ListDetailPaneScaffold` uses (`calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth`
+ * over `currentWindowAdaptiveInfo`, `maxHorizontalPartitions == 1`) so the drilled bar and the pane scaffold
+ * never disagree about whether the detail is drilled-over (compact) or side-by-side (two-pane). Any non-Tasks
+ * Destination short-circuits to false.
+ */
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+private fun rememberTasksCompactDetail(active: MainShellComponent.DestinationChild): Boolean {
+    val tasks = (active as? MainShellComponent.DestinationChild.Tasks)?.component ?: return false
+    val slot by tasks.detail.subscribeAsState()
+    val singlePane = calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth(currentWindowAdaptiveInfo())
+        .maxHorizontalPartitions == 1
+    return slot.child != null && singlePane
+}
+
+/**
+ * The **drilled Tasks-detail top bar** (ADR-0044): on a compact detail the shell bar carries a leading ← back
+ * + a trailing contextual overflow, and NO title / search pill (the connected-parent node in the body is the
+ * heading). Back reuses the same [MainShellComponent.onBack] the activity `BackHandler` and the drawer ← run
+ * (it pops the foreground Tasks detail). The overflow binds to the LIVE foreground [TaskDetailComponent] read
+ * off the detail slot; if it is momentarily null between activations, only the ← renders.
+ */
+@Composable
+private fun TasksDetailDrilledBar(shell: MainShellComponent, tasks: TasksComponent) {
+    val slot by tasks.detail.subscribeAsState()
+    val detail = slot.child?.instance
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // Reserve the ← from the OS back gesture so its taps aren't eaten at the left edge (as ShellTopBar does).
+        IconButton(onClick = { shell.onBack() }, modifier = Modifier.systemGestureExclusionCompat()) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.common_back))
+        }
+        Spacer(Modifier.weight(1f))
+        detail?.let { TaskDetailOverflowMenu(it) }
     }
 }
 

@@ -1,13 +1,21 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,14 +27,18 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -35,13 +47,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -52,7 +72,6 @@ import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
-import com.circuitstitch.deferno.core.designsystem.format.formatTime
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.activity_history_created
 import com.circuitstitch.deferno.core.designsystem.resources.activity_history_folded_into
@@ -69,6 +88,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
 import com.circuitstitch.deferno.core.designsystem.resources.common_clear
 import com.circuitstitch.deferno.core.designsystem.resources.common_collapse_named_cd
 import com.circuitstitch.deferno.core.designsystem.resources.common_delete
+import com.circuitstitch.deferno.core.designsystem.resources.common_done
 import com.circuitstitch.deferno.core.designsystem.resources.common_edit
 import com.circuitstitch.deferno.core.designsystem.resources.common_expand_named_cd
 import com.circuitstitch.deferno.core.designsystem.resources.common_labels
@@ -80,14 +100,16 @@ import com.circuitstitch.deferno.core.designsystem.resources.common_set
 import com.circuitstitch.deferno.core.designsystem.resources.common_size_bytes
 import com.circuitstitch.deferno.core.designsystem.resources.common_size_kb
 import com.circuitstitch.deferno.core.designsystem.resources.common_size_mb
-import com.circuitstitch.deferno.core.designsystem.resources.common_time_pattern
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_caption
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_comment_placeholder
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_file
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_label_placeholder
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_subtask_placeholder
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachment_count
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachment_meta
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachment_meta_on_device
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachments_total
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_attachments_view
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_caption_placeholder
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_clear_due_date_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_comment_author_member
@@ -105,18 +127,31 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_play
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_play_attachment_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_post
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_posting
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_due
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_owner
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_source
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_time
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_status
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_when
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_remove_caption_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_remove_label_a11y
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_activity
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_attachments
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_properties
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_history
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_filter_hide_done
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_subtasks
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_set_due_date
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_status_picker_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_status_row_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_tab_comments
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_due_days_ago
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_due_days_away
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_due_today
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_due_tomorrow
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_due_yesterday
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_journey_blocked
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_journey_done
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_journey_in_progress
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_journey_in_review
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_journey_not_doing
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_journey_todo
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_source_open_in
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_source_row_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_source_row_no_link_a11y
@@ -130,17 +165,27 @@ import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.JourneyLabel
+import com.circuitstitch.deferno.core.model.JourneySlot
+import com.circuitstitch.deferno.core.model.JourneyStyle
+import com.circuitstitch.deferno.core.model.RelativeDay
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.journeyStatus
+import com.circuitstitch.deferno.core.model.relativeDay
 import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.SubtaskRow
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.time.Instant
 
 // The web-parity Task detail sections (Subtasks tree · Attachments · Activity/Comments). Platform-
@@ -164,47 +209,413 @@ internal fun SectionHeader(title: String, modifier: Modifier = Modifier, trailin
     )
 }
 
-// --- Properties (DUE · TIME · LABELS · OWNER) ---
+// --- Properties table (WHEN · STATUS · LABELS · OWNER · SOURCE) ---
 
 /**
- * The calm PROPERTIES block on the Task detail: a flat list of rows for the deadline DUE date, its
- * TIME-of-day, the LABELS, and the OWNER org. DUE and LABELS are editable through the [TaskDetailComponent]
- * write seams ([onSetDeadline] / [onSetLabels], optimistic + offline-first); TIME and OWNER are read-only
- * this slice. Renders straight off the hydrated [task] fields — no new component state (#195).
- *
- * Design-principles.md: plain labels, large touch targets, a muted "—" for absent values, and
- * self-describing TalkBack semantics on the interactive controls.
+ * The Task detail's **properties table** (ADR-0044): a small-caps label column ruled off from the content,
+ * rows divided by hairlines, wrapped in a rounded border — the calm "everything in one card" of the detail
+ * mockup. WHEN (the deadline day + a relative-day suffix) and LABELS are inline-editable through the
+ * [TaskDetailComponent] write seams ([onSetDeadline] / [onSetLabels], optimistic + offline-first); STATUS is
+ * the read-only journey track whose whole row opens the status picker sheet. OWNER and SOURCE rows appear only
+ * when the item carries them. Renders straight off the hydrated [task] fields — no new component state (#195).
  */
 @Composable
 internal fun PropertiesSection(
     task: Task,
     onSetDeadline: (LocalDate?) -> Unit,
     onSetLabels: (List<String>) -> Unit,
+    onStatusRowClick: () -> Unit,
+    ownerGroupCount: Int,
+    // ATTACHMENTS now rides as the table's last row (rather than its own section below) — the file list +
+    // "Add file" affordance in the content cell, the label column supplying the "ATTACHMENTS" heading.
+    attachments: List<Attachment>,
+    isUploadingAttachment: Boolean,
+    onAddAttachment: () -> Unit,
+    onDeleteAttachment: (String) -> Unit,
+    onSetAttachmentCaption: (String, String?) -> Unit,
+    onDeviceAttachments: List<OnDeviceAttachment> = emptyList(),
+    onDeleteOnDeviceAttachment: (String) -> Unit = {},
+    onPlayOnDeviceAttachment: (OnDeviceAttachment) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier.fillMaxWidth()) {
-        SectionHeader(stringResource(Res.string.tasks_detail_section_properties))
-        DueRow(completeBy = task.completeBy, onSetDeadline = onSetDeadline)
-        // ponytail: editable TIME is deferred — it needs the deadline_time_of_day mutation seam.
-        PropertyRow(
-            label = stringResource(Res.string.tasks_detail_property_time),
-            value = task.deadlineTimeOfDay?.let { formatTime(it, stringResource(Res.string.common_time_pattern)) } ?: "—",
-        )
-        LabelsRow(labels = task.labels, onSetLabels = onSetLabels)
-        PropertyRow(label = stringResource(Res.string.tasks_detail_property_owner), value = task.ownerOrgId?.value ?: "—")
-        // Source cell for a synced/imported item: the provenance mark + origin label, linking to the
-        // provider. Renders only when the item carries external provenance (a native Task shows no row).
-        task.external?.let { SourceRow(it) }
+    val statusLabel = journeyLabelText(journeyStatus(task.workingState, task.blocked).label)
+    val statusA11y = stringResource(Res.string.tasks_detail_status_row_a11y, statusLabel)
+
+    // Only the rows this item actually carries (ADR-0044): WHEN drops when no deadline is set; STATUS + LABELS
+    // are always present; SOURCE only for an imported item. OWNER shows only for a shared / multi-group account
+    // ([ownerGroupCount] > 1) — a single-group user's only group is their own personal org, so the row is noise.
+    val rows = buildList<@Composable () -> Unit> {
+        if (task.completeBy != null) {
+            add {
+                // WHEN: the deadline day + a relative-day suffix ("N days away"), editable through the picker.
+                PropertyTableRow(label = stringResource(Res.string.tasks_detail_property_when)) {
+                    DueCell(completeBy = task.completeBy, onSetDeadline = onSetDeadline)
+                }
+            }
+        }
+        add {
+            // STATUS: the read-only journey track; tapping the whole row opens the status picker sheet.
+            PropertyTableRow(
+                label = stringResource(Res.string.tasks_detail_property_status),
+                onClick = onStatusRowClick,
+                onClickLabel = stringResource(Res.string.tasks_detail_status_picker_title),
+                rowSemantics = statusA11y,
+            ) {
+                JourneyStatusIndicator(workingState = task.workingState, blocked = task.blocked)
+            }
+        }
+        add {
+            PropertyTableRow(label = stringResource(Res.string.common_labels)) {
+                LabelsCell(labels = task.labels, onSetLabels = onSetLabels)
+            }
+        }
+        // OWNER: the owning org — shown only for a shared / multi-group account (more than one group across
+        // the cached items). A single-group user's only group is their personal org, so the row is hidden.
+        if (ownerGroupCount > 1) {
+            task.ownerOrgId?.let { owner ->
+                add {
+                    PropertyTableRow(label = stringResource(Res.string.tasks_detail_property_owner)) {
+                        Text(
+                            text = owner.value,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+        }
+        task.external?.let { external ->
+            add {
+                // SOURCE: the provenance mark + origin label for a synced/imported item; only when external.
+                PropertyTableRow(label = stringResource(Res.string.tasks_detail_property_source)) {
+                    SourceCell(external)
+                }
+            }
+        }
+        add {
+            // ATTACHMENTS: always present (it holds the "Add file" affordance even with no files yet). A
+            // compact summary — the count + combined size + View/Add buttons — matching the other rows'
+            // columnar label|value shape; the full list (playback + delete) opens in the View sheet.
+            PropertyTableRow(label = stringResource(Res.string.tasks_detail_section_attachments)) {
+                AttachmentsCell(
+                    attachments = attachments,
+                    isUploading = isUploadingAttachment,
+                    onAddClick = onAddAttachment,
+                    onDelete = onDeleteAttachment,
+                    onSetCaption = onSetAttachmentCaption,
+                    onDeviceAttachments = onDeviceAttachments,
+                    onDeleteOnDevice = onDeleteOnDeviceAttachment,
+                    onPlayOnDevice = onPlayOnDeviceAttachment,
+                )
+            }
+        }
+    }
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium),
+    ) {
+        rows.forEachIndexed { i, row ->
+            if (i > 0) PropertyTableDivider()
+            row()
+        }
+    }
+}
+
+/** The fixed left label column of the properties table — wide enough for the longest label ("ATTACHMENTS"). */
+private val PropLabelWidth = 116.dp
+
+/**
+ * One properties-table row: a tinted small-caps label cell ruled off from the content cell. When [onClick] is
+ * set the whole row is tappable (the STATUS row → status picker) and announced as one node via [rowSemantics].
+ */
+@Composable
+private fun PropertyTableRow(
+    label: String,
+    onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
+    rowSemantics: String? = null,
+    content: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .heightIn(min = MinTouchTarget)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(onClickLabel = onClickLabel) { onClick() }
+                } else {
+                    Modifier
+                },
+            )
+            .then(
+                if (rowSemantics != null) {
+                    Modifier.clearAndSetSemantics { contentDescription = rowSemantics }
+                } else {
+                    Modifier
+                },
+            ),
+    ) {
+        Box(
+            Modifier
+                .width(PropLabelWidth)
+                .fillMaxHeight()
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(horizontal = 12.dp, vertical = 14.dp),
+        ) {
+            Text(
+                text = label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.defernoColors.inkMuted,
+            )
+        }
+        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Box(
+            Modifier
+                .weight(1f)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            content()
+        }
+    }
+}
+
+/** The hairline between two properties-table rows. */
+@Composable
+private fun PropertyTableDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+/**
+ * The read-only **journey status** indicator (ADR-0044): a labelled three-node track — initial `TO-DO` → a
+ * present marker → terminal `DONE`. Each slot label sits **above** the track, aligned over its node; the
+ * active node is filled in its slot colour (`DONE` in the success green, a blocked middle in an error-red
+ * four-point star), and the not-yet-reached nodes are a soft grey. A shelved (Dropped / `NOT DOING`) reading
+ * draws a **dashed** tail to a **hollow, struck-through** `DONE` — "not headed to done". Colour is
+ * reinforcement only — the reading carries text plus a `clearAndSetSemantics` contentDescription, so it is
+ * never the sole signal. There is no `onClick`: state changes go through the status picker sheet.
+ */
+@Composable
+internal fun JourneyStatusIndicator(
+    workingState: WorkingState,
+    blocked: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val status = journeyStatus(workingState, blocked)
+    val middleText = when (status.label) {
+        JourneyLabel.InProgress -> stringResource(Res.string.tasks_journey_in_progress)
+        JourneyLabel.InReview -> stringResource(Res.string.tasks_journey_in_review)
+        JourneyLabel.Blocked -> stringResource(Res.string.tasks_journey_blocked)
+        JourneyLabel.NotDoing -> stringResource(Res.string.tasks_journey_not_doing)
+        // When the reading is at an endpoint the middle shows a muted "not there yet" hint.
+        JourneyLabel.ToDo, JourneyLabel.Done -> stringResource(Res.string.tasks_journey_in_progress)
+    }
+    val a11y = journeyLabelText(status.label)
+
+    val primary = MaterialTheme.colorScheme.primary
+    val done = MaterialTheme.defernoColors.success
+    val muted = MaterialTheme.defernoColors.inkMuted
+    val lineColor = MaterialTheme.colorScheme.outlineVariant
+    // Soft grey fill for the not-yet-reached nodes (reinforced by the muted, non-bold labels above).
+    val idle = muted.copy(alpha = 0.35f)
+    val middleColor = when (status.style) {
+        JourneyStyle.Blocked -> MaterialTheme.colorScheme.error
+        JourneyStyle.NotDoing -> muted
+        JourneyStyle.Normal -> primary
+    }
+    val shelved = status.style == JourneyStyle.NotDoing
+
+    Column(
+        modifier = modifier.clearAndSetSemantics { contentDescription = a11y },
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        // The labels overlaid above the track, each aligned over its node (start · center · end). A Box rather
+        // than equal thirds so a long middle label ("IN-PROGRESS") isn't capped to a third and truncated — the
+        // short end labels (TO-DO / DONE) leave the centre room.
+        Box(Modifier.fillMaxWidth()) {
+            JourneyLabel(
+                text = stringResource(Res.string.tasks_journey_todo),
+                active = status.slot == JourneySlot.Initial,
+                color = primary, muted = muted,
+                modifier = Modifier.align(Alignment.CenterStart),
+            )
+            JourneyLabel(
+                text = middleText,
+                active = status.slot == JourneySlot.Middle,
+                color = middleColor, muted = muted,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            JourneyLabel(
+                text = stringResource(Res.string.tasks_journey_done),
+                active = status.slot == JourneySlot.Terminal,
+                color = done, muted = muted, struck = shelved,
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
+        }
+        // The track: a hairline through three nodes at the start / centre / end.
+        Canvas(Modifier.fillMaxWidth().height(JourneyTrackHeight)) {
+            val cy = size.height / 2f
+            val r = JourneyNodeRadius.toPx()
+            val left = Offset(r, cy)
+            val mid = Offset(size.width / 2f, cy)
+            val right = Offset(size.width - r, cy)
+            val stroke = JourneyTrackStroke.toPx()
+            drawLine(lineColor, left, mid, stroke)
+            drawLine(
+                lineColor, mid, right, stroke,
+                pathEffect = if (shelved) {
+                    val d = JourneyDash.toPx()
+                    PathEffect.dashPathEffect(floatArrayOf(d, d))
+                } else {
+                    null
+                },
+            )
+            journeyNode(left, active = status.slot == JourneySlot.Initial, color = primary, idle = idle, radius = r)
+            if (status.style == JourneyStyle.Blocked) {
+                journeyStar(mid, JourneyStarRadius.toPx(), middleColor)
+            } else {
+                journeyNode(mid, active = status.slot == JourneySlot.Middle, color = middleColor, idle = idle, radius = r)
+            }
+            if (shelved) {
+                // Not headed to done — a hollow ring rather than a filled node.
+                drawCircle(muted, r, right, style = Stroke(width = stroke))
+            } else {
+                journeyNode(right, active = status.slot == JourneySlot.Terminal, color = done, idle = idle, radius = r)
+            }
+        }
+    }
+}
+
+/** One journey slot label above its node; coloured + semibold only when it is the active slot. */
+@Composable
+private fun JourneyLabel(
+    text: String,
+    active: Boolean,
+    color: Color,
+    muted: Color,
+    modifier: Modifier = Modifier,
+    struck: Boolean = false,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+        color = if (active) color else muted,
+        textDecoration = if (struck) TextDecoration.LineThrough else TextDecoration.None,
+        maxLines = 1,
+        softWrap = false,
+        modifier = modifier,
+    )
+}
+
+/** A filled track node — the slot colour when active, a soft grey when the reading has not reached it. */
+private fun DrawScope.journeyNode(center: Offset, active: Boolean, color: Color, idle: Color, radius: Float) {
+    drawCircle(if (active) color else idle, radius, center)
+}
+
+/** The blocked marker: a four-point star ("stuck") on the middle node, drawn in the error colour. */
+private fun DrawScope.journeyStar(center: Offset, outer: Float, color: Color) {
+    val inner = outer * 0.4f
+    val path = Path()
+    for (i in 0 until 8) {
+        val rad = if (i % 2 == 0) outer else inner
+        val a = ((-90f + i * 45f) * PI / 180f).toFloat()
+        path.run { if (i == 0) moveTo(center.x + rad * cos(a), center.y + rad * sin(a)) else lineTo(center.x + rad * cos(a), center.y + rad * sin(a)) }
+    }
+    path.close()
+    drawPath(path, color)
+}
+
+private val JourneyTrackHeight = 18.dp
+private val JourneyNodeRadius = 5.dp
+private val JourneyStarRadius = 8.dp
+private val JourneyTrackStroke = 1.5.dp
+private val JourneyDash = 4.dp
+
+/** The display-only journey label (ADR-0044): a [JourneyLabel] typed code → its `tasks_journey_*` string. */
+@Composable
+private fun journeyLabelText(label: JourneyLabel): String = stringResource(
+    when (label) {
+        JourneyLabel.ToDo -> Res.string.tasks_journey_todo
+        JourneyLabel.InProgress -> Res.string.tasks_journey_in_progress
+        JourneyLabel.InReview -> Res.string.tasks_journey_in_review
+        JourneyLabel.Done -> Res.string.tasks_journey_done
+        JourneyLabel.NotDoing -> Res.string.tasks_journey_not_doing
+        JourneyLabel.Blocked -> Res.string.tasks_journey_blocked
+    },
+)
+
+/** The relative-day reading (ADR-0044) mapped to its localized string — discrete keys, plurals for N days. */
+@Composable
+private fun relativeDayText(rel: RelativeDay): String = when (rel) {
+    RelativeDay.Today -> stringResource(Res.string.tasks_detail_due_today)
+    RelativeDay.Tomorrow -> stringResource(Res.string.tasks_detail_due_tomorrow)
+    RelativeDay.Yesterday -> stringResource(Res.string.tasks_detail_due_yesterday)
+    is RelativeDay.DaysAway -> pluralStringResource(Res.plurals.tasks_detail_due_days_away, rel.days, rel.days)
+    is RelativeDay.DaysAgo -> pluralStringResource(Res.plurals.tasks_detail_due_days_ago, rel.days, rel.days)
+}
+
+/**
+ * The status picker sheet (ADR-0044): a modal bottom sheet listing the five [WorkingState]s (via
+ * [workingStateLabel]) with the [current] one marked; tapping a row forwards [onSelect] then [onDismiss].
+ * This is the only way to reach Dropped now the inline chips + the kebab's "Set aside" are gone.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun StatusPickerSheet(
+    current: WorkingState,
+    onSelect: (WorkingState) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = stringResource(Res.string.tasks_detail_status_picker_title),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(bottom = 8.dp).semantics { heading() },
+            )
+            WorkingState.entries.forEach { s ->
+                val selected = s == current
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = MinTouchTarget)
+                        .clickable { onSelect(s) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = workingStateLabel(s),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (selected) {
+                        Icon(
+                            imageVector = DefernoIcons.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 /**
- * The detail Source cell: the provider [SourceIndicator] mark + the origin label (the `owner/repo#N` tracker
+ * The SOURCE cell content: the provider [SourceIndicator] mark + the origin label (the `owner/repo#N` tracker
  * ref, or the provider label for a non-tracker), opening the provider URL when present. The label underlines
  * only when it links somewhere. Read-only — provenance, not an editor.
  */
 @Composable
-private fun SourceRow(external: ExternalRef) {
+private fun SourceCell(external: ExternalRef) {
     val uriHandler = LocalUriHandler.current
     val label = sourceOriginLabel(external)
     val url = external.url
@@ -216,7 +627,6 @@ private fun SourceRow(external: ExternalRef) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = MinTouchTarget)
             .then(
                 if (url != null) {
                     Modifier.clickable(
@@ -229,12 +639,6 @@ private fun SourceRow(external: ExternalRef) {
             .clearAndSetSemantics { contentDescription = rowSemantics },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = stringResource(Res.string.tasks_detail_property_source),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.defernoColors.inkMuted,
-            modifier = Modifier.width(80.dp),
-        )
         SourceIndicator(external.source)
         Spacer(Modifier.width(6.dp))
         Text(
@@ -242,53 +646,28 @@ private fun SourceRow(external: ExternalRef) {
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
             textDecoration = if (url != null) TextDecoration.Underline else TextDecoration.None,
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-/** A read-only property: a fixed label and its value (or a muted "—" when absent). */
-@Composable
-private fun PropertyRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.defernoColors.inkMuted,
-            modifier = Modifier.width(80.dp),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (value == "—") MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
         )
     }
 }
 
 /**
- * The editable DUE row: shows the deadline day (or a muted "—"), tapping opens a Material3
- * [DatePickerDialog] seeded from [completeBy]; confirming forwards the picked day, and a Clear
+ * The WHEN cell content: the deadline day + a relative-day suffix (or a muted "—"). Tapping the value opens a
+ * Material3 [DatePickerDialog] seeded from [completeBy]; confirming forwards the picked day, and a Clear
  * affordance forwards `null` to drop the deadline.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DueRow(completeBy: Instant?, onSetDeadline: (LocalDate?) -> Unit) {
+private fun DueCell(completeBy: Instant?, onSetDeadline: (LocalDate?) -> Unit) {
     var showPicker by remember { mutableStateOf(false) }
-    val display = completeBy?.toDisplayDate() ?: "—"
+    // WHEN (ADR-0044): the absolute deadline day + a relative-day suffix ("· In 3 days" / "· Yesterday").
+    val display = completeBy?.let { instant ->
+        val date = instant.toDisplayDate()
+        "$date  ·  ${relativeDayText(relativeDay(instant))}"
+    } ?: "—"
     Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = stringResource(Res.string.tasks_detail_property_due),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.defernoColors.inkMuted,
-            modifier = Modifier.width(80.dp),
-        )
         val dueDateA11y = stringResource(Res.string.tasks_detail_due_date_a11y, display)
         Text(
             text = display,
@@ -296,7 +675,6 @@ private fun DueRow(completeBy: Instant?, onSetDeadline: (LocalDate?) -> Unit) {
             color = if (completeBy == null) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = MinTouchTarget)
                 .clickable(onClickLabel = stringResource(Res.string.tasks_detail_set_due_date)) { showPicker = true }
                 .semantics { contentDescription = dueDateA11y },
         )
@@ -340,39 +718,70 @@ private fun Long.toPickedLocalDate(): LocalDate =
         .date
 
 /**
- * The editable LABELS row: each label as a removable [InputChip], plus an inline "add label" field. On
- * any add or remove the whole updated list (trimmed, blanks + duplicates dropped) is forwarded through
- * [onSetLabels] — the component replaces the Task's labels wholesale.
+ * The LABELS cell (ADR-0044): **read-only by default** — the labels as calm filled chips (matching the design
+ * mockup) — with a trailing **Edit** toggle. Tapping Edit reveals removable [InputChip]s + an inline "add
+ * label" field; **Done** returns to read-only. On any add or remove the whole updated list (trimmed, blanks +
+ * duplicates dropped) is forwarded through [onSetLabels] — the component replaces the Task's labels wholesale.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LabelsRow(labels: List<String>, onSetLabels: (List<String>) -> Unit) {
+private fun LabelsCell(labels: List<String>, onSetLabels: (List<String>) -> Unit) {
     fun normalize(list: List<String>): List<String> =
         list.map { it.trim() }.filter { it.isNotBlank() }.distinct()
 
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(
-            text = stringResource(Res.string.common_labels),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.defernoColors.inkMuted,
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            labels.forEach { label ->
-                InputChip(
-                    selected = false,
-                    onClick = { onSetLabels(normalize(labels - label)) },
-                    label = { Text(label) },
-                    trailingIcon = {
-                        val removeLabelA11y = stringResource(Res.string.tasks_detail_remove_label_a11y, label)
-                        Text(
-                            text = "×",
-                            modifier = Modifier.semantics { contentDescription = removeLabelA11y },
-                        )
-                    },
-                )
+    var editing by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            Box(Modifier.weight(1f).padding(top = 4.dp)) {
+                when {
+                    labels.isNotEmpty() -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        labels.forEach { label ->
+                            if (editing) {
+                                InputChip(
+                                    selected = false,
+                                    onClick = { onSetLabels(normalize(labels - label)) },
+                                    label = { Text(label) },
+                                    trailingIcon = {
+                                        val removeLabelA11y = stringResource(Res.string.tasks_detail_remove_label_a11y, label)
+                                        Text(
+                                            text = "×",
+                                            modifier = Modifier.semantics { contentDescription = removeLabelA11y },
+                                        )
+                                    },
+                                )
+                            } else {
+                                LabelChip(label)
+                            }
+                        }
+                    }
+                    // Empty + read-only: a muted em dash, like the WHEN cell's "no value".
+                    !editing -> Text(
+                        text = "—",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.defernoColors.inkMuted,
+                    )
+                }
+            }
+            TextButton(onClick = { editing = !editing }) {
+                Text(stringResource(if (editing) Res.string.common_done else Res.string.common_edit))
             }
         }
-        AddLabelField(onAdd = { entry -> onSetLabels(normalize(labels + entry)) })
+        if (editing) {
+            AddLabelField(onAdd = { entry -> onSetLabels(normalize(labels + entry)) })
+        }
+    }
+}
+
+/** A calm read-only label pill (ADR-0044 mockup): the label text in a filled, rounded chip. */
+@Composable
+private fun LabelChip(label: String) {
+    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
     }
 }
 
@@ -569,36 +978,52 @@ private fun AddSubtaskField(onAdd: (String) -> Unit, focusRequester: FocusReques
 // --- Attachments ---
 
 /**
- * The attachment list: filename + size/type + optional caption, tapping a row opens the signed URL in
- * the platform. An "Add file" affordance launches the platform file picker ([onAddClick]; the picker +
- * byte read are the host's androidMain glue), and each row offers Delete + an inline caption editor.
- * [isUploading] disables Add while a PUT is in flight.
+ * The ATTACHMENTS cell (ADR-0044): the value half of the properties table's attachments row — a **compact
+ * summary** (the count + combined size) over two actions: **View** (opens the [AttachmentsSheet] with the full
+ * list — playback, delete, caption edit) and **Add file** (the platform file picker; the picker + byte read
+ * are the host's androidMain glue). [isUploading] disables Add while a PUT is in flight. Keeping the list off
+ * the row lets the attachments live in the narrow value column like the other properties (LABELS / SOURCE).
  */
 @Composable
-internal fun AttachmentsSection(
+private fun AttachmentsCell(
     attachments: List<Attachment>,
     isUploading: Boolean,
     onAddClick: () -> Unit,
     onDelete: (String) -> Unit,
     onSetCaption: (String, String?) -> Unit,
-    modifier: Modifier = Modifier,
-    // On-device attachments (#211, e.g. a retained brain-dump recording). Rendered below the synced
-    // attachments: they have no signed URL, so audio is played locally rather than opened in a browser.
-    // Empty on platforms without on-device capture (desktop/iOS) — then this section is unchanged.
+    // On-device attachments (#211, e.g. a retained brain-dump recording). Folded into the count + size and
+    // shown in the View sheet (they have no signed URL, so audio plays locally). Empty on platforms without
+    // on-device capture (desktop/iOS).
     onDeviceAttachments: List<OnDeviceAttachment> = emptyList(),
     onDeleteOnDevice: (String) -> Unit = {},
     onPlayOnDevice: (OnDeviceAttachment) -> Unit = {},
 ) {
-    Column(modifier.fillMaxWidth()) {
-        SectionHeader(
-            stringResource(Res.string.tasks_detail_section_attachments),
-            trailing = (attachments.size + onDeviceAttachments.size).toString(),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(onClick = onAddClick, enabled = !isUploading) {
+    var showSheet by remember { mutableStateOf(false) }
+    val count = attachments.size + onDeviceAttachments.size
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (count == 0) {
+            Text(
+                stringResource(Res.string.tasks_detail_no_attachments),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.defernoColors.inkMuted,
+            )
+        } else {
+            // Count over combined size, stacked — the narrow value column can't hold both side by side.
+            val totalBytes = attachments.sumOf { it.size } + onDeviceAttachments.sumOf { it.size }
+            Text(
+                text = pluralStringResource(Res.plurals.tasks_detail_attachment_count, count, count),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            MonoMeta(text = stringResource(Res.string.tasks_detail_attachments_total, formatBytes(totalBytes)))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (count > 0) {
+                TextButton(onClick = { showSheet = true }) {
+                    Text(stringResource(Res.string.tasks_detail_attachments_view))
+                }
+            }
+            TextButton(onClick = onAddClick, enabled = !isUploading) {
                 Text(
                     if (isUploading) {
                         stringResource(Res.string.tasks_detail_uploading)
@@ -608,13 +1033,50 @@ internal fun AttachmentsSection(
                 )
             }
         }
-        if (attachments.isEmpty() && onDeviceAttachments.isEmpty()) {
+    }
+    if (showSheet) {
+        AttachmentsSheet(
+            attachments = attachments,
+            onDeviceAttachments = onDeviceAttachments,
+            onDelete = onDelete,
+            onSetCaption = onSetCaption,
+            onDeleteOnDevice = onDeleteOnDevice,
+            onPlayOnDevice = onPlayOnDevice,
+            onDismiss = { showSheet = false },
+        )
+    }
+}
+
+/**
+ * The **View attachments** sheet (ADR-0044): a modal bottom sheet with the full attachment list the compact
+ * cell summarises — each synced file (open / delete / caption) and each on-device recording (play / delete).
+ * Adding a file stays on the row (its picker is the host's glue); this sheet is view + manage only.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AttachmentsSheet(
+    attachments: List<Attachment>,
+    onDeviceAttachments: List<OnDeviceAttachment>,
+    onDelete: (String) -> Unit,
+    onSetCaption: (String, String?) -> Unit,
+    onDeleteOnDevice: (String) -> Unit,
+    onPlayOnDevice: (OnDeviceAttachment) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 22.dp)
+                .padding(bottom = 28.dp),
+        ) {
             Text(
-                stringResource(Res.string.tasks_detail_no_attachments),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.defernoColors.inkMuted,
+                text = stringResource(Res.string.tasks_detail_section_attachments),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(bottom = 8.dp).semantics { heading() },
             )
-        } else {
             attachments.forEach { a -> AttachmentRow(a, onDelete, onSetCaption) }
             onDeviceAttachments.forEach { a -> OnDeviceAttachmentRow(a, onDeleteOnDevice, onPlayOnDevice) }
         }
@@ -765,17 +1227,17 @@ private fun AttachmentRow(
     }
 }
 
-// --- Activity feed (comments + server item history) ---
+// --- Comments tab + History tab (the ADR-0043 feed, split by ADR-0044) ---
 
 /**
- * The ACTIVITY feed (ADR-0043): a composer to post, then the merged, chronological feed of user comments
- * and server-authored item history. Reads from the cache (offline-first) — there is no error state.
- * [loading] flags an in-flight best-effort on-open refresh (only shown while the feed is still empty). The
- * current user's own comments offer inline Edit / Delete; history events are read-only.
+ * The Comments tab (ADR-0044): a composer to post, then the per-item comment feed (the [ActivityItem.Comment]
+ * half of the ADR-0043 activity feed — history moves to [HistorySection]). Reads from the cache
+ * (offline-first) — no error state. [loading] flags an in-flight best-effort on-open refresh (only shown
+ * while the feed is still empty). The current user's own comments offer inline Edit / Delete.
  */
 @Composable
 internal fun CommentsSection(
-    activity: List<ActivityItem>,
+    comments: List<ActivityItem.Comment>,
     currentUserId: UserId?,
     loading: Boolean,
     isPosting: Boolean,
@@ -785,23 +1247,41 @@ internal fun CommentsSection(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SectionHeader(stringResource(Res.string.tasks_detail_section_activity), trailing = activity.size.toString())
+        SectionHeader(stringResource(Res.string.tasks_detail_tab_comments), trailing = comments.size.toString())
         CommentComposer(isPosting = isPosting, onPost = onPost)
         when {
-            loading && activity.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
-            activity.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_no_comments))
-            else -> activity.forEach { item ->
+            loading && comments.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
+            comments.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_no_comments))
+            else -> comments.forEach { item ->
                 key(item.id) {
-                    when (item) {
-                        is ActivityItem.Comment -> CommentRow(
-                            item.comment,
-                            isMine = currentUserId != null && item.comment.createdBy == currentUserId,
-                            onEdit, onDelete,
-                        )
-                        is ActivityItem.HistoryEvent -> HistoryEventRow(item.event)
-                    }
+                    CommentRow(
+                        item.comment,
+                        isMine = currentUserId != null && item.comment.createdBy == currentUserId,
+                        onEdit, onDelete,
+                    )
                 }
             }
+        }
+    }
+}
+
+/**
+ * The History tab (ADR-0044): the per-item server item-history ([ActivityItem.HistoryEvent], ADR-0043) as a
+ * read-only list of coarse localized one-liners. Reads from the cache — no error state; [loading] flags the
+ * best-effort on-open refresh while the list is still empty.
+ */
+@Composable
+internal fun HistorySection(
+    history: List<ActivityItem.HistoryEvent>,
+    loading: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SectionHeader(stringResource(Res.string.tasks_detail_section_history), trailing = history.size.toString())
+        when {
+            loading && history.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
+            history.isEmpty() -> Unit // nothing to show yet; the header stands alone
+            else -> history.forEach { item -> key(item.id) { HistoryEventRow(item.event) } }
         }
     }
 }

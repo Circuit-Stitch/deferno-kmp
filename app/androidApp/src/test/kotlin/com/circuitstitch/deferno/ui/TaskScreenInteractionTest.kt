@@ -138,16 +138,16 @@ class TaskScreenInteractionTest {
     }
 
     @Test
-    fun taskDetail_actions_emitIntents() {
+    fun taskDetail_addToPlan_emitsIntent() {
+        // ADR-0044 removed the body PaneHeader (back is owned by the shell / two-pane close affordance now),
+        // so the detail body no longer carries a "Back" — only the moved-to-Info Add-to-plan button remains here.
         val task = sampleTask("1", "Plan the spring launch", description = "Do the thing")
         val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
         setContent { TaskDetailScreen(component) }
 
         composeRule.onNodeWithText("Add to today's plan").performClick()
-        composeRule.onNodeWithText("Back").performClick()
 
         assertEquals(1, component.addToPlanCount)
-        assertEquals(1, component.closeCount)
     }
 
     @Test
@@ -163,11 +163,12 @@ class TaskScreenInteractionTest {
         val component = FakeTaskDetailComponent(state)
         setContent { TaskDetailScreen(component) }
 
-        // The inline subtask checkbox forwards a done-toggle for that child. The "See the trees" detail
-        // is taller (title block + properties + subtask tree), so scroll the row into view before tapping.
+        // The inline subtask checkbox (Info tab, the default) forwards a done-toggle for that child. The Info
+        // tab is taller (title block + properties + subtask tree), so scroll the row into view before tapping.
         composeRule.onNodeWithContentDescription("Mark “Draft the announcement” done").performScrollTo().performClick()
-        // The Activity composer forwards the posted comment text. With the PROPERTIES section added
-        // (#195) the detail is taller, so scroll the composer into view before interacting.
+        // ADR-0044 split the feed into tabs: the comment composer now lives under the Comments tab, so switch
+        // to it before posting. Then the composer forwards the posted comment text.
+        composeRule.onNodeWithText("Comments").performClick()
         composeRule.onNodeWithText("Add a comment…").performScrollTo().performTextInput("Looks good")
         composeRule.onNodeWithText("Post").performScrollTo().performClick()
 
@@ -176,30 +177,46 @@ class TaskScreenInteractionTest {
     }
 
     @Test
-    fun taskDetail_workingStateChip_forwardsTheSetIntent() {
-        // The Task is Open, so tapping "In progress" forwards a Start (→ InProgress) edit (#73).
+    fun taskDetail_statusRow_opensPickerAndForwardsTheSelectedState() {
+        // ADR-0044: the inline working-state chips are gone. STATUS is a read-only journey row (a11y
+        // "Status: <label>. Tap to change.") whose tap opens the status picker sheet; picking a state there
+        // forwards the one lifecycle edit (#73). The Task is Open → the row reads TO-DO; picking In progress
+        // forwards InProgress.
         val task = sampleTask("1", "Plan the spring launch", workingState = WorkingState.Open)
         val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
         setContent { TaskDetailScreen(component) }
 
-        composeRule.onNodeWithContentDescription("Set to In progress").performClick()
-        composeRule.onNodeWithContentDescription("Set to Done").performClick()
-        composeRule.onNodeWithContentDescription("Set to Set aside").performClick()
+        composeRule.onNodeWithContentDescription("Status: TO-DO. Tap to change.").performScrollTo().performClick()
+        composeRule.onNodeWithText("In progress").performClick()
 
-        assertEquals(
-            listOf(WorkingState.InProgress, WorkingState.Done, WorkingState.Dropped),
-            component.workingStateSets,
-        )
+        assertEquals(listOf(WorkingState.InProgress), component.workingStateSets)
     }
 
     @Test
-    fun taskDetail_currentWorkingState_isMarkedSelected() {
+    fun taskDetail_statusPicker_reachesSetAside() {
+        // ADR-0044 removed the kebab's "Set aside" — Dropped ("Set aside") is now reachable ONLY through the
+        // status picker sheet. Proving the shelve path still exists guards that removal.
+        val task = sampleTask("1", "Plan the spring launch", workingState = WorkingState.Open)
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        setContent { TaskDetailScreen(component) }
+
+        composeRule.onNodeWithContentDescription("Status: TO-DO. Tap to change.").performScrollTo().performClick()
+        composeRule.onNodeWithText("Set aside").performClick()
+
+        assertEquals(listOf(WorkingState.Dropped), component.workingStateSets)
+    }
+
+    @Test
+    fun taskDetail_currentWorkingState_readsAsTheJourneyLabel() {
+        // The read-only STATUS row surfaces the current working state as its journey label (ADR-0044): an
+        // InReview Task reads IN-REVIEW in the row's self-describing a11y (colour is never the sole signal).
         val task = sampleTask("1", workingState = WorkingState.InReview)
         val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
         setContent { TaskDetailScreen(component) }
 
-        // The current state reads as the selected affordance (not a "Set to" action).
-        composeRule.onNodeWithContentDescription("In review, current working state").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Status: IN-REVIEW. Tap to change.")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test

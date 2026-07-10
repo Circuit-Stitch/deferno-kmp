@@ -11,9 +11,11 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -21,6 +23,7 @@ import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.ItemTreeState
+import com.circuitstitch.deferno.feature.tasks.ParentSummary
 import com.circuitstitch.deferno.feature.tasks.SubtaskRow
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import com.circuitstitch.deferno.feature.tasks.buildItemTree
@@ -70,6 +73,8 @@ class ScreenshotTest {
     private val populatedDetail = TaskDetailState(
         task = hydratedTask,
         isHydrating = false,
+        // An immediate parent so the golden exercises the connected-parent branch + short ref (ADR-0044).
+        parent = ParentSummary(TaskId("p"), "Spring 2026 initiatives", ref = "acme-7"),
         // The subtree flattened with the shared fold mechanism (ADR-0034): "1a" parents "1ai", both shallow
         // so they auto-expand; "1a" shows a fold chevron.
         subtaskRows = listOf(
@@ -200,6 +205,71 @@ class ScreenshotTest {
     fun taskDetail_hydrating_light() = capture("task_detail_hydrating_light") {
         val summary = sampleTask("2", "Water the plants")
         TaskDetailScreen(FakeTaskDetailComponent(TaskDetailState(task = summary, isHydrating = true)))
+    }
+
+    // The journey-status track's distinct visual branches (ADR-0044): a blocked reading (an error-red star on
+    // the middle node), a Done terminal (the success-green node), and a Dropped "NOT DOING" reading (a dashed
+    // tail to a hollow, struck-through DONE). Minimal detail states so each golden pins the STATUS control.
+    @Test
+    fun taskDetail_statusBlocked_light() = capture("task_detail_status_blocked_light") {
+        TaskDetailScreen(
+            FakeTaskDetailComponent(
+                TaskDetailState(
+                    task = sampleTask(
+                        "b", "Wire up the new screens", workingState = WorkingState.InProgress,
+                        blocked = true, hydration = HydrationState.Full,
+                    ),
+                    isHydrating = false,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun taskDetail_statusDone_light() = capture("task_detail_status_done_light") {
+        TaskDetailScreen(
+            FakeTaskDetailComponent(
+                TaskDetailState(
+                    task = sampleTask(
+                        "d", "Ship the redesign", workingState = WorkingState.Done, hydration = HydrationState.Full,
+                    ),
+                    isHydrating = false,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun taskDetail_statusDropped_light() = capture("task_detail_status_dropped_light") {
+        TaskDetailScreen(
+            FakeTaskDetailComponent(
+                TaskDetailState(
+                    task = sampleTask(
+                        "x", "Old idea worth revisiting", workingState = WorkingState.Dropped,
+                        hydration = HydrationState.Full,
+                    ),
+                    isHydrating = false,
+                ),
+            ),
+        )
+    }
+
+    // The OWNER property row (ADR-0044): hidden for a single-group user, shown only for a shared / multi-group
+    // account. This golden pins the shown case (ownerGroupCount = 2 with an owning org).
+    @Test
+    fun taskDetail_ownerMultiGroup_light() = capture("task_detail_owner_multigroup_light") {
+        TaskDetailScreen(
+            FakeTaskDetailComponent(
+                TaskDetailState(
+                    task = sampleTask(
+                        "o", "Ship the shared roadmap", ownerOrgId = OrgId("acme-team"),
+                        hydration = HydrationState.Full,
+                    ),
+                    isHydrating = false,
+                    ownerGroupCount = 2,
+                ),
+            ),
+        )
     }
 
     @Test

@@ -621,6 +621,12 @@ Vielen Dank.</string>
     <string name="tasks_detail_add_caption">Beschriftung hinzufügen</string>
     <string name="tasks_detail_add_comment_placeholder">Kommentar hinzufügen…</string>
     <string name="tasks_detail_add_file">Datei hinzufügen</string>
+    <plurals name="tasks_detail_attachment_count">
+        <item quantity="one">%1$d Anhang</item>
+        <item quantity="other">%1$d Anhänge</item>
+    </plurals>
+    <string name="tasks_detail_attachments_total">%1$s insgesamt</string>
+    <string name="tasks_detail_attachments_view">Anzeigen</string>
     <string name="tasks_detail_add_label_placeholder">Label hinzufügen…</string>
     <string name="tasks_detail_add_subtask_placeholder">Unteraufgabe hinzufügen…</string>
     <string name="tasks_detail_attachment_meta">%1$s · %2$s</string>
@@ -673,6 +679,32 @@ Vielen Dank.</string>
     <string name="tasks_detail_uploading">Wird hochgeladen…</string>
     <string name="tasks_detail_working_state_current_a11y">%1$s, aktueller Bearbeitungsstand</string>
     <string name="tasks_detail_working_state_heading">Bearbeitungsstand</string>
+    <!-- ADR-0044 journey-status reading (display-only vocabulary, all-caps) -->
+    <string name="tasks_journey_todo">ZU ERLEDIGEN</string>
+    <string name="tasks_journey_in_progress">IN ARBEIT</string>
+    <string name="tasks_journey_in_review">IN PRÜFUNG</string>
+    <string name="tasks_journey_done">ERLEDIGT</string>
+    <string name="tasks_journey_not_doing">NICHT GEPLANT</string>
+    <string name="tasks_journey_blocked">BLOCKIERT</string>
+    <string name="tasks_detail_tab_info">Info</string>
+    <string name="tasks_detail_tab_comments">Kommentare</string>
+    <string name="tasks_detail_tab_history">Verlauf</string>
+    <string name="tasks_detail_section_history">Verlauf</string>
+    <string name="tasks_detail_property_when">Wann</string>
+    <string name="tasks_detail_property_status">Status</string>
+    <string name="tasks_detail_status_picker_title">Status festlegen</string>
+    <string name="tasks_detail_status_row_a11y">Status: %1$s. Zum Ändern tippen.</string>
+    <string name="tasks_detail_due_today">Heute</string>
+    <string name="tasks_detail_due_tomorrow">Morgen</string>
+    <string name="tasks_detail_due_yesterday">Gestern</string>
+    <plurals name="tasks_detail_due_days_away">
+        <item quantity="one">In %1$d Tag</item>
+        <item quantity="other">In %1$d Tagen</item>
+    </plurals>
+    <plurals name="tasks_detail_due_days_ago">
+        <item quantity="one">Vor %1$d Tag</item>
+        <item quantity="other">Vor %1$d Tagen</item>
+    </plurals>
     <!-- Technisches Format — bleibt -->
     <string name="tasks_external_ref_prefix">[%1$s#%2$d]</string>
     <string name="tasks_filter_active">Aktiv</string>

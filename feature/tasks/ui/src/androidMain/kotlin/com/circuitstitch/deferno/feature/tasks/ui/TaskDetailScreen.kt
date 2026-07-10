@@ -31,7 +31,11 @@ import java.io.File
  * desktop screen (ADR-0004 #27).
  */
 @Composable
-fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifier) {
+fun TaskDetailScreen(
+    component: TaskDetailComponent,
+    modifier: Modifier = Modifier,
+    showHeaderOverflow: Boolean = true,
+) {
     val state by component.state.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -54,7 +58,8 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
         Box(Modifier.size(1.dp).focusTarget())
         TaskDetailContent(
             state = state,
-            onClose = component::onCloseClicked,
+            showHeaderOverflow = showHeaderOverflow,
+            onOpenParent = { state.parent?.let { component.onSubtaskClicked(it.id) } },
             onDelete = component::onDelete,
             onAddToPlan = component::onAddToPlanClicked,
             onSetWorkingState = component::onSetWorkingState,

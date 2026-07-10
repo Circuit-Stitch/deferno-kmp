@@ -83,7 +83,26 @@ data class TaskDetailState(
     // not opened from a signed URL. Empty on platforms without on-device capture (desktop/iOS).
     val onDeviceAttachments: List<OnDeviceAttachment> = emptyList(),
     val currentUserId: UserId? = null,
+    // The immediate parent ([Task.parentId] only — not the full ancestor spine, ADR-0044) resolved from
+    // the cached Task list, for the connected-parent header. `null` when this Task has no parent (it
+    // stands alone). Tapping it reuses [TaskDetailComponent.onSubtaskClicked] to push the parent's detail.
+    val parent: ParentSummary? = null,
+    // A monotonic reveal token (ADR-0044): [TaskDetailComponent.onAddSubtaskRequested] bumps it so the
+    // Info tab scrolls to + focuses the inline add-subtask field. Starts at 0 (the View skips the initial 0).
+    val revealAddSubtaskComposer: Int = 0,
+    // The number of distinct groups (orgs) across the cached items — the OWNER row shows only when this is
+    // > 1 (a shared / multi-group account), and is hidden for a single-group user whose only group is their
+    // own personal org (ADR-0044). Defaults to 1 so tests/callers without a roster hide the row.
+    val ownerGroupCount: Int = 1,
 )
+
+/**
+ * The immediate-parent summary for the connected-parent header (ADR-0044). The parent is resolved from
+ * the cached `List<Task>`, so it is always a Task — the header renders a fixed `common_kind_task` chip;
+ * [ref] is the human-facing reference (may be `null` on a just-created row). Tapping the header reuses
+ * [TaskDetailComponent.onSubtaskClicked] with [id] to push the parent's detail (Back returns).
+ */
+data class ParentSummary(val id: TaskId, val title: String, val ref: String?)
 
 /**
  * A locally-stored attachment on a Task (#210/#211) as the detail View renders it — a thin, transport-free
@@ -187,8 +206,16 @@ interface TaskDetailComponent {
      */
     fun onSetHideDoneSubtasks(hide: Boolean) {}
 
-    /** Open a subtask's own detail (tapping the row, web's chevron) — re-keys the detail to that child. */
+    /** Open a subtask's own detail (tapping the row, web's chevron) — re-keys the detail to that child.
+     *  Also reused by the connected-parent header to push the immediate parent (ADR-0044). */
     fun onSubtaskClicked(id: TaskId)
+
+    /**
+     * Request the inline "Add subtask" composer (ADR-0044) — the drilled-overflow item has no title to
+     * pass, so it bumps [TaskDetailState.revealAddSubtaskComposer]; the Info tab reacts by scrolling to +
+     * focusing the existing inline add-subtask field. Default no-op body so fakes/other impls needn't override.
+     */
+    fun onAddSubtaskRequested() {}
 
     /**
      * Toggle a subtask row's expand/collapse — the leading chevron. Persists through the shared device-local
@@ -309,6 +336,11 @@ class DefaultTaskDetailComponent(
             // Done parent's non-done children re-root to the top). Progress below still counts the whole
             // subtree, so the bar reflects true completion regardless of the filter.
             val visible = if (ex.hideDoneSubtasks) descendants.filterNot { it.workingState == WorkingState.Done } else descendants
+            // The immediate parent (parentId only) resolved from the cached list — zero new repository calls
+            // (ADR-0044). Skips a tombstoned parent so a soft-deleted row never surfaces in the header.
+            val parent = task?.parentId
+                ?.let { pid -> all.firstOrNull { it.id == pid && !it.isDeleted } }
+                ?.let { ParentSummary(it.id, it.title, it.ref) }
             TaskDetailState(
                 task = task,
                 isHydrating = isHydrating,
@@ -330,6 +362,11 @@ class DefaultTaskDetailComponent(
                 isUploadingAttachment = ex.isUploadingAttachment,
                 onDeviceAttachments = ex.onDeviceAttachments,
                 currentUserId = currentUserId,
+                parent = parent,
+                revealAddSubtaskComposer = ex.revealAddSubtaskComposer,
+                // Distinct owning orgs across the cached forest — a single-group user's items all share their
+                // personal-org slug (count 1 → OWNER hidden); a shared/multi-group account spans more.
+                ownerGroupCount = all.filterNot { it.isDeleted }.map { it.orgSlug }.distinct().size,
             )
             // initialTask seeds the title/body on the very first frame so the pane doesn't flash a "Task"
             // placeholder before observeTask first emits (the title "pop-in").
@@ -441,6 +478,12 @@ class DefaultTaskDetailComponent(
         output(TaskDetailComponent.Output.SubtaskSelected(id))
     }
 
+    override fun onAddSubtaskRequested() {
+        // Bump the monotonic reveal token; the combine writes it into revealAddSubtaskComposer and the
+        // Info tab reacts (scroll to + focus the inline add-subtask field). ADR-0044.
+        extras.update { it.copy(revealAddSubtaskComposer = it.revealAddSubtaskComposer + 1) }
+    }
+
     override fun onToggleSubtaskExpand(id: String, currentlyExpanded: Boolean) {
         foldStore.setOverride(id, !currentlyExpanded)
     }
@@ -521,6 +564,8 @@ class DefaultTaskDetailComponent(
         val onDeviceAttachments: List<OnDeviceAttachment> = emptyList(),
         // The "Hide done" subtask filter toggle (#197c) — folded through the combine so flipping it re-derives the rows.
         val hideDoneSubtasks: Boolean = false,
+        // Monotonic "reveal the add-subtask composer" token (ADR-0044) — bumped by onAddSubtaskRequested().
+        val revealAddSubtaskComposer: Int = 0,
     )
 }
 

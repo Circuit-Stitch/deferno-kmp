@@ -802,6 +802,12 @@ Thank you.</string>
     <string name="tasks_detail_add_caption">Add caption</string>
     <string name="tasks_detail_add_comment_placeholder">Add a comment…</string>
     <string name="tasks_detail_add_file">Add file</string>
+    <plurals name="tasks_detail_attachment_count">
+        <item quantity="one">%1$d attachment</item>
+        <item quantity="other">%1$d attachments</item>
+    </plurals>
+    <string name="tasks_detail_attachments_total">%1$s total</string>
+    <string name="tasks_detail_attachments_view">View</string>
     <!-- Also the Search sheet label field -->
     <string name="tasks_detail_add_label_placeholder">Add a label…</string>
     <string name="tasks_detail_add_subtask_placeholder">Add a subtask…</string>
@@ -874,6 +880,32 @@ Thank you.</string>
     <!-- Test-pinned pattern 'In review, current working state' -->
     <string name="tasks_detail_working_state_current_a11y">%1$s, current working state</string>
     <string name="tasks_detail_working_state_heading">Working state</string>
+    <!-- ADR-0044 journey-status reading (display-only vocabulary, all-caps) -->
+    <string name="tasks_journey_todo">TO-DO</string>
+    <string name="tasks_journey_in_progress">IN-PROGRESS</string>
+    <string name="tasks_journey_in_review">IN-REVIEW</string>
+    <string name="tasks_journey_done">DONE</string>
+    <string name="tasks_journey_not_doing">NOT DOING</string>
+    <string name="tasks_journey_blocked">BLOCKED</string>
+    <string name="tasks_detail_tab_info">Info</string>
+    <string name="tasks_detail_tab_comments">Comments</string>
+    <string name="tasks_detail_tab_history">History</string>
+    <string name="tasks_detail_section_history">History</string>
+    <string name="tasks_detail_property_when">When</string>
+    <string name="tasks_detail_property_status">Status</string>
+    <string name="tasks_detail_status_picker_title">Set status</string>
+    <string name="tasks_detail_status_row_a11y">Status: %1$s. Tap to change.</string>
+    <string name="tasks_detail_due_today">Today</string>
+    <string name="tasks_detail_due_tomorrow">Tomorrow</string>
+    <string name="tasks_detail_due_yesterday">Yesterday</string>
+    <plurals name="tasks_detail_due_days_away">
+        <item quantity="one">In %1$d day</item>
+        <item quantity="other">In %1$d days</item>
+    </plurals>
+    <plurals name="tasks_detail_due_days_ago">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
     <!-- Was [${sourceLabel}#$number]; ExternalRefLabelTest pins '[GitHub#42]' — likely translatable=false -->
     <string name="tasks_external_ref_prefix">[%1$s#%2$d]</string>
     <!-- Also the Search STATUS preset — status adjective (not archived/done) -->
