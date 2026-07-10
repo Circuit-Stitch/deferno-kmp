@@ -1,19 +1,20 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.verticalScroll
@@ -38,7 +39,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,13 +51,11 @@ import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
-import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
 import com.circuitstitch.deferno.core.designsystem.resources.common_cannot_be_undone
 import com.circuitstitch.deferno.core.designsystem.resources.common_delete
 import com.circuitstitch.deferno.core.designsystem.resources.common_due
-import com.circuitstitch.deferno.core.designsystem.resources.common_kind_task
 import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_done
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_in_progress
@@ -75,7 +78,6 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_progress_done
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_working_state_open
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_set_aside
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
-import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.ActivityItem
@@ -137,7 +139,10 @@ internal fun TaskDetailContent(
     // surface and consume taps — otherwise the Plan behind bleeds through (Surface does both). The Surface
     // fills edge-to-edge (cream under the translucent bars); the content insets past the system bars.
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-        Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
+        // Only the bottom nav-bar inset here — the shell top bar (compact drilled / two-pane) and the desktop
+        // host already sit below the status bar, so padding systemBars again opened a large gap above the
+        // connected-parent header (ADR-0044). The bottom inset still keeps scroll content clear of the nav bar.
+        Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars)) {
             if (state.isHydrating) {
                 LoadingStrip(label = stringResource(Res.string.tasks_detail_loading))
             }
@@ -299,6 +304,7 @@ private fun TaskBody(
                         onSetDeadline = onSetDeadline,
                         onSetLabels = onSetLabels,
                         onStatusRowClick = { showStatusPicker = true },
+                        ownerGroupCount = state.ownerGroupCount,
                     )
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -374,9 +380,10 @@ private fun TaskBody(
 
 /**
  * The connected-parent header (ADR-0044) — the screen's single heading. When [parent] is non-null it draws a
- * muted, tappable parent node (kind chip + title + ref) with a thin thread connector down into the current
- * item's [DetailTitleBlock]; tapping it pushes the parent's detail via [onOpenParent] (Back returns). With no
- * parent the item stands alone. The ⋮ [overflow] rides top-right of the block.
+ * muted, tappable parent node threaded by a **curved amber branch** down into the current item's node + title
+ * block (a calm git-graph connector, replacing the old "TASK" kind chips); tapping the parent row pushes its
+ * detail via [onOpenParent] (Back returns). With no parent the item stands alone. The ⋮ [overflow] rides
+ * top-right of the block.
  */
 @Composable
 internal fun ConnectedParentHeader(
@@ -394,50 +401,97 @@ internal fun ConnectedParentHeader(
     ) {
         Column(Modifier.weight(1f)) {
             if (parent != null) {
-                ParentNode(parent = parent, onOpenParent = onOpenParent)
-                // A thin thread connecting the parent node down into the current item (the "connected" look).
-                Box(
-                    Modifier
-                        .padding(start = 11.dp)
-                        .width(1.dp)
-                        .height(10.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant),
-                )
+                // The parent node + its title (muted, tappable) — the branch's upper node descends from here.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min)
+                        .heightIn(min = MinTouchTarget)
+                        .clickable(onClickLabel = stringResource(Res.string.common_open_named_cd, parent.title)) { onOpenParent() },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    BranchCell(current = false)
+                    Text(
+                        text = parent.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.defernoColors.inkMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    shortRef(parent.ref)?.let { MonoMeta(text = it) }
+                }
+                // The current item's node (the branch's lower node) beside its title block.
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.Top) {
+                    BranchCell(current = true)
+                    DetailTitleBlock(task, subtaskDone, subtaskTotal, Modifier.weight(1f))
+                }
+            } else {
+                DetailTitleBlock(task, subtaskDone, subtaskTotal)
             }
-            DetailTitleBlock(task = task, subtaskDone = subtaskDone, subtaskTotal = subtaskTotal)
         }
         overflow?.invoke()
     }
 }
 
-/** The muted, tappable immediate-parent node: a Task kind chip, the parent title, and its ref. */
+/**
+ * One column of the connected-parent branch (ADR-0044). The **parent** cell draws the upper node and a line
+ * descending to the row's bottom; the **current** cell continues that line from the top and lands a rounded
+ * elbow in the slightly-indented lower node — a calm git-graph thread in the Task accent. Both cells share the
+ * same width so the parent and current titles stay left-aligned.
+ */
 @Composable
-private fun ParentNode(parent: ParentSummary, onOpenParent: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = MinTouchTarget)
-            .clickable(onClickLabel = stringResource(Res.string.common_open_named_cd, parent.title)) { onOpenParent() },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        TreeChip(
-            text = kindLabel(ItemKind.Task),
-            filled = false,
-            content = MaterialTheme.defernoColors.inkMuted,
-            semanticLabel = stringResource(Res.string.common_kind_task),
-        )
-        Text(
-            text = parent.title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.defernoColors.inkMuted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        parent.ref?.let { MonoMeta(text = it) }
-    }
+private fun BranchCell(current: Boolean) {
+    val color = MaterialTheme.colorScheme.primary
+    Box(
+        Modifier
+            .width(BranchGutterWidth)
+            .fillMaxHeight()
+            .drawBehind {
+                val parentX = BranchParentCx.toPx()
+                val currentX = BranchCurrentCx.toPx()
+                val r = BranchNodeRadius.toPx()
+                val stroke = BranchStroke.toPx()
+                if (current) {
+                    val cy = BranchCurrentCy.toPx()
+                    val elbow = BranchElbowRadius.toPx()
+                    drawPath(
+                        Path().apply {
+                            moveTo(parentX, 0f)
+                            lineTo(parentX, cy - elbow)
+                            quadraticTo(parentX, cy, parentX + elbow, cy)
+                            lineTo(currentX, cy)
+                        },
+                        color,
+                        style = Stroke(width = stroke),
+                    )
+                    drawCircle(color, r, Offset(currentX, cy))
+                } else {
+                    val cy = size.height / 2f
+                    drawLine(color, Offset(parentX, cy), Offset(parentX, size.height), stroke)
+                    drawCircle(color, r, Offset(parentX, cy))
+                }
+            },
+    )
 }
+
+private val BranchGutterWidth = 26.dp
+private val BranchParentCx = 9.dp
+private val BranchCurrentCx = 18.dp
+private val BranchNodeRadius = 5.dp
+private val BranchStroke = 1.6.dp
+private val BranchElbowRadius = 7.dp
+
+// Aligns the current node with the headline-title's first line (≈ its line-height / 2 from the row top).
+private val BranchCurrentCy = 16.dp
+
+/**
+ * The short human ref (`#123`) from a full `{org_slug}-{sequence}` ref (ADR-0044) — the trailing numeric
+ * sequence only, since the org slug is implied on a single-item screen. `null` when there is no ref (a
+ * just-created row) or the tail isn't the expected numeric sequence.
+ */
+private fun shortRef(ref: String?): String? =
+    ref?.substringAfterLast('-')?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) }?.let { "#$it" }
 
 /**
  * The detail's ⋮ more-actions kebab (#262/ADR-0044): Add subtask (reveals the inline add field) and the
@@ -478,22 +532,15 @@ private fun TaskOverflowMenu(
 }
 
 /**
- * The "Everything in one place" title block (#231): the kind as a [TreeChip] (filled, in the kind's
- * colour), the Task title at headline rank, a mono meta line (human ref + due day), and — when the Task
- * parents subtasks — an **overall-status** progress bar with a `{done} of {total} done` label right
- * under the title (#231), so the whole's completion is legible above the fold without scrolling to the
- * Subtasks section. Calm, low-overwhelm; the ref keeps IBM Plex Mono.
+ * The "Everything in one place" title block (#231): the Task title at headline rank, a mono meta line (the
+ * short `#N` ref + due day), and — when the Task parents subtasks — an **overall-status** progress bar with a
+ * `{done} of {total} done` label right under the title (#231), so the whole's completion is legible above the
+ * fold without scrolling to the Subtasks section. The kind is now carried by the connected-branch node
+ * (ADR-0044), not a chip. Calm, low-overwhelm; the ref keeps IBM Plex Mono.
  */
 @Composable
-private fun DetailTitleBlock(task: Task, subtaskDone: Int, subtaskTotal: Int) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        TreeChip(
-            text = kindLabel(ItemKind.Task),
-            filled = true,
-            container = kindColor(ItemKind.Task),
-            content = MaterialTheme.colorScheme.onPrimary,
-            semanticLabel = stringResource(Res.string.common_kind_task),
-        )
+private fun DetailTitleBlock(task: Task, subtaskDone: Int, subtaskTotal: Int, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             // A dimmed `[GitHub#N]` ref prefix for a GitHub-imported issue; the tracker owns the title
             // itself, so the prefix is derived client-side, not stored.
@@ -506,7 +553,7 @@ private fun DetailTitleBlock(task: Task, subtaskDone: Int, subtaskTotal: Int) {
             style = MaterialTheme.typography.headlineSmall,
         )
         val meta = buildList {
-            task.ref?.let { add(it) }
+            shortRef(task.ref)?.let { add(it) }
             task.completeBy?.let { add(stringResource(Res.string.common_due, it.toDisplayDate())) }
         }
         if (meta.isNotEmpty()) {

@@ -15,6 +15,7 @@ import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -22,6 +23,7 @@ import com.circuitstitch.deferno.feature.plan.PlanState
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.ItemTreeState
+import com.circuitstitch.deferno.feature.tasks.ParentSummary
 import com.circuitstitch.deferno.feature.tasks.SubtaskRow
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import com.circuitstitch.deferno.feature.tasks.buildItemTree
@@ -71,6 +73,8 @@ class ScreenshotTest {
     private val populatedDetail = TaskDetailState(
         task = hydratedTask,
         isHydrating = false,
+        // An immediate parent so the golden exercises the connected-parent branch + short ref (ADR-0044).
+        parent = ParentSummary(TaskId("p"), "Spring 2026 initiatives", ref = "acme-7"),
         // The subtree flattened with the shared fold mechanism (ADR-0034): "1a" parents "1ai", both shallow
         // so they auto-expand; "1a" shows a fold chevron.
         subtaskRows = listOf(
@@ -245,6 +249,24 @@ class ScreenshotTest {
                         hydration = HydrationState.Full,
                     ),
                     isHydrating = false,
+                ),
+            ),
+        )
+    }
+
+    // The OWNER property row (ADR-0044): hidden for a single-group user, shown only for a shared / multi-group
+    // account. This golden pins the shown case (ownerGroupCount = 2 with an owning org).
+    @Test
+    fun taskDetail_ownerMultiGroup_light() = capture("task_detail_owner_multigroup_light") {
+        TaskDetailScreen(
+            FakeTaskDetailComponent(
+                TaskDetailState(
+                    task = sampleTask(
+                        "o", "Ship the shared roadmap", ownerOrgId = OrgId("acme-team"),
+                        hydration = HydrationState.Full,
+                    ),
+                    isHydrating = false,
+                    ownerGroupCount = 2,
                 ),
             ),
         )

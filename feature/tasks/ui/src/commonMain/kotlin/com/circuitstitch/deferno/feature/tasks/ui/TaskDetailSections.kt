@@ -86,6 +86,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
 import com.circuitstitch.deferno.core.designsystem.resources.common_clear
 import com.circuitstitch.deferno.core.designsystem.resources.common_collapse_named_cd
 import com.circuitstitch.deferno.core.designsystem.resources.common_delete
+import com.circuitstitch.deferno.core.designsystem.resources.common_done
 import com.circuitstitch.deferno.core.designsystem.resources.common_edit
 import com.circuitstitch.deferno.core.designsystem.resources.common_expand_named_cd
 import com.circuitstitch.deferno.core.designsystem.resources.common_labels
@@ -219,51 +220,73 @@ internal fun PropertiesSection(
     onSetDeadline: (LocalDate?) -> Unit,
     onSetLabels: (List<String>) -> Unit,
     onStatusRowClick: () -> Unit,
+    ownerGroupCount: Int,
     modifier: Modifier = Modifier,
 ) {
     val statusLabel = journeyLabelText(journeyStatus(task.workingState, task.blocked).label)
     val statusA11y = stringResource(Res.string.tasks_detail_status_row_a11y, statusLabel)
+
+    // Only the rows this item actually carries (ADR-0044): WHEN drops when no deadline is set; STATUS + LABELS
+    // are always present; SOURCE only for an imported item. OWNER shows only for a shared / multi-group account
+    // ([ownerGroupCount] > 1) — a single-group user's only group is their own personal org, so the row is noise.
+    val rows = buildList<@Composable () -> Unit> {
+        if (task.completeBy != null) {
+            add {
+                // WHEN: the deadline day + a relative-day suffix ("N days away"), editable through the picker.
+                PropertyTableRow(label = stringResource(Res.string.tasks_detail_property_when)) {
+                    DueCell(completeBy = task.completeBy, onSetDeadline = onSetDeadline)
+                }
+            }
+        }
+        add {
+            // STATUS: the read-only journey track; tapping the whole row opens the status picker sheet.
+            PropertyTableRow(
+                label = stringResource(Res.string.tasks_detail_property_status),
+                onClick = onStatusRowClick,
+                onClickLabel = stringResource(Res.string.tasks_detail_status_picker_title),
+                rowSemantics = statusA11y,
+            ) {
+                JourneyStatusIndicator(workingState = task.workingState, blocked = task.blocked)
+            }
+        }
+        add {
+            PropertyTableRow(label = stringResource(Res.string.common_labels)) {
+                LabelsCell(labels = task.labels, onSetLabels = onSetLabels)
+            }
+        }
+        // OWNER: the owning org — shown only for a shared / multi-group account (more than one group across
+        // the cached items). A single-group user's only group is their personal org, so the row is hidden.
+        if (ownerGroupCount > 1) {
+            task.ownerOrgId?.let { owner ->
+                add {
+                    PropertyTableRow(label = stringResource(Res.string.tasks_detail_property_owner)) {
+                        Text(
+                            text = owner.value,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+        }
+        task.external?.let { external ->
+            add {
+                // SOURCE: the provenance mark + origin label for a synced/imported item; only when external.
+                PropertyTableRow(label = stringResource(Res.string.tasks_detail_property_source)) {
+                    SourceCell(external)
+                }
+            }
+        }
+    }
     Column(
         modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium),
     ) {
-        // WHEN: the deadline day + a relative-day suffix ("N days away"), editable through the date picker.
-        PropertyTableRow(label = stringResource(Res.string.tasks_detail_property_when)) {
-            DueCell(completeBy = task.completeBy, onSetDeadline = onSetDeadline)
-        }
-        PropertyTableDivider()
-        // STATUS: the read-only journey track; tapping the whole row opens the status picker sheet (ADR-0044).
-        PropertyTableRow(
-            label = stringResource(Res.string.tasks_detail_property_status),
-            onClick = onStatusRowClick,
-            onClickLabel = stringResource(Res.string.tasks_detail_status_picker_title),
-            rowSemantics = statusA11y,
-        ) {
-            JourneyStatusIndicator(workingState = task.workingState, blocked = task.blocked)
-        }
-        PropertyTableDivider()
-        PropertyTableRow(label = stringResource(Res.string.common_labels)) {
-            LabelsCell(labels = task.labels, onSetLabels = onSetLabels)
-        }
-        // OWNER: the owning org, only when the item carries one (a personal Task shows no row).
-        task.ownerOrgId?.let { owner ->
-            PropertyTableDivider()
-            PropertyTableRow(label = stringResource(Res.string.tasks_detail_property_owner)) {
-                Text(
-                    text = owner.value,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-        // SOURCE: the provenance mark + origin label for a synced/imported item; only when external.
-        task.external?.let { external ->
-            PropertyTableDivider()
-            PropertyTableRow(label = stringResource(Res.string.tasks_detail_property_source)) {
-                SourceCell(external)
-            }
+        rows.forEachIndexed { i, row ->
+            if (i > 0) PropertyTableDivider()
+            row()
         }
     }
 }
@@ -663,9 +686,10 @@ private fun Long.toPickedLocalDate(): LocalDate =
         .date
 
 /**
- * The LABELS cell content: each label as a removable [InputChip] (in a FlowRow), plus an inline "add label"
- * field. On any add or remove the whole updated list (trimmed, blanks + duplicates dropped) is forwarded
- * through [onSetLabels] — the component replaces the Task's labels wholesale.
+ * The LABELS cell (ADR-0044): **read-only by default** — the labels as calm filled chips (matching the design
+ * mockup) — with a trailing **Edit** toggle. Tapping Edit reveals removable [InputChip]s + an inline "add
+ * label" field; **Done** returns to read-only. On any add or remove the whole updated list (trimmed, blanks +
+ * duplicates dropped) is forwarded through [onSetLabels] — the component replaces the Task's labels wholesale.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -673,26 +697,59 @@ private fun LabelsCell(labels: List<String>, onSetLabels: (List<String>) -> Unit
     fun normalize(list: List<String>): List<String> =
         list.map { it.trim() }.filter { it.isNotBlank() }.distinct()
 
+    var editing by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
-        if (labels.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                labels.forEach { label ->
-                    InputChip(
-                        selected = false,
-                        onClick = { onSetLabels(normalize(labels - label)) },
-                        label = { Text(label) },
-                        trailingIcon = {
-                            val removeLabelA11y = stringResource(Res.string.tasks_detail_remove_label_a11y, label)
-                            Text(
-                                text = "×",
-                                modifier = Modifier.semantics { contentDescription = removeLabelA11y },
-                            )
-                        },
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            Box(Modifier.weight(1f).padding(top = 4.dp)) {
+                when {
+                    labels.isNotEmpty() -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        labels.forEach { label ->
+                            if (editing) {
+                                InputChip(
+                                    selected = false,
+                                    onClick = { onSetLabels(normalize(labels - label)) },
+                                    label = { Text(label) },
+                                    trailingIcon = {
+                                        val removeLabelA11y = stringResource(Res.string.tasks_detail_remove_label_a11y, label)
+                                        Text(
+                                            text = "×",
+                                            modifier = Modifier.semantics { contentDescription = removeLabelA11y },
+                                        )
+                                    },
+                                )
+                            } else {
+                                LabelChip(label)
+                            }
+                        }
+                    }
+                    // Empty + read-only: a muted em dash, like the WHEN cell's "no value".
+                    !editing -> Text(
+                        text = "—",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.defernoColors.inkMuted,
                     )
                 }
             }
+            TextButton(onClick = { editing = !editing }) {
+                Text(stringResource(if (editing) Res.string.common_done else Res.string.common_edit))
+            }
         }
-        AddLabelField(onAdd = { entry -> onSetLabels(normalize(labels + entry)) })
+        if (editing) {
+            AddLabelField(onAdd = { entry -> onSetLabels(normalize(labels + entry)) })
+        }
+    }
+}
+
+/** A calm read-only label pill (ADR-0044 mockup): the label text in a filled, rounded chip. */
+@Composable
+private fun LabelChip(label: String) {
+    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
     }
 }
 

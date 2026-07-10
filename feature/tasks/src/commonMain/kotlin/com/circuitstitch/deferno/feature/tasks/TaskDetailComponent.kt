@@ -90,6 +90,10 @@ data class TaskDetailState(
     // A monotonic reveal token (ADR-0044): [TaskDetailComponent.onAddSubtaskRequested] bumps it so the
     // Info tab scrolls to + focuses the inline add-subtask field. Starts at 0 (the View skips the initial 0).
     val revealAddSubtaskComposer: Int = 0,
+    // The number of distinct groups (orgs) across the cached items — the OWNER row shows only when this is
+    // > 1 (a shared / multi-group account), and is hidden for a single-group user whose only group is their
+    // own personal org (ADR-0044). Defaults to 1 so tests/callers without a roster hide the row.
+    val ownerGroupCount: Int = 1,
 )
 
 /**
@@ -360,6 +364,9 @@ class DefaultTaskDetailComponent(
                 currentUserId = currentUserId,
                 parent = parent,
                 revealAddSubtaskComposer = ex.revealAddSubtaskComposer,
+                // Distinct owning orgs across the cached forest — a single-group user's items all share their
+                // personal-org slug (count 1 → OWNER hidden); a shared/multi-group account spans more.
+                ownerGroupCount = all.filterNot { it.isDeleted }.map { it.orgSlug }.distinct().size,
             )
             // initialTask seeds the title/body on the very first frame so the pane doesn't flash a "Task"
             // placeholder before observeTask first emits (the title "pop-in").
