@@ -32,6 +32,8 @@ class LedgerRecordingOutboxStore(
 
     override suspend fun delete(seq: Long) = delegate.delete(seq)
 
+    override suspend fun markFailed(seq: Long, failedAt: Instant) = delegate.markFailed(seq, failedAt)
+
     override suspend fun markRetry(seq: Long, attempts: Int, nextAttemptAt: Instant) =
         delegate.markRetry(seq, attempts, nextAttemptAt)
 

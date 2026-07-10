@@ -24,14 +24,13 @@ interface CommentReplayListener {
      */
     suspend fun onReplayed(taskId: String, clientId: String, serverId: String): Boolean
 
-    /** The comment create under [clientId] was terminally rejected / exhausted — undo the optimistic post. */
-    suspend fun onRejected(taskId: String, clientId: String)
+    // No onRejected: a terminally-rejected comment create is dead-lettered by the processor, NOT undone —
+    // the optimistic post is preserved (the user's comment must never silently vanish). See OutboxProcessor.
 
     companion object {
         /** A listener that does nothing — the default the engine's own tests construct with. */
         val NoOp: CommentReplayListener = object : CommentReplayListener {
             override suspend fun onReplayed(taskId: String, clientId: String, serverId: String): Boolean = false
-            override suspend fun onRejected(taskId: String, clientId: String) {}
         }
     }
 }

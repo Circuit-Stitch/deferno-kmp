@@ -24,10 +24,17 @@ CREATE TABLE outboxEntry (
     body            TEXT,
     attempts        INTEGER NOT NULL DEFAULT 0,
     next_attempt_at TEXT NOT NULL,
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    -- Dead-letter marker: set when the server terminally rejected this write (or its retries were
+    -- exhausted). A dead-lettered row is NEVER deleted here — its outbound request is preserved, not
+    -- silently dropped — but the processor skips it (it never replays again). It stays in the queue so
+    -- the reconcile clobber-guards keep protecting the optimistic local row it stands behind. NULL = live.
+    failed_at       TEXT
 );
 
--- The whole queue in FIFO order — the processor pulls this and walks it head-first (#23).
+-- The whole queue (live + dead-lettered) in FIFO order — the processor walks it head-first and skips
+-- the dead-lettered rows (`failed_at` set); the reconcile clobber-guards read it to protect optimistic
+-- rows a live-OR-failed write stands behind (#23).
 selectAllInOrder:
 SELECT * FROM outboxEntry ORDER BY seq;
 
@@ -37,9 +44,15 @@ enqueue:
 INSERT INTO outboxEntry(target, method, path, body, attempts, next_attempt_at, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?);
 
--- Drop a dispatched (succeeded / terminally-rejected / attempts-exhausted) entry from the queue.
+-- Drop a successfully-dispatched entry from the queue.
 deleteBySeq:
 DELETE FROM outboxEntry WHERE seq = ?;
+
+-- Dead-letter a terminally-rejected / attempts-exhausted entry: mark it failed rather than deleting it,
+-- so the user's unsynced write is preserved (never silently dropped) and its optimistic local row stays
+-- protected by the reconcile clobber-guards. The processor skips failed rows, so it never replays again.
+markFailed:
+UPDATE outboxEntry SET failed_at = ? WHERE seq = ?;
 
 -- Record a retryable failure: bump the attempt count and schedule the next attempt (backoff).
 markRetry:
@@ -52,9 +65,10 @@ UPDATE outboxEntry SET attempts = ?, next_attempt_at = ? WHERE seq = ?;
 updateEntry:
 UPDATE outboxEntry SET target = ?, path = ?, body = ? WHERE seq = ?;
 
--- The pending count — the size of the unsynced-writes queue (diagnostics / a future UI badge).
+-- The live (still-syncable) unsynced-writes count — excludes dead-lettered rows (they will not sync).
+-- Drives the flush drain-loop's "remaining work" and a future UI badge (diagnostics).
 count:
-SELECT count(*) FROM outboxEntry;
+SELECT count(*) FROM outboxEntry WHERE failed_at IS NULL;
 
 deleteAll:
 DELETE FROM outboxEntry;

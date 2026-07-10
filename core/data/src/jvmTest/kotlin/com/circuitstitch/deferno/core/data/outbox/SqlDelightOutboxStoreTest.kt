@@ -74,6 +74,23 @@ class SqlDelightOutboxStoreTest {
     }
 
     @Test
+    fun markFailedDeadLettersTheRowKeepingItInPendingButOutOfTheLiveCount() = runTest {
+        val store = newStore()
+        store.enqueue("comment-create:t-1:c", OutboxRequest(OutboxMethod.Post, listOf("tasks", "t-1", "comments"), """{"body":"hi"}"""), t0)
+        store.enqueue("task:b", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "b"), """{"title":"y"}"""), t0)
+
+        val create = store.pending().first()
+        store.markFailed(create.seq, t1)
+
+        // Preserved (never deleted) and still visible in pending() so the reconcile clobber-guards keep
+        // protecting its optimistic row — but flagged failed and excluded from the live (syncable) count.
+        val row = store.pending().first { it.seq == create.seq }
+        assertEquals(t1, row.failedAt)
+        assertEquals(2, store.pending().size)
+        assertEquals(1L, store.count()) // only the live `task:b` counts
+    }
+
+    @Test
     fun seqIsMonotonicAndNeverReusedAcrossDeletes() = runTest {
         val store = newStore()
         store.enqueue("task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), "{}"), t0)

@@ -26,7 +26,11 @@ data class PostComment(val taskId: TaskId, val clientId: String, val body: Strin
     override fun toRequest(): OutboxRequest = OutboxRequest(
         OutboxMethod.Post,
         listOf("tasks", taskId.value, "comments"),
-        buildJsonObject { put("body", body) }.toString(),
+        // `is_private` is a REQUIRED field of the server's CreateCommentPayload — omitting it 422s the POST
+        // (Terminal), which now dead-letters the write instead of syncing it. Sending it keeps the create
+        // valid so it lands. ponytail: hardcoded false — this client has no private-comment UI yet; thread
+        // it through PostComment when one lands.
+        buildJsonObject { put("body", body); put("is_private", false) }.toString(),
     )
 }
 

@@ -62,12 +62,7 @@ class DefaultCommentReplayListenerTest {
         assertFalse(healed)
     }
 
-    @Test
-    fun onRejectedRemovesTheOptimisticPost() = runTest {
-        val store = FakeCommentLocalStore().apply { upsert(comment("client")) }
-
-        DefaultCommentReplayListener(store, FakeOutboxStore()).onRejected(task.value, "client")
-
-        assertTrue(store.all.isEmpty())
-    }
+    // A terminal rejection no longer undoes the optimistic post — the processor dead-letters it and the
+    // row is preserved (the user's comment must never silently vanish). Covered at the processor level in
+    // CommentReplayProcessorTest; there is no onRejected on the listener anymore.
 }

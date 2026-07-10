@@ -33,6 +33,11 @@ class FakeOutboxStore(initial: List<OutboxEntry> = emptyList()) : OutboxStore {
         entries.removeAll { it.seq == seq }
     }
 
+    override suspend fun markFailed(seq: Long, failedAt: Instant) {
+        val index = entries.indexOfFirst { it.seq == seq }
+        if (index >= 0) entries[index] = entries[index].copy(failedAt = failedAt)
+    }
+
     override suspend fun markRetry(seq: Long, attempts: Int, nextAttemptAt: Instant) {
         val index = entries.indexOfFirst { it.seq == seq }
         if (index >= 0) entries[index] = entries[index].copy(attempts = attempts, nextAttemptAt = nextAttemptAt)
@@ -43,5 +48,7 @@ class FakeOutboxStore(initial: List<OutboxEntry> = emptyList()) : OutboxStore {
         if (index >= 0) entries[index] = entries[index].copy(target = target, request = request)
     }
 
-    override suspend fun count(): Long = entries.size.toLong()
+    // Live (still-syncable) queue size — dead-lettered entries are preserved but excluded, mirroring the
+    // SQL `count`'s `WHERE failed_at IS NULL`.
+    override suspend fun count(): Long = entries.count { it.failedAt == null }.toLong()
 }

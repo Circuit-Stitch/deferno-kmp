@@ -20,8 +20,8 @@ import kotlin.test.assertTrue
  * The offline create → replay → confirm/heal/reject loop end to end (#185), wiring the real
  * [OfflineCreateWriter] → outbox → [OutboxProcessor] → [DefaultCreateReplayListener] on the in-memory
  * fakes (ADR-0006 JVM-fast path). Proves: a replay the server honors confirms the pending row and does
- * not duplicate; a replay the server re-ids heals the local references; a terminal rejection undoes the
- * optimistic insert.
+ * not duplicate; a replay the server re-ids heals the local references; a terminal rejection dead-letters
+ * the entry and **preserves** the optimistic insert (never silently deletes the user's create).
  */
 class OfflineCreateReplayTest {
 
@@ -50,7 +50,7 @@ class OfflineCreateReplayTest {
             orgSlug = { "u-test" },
         )
         val healer = ItemIdHealer(taskStore, habitStore, choreStore, eventStore, planStore, outbox)
-        val listener = DefaultCreateReplayListener(healer, pending, taskStore, habitStore, choreStore, eventStore)
+        val listener = DefaultCreateReplayListener(healer, pending)
         val processor = OutboxProcessor(outbox, sender, reconcile = {}, createListener = listener)
     }
 
@@ -90,17 +90,25 @@ class OfflineCreateReplayTest {
     }
 
     @Test
-    fun terminalRejectionUndoesTheOptimisticInsert() = runTest {
+    fun terminalRejectionDeadLettersAndPreservesTheOptimisticInsert() = runTest {
         val f = Fixture()
         f.writer.createTask(CreateTaskPayload(title = ""))
         f.sender.createOutcome = CreateSendOutcome.Terminal // server rejected the create (e.g. 422)
 
         val result = f.processor.flush(t0)
 
-        assertEquals(1, result.dropped)
-        assertEquals(0L, f.outbox.count())
-        // The optimistic row is gone and the pending row removed (no zombie protected row).
-        assertTrue(f.taskStore.all.isEmpty())
-        assertTrue(f.pending.all.isEmpty())
+        assertEquals(1, result.dropped) // dead-lettered this pass
+        // The entry is PRESERVED (dead-lettered, not deleted) — the user's create is never silently lost.
+        val entry = f.outbox.all.single()
+        assertEquals(t0, entry.failedAt)
+        // The optimistic Item row + its pending-create purge-protection survive (still there, still Pending).
+        assertTrue(f.taskStore.all.containsKey(TaskId("client-1")))
+        assertEquals(PendingCreateState.Pending, f.pending.all.single().state)
+
+        // A later flush skips the dead-lettered entry — no retry loop, no second send to the server.
+        val again = f.processor.flush(t0)
+        assertEquals(0, again.succeeded)
+        assertEquals(0, again.dropped)
+        assertEquals(1, f.sender.sent.size) // still just the one original send
     }
 }

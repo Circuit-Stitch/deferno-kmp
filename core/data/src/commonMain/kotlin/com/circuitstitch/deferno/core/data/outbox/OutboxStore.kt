@@ -12,6 +12,10 @@ import kotlin.time.Instant
  * - [nextAttemptAt] — the entry is *ready* to dispatch when this is `<= now`; a retry pushes it into
  *   the future by the backoff (the head-of-line wait).
  * - [createdAt] — when the intent was enqueued (audit/diagnostics).
+ * - [failedAt] — the dead-letter marker (`null` = live). Set when the server terminally rejected the
+ *   write (or its retries were exhausted): the entry is preserved (its outbound request is never
+ *   silently dropped) but the processor skips it — it never replays again. It stays in the queue so the
+ *   reconcile clobber-guards keep protecting the optimistic local row it stands behind.
  */
 data class OutboxEntry(
     val seq: Long,
@@ -20,12 +24,14 @@ data class OutboxEntry(
     val attempts: Int,
     val nextAttemptAt: Instant,
     val createdAt: Instant,
+    val failedAt: Instant? = null,
 )
 
 /**
  * The local source-of-truth port for the outbox queue (ADR-0001, #23). The write path enqueues
  * through [enqueue]; the [OutboxProcessor] drains via [pending] (FIFO) and resolves entries with
- * [delete] (dispatched) or [markRetry] (backoff). Extracting persistence behind a port keeps the
+ * [delete] (dispatched OK), [markRetry] (transient failure → backoff), or [markFailed] (terminal
+ * rejection → dead-letter, preserved not deleted). Extracting persistence behind a port keeps the
  * replay/backoff/head-of-line *algorithm* (the heart of #23) unit-testable against an in-memory fake
  * on the ADR-0006 JVM-fast path, while [SqlDelightOutboxStore] proves the real SQLite path.
  */
@@ -37,11 +43,22 @@ interface OutboxStore {
      */
     suspend fun enqueue(target: String, request: OutboxRequest, now: Instant)
 
-    /** The whole queue in FIFO ([OutboxEntry.seq]) order — the processor walks this head-first. */
+    /**
+     * The whole queue (live + dead-lettered) in FIFO ([OutboxEntry.seq]) order. The processor walks this
+     * head-first and skips the dead-lettered rows ([OutboxEntry.failedAt] set); the reconcile clobber-
+     * guards read it to protect an optimistic local row a live-OR-failed write stands behind.
+     */
     suspend fun pending(): List<OutboxEntry>
 
-    /** Removes the dispatched/abandoned entry [seq] from the queue. */
+    /** Removes the successfully-dispatched entry [seq] from the queue. */
     suspend fun delete(seq: Long)
+
+    /**
+     * Dead-letter the terminally-rejected / attempts-exhausted entry [seq] at [failedAt]: it is kept
+     * (its outbound request is preserved, never silently dropped) but the processor skips it forever, so
+     * it never replays again. The optimistic local row it stands behind stays protected by the guards.
+     */
+    suspend fun markFailed(seq: Long, failedAt: Instant)
 
     /** Records a retryable failure on [seq]: the new [attempts] count and the backed-off [nextAttemptAt]. */
     suspend fun markRetry(seq: Long, attempts: Int, nextAttemptAt: Instant)

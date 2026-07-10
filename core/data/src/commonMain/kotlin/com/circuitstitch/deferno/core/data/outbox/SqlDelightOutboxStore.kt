@@ -41,6 +41,10 @@ class SqlDelightOutboxStore(
         queries.deleteBySeq(seq)
     }
 
+    override suspend fun markFailed(seq: Long, failedAt: Instant) {
+        queries.markFailed(failedAt.toString(), seq)
+    }
+
     override suspend fun markRetry(seq: Long, attempts: Int, nextAttemptAt: Instant) {
         queries.markRetry(attempts.toLong(), nextAttemptAt.toString(), seq)
     }
@@ -70,6 +74,7 @@ private fun OutboxRow.toDomain(): OutboxEntry = OutboxEntry(
     attempts = attempts.toInt(),
     nextAttemptAt = Instant.parse(next_attempt_at),
     createdAt = Instant.parse(created_at),
+    failedAt = failed_at?.let(Instant::parse),
 )
 
 /** Defensive decode: an unrecognised stored method token degrades to [OutboxMethod.Post] (never throws). */

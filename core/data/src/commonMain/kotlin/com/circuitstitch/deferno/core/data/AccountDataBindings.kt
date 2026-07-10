@@ -362,12 +362,8 @@ interface AccountDataBindings {
     fun createReplayListener(
         healer: ItemIdHealer,
         pendingCreateStore: PendingCreateStore,
-        taskStore: TaskLocalStore,
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
     ): CreateReplayListener =
-        DefaultCreateReplayListener(healer, pendingCreateStore, taskStore, habitStore, choreStore, eventStore)
+        DefaultCreateReplayListener(healer, pendingCreateStore)
 
     // The comment-create replay seam (ADR-0043): the second listener beside [createReplayListener], keyed
     // on the `comment-create:` target. Rekeys the optimistic comment row + re-points its queued edits.
