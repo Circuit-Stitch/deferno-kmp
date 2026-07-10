@@ -1245,10 +1245,13 @@ internal fun CommentsSection(
     onEdit: (String, String) -> Unit,
     onDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
+    // The Android FAB's "Add comment" focus target (mirrors [SubtasksSection]'s addSubtaskFocus): threaded
+    // into the composer so revealing the Comments tab focuses it. Null when no host drives a reveal.
+    commentFocus: FocusRequester? = null,
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SectionHeader(stringResource(Res.string.tasks_detail_tab_comments), trailing = comments.size.toString())
-        CommentComposer(isPosting = isPosting, onPost = onPost)
+        CommentComposer(isPosting = isPosting, onPost = onPost, focusRequester = commentFocus)
         when {
             loading && comments.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
             comments.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_no_comments))
@@ -1322,7 +1325,13 @@ private fun ItemHistoryEvent.label(): String = stringResource(
 )
 
 @Composable
-private fun CommentComposer(isPosting: Boolean, onPost: (String) -> Unit) {
+private fun CommentComposer(
+    isPosting: Boolean,
+    onPost: (String) -> Unit,
+    // The Android FAB's "Add comment" focus target — applied to the composer field so a reveal focuses it and
+    // pops the keyboard. Null (desktop + existing callers) leaves the field un-driven.
+    focusRequester: FocusRequester? = null,
+) {
     var text by remember { mutableStateOf("") }
     Column(Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -1330,7 +1339,8 @@ private fun CommentComposer(isPosting: Boolean, onPost: (String) -> Unit) {
             onValueChange = { if (it.length <= MaxCommentLength) text = it },
             placeholder = { Text(stringResource(Res.string.tasks_detail_add_comment_placeholder)) },
             enabled = !isPosting,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
         )
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),

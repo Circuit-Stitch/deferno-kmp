@@ -29,10 +29,12 @@ import org.robolectric.annotation.Config
  * in-memory repository on [Dispatchers.Unconfined] (state flows resolve synchronously) through the
  * rendered UI, so it exercises the whole `ListDetailPaneScaffold` path, not a hand-rolled breakpoint.
  *
- * The list pane's **"Refresh"** action and the detail pane's **"Add to today's plan"** button are the
- * unambiguous tells: both on screen ⇒ two panes; only the detail's ⇒ a single pane collapsed onto the
- * open task. The breakpoint is pinned at the medium boundary (599dp single / 600dp two), matching
- * `calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth`.
+ * The list pane's **"Refresh"** action and the detail pane's **FAB** (contentDescription "Add", which
+ * opens the add-actions sheet) are the unambiguous tells: both on screen ⇒ two panes; only the detail's
+ * FAB ⇒ a single pane collapsed onto the open task. The FAB replaced the omni-present inline "Add to
+ * today's plan" button on Android, and unlike the task title it lives only in the detail pane (the title
+ * would double up in the list row under two panes). The breakpoint is pinned at the medium boundary
+ * (599dp single / 600dp two), matching `calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth`.
  */
 @RunWith(RobolectricTestRunner::class)
 @OptIn(ExperimentalTestApi::class)
@@ -57,8 +59,10 @@ class TasksAdaptivePaneTest {
 
         composeRule.onNodeWithContentDescription("Open Plan the spring launch").performClick()
 
-        // The detail pane is always present once a task is open.
-        composeRule.onNodeWithText("Add to today's plan").assertIsDisplayed()
+        // The detail pane is always present once a task is open — its FAB (contentDescription "Add") is the
+        // detail-only tell now (the inline "Add to today's plan" button is gone; the title would be ambiguous
+        // with the list row under two panes).
+        composeRule.onNodeWithContentDescription("Add").assertIsDisplayed()
         // The list pane survives only in two-pane mode.
         if (listRefreshVisible) {
             composeRule.onNodeWithText("Refresh").assertIsDisplayed()

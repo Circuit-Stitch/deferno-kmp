@@ -245,8 +245,18 @@ internal class FakeTaskDetailComponent(
     /** Bytes the View can read back for an on-device attachment (#211) — keyed by attachment id. */
     var onDeviceBytes: Map<String, ByteArray> = emptyMap()
 
+    var addSubtaskRequestedCount = 0
+        private set
+    var addCommentRequestedCount = 0
+        private set
+    var changeStatusRequestedCount = 0
+        private set
+
     override fun onCloseClicked() { closeCount++ }
     override fun onAddToPlanClicked() { addToPlanCount++ }
+    override fun onAddSubtaskRequested() { addSubtaskRequestedCount++ }
+    override fun onAddCommentRequested() { addCommentRequestedCount++ }
+    override fun onChangeStatusRequested() { changeStatusRequestedCount++ }
     override fun onSetWorkingState(target: WorkingState) { workingStateSets += target }
     override fun onSetDeadline(date: LocalDate?) { deadlineSets += date }
     override fun onSetLabels(labels: List<String>) { labelSets += labels }

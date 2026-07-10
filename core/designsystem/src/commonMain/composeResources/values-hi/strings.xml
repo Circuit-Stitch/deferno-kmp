@@ -722,7 +722,9 @@
     <string name="tasks_kind_label_task">कार्य</string>
     <string name="tasks_menu_activate">सक्रिय करें</string>
     <string name="tasks_menu_add_subtask">उपकार्य जोड़ें</string>
+    <string name="tasks_menu_add_comment">टिप्पणी जोड़ें</string>
     <string name="tasks_menu_add_to_plan">आज की योजना में जोड़ें</string>
+    <string name="tasks_menu_change_status">स्थिति बदलें</string>
     <string name="tasks_menu_archive">संग्रहित करें</string>
     <string name="tasks_menu_blocked_by">किसके द्वारा अवरुद्ध…</string>
     <string name="tasks_menu_break_this_down">इसे छोटे हिस्सों में बाँटें</string>
