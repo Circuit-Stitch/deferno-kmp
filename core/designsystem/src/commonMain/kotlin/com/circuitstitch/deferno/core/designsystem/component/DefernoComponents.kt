@@ -26,12 +26,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -301,6 +303,60 @@ fun DashedAddButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
         Spacer(Modifier.width(9.dp))
         Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
     }
+}
+
+/**
+ * A dotted horizontal rule with labels punched into it — a [startLabel] pinned to the leading edge and a
+ * [centerLabel] centered in the **full** width (not the space left of the start label). Each label rides an
+ * opaque [surface]-colored chip so the dots break cleanly around it; pass the color of whatever surface this
+ * divider sits on (defaults to the page background) or the dots will show through the labels.
+ *
+ * The Task detail's Trail day divider ("2026-07-10 ···· TODAY ····"). A11y: the whole rule is one merged
+ * [heading] node that reads its labels once; the decorative dots carry no semantics of their own.
+ */
+@Composable
+fun DottedLabelDivider(
+    modifier: Modifier = Modifier,
+    startLabel: String? = null,
+    centerLabel: String? = null,
+    color: Color = MaterialTheme.defernoColors.inkMuted,
+    surface: Color = MaterialTheme.colorScheme.background,
+) {
+    Box(
+        modifier.fillMaxWidth().semantics(mergeDescendants = true) { heading() },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Spacer(
+            Modifier.fillMaxWidth().height(1.dp).drawBehind {
+                drawLine(
+                    color = color,
+                    start = Offset(0f, size.height / 2),
+                    end = Offset(size.width, size.height / 2),
+                    strokeWidth = size.height,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(2f, 6f)),
+                )
+            },
+        )
+        if (startLabel != null) {
+            DividerLabel(startLabel, color, Modifier.background(surface).padding(end = 8.dp))
+        }
+        if (centerLabel != null) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                DividerLabel(centerLabel, color, Modifier.background(surface).padding(horizontal = 8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DividerLabel(text: String, color: Color, modifier: Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = color,
+        modifier = modifier,
+    )
 }
 
 /**

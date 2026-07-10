@@ -68,10 +68,12 @@ import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.BlockedChip
 import com.circuitstitch.deferno.core.designsystem.component.CheckDot
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
+import com.circuitstitch.deferno.core.designsystem.component.DottedLabelDivider
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.format.formatInstant
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.activity_field_deadline
 import com.circuitstitch.deferno.core.designsystem.resources.activity_field_title
@@ -104,6 +106,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.common_set
 import com.circuitstitch.deferno.core.designsystem.resources.common_size_bytes
 import com.circuitstitch.deferno.core.designsystem.resources.common_size_kb
 import com.circuitstitch.deferno.core.designsystem.resources.common_size_mb
+import com.circuitstitch.deferno.core.designsystem.resources.common_time_pattern
 import com.circuitstitch.deferno.core.designsystem.resources.new_notes_label
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_caption
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_comment_placeholder
@@ -1261,15 +1264,30 @@ internal fun TrailSection(
         when {
             loading && activity.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
             activity.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_trail_empty))
-            else -> activity.forEach { item ->
-                key(item.id) {
-                    when (item) {
-                        is ActivityItem.Comment -> CommentRow(
-                            item.comment,
-                            isMine = currentUserId != null && item.comment.createdBy == currentUserId,
-                            onEdit, onDelete,
-                        )
-                        is ActivityItem.HistoryEvent -> HistoryEventRow(item)
+            else -> {
+                // Group by the device-local day (same zone the row time uses, so a row never lands under
+                // the wrong header at a day boundary); the header carries the date, each row just its time.
+                val timePattern = stringResource(Res.string.common_time_pattern)
+                val today = java.time.LocalDate.now().toString() // device-zone ISO, matches trailDay()
+                val todayLabel = stringResource(Res.string.tasks_detail_due_today).uppercase()
+                activity.groupBy { it.at.trailDay() }.forEach { (day, rows) ->
+                    DottedLabelDivider(
+                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 2.dp),
+                        startLabel = day,
+                        centerLabel = if (day == today) todayLabel else null,
+                    )
+                    rows.forEach { item ->
+                        key(item.id) {
+                            when (item) {
+                                is ActivityItem.Comment -> CommentRow(
+                                    item.comment,
+                                    isMine = currentUserId != null && item.comment.createdBy == currentUserId,
+                                    time = item.at.trailTime(timePattern),
+                                    onEdit = onEdit, onDelete = onDelete,
+                                )
+                                is ActivityItem.HistoryEvent -> HistoryEventRow(item, time = item.at.trailTime(timePattern))
+                            }
+                        }
                     }
                 }
             }
@@ -1284,7 +1302,7 @@ internal fun TrailSection(
  * changed-field list, with the recorded date trailing.
  */
 @Composable
-private fun HistoryEventRow(item: ActivityItem.HistoryEvent) {
+private fun HistoryEventRow(item: ActivityItem.HistoryEvent, time: String) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = historyGlyph(item.event),
@@ -1300,7 +1318,7 @@ private fun HistoryEventRow(item: ActivityItem.HistoryEvent) {
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = item.event.recordedAt.toDisplayDate(),
+            text = time,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.defernoColors.inkMuted,
         )
@@ -1431,6 +1449,7 @@ private fun CommentComposer(
 private fun CommentRow(
     comment: Comment,
     isMine: Boolean,
+    time: String,
     onEdit: (String, String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
@@ -1451,7 +1470,7 @@ private fun CommentRow(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = comment.createdAt.toDisplayDate() +
+                text = time +
                     if (comment.editedAt != null) " " + stringResource(Res.string.tasks_detail_comment_edited) else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.defernoColors.inkMuted,
@@ -1517,3 +1536,13 @@ private fun formatTenths(tenths: Long): String = String.format(Locale.getDefault
  * detail earns richer time display.
  */
 internal fun kotlin.time.Instant.toDisplayDate(): String = toString().substringBefore('T')
+
+/**
+ * The Trail group key — the ISO local day (device zone) an instant falls on. ISO on purpose (a machine
+ * date divider, not localized prose); zoned so it matches [trailTime], keeping a row under the header for
+ * the same day its time reads.
+ */
+private fun kotlin.time.Instant.trailDay(): String = formatInstant(this, "yyyy-MM-dd")
+
+/** The Trail row time — the instant's clock time in the device zone/locale (pattern from `common_time_pattern`). */
+private fun kotlin.time.Instant.trailTime(pattern: String): String = formatInstant(this, pattern)
