@@ -724,7 +724,9 @@ Agradeço.</string>
     <string name="tasks_kind_label_task">TAREFA</string>
     <string name="tasks_menu_activate">Ativar</string>
     <string name="tasks_menu_add_subtask">Adicionar subtarefa</string>
+    <string name="tasks_menu_add_comment">Adicionar comentário</string>
     <string name="tasks_menu_add_to_plan">Adicionar ao plano de hoje</string>
+    <string name="tasks_menu_change_status">Alterar status</string>
     <string name="tasks_menu_archive">Arquivar</string>
     <string name="tasks_menu_blocked_by">Bloqueado por…</string>
     <string name="tasks_menu_break_this_down">Dividir em partes</string>

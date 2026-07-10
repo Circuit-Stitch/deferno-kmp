@@ -721,7 +721,9 @@ Vielen Dank.</string>
     <string name="tasks_kind_label_task">AUFGABE</string>
     <string name="tasks_menu_activate">Aktivieren</string>
     <string name="tasks_menu_add_subtask">Unteraufgabe hinzufügen</string>
+    <string name="tasks_menu_add_comment">Kommentar hinzufügen</string>
     <string name="tasks_menu_add_to_plan">Zum heutigen Plan hinzufügen</string>
+    <string name="tasks_menu_change_status">Status ändern</string>
     <string name="tasks_menu_archive">Archivieren</string>
     <string name="tasks_menu_blocked_by">Blockiert durch…</string>
     <string name="tasks_menu_break_this_down">In Schritte zerlegen</string>

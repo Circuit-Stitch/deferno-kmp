@@ -706,7 +706,9 @@ Gracias.</string>
     <string name="tasks_kind_label_task">TAREA</string>
     <string name="tasks_menu_activate">Activar</string>
     <string name="tasks_menu_add_subtask">Agregar subtarea</string>
+    <string name="tasks_menu_add_comment">Agregar comentario</string>
     <string name="tasks_menu_add_to_plan">Agregar al plan de hoy</string>
+    <string name="tasks_menu_change_status">Cambiar estado</string>
     <string name="tasks_menu_archive">Archivar</string>
     <string name="tasks_menu_blocked_by">Bloqueado por…</string>
     <string name="tasks_menu_break_this_down">Desglosar esto</string>

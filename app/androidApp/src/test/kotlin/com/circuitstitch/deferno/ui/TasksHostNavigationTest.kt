@@ -66,8 +66,10 @@ class TasksHostNavigationTest {
         composeRule.onNodeWithContentDescription("Open Parent task").performClick()
         composeRule.onNodeWithText("Child step").performScrollTo().performClick()
 
-        // The child's *detail* is now foregrounded: its title header and the detail-only action show.
+        // The child's *detail* is now foregrounded: its title header and the detail-only FAB show. The FAB
+        // (contentDescription "Add", opening the add-actions sheet) replaced the omni-present inline "Add to
+        // today's plan" button on Android, so it's the detail-only tell now.
         composeRule.onNodeWithText("Child step").assertIsDisplayed()
-        composeRule.onNodeWithText("Add to today's plan").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Add").assertIsDisplayed()
     }
 }

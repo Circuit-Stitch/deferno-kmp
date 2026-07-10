@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -132,6 +133,12 @@ internal fun TaskDetailContent(
     // ADR-0044: whether the body's connected-header renders its own ⋮ overflow. False on the compact
     // single-pane Tasks detail, where the shell's drilled bar owns the overflow (else it doubles).
     showHeaderOverflow: Boolean = true,
+    // ADR-0044 amendment: when true the platform host (Android) stashes the three "add" actions — Add subtask ·
+    // Add comment · Add to today's plan — behind an overlaid FAB + ModalBottomSheet, so this shared body must
+    // NOT also draw them inline: the header kebab drops its "Add subtask" item, the Info tab drops its "Add to
+    // today's plan" Button (the FAB owns both), and a trailing Spacer keeps the FAB off the last row. False
+    // (desktop + existing tests) keeps every affordance inline.
+    externalAddActions: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val task = state.task
@@ -176,6 +183,7 @@ internal fun TaskDetailContent(
                     onBreakdown = onBreakdown,
                     onOpenParent = onOpenParent,
                     showHeaderOverflow = showHeaderOverflow,
+                    externalAddActions = externalAddActions,
                 )
             }
         }
@@ -210,6 +218,7 @@ private fun TaskBody(
     onBreakdown: (() -> Unit)?,
     onOpenParent: () -> Unit,
     showHeaderOverflow: Boolean,
+    externalAddActions: Boolean,
 ) {
     // Reset the scroll to the top when drilling into a different task (key by id) — the detail composable
     // is reused across the parent→subtask navigation, so an unkeyed scroll state would carry the parent's
@@ -218,6 +227,9 @@ private fun TaskBody(
     // The add-subtask field lives far down in the Info tab; the kebab's "Add subtask" (and the drilled
     // overflow's reveal token) request focus on it, which auto-scrolls it into view and pops the keyboard.
     val addSubtaskFocus = remember(task.id) { FocusRequester() }
+    // The comment composer's focus target (the twin of [addSubtaskFocus]): the Android FAB's "Add comment"
+    // (via the component's revealCommentComposer token) switches to the Comments tab and requests focus here.
+    val commentFocus = remember(task.id) { FocusRequester() }
     var confirmDelete by remember { mutableStateOf(false) }
     var tab by remember(task.id) { mutableStateOf(DetailTab.Info) }
     var showStatusPicker by remember { mutableStateOf(false) }
@@ -229,6 +241,16 @@ private fun TaskBody(
     // so the always-composed add-subtask field is present for the focus request below (skip the initial 0).
     LaunchedEffect(state.revealAddSubtaskComposer) {
         if (state.revealAddSubtaskComposer > 0) tab = DetailTab.Info
+    }
+    // Its comment twin (ADR-0044): the FAB's "Add comment" bumps revealCommentComposer → switch to the
+    // Comments tab so the always-composed composer is present for the focus request in that branch (skip 0).
+    LaunchedEffect(state.revealCommentComposer) {
+        if (state.revealCommentComposer > 0) tab = DetailTab.Comments
+    }
+    // The status-picker twin (ADR-0044): the FAB's "Change status" bumps revealStatusPicker → open the same
+    // status picker sheet the STATUS row opens on tap (skip the initial 0 so it never opens unbidden).
+    LaunchedEffect(state.revealStatusPicker) {
+        if (state.revealStatusPicker > 0) showStatusPicker = true
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -243,7 +265,13 @@ private fun TaskBody(
             overflow = if (showHeaderOverflow) {
                 {
                     TaskOverflowMenu(
-                        onAddSubtask = { tab = DetailTab.Info; localAddSubtaskReveal++ },
+                        // When the FAB owns the "add" actions (Android), the kebab drops its "Add subtask"
+                        // item — a null lambda hides it; else it reveals the inline add-subtask field.
+                        onAddSubtask = if (externalAddActions) {
+                            null
+                        } else {
+                            { tab = DetailTab.Info; localAddSubtaskReveal++ }
+                        },
                         onDelete = { confirmDelete = true },
                         onBreakdown = onBreakdown,
                     )
@@ -294,10 +322,14 @@ private fun TaskBody(
                         )
                     }
 
-                    Button(
-                        onClick = onAddToPlan,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
-                    ) { Text(stringResource(Res.string.tasks_menu_add_to_plan)) }
+                    // The inline "Add to today's plan" Button — hidden when the Android FAB owns it
+                    // ([externalAddActions]); on desktop it stays here.
+                    if (!externalAddActions) {
+                        Button(
+                            onClick = onAddToPlan,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
+                        ) { Text(stringResource(Res.string.tasks_menu_add_to_plan)) }
+                    }
 
                     PropertiesSection(
                         task = task,
@@ -329,19 +361,32 @@ private fun TaskBody(
                         addSubtaskFocus = addSubtaskFocus,
                     )
                 }
-                DetailTab.Comments -> CommentsSection(
-                    comments = state.activity.filterIsInstance<ActivityItem.Comment>(),
-                    currentUserId = state.currentUserId,
-                    loading = state.commentsLoading,
-                    isPosting = state.isPostingComment,
-                    onPost = onPostComment,
-                    onEdit = onEditComment,
-                    onDelete = onDeleteComment,
-                )
+                DetailTab.Comments -> {
+                    // Reveal the composer on request (the FAB's "Add comment"): focus it once the Comments tab
+                    // is composed. This effect lives in the branch so the composer is present for the focus
+                    // request; the initial 0 is skipped so opening the tab never pops the keyboard.
+                    LaunchedEffect(state.revealCommentComposer) {
+                        if (state.revealCommentComposer > 0) commentFocus.requestFocus()
+                    }
+                    CommentsSection(
+                        comments = state.activity.filterIsInstance<ActivityItem.Comment>(),
+                        currentUserId = state.currentUserId,
+                        loading = state.commentsLoading,
+                        isPosting = state.isPostingComment,
+                        onPost = onPostComment,
+                        onEdit = onEditComment,
+                        onDelete = onDeleteComment,
+                        commentFocus = commentFocus,
+                    )
+                }
                 DetailTab.History -> HistorySection(
                     history = state.activity.filterIsInstance<ActivityItem.HistoryEvent>(),
                     loading = state.commentsLoading,
                 )
+            }
+            // When the Android FAB overlays the content, pad the tail so it never covers the last row.
+            if (externalAddActions) {
+                Spacer(Modifier.height(80.dp))
             }
         }
     }
@@ -493,11 +538,12 @@ private fun shortRef(ref: String?): String? =
  * The detail's ⋮ more-actions kebab (#262/ADR-0044): Add subtask (reveals the inline add field) and the
  * destructive Delete (the caller gates it behind a confirm), plus "Break this down" where a host wired it.
  * "Set aside" is gone — Dropped is now reachable only through the status picker sheet. Icon-only trigger, so
- * it carries its own contentDescription for TalkBack.
+ * it carries its own contentDescription for TalkBack. [onAddSubtask] is nullable: a host that owns "Add
+ * subtask" elsewhere (Android's FAB + add sheet) passes null to drop the item so the two never double up.
  */
 @Composable
 private fun TaskOverflowMenu(
-    onAddSubtask: () -> Unit,
+    onAddSubtask: (() -> Unit)?,
     onDelete: () -> Unit,
     onBreakdown: (() -> Unit)? = null,
 ) {
@@ -507,10 +553,14 @@ private fun TaskOverflowMenu(
             Icon(imageVector = DefernoIcons.MoreVert, contentDescription = stringResource(Res.string.tasks_detail_more_actions))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.tasks_menu_add_subtask)) },
-                onClick = { expanded = false; onAddSubtask() },
-            )
+            // Absent when the host owns "Add subtask" elsewhere (Android's FAB); present as the inline reveal
+            // otherwise (desktop + the compact single-pane detail).
+            if (onAddSubtask != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.tasks_menu_add_subtask)) },
+                    onClick = { expanded = false; onAddSubtask() },
+                )
+            }
             // "Break this down" (Deferno#525) — the on-device impediment flow. Only where a host wired it
             // (Android); desktop has no engine, so the item is absent rather than opening an empty overlay.
             if (onBreakdown != null) {

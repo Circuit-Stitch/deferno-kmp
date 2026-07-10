@@ -90,6 +90,12 @@ data class TaskDetailState(
     // A monotonic reveal token (ADR-0044): [TaskDetailComponent.onAddSubtaskRequested] bumps it so the
     // Info tab scrolls to + focuses the inline add-subtask field. Starts at 0 (the View skips the initial 0).
     val revealAddSubtaskComposer: Int = 0,
+    // A monotonic reveal token: [TaskDetailComponent.onAddCommentRequested] bumps it so the detail switches
+    // to the Comments tab and focuses the composer. Starts at 0 (the View skips the initial 0).
+    val revealCommentComposer: Int = 0,
+    // A monotonic reveal token: [TaskDetailComponent.onChangeStatusRequested] bumps it so the detail opens the
+    // status picker sheet (the Android FAB's twin of tapping the STATUS row). Starts at 0 (View skips 0).
+    val revealStatusPicker: Int = 0,
     // The number of distinct groups (orgs) across the cached items — the OWNER row shows only when this is
     // > 1 (a shared / multi-group account), and is hidden for a single-group user whose only group is their
     // own personal org (ADR-0044). Defaults to 1 so tests/callers without a roster hide the row.
@@ -216,6 +222,12 @@ interface TaskDetailComponent {
      * focusing the existing inline add-subtask field. Default no-op body so fakes/other impls needn't override.
      */
     fun onAddSubtaskRequested() {}
+
+    /** Reveal the comment composer (switch to Comments tab + focus). Bumps [TaskDetailState.revealCommentComposer]. */
+    fun onAddCommentRequested() {}
+
+    /** Open the status picker sheet (the Android FAB's twin of tapping the STATUS row). Bumps [TaskDetailState.revealStatusPicker]. */
+    fun onChangeStatusRequested() {}
 
     /**
      * Toggle a subtask row's expand/collapse — the leading chevron. Persists through the shared device-local
@@ -364,6 +376,8 @@ class DefaultTaskDetailComponent(
                 currentUserId = currentUserId,
                 parent = parent,
                 revealAddSubtaskComposer = ex.revealAddSubtaskComposer,
+                revealCommentComposer = ex.revealCommentComposer,
+                revealStatusPicker = ex.revealStatusPicker,
                 // Distinct owning orgs across the cached forest — a single-group user's items all share their
                 // personal-org slug (count 1 → OWNER hidden); a shared/multi-group account spans more.
                 ownerGroupCount = all.filterNot { it.isDeleted }.map { it.orgSlug }.distinct().size,
@@ -484,6 +498,14 @@ class DefaultTaskDetailComponent(
         extras.update { it.copy(revealAddSubtaskComposer = it.revealAddSubtaskComposer + 1) }
     }
 
+    override fun onAddCommentRequested() {
+        extras.update { it.copy(revealCommentComposer = it.revealCommentComposer + 1) }
+    }
+
+    override fun onChangeStatusRequested() {
+        extras.update { it.copy(revealStatusPicker = it.revealStatusPicker + 1) }
+    }
+
     override fun onToggleSubtaskExpand(id: String, currentlyExpanded: Boolean) {
         foldStore.setOverride(id, !currentlyExpanded)
     }
@@ -566,6 +588,10 @@ class DefaultTaskDetailComponent(
         val hideDoneSubtasks: Boolean = false,
         // Monotonic "reveal the add-subtask composer" token (ADR-0044) — bumped by onAddSubtaskRequested().
         val revealAddSubtaskComposer: Int = 0,
+        // Monotonic "reveal the comment composer" token — bumped by onAddCommentRequested().
+        val revealCommentComposer: Int = 0,
+        // Monotonic "open the status picker" token — bumped by onChangeStatusRequested().
+        val revealStatusPicker: Int = 0,
     )
 }
 

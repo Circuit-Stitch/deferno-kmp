@@ -933,8 +933,10 @@ Thank you.</string>
     <!-- Non-Task definition light-switch (opposite of Archive) -->
     <string name="tasks_menu_activate">Activate</string>
     <string name="tasks_menu_add_subtask">Add subtask</string>
+    <string name="tasks_menu_add_comment">Add comment</string>
     <!-- Merges tree menu, detail button, Breakdown button -->
     <string name="tasks_menu_add_to_plan">Add to today's plan</string>
+    <string name="tasks_menu_change_status">Change status</string>
     <!-- Verb -->
     <string name="tasks_menu_archive">Archive</string>
     <!-- Opens the dependency-edge picker (#291) -->

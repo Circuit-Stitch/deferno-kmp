@@ -139,15 +139,56 @@ class TaskScreenInteractionTest {
 
     @Test
     fun taskDetail_addToPlan_emitsIntent() {
-        // ADR-0044 removed the body PaneHeader (back is owned by the shell / two-pane close affordance now),
-        // so the detail body no longer carries a "Back" — only the moved-to-Info Add-to-plan button remains here.
+        // The omni-present inline "Add to today's plan" button is gone on Android: the FAB (contentDescription
+        // "Add") opens a ModalBottomSheet whose three rows are the add-actions. Add-to-plan is now the third
+        // sheet row — open the FAB, then tap it, and the detail forwards the plan intent.
         val task = sampleTask("1", "Plan the spring launch", description = "Do the thing")
         val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
         setContent { TaskDetailScreen(component) }
 
+        composeRule.onNodeWithContentDescription("Add").performClick()
         composeRule.onNodeWithText("Add to today's plan").performClick()
 
         assertEquals(1, component.addToPlanCount)
+    }
+
+    @Test
+    fun taskDetail_addSheetComment_emitsIntent() {
+        // The FAB sheet's "Add comment" row forwards onAddCommentRequested() (which reveals the comment composer).
+        val task = sampleTask("1", "Plan the spring launch", description = "Do the thing")
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        setContent { TaskDetailScreen(component) }
+
+        composeRule.onNodeWithContentDescription("Add").performClick()
+        composeRule.onNodeWithText("Add comment").performClick()
+
+        assertEquals(1, component.addCommentRequestedCount)
+    }
+
+    @Test
+    fun taskDetail_addSheetSubtask_emitsIntent() {
+        // The FAB sheet's "Add subtask" row forwards onAddSubtaskRequested().
+        val task = sampleTask("1", "Plan the spring launch", description = "Do the thing")
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        setContent { TaskDetailScreen(component) }
+
+        composeRule.onNodeWithContentDescription("Add").performClick()
+        composeRule.onNodeWithText("Add subtask").performClick()
+
+        assertEquals(1, component.addSubtaskRequestedCount)
+    }
+
+    @Test
+    fun taskDetail_addSheetChangeStatus_emitsIntent() {
+        // The FAB sheet's "Change status" row forwards onChangeStatusRequested() (which opens the status picker).
+        val task = sampleTask("1", "Plan the spring launch", description = "Do the thing")
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        setContent { TaskDetailScreen(component) }
+
+        composeRule.onNodeWithContentDescription("Add").performClick()
+        composeRule.onNodeWithText("Change status").performClick()
+
+        assertEquals(1, component.changeStatusRequestedCount)
     }
 
     @Test
