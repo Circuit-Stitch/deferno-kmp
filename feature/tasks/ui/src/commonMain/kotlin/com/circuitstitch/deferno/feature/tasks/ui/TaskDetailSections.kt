@@ -68,21 +68,27 @@ import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.BlockedChip
 import com.circuitstitch.deferno.core.designsystem.component.CheckDot
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
+import com.circuitstitch.deferno.core.designsystem.component.DottedLabelDivider
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.format.formatInstant
 import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.activity_field_deadline
+import com.circuitstitch.deferno.core.designsystem.resources.activity_field_title
 import com.circuitstitch.deferno.core.designsystem.resources.activity_history_created
-import com.circuitstitch.deferno.core.designsystem.resources.activity_history_folded_into
-import com.circuitstitch.deferno.core.designsystem.resources.activity_history_merged_child
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_folded_peer
 import com.circuitstitch.deferno.core.designsystem.resources.activity_history_merged_into_parent
-import com.circuitstitch.deferno.core.designsystem.resources.activity_history_moved
-import com.circuitstitch.deferno.core.designsystem.resources.activity_history_parent_assigned
-import com.circuitstitch.deferno.core.designsystem.resources.activity_history_split
-import com.circuitstitch.deferno.core.designsystem.resources.activity_history_status_changed
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_merged_peer
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_moved_peer
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_parent_peer
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_peer_unknown
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_split_peer
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_status_transition
 import com.circuitstitch.deferno.core.designsystem.resources.activity_history_unknown
 import com.circuitstitch.deferno.core.designsystem.resources.activity_history_updated
+import com.circuitstitch.deferno.core.designsystem.resources.activity_history_updated_fields
 import com.circuitstitch.deferno.core.designsystem.resources.common_add
 import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
 import com.circuitstitch.deferno.core.designsystem.resources.common_clear
@@ -100,6 +106,8 @@ import com.circuitstitch.deferno.core.designsystem.resources.common_set
 import com.circuitstitch.deferno.core.designsystem.resources.common_size_bytes
 import com.circuitstitch.deferno.core.designsystem.resources.common_size_kb
 import com.circuitstitch.deferno.core.designsystem.resources.common_size_mb
+import com.circuitstitch.deferno.core.designsystem.resources.common_time_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.new_notes_label
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_caption
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_comment_placeholder
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_add_file
@@ -122,7 +130,6 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_edit_c
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_edit_caption_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_encrypted_comment
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_no_attachments
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_no_comments
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_play
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_play_attachment_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_post
@@ -134,13 +141,13 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_proper
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_remove_caption_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_remove_label_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_attachments
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_history
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_filter_hide_done
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_subtasks
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_set_due_date
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_status_picker_title
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_status_row_a11y
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_tab_comments
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_tab_trail
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_trail_empty
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_due_days_ago
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_due_days_away
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_due_today
@@ -1227,17 +1234,19 @@ private fun AttachmentRow(
     }
 }
 
-// --- Comments tab + History tab (the ADR-0043 feed, split by ADR-0044) ---
+// --- Trail: one merged, reverse-chronological comments + enriched-history feed (ADR-0046) ---
 
 /**
- * The Comments tab (ADR-0044): a composer to post, then the per-item comment feed (the [ActivityItem.Comment]
- * half of the ADR-0043 activity feed — history moves to [HistorySection]). Reads from the cache
- * (offline-first) — no error state. [loading] flags an in-flight best-effort on-open refresh (only shown
- * while the feed is still empty). The current user's own comments offer inline Edit / Delete.
+ * The **Trail** (ADR-0046): the single, interleaved comments + server-history feed — the whole
+ * [ActivityItem] list the component already merged and sorted **newest-first** (no filterIsInstance split,
+ * no coalescing; every row stays). The comment [CommentComposer] sits **inline at the top** (non-sticky,
+ * first slot); below it the feed renders top-to-bottom, each row a comment (its own Edit/Delete when
+ * [currentUserId] owns it) or an enriched, glyph-prefixed history line. Reads from the cache (offline-first)
+ * — no error state; [loading] flags the best-effort on-open refresh only while the feed is still empty.
  */
 @Composable
-internal fun CommentsSection(
-    comments: List<ActivityItem.Comment>,
+internal fun TrailSection(
+    activity: List<ActivityItem>,
     currentUserId: UserId?,
     loading: Boolean,
     isPosting: Boolean,
@@ -1246,22 +1255,40 @@ internal fun CommentsSection(
     onDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
     // The Android FAB's "Add comment" focus target (mirrors [SubtasksSection]'s addSubtaskFocus): threaded
-    // into the composer so revealing the Comments tab focuses it. Null when no host drives a reveal.
+    // into the top composer so revealing the Trail tab focuses it. Null when no host drives a reveal.
     commentFocus: FocusRequester? = null,
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SectionHeader(stringResource(Res.string.tasks_detail_tab_comments), trailing = comments.size.toString())
+        SectionHeader(stringResource(Res.string.tasks_detail_tab_trail), trailing = activity.size.toString())
         CommentComposer(isPosting = isPosting, onPost = onPost, focusRequester = commentFocus)
         when {
-            loading && comments.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
-            comments.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_no_comments))
-            else -> comments.forEach { item ->
-                key(item.id) {
-                    CommentRow(
-                        item.comment,
-                        isMine = currentUserId != null && item.comment.createdBy == currentUserId,
-                        onEdit, onDelete,
+            loading && activity.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
+            activity.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_trail_empty))
+            else -> {
+                // Group by the device-local day (same zone the row time uses, so a row never lands under
+                // the wrong header at a day boundary); the header carries the date, each row just its time.
+                val timePattern = stringResource(Res.string.common_time_pattern)
+                val today = java.time.LocalDate.now().toString() // device-zone ISO, matches trailDay()
+                val todayLabel = stringResource(Res.string.tasks_detail_due_today).uppercase()
+                activity.groupBy { it.at.trailDay() }.forEach { (day, rows) ->
+                    DottedLabelDivider(
+                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 2.dp),
+                        startLabel = day,
+                        centerLabel = if (day == today) todayLabel else null,
                     )
+                    rows.forEach { item ->
+                        key(item.id) {
+                            when (item) {
+                                is ActivityItem.Comment -> CommentRow(
+                                    item.comment,
+                                    isMine = currentUserId != null && item.comment.createdBy == currentUserId,
+                                    time = item.at.trailTime(timePattern),
+                                    onEdit = onEdit, onDelete = onDelete,
+                                )
+                                is ActivityItem.HistoryEvent -> HistoryEventRow(item, time = item.at.trailTime(timePattern))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1269,60 +1296,110 @@ internal fun CommentsSection(
 }
 
 /**
- * The History tab (ADR-0044): the per-item server item-history ([ActivityItem.HistoryEvent], ADR-0043) as a
- * read-only list of coarse localized one-liners. Reads from the cache — no error state; [loading] flags the
- * best-effort on-open refresh while the list is still empty.
+ * A read-only server-history row (ADR-0046) — a **leading unicode glyph** by kind (no material-icons
+ * dependency) then the **enriched, payload-rendered** line: the status transition in the editor vocabulary,
+ * the peer-title verbs (resolved off the local cache, "another item" when aged out), or the humanized
+ * changed-field list, with the recorded date trailing.
  */
 @Composable
-internal fun HistorySection(
-    history: List<ActivityItem.HistoryEvent>,
-    loading: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SectionHeader(stringResource(Res.string.tasks_detail_section_history), trailing = history.size.toString())
-        when {
-            loading && history.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
-            history.isEmpty() -> Unit // nothing to show yet; the header stands alone
-            else -> history.forEach { item -> key(item.id) { HistoryEventRow(item.event) } }
-        }
-    }
-}
-
-/** A read-only server-history row — a coarse, localized one-liner for the event (ADR-0043, v1 Task-only). */
-@Composable
-private fun HistoryEventRow(event: ItemHistoryEvent) {
+private fun HistoryEventRow(item: ActivityItem.HistoryEvent, time: String) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text = event.label(),
+            text = historyGlyph(item.event),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.defernoColors.inkMuted,
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = event.recordedAt.toDisplayDate(),
+            text = historyLabel(item.event, item.peerTitle),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.defernoColors.inkMuted,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = time,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.defernoColors.inkMuted,
         )
     }
 }
 
-/** Maps a history event to its localized verb label (the typed-code → resource mapping, ADR-0043). */
+/**
+ * The leading unicode glyph for a history event (ADR-0046) — a dependency-free kind marker (no
+ * material-icons). Plain [String] constants, not localized text (decorative, like the "×"/"—" glyphs
+ * elsewhere in this file).
+ */
+private fun historyGlyph(event: ItemHistoryEvent): String = when (event) {
+    is ItemHistoryEvent.Created -> "●" // ●
+    is ItemHistoryEvent.Updated -> "✎" // ✎
+    is ItemHistoryEvent.StatusChanged -> "↻" // ↻
+    is ItemHistoryEvent.Split -> "✂" // ✂
+    is ItemHistoryEvent.Moved -> "→" // →
+    is ItemHistoryEvent.ParentAssigned -> "◈" // ◈
+    is ItemHistoryEvent.FoldedInto -> "≡" // ≡
+    is ItemHistoryEvent.MergedChild -> "≡" // ≡
+    is ItemHistoryEvent.MergedIntoParent -> "≡" // ≡
+    is ItemHistoryEvent.Unknown -> "…" // …
+}
+
+/**
+ * The enriched history line (ADR-0046) — the typed-code → localized-string mapping, rendering the wire
+ * payload the old coarse `label()` discarded. [StatusChanged] shows the from→to transition in the editor
+ * vocabulary (the reused status-picker labels via [workingStateLabel]); the structural peer events show the
+ * resolved [peerTitle] (degrading to "another item"); [Updated] names the humanized changed field(s) (generic
+ * fallback on an unknown token); [Created] / [MergedIntoParent] / [Unknown] keep their generic labels.
+ */
 @Composable
-private fun ItemHistoryEvent.label(): String = stringResource(
-    when (this) {
-        is ItemHistoryEvent.Created -> Res.string.activity_history_created
-        is ItemHistoryEvent.Updated -> Res.string.activity_history_updated
-        is ItemHistoryEvent.StatusChanged -> Res.string.activity_history_status_changed
-        is ItemHistoryEvent.Moved -> Res.string.activity_history_moved
-        is ItemHistoryEvent.ParentAssigned -> Res.string.activity_history_parent_assigned
-        is ItemHistoryEvent.Split -> Res.string.activity_history_split
-        is ItemHistoryEvent.FoldedInto -> Res.string.activity_history_folded_into
-        is ItemHistoryEvent.MergedChild -> Res.string.activity_history_merged_child
-        is ItemHistoryEvent.MergedIntoParent -> Res.string.activity_history_merged_into_parent
-        is ItemHistoryEvent.Unknown -> Res.string.activity_history_unknown
-    },
-)
+private fun historyLabel(event: ItemHistoryEvent, peerTitle: String?): String {
+    val peer = peerTitle ?: stringResource(Res.string.activity_history_peer_unknown)
+    return when (event) {
+        is ItemHistoryEvent.Created -> stringResource(Res.string.activity_history_created)
+        is ItemHistoryEvent.MergedIntoParent -> stringResource(Res.string.activity_history_merged_into_parent)
+        is ItemHistoryEvent.Unknown -> stringResource(Res.string.activity_history_unknown)
+        is ItemHistoryEvent.StatusChanged -> stringResource(
+            Res.string.activity_history_status_transition,
+            workingStateLabel(event.from),
+            workingStateLabel(event.to),
+        )
+        is ItemHistoryEvent.Split -> stringResource(Res.string.activity_history_split_peer, peer)
+        is ItemHistoryEvent.Moved -> stringResource(Res.string.activity_history_moved_peer, peer)
+        is ItemHistoryEvent.ParentAssigned -> stringResource(Res.string.activity_history_parent_peer, peer)
+        is ItemHistoryEvent.FoldedInto -> stringResource(Res.string.activity_history_folded_peer, peer)
+        is ItemHistoryEvent.MergedChild -> stringResource(Res.string.activity_history_merged_peer, peer)
+        is ItemHistoryEvent.Updated -> updatedLabel(event.fields)
+    }
+}
+
+/**
+ * The [ItemHistoryEvent.Updated] line: "Edited: X, Y" over the humanized changed-field names, or the generic
+ * "Edited this task" when the field list is empty or carries any token this View can't humanize (never leak
+ * raw snake_case). No old→new values exist on the wire.
+ */
+@Composable
+private fun updatedLabel(fields: List<String>): String {
+    val names = ArrayList<String>(fields.size)
+    var unknown = fields.isEmpty()
+    for (token in fields) {
+        val label = fieldLabel(token)
+        if (label == null) unknown = true else names.add(label)
+    }
+    return if (unknown) {
+        stringResource(Res.string.activity_history_updated)
+    } else {
+        stringResource(Res.string.activity_history_updated_fields, names.joinToString(", "))
+    }
+}
+
+/** Humanizes a raw wire field token to a localized name (reusing property labels), or `null` if unknown. */
+@Composable
+private fun fieldLabel(token: String): String? = when (token) {
+    "title" -> stringResource(Res.string.activity_field_title)
+    "description", "notes" -> stringResource(Res.string.new_notes_label)
+    "deadline", "complete_by" -> stringResource(Res.string.activity_field_deadline)
+    "labels" -> stringResource(Res.string.common_labels)
+    else -> null
+}
 
 @Composable
 private fun CommentComposer(
@@ -1372,6 +1449,7 @@ private fun CommentComposer(
 private fun CommentRow(
     comment: Comment,
     isMine: Boolean,
+    time: String,
     onEdit: (String, String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
@@ -1379,6 +1457,9 @@ private fun CommentRow(
     DetailCard {
       Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // The Trail's comment glyph (ADR-0046, U+1F4AC) — decorative, no material-icons dependency.
+            Text(text = "💬", style = MaterialTheme.typography.labelMedium)
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = if (isMine) {
                     stringResource(Res.string.tasks_detail_comment_author_you)
@@ -1389,7 +1470,7 @@ private fun CommentRow(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = comment.createdAt.toDisplayDate() +
+                text = time +
                     if (comment.editedAt != null) " " + stringResource(Res.string.tasks_detail_comment_edited) else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.defernoColors.inkMuted,
@@ -1455,3 +1536,13 @@ private fun formatTenths(tenths: Long): String = String.format(Locale.getDefault
  * detail earns richer time display.
  */
 internal fun kotlin.time.Instant.toDisplayDate(): String = toString().substringBefore('T')
+
+/**
+ * The Trail group key — the ISO local day (device zone) an instant falls on. ISO on purpose (a machine
+ * date divider, not localized prose); zoned so it matches [trailTime], keeping a row under the header for
+ * the same day its time reads.
+ */
+private fun kotlin.time.Instant.trailDay(): String = formatInstant(this, "yyyy-MM-dd")
+
+/** The Trail row time — the instant's clock time in the device zone/locale (pattern from `common_time_pattern`). */
+private fun kotlin.time.Instant.trailTime(pattern: String): String = formatInstant(this, pattern)

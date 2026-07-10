@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.data.comment.CommentRepository
 import com.circuitstitch.deferno.core.data.comment.CommentWriter
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
+import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Task
@@ -59,6 +60,9 @@ class DefaultTaskDetailStackComponent(
     // + the device-local user id, threaded into every detail page of the macOS window stack.
     private val commentRepository: CommentRepository = CommentRepository.NONE,
     private val itemHistoryRepository: ItemHistoryRepository = ItemHistoryRepository.NONE,
+    // The cross-kind Item read the Trail resolves history peer titles from (ADR-0046), threaded into every
+    // detail page. Null default leaves peers unresolved ("another item") — the macOS window wiring is a follow-up.
+    private val itemRepository: ItemRepository? = null,
     private val commentWriter: CommentWriter = CommentWriter.NONE,
     private val currentUserId: UserId? = null,
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
@@ -94,6 +98,7 @@ class DefaultTaskDetailStackComponent(
                     detailRepository = detailRepository,
                     commentRepository = commentRepository,
                     historyRepository = itemHistoryRepository,
+                    itemRepository = itemRepository,
                     commentWriter = commentWriter,
                     currentUserId = currentUserId,
                     createSubtask = createSubtask,

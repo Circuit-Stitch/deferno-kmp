@@ -689,6 +689,7 @@ Vielen Dank.</string>
     <string name="tasks_detail_tab_info">Info</string>
     <string name="tasks_detail_tab_comments">Kommentare</string>
     <string name="tasks_detail_tab_history">Verlauf</string>
+    <string name="tasks_detail_tab_trail">Pfad</string>
     <string name="tasks_detail_section_history">Verlauf</string>
     <string name="tasks_detail_property_when">Wann</string>
     <string name="tasks_detail_property_status">Status</string>
@@ -929,4 +930,20 @@ Vielen Dank.</string>
     <string name="activity_history_merged_child">Eine Aufgabe zusammengeführt</string>
     <string name="activity_history_merged_into_parent">Mit der übergeordneten Aufgabe zusammengeführt</string>
     <string name="activity_history_unknown">Eine Änderung vorgenommen</string>
+    <!-- Trail (ADR-0046): die angereicherten, aus den Payloads gerenderten Verlaufseinträge. Die Peer-Titel-Verben bekommen einen aufgelösten Elementtitel (oder „ein anderes Element“); der Statusübergang bekommt die beiden Editor-Statuslabels. -->
+    <string name="activity_history_status_transition">Status: %1$s → %2$s</string>
+    <string name="activity_history_split_peer">Abgetrennt: %1$s</string>
+    <string name="activity_history_moved_peer">Verschoben unter: %1$s</string>
+    <string name="activity_history_parent_peer">Übergeordnetes Element gesetzt: %1$s</string>
+    <string name="activity_history_folded_peer">Eingegliedert in: %1$s</string>
+    <string name="activity_history_merged_peer">Zusammengeführt mit: %1$s</string>
+    <!-- Platzhaltertitel für ein strukturelles Peer-Element, das aus dem lokalen Cache herausgefallen ist (der Verlauf lädt zum Rendern nicht nach). -->
+    <string name="activity_history_peer_unknown">ein anderes Element</string>
+    <!-- Aktualisiert-Ereignis: die vermenschlichten, per Komma verbundenen Namen der geänderten Felder (auf der Leitung gibt es keine Alt→Neu-Werte). -->
+    <string name="activity_history_updated_fields">Bearbeitet: %1$s</string>
+    <!-- Vermenschlichte Feldnamen für die Liste geänderter Felder des Aktualisiert-Ereignisses. -->
+    <string name="activity_field_title">Titel</string>
+    <string name="activity_field_deadline">Frist</string>
+    <!-- Leerer Verlauf (noch keine Kommentare und kein Verlauf). -->
+    <string name="tasks_detail_trail_empty">Noch keine Aktivität</string>
 </resources>
