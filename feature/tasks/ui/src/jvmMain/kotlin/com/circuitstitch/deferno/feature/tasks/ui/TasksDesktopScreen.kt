@@ -188,7 +188,7 @@ fun TaskDetailScreen(component: TaskDetailComponent, modifier: Modifier = Modifi
     TaskDetailContent(
         state = state,
         modifier = modifier,
-        onClose = component::onCloseClicked,
+        onOpenParent = { state.parent?.let { component.onSubtaskClicked(it.id) } },
         onDelete = component::onDelete,
         onAddToPlan = component::onAddToPlanClicked,
         onSetWorkingState = component::onSetWorkingState,

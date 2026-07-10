@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -200,6 +201,53 @@ class ScreenshotTest {
     fun taskDetail_hydrating_light() = capture("task_detail_hydrating_light") {
         val summary = sampleTask("2", "Water the plants")
         TaskDetailScreen(FakeTaskDetailComponent(TaskDetailState(task = summary, isHydrating = true)))
+    }
+
+    // The journey-status track's distinct visual branches (ADR-0044): a blocked reading (an error-red star on
+    // the middle node), a Done terminal (the success-green node), and a Dropped "NOT DOING" reading (a dashed
+    // tail to a hollow, struck-through DONE). Minimal detail states so each golden pins the STATUS control.
+    @Test
+    fun taskDetail_statusBlocked_light() = capture("task_detail_status_blocked_light") {
+        TaskDetailScreen(
+            FakeTaskDetailComponent(
+                TaskDetailState(
+                    task = sampleTask(
+                        "b", "Wire up the new screens", workingState = WorkingState.InProgress,
+                        blocked = true, hydration = HydrationState.Full,
+                    ),
+                    isHydrating = false,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun taskDetail_statusDone_light() = capture("task_detail_status_done_light") {
+        TaskDetailScreen(
+            FakeTaskDetailComponent(
+                TaskDetailState(
+                    task = sampleTask(
+                        "d", "Ship the redesign", workingState = WorkingState.Done, hydration = HydrationState.Full,
+                    ),
+                    isHydrating = false,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun taskDetail_statusDropped_light() = capture("task_detail_status_dropped_light") {
+        TaskDetailScreen(
+            FakeTaskDetailComponent(
+                TaskDetailState(
+                    task = sampleTask(
+                        "x", "Old idea worth revisiting", workingState = WorkingState.Dropped,
+                        hydration = HydrationState.Full,
+                    ),
+                    isHydrating = false,
+                ),
+            ),
+        )
     }
 
     @Test

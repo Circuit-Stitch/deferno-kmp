@@ -222,6 +222,10 @@ dependencies {
     // The navigation shell (#55): NavigationSuiteScaffold + the window-size-class metric it adapts to.
     implementation(libs.androidx.material3.adaptive.navigation.suite)
     implementation(libs.androidx.material3.adaptive)
+    // ADR-0044: MainShell computes the compact-vs-two-pane split itself (the drilled Tasks-detail bar)
+    // with the SAME predicate TasksScreen uses — currentWindowAdaptiveInfo() +
+    // calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth() — so the bar and the pane scaffold never disagree.
+    implementation(libs.androidx.material3.adaptive.layout)
     implementation(libs.androidx.material.icons.core)
 
     // JVM-fast unit + screenshot tests for the Views (#27): Robolectric runs the Compose UI tests +

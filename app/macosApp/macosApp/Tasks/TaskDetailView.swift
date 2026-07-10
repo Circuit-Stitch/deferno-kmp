@@ -1,28 +1,37 @@
 import Deferno
 import SwiftUI
 
-/// The Task detail pane (#195). Thin renderer of `TaskDetailComponent`: observes the hydrating row and
-/// forwards the close / add-to-plan / working-state intents plus the web-parity detail sections —
-/// editable PROPERTIES (Due / Labels) and the nested SUBTASKS outline (checkbox + progress + drill).
-/// The component hydrates on creation (summary → full, #22); this View just reflects its state. The
-/// detail component is shared with the inline pane and the (future) detached window (#196), so this
-/// upgrades both surfaces at once. The subtasks section also hosts Add-subtask + a "Hide done" filter
-/// (#197b/c) and the ACTIVITY feed — comments + read-only item history (#197a / ADR-0043). Attachments
-/// are still deferred (not built here).
+/// The Task detail pane (#195, reshaped by ADR-0044). Thin renderer of `TaskDetailComponent`: observes the
+/// hydrating row and forwards the close / add-to-plan / status intents. The single heading is now a
+/// **connected-parent header** (the immediate parent, tappable → pushes its detail) and the body is three
+/// tabs — **Info** (NOTES → Add-to-plan → PROPERTIES → SUBTASKS) · **Comments** · **History**. STATUS is a
+/// read-only journey indicator that opens a status-picker sheet on tap (the inline working-state chips are
+/// gone). The component hydrates on creation (summary → full, #22); this View just reflects its state, and
+/// is shared with the inline pane and the (future) detached window (#196). Attachments stay deferred on macOS.
 struct TaskDetailView: View {
     let component: TaskDetailComponent
     /// Hide the header's Back control. Set at a detached window's root entry (#196, depth 1) — it has
     /// nothing to pop and the window's own chrome closes it. Default false: the inline / Plan callers
     /// keep their Back (which routes through the detail's `Closed` output to close the pane / pop).
     var hidesBackControl: Bool = false
-    /// Drop the in-pane `PaneHeader` entirely. Set by the Plan tier-3 host (#51), where the single adaptive
-    /// shell bar already shows the Task title + ← back; default true keeps the header for the inline Tasks
-    /// pane and the detached detail window.
+    /// Drop the in-pane `DrilledBackBar` entirely. Set by the Plan tier-3 host (#51), where the single
+    /// adaptive shell bar already shows the ← back; default true keeps the bar for the inline Tasks pane
+    /// and the detached detail window. (The connected-parent node is the heading in every case.)
     var showsHeader: Bool = true
     @StateObject private var state: StateFlowObserver<TaskDetailState>
     @State private var newLabel = ""
     @State private var newSubtask = ""
     @State private var commentDraft = ""
+    /// The active body tab (ADR-0044: Info · Comments · History, Info default). The View is re-created
+    /// per Task via `.id(detailKey)`, so this resets when the pane re-keys to another item.
+    @State private var tab: DetailTab = .info
+    /// Whether the status-picker sheet is up (opened by tapping the STATUS row — the inline chips are gone).
+    @State private var showingStatusPicker = false
+    /// Whether the overflow's Delete confirmation is up.
+    @State private var showingDeleteConfirm = false
+    @FocusState private var subtaskFieldFocused: Bool
+
+    enum DetailTab { case info, comments, history }
 
     init(component: TaskDetailComponent, hidesBackControl: Bool = false, showsHeader: Bool = true) {
         self.component = component
@@ -34,14 +43,11 @@ struct TaskDetailView: View {
     var body: some View {
         let value = state.value
         VStack(spacing: 0) {
-            // In single-pane the leading control returns to the list, so it reads as "Back". Hidden at a
-            // detached window's root entry (#196), where there's nothing to pop to. Dropped entirely in the
-            // Plan tier-3 host (#51), where the shell bar shows the title + back.
+            // ADR-0044: the connected-parent node is the single heading, so this bar is title-less — just a
+            // Back affordance. In single-pane it returns to the list ("Back"). Hidden at a detached window's
+            // root entry (#196, nothing to pop) and dropped in the Plan tier-3 host (#51, the shell bar backs).
             if showsHeader {
-                PaneHeader(
-                    title: value.task?.title ?? L.string("common_kind_task"),
-                    onBack: hidesBackControl ? nil : { component.onCloseClicked() }
-                )
+                DrilledBackBar(onBack: hidesBackControl ? nil : { component.onCloseClicked() })
             }
             if value.isHydrating && value.task == nil {
                 LoadingStrip(label: L.string("tasks_detail_loading"))
@@ -64,52 +70,181 @@ struct TaskDetailView: View {
     private func taskBody(for task: Task, state value: TaskDetailState) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                if let ref = task.ref {
-                    Text(ref)
-                        .font(.footnote.monospaced())
-                        .foregroundStyle(.secondary)
+                // The single heading (ADR-0044): the tappable immediate-parent node thread-connected above
+                // the current item's title + ref, with the self-contained overflow riding top-right.
+                ConnectedParentHeader(
+                    parent: value.parent,
+                    task: task,
+                    onOpenParent: {
+                        if let p = value.parent { BridgeKt.openParent(component: component, parent: p) }
+                    },
+                    overflow: { overflowMenu }
+                )
+
+                Picker("", selection: $tab) {
+                    Text(L.string("tasks_detail_tab_info")).tag(DetailTab.info)
+                    Text(L.string("tasks_detail_tab_comments")).tag(DetailTab.comments)
+                    Text(L.string("tasks_detail_tab_history")).tag(DetailTab.history)
                 }
+                .pickerStyle(.segmented)
+                .labelsHidden()
 
-                WorkingStateEditorView(current: task.workingState) { component.onSetWorkingState(target: $0) }
-
-                if let description = task.description_, !description.isEmpty {
-                    Text(description).font(.body)
-                } else if !value.isHydrating {
-                    Text(L.string("tasks_detail_no_description"))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                switch tab {
+                case .info: infoTab(task, value)
+                case .comments: commentsTab(value)
+                case .history: historyTab(value)
                 }
-
-                Button { component.onAddToPlanClicked() } label: {
-                    Text(L.string("tasks_menu_add_to_plan")).frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .frame(minHeight: Layout.minTouchTarget)
-
-                Divider()
-                propertiesSection(task)
-                Divider()
-                subtasksSection(value)
-                Divider()
-                activitySection(value)
             }
             .padding(.horizontal, Layout.gutter)
             .padding(.vertical, 12)
         }
+        .sheet(isPresented: $showingStatusPicker) {
+            StatusPickerSheet(current: task.workingState) {
+                component.onSetWorkingState(target: $0)
+                showingStatusPicker = false
+            }
+        }
+        .confirmationDialog(
+            L.string("tasks_detail_delete_confirm_title"),
+            isPresented: $showingDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(L.string("common_delete"), role: .destructive) { component.onDelete() }
+            Button(L.string("common_cancel"), role: .cancel) {}
+        }
+        // ADR-0044: the drilled-overflow "Add subtask" reveals the inline composer. macOS has no compact
+        // shell bar, so the overflow lives in the header; reacting here focuses the add-subtask field.
+        // TODO(port-verify): confirm the focus lands and the Info tab is showing after an Xcode build.
+        .onChange(of: value.revealAddSubtaskComposer) { token in
+            if token > 0 { tab = .info; subtaskFieldFocused = true }
+        }
     }
 
-    // MARK: - Properties (Due · Time · Labels · Owner)
+    // MARK: - Tabs
+
+    @ViewBuilder
+    private func infoTab(_ task: Task, _ value: TaskDetailState) -> some View {
+        if let description = task.description_, !description.isEmpty {
+            Text(description).font(.body)
+        } else if !value.isHydrating {
+            Text(L.string("tasks_detail_no_description"))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+
+        Button { component.onAddToPlanClicked() } label: {
+            Text(L.string("tasks_menu_add_to_plan")).frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .frame(minHeight: Layout.minTouchTarget)
+
+        Divider()
+        propertiesSection(task)
+        Divider()
+        subtasksSection(value)
+    }
+
+    @ViewBuilder
+    private func commentsTab(_ value: TaskDetailState) -> some View {
+        let comments = value.activity.filter { BridgeKt.activityItemComment(item: $0) != nil }
+        VStack(alignment: .leading, spacing: 8) {
+            commentComposer(isPosting: value.isPostingComment)
+            if value.commentsLoading && comments.isEmpty {
+                MutedLine(L.string("common_loading"))
+            } else if comments.isEmpty {
+                MutedLine(L.string("tasks_detail_no_comments"))
+            } else {
+                ForEach(comments.map(ActivityRow.init)) { row in
+                    if let comment = BridgeKt.activityItemComment(item: row.item) {
+                        CommentRow(
+                            comment: comment,
+                            isMine: BridgeKt.commentIsMine(state: value, comment: comment),
+                            dateLabel: BridgeKt.commentDateLabel(comment: comment),
+                            onEdit: { component.onEditComment(commentId: $0, body: $1) },
+                            onDelete: { component.onDeleteComment(commentId: $0) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func historyTab(_ value: TaskDetailState) -> some View {
+        let history = value.activity.filter { BridgeKt.activityHistoryVerb(item: $0) != nil }
+        VStack(alignment: .leading, spacing: 8) {
+            if value.commentsLoading && history.isEmpty {
+                MutedLine(L.string("common_loading"))
+            } else {
+                // An empty history is a valid terminal state — no error/placeholder branch (ADR-0043).
+                ForEach(history.map(ActivityRow.init)) { row in
+                    if let verb = BridgeKt.activityHistoryVerb(item: row.item) {
+                        HistoryRow(
+                            label: L.activityHistory(verb),
+                            dateLabel: BridgeKt.activityHistoryDateLabel(item: row.item) ?? ""
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Overflow (Add subtask · Break this down · Delete)
+
+    /// The self-contained detail overflow (ADR-0044) — replaces the old always-visible chips' "Set aside"
+    /// (Dropped now reaches only via the status picker). Add subtask bumps the reveal token; Delete confirms.
+    private var overflowMenu: some View {
+        Menu {
+            Button { component.onAddSubtaskRequested() } label: {
+                Label(L.string("tasks_menu_add_subtask"), systemImage: "plus")
+            }
+            Button { component.onBreakdownClicked() } label: {
+                Label(L.string("tasks_menu_break_this_down"), systemImage: "wand.and.stars")
+            }
+            Button(role: .destructive) { showingDeleteConfirm = true } label: {
+                Label(L.string("common_delete"), systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .accessibilityLabel(L.string("tasks_detail_more_actions"))
+    }
+
+    // MARK: - Properties (Status · When · Time · Labels · Owner)
 
     @ViewBuilder
     private func propertiesSection(_ task: Task) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             SectionTitle(L.string("tasks_detail_section_properties"))
+            statusRow(task)
             dueRow(task)
             propertyRow(label: L.string("tasks_detail_property_time"), value: BridgeKt.taskTimeLabel(task: task))
             labelsRow(task)
+            // OWNER / SOURCE stay as trailing read-only provenance rows (spec §8, kept in the Info tab).
             propertyRow(label: L.string("tasks_detail_property_owner"), value: BridgeKt.taskOwnerLabel(task: task))
         }
+    }
+
+    /// The STATUS row (ADR-0044): a read-only journey indicator that, when tapped, opens the status picker
+    /// sheet — the only path to Dropped ("NOT DOING") now. The spoken label carries the current journey label.
+    @ViewBuilder
+    private func statusRow(_ task: Task) -> some View {
+        Button { showingStatusPicker = true } label: {
+            HStack {
+                Text(L.string("tasks_detail_property_status"))
+                    .font(.subheadline).foregroundStyle(.secondary).frame(width: 72, alignment: .leading)
+                JourneyStatusIndicator(task: task)
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(minHeight: Layout.minTouchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L.format("tasks_detail_status_row_a11y", L.journeyLabel(BridgeKt.journeyLabelToken(task: task))))
     }
 
     // A fixed-width label + flexible value keeps each row single-column, so it survives the 250pt inline
@@ -129,10 +264,12 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func dueRow(_ task: Task) -> some View {
         let hasDue = BridgeKt.taskDeadlineEpochSeconds(task: task) >= 0
+        // ADR-0044: labelled WHEN (was DUE) and, when a deadline is set, followed by the relative-day
+        // reading ("In 3 days" / "Yesterday") mapped from the typed bridge token.
         HStack {
             if hasDue {
                 DatePicker(
-                    L.string("tasks_detail_property_due"),
+                    L.string("tasks_detail_property_when"),
                     selection: Binding(
                         get: { Date(timeIntervalSince1970: BridgeKt.taskDeadlineEpochSeconds(task: task)) },
                         set: { BridgeKt.setTaskDeadline(component: component, epochSeconds: $0.timeIntervalSince1970) }
@@ -140,11 +277,15 @@ struct TaskDetailView: View {
                     displayedComponents: .date
                 )
                 .datePickerStyle(.field)
+                if let token = BridgeKt.taskDueRelativeToken(task: task) {
+                    Text(L.relativeDay(token, Int(BridgeKt.taskDueRelativeCount(task: task))))
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Button(L.string("common_clear")) { BridgeKt.clearTaskDeadline(component: component) }
                     .font(.subheadline)
                     .accessibilityLabel(L.string("tasks_detail_clear_due_date_a11y"))
             } else {
-                Text(L.string("tasks_detail_property_due")).font(.subheadline).foregroundStyle(.secondary).frame(width: 72, alignment: .leading)
+                Text(L.string("tasks_detail_property_when")).font(.subheadline).foregroundStyle(.secondary).frame(width: 72, alignment: .leading)
                 Text("—").foregroundStyle(.secondary)
                 Spacer()
                 Button(L.string("common_set")) { BridgeKt.setTaskDeadline(component: component, epochSeconds: Date().timeIntervalSince1970) }
@@ -256,6 +397,7 @@ struct TaskDetailView: View {
         HStack {
             TextField(L.string("tasks_detail_add_subtask_placeholder"), text: $newSubtask)
                 .textFieldStyle(.roundedBorder)
+                .focused($subtaskFieldFocused)
                 .onSubmit { submitSubtask() }
             Button(L.string("common_add")) { submitSubtask() }
                 .disabled(newSubtask.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -269,47 +411,7 @@ struct TaskDetailView: View {
         newSubtask = ""
     }
 
-    // MARK: - Activity (comments + read-only item history)
-
-    /// The ACTIVITY feed (#197a, ADR-0043): the composer, then a merged chronological list of comments
-    /// (own-comment Edit/Delete gated by the bridge) plus read-only item-history rows. Swift can't
-    /// pattern-match the sealed `ActivityItem`, so each row is cracked open with the hand-written `BridgeKt`
-    /// discriminators — `activityItemComment` yields a Comment (else nil ⇒ a history verb token). The header
-    /// uses `shell_destination_activity` to match iOS (the Compose `tasks_detail_section_activity` divergence
-    /// is deliberate, ADR-0043). An empty feed is a valid terminal state — there is no error branch.
-    @ViewBuilder
-    private func activitySection(_ value: TaskDetailState) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionTitle(L.string("shell_destination_activity"), trailing: "\(value.activity.count)")
-            commentComposer(isPosting: value.isPostingComment)
-            if value.commentsLoading && value.activity.isEmpty {
-                MutedLine(L.string("common_loading"))
-            } else if value.activity.isEmpty {
-                MutedLine(L.string("tasks_detail_no_comments"))
-            } else {
-                // Key on the bridge's stable id (comment id / "history:<index>"), NOT the position — else
-                // a CommentRow's edit @State would bind to a slot, so an optimistic delete above an
-                // in-progress edit would shift the draft onto the wrong comment (ADR-0043).
-                ForEach(value.activity.map(ActivityRow.init)) { row in
-                    let item = row.item
-                    if let comment = BridgeKt.activityItemComment(item: item) {
-                        CommentRow(
-                            comment: comment,
-                            isMine: BridgeKt.commentIsMine(state: value, comment: comment),
-                            dateLabel: BridgeKt.commentDateLabel(comment: comment),
-                            onEdit: { component.onEditComment(commentId: $0, body: $1) },
-                            onDelete: { component.onDeleteComment(commentId: $0) }
-                        )
-                    } else if let verb = BridgeKt.activityHistoryVerb(item: item) {
-                        HistoryRow(
-                            label: L.activityHistory(verb),
-                            dateLabel: BridgeKt.activityHistoryDateLabel(item: item) ?? ""
-                        )
-                    }
-                }
-            }
-        }
-    }
+    // MARK: - Comments composer
 
     /// The comment composer (unchanged write seam): a multi-line entry + Post, forwarding a trimmed,
     /// non-empty body through `onPostComment` then clearing. Disabled while a post is in flight.
@@ -330,6 +432,167 @@ struct TaskDetailView: View {
             .buttonStyle(.borderedProminent)
             .disabled(isPosting || commentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
+    }
+}
+
+/// The single heading (ADR-0044): the immediate parent (`Task.parentId` only) drawn as a muted, tappable
+/// node — a `common_kind_task` chip + title (+ `ref`) — thread-connected above the current item's title +
+/// `ref`, with the self-contained overflow riding top-right. No parent → the item stands alone. Tapping
+/// the parent pushes its own detail (Back returns); the redundant `PaneHeader("Details")` is gone.
+private struct ConnectedParentHeader<Overflow: View>: View {
+    let parent: ParentSummary?
+    let task: Task
+    let onOpenParent: () -> Void
+    @ViewBuilder let overflow: () -> Overflow
+    @Environment(\.defernoColors) private var colors
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let parent {
+                Button(action: onOpenParent) {
+                    HStack(spacing: 6) {
+                        Text(L.string("common_kind_task"))
+                            .font(.caption2.weight(.medium))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(colors.surfaceVariant, in: Capsule())
+                            .foregroundStyle(colors.onSurfaceVariant)
+                        Text(parent.title)
+                            .font(.subheadline)
+                            .foregroundStyle(colors.onSurfaceVariant)
+                            .lineLimit(1)
+                        if let ref = parent.ref {
+                            Text(ref).font(.footnote.monospaced()).foregroundStyle(.secondary)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L.format("common_open_named_cd", parent.title))
+                // The thin thread connector from the parent node down into the current item's title block.
+                Rectangle()
+                    .fill(colors.outlineVariant)
+                    .frame(width: 1, height: 8)
+                    .padding(.leading, 8)
+            }
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(task.title)
+                        .font(.title2.weight(.semibold))
+                        .accessibilityAddTraits(.isHeader)
+                    if let ref = task.ref {
+                        Text(ref).font(.footnote.monospaced()).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
+                overflow()
+            }
+        }
+    }
+}
+
+/// The title-less drilled Back bar (ADR-0044) — the connected-parent node is the heading, so this carries
+/// only the Back affordance (`nil` at a detached window's root, #196). Replaces the old titled `PaneHeader`.
+private struct DrilledBackBar: View {
+    let onBack: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let onBack {
+                Button(L.string("common_back"), action: onBack)
+                    .frame(minHeight: Layout.minTouchTarget)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .frame(minHeight: 44)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+/// The read-only journey-status indicator (ADR-0044): a 3-slot track — initial TO-DO → a middle marker →
+/// terminal DONE — read from the bridge's typed tokens (`journeyActiveSlot`/`journeyLabelToken`/shelved/
+/// blocked). Colour is reinforcement only; the STATUS row's `Button` carries the accessible label, so the
+/// track is `accessibilityHidden`. Shelved (NOT DOING) draws a dashed tail to a struck-through DONE; blocked
+/// tints the middle slot with the error tone.
+private struct JourneyStatusIndicator: View {
+    let task: Task
+    @Environment(\.defernoColors) private var colors
+
+    private enum Tone { case normal, blocked }
+
+    var body: some View {
+        let active = Int(BridgeKt.journeyActiveSlot(task: task))
+        let shelved = BridgeKt.journeyIsShelved(task: task)
+        let blocked = BridgeKt.journeyIsBlocked(task: task)
+        let token = BridgeKt.journeyLabelToken(task: task)
+        // At the endpoints the middle shows a muted "IN-PROGRESS" hint ("not there yet"); otherwise it is
+        // the reading's own label (IN-PROGRESS / IN-REVIEW / BLOCKED / NOT DOING).
+        let atEnd = token == "TODO" || token == "DONE"
+        let middleText = atEnd ? L.string("tasks_journey_in_progress") : L.journeyLabel(token)
+        HStack(spacing: 3) {
+            capsule(L.string("tasks_journey_todo"), on: active == 0, tone: .normal)
+            connector(dashed: false)
+            capsule(middleText, on: active == 1, tone: blocked ? .blocked : .normal, muted: atEnd)
+            connector(dashed: shelved)
+            capsule(L.string("tasks_journey_done"), on: active == 2, tone: .normal, struck: shelved)
+        }
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func capsule(_ text: String, on: Bool, tone: Tone, muted: Bool = false, struck: Bool = false) -> some View {
+        let fg: Color = tone == .blocked ? colors.error : (on ? colors.onPrimary : (muted ? Color.secondary : colors.onSurfaceVariant))
+        let bg: Color = tone == .blocked ? colors.errorContainer : (on ? colors.primary : colors.surfaceVariant)
+        Text(text)
+            .font(.caption2.weight(on ? .semibold : .regular))
+            .strikethrough(struck)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(bg, in: Capsule())
+            .foregroundStyle(fg)
+    }
+
+    private func connector(dashed: Bool) -> some View {
+        // Solid = on-track; dashed = the shelved "not headed to done" tail (an empty dash array is solid).
+        DashLine()
+            .stroke(colors.outlineVariant, style: StrokeStyle(lineWidth: 1, dash: dashed ? [2, 2] : []))
+            .frame(width: 10, height: 1)
+    }
+}
+
+/// A single horizontal hairline — the journey track's slot connector (solid or dashed via the stroke style).
+private struct DashLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 0, y: rect.midY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        return p
+    }
+}
+
+/// The status-picker sheet (ADR-0044) — the only path to change working state now (the inline chips are
+/// gone). One `SelectableChip` per state via `WorkingState.ordered`, the current marked selected; a tap
+/// forwards the intent and dismisses. Dropped is labelled "Set aside" by `WorkingState.label` (no shame).
+private struct StatusPickerSheet: View {
+    let current: WorkingState
+    let onSelect: (WorkingState) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L.string("tasks_detail_status_picker_title"))
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+            ForEach(WorkingState.ordered, id: \.self) { state in
+                SelectableChip(
+                    label: state.label,
+                    selected: state == current,
+                    accessibilityLabel: state == current
+                        ? L.format("tasks_detail_working_state_current_a11y", state.label)
+                        : L.format("tasks_detail_set_working_state_a11y", state.label)
+                ) { onSelect(state) }
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 240, alignment: .leading)
     }
 }
 
@@ -477,40 +740,5 @@ private struct HistoryRow: View {
             Text(dateLabel).font(.caption2).foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
-    }
-}
-
-/// The interactive working-state control (#73): a selectable chip per state with the current one
-/// highlighted, so the user can move the Task across all five states. Tapping forwards the intent;
-/// the component issues the offline-first Command and the badge flips optimistically. Plain labels,
-/// large touch targets, and a self-describing VoiceOver label per chip (design-principles.md).
-private struct WorkingStateEditorView: View {
-    let current: WorkingState
-    let onSet: (WorkingState) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(L.string("tasks_detail_working_state_heading"))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .accessibilityAddTraits(.isHeader)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(WorkingState.ordered, id: \.self) { state in
-                        chip(state)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func chip(_ state: WorkingState) -> some View {
-        let selected = state == current
-        SelectableChip(
-            label: state.label,
-            selected: selected,
-            accessibilityLabel: selected ? L.format("tasks_detail_working_state_current_a11y", state.label) : L.format("tasks_detail_set_working_state_a11y", state.label)
-        ) { onSet(state) }
     }
 }

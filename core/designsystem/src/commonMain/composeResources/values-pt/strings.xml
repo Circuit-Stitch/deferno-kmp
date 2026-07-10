@@ -676,6 +676,32 @@ Agradeço.</string>
     <string name="tasks_detail_uploading">Enviando…</string>
     <string name="tasks_detail_working_state_current_a11y">%1$s, estado de trabalho atual</string>
     <string name="tasks_detail_working_state_heading">Estado de trabalho</string>
+    <!-- ADR-0044 journey-status reading (display-only vocabulary, all-caps) -->
+    <string name="tasks_journey_todo">A FAZER</string>
+    <string name="tasks_journey_in_progress">EM ANDAMENTO</string>
+    <string name="tasks_journey_in_review">EM REVISÃO</string>
+    <string name="tasks_journey_done">CONCLUÍDO</string>
+    <string name="tasks_journey_not_doing">NÃO FAREI</string>
+    <string name="tasks_journey_blocked">BLOQUEADO</string>
+    <string name="tasks_detail_tab_info">Info</string>
+    <string name="tasks_detail_tab_comments">Comentários</string>
+    <string name="tasks_detail_tab_history">Histórico</string>
+    <string name="tasks_detail_section_history">Histórico</string>
+    <string name="tasks_detail_property_when">Quando</string>
+    <string name="tasks_detail_property_status">Status</string>
+    <string name="tasks_detail_status_picker_title">Definir status</string>
+    <string name="tasks_detail_status_row_a11y">Status: %1$s. Toque para alterar.</string>
+    <string name="tasks_detail_due_today">Hoje</string>
+    <string name="tasks_detail_due_tomorrow">Amanhã</string>
+    <string name="tasks_detail_due_yesterday">Ontem</string>
+    <plurals name="tasks_detail_due_days_away">
+        <item quantity="one">Em %1$d dia</item>
+        <item quantity="other">Em %1$d dias</item>
+    </plurals>
+    <plurals name="tasks_detail_due_days_ago">
+        <item quantity="one">Há %1$d dia</item>
+        <item quantity="other">Há %1$d dias</item>
+    </plurals>
     <string name="tasks_external_ref_prefix">[%1$s#%2$d]</string>
     <string name="tasks_filter_active">Ativas</string>
     <!-- Referenciado dentro de tasks_tree_filtered_empty_body — manter em sincronia -->

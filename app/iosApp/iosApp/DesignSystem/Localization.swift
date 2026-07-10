@@ -144,6 +144,36 @@ enum L {
         }
     }
 
+    // MARK: Journey status + relative day (typed tokens — ADR-0044)
+
+    /// The display-only journey label for a `JourneyLabel` token (`BridgeKt.journeyLabelToken`). Kept in
+    /// lockstep with the Kotlin `JourneyLabel` enum — Swift can't `==` a bridged enum in a static framework.
+    static func journeyLabel(_ token: String) -> String {
+        switch token {
+        case "TODO": return string("tasks_journey_todo")
+        case "IN_PROGRESS": return string("tasks_journey_in_progress")
+        case "IN_REVIEW": return string("tasks_journey_in_review")
+        case "DONE": return string("tasks_journey_done")
+        case "NOT_DOING": return string("tasks_journey_not_doing")
+        case "BLOCKED": return string("tasks_journey_blocked")
+        default: return token
+        }
+    }
+
+    /// The relative-day suffix for the WHEN row from a `RelativeDay` token + day count
+    /// (`BridgeKt.taskDueRelativeToken`/`Count`). Today/Tomorrow/Yesterday are singular; the DaysAway /
+    /// DaysAgo arms are plural-agreed on `n`.
+    static func relativeDay(_ token: String, _ n: Int) -> String {
+        switch token {
+        case "TODAY": return string("tasks_detail_due_today")
+        case "TOMORROW": return string("tasks_detail_due_tomorrow")
+        case "YESTERDAY": return string("tasks_detail_due_yesterday")
+        case "DAYS_AWAY": return plural("tasks_detail_due_days_away", n)
+        case "DAYS_AGO": return plural("tasks_detail_due_days_ago", n)
+        default: return token
+        }
+    }
+
     // MARK: New / Feedback failure (typed reasons)
 
     /// The localized create-failure note, or nil when New isn't in a Failed state.

@@ -14,6 +14,8 @@ import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.shell.MainShellComponent
 import com.circuitstitch.deferno.demo.DemoItemRepository
 import com.circuitstitch.deferno.demo.DemoPlanRepository
 import com.circuitstitch.deferno.demo.DemoTaskRepository
@@ -105,5 +107,29 @@ class MainShellNavScreenshotTest {
     fun tasksSearchBar_light() {
         setContent { MainShell(shell().also { it.selectDestination(Destination.Tasks) }) }
         composeRule.onRoot().captureRoboImage("src/test/screenshots/shell_tasks_search_bar_light.png")
+    }
+
+    // ADR-0044: a COMPACT Tasks detail (single pane, a detail drilled over the tree) swaps the search pill for
+    // a drilled bar — ← back + a contextual overflow, no title — and suppresses the bottom-centre capture FABs.
+    // Drives the real MainShell on Tasks with a detail open at a compact width, so the View-resolved drilled
+    // chrome (MainShell.rememberTasksCompactDetail) is baselined against the search-pill baseline above.
+    private fun tasksDrilledShell() = shell().also {
+        it.selectDestination(Destination.Tasks)
+        val tasks = (it.stack.value.active.instance as MainShellComponent.DestinationChild.Tasks).component
+        tasks.tree.onOpenDetail("t-1", ItemKind.Task)
+    }
+
+    @Test
+    @Config(qualifiers = "w400dp-h800dp")
+    fun tasksDrilledDetail_light() {
+        setContent { MainShell(tasksDrilledShell()) }
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/shell_tasks_drilled_detail_light.png")
+    }
+
+    @Test
+    @Config(qualifiers = "w400dp-h800dp")
+    fun tasksDrilledDetail_dark() {
+        setContent(darkTheme = true) { MainShell(tasksDrilledShell()) }
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/shell_tasks_drilled_detail_dark.png")
     }
 }

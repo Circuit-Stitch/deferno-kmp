@@ -673,6 +673,32 @@
     <string name="tasks_detail_uploading">अपलोड हो रहा है…</string>
     <string name="tasks_detail_working_state_current_a11y">%1$s, वर्तमान कार्य-स्थिति</string>
     <string name="tasks_detail_working_state_heading">कार्य-स्थिति</string>
+    <!-- ADR-0044 journey-status reading (display-only vocabulary) -->
+    <string name="tasks_journey_todo">करना है</string>
+    <string name="tasks_journey_in_progress">चल रहा है</string>
+    <string name="tasks_journey_in_review">समीक्षा में</string>
+    <string name="tasks_journey_done">पूर्ण</string>
+    <string name="tasks_journey_not_doing">नहीं करना</string>
+    <string name="tasks_journey_blocked">अवरुद्ध</string>
+    <string name="tasks_detail_tab_info">जानकारी</string>
+    <string name="tasks_detail_tab_comments">टिप्पणियाँ</string>
+    <string name="tasks_detail_tab_history">इतिहास</string>
+    <string name="tasks_detail_section_history">इतिहास</string>
+    <string name="tasks_detail_property_when">कब</string>
+    <string name="tasks_detail_property_status">स्थिति</string>
+    <string name="tasks_detail_status_picker_title">स्थिति सेट करें</string>
+    <string name="tasks_detail_status_row_a11y">स्थिति: %1$s. बदलने के लिए टैप करें.</string>
+    <string name="tasks_detail_due_today">आज</string>
+    <string name="tasks_detail_due_tomorrow">कल</string>
+    <string name="tasks_detail_due_yesterday">बीता कल</string>
+    <plurals name="tasks_detail_due_days_away">
+        <item quantity="one">%1$d दिन में</item>
+        <item quantity="other">%1$d दिनों में</item>
+    </plurals>
+    <plurals name="tasks_detail_due_days_ago">
+        <item quantity="one">%1$d दिन पहले</item>
+        <item quantity="other">%1$d दिन पहले</item>
+    </plurals>
     <!-- संभवतः translatable=false -->
     <string name="tasks_external_ref_prefix">[%1$s#%2$d]</string>
     <string name="tasks_filter_active">सक्रिय</string>

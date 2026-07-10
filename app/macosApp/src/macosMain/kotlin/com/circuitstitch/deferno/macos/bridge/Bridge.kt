@@ -3,11 +3,17 @@ package com.circuitstitch.deferno.macos.bridge
 import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.JourneyLabel
+import com.circuitstitch.deferno.core.model.JourneyStyle
+import com.circuitstitch.deferno.core.model.RelativeDay
 import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.journeyStatus
+import com.circuitstitch.deferno.core.model.relativeDay
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 import com.circuitstitch.deferno.feature.tasks.ActivityItem
+import com.circuitstitch.deferno.feature.tasks.ParentSummary
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 
@@ -61,6 +67,59 @@ fun clearTaskDeadline(component: TaskDetailComponent) = component.onSetDeadline(
 /** Read-only PROPERTIES labels for the Swift view — the opaque-typed fields it can't format itself. */
 fun taskTimeLabel(task: Task): String = task.deadlineTimeOfDay?.toString() ?: "—"
 fun taskOwnerLabel(task: Task): String = task.ownerOrgId?.value ?: "—"
+
+// ---------------------------------------------------------------------------------------------------
+// Connected-parent header + journey-status + relative-day readings (ADR-0044). Kept IDENTICAL to
+// app/iosApp .../ios/bridge/Bridge.kt. `JourneyStatus`/`RelativeDay` are pure readings in core/model
+// (Compose-free, iOS-safe); Swift can't `==` a bridged enum in a static framework, so these expose
+// stable String tokens the SwiftUI View maps to `L` strings — the same idiom as [historyVerbToken].
+// ---------------------------------------------------------------------------------------------------
+
+/** Tap the connected-parent node → push the parent's own detail (reuses the subtask-drill seam). */
+fun openParent(component: TaskDetailComponent, parent: ParentSummary) = component.onSubtaskClicked(parent.id)
+
+/** The active journey slot for the 3-slot indicator: Initial=0, Middle=1, Terminal=2. */
+fun journeyActiveSlot(task: Task): Int = task.journeyStatus().slot.ordinal
+
+/** The stable journey-label token — Swift maps it to a `tasks_journey_*` string via `L.journeyLabel`. */
+fun journeyLabelToken(task: Task): String = when (task.journeyStatus().label) {
+    JourneyLabel.ToDo -> "TODO"
+    JourneyLabel.InProgress -> "IN_PROGRESS"
+    JourneyLabel.InReview -> "IN_REVIEW"
+    JourneyLabel.Done -> "DONE"
+    JourneyLabel.NotDoing -> "NOT_DOING"
+    JourneyLabel.Blocked -> "BLOCKED"
+}
+
+/** Whether the reading is the shelved (NOT DOING) style — the dashed tail + struck-through DONE. */
+fun journeyIsShelved(task: Task): Boolean = task.journeyStatus().style == JourneyStyle.NotDoing
+
+/** Whether the reading is the blocked style — the error-tone middle slot. */
+fun journeyIsBlocked(task: Task): Boolean = task.journeyStatus().style == JourneyStyle.Blocked
+
+/**
+ * The relative-day token for the WHEN row over [Task.completeBy], or `null` when the Task has no
+ * deadline: `TODAY | TOMORROW | YESTERDAY | DAYS_AWAY | DAYS_AGO`. Swift maps it (with [taskDueRelativeCount])
+ * to a `tasks_detail_due_*` string via `L.relativeDay`.
+ */
+fun taskDueRelativeToken(task: Task): String? = task.completeBy?.let { instant ->
+    when (relativeDay(instant)) {
+        RelativeDay.Today -> "TODAY"
+        RelativeDay.Tomorrow -> "TOMORROW"
+        RelativeDay.Yesterday -> "YESTERDAY"
+        is RelativeDay.DaysAway -> "DAYS_AWAY"
+        is RelativeDay.DaysAgo -> "DAYS_AGO"
+    }
+}
+
+/** The day count for the `DAYS_AWAY`/`DAYS_AGO` plural (else 0) — feeds `L.relativeDay(token, count)`. */
+fun taskDueRelativeCount(task: Task): Int = task.completeBy?.let { instant ->
+    when (val r = relativeDay(instant)) {
+        is RelativeDay.DaysAway -> r.days
+        is RelativeDay.DaysAgo -> r.days
+        else -> 0
+    }
+} ?: 0
 
 // ---------------------------------------------------------------------------------------------------
 // ACTIVITY feed (ADR-0043) — the macOS twin of the iOS bridge's comment/activity seam. macOS newly gains

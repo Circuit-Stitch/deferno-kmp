@@ -729,10 +729,9 @@ class DefaultMainShellComponent(
                         is MainShellComponent.PlanChild.Dashboard ->
                             flowOf(rootChrome(ChromeTitle.None, onRefresh = child.component::onRefresh))
                         is MainShellComponent.PlanChild.Detail ->
-                            child.component.state.map { s ->
-                                val t = s.task?.title
-                                drilledChrome(if (t != null) ChromeTitle.Verbatim(t) else ChromeTitle.TaskFallback)
-                            }
+                            // ADR-0044: the body's connected-parent node is the heading, so the drilled bar
+                            // carries no title (a bar title would duplicate it) — just the ← back.
+                            flowOf(drilledChrome(ChromeTitle.None))
                     }
                 }
 

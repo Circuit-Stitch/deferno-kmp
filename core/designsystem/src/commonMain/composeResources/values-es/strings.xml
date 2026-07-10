@@ -659,6 +659,32 @@ Gracias.</string>
     <string name="tasks_detail_uploading">Subiendo…</string>
     <string name="tasks_detail_working_state_current_a11y">%1$s, estado de trabajo actual</string>
     <string name="tasks_detail_working_state_heading">Estado de trabajo</string>
+    <!-- ADR-0044 journey-status reading (display-only vocabulary, all-caps) -->
+    <string name="tasks_journey_todo">POR HACER</string>
+    <string name="tasks_journey_in_progress">EN PROGRESO</string>
+    <string name="tasks_journey_in_review">EN REVISIÓN</string>
+    <string name="tasks_journey_done">HECHO</string>
+    <string name="tasks_journey_not_doing">SIN HACER</string>
+    <string name="tasks_journey_blocked">BLOQUEADO</string>
+    <string name="tasks_detail_tab_info">Info</string>
+    <string name="tasks_detail_tab_comments">Comentarios</string>
+    <string name="tasks_detail_tab_history">Historial</string>
+    <string name="tasks_detail_section_history">Historial</string>
+    <string name="tasks_detail_property_when">Cuándo</string>
+    <string name="tasks_detail_property_status">Estado</string>
+    <string name="tasks_detail_status_picker_title">Definir estado</string>
+    <string name="tasks_detail_status_row_a11y">Estado: %1$s. Toca para cambiar.</string>
+    <string name="tasks_detail_due_today">Hoy</string>
+    <string name="tasks_detail_due_tomorrow">Mañana</string>
+    <string name="tasks_detail_due_yesterday">Ayer</string>
+    <plurals name="tasks_detail_due_days_away">
+        <item quantity="one">En %1$d día</item>
+        <item quantity="other">En %1$d días</item>
+    </plurals>
+    <plurals name="tasks_detail_due_days_ago">
+        <item quantity="one">Hace %1$d día</item>
+        <item quantity="other">Hace %1$d días</item>
+    </plurals>
     <string name="tasks_external_ref_prefix">[%1$s#%2$d]</string>
     <string name="tasks_filter_active">Activas</string>
     <!-- Debe coincidir con la cita en tasks_tree_filtered_empty_body -->

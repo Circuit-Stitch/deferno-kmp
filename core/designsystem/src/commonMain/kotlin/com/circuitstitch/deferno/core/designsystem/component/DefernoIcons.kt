@@ -57,6 +57,14 @@ object DefernoIcons {
         stroke("ChevronRight") { moveTo(9f, 6f); lineToRelative(6f, 6f); lineToRelative(-6f, 6f) }
     }
 
+    /** An X — dismiss / close (e.g. the two-pane Task-detail close affordance, ADR-0044). */
+    val Close: ImageVector by lazy {
+        stroke("Close") {
+            moveTo(6f, 6f); lineTo(18f, 18f)
+            moveTo(18f, 6f); lineTo(6f, 18f)
+        }
+    }
+
     val ChevronLeft: ImageVector by lazy {
         stroke("ChevronLeft") { moveTo(15f, 6f); lineToRelative(-6f, 6f); lineToRelative(6f, 6f) }
     }

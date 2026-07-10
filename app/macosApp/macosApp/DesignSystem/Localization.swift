@@ -142,6 +142,35 @@ enum L {
         }
     }
 
+    // MARK: Journey status + relative day (typed tokens, ADR-0044)
+
+    /// The localized journey-vocabulary label for a token from `BridgeKt.journeyLabelToken(task:)`
+    /// ("TODO"/"IN_PROGRESS"/…) → a `tasks_journey_*` string. Display-only vocabulary; never a state name.
+    static func journeyLabel(_ token: String) -> String {
+        switch token {
+        case "TODO": return string("tasks_journey_todo")
+        case "IN_PROGRESS": return string("tasks_journey_in_progress")
+        case "IN_REVIEW": return string("tasks_journey_in_review")
+        case "DONE": return string("tasks_journey_done")
+        case "NOT_DOING": return string("tasks_journey_not_doing")
+        case "BLOCKED": return string("tasks_journey_blocked")
+        default: return token
+        }
+    }
+
+    /// The localized WHEN-row relative-day suffix for a token from `BridgeKt.taskDueRelativeToken(task:)`
+    /// + its count. TODAY/TOMORROW/YESTERDAY are the singular keys; DAYS_AWAY/DAYS_AGO are the plural keys.
+    static func relativeDay(_ token: String, _ n: Int) -> String {
+        switch token {
+        case "TODAY": return string("tasks_detail_due_today")
+        case "TOMORROW": return string("tasks_detail_due_tomorrow")
+        case "YESTERDAY": return string("tasks_detail_due_yesterday")
+        case "DAYS_AWAY": return plural("tasks_detail_due_days_away", n)
+        case "DAYS_AGO": return plural("tasks_detail_due_days_ago", n)
+        default: return ""
+        }
+    }
+
     // MARK: Item-history verb (typed history token, ADR-0043)
 
     /// The localized ACTIVITY-feed history line for a typed verb token from
