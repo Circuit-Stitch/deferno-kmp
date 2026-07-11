@@ -13,7 +13,7 @@ class FakeOutboxStore(initial: List<OutboxEntry> = emptyList()) : OutboxStore {
     private val entries = initial.toMutableList()
     private var nextSeq = (initial.maxOfOrNull { it.seq } ?: 0L) + 1
 
-    /** Direct read of the backing queue for assertions (already in seq order via [pending]). */
+    /** Direct read of the backing queue for assertions (already in seq order via [allUnsynced]). */
     val all: List<OutboxEntry> get() = entries.sortedBy { it.seq }
 
     override suspend fun enqueue(target: String, request: OutboxRequest, now: Instant) {
@@ -27,7 +27,9 @@ class FakeOutboxStore(initial: List<OutboxEntry> = emptyList()) : OutboxStore {
         )
     }
 
-    override suspend fun pending(): List<OutboxEntry> = entries.sortedBy { it.seq }
+    override suspend fun syncable(): List<OutboxEntry> = entries.filter { it.failedAt == null }.sortedBy { it.seq }
+
+    override suspend fun allUnsynced(): List<OutboxEntry> = entries.sortedBy { it.seq }
 
     override suspend fun delete(seq: Long) {
         entries.removeAll { it.seq == seq }

@@ -79,7 +79,7 @@ class OutboxDriverTest {
     @Test
     fun driveDrainsTheOutboxToQuiescence_notOnePerTick() = runTest {
         // A comment-create heal breaks each flush pass on replay (ADR-0043: the rekey stales the engine's
-        // pending() snapshot), so a burst of offline comments would otherwise drain one-per-30s-tick. The
+        // syncable() snapshot), so a burst of offline comments would otherwise drain one-per-30s-tick. The
         // driver loops flush() while a pass made progress AND work remains — draining fully in one activation.
         val session = FakeAccountSession(
             flushResults = ArrayDeque(

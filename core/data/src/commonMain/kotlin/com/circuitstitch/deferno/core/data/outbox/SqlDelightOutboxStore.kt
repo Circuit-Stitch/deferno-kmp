@@ -11,7 +11,7 @@ import com.circuitstitch.deferno.core.database.sql.OutboxEntry as OutboxRow
  * fake), while *this* class's only job is the row mapping — proved by the real-SQLite
  * `SqlDelightOutboxStoreTest`, which also pins the `AUTOINCREMENT` monotonic-seq guarantee.
  *
- * Every query is a synchronous SQLDelight call (no observe `Flow` — the processor pulls [pending] on
+ * Every query is a synchronous SQLDelight call (no observe `Flow` — the processor pulls [syncable] on
  * demand), so the suspend port methods run straight through. Encoding mirrors the `taskEntity`
  * conventions: `path` segments ↔ a `\n`-joined TEXT, instants ↔ RFC3339 strings, the enum method ↔
  * its `.name` decoded **defensively** (an unrecognised stored token degrades rather than throwing).
@@ -34,7 +34,10 @@ class SqlDelightOutboxStore(
         )
     }
 
-    override suspend fun pending(): List<OutboxEntry> =
+    override suspend fun syncable(): List<OutboxEntry> =
+        queries.selectSyncableInOrder().executeAsList().map { it.toDomain() }
+
+    override suspend fun allUnsynced(): List<OutboxEntry> =
         queries.selectAllInOrder().executeAsList().map { it.toDomain() }
 
     override suspend fun delete(seq: Long) {

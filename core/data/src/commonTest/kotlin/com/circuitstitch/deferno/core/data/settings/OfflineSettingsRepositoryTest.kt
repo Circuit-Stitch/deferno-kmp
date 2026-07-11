@@ -18,9 +18,10 @@ import kotlin.time.Instant
  * The offline-first behaviour of [OfflineSettingsRepository] (#72, ADR-0001), against the in-memory
  * fakes. Covers: [observeSettings] emits from the local store `Flow` only (never the network),
  * seeding [UserSettings.Default] before the first refresh; [refresh] upserts the remote snapshot; an
- * Unavailable remote pull leaves the cache intact; and the #143 hardening — a refresh never overwrites
+ * Unavailable remote pull leaves the cache intact; the #143 hardening — a refresh never overwrites
  * the row while an un-synced settings mutation is pending in the outbox (LWW: the local optimistic
- * change is newer than the server snapshot). Mirrors [com.circuitstitch.deferno.core.data.plan.OfflinePlanRepositoryTest].
+ * change is newer than the server snapshot); and the PR #353 corollary — once that write is dead-lettered
+ * the guard releases it and the row reconverges. Mirrors [com.circuitstitch.deferno.core.data.plan.OfflinePlanRepositoryTest].
  */
 class OfflineSettingsRepositoryTest {
 
@@ -95,6 +96,28 @@ class OfflineSettingsRepositoryTest {
 
         // The pending mutation is newer than the snapshot (LWW): the optimistic row stands.
         assertEquals(chosen, local.current)
+    }
+
+    @Test
+    fun refreshReconvergesOnceAPendingSettingsWriteIsDeadLettered() = runTest {
+        // PR #353 finding: a terminally-rejected settings PATCH is dead-lettered (not deleted). The guard
+        // reads the SYNCABLE view (live only), so the dead-lettered write no longer freezes the settings
+        // row — the next clean refresh reconverges the single global row to server truth (and a settings
+        // change made on another device can land again). While the write was still live it WOULD block
+        // (covered by refreshDoesNotClobberAnUnsyncedSettingsChange).
+        val chosen = UserSettings(themeFamily = ThemeFamily.Mono, themeMode = ThemeMode.Dark)
+        val local = FakeSettingsLocalStore(initial = chosen)
+        val remote = FakeSettingsRemoteSource(next = UserSettings.Default) // server truth after the reject
+        val outbox = FakeOutboxStore().apply {
+            val rejected = SetTheme(ThemeFamily.Mono, ThemeMode.Dark)
+            enqueue(rejected.target, rejected.toRequest(), t0)
+            markFailed(allUnsynced().single().seq, t0) // the server terminally rejected it → dead-lettered
+        }
+
+        repo(local, remote, outbox).refresh()
+
+        // No longer blocked by the dead-lettered write: the row reconverges to the server snapshot.
+        assertEquals(UserSettings.Default, local.current)
     }
 
     @Test

@@ -28,7 +28,9 @@ class LedgerRecordingOutboxStore(
         runCatching { ledger.record(ActivitySource.Mobile, target, request, now) }
     }
 
-    override suspend fun pending(): List<OutboxEntry> = delegate.pending()
+    override suspend fun syncable(): List<OutboxEntry> = delegate.syncable()
+
+    override suspend fun allUnsynced(): List<OutboxEntry> = delegate.allUnsynced()
 
     override suspend fun delete(seq: Long) = delegate.delete(seq)
 

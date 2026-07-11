@@ -14,8 +14,9 @@ import kotlin.time.Instant
  * - [createdAt] — when the intent was enqueued (audit/diagnostics).
  * - [failedAt] — the dead-letter marker (`null` = live). Set when the server terminally rejected the
  *   write (or its retries were exhausted): the entry is preserved (its outbound request is never
- *   silently dropped) but the processor skips it — it never replays again. It stays in the queue so the
- *   reconcile clobber-guards keep protecting the optimistic local row it stands behind.
+ *   silently dropped) but it is excluded from [OutboxStore.syncable] so the processor never replays it
+ *   again. It stays in the queue (visible via [OutboxStore.allUnsynced]) so the reconcile clobber-guards
+ *   can still see it.
  */
 data class OutboxEntry(
     val seq: Long,
@@ -29,11 +30,16 @@ data class OutboxEntry(
 
 /**
  * The local source-of-truth port for the outbox queue (ADR-0001, #23). The write path enqueues
- * through [enqueue]; the [OutboxProcessor] drains via [pending] (FIFO) and resolves entries with
- * [delete] (dispatched OK), [markRetry] (transient failure → backoff), or [markFailed] (terminal
+ * through [enqueue]; the [OutboxProcessor] drains via [syncable] (FIFO, live only) and resolves entries
+ * with [delete] (dispatched OK), [markRetry] (transient failure → backoff), or [markFailed] (terminal
  * rejection → dead-letter, preserved not deleted). Extracting persistence behind a port keeps the
  * replay/backoff/head-of-line *algorithm* (the heart of #23) unit-testable against an in-memory fake
  * on the ADR-0006 JVM-fast path, while [SqlDelightOutboxStore] proves the real SQLite path.
+ *
+ * Two read views, by intent: [syncable] is the live work the processor drains and the settings guard
+ * reads (a dead-lettered write is excluded, so it stops replaying AND stops blocking the settings
+ * refresh); [allUnsynced] is the full queue the comment clobber-guard and the id-heal re-point read
+ * (they must still see a dead-lettered row to keep protecting / re-pointing the local row behind it).
  */
 interface OutboxStore {
 
@@ -44,19 +50,28 @@ interface OutboxStore {
     suspend fun enqueue(target: String, request: OutboxRequest, now: Instant)
 
     /**
-     * The whole queue (live + dead-lettered) in FIFO ([OutboxEntry.seq]) order. The processor walks this
-     * head-first and skips the dead-lettered rows ([OutboxEntry.failedAt] set); the reconcile clobber-
-     * guards read it to protect an optimistic local row a live-OR-failed write stands behind.
+     * The **still-syncable** queue — live rows only (dead-lettered [OutboxEntry.failedAt] rows excluded)
+     * — in FIFO ([OutboxEntry.seq]) order. The processor drains this head-first, so a dead-lettered entry
+     * never replays again (no drain-loop filter needed); the settings reconcile guard reads it too, so a
+     * terminally-rejected settings write stops blocking the refresh.
      */
-    suspend fun pending(): List<OutboxEntry>
+    suspend fun syncable(): List<OutboxEntry>
+
+    /**
+     * The **whole** queue (live + dead-lettered) in FIFO ([OutboxEntry.seq]) order — read by the comment
+     * reconcile clobber-guard and the [repointId] id-heal, both of which must still see a dead-lettered
+     * row to keep protecting / re-pointing the optimistic local row it stands behind.
+     */
+    suspend fun allUnsynced(): List<OutboxEntry>
 
     /** Removes the successfully-dispatched entry [seq] from the queue. */
     suspend fun delete(seq: Long)
 
     /**
      * Dead-letter the terminally-rejected / attempts-exhausted entry [seq] at [failedAt]: it is kept
-     * (its outbound request is preserved, never silently dropped) but the processor skips it forever, so
-     * it never replays again. The optimistic local row it stands behind stays protected by the guards.
+     * (its outbound request is preserved, never silently dropped) but excluded from [syncable] so the
+     * processor never replays it again. It stays visible via [allUnsynced], so the optimistic local row it
+     * stands behind stays protected by the guards.
      */
     suspend fun markFailed(seq: Long, failedAt: Instant)
 
@@ -70,7 +85,7 @@ interface OutboxStore {
      */
     suspend fun update(seq: Long, target: String, request: OutboxRequest)
 
-    /** The number of pending entries — the size of the unsynced-writes queue. */
+    /** The size of the still-syncable queue — live entries only (dead-lettered rows excluded, like [syncable]). */
     suspend fun count(): Long
 }
 
@@ -79,12 +94,12 @@ interface OutboxStore {
  * so a queued mutation addressing an offline-minted client id lands on the server's canonical id once the
  * two diverge — the #185 item-create id-heal and the ADR-0043 comment-create rekey are the same substring
  * re-point. A UUID substring replace is collision-safe (ids never appear as substrings of unrelated
- * content). Returns `true` if any entry changed, so a caller walking a `pending()` snapshot knows the
- * queue moved and its snapshot is now stale.
+ * content). Returns `true` if any entry changed, so a caller walking an `allUnsynced()` snapshot knows
+ * the queue moved and its snapshot is now stale.
  */
 internal suspend fun OutboxStore.repointId(from: String, to: String): Boolean {
     var changed = false
-    for (entry in pending()) {
+    for (entry in allUnsynced()) {
         val newTarget = entry.target.replace(from, to)
         val newPath = entry.request.path.map { it.replace(from, to) }
         val newBody = entry.request.body?.replace(from, to)

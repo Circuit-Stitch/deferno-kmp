@@ -9,7 +9,7 @@ package com.circuitstitch.deferno.core.data.outbox
  * Because the backend never honours the client comment id, the rekey is the **mainline, not a rare
  * heal**: *every* create replay reassigns a fresh server id, so [onReplayed] rekeys the optimistic
  * `commentEntity` row and re-points any already-queued `comment:<clientId>` edit/delete — and returns
- * `true` so the processor breaks its now-stale `pending()` pass (load-bearing: without the break the
+ * `true` so the processor breaks its now-stale `syncable()` pass (load-bearing: without the break the
  * processor would replay the queued edit against the dead client id → `404` → success → the edit is
  * silently lost).
  */
@@ -20,7 +20,7 @@ interface CommentReplayListener {
      * Rekeys the optimistic row and re-points queued edits/deletes to [serverId].
      *
      * @return `true` if a queued `comment:<clientId>` entry was re-pointed, so the processor stops the
-     *   current pass (its in-flight `pending()` snapshot is now stale) and lets the next flush re-read.
+     *   current pass (its in-flight `syncable()` snapshot is now stale) and lets the next flush re-read.
      */
     suspend fun onReplayed(taskId: String, clientId: String, serverId: String): Boolean
 

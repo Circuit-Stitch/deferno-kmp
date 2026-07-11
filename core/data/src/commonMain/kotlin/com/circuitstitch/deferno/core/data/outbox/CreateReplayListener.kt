@@ -19,7 +19,7 @@ interface CreateReplayListener {
      * pending-create row, and when [serverId] diverges from [clientId], heals all references.
      *
      * @return `true` if a heal mutated the outbox queue, so the processor should stop the current pass
-     *   (its in-flight `pending()` snapshot is now stale) and let the next flush re-read.
+     *   (its in-flight `syncable()` snapshot is now stale) and let the next flush re-read.
      */
     suspend fun onReplayed(clientId: String, kind: ItemKind, serverId: String): Boolean
 

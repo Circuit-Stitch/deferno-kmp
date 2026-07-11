@@ -36,7 +36,8 @@ data class FlushResult(
  * continues. To stop one permanently-failing entry starving the whole queue, a head that has retried
  * [maxAttempts] times is likewise dead-lettered so the queue can make progress. A dead-lettered entry is
  * never deleted and its optimistic local value is never undone — the user's write is preserved (never
- * silently dropped); it simply stops replaying. Subsequent passes skip it ([OutboxEntry.failedAt]).
+ * silently dropped); it simply stops replaying (excluded from [OutboxStore.syncable], so no later pass
+ * sees it).
  *
  * **Reconcile after a successful flush.** If at least one entry succeeded this pass, [reconcile] runs
  * once at the end — the app binds it to its repository refresh(es), which re-pull the full snapshot and
@@ -50,7 +51,7 @@ data class FlushResult(
  * id is needed to confirm the pending-create row and to heal a divergent canonical id), and resolves
  * through the [CreateReplayListener] — confirm on success. On terminal rejection it is dead-lettered like
  * any other entry (the optimistic insert is preserved, not undone). If a heal re-points queued entries,
- * the pass stops (its `pending()` snapshot is stale) and
+ * the pass stops (its `syncable()` snapshot is stale) and
  * the next flush re-reads. A `comment-create:<taskId>:<clientId>` entry (ADR-0043) replays through the
  * **same** response-bearing path but resolves through the [CommentReplayListener] — the backend never
  * honours the client comment id, so *every* comment-create rekeys the row and re-points its queued edits;
@@ -80,11 +81,10 @@ class OutboxProcessor(
         var dropped = 0
         var retried = 0
 
-        for (entry in store.pending()) {
-            // Dead-lettered entries (a prior terminal rejection) are preserved in the queue but never
-            // replay again — skip them transparently so they don't trip the head-of-line break below.
-            if (entry.failedAt != null) continue
-
+        for (entry in store.syncable()) {
+            // [syncable] is live rows only — a dead-lettered entry (a prior terminal rejection) is already
+            // excluded, so it never replays again and can't trip the head-of-line break below.
+            //
             // Entries are in seq order; the first not-yet-ready entry (a backed-off head) stops the
             // pass, preserving strict FIFO — nothing behind it may overtake it.
             if (entry.nextAttemptAt > now) break
@@ -100,7 +100,7 @@ class OutboxProcessor(
                         val healed = route.onReplayed(outcome.serverId)
                         store.delete(entry.seq)
                         succeeded++
-                        // A heal re-pointed queued entries in the store; the in-flight `pending()`
+                        // A heal re-pointed queued entries in the store; the in-flight `syncable()`
                         // snapshot this loop walks is now stale, so stop and let the next flush re-read.
                         if (healed) break
                     }
@@ -199,7 +199,7 @@ class OutboxProcessor(
 
     /**
      * A resolved response-bearing create replay: [onReplayed] heals the optimistic row and returns whether
-     * it re-pointed queued entries (so the pass must stop, its `pending()` snapshot being stale). A
+     * it re-pointed queued entries (so the pass must stop, its `syncable()` snapshot being stale). A
      * terminal rejection is dead-lettered by [deadLetter], not undone — the optimistic row is preserved.
      */
     private class ReplayRoute(

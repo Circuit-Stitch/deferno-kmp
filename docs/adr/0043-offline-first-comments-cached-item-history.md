@@ -130,7 +130,7 @@ parser) — **rekeys** the optimistic row's `comment_id` clientId→serverId (th
 `pendingItemCreate.rekey` in-place `UPDATE`; no FK hazard, the schema has none) **and re-points any
 already-queued `comment:<clientId>` edit/delete** to the server id (the shared `OutboxStore.repointId`
 outbox sweep, also used by `ItemIdHealer`; a UUID substring is collision-safe). It **returns `healed=true`
-so the processor breaks the now-stale `pending()` pass** — load-bearing, not optional: without the break the processor replays
+so the processor breaks the now-stale `syncable()` pass** — load-bearing, not optional: without the break the processor replays
 the queued edit against the dead client id, gets a 404 → `Success` → drops it, **silently losing the edit**.
 Because that break fires on *every* comment-create, **`OutboxDriver` loops `flush()` while a pass made
 progress and work remains** (`do { r = flush() } while (r.succeeded > 0 && r.remaining > 0)`) so a burst of

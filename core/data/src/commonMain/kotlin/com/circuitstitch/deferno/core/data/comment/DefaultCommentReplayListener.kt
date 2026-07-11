@@ -15,7 +15,7 @@ import com.circuitstitch.deferno.core.data.outbox.repointId
  *   any already-queued `comment:<clientId>` edit/delete to the server id via the shared
  *   [com.circuitstitch.deferno.core.data.outbox.repointId] outbox sweep (the same helper the #185
  *   [com.circuitstitch.deferno.core.data.create.ItemIdHealer] uses). It returns `true` **iff** it
- *   re-pointed a queued entry, so the processor breaks its now-stale `pending()` pass (a lone create
+ *   re-pointed a queued entry, so the processor breaks its now-stale `syncable()` pass (a lone create
  *   with no queued edit leaves the outbox unchanged, so the pass may continue).
  * - **Blank server id ⇒ loud, never silent.** The backend never honours the client comment id (no `id`
  *   on `CreateCommentPayload`, Deferno#559), so a blank id is *never* "the server honoured the client
