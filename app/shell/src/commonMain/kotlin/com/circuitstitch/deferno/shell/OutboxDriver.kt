@@ -73,7 +73,7 @@ class OutboxDriver(
 
     /**
      * Flush the outbox repeatedly until a pass makes no progress or drains the queue (ADR-0043): an
-     * offline comment-create heal breaks each pass on replay (the rekey stales the engine's `pending()`
+     * offline comment-create heal breaks each pass on replay (the rekey stales the engine's `syncable()`
      * snapshot), so without this loop a burst of offline comments would drain one-per-tick. `succeeded > 0`
      * means the last pass advanced; `remaining > 0` means there is still work — loop only while both hold.
      */

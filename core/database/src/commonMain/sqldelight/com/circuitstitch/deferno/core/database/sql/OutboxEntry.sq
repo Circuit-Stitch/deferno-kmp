@@ -24,12 +24,26 @@ CREATE TABLE outboxEntry (
     body            TEXT,
     attempts        INTEGER NOT NULL DEFAULT 0,
     next_attempt_at TEXT NOT NULL,
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    -- Dead-letter marker: set when the server terminally rejected this write (or its retries were
+    -- exhausted). A dead-lettered row is NEVER deleted here — its outbound request is preserved, not
+    -- silently dropped — but it is excluded from `selectSyncableInOrder` so the processor never replays
+    -- it again. It stays in the queue so the reconcile clobber-guards can still see it. NULL = live.
+    failed_at       TEXT
 );
 
--- The whole queue in FIFO order — the processor pulls this and walks it head-first (#23).
+-- The whole queue (live + dead-lettered) in FIFO order. The comment reconcile clobber-guard (#143) and
+-- the #185 id-heal re-point read this — both must still see a dead-lettered row (to keep protecting /
+-- re-pointing the optimistic local row it stands behind). The processor's drain uses the syncable view.
 selectAllInOrder:
 SELECT * FROM outboxEntry ORDER BY seq;
+
+-- The still-syncable queue (live rows only — dead-lettered `failed_at` rows excluded) in FIFO order. The
+-- processor drains THIS head-first, so a dead-lettered row never replays again without the drain loop
+-- having to filter it; the settings reconcile guard reads it too, so a terminally-rejected settings write
+-- stops blocking the refresh (the local row reconverges to server truth on the next clean pull).
+selectSyncableInOrder:
+SELECT * FROM outboxEntry WHERE failed_at IS NULL ORDER BY seq;
 
 -- Append a mutation to the tail. `seq` is assigned by AUTOINCREMENT; a fresh entry starts at
 -- attempts = 0 with next_attempt_at = now (ready to dispatch immediately).
@@ -37,9 +51,16 @@ enqueue:
 INSERT INTO outboxEntry(target, method, path, body, attempts, next_attempt_at, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?);
 
--- Drop a dispatched (succeeded / terminally-rejected / attempts-exhausted) entry from the queue.
+-- Drop a successfully-dispatched entry from the queue.
 deleteBySeq:
 DELETE FROM outboxEntry WHERE seq = ?;
+
+-- Dead-letter a terminally-rejected / attempts-exhausted entry: mark it failed rather than deleting it,
+-- so the user's unsynced write is preserved (never silently dropped) and its optimistic local row stays
+-- protected by the reconcile clobber-guards. Excluded from `selectSyncableInOrder`, so the processor
+-- never replays it again.
+markFailed:
+UPDATE outboxEntry SET failed_at = ? WHERE seq = ?;
 
 -- Record a retryable failure: bump the attempt count and schedule the next attempt (backoff).
 markRetry:
@@ -52,9 +73,10 @@ UPDATE outboxEntry SET attempts = ?, next_attempt_at = ? WHERE seq = ?;
 updateEntry:
 UPDATE outboxEntry SET target = ?, path = ?, body = ? WHERE seq = ?;
 
--- The pending count — the size of the unsynced-writes queue (diagnostics / a future UI badge).
+-- The live (still-syncable) unsynced-writes count — excludes dead-lettered rows (they will not sync).
+-- Drives the flush drain-loop's "remaining work" and a future UI badge (diagnostics).
 count:
-SELECT count(*) FROM outboxEntry;
+SELECT count(*) FROM outboxEntry WHERE failed_at IS NULL;
 
 deleteAll:
 DELETE FROM outboxEntry;

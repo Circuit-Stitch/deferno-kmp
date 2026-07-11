@@ -73,4 +73,29 @@ class CommentReplayProcessorTest {
         assertEquals(listOf("comments", "server-1"), patch.path) // the edit landed on the server id...
         assertTrue(sender.sent.none { it.method == OutboxMethod.Patch && it.path == listOf("comments", "client") }) // ...never the dead one
     }
+
+    @Test
+    fun aTerminallyRejectedCommentCreateIsDeadLetteredAndTheOptimisticPostSurvives() = runTest {
+        // The exact "I posted a comment and 10s later it vanished" bug: the server terminally rejects the
+        // create (e.g. a 422). The optimistic row MUST survive (never silently deleted) and the write MUST
+        // be preserved for a later retry/discard — not dropped.
+        val store = FakeCommentLocalStore().apply { upsert(Comment("client", task, "hi", UserId("me"), t0)) }
+        val outbox = FakeOutboxStore().apply {
+            enqueue("comment-create:t-1:client", OutboxRequest(OutboxMethod.Post, listOf("tasks", "t-1", "comments"), """{"body":"hi"}"""), t0)
+        }
+        val sender = FakeOutboxRequestSender().apply { createOutcome = CreateSendOutcome.Terminal }
+        val processor = OutboxProcessor(store = outbox, sender = sender, reconcile = {}, commentListener = DefaultCommentReplayListener(store, outbox))
+
+        val result = processor.flush(t0)
+
+        assertEquals(1, result.dropped) // dead-lettered this pass
+        assertEquals(0L, outbox.count()) // no LIVE work remains...
+        assertEquals(t0, outbox.all.single().failedAt) // ...but the entry is PRESERVED, marked failed
+        assertEquals("hi", store.all.single().body) // and the user's optimistic comment still shows
+
+        // A later flush skips the dead-lettered entry — no retry loop, no second POST.
+        val again = processor.flush(t0)
+        assertEquals(0, again.dropped)
+        assertEquals(1, sender.sent.size)
+    }
 }

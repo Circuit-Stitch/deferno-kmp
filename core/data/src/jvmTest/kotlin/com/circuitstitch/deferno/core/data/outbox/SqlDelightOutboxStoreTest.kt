@@ -36,7 +36,7 @@ class SqlDelightOutboxStoreTest {
         store.enqueue("plan:d", OutboxRequest(OutboxMethod.Post, listOf("tasks", "plan", "add"), """{"task_id":"t1"}"""), t1)
         store.enqueue("task:b", OutboxRequest(OutboxMethod.Delete, listOf("tasks", "b")), t2)
 
-        val pending = store.pending()
+        val pending = store.allUnsynced()
         assertEquals(3, pending.size)
         assertEquals(pending.map { it.seq }.sorted(), pending.map { it.seq }) // FIFO seq order
 
@@ -62,15 +62,34 @@ class SqlDelightOutboxStoreTest {
         store.enqueue("task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"x"}"""), t0)
         store.enqueue("task:b", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "b"), """{"title":"y"}"""), t0)
 
-        val first = store.pending().first()
+        val first = store.allUnsynced().first()
         store.markRetry(first.seq, attempts = 3, nextAttemptAt = t2)
-        val retried = store.pending().first { it.seq == first.seq }
+        val retried = store.allUnsynced().first { it.seq == first.seq }
         assertEquals(3, retried.attempts)
         assertEquals(t2, retried.nextAttemptAt)
 
         store.delete(first.seq)
         assertEquals(1L, store.count())
-        assertTrue(store.pending().none { it.seq == first.seq })
+        assertTrue(store.allUnsynced().none { it.seq == first.seq })
+    }
+
+    @Test
+    fun markFailedDeadLettersTheRowKeepingItInAllUnsyncedButOutOfTheSyncableViewAndLiveCount() = runTest {
+        val store = newStore()
+        store.enqueue("comment-create:t-1:c", OutboxRequest(OutboxMethod.Post, listOf("tasks", "t-1", "comments"), """{"body":"hi"}"""), t0)
+        store.enqueue("task:b", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "b"), """{"title":"y"}"""), t0)
+
+        val create = store.allUnsynced().first()
+        store.markFailed(create.seq, t1)
+
+        // Preserved (never deleted) and still visible via allUnsynced() so the comment clobber-guard keeps
+        // protecting its optimistic row — but flagged failed, dropped from the syncable() drain view (so
+        // the processor never replays it), and excluded from the live (syncable) count.
+        val row = store.allUnsynced().first { it.seq == create.seq }
+        assertEquals(t1, row.failedAt)
+        assertEquals(2, store.allUnsynced().size)
+        assertEquals(listOf("task:b"), store.syncable().map { it.target }) // the dead-lettered row is gone from the drain view
+        assertEquals(1L, store.count()) // only the live `task:b` counts
     }
 
     @Test
@@ -79,13 +98,13 @@ class SqlDelightOutboxStoreTest {
         store.enqueue("task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), "{}"), t0)
         store.enqueue("task:b", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "b"), "{}"), t0)
         store.enqueue("task:c", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "c"), "{}"), t0)
-        val before = store.pending().map { it.seq }
+        val before = store.allUnsynced().map { it.seq }
 
         // Drain the whole queue, then enqueue a fresh entry.
         before.forEach { store.delete(it) }
         store.enqueue("task:d", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "d"), "{}"), t0)
 
-        val dSeq = store.pending().single().seq
+        val dSeq = store.allUnsynced().single().seq
         // AUTOINCREMENT: the new seq is strictly greater than every prior one — never recycled — so a
         // later enqueue can never sort ahead of an already-deleted earlier entry (FIFO integrity).
         assertTrue(dSeq > before.max(), "expected $dSeq > ${before.max()}")

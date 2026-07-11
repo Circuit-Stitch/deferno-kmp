@@ -20,7 +20,8 @@ class CommentMutationTest {
         }
         assertEquals(OutboxMethod.Post, request.method)
         assertEquals(listOf("tasks", "t-1", "comments"), request.path)
-        assertEquals("""{"body":"hello"}""", request.body) // NO id — the backend does not accept one
+        // NO id (the backend does not accept one), but is_private IS required — omitting it 422s the create.
+        assertEquals("""{"body":"hello","is_private":false}""", request.body)
     }
 
     @Test

@@ -63,11 +63,27 @@ class DefaultCommentReplayListenerTest {
     }
 
     @Test
-    fun onRejectedRemovesTheOptimisticPost() = runTest {
+    fun aBlankServerIdIsNeverAppliedSoTheRowAndItsQueuedEditSurviveUnderTheClientId() = runTest {
+        // A blank server id means the create response id was unparseable — never "the server honoured the
+        // client id" (the backend never does that for comments). The listener must NOT rekey to a blank
+        // id: the optimistic row + any queued edit stay keyed by the client id, intact, for a later heal.
+        // (Regression for the missing-serializer bug that made parseCreatedId silently return blank →
+        // duplicate comment + lost edit.)
         val store = FakeCommentLocalStore().apply { upsert(comment("client")) }
+        val outbox = FakeOutboxStore().apply {
+            enqueue("comment:client", OutboxRequest(OutboxMethod.Patch, listOf("comments", "client"), """{"body":"x"}"""), t0)
+        }
 
-        DefaultCommentReplayListener(store, FakeOutboxStore()).onRejected(task.value, "client")
+        val healed = DefaultCommentReplayListener(store, outbox).onReplayed(task.value, "client", "")
 
-        assertTrue(store.all.isEmpty())
+        assertFalse(healed) // nothing re-pointed → the processor's pass may continue
+        assertEquals("client", store.all.single().id) // row NOT rekeyed to a blank id
+        val entry = outbox.all.single()
+        assertEquals("comment:client", entry.target) // queued edit left intact, not re-pointed to blank
+        assertEquals(listOf("comments", "client"), entry.request.path)
     }
+
+    // A terminal rejection no longer undoes the optimistic post — the processor dead-letters it and the
+    // row is preserved (the user's comment must never silently vanish). Covered at the processor level in
+    // CommentReplayProcessorTest; there is no onRejected on the listener anymore.
 }

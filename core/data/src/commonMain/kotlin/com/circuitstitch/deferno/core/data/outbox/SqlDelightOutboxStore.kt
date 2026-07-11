@@ -11,7 +11,7 @@ import com.circuitstitch.deferno.core.database.sql.OutboxEntry as OutboxRow
  * fake), while *this* class's only job is the row mapping — proved by the real-SQLite
  * `SqlDelightOutboxStoreTest`, which also pins the `AUTOINCREMENT` monotonic-seq guarantee.
  *
- * Every query is a synchronous SQLDelight call (no observe `Flow` — the processor pulls [pending] on
+ * Every query is a synchronous SQLDelight call (no observe `Flow` — the processor pulls [syncable] on
  * demand), so the suspend port methods run straight through. Encoding mirrors the `taskEntity`
  * conventions: `path` segments ↔ a `\n`-joined TEXT, instants ↔ RFC3339 strings, the enum method ↔
  * its `.name` decoded **defensively** (an unrecognised stored token degrades rather than throwing).
@@ -34,11 +34,18 @@ class SqlDelightOutboxStore(
         )
     }
 
-    override suspend fun pending(): List<OutboxEntry> =
+    override suspend fun syncable(): List<OutboxEntry> =
+        queries.selectSyncableInOrder().executeAsList().map { it.toDomain() }
+
+    override suspend fun allUnsynced(): List<OutboxEntry> =
         queries.selectAllInOrder().executeAsList().map { it.toDomain() }
 
     override suspend fun delete(seq: Long) {
         queries.deleteBySeq(seq)
+    }
+
+    override suspend fun markFailed(seq: Long, failedAt: Instant) {
+        queries.markFailed(failedAt.toString(), seq)
     }
 
     override suspend fun markRetry(seq: Long, attempts: Int, nextAttemptAt: Instant) {
@@ -70,6 +77,7 @@ private fun OutboxRow.toDomain(): OutboxEntry = OutboxEntry(
     attempts = attempts.toInt(),
     nextAttemptAt = Instant.parse(next_attempt_at),
     createdAt = Instant.parse(created_at),
+    failedAt = failed_at?.let(Instant::parse),
 )
 
 /** Defensive decode: an unrecognised stored method token degrades to [OutboxMethod.Post] (never throws). */

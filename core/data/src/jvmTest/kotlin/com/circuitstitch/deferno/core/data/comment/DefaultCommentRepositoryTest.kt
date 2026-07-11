@@ -21,8 +21,9 @@ import kotlin.time.Instant
  * The outbox-aware reconcile of [DefaultCommentRepository] (ADR-0043, #197) over a real in-memory
  * `DefernoDatabase` (ADR-0006 JVM-fast path). Proves the offline-first contract: reads come from the
  * cache, a refresh upserts server rows and drops server-gone ones, an [RemoteSnapshot.Unavailable] pull
- * leaves the cache intact, and — the #143 clobber-guard — a comment with a pending outbox mutation (an
- * optimistic edit/delete or an un-synced create) survives a refresh that would otherwise revert it.
+ * leaves the cache intact, and — the #143 clobber-guard — a comment with an un-synced outbox mutation (an
+ * optimistic edit/delete or a create, live OR dead-lettered) survives a refresh that would otherwise revert
+ * it. The guard reads the full `allUnsynced()` view precisely so a dead-lettered write still protects (#353).
  */
 class DefaultCommentRepositoryTest {
 
@@ -95,6 +96,26 @@ class DefaultCommentRepositoryTest {
         store.upsert(comment("client-uuid")) // optimistic post, not yet on the server
         val outbox = FakeOutboxStore().apply { enqueue(CommentTargets.create("t-1", "client-uuid"), post(), t0) }
         // Server thread is empty (the create hasn't replayed) — the un-synced comment must survive.
+        val repo = DefaultCommentRepository(store, FakeRemote(RemoteSnapshot.Available(emptyList())), outbox)
+
+        repo.refresh(task)
+
+        assertEquals(listOf("client-uuid"), store.observe(task).first().map { it.id })
+    }
+
+    @Test
+    fun refreshKeepsADeadLetteredPostedComment() = runTest {
+        // PR #353: a terminally-rejected comment create is dead-lettered (never landed server-side, never
+        // deleted locally). The clobber-guard reads the FULL queue (allUnsynced, incl. dead-lettered rows),
+        // so the optimistic post must STILL survive a refresh — the exact "comment vanished ~10s later" bug,
+        // now guarded even after the write gives up. (A live create is covered by the test above; this pins
+        // that dropping to the syncable view here would silently resurrect the bug.)
+        val store = newStore()
+        store.upsert(comment("client-uuid"))
+        val outbox = FakeOutboxStore().apply {
+            enqueue(CommentTargets.create("t-1", "client-uuid"), post(), t0)
+            markFailed(allUnsynced().single().seq, t1) // the server terminally rejected the create → dead-lettered
+        }
         val repo = DefaultCommentRepository(store, FakeRemote(RemoteSnapshot.Available(emptyList())), outbox)
 
         repo.refresh(task)

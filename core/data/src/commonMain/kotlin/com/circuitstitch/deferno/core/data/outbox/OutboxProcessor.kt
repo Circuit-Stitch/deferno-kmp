@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.outbox
 
+import com.circuitstitch.deferno.core.common.log.Logger
 import com.circuitstitch.deferno.core.model.ItemKind
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -10,7 +11,11 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
-/** The outcome counts of one [OutboxProcessor.flush] pass (succeeded / dropped / retried + remaining queue size). */
+/**
+ * The outcome counts of one [OutboxProcessor.flush] pass. [dropped] counts entries **dead-lettered** this
+ * pass (terminally rejected / attempts-exhausted) — they are preserved in the queue ([OutboxEntry.failedAt]),
+ * not deleted; [remaining] is the live (still-syncable) queue size.
+ */
 data class FlushResult(
     val succeeded: Int,
     val dropped: Int,
@@ -27,23 +32,26 @@ data class FlushResult(
  * **Strict FIFO, head-of-line.** Entries replay in [OutboxEntry.seq] (enqueue) order. A *transient*
  * failure on the head ([SendOutcome.Retryable]) backs the head off and **stops** the pass — later
  * entries wait — so independent intents never overtake an earlier one (LWW ordering, ADR-0001). A
- * *rejected* entry ([SendOutcome.Terminal]) is dropped and the pass continues. To stop one permanently-
- * failing entry starving the whole queue, a head that has retried [maxAttempts] times is given up on
- * (dropped, like a Terminal) so the queue can make progress — its local optimistic value is then
- * corrected by the next reconcile (LWW).
+ * *rejected* entry ([SendOutcome.Terminal]) is **dead-lettered** (preserved, [deadLetter]) and the pass
+ * continues. To stop one permanently-failing entry starving the whole queue, a head that has retried
+ * [maxAttempts] times is likewise dead-lettered so the queue can make progress. A dead-lettered entry is
+ * never deleted and its optimistic local value is never undone — the user's write is preserved (never
+ * silently dropped); it simply stops replaying (excluded from [OutboxStore.syncable], so no later pass
+ * sees it).
  *
  * **Reconcile after a successful flush.** If at least one entry succeeded this pass, [reconcile] runs
  * once at the end — the app binds it to its repository refresh(es), which re-pull the full snapshot and
  * LWW-merge server truth over the optimistic local state (ADR-0001 "re-reconcile after each flush").
  * It is best-effort: a thrown reconcile is swallowed (the already-dispatched entries stay dispatched;
- * the next flush re-triggers it). A flush that only drops/retries does not reconcile — there is no new
- * server state to pull (a terminally-rejected optimistic value is corrected on the next real refresh).
+ * the next flush re-triggers it). A flush that only dead-letters/retries does not reconcile — there is
+ * no new server state to pull.
  *
  * **Create entries replay specially (#185).** An entry whose target is `create:<kind>:<id>` is an
  * offline create: it replays through the response-bearing [OutboxRequestSender.sendCreate] (the server
  * id is needed to confirm the pending-create row and to heal a divergent canonical id), and resolves
- * through the [CreateReplayListener] — confirm on success, undo the optimistic insert on terminal
- * rejection. If a heal re-points queued entries, the pass stops (its `pending()` snapshot is stale) and
+ * through the [CreateReplayListener] — confirm on success. On terminal rejection it is dead-lettered like
+ * any other entry (the optimistic insert is preserved, not undone). If a heal re-points queued entries,
+ * the pass stops (its `syncable()` snapshot is stale) and
  * the next flush re-reads. A `comment-create:<taskId>:<clientId>` entry (ADR-0043) replays through the
  * **same** response-bearing path but resolves through the [CommentReplayListener] — the backend never
  * honours the client comment id, so *every* comment-create rekeys the row and re-points its queued edits;
@@ -65,6 +73,7 @@ class OutboxProcessor(
     private val commentListener: CommentReplayListener = CommentReplayListener.NoOp,
 ) {
     private val mutex = Mutex()
+    private val log = Logger("OutboxProcessor")
 
     /** Drains the ready entries at [now], applying the FIFO/backoff/head-of-line policy above. */
     suspend fun flush(now: Instant): FlushResult = mutex.withLock {
@@ -72,7 +81,10 @@ class OutboxProcessor(
         var dropped = 0
         var retried = 0
 
-        for (entry in store.pending()) {
+        for (entry in store.syncable()) {
+            // [syncable] is live rows only — a dead-lettered entry (a prior terminal rejection) is already
+            // excluded, so it never replays again and can't trip the head-of-line break below.
+            //
             // Entries are in seq order; the first not-yet-ready entry (a backed-off head) stops the
             // pass, preserving strict FIFO — nothing behind it may overtake it.
             if (entry.nextAttemptAt > now) break
@@ -88,20 +100,18 @@ class OutboxProcessor(
                         val healed = route.onReplayed(outcome.serverId)
                         store.delete(entry.seq)
                         succeeded++
-                        // A heal re-pointed queued entries in the store; the in-flight `pending()`
+                        // A heal re-pointed queued entries in the store; the in-flight `syncable()`
                         // snapshot this loop walks is now stale, so stop and let the next flush re-read.
                         if (healed) break
                     }
                     CreateSendOutcome.Terminal -> {
-                        route.onRejected()
-                        store.delete(entry.seq)
+                        deadLetter(entry, now)
                         dropped++
                     }
                     CreateSendOutcome.Retryable -> {
                         val attempts = entry.attempts + 1
                         if (attempts >= maxAttempts) {
-                            route.onRejected()
-                            store.delete(entry.seq)
+                            deadLetter(entry, now)
                             dropped++
                         } else {
                             store.markRetry(entry.seq, attempts, now + backoff(attempts))
@@ -119,7 +129,7 @@ class OutboxProcessor(
                     succeeded++
                 }
                 SendOutcome.Terminal -> {
-                    store.delete(entry.seq)
+                    deadLetter(entry, now)
                     dropped++
                 }
                 SendOutcome.Retryable -> {
@@ -127,7 +137,7 @@ class OutboxProcessor(
                     if (attempts >= maxAttempts) {
                         // Exhausted: give up so this entry can't block the queue forever. Continue the
                         // pass (don't break) — the now-unblocked tail gets its turn.
-                        store.delete(entry.seq)
+                        deadLetter(entry, now)
                         dropped++
                     } else {
                         store.markRetry(entry.seq, attempts, now + backoff(attempts))
@@ -153,22 +163,35 @@ class OutboxProcessor(
     }
 
     /**
+     * Dead-letter a terminally-rejected / attempts-exhausted [entry]: preserve it (never silently
+     * delete — its optimistic local row stays too, and it keeps protecting that row from the reconcile
+     * clobber-guards) and log the loss of sync so a bad request/contract is visible instead of vanishing.
+     */
+    private suspend fun deadLetter(entry: OutboxEntry, now: Instant) {
+        store.markFailed(entry.seq, now)
+        log.e {
+            "dead-lettered ${entry.request.method} /${entry.request.path.joinToString("/")} " +
+                "(target=${entry.target}, attempts=${entry.attempts}) — server terminally rejected it; " +
+                "the write is preserved locally but will NOT sync until retried/discarded"
+        }
+    }
+
+    /**
      * The response-bearing replay route for [entry], or `null` for a plain fire-and-forget edit. The two
      * create-target schemes are disjoint by prefix (`create:` vs `comment-create:` — the latter is not a
      * `create:` prefix-match), so each entry resolves to at most one route regardless of order. Binds the
-     * matched target to its listener so [flush] runs one policy for both.
+     * matched target to its listener so [flush] runs one policy for both. A terminal rejection is handled
+     * uniformly by [deadLetter] (not the listener) — the optimism is preserved, never undone.
      */
     private fun routeFor(entry: OutboxEntry): ReplayRoute? {
         CreateTarget.parse(entry.target)?.let { create ->
             return ReplayRoute(
                 onReplayed = { serverId -> createListener.onReplayed(create.clientId, create.kind, serverId) },
-                onRejected = { createListener.onRejected(create.clientId, create.kind) },
             )
         }
         CommentTargets.parseCreate(entry.target)?.let { commentCreate ->
             return ReplayRoute(
                 onReplayed = { serverId -> commentListener.onReplayed(commentCreate.taskId, commentCreate.clientId, serverId) },
-                onRejected = { commentListener.onRejected(commentCreate.taskId, commentCreate.clientId) },
             )
         }
         return null
@@ -176,12 +199,11 @@ class OutboxProcessor(
 
     /**
      * A resolved response-bearing create replay: [onReplayed] heals the optimistic row and returns whether
-     * it re-pointed queued entries (so the pass must stop, its `pending()` snapshot being stale);
-     * [onRejected] undoes the optimism on a terminal/exhausted rejection.
+     * it re-pointed queued entries (so the pass must stop, its `syncable()` snapshot being stale). A
+     * terminal rejection is dead-lettered by [deadLetter], not undone — the optimistic row is preserved.
      */
     private class ReplayRoute(
         val onReplayed: suspend (serverId: String) -> Boolean,
-        val onRejected: suspend () -> Unit,
     )
 
     companion object {

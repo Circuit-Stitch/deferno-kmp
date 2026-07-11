@@ -60,9 +60,12 @@ class DefaultCommentRepository(
             is RemoteSnapshot.Available -> snapshot.value
             RemoteSnapshot.Unavailable -> return
         }
-        // The #143 clobber-guard: the ids an un-synced write is optimistically holding. Read after the
-        // fetch (like the settings reconcile) to shrink the enqueue-during-fetch race window.
-        val protected = outbox.pending().mapNotNullTo(mutableSetOf()) { CommentTargets.protectedId(it.target) }
+        // The #143 clobber-guard: the ids an un-synced write is optimistically holding. Reads the FULL
+        // queue ([allUnsynced], incl. dead-lettered rows) — a terminally-rejected comment create/edit must
+        // KEEP protecting its optimistic row (the user's comment must never silently vanish, PR #353), so
+        // unlike the settings guard it does not drop to the syncable view. Read after the fetch to shrink
+        // the enqueue-during-fetch race window.
+        val protected = outbox.allUnsynced().mapNotNullTo(mutableSetOf()) { CommentTargets.protectedId(it.target) }
         val serverIds = server.mapTo(mutableSetOf()) { it.id }
 
         for (comment in server) {

@@ -1,0 +1,10 @@
+-- Migration 14 -> 15: dead-letter the outbox instead of silently dropping a rejected write.
+--
+-- One additive, nullable column on `outboxEntry`. Before this, a terminally-rejected / attempts-
+-- exhausted replay was DELETEd (and its optimistic local row undone) — the user's write vanished with
+-- no trace ("I added a comment and 10s later it disappeared"). Now such an entry is marked `failed_at`
+-- instead: its outbound request is preserved, the processor skips it (no retry loop), and it keeps
+-- protecting the optimistic local row it stands behind. Existing rows default to NULL = live.
+-- Mirrors OutboxEntry.sq exactly (verifyCommonMainDefernoDatabaseMigration checks it).
+-- Never edit a released migration or snapshot — ADR-0022 runbook.
+ALTER TABLE outboxEntry ADD COLUMN failed_at TEXT;
