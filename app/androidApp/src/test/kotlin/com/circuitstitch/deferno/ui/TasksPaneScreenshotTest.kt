@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.ui
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.onRoot
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
+import com.circuitstitch.deferno.core.designsystem.format.LocalToday
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -63,7 +65,10 @@ class TasksPaneScreenshotTest {
     private fun capture(name: String, darkTheme: Boolean = false, content: @Composable () -> Unit) {
         composeRule.setContent {
             DefernoTheme(palette = DefernoPalette.Deferno, darkTheme = darkTheme) {
-                Surface(modifier = Modifier.fillMaxSize()) { content() }
+                // Pin "today" so the detail's WHEN row ("in N days") doesn't drift with the wall clock.
+                CompositionLocalProvider(LocalToday provides SCREENSHOT_TODAY) {
+                    Surface(modifier = Modifier.fillMaxSize()) { content() }
+                }
             }
         }
         composeRule.onRoot().captureRoboImage("src/test/screenshots/$name.png")

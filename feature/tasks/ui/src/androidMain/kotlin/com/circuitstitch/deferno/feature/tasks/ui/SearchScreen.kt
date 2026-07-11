@@ -65,6 +65,7 @@ import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
 import com.circuitstitch.deferno.core.designsystem.component.SessionExpiredBanner
+import com.circuitstitch.deferno.core.designsystem.format.currentToday
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.common_back
 import com.circuitstitch.deferno.core.designsystem.resources.common_labels
@@ -104,13 +105,10 @@ import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
-import kotlinx.datetime.todayIn
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
-import kotlin.time.Clock
 
 /**
  * The global Search overlay View ("Deep search", #73/#231): a thin renderer of [SearchComponent]. The
@@ -347,7 +345,7 @@ private fun FilterSheet(
     onDismissSheet: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
-    val today = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
+    val today = currentToday
     ModalBottomSheet(onDismissRequest = onDismissSheet, sheetState = sheetState) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 28.dp),

@@ -9,13 +9,11 @@ import com.circuitstitch.deferno.core.designsystem.resources.plan_deadline_anyti
 import com.circuitstitch.deferno.core.designsystem.resources.plan_header_date_pattern
 import com.circuitstitch.deferno.core.model.Task
 import java.util.Locale
-import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.datetime.todayIn
 import org.jetbrains.compose.resources.stringResource
 
 // Locale-aware formatting helpers for the Plan View: the words come from the JDK's CLDR data via
@@ -37,7 +35,3 @@ internal fun formatDeadlineDate(instant: Instant, tz: TimeZone): String =
 internal fun Task.deadlineLabel(): String =
     deadlineTimeOfDay?.let { formatTime(it, stringResource(Res.string.common_time_pattern)) }
         ?: stringResource(Res.string.plan_deadline_anytime)
-
-/** Today's date in the system zone — the default when the host doesn't thread one in. */
-internal fun systemToday(): LocalDate =
-    Clock.System.todayIn(TimeZone.currentSystemDefault())
