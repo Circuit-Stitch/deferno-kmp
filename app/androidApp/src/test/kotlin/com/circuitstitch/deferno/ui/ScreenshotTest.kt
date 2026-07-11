@@ -207,6 +207,63 @@ class ScreenshotTest {
         TaskDetailScreen(FakeTaskDetailComponent(TaskDetailState(task = summary, isHydrating = true)))
     }
 
+    // The NOTES markdown: a GitHub-imported description arrives as GitHub-Flavored Markdown, rendered (not
+    // the raw `**`/`>`/backtick source) and clamped to the first ~20 rendered lines under a fade with a
+    // "Show more" affordance that opens the full body in a bottom sheet. This golden pins the collapsed
+    // rendered state — a heading, bold, inline code, a blockquote, a bullet list, a link. MarkdownText
+    // parses synchronously (immediate = true), so no inspection-mode wrapper is needed to render it here.
+    private val markdownDescription = """
+        > **Design is settled.** This packages the decisions in `docs/adr/0044-topology.md`.
+
+        ## Problem statement
+
+        There is **no billing or entitlement machinery** at all today (greenfield). Several
+        constraints collide and must be resolved together:
+
+        - A customer needs to buy premium the `way each platform requires`
+        - We will **not** register for and remit worldwide VAT/GST
+        - RevenueCat is the single unifier across iOS, Android, and web
+
+        ### Non-goals
+
+        This does *not* re-open the resolved topology. See the
+        [tracking issue](https://github.com/Circuit-Stitch/deferno-kmp/issues/460) for context.
+
+        1. Wire the per-Org entitlement read
+        2. Reconcile the RevenueCat webhook
+        3. Ship the staff override console
+    """.trimIndent()
+
+    @Test
+    fun taskDetail_markdown_light() = capture("task_detail_markdown_light") {
+        TaskDetailScreen(
+            FakeTaskDetailComponent(
+                TaskDetailState(
+                    task = sampleTask(
+                        "md", "[GitHub#460] PRD: Premium entitlement & billing topology",
+                        description = markdownDescription, hydration = HydrationState.Full,
+                    ),
+                    isHydrating = false,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun taskDetail_markdown_dark() = capture("task_detail_markdown_dark", darkTheme = true) {
+        TaskDetailScreen(
+            FakeTaskDetailComponent(
+                TaskDetailState(
+                    task = sampleTask(
+                        "md", "[GitHub#460] PRD: Premium entitlement & billing topology",
+                        description = markdownDescription, hydration = HydrationState.Full,
+                    ),
+                    isHydrating = false,
+                ),
+            ),
+        )
+    }
+
     // The journey-status track's distinct visual branches (ADR-0044): a blocked reading (an error-red star on
     // the middle node), a Done terminal (the success-green node), and a Dropped "NOT DOING" reading (a dashed
     // tail to a hollow, struck-through DONE). Minimal detail states so each golden pins the STATUS control.

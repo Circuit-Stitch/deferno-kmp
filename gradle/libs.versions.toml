@@ -93,6 +93,22 @@ conveyorControl = "1.1"
 # uses) instead of `material-icons-extended` (≈37 MB) the desktop distribution would otherwise
 # bundle for two glyphs — the same `material-icons-core` choice the Android shell makes.
 composeIcons = "1.7.3"
+# Markdown rendering for the Task detail's synced description. GitHub-imported PRDs/issues arrive as
+# GitHub-Flavored Markdown (the tracker owns the body verbatim), so the NOTES section renders raw `**`,
+# `>`, backtick spans as-is without this. mikepenz's Compose-Multiplatform renderer sits over the
+# JetBrains `org.jetbrains:markdown` parser (GFM flavour by default). Used ONLY on the Compose targets
+# (Android + JVM/desktop) from core/designsystem — its iOS/JS/Wasm variants go unused (the iOS View is
+# SwiftUI, ADR-0003/0004), which is why it lands in a `deferno.compose.library` module, not a KMP one.
+# The `-m3` module supplies the Material 3 default colours/typography; links render via the native
+# Compose `LinkAnnotation` (clickable AND selection-compatible), so a wrapping SelectionContainer makes
+# the rendered text long-press selectable + copyable. No image/syntax modules (coil3 / code) taken — a
+# description degrades images to alt text and code fences to plain monospace, calmer + one fewer dep.
+# The latest line carries two floors, both met in ProjectConfig (see there): v0.42.0+ require
+# `minCompileSdk 37` (→ COMPILE_SDK 37), and v0.40.0+ ship Java 21 bytecode in BOTH the `-android` and
+# `-jvm` artifacts (→ JVM_TOOLCHAIN 21, so the JVM-hosted Robolectric tests + desktop can load them;
+# Android re-dexes so a device is unaffected). Bump those two ProjectConfig floors in lockstep with any
+# future markdown-renderer bump that raises them.
+markdownRenderer = "0.43.0"
 # Material 3 adaptive (window-size-class layout): the nav suite (#55) + the tier-2 list/detail
 # Panes (#29). app/androidApp gets these via the Compose BOM, but :feature:tasks:ui is a Compose
 # *Multiplatform* module with no androidx BOM, so the artifacts it uses (`adaptive` +
@@ -211,6 +227,11 @@ compose-foundation = { group = "org.jetbrains.compose.foundation", name = "found
 compose-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "composeMultiplatform" }
 compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "composeMaterial3" }
 compose-components-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "composeMultiplatform" }
+# Markdown renderer (see the `markdownRenderer` version note): the core renderer + GFM parser, and the
+# `-m3` Material 3 theme defaults (markdownColor()/markdownTypography()). Both land in core/designsystem's
+# commonMain — the shared home for the reusable MarkdownDescription atom the Task detail's NOTES uses.
+markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer", version.ref = "markdownRenderer" }
+markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
 compose-ui-test-junit4 = { group = "org.jetbrains.compose.ui", name = "ui-test-junit4", version.ref = "composeMultiplatform" }
 compose-desktop-linux-x64 = { group = "org.jetbrains.compose.desktop", name = "desktop-jvm-linux-x64", version.ref = "composeMultiplatform" }
 compose-desktop-windows-x64 = { group = "org.jetbrains.compose.desktop", name = "desktop-jvm-windows-x64", version.ref = "composeMultiplatform" }

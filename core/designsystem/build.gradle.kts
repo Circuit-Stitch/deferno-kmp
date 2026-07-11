@@ -18,6 +18,11 @@ kotlin {
             implementation(libs.compose.material3)
             // Compose Resources — the IBM Plex font families packaged in commonMain/composeResources.
             implementation(libs.compose.components.resources)
+            // Markdown rendering for the reusable MarkdownDescription atom (the Task detail's NOTES /
+            // GitHub-imported descriptions). Compose-target-only (this module has no iOS target); the
+            // `-m3` module api-exposes the core renderer but both are declared for an explicit surface.
+            implementation(libs.markdown.renderer)
+            implementation(libs.markdown.renderer.m3)
             // LocalizedDateFormats bridges kotlinx types (LocalDate/LocalTime/Instant) to java.time
             // formatting — this module is Android+JVM only, so commonMain sees java.time (ADR-0004).
             implementation(libs.kotlinx.datetime)

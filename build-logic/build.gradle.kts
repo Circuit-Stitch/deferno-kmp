@@ -21,7 +21,9 @@ dependencies {
     compileOnly(libs.compose.compiler.gradlePlugin)
 }
 
-// Match the project JDK toolchain (see kotlin { jvmToolchain(17) } in modules).
+// build-logic's convention plugins run INSIDE the Gradle daemon, so their classes must target the
+// daemon's JDK (17, gradle/gradle-daemon-jvm.properties) — NOT ProjectConfig.JVM_TOOLCHAIN (21), which
+// is the module *compile/test* toolchain Gradle provisions+forks for the app. Keep this at the daemon JVM.
 kotlin {
     jvmToolchain(17)
 }

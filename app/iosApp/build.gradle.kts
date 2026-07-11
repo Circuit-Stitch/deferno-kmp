@@ -12,7 +12,7 @@ kotlin {
     // used by the deferno.* conventions). This bespoke iOS-only framework module can't
     // apply those conventions (different target set, no jvm()), and a dedicated
     // convention for a single module isn't earned yet (ADR-0004).
-    jvmToolchain(17)
+    jvmToolchain(21)
 
     // iosX64 (Intel-Mac simulator) is dropped to match the `deferno.kmp` target set: the shared
     // modules this framework links no longer build an iosX64 variant (amzn/kmp-logger ships none),

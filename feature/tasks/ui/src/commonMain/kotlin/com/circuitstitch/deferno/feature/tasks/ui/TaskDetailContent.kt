@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
+import com.circuitstitch.deferno.core.designsystem.component.MarkdownDescription
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.resources.Res
@@ -313,7 +314,14 @@ private fun TaskBody(
                         SectionHeader(stringResource(Res.string.new_notes_label))
                     }
                     when {
-                        !description.isNullOrBlank() -> Text(description, style = MaterialTheme.typography.bodyLarge)
+                        // A GitHub-imported PRD/issue body is GitHub-Flavored Markdown — render it (not the raw
+                        // `**`/`>`/backtick source), clamped to the first lines with the rest one tap away in a
+                        // bottom sheet, selectable + copyable, links live (#). Shared atom in core:designsystem.
+                        !description.isNullOrBlank() -> MarkdownDescription(
+                            markdown = description,
+                            modifier = Modifier.fillMaxWidth(),
+                            sheetTitle = stringResource(Res.string.new_notes_label),
+                        )
                         !state.isHydrating -> Text(
                             text = stringResource(Res.string.tasks_detail_no_description),
                             style = MaterialTheme.typography.bodyMedium,

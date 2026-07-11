@@ -213,6 +213,7 @@
     <string name="common_send">Enviar</string>
     <string name="common_session_expired_message">Sessão expirada — entre de novo para atualizar.</string>
     <string name="common_set">Definir</string>
+    <string name="common_show_more">Mostrar mais</string>
     <string name="common_sign_in_again">Entrar de novo</string>
     <string name="common_sign_out">Sair</string>
     <string name="common_signing_in">Entrando…</string>

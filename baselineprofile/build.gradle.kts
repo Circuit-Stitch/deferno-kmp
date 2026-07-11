@@ -15,10 +15,10 @@ plugins {
 
 android {
     namespace = "com.circuitstitch.deferno.baselineprofile"
-    // Keep in sync with ProjectConfig.COMPILE_SDK (36) / TARGET_SDK (36). minSdk is 28 — the floor
+    // Keep in sync with ProjectConfig.COMPILE_SDK (37) / TARGET_SDK (36). minSdk is 28 — the floor
     // Baseline Profile generation requires on the target device (above the app's own minSdk 27; this
     // test APK never ships, and the emulator is well past 28).
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 28
@@ -44,8 +44,8 @@ dependencies {
     implementation(libs.androidx.junit)
 }
 
-// Same JVM target the rest of the project compiles to (mirrors ProjectConfig.JVM_TOOLCHAIN = 17,
+// Same JVM target the rest of the project compiles to (mirrors ProjectConfig.JVM_TOOLCHAIN = 21,
 // auto-provisioned via the Foojay resolver in settings.gradle.kts).
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
