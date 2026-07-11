@@ -180,6 +180,10 @@ fun ShellChrome(
     // supply its own leading control. The Tasks destination puts a Files-style search pill (☰ inside it +
     // trailing magnifier) here so search reads as the native top bar. Ignored when drilled. Null = ☰ + title.
     topBarCenter: (@Composable () -> Unit)? = null,
+    // Injected into the drilled detail bar's trailing edge (ADR-0044): the ← + title drilled branch has no
+    // trailing slot, so a host supplies a detail's ⋮ overflow here (the Plan-stack Task detail) to keep it
+    // reachable once the body scrolls. Null (and ignored) for non-drilled bars and the topBarCenter path.
+    topBarTrailing: (@Composable () -> Unit)? = null,
     // Whether the bottom-centre capture FAB pair is offered (ADR-0044). Defaults on; the caller suppresses
     // it where capture doesn't apply — e.g. a compact Tasks detail whose top bar OWNS the drilled ← + overflow
     // and shouldn't float a New/Brain-dump pair over a read surface. Still gated on `chrome.actions` too.
@@ -301,6 +305,7 @@ fun ShellChrome(
                         onMenu = { onDrawerOpenChange(!drawerOpen) },
                         onBack = { component.onBack() },
                         topBarCenter = topBarCenter,
+                        topBarTrailing = topBarTrailing,
                     )
                     if (sessionExpired && activeDestination != Destination.Profile) {
                         // "Sign in again" routes to Profile — where the account controls (sign out → re-auth)
@@ -394,6 +399,10 @@ private fun ShellTopBar(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     topBarCenter: (@Composable () -> Unit)? = null,
+    // An optional trailing action for the DRILLED detail bar (ADR-0044): the ← + title branch has no trailing
+    // slot of its own, so a host (the Plan-stack Task detail) supplies its ⋮ overflow here to keep it reachable
+    // once the detail body scrolls. Rendered only in the drilled branch.
+    topBarTrailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -416,6 +425,9 @@ private fun ShellTopBar(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() },
                 )
+                // The drilled detail's trailing overflow (e.g. the Plan-stack Task detail's ⋮), pinned in the
+                // bar so it survives the body scrolling. Null for drills that offer no bar action.
+                topBarTrailing?.invoke()
             }
             // A center slot owns the whole bar interior — its own leading control included. The Tasks
             // destination puts a Files-style search pill here (☰ inside it), so no separate ☰ is drawn.
