@@ -68,6 +68,9 @@ import org.jetbrains.compose.resources.stringResource
  * @param markdown the raw GFM source (CRLF-safe — the renderer normalizes).
  * @param sheetTitle optional heading for the expanded sheet (the caller passes its section label, e.g. NOTES).
  * @param collapsedMaxLines the preview cap in rendered body lines — the "first N lines" of the spec.
+ * @param fadeColor the colour the overflow fade blends into — MUST match the background the atom is drawn on,
+ *   or the "there's more below" gradient fades to the wrong colour. Defaults to `colorScheme.surface` (the
+ *   Task detail's page surface); pass the container colour when dropping this on a card / surfaceContainer.
  */
 @Composable
 fun MarkdownDescription(
@@ -75,6 +78,7 @@ fun MarkdownDescription(
     modifier: Modifier = Modifier,
     sheetTitle: String? = null,
     collapsedMaxLines: Int = 20,
+    fadeColor: Color = MaterialTheme.colorScheme.surface,
 ) {
     val density = LocalDensity.current
     // The clamp height: collapsedMaxLines × the body line height. bodyLarge carries a defined lineHeight
@@ -122,7 +126,9 @@ fun MarkdownDescription(
                 )
             }
             if (overflow) {
-                // A soft fade to the page surface over the last rows — the "there's more below" cue.
+                // A soft fade to the host background ([fadeColor]) over the last rows — the "there's more
+                // below" cue. The colour is a parameter so the atom fades to whatever surface it sits on,
+                // not a baked-in assumption about its parent.
                 Box(
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -130,7 +136,7 @@ fun MarkdownDescription(
                         .height(FadeHeight)
                         .background(
                             Brush.verticalGradient(
-                                listOf(Color.Transparent, MaterialTheme.colorScheme.surface),
+                                listOf(Color.Transparent, fadeColor),
                             ),
                         ),
                 )
