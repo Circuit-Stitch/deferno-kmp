@@ -213,6 +213,7 @@
     <string name="common_session_expired_message">Sitzung abgelaufen — melde dich erneut an, um zu aktualisieren.</string>
     <!-- DatePicker-Bestätigung — Verb -->
     <string name="common_set">Festlegen</string>
+    <string name="common_show_more">Mehr anzeigen</string>
     <string name="common_sign_in_again">Erneut anmelden</string>
     <string name="common_sign_out">Abmelden</string>
     <string name="common_signing_in">Anmeldung läuft…</string>

@@ -17,7 +17,7 @@ kotlin {
     // Keep in lockstep with ProjectConfig.JVM_TOOLCHAIN (the build's source of truth). Bespoke
     // Apple-only framework module — can't apply the deferno.* conventions (different target set), and
     // a dedicated convention for one module isn't earned yet (ADR-0004 / ADR-0029).
-    jvmToolchain(17)
+    jvmToolchain(21)
 
     macosArm64().binaries.framework {
         baseName = "Deferno"

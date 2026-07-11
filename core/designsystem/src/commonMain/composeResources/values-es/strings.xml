@@ -202,6 +202,7 @@
     <string name="common_send">Enviar</string>
     <string name="common_session_expired_message">La sesión expiró — inicia sesión de nuevo para actualizar.</string>
     <string name="common_set">Establecer</string>
+    <string name="common_show_more">Mostrar más</string>
     <string name="common_sign_in_again">Volver a iniciar sesión</string>
     <string name="common_sign_out">Cerrar sesión</string>
     <string name="common_signing_in">Iniciando sesión…</string>

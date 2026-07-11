@@ -1,3 +1,4 @@
+import com.circuitstitch.deferno.gradle.ProjectConfig
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.gradle.api.provider.Provider
 import org.gradle.jvm.toolchain.JavaLanguageVersion
@@ -30,11 +31,13 @@ plugins {
 // one). So the desktop standardizes on Temurin — no JBR. `compose.desktop.application.javaHome` (set
 // below) is what Compose uses for BOTH the dev `run` task and the jpackage/jlink packaging, so the
 // bundled distribution runtime is Temurin too — matching the Conveyor package, which jlinks the same
-// auto-imported Temurin (conveyor.conf). Resolved (and auto-provisioned) via the Foojay resolver at the
-// project's Java 17 level; compile/test already use the shared toolchain. A full JDK ships jmods, so
-// jlink/jpackage can build the native distributions.
+// auto-imported Temurin (conveyor.conf). Resolved (and auto-provisioned) via the Foojay resolver at
+// ProjectConfig.JVM_TOOLCHAIN — the SAME level compile/test use. This MUST track that toolchain: the
+// runtime loads the markdown-renderer's Java-21 bytecode (via the shared TaskDetailContent), so a JDK
+// below JVM_TOOLCHAIN would throw UnsupportedClassVersionError opening a Task detail. A full JDK ships
+// jmods, so jlink/jpackage can build the native distributions.
 val temurinRuntimeHome: String = javaToolchains.launcherFor {
-    languageVersion.set(JavaLanguageVersion.of(17))
+    languageVersion.set(JavaLanguageVersion.of(ProjectConfig.JVM_TOOLCHAIN))
     vendor.set(JvmVendorSpec.ADOPTIUM)
 }.get().metadata.installationPath.asFile.absolutePath
 

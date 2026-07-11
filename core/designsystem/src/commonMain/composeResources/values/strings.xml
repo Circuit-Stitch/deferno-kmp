@@ -279,6 +279,8 @@
     <string name="common_session_expired_message">Session expired — sign in again to refresh.</string>
     <!-- DatePickerDialog confirm — verb -->
     <string name="common_set">Set</string>
+    <!-- Affordance to expand a truncated/collapsed block (e.g. a long description) into a full view -->
+    <string name="common_show_more">Show more</string>
     <!-- Merges SessionExpiredBanner action default, Auth retry button, Profile notice action -->
     <string name="common_sign_in_again">Sign in again</string>
     <!-- Merges desktop Account menu item, Profile destructive button + its dialog confirm -->

@@ -211,6 +211,7 @@
     <string name="common_send">भेजें</string>
     <string name="common_session_expired_message">सेशन समाप्त — रीफ़्रेश करने के लिए फिर से साइन इन करें।</string>
     <string name="common_set">सेट करें</string>
+    <string name="common_show_more">और दिखाएं</string>
     <string name="common_sign_in_again">फिर से साइन इन करें</string>
     <string name="common_sign_out">साइन आउट करें</string>
     <string name="common_signing_in">साइन इन हो रहा है…</string>

@@ -10,14 +10,18 @@ package com.circuitstitch.deferno.gradle
  * points here; change them in one place.
  */
 object ProjectConfig {
-    // compileSdk 36 (Android 16, was 35): amzn/kmp-logger's `kmp-logger-log-android` AAR metadata
-    // requires consumers to compile against API 36+.
-    const val COMPILE_SDK = 36
+    // compileSdk 37 (Android 17, was 36): floored by mikepenz/multiplatform-markdown-renderer's
+    // `-android` AAR metadata (`minCompileSdk 37` at v0.42.0+, the Task-detail markdown renderer).
+    // compileSdk only widens the APIs available at compile time; it is deliberately DECOUPLED from
+    // targetSdk below (Google's own guidance — the two move independently), so this bump carries no
+    // runtime-behavior change.
+    const val COMPILE_SDK = 37
     // minSdk 27 (Android 8.1, was 26): floored by amzn/kmp-logger's `kmp-logger-log-android`, which
     // declares minSdk 27 — the manifest merger requires the app's minSdk ≥ every library's.
     const val MIN_SDK = 27
-    // targetSdk kept equal to compileSdk (36, was 35): opts the app in to API 36 (Android 16) runtime
-    // behavior. Unlike compileSdk this changes runtime semantics — verify on an API 36 emulator.
+    // targetSdk 36 (Android 16): opts the app in to API 36 runtime behavior. Held one below compileSdk
+    // (37) on purpose — targetSdk changes runtime semantics and wants an API 37 emulator soak before it
+    // moves, whereas compileSdk 37 is a pure compile-time floor from a dependency (see COMPILE_SDK).
     const val TARGET_SDK = 36
 
     /**
@@ -52,8 +56,15 @@ object ProjectConfig {
 
     private fun List<String>.intAt(index: Int): Int = getOrNull(index)?.toIntOrNull() ?: 0
 
-    /** JDK the Kotlin/Java toolchain pins (auto-provisioned via the Foojay resolver). */
-    const val JVM_TOOLCHAIN = 17
+    /**
+     * JDK the Kotlin/Java toolchain pins (auto-provisioned via the Foojay resolver). 21 (LTS, was 17):
+     * mikepenz/multiplatform-markdown-renderer v0.40.0+ ships **Java 21 bytecode** in BOTH its `-android`
+     * and `-jvm` artifacts. Android re-dexes so a device is unaffected, but the JVM-hosted Robolectric
+     * unit tests (and the desktop app) load those classes directly — on JDK 17 that throws
+     * `UnsupportedClassVersionError` (class file 65.0). Bumping the toolchain to 21 lets every JVM
+     * consumer load them. Move in lockstep with any future markdown-renderer bytecode bump.
+     */
+    const val JVM_TOOLCHAIN = 21
 
     /**
      * The NDK the native speech library pins (#92, ADR-0018 — the repo's first native code). The
