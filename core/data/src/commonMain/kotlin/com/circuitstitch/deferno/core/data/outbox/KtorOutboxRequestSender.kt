@@ -12,7 +12,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.appendPathSegments
 import io.ktor.http.content.TextContent
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -123,13 +124,22 @@ private fun OutboxRequest.displayPath(): String = "/" + path.joinToString("/")
 private suspend fun io.ktor.client.statement.HttpResponse.readBodyOrNull(): String? =
     runCatching { bodyAsText() }.getOrNull()
 
-/** Pulls the server-assigned id out of the create envelope (`{version, data:{id}}`); null if absent. */
-private fun String.parseCreatedId(): String? =
-    DefernoJson.decodeFromString<CreatedIdEnvelope>(this).data?.id
-
-@Serializable private data class CreatedIdEnvelope(val data: CreatedId? = null)
-
-@Serializable private data class CreatedId(val id: String? = null)
+/**
+ * Pulls the server-assigned id out of the create envelope (`{version, data:{id}}`); null if absent or
+ * unparseable.
+ *
+ * **Runtime-only, no compiler plugin (load-bearing).** `core:data` deliberately does not apply the
+ * kotlinx.serialization *compiler* plugin — it carries only the runtime (see this module's build file +
+ * [com.circuitstitch.deferno.core.data.account.AccountRosterCodec]). So an `@Serializable data class` here
+ * would compile but have **no generated serializer**, and `decodeFromString<T>()` would throw at runtime
+ * (`Serializer for class … is not found`) — silently swallowed to a blank id, which orphans every offline
+ * comment create (no re-key → duplicate row + a lost edit). We therefore navigate the [JsonElement] tree
+ * with the runtime API (the same approach the outbox uses to render bodies), which needs no plugin.
+ */
+private fun String.parseCreatedId(): String? {
+    val data = (DefernoJson.parseToJsonElement(this) as? JsonObject)?.get("data") as? JsonObject ?: return null
+    return (data["id"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+}
 
 /** Maps an HTTP status code to the queue's three-way outcome (see [SendOutcome]). */
 internal fun outcomeFor(status: Int): SendOutcome = when {
