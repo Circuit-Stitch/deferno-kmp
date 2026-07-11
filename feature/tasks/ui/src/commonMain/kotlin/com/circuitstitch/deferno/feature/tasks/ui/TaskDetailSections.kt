@@ -73,6 +73,7 @@ import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.format.currentToday
 import com.circuitstitch.deferno.core.designsystem.format.formatInstant
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.activity_field_deadline
@@ -667,9 +668,10 @@ private fun SourceCell(external: ExternalRef) {
 private fun DueCell(completeBy: Instant?, onSetDeadline: (LocalDate?) -> Unit) {
     var showPicker by remember { mutableStateOf(false) }
     // WHEN (ADR-0044): the absolute deadline day + a relative-day suffix ("· In 3 days" / "· Yesterday").
+    val today = currentToday
     val display = completeBy?.let { instant ->
         val date = instant.toDisplayDate()
-        "$date  ·  ${relativeDayText(relativeDay(instant))}"
+        "$date  ·  ${relativeDayText(relativeDay(instant, today = today))}"
     } ?: "—"
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1268,7 +1270,7 @@ internal fun TrailSection(
                 // Group by the device-local day (same zone the row time uses, so a row never lands under
                 // the wrong header at a day boundary); the header carries the date, each row just its time.
                 val timePattern = stringResource(Res.string.common_time_pattern)
-                val today = java.time.LocalDate.now().toString() // device-zone ISO, matches trailDay()
+                val today = currentToday.toString() // device-zone ISO, matches trailDay()
                 val todayLabel = stringResource(Res.string.tasks_detail_due_today).uppercase()
                 activity.groupBy { it.at.trailDay() }.forEach { (day, rows) ->
                     DottedLabelDivider(

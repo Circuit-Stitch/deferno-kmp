@@ -58,6 +58,14 @@ import kotlin.time.Instant
 
 private val FIXED_CREATED = Instant.parse("2026-06-01T09:00:00Z")
 
+/**
+ * The fixed "today" the screenshot harness pins via `CompositionLocalProvider(LocalToday provides …)`,
+ * so date-driven goldens (the Plan header day, the Task-detail WHEN row's "in N days") never drift with
+ * the wall clock. Anchored to the same day the Calendar fixture uses (`SampleCalendar.day`) so the whole
+ * screenshot suite reads one consistent "today" — five days before the sample deadline (2026-06-20).
+ */
+internal val SCREENSHOT_TODAY = LocalDate(2026, 6, 15)
+
 internal fun sampleTask(
     id: String,
     title: String = "Task $id",

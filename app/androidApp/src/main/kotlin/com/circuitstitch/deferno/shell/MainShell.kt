@@ -60,6 +60,7 @@ import com.circuitstitch.deferno.feature.calendar.ui.CalendarScreen
 import com.circuitstitch.deferno.feature.plan.ui.PlanScreen
 import com.circuitstitch.deferno.feature.profile.ui.ProfileScreen
 import com.circuitstitch.deferno.feature.settings.ui.SettingsScreen
+import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.feature.tasks.ui.SearchScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailOverflowMenu
@@ -99,6 +100,9 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
     // is byte-identical to the one TasksScreen's ListDetailPaneScaffold uses, so the bar and the panes agree.
     val tasksComponent = (active as? MainShellComponent.DestinationChild.Tasks)?.component
     val compactDetail = rememberTasksCompactDetail(active)
+    // ADR-0044: the foreground Plan-stack Task detail (if any) lifts its ⋮ overflow onto the shell bar so it
+    // stays reachable when the detail body scrolls (the Plan drill's chrome is `drilled` = ← + no trailing).
+    val planDetail = rememberPlanDetailComponent(active)
 
     Box(modifier.fillMaxSize()) {
         ShellChrome(
@@ -122,6 +126,14 @@ fun MainShell(component: MainShellComponent, modifier: Modifier = Modifier) {
                     { TasksSearchBar(onMenu = { drawerOpen = !drawerOpen }, onSearch = openSearch) }
                 }
                 else -> null
+            },
+            // The Plan-stack detail's ⋮ overflow rides the drilled bar's trailing edge (ADR-0044) so it stays
+            // reachable when the body scrolls; null for every other surface (the Tasks detail's topBarCenter
+            // bar carries its own overflow, and roots have none).
+            topBarTrailing = if (planDetail != null) {
+                { TaskDetailOverflowMenu(planDetail) }
+            } else {
+                null
             },
             // The drilled bar owns the ← + overflow, so suppress the bottom-centre capture FAB pair over the
             // read surface; every other surface keeps it (ADR-0044).
@@ -210,6 +222,19 @@ private fun rememberTasksCompactDetail(active: MainShellComponent.DestinationChi
 }
 
 /**
+ * The LIVE foreground Plan-stack Task detail (#51), or null when the Plan dashboard — or any other Destination
+ * — is foreground. The Plan drill's chrome is `drilled` (← + no title, ADR-0044), whose bar has no trailing
+ * slot, so the View lifts the detail's ⋮ overflow into [ShellChrome]'s trailing slot to keep it reachable once
+ * the body scrolls. Any non-Plan Destination short-circuits to null.
+ */
+@Composable
+private fun rememberPlanDetailComponent(active: MainShellComponent.DestinationChild): TaskDetailComponent? {
+    val plan = active as? MainShellComponent.DestinationChild.Plan ?: return null
+    val stack by plan.stack.subscribeAsState()
+    return (stack.active.instance as? MainShellComponent.PlanChild.Detail)?.component
+}
+
+/**
  * The **drilled Tasks-detail top bar** (ADR-0044): on a compact detail the shell bar carries a leading ← back
  * + a trailing contextual overflow, and NO title / search pill (the connected-parent node in the body is the
  * heading). Back reuses the same [MainShellComponent.onBack] the activity `BackHandler` and the drawer ← run
@@ -284,7 +309,9 @@ private fun PlanBody(plan: MainShellComponent.DestinationChild.Plan, modifier: M
             PlanScreen(child.component, modifier)
 
         is MainShellComponent.PlanChild.Detail ->
-            key(child.component) { TaskDetailScreen(child.component, modifier) }
+            // The ⋮ overflow now rides the shell's drilled bar (topBarTrailing) so it survives the body
+            // scrolling (ADR-0044) — drop the body's own header kebab here to avoid doubling it.
+            key(child.component) { TaskDetailScreen(child.component, modifier, showHeaderOverflow = false) }
     }
 }
 

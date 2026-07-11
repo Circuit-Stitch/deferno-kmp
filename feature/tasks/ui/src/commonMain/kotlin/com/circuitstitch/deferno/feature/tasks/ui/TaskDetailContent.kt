@@ -1,6 +1,6 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
-import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,7 +18,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -193,6 +194,7 @@ internal fun TaskDetailContent(
 /** The Task detail's two body tabs (ADR-0046): Info (default) · Trail (the merged comments + history feed). */
 private enum class DetailTab { Info, Trail }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TaskBody(
     task: Task,
@@ -223,7 +225,7 @@ private fun TaskBody(
     // Reset the scroll to the top when drilling into a different task (key by id) — the detail composable
     // is reused across the parent→subtask navigation, so an unkeyed scroll state would carry the parent's
     // scroll position into the child and open it past its title (#231).
-    val scrollState = remember(task.id) { ScrollState(0) }
+    val listState = remember(task.id) { LazyListState() }
     // The add-subtask field lives far down in the Info tab; the kebab's "Add subtask" (and the drilled
     // overflow's reveal token) request focus on it, which auto-scrolls it into view and pops the keyboard.
     val addSubtaskFocus = remember(task.id) { FocusRequester() }
@@ -254,144 +256,154 @@ private fun TaskBody(
         if (state.revealStatusPicker > 0) showStatusPicker = true
     }
 
-    Column(Modifier.fillMaxSize()) {
+    val tabs = listOf(
+        DetailTab.Info to stringResource(Res.string.tasks_detail_tab_info),
+        DetailTab.Trail to stringResource(Res.string.tasks_detail_tab_trail),
+    )
+    // #231/ADR-0044: the breadcrumb + big title + progress now SCROLL AWAY with the body — an unbounded
+    // GitHub-PRD title used to pin ~half the screen. Only the Info/Trail tab row PINS (stickyHeader), so
+    // switching tabs stays reachable once you're deep in the content.
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         // The single heading (ADR-0044): the immediate parent node (when any) drawn thread-connected above
         // the current item's title block, with the ⋮ overflow riding top-right.
-        ConnectedParentHeader(
-            parent = state.parent,
-            task = task,
-            subtaskDone = state.subtaskDone,
-            subtaskTotal = state.subtaskTotal,
-            onOpenParent = onOpenParent,
-            overflow = if (showHeaderOverflow) {
-                {
-                    TaskOverflowMenu(
-                        // When the FAB owns the "add" actions (Android), the kebab drops its "Add subtask"
-                        // item — a null lambda hides it; else it reveals the inline add-subtask field.
-                        onAddSubtask = if (externalAddActions) {
-                            null
-                        } else {
-                            { tab = DetailTab.Info; localAddSubtaskReveal++ }
-                        },
-                        onDelete = { confirmDelete = true },
-                        onBreakdown = onBreakdown,
-                    )
+        item(key = "header") {
+            ConnectedParentHeader(
+                parent = state.parent,
+                task = task,
+                subtaskDone = state.subtaskDone,
+                subtaskTotal = state.subtaskTotal,
+                onOpenParent = onOpenParent,
+                overflow = if (showHeaderOverflow) {
+                    {
+                        TaskOverflowMenu(
+                            // When the FAB owns the "add" actions (Android), the kebab drops its "Add subtask"
+                            // item — a null lambda hides it; else it reveals the inline add-subtask field.
+                            onAddSubtask = if (externalAddActions) {
+                                null
+                            } else {
+                                { tab = DetailTab.Info; localAddSubtaskReveal++ }
+                            },
+                            onDelete = { confirmDelete = true },
+                            onBreakdown = onBreakdown,
+                        )
+                    }
+                } else {
+                    null
+                },
+            )
+        }
+        // The tab row PINS to the top once the header above scrolls off; its surface container fully hides
+        // the body scrolling beneath it.
+        stickyHeader(key = "tabs") {
+            TabRow(selectedTabIndex = tab.ordinal, containerColor = MaterialTheme.colorScheme.surface) {
+                tabs.forEach { (t, label) ->
+                    Tab(selected = tab == t, onClick = { tab = t }, text = { Text(label) })
                 }
-            } else {
-                null
-            },
-        )
-        val tabs = listOf(
-            DetailTab.Info to stringResource(Res.string.tasks_detail_tab_info),
-            DetailTab.Trail to stringResource(Res.string.tasks_detail_tab_trail),
-        )
-        TabRow(selectedTabIndex = tab.ordinal) {
-            tabs.forEach { (t, label) ->
-                Tab(selected = tab == t, onClick = { tab = t }, text = { Text(label) })
             }
         }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            when (tab) {
-                DetailTab.Info -> {
-                    // Reveal the inline add-subtask field on request (kebab / drilled overflow). This effect
-                    // lives inside the Info branch so the field is composed when the focus is requested; the
-                    // both-zero initial state is skipped so opening the tab never pops the keyboard.
-                    LaunchedEffect(state.revealAddSubtaskComposer, localAddSubtaskReveal) {
-                        if (state.revealAddSubtaskComposer > 0 || localAddSubtaskReveal > 0) {
-                            addSubtaskFocus.requestFocus()
+        item(key = "body") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                when (tab) {
+                    DetailTab.Info -> {
+                        // Reveal the inline add-subtask field on request (kebab / drilled overflow). This effect
+                        // lives inside the Info branch so the field is composed when the focus is requested; the
+                        // both-zero initial state is skipped so opening the tab never pops the keyboard.
+                        LaunchedEffect(state.revealAddSubtaskComposer, localAddSubtaskReveal) {
+                            if (state.revealAddSubtaskComposer > 0 || localAddSubtaskReveal > 0) {
+                                addSubtaskFocus.requestFocus()
+                            }
                         }
-                    }
-                    // NOTES: a caps section header over the description, or a muted "no description" once
-                    // hydration settles. The header hides only during the brief pre-hydration gap.
-                    val description = task.description
-                    if (!description.isNullOrBlank() || !state.isHydrating) {
-                        SectionHeader(stringResource(Res.string.new_notes_label))
-                    }
-                    when {
-                        // A GitHub-imported PRD/issue body is GitHub-Flavored Markdown — render it (not the raw
-                        // `**`/`>`/backtick source), clamped to the first lines with the rest one tap away in a
-                        // bottom sheet, selectable + copyable, links live (#). Shared atom in core:designsystem.
-                        !description.isNullOrBlank() -> MarkdownDescription(
-                            markdown = description,
-                            modifier = Modifier.fillMaxWidth(),
-                            sheetTitle = stringResource(Res.string.new_notes_label),
+                        // NOTES: a caps section header over the description, or a muted "no description" once
+                        // hydration settles. The header hides only during the brief pre-hydration gap.
+                        val description = task.description
+                        if (!description.isNullOrBlank() || !state.isHydrating) {
+                            SectionHeader(stringResource(Res.string.new_notes_label))
+                        }
+                        when {
+                            // A GitHub-imported PRD/issue body is GitHub-Flavored Markdown — render it (not the raw
+                            // `**`/`>`/backtick source), clamped to the first lines with the rest one tap away in a
+                            // bottom sheet, selectable + copyable, links live (#). Shared atom in core:designsystem.
+                            !description.isNullOrBlank() -> MarkdownDescription(
+                                markdown = description,
+                                modifier = Modifier.fillMaxWidth(),
+                                sheetTitle = stringResource(Res.string.new_notes_label),
+                            )
+                            !state.isHydrating -> Text(
+                                text = stringResource(Res.string.tasks_detail_no_description),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.defernoColors.inkMuted,
+                            )
+                        }
+
+                        // The inline "Add to today's plan" Button — hidden when the Android FAB owns it
+                        // ([externalAddActions]); on desktop it stays here.
+                        if (!externalAddActions) {
+                            Button(
+                                onClick = onAddToPlan,
+                                modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
+                            ) { Text(stringResource(Res.string.tasks_menu_add_to_plan)) }
+                        }
+
+                        PropertiesSection(
+                            task = task,
+                            onSetDeadline = onSetDeadline,
+                            onSetLabels = onSetLabels,
+                            onStatusRowClick = { showStatusPicker = true },
+                            ownerGroupCount = state.ownerGroupCount,
+                            attachments = state.attachments,
+                            isUploadingAttachment = state.isUploadingAttachment,
+                            onAddAttachment = onAddAttachment,
+                            onDeleteAttachment = onDeleteAttachment,
+                            onSetAttachmentCaption = onSetAttachmentCaption,
+                            onDeviceAttachments = state.onDeviceAttachments,
+                            onDeleteOnDeviceAttachment = onDeleteOnDeviceAttachment,
+                            onPlayOnDeviceAttachment = onPlayOnDeviceAttachment,
                         )
-                        !state.isHydrating -> Text(
-                            text = stringResource(Res.string.tasks_detail_no_description),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.defernoColors.inkMuted,
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        SubtasksSection(
+                            rows = state.subtaskRows,
+                            done = state.subtaskDone,
+                            total = state.subtaskTotal,
+                            onToggleDone = onToggleSubtask,
+                            onToggleExpand = onToggleSubtaskExpand,
+                            onOpen = onOpenSubtask,
+                            onAddSubtask = onAddSubtask,
+                            hideDone = state.hideDoneSubtasks,
+                            onSetHideDone = onSetHideDoneSubtasks,
+                            addSubtaskFocus = addSubtaskFocus,
                         )
                     }
-
-                    // The inline "Add to today's plan" Button — hidden when the Android FAB owns it
-                    // ([externalAddActions]); on desktop it stays here.
-                    if (!externalAddActions) {
-                        Button(
-                            onClick = onAddToPlan,
-                            modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
-                        ) { Text(stringResource(Res.string.tasks_menu_add_to_plan)) }
+                    DetailTab.Trail -> {
+                        // Reveal the composer on request (the FAB's "Add comment"): focus it once the Trail tab is
+                        // composed. This effect lives in the branch so the inline composer (first slot) is present
+                        // for the focus request; the initial 0 is skipped so opening the tab never pops the keyboard.
+                        LaunchedEffect(state.revealCommentComposer) {
+                            if (state.revealCommentComposer > 0) commentFocus.requestFocus()
+                        }
+                        // The full merged, reverse-chronological feed (ADR-0046): comments + enriched history, one
+                        // interleaved list, no filterIsInstance split — the component already sorted it newest-first.
+                        TrailSection(
+                            activity = state.activity,
+                            currentUserId = state.currentUserId,
+                            loading = state.commentsLoading,
+                            isPosting = state.isPostingComment,
+                            onPost = onPostComment,
+                            onEdit = onEditComment,
+                            onDelete = onDeleteComment,
+                            commentFocus = commentFocus,
+                        )
                     }
-
-                    PropertiesSection(
-                        task = task,
-                        onSetDeadline = onSetDeadline,
-                        onSetLabels = onSetLabels,
-                        onStatusRowClick = { showStatusPicker = true },
-                        ownerGroupCount = state.ownerGroupCount,
-                        attachments = state.attachments,
-                        isUploadingAttachment = state.isUploadingAttachment,
-                        onAddAttachment = onAddAttachment,
-                        onDeleteAttachment = onDeleteAttachment,
-                        onSetAttachmentCaption = onSetAttachmentCaption,
-                        onDeviceAttachments = state.onDeviceAttachments,
-                        onDeleteOnDeviceAttachment = onDeleteOnDeviceAttachment,
-                        onPlayOnDeviceAttachment = onPlayOnDeviceAttachment,
-                    )
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SubtasksSection(
-                        rows = state.subtaskRows,
-                        done = state.subtaskDone,
-                        total = state.subtaskTotal,
-                        onToggleDone = onToggleSubtask,
-                        onToggleExpand = onToggleSubtaskExpand,
-                        onOpen = onOpenSubtask,
-                        onAddSubtask = onAddSubtask,
-                        hideDone = state.hideDoneSubtasks,
-                        onSetHideDone = onSetHideDoneSubtasks,
-                        addSubtaskFocus = addSubtaskFocus,
-                    )
                 }
-                DetailTab.Trail -> {
-                    // Reveal the composer on request (the FAB's "Add comment"): focus it once the Trail tab is
-                    // composed. This effect lives in the branch so the inline composer (first slot) is present
-                    // for the focus request; the initial 0 is skipped so opening the tab never pops the keyboard.
-                    LaunchedEffect(state.revealCommentComposer) {
-                        if (state.revealCommentComposer > 0) commentFocus.requestFocus()
-                    }
-                    // The full merged, reverse-chronological feed (ADR-0046): comments + enriched history, one
-                    // interleaved list, no filterIsInstance split — the component already sorted it newest-first.
-                    TrailSection(
-                        activity = state.activity,
-                        currentUserId = state.currentUserId,
-                        loading = state.commentsLoading,
-                        isPosting = state.isPostingComment,
-                        onPost = onPostComment,
-                        onEdit = onEditComment,
-                        onDelete = onDeleteComment,
-                        commentFocus = commentFocus,
-                    )
+                // When the Android FAB overlays the content, pad the tail so it never covers the last row.
+                if (externalAddActions) {
+                    Spacer(Modifier.height(80.dp))
                 }
-            }
-            // When the Android FAB overlays the content, pad the tail so it never covers the last row.
-            if (externalAddActions) {
-                Spacer(Modifier.height(80.dp))
             }
         }
     }

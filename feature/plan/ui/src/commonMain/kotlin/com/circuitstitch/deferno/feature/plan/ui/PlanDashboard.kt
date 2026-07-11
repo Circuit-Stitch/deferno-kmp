@@ -64,6 +64,7 @@ import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.component.StartPill
 import com.circuitstitch.deferno.core.designsystem.component.TextLink
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
+import com.circuitstitch.deferno.core.designsystem.format.currentToday
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.common_due
 import com.circuitstitch.deferno.core.designsystem.resources.common_mark_done_cd
@@ -119,7 +120,9 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun PlanScreen(component: PlanComponent, modifier: Modifier = Modifier) {
     val state by component.state.collectAsState()
-    val today = remember { systemToday() }
+    // "Today" for the header/greeting — read through the shared seam so screenshot tests can pin a
+    // fixed date (production falls back to the live system clock). See [currentToday].
+    val today = currentToday
 
     var mode by remember { mutableStateOf<PlanMode>(PlanMode.Today) }
 
