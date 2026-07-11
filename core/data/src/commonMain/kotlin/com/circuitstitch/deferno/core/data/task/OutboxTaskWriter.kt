@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.data.outbox.ClearDeadline
 import com.circuitstitch.deferno.core.data.outbox.ClearDescription
 import com.circuitstitch.deferno.core.data.outbox.DeleteTask
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
+import com.circuitstitch.deferno.core.data.outbox.beforeValues
 import com.circuitstitch.deferno.core.data.outbox.Rename
 import com.circuitstitch.deferno.core.data.outbox.SetDeadline
 import com.circuitstitch.deferno.core.data.outbox.SetDescription
@@ -59,9 +60,16 @@ class OutboxTaskWriter(
     override suspend fun delete(id: TaskId) = submit(DeleteTask(id, now()))
 
     private suspend fun submit(mutation: TaskMutation) {
+        // Snapshot the pre-apply old values INSIDE the transaction (the same read-modify-write the reconcile
+        // uses), right before applyTo overwrites them, so the ledger can show a true old->new diff (#260).
+        // Null when the target row isn't cached (nothing to diff) or the intent has no field diff (delete).
+        var before: String? = null
         localStore.transaction { store ->
-            store.get(mutation.taskId)?.let { current -> store.upsert(mutation.applyTo(current)) }
+            store.get(mutation.taskId)?.let { current ->
+                before = mutation.beforeValues(current)?.toString()
+                store.upsert(mutation.applyTo(current))
+            }
         }
-        outbox.enqueue(mutation.target, mutation.toRequest(), now())
+        outbox.enqueue(mutation.target, mutation.toRequest(), now(), before)
     }
 }

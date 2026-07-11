@@ -15,6 +15,7 @@ import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
+import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.comment.CommentRepository
 import com.circuitstitch.deferno.core.data.comment.CommentWriter
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
@@ -93,6 +94,9 @@ class DefaultTasksComponent(
     // + the device-local user id, threaded down into the detail slot. Empty/no-op defaults.
     private val commentRepository: CommentRepository = CommentRepository.NONE,
     private val itemHistoryRepository: ItemHistoryRepository = ItemHistoryRepository.NONE,
+    // This item's local activity-ledger slice (#260), threaded into the detail so the Trail can graft the
+    // captured old->new values onto server `Updated` rows. Empty default for tests/callers without it.
+    private val observeItemLedger: (String) -> Flow<List<ActivityEntry>> = { flowOf(emptyList()) },
     private val commentWriter: CommentWriter = CommentWriter.NONE,
     private val currentUserId: UserId? = null,
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
@@ -168,6 +172,7 @@ class DefaultTasksComponent(
                 detailRepository = taskDetailRepository,
                 commentRepository = commentRepository,
                 historyRepository = itemHistoryRepository,
+                observeItemLedger = observeItemLedger,
                 itemRepository = itemRepository,
                 commentWriter = commentWriter,
                 currentUserId = currentUserId,

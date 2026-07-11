@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import com.circuitstitch.deferno.core.data.outbox.SqlDelightOutboxStore
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
+import com.circuitstitch.deferno.core.model.ActivityFieldValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -60,10 +61,33 @@ class ActivityLedgerTest {
     }
 
     @Test
+    fun recordsAndReadsBackTheOldNewDiffPayload() = runTest {
+        val db = newDb()
+        val ledger = SqlDelightActivityLedgerStore(db, Dispatchers.Unconfined)
+        val outbox = LedgerRecordingOutboxStore(SqlDelightOutboxStore(db), ledger)
+
+        outbox.enqueue(
+            "task:a",
+            OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"new"}"""),
+            t0,
+            before = """{"title":"old"}""",
+        )
+
+        // The new value rides the request body; the old value is the ledger's captured before-image.
+        val entry = ledger.recent().first().single()
+        assertEquals("""{"title":"new"}""", entry.body)
+        assertEquals("""{"title":"old"}""", entry.before)
+        // …and they zip into a typed old->new field diff.
+        val change = entry.changes().single()
+        assertEquals(ActivityFieldValue.Present("old"), change.before)
+        assertEquals(ActivityFieldValue.Present("new"), change.after)
+    }
+
+    @Test
     fun clearEmptiesLedger() = runTest {
         val db = newDb()
         val ledger = SqlDelightActivityLedgerStore(db, Dispatchers.Unconfined)
-        ledger.record(ActivitySource.Mobile, "task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), "{}"), t0)
+        ledger.record(ActivitySource.Mobile, "task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), "{}"), before = null, now = t0)
         assertEquals(1, ledger.recent().first().size)
         ledger.clear()
         assertTrue(ledger.recent().first().isEmpty())

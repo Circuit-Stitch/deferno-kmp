@@ -2,6 +2,8 @@ package com.circuitstitch.deferno.feature.tasks
 
 import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.common.componentScope
+import com.circuitstitch.deferno.core.data.activity.ActivityEntry
+import com.circuitstitch.deferno.core.data.activity.changes
 import com.circuitstitch.deferno.core.data.comment.CommentRepository
 import com.circuitstitch.deferno.core.data.comment.CommentWriter
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
@@ -20,10 +22,12 @@ import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -308,6 +312,11 @@ class DefaultTaskDetailComponent(
     // Flow and folded into the ACTIVITY feed at merge time; render never fetches. Null (the default) leaves
     // every peer unresolved — the View then shows "another item" — so tests/offline callers build without it.
     private val itemRepository: ItemRepository? = null,
+    // The local activity-ledger feed for THIS item (#260 follow-up): the durable journal of edits this
+    // device made, observed so the Trail can graft real old->new values onto the server's field-name-only
+    // `Updated` rows (see [mergeActivity]). Returns the ledger entries whose target is this item; the
+    // component parses each into a [LedgerEdit]. Default empty so tests/other callers build without it.
+    private val observeItemLedger: (String) -> Flow<List<ActivityEntry>> = { flowOf(emptyList()) },
     // The offline-first comment write seam (ADR-0043): optimistic apply to the cache + outbox enqueue.
     private val commentWriter: CommentWriter = CommentWriter.NONE,
     // The device-local signed-in user id (the Active Account's user id) — gates own-comment edit/delete
@@ -376,7 +385,7 @@ class DefaultTaskDetailComponent(
                 subtaskTotal = descendants.size,
                 // Resolve each history peer id to a title off the cached item forest (ADR-0046) — no fetch;
                 // an unresolved/aged-out peer stays null and the View shows "another item".
-                activity = mergeActivity(ex.comments, ex.history) { peerId ->
+                activity = mergeActivity(ex.comments, ex.history, ex.localEdits) { peerId ->
                     ex.items.firstOrNull { it.id == peerId }?.title
                 },
                 commentsLoading = ex.commentsLoading,
@@ -431,6 +440,16 @@ class DefaultTaskDetailComponent(
     private fun observeActivity() {
         scope.launch { commentRepository.observe(taskId).collect { comments -> extras.update { it.copy(comments = comments) } } }
         scope.launch { historyRepository.observe(taskId.value).collect { history -> extras.update { it.copy(history = history) } } }
+        // This item's local ledger edits → typed old->new diffs the combine grafts onto server `Updated`
+        // rows (#260). Entries with no captured diff (before/body absent) are dropped; render never fetches.
+        scope.launch {
+            observeItemLedger(taskId.value).collect { entries ->
+                val edits = entries.mapNotNull { entry ->
+                    entry.changes().takeIf { it.isNotEmpty() }?.let { LedgerEdit(entry.recordedAt, it) }
+                }
+                extras.update { it.copy(localEdits = edits) }
+            }
+        }
         // The cross-kind item cache the Trail resolves history peer titles from (ADR-0046) — folded into
         // [extras] like comments/history so the combine re-resolves peers as the forest changes. Never fetches.
         itemRepository?.let { repo -> scope.launch { repo.observeItems().collect { items -> extras.update { it.copy(items = items) } } } }
@@ -593,6 +612,9 @@ class DefaultTaskDetailComponent(
         // The cached comment thread + item history (ADR-0043), merged into [activity] by the combine.
         val comments: List<Comment> = emptyList(),
         val history: List<ItemHistoryEvent> = emptyList(),
+        // This device's captured old->new edits for the item (#260), grafted onto the server `Updated`
+        // rows by the combine so the Trail shows real values, not just field names.
+        val localEdits: List<LedgerEdit> = emptyList(),
         // The cross-kind item cache (ADR-0046) the combine resolves history peer titles against.
         val items: List<Item> = emptyList(),
         val commentsLoading: Boolean = false,

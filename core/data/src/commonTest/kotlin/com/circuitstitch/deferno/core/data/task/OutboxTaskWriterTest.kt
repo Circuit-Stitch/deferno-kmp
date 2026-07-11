@@ -81,6 +81,52 @@ class OutboxTaskWriterTest {
     }
 
     @Test
+    fun capturesTheOldValuesAsTheLedgerBeforeImage() = runTest {
+        val local = FakeTaskLocalStore(mapOf(TaskId("a") to task("a", WorkingState.InProgress)))
+        val outbox = FakeOutboxStore()
+
+        writer(local, outbox).setWorkingState(TaskId("a"), WorkingState.Done)
+
+        // The request body carries the NEW value (for replay); the ledger before-image carries the OLD one.
+        assertEquals("""{"status":"done"}""", outbox.all.single().request.body)
+        assertEquals("""{"status":"in-progress"}""", outbox.enqueuedBefore.single())
+    }
+
+    @Test
+    fun anUnhydratedDescriptionEditOmitsTheOldBodyRatherThanFakingEmpty() = runTest {
+        // Summary hydration: the cached description is null even if the server holds text, so the old body
+        // is unknown — the before-image omits the key (rendered "previously unavailable"), not a false empty.
+        val local = FakeTaskLocalStore(mapOf(TaskId("a") to task("a")))
+        val outbox = FakeOutboxStore()
+
+        writer(local, outbox).setDescription(TaskId("a"), "new body")
+
+        assertEquals("""{"description":"new body"}""", outbox.all.single().request.body)
+        assertEquals("{}", outbox.enqueuedBefore.single())
+    }
+
+    @Test
+    fun aHydratedDescriptionEditCapturesTheOldBody() = runTest {
+        val full = task("a").copy(hydration = HydrationState.Full, description = "old body")
+        val local = FakeTaskLocalStore(mapOf(TaskId("a") to full))
+        val outbox = FakeOutboxStore()
+
+        writer(local, outbox).setDescription(TaskId("a"), "new body")
+
+        assertEquals("""{"description":"old body"}""", outbox.enqueuedBefore.single())
+    }
+
+    @Test
+    fun aWriteToAnAbsentRowCapturesNoBeforeImage() = runTest {
+        val local = FakeTaskLocalStore() // empty
+        val outbox = FakeOutboxStore()
+
+        writer(local, outbox).rename(TaskId("ghost"), "renamed")
+
+        assertEquals(null, outbox.enqueuedBefore.single()) // nothing cached → nothing to diff
+    }
+
+    @Test
     fun theOptimisticApplyReEmitsThroughTheObservedList() = runTest {
         val local = FakeTaskLocalStore(mapOf(TaskId("a") to task("a", WorkingState.Open)))
         val outbox = FakeOutboxStore()

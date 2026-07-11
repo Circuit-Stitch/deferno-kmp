@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.shell.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,22 +21,36 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivitySummary
 import com.circuitstitch.deferno.core.data.activity.ActivityVerb
+import com.circuitstitch.deferno.core.designsystem.component.ChangeDiffSheet
+import com.circuitstitch.deferno.core.designsystem.component.DayGroupHeader
+import com.circuitstitch.deferno.core.designsystem.component.DiffRow
+import com.circuitstitch.deferno.core.designsystem.component.DiffValue
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
+import com.circuitstitch.deferno.core.designsystem.format.activityStatusLabel
 import com.circuitstitch.deferno.core.designsystem.format.formatInstant
+import com.circuitstitch.deferno.core.designsystem.format.localDayIso
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.activity_change_count
 import com.circuitstitch.deferno.core.designsystem.resources.activity_empty_body
 import com.circuitstitch.deferno.core.designsystem.resources.activity_empty_title
+import com.circuitstitch.deferno.core.designsystem.resources.activity_field_deadline
+import com.circuitstitch.deferno.core.designsystem.resources.activity_field_pinned
+import com.circuitstitch.deferno.core.designsystem.resources.activity_field_status
+import com.circuitstitch.deferno.core.designsystem.resources.activity_field_title
 import com.circuitstitch.deferno.core.designsystem.resources.activity_source_mcp
 import com.circuitstitch.deferno.core.designsystem.resources.activity_source_mobile
 import com.circuitstitch.deferno.core.designsystem.resources.activity_source_unknown
@@ -58,18 +73,27 @@ import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_up
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_occurrence_habit
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_plan
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_task
+import com.circuitstitch.deferno.core.designsystem.resources.activity_value_pinned
+import com.circuitstitch.deferno.core.designsystem.resources.activity_value_unpinned
 import com.circuitstitch.deferno.core.designsystem.resources.activity_when_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.common_labels
+import com.circuitstitch.deferno.core.designsystem.resources.new_notes_label
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import com.circuitstitch.deferno.core.model.ActivityField
+import com.circuitstitch.deferno.core.model.ActivityFieldChange
+import com.circuitstitch.deferno.core.model.ActivityFieldValue
 import com.circuitstitch.deferno.shell.ActivityComponent
 import com.circuitstitch.deferno.shell.ActivityFeedRow
+import kotlin.time.Instant
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The **Activity** Destination View (#260): a calm, reverse-chronological feed of every change the app
- * has recorded in the offline-first ledger. A thin render of [ActivityComponent.state] — each row shows
- * what changed, who made it (a source chip), and when. Server-sourced ("via Website" / "via MCP") rows
- * land here too once the reconcile seam tags them, with no View change.
+ * The **Activity** Destination View (#260): a calm, reverse-chronological feed of every change the app has
+ * recorded in the offline-first ledger, bucketed under [DayGroupHeader] day dividers (the Trail's grouping,
+ * shared). Each row shows what changed, who made it (a source chip), the fields it touched, and when;
+ * tapping it opens a [ChangeDiffSheet] with the full old->new diff and an "Open item" action. Server-sourced
+ * ("via Website" / "via MCP") rows land here too once the reconcile seam tags them, with no View change.
  *
  * Shared between the Android shell and the desktop shell (ADR-0004 #27): the component is Compose-free in
  * `:app:shell`, the atoms are cross-platform, so one View serves both platforms (no per-platform drift).
@@ -77,6 +101,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) {
     val state by component.state.collectAsState()
+    var selected by remember { mutableStateOf<ActivityFeedRow?>(null) }
     Column(modifier.fillMaxSize()) {
         Surface(color = MaterialTheme.colorScheme.surface) {
             Column(
@@ -96,30 +121,107 @@ fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) 
                 // Empty inset on desktop; clears the nav bar on Android.
                 contentPadding = WindowInsets.systemBars.only(WindowInsetsSides.Bottom).asPaddingValues(),
             ) {
-                items(state.rows, key = { it.seq }) { row ->
-                    ActivityRowView(row)
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                // Bucket by the device-local day (rows are already newest-first, so groupBy keeps that order),
+                // and head each group with the shared TODAY-aware divider — the Trail's grouping, reused.
+                state.rows.groupBy { it.recordedAt.localDayIso() }.forEach { (day, rows) ->
+                    item(key = "day-$day") { DayGroupHeader(day) }
+                    items(rows, key = { it.seq }) { row ->
+                        ActivityRowView(row, onClick = { selected = row })
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
                 }
             }
         }
     }
+
+    selected?.let { row ->
+        ChangeDiffSheet(
+            title = row.summaryInfo.text,
+            subtitle = "${row.source.label} · ${formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern))}",
+            rows = row.changes.toDiffRows(),
+            onOpenItem = row.itemId?.let { id -> { component.openItem(id); selected = null } },
+            onDismiss = { selected = null },
+        )
+    }
 }
 
-/** One feed row: the change, a source chip, and the time it was applied. */
+/** One feed row: the change, a source chip, the fields it touched, and the time it was applied. Tap for detail. */
 @Composable
-private fun ActivityRowView(row: ActivityFeedRow) {
+private fun ActivityRowView(row: ActivityFeedRow, onClick: () -> Unit) {
+    val fieldHint = row.changes.changedFieldHint()
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(text = row.summaryInfo.text, style = MaterialTheme.typography.titleMedium)
-            TreeChip(text = row.source.label, filled = false)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TreeChip(text = row.source.label, filled = false)
+                if (fieldHint != null) {
+                    Text(
+                        text = fieldHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.defernoColors.inkMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
         // A calm absolute timestamp — "Jun 21 · 09:45" in the device's time zone and language.
         MonoMeta(text = formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern)))
     }
+}
+
+/** The recognized changed-field names joined for the row's inline hint ("Title, Description"), or null. */
+@Composable
+private fun List<ActivityFieldChange>.changedFieldHint(): String? {
+    val names = filter { it.field != ActivityField.Unknown }.map { activityFieldLabel(it.field, it.rawKey) }
+    return if (names.isEmpty()) null else names.joinToString(", ")
+}
+
+/** The captured field diff → sheet rows: recognized fields only, each label + formatted old/new value. */
+@Composable
+private fun List<ActivityFieldChange>.toDiffRows(): List<DiffRow> =
+    filter { it.field != ActivityField.Unknown }.map { change ->
+        DiffRow(
+            label = activityFieldLabel(change.field, change.rawKey),
+            before = change.before.toDiffValue(change.field),
+            after = change.after.toDiffValue(change.field),
+        )
+    }
+
+/** The localized label for a changed field — reuses the property vocabulary; [Unknown] shows its raw key. */
+@Composable
+private fun activityFieldLabel(field: ActivityField, rawKey: String): String = when (field) {
+    ActivityField.Title -> stringResource(Res.string.activity_field_title)
+    ActivityField.Description -> stringResource(Res.string.new_notes_label)
+    ActivityField.Deadline -> stringResource(Res.string.activity_field_deadline)
+    ActivityField.Labels -> stringResource(Res.string.common_labels)
+    ActivityField.Status -> stringResource(Res.string.activity_field_status)
+    ActivityField.Pinned -> stringResource(Res.string.activity_field_pinned)
+    ActivityField.Unknown -> rawKey
+}
+
+/** One captured value → its display form, formatted per field (a deadline date, a status label, pinned yes/no). */
+@Composable
+private fun ActivityFieldValue.toDiffValue(field: ActivityField): DiffValue = when (this) {
+    ActivityFieldValue.Cleared -> DiffValue.Cleared
+    ActivityFieldValue.Unavailable -> DiffValue.Unavailable
+    is ActivityFieldValue.Present -> DiffValue.Text(formatFieldValue(field, raw))
+}
+
+@Composable
+private fun formatFieldValue(field: ActivityField, raw: String): String = when (field) {
+    ActivityField.Deadline -> {
+        val pattern = stringResource(Res.string.activity_when_pattern)
+        runCatching { formatInstant(Instant.parse(raw), pattern) }.getOrDefault(raw)
+    }
+    ActivityField.Status -> activityStatusLabel(raw)
+    ActivityField.Pinned ->
+        stringResource(if (raw == "true") Res.string.activity_value_pinned else Res.string.activity_value_unpinned)
+    else -> raw
 }
 
 /** The localized one-liner for a typed [ActivitySummary] — per-kind keys keep article/gender right. */

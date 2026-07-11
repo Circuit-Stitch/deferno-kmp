@@ -944,5 +944,13 @@ Agradeço.</string>
     <string name="activity_history_updated_fields">Editou: %1$s</string>
     <string name="activity_field_title">Título</string>
     <string name="activity_field_deadline">Prazo</string>
+    <string name="activity_field_pinned">Fixado</string>
+    <string name="activity_field_status">Estado</string>
+    <string name="activity_diff_empty">Nenhuma alteração de campo registrada.</string>
+    <string name="activity_diff_open_item">Abrir item</string>
+    <string name="activity_diff_value_cleared">Nenhum</string>
+    <string name="activity_diff_value_unavailable">Não registrado</string>
+    <string name="activity_value_pinned">Fixado</string>
+    <string name="activity_value_unpinned">Não fixado</string>
     <string name="tasks_detail_trail_empty">Nenhuma atividade ainda</string>
 </resources>

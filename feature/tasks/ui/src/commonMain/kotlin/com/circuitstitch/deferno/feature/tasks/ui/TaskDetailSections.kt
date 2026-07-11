@@ -67,17 +67,28 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.designsystem.component.BlockedChip
 import com.circuitstitch.deferno.core.designsystem.component.CheckDot
+import com.circuitstitch.deferno.core.designsystem.component.ChangeDiffSheet
+import com.circuitstitch.deferno.core.designsystem.component.DayGroupHeader
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
-import com.circuitstitch.deferno.core.designsystem.component.DottedLabelDivider
+import com.circuitstitch.deferno.core.designsystem.component.DiffRow
+import com.circuitstitch.deferno.core.designsystem.component.DiffValue
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.format.activityStatusLabel
 import com.circuitstitch.deferno.core.designsystem.format.currentToday
 import com.circuitstitch.deferno.core.designsystem.format.formatInstant
+import com.circuitstitch.deferno.core.designsystem.format.localDayIso
+import com.circuitstitch.deferno.core.designsystem.format.localTime
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.activity_field_deadline
+import com.circuitstitch.deferno.core.designsystem.resources.activity_field_pinned
+import com.circuitstitch.deferno.core.designsystem.resources.activity_field_status
 import com.circuitstitch.deferno.core.designsystem.resources.activity_field_title
+import com.circuitstitch.deferno.core.designsystem.resources.activity_value_pinned
+import com.circuitstitch.deferno.core.designsystem.resources.activity_value_unpinned
+import com.circuitstitch.deferno.core.designsystem.resources.activity_when_pattern
 import com.circuitstitch.deferno.core.designsystem.resources.activity_history_created
 import com.circuitstitch.deferno.core.designsystem.resources.activity_history_folded_peer
 import com.circuitstitch.deferno.core.designsystem.resources.activity_history_merged_into_parent
@@ -168,6 +179,9 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_subtas
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_uploading
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_progress_fraction
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import com.circuitstitch.deferno.core.model.ActivityField
+import com.circuitstitch.deferno.core.model.ActivityFieldChange
+import com.circuitstitch.deferno.core.model.ActivityFieldValue
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
@@ -1267,30 +1281,39 @@ internal fun TrailSection(
             loading && activity.isEmpty() -> MutedLine(stringResource(Res.string.common_loading))
             activity.isEmpty() -> MutedLine(stringResource(Res.string.tasks_detail_trail_empty))
             else -> {
-                // Group by the device-local day (same zone the row time uses, so a row never lands under
-                // the wrong header at a day boundary); the header carries the date, each row just its time.
+                // Group by the device-local day under the shared TODAY-aware header (the Activity destination
+                // reuses the same DayGroupHeader). The header carries the date, each row just its time.
                 val timePattern = stringResource(Res.string.common_time_pattern)
-                val today = currentToday.toString() // device-zone ISO, matches trailDay()
-                val todayLabel = stringResource(Res.string.tasks_detail_due_today).uppercase()
-                activity.groupBy { it.at.trailDay() }.forEach { (day, rows) ->
-                    DottedLabelDivider(
-                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 2.dp),
-                        startLabel = day,
-                        centerLabel = if (day == today) todayLabel else null,
-                    )
+                // The Updated row whose old->new diff sheet is open (#260) — a captured local edit grafted its
+                // values on, making the row tappable. Null = no sheet.
+                var openDiff by remember { mutableStateOf<ActivityItem.HistoryEvent?>(null) }
+                activity.groupBy { it.at.localDayIso() }.forEach { (day, rows) ->
+                    DayGroupHeader(day)
                     rows.forEach { item ->
                         key(item.id) {
                             when (item) {
                                 is ActivityItem.Comment -> CommentRow(
                                     item.comment,
                                     isMine = currentUserId != null && item.comment.createdBy == currentUserId,
-                                    time = item.at.trailTime(timePattern),
+                                    time = item.at.localTime(timePattern),
                                     onEdit = onEdit, onDelete = onDelete,
                                 )
-                                is ActivityItem.HistoryEvent -> HistoryEventRow(item, time = item.at.trailTime(timePattern))
+                                is ActivityItem.HistoryEvent -> HistoryEventRow(
+                                    item,
+                                    time = item.at.localTime(timePattern),
+                                    onClick = if (item.changes.isNotEmpty()) ({ openDiff = item }) else null,
+                                )
                             }
                         }
                     }
+                }
+                openDiff?.let { event ->
+                    ChangeDiffSheet(
+                        title = historyLabel(event.event, event.peerTitle),
+                        subtitle = formatInstant(event.at, stringResource(Res.string.activity_when_pattern)),
+                        rows = event.changes.toDiffRows(),
+                        onDismiss = { openDiff = null },
+                    )
                 }
             }
         }
@@ -1302,10 +1325,16 @@ internal fun TrailSection(
  * dependency) then the **enriched, payload-rendered** line: the status transition in the editor vocabulary,
  * the peer-title verbs (resolved off the local cache, "another item" when aged out), or the humanized
  * changed-field list, with the recorded date trailing.
+ *
+ * [onClick] is non-null only when this row carries a captured old->new diff ([ActivityItem.HistoryEvent
+ * .changes], #260): the label then reads in full ink and a tap opens the [ChangeDiffSheet] with the values.
  */
 @Composable
-private fun HistoryEventRow(item: ActivityItem.HistoryEvent, time: String) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun HistoryEventRow(item: ActivityItem.HistoryEvent, time: String, onClick: (() -> Unit)? = null) {
+    val rowModifier = Modifier.fillMaxWidth()
+        .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .padding(horizontal = 12.dp, vertical = 6.dp)
+    Row(rowModifier, verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = historyGlyph(item.event),
             style = MaterialTheme.typography.bodySmall,
@@ -1315,7 +1344,8 @@ private fun HistoryEventRow(item: ActivityItem.HistoryEvent, time: String) {
         Text(
             text = historyLabel(item.event, item.peerTitle),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.defernoColors.inkMuted,
+            // A tappable (diff-carrying) row reads in full ink to signal it opens detail; the rest stay muted.
+            color = if (onClick != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.defernoColors.inkMuted,
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(8.dp))
@@ -1401,6 +1431,51 @@ private fun fieldLabel(token: String): String? = when (token) {
     "deadline", "complete_by" -> stringResource(Res.string.activity_field_deadline)
     "labels" -> stringResource(Res.string.common_labels)
     else -> null
+}
+
+/**
+ * A captured old->new edit (#260) → the [ChangeDiffSheet]'s rows: recognized fields only, each with its
+ * localized label and its two sides formatted per field (a deadline date, a status label, pinned yes/no).
+ * The Activity destination formats these the same way — the two Views share the [DiffRow] contract.
+ */
+@Composable
+private fun List<ActivityFieldChange>.toDiffRows(): List<DiffRow> =
+    filter { it.field != ActivityField.Unknown }.map { change ->
+        DiffRow(
+            label = activityDiffFieldLabel(change.field, change.rawKey),
+            before = change.before.toDiffValue(change.field),
+            after = change.after.toDiffValue(change.field),
+        )
+    }
+
+@Composable
+private fun activityDiffFieldLabel(field: ActivityField, rawKey: String): String = when (field) {
+    ActivityField.Title -> stringResource(Res.string.activity_field_title)
+    ActivityField.Description -> stringResource(Res.string.new_notes_label)
+    ActivityField.Deadline -> stringResource(Res.string.activity_field_deadline)
+    ActivityField.Labels -> stringResource(Res.string.common_labels)
+    ActivityField.Status -> stringResource(Res.string.activity_field_status)
+    ActivityField.Pinned -> stringResource(Res.string.activity_field_pinned)
+    ActivityField.Unknown -> rawKey
+}
+
+@Composable
+private fun ActivityFieldValue.toDiffValue(field: ActivityField): DiffValue = when (this) {
+    ActivityFieldValue.Cleared -> DiffValue.Cleared
+    ActivityFieldValue.Unavailable -> DiffValue.Unavailable
+    is ActivityFieldValue.Present -> DiffValue.Text(formatActivityDiffValue(field, raw))
+}
+
+@Composable
+private fun formatActivityDiffValue(field: ActivityField, raw: String): String = when (field) {
+    ActivityField.Deadline -> {
+        val pattern = stringResource(Res.string.activity_when_pattern)
+        runCatching { formatInstant(Instant.parse(raw), pattern) }.getOrDefault(raw)
+    }
+    ActivityField.Status -> activityStatusLabel(raw)
+    ActivityField.Pinned ->
+        stringResource(if (raw == "true") Res.string.activity_value_pinned else Res.string.activity_value_unpinned)
+    else -> raw
 }
 
 @Composable
@@ -1538,13 +1613,3 @@ private fun formatTenths(tenths: Long): String = String.format(Locale.getDefault
  * detail earns richer time display.
  */
 internal fun kotlin.time.Instant.toDisplayDate(): String = toString().substringBefore('T')
-
-/**
- * The Trail group key — the ISO local day (device zone) an instant falls on. ISO on purpose (a machine
- * date divider, not localized prose); zoned so it matches [trailTime], keeping a row under the header for
- * the same day its time reads.
- */
-private fun kotlin.time.Instant.trailDay(): String = formatInstant(this, "yyyy-MM-dd")
-
-/** The Trail row time — the instant's clock time in the device zone/locale (pattern from `common_time_pattern`). */
-private fun kotlin.time.Instant.trailTime(pattern: String): String = formatInstant(this, pattern)

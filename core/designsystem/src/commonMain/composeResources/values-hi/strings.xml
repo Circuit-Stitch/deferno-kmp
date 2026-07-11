@@ -943,5 +943,13 @@
     <string name="activity_history_updated_fields">संपादित किया: %1$s</string>
     <string name="activity_field_title">शीर्षक</string>
     <string name="activity_field_deadline">समय-सीमा</string>
+    <string name="activity_field_pinned">पिन किया गया</string>
+    <string name="activity_field_status">स्थिति</string>
+    <string name="activity_diff_empty">कोई फ़ील्ड परिवर्तन रिकॉर्ड नहीं किया गया।</string>
+    <string name="activity_diff_open_item">आइटम खोलें</string>
+    <string name="activity_diff_value_cleared">कोई नहीं</string>
+    <string name="activity_diff_value_unavailable">रिकॉर्ड नहीं किया गया</string>
+    <string name="activity_value_pinned">पिन किया गया</string>
+    <string name="activity_value_unpinned">पिन नहीं किया गया</string>
     <string name="tasks_detail_trail_empty">अभी तक कोई गतिविधि नहीं</string>
 </resources>

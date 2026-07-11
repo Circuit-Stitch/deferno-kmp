@@ -22,7 +22,8 @@ class SqlDelightOutboxStore(
 
     private val queries get() = db.outboxEntryQueries
 
-    override suspend fun enqueue(target: String, request: OutboxRequest, now: Instant) {
+    // [before] is audit-only (the ledger decorator consumes it); the replay queue never persists it.
+    override suspend fun enqueue(target: String, request: OutboxRequest, now: Instant, before: String?) {
         queries.enqueue(
             target = target,
             method = request.method.name,

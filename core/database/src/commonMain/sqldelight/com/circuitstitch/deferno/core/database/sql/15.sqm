@@ -1,0 +1,13 @@
+-- Migration 15 -> 16: carry the change payload on the activity ledger so the Activity feed + Task Trail
+-- can show a true old->new field diff, not just the coarse "Updated a task" summary (#260 follow-up).
+--
+-- Two additive, nullable columns on activityLedgerEntry — no existing column changes. `body` is the
+-- rendered new-value PATCH/POST JSON the outbox already computed (persisted for EVERY write, so any row
+-- can surface what was set); `before` is the matching old-value JSON, snapshotted just before the
+-- optimistic apply (Task field edits only — null on every other writer and on all rows written before
+-- this migration). Existing rows default to NULL = no captured diff and render the coarse summary
+-- exactly as they did pre-migration. Mirrors ActivityLedgerEntry.sq exactly
+-- (verifyCommonMainDefernoDatabaseMigration checks it).
+-- Never edit a released migration or snapshot — ADR-0022 runbook.
+ALTER TABLE activityLedgerEntry ADD COLUMN body TEXT;
+ALTER TABLE activityLedgerEntry ADD COLUMN before TEXT;

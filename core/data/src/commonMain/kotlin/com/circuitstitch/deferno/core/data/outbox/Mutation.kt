@@ -5,6 +5,7 @@ import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.Habit
+import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
@@ -18,6 +19,7 @@ import com.circuitstitch.deferno.core.network.mapper.toWireToken
 import com.circuitstitch.deferno.core.network.mapper.toWorkingState
 import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
@@ -199,6 +201,36 @@ data class SetPinned(override val taskId: TaskId, val pinned: Boolean) : TaskMut
 data class DeleteTask(override val taskId: TaskId, val deletedAt: Instant) : TaskMutation {
     override fun applyTo(task: Task): Task = task.copy(deletedAt = deletedAt)
     override fun toRequest(): OutboxRequest = OutboxRequest(OutboxMethod.Delete, listOf("tasks", taskId.value))
+}
+
+/**
+ * The **old** values of exactly the fields this Task edit changes, in the same JSON keys/encoding as
+ * [toRequest]'s body — the "before" half of the Activity ledger's old->new diff (#260 follow-up),
+ * snapshotted from the pre-apply cached [task]. `null` for [DeleteTask] (a delete has no field diff).
+ *
+ * Symmetry with the new-value body is the point: every key here also appears in `toRequest().body`, so a
+ * reader zips the two objects per key. `description` is a hydrate-on-demand field ([HydrationState.Full]
+ * only) — on a summary row the cached value is null even when the server holds text, so an un-hydrated
+ * description edit **omits** the key (the reader renders "previously unavailable") rather than falsely
+ * claiming the old body was empty.
+ */
+internal fun TaskMutation.beforeValues(task: Task): JsonObject? = when (this) {
+    is SetWorkingState -> buildJsonObject { put("status", task.workingState.toWireToken()) }
+    is Rename -> buildJsonObject { put("title", task.title) }
+    is SetDeadline, is ClearDeadline -> buildJsonObject {
+        val by = task.completeBy
+        if (by == null) put("complete_by", JsonNull) else put("complete_by", by.toString())
+    }
+    is SetDescription, is ClearDescription -> buildJsonObject {
+        if (task.hydration == HydrationState.Full) {
+            val desc = task.description
+            if (desc == null) put("description", JsonNull) else put("description", desc)
+        }
+        // else: omit "description" — the old body is unknown on an un-hydrated (Summary) row.
+    }
+    is SetLabels -> buildJsonObject { putJsonArray("labels") { task.labels.forEach { add(it) } } }
+    is SetPinned -> buildJsonObject { put("pinned", task.pinned) }
+    is DeleteTask -> null
 }
 
 // --- Plan intents ---

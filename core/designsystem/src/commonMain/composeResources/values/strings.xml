@@ -1181,6 +1181,14 @@ Thank you.</string>
     <!-- Humanized field names for the Updated event's changed-field list. -->
     <string name="activity_field_title">Title</string>
     <string name="activity_field_deadline">Deadline</string>
+    <string name="activity_field_pinned">Pinned</string>
+    <string name="activity_field_status">Status</string>
+    <string name="activity_diff_empty">No field changes were recorded.</string>
+    <string name="activity_diff_open_item">Open item</string>
+    <string name="activity_diff_value_cleared">None</string>
+    <string name="activity_diff_value_unavailable">Not recorded</string>
+    <string name="activity_value_pinned">Pinned</string>
+    <string name="activity_value_unpinned">Not pinned</string>
     <!-- Empty Trail (no comments and no history yet). -->
     <string name="tasks_detail_trail_empty">No activity yet</string>
 </resources>

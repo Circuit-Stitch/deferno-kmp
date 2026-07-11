@@ -16,7 +16,11 @@ class FakeOutboxStore(initial: List<OutboxEntry> = emptyList()) : OutboxStore {
     /** Direct read of the backing queue for assertions (already in seq order via [allUnsynced]). */
     val all: List<OutboxEntry> get() = entries.sortedBy { it.seq }
 
-    override suspend fun enqueue(target: String, request: OutboxRequest, now: Instant) {
+    /** The audit-only `before` (old-value JSON) passed to each [enqueue], in call order — for diff assertions. */
+    val enqueuedBefore = mutableListOf<String?>()
+
+    override suspend fun enqueue(target: String, request: OutboxRequest, now: Instant, before: String?) {
+        enqueuedBefore += before
         entries += OutboxEntry(
             seq = nextSeq++,
             target = target,
