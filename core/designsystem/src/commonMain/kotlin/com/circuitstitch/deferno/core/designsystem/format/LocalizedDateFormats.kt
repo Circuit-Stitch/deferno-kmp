@@ -31,6 +31,19 @@ fun formatInstant(
     locale: Locale = Locale.getDefault(),
 ): String = DateTimeFormatter.ofPattern(pattern, locale).withZone(zone).format(instant.toJavaInstant())
 
+/**
+ * The device-local **ISO day** (`yyyy-MM-dd`) an [instant] falls on — the grouping key for a day-bucketed,
+ * reverse-chron feed (the Task Trail + the Activity destination, #260). Formatted in the same zone the row
+ * time uses, so a row never lands under the wrong day header at a boundary; it compares equal to
+ * `currentToday.toString()` (also ISO), which is how the header decides "TODAY".
+ */
+fun Instant.localDayIso(zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
+    formatInstant(this, "yyyy-MM-dd", zone, locale)
+
+/** This [Instant]'s clock time in the device zone/locale, rendered with [pattern] — a day-bucketed row's time. */
+fun Instant.localTime(pattern: String, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
+    formatInstant(this, pattern, zone, locale)
+
 /** [date] rendered with [pattern] in the device's language, e.g. "June 2026" or "Monday, June 8". */
 fun formatDate(date: LocalDate, pattern: String, locale: Locale = Locale.getDefault()): String =
     date.toJavaLocalDate().format(DateTimeFormatter.ofPattern(pattern, locale))

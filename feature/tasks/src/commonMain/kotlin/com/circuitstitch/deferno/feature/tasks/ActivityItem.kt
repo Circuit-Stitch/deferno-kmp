@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.feature.tasks
 
+import com.circuitstitch.deferno.core.model.ActivityField
+import com.circuitstitch.deferno.core.model.ActivityFieldChange
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import kotlin.time.Instant
 import com.circuitstitch.deferno.core.model.Comment as CommentModel
@@ -40,10 +42,23 @@ sealed interface ActivityItem {
         override val id: String,
         val event: ItemHistoryEvent,
         val peerTitle: String? = null,
+        // The render-time-attached local old->new field diff (#260): for an [ItemHistoryEvent.Updated] the
+        // server carries only the changed field NAMES, so [mergeActivity] correlates the row with this
+        // device's activity-ledger edit and grafts its captured values here. Empty when there is no matching
+        // local capture (an edit from another surface, or one made before diff capture landed) — the View
+        // then shows the field-name summary, un-tappable.
+        val changes: List<ActivityFieldChange> = emptyList(),
     ) : ActivityItem {
         override val at: Instant get() = event.recordedAt
     }
 }
+
+/**
+ * One captured local edit from this device's activity ledger (#260) — its apply-time [at] and the typed
+ * old->new [changes] the reader parsed from the ledger payload. [mergeActivity] grafts these onto the
+ * matching server [ItemHistoryEvent.Updated] row so the Trail shows real values, not just field names.
+ */
+data class LedgerEdit(val at: Instant, val changes: List<ActivityFieldChange>)
 
 /**
  * The structural **peer id** an [ItemHistoryEvent] references — the other item in a split/move/reparent/
@@ -84,14 +99,38 @@ fun ItemHistoryEvent.peerId(): String? = when (this) {
 fun mergeActivity(
     comments: List<CommentModel>,
     history: List<ItemHistoryEvent>,
+    localEdits: List<LedgerEdit> = emptyList(),
     peerTitle: (peerId: String) -> String? = { null },
-): List<ActivityItem> =
-    (comments.map { ActivityItem.Comment(it) } +
-        history.mapIndexed { index, event ->
-            ActivityItem.HistoryEvent(
-                id = "history:$index",
-                event = event,
-                peerTitle = event.peerId()?.let(peerTitle),
-            )
-        })
-        .sortedByDescending { it.at }
+): List<ActivityItem> {
+    // A consume-once pool of this device's captured edits, grafted onto matching server `Updated` rows so
+    // the Trail shows real old->new values. Correlation is by field overlap + nearest apply-time (the local
+    // apply and the server record differ by sync latency), each edit used at most once — a best-effort
+    // enrichment: an unmatched row simply keeps its field-name summary, and the worst case in a rare
+    // multi-surface same-field race is a slightly-off old value, never a crash or a dropped/dup row.
+    val pool = localEdits.toMutableList()
+    val historyItems = history.mapIndexed { index, event ->
+        ActivityItem.HistoryEvent(
+            id = "history:$index",
+            event = event,
+            peerTitle = event.peerId()?.let(peerTitle),
+            changes = if (event is ItemHistoryEvent.Updated) pool.takeMatchFor(event) else emptyList(),
+        )
+    }
+    return (comments.map { ActivityItem.Comment(it) } + historyItems).sortedByDescending { it.at }
+}
+
+/**
+ * Pull (and consume) this pool's local edit that best matches a server [ItemHistoryEvent.Updated] — the
+ * unconsumed edit whose changed field is one the event names, nearest in time. Returns its typed changes,
+ * or empty when nothing matches (the row then keeps its field-name summary).
+ */
+private fun MutableList<LedgerEdit>.takeMatchFor(event: ItemHistoryEvent.Updated): List<ActivityFieldChange> {
+    val eventFields = event.fields.map { ActivityField.fromKey(it) }.filterNot { it == ActivityField.Unknown }.toSet()
+    if (eventFields.isEmpty()) return emptyList()
+    val match = this
+        .filter { edit -> edit.changes.any { it.field in eventFields } }
+        .minByOrNull { (it.at - event.recordedAt).absoluteValue }
+        ?: return emptyList()
+    remove(match)
+    return match.changes
+}

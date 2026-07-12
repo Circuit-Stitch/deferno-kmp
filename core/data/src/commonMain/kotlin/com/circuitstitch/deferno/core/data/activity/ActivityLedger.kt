@@ -28,6 +28,12 @@ enum class ActivitySource {
  * [method], and the request [path] — so the human [summary] and the deep-link [itemId] are derived at
  * read-time and can be refined without a schema migration. [source] is who made it; [recordedAt] is when
  * the change was applied (not when it later synced).
+ *
+ * [body] / [before] carry the change payload for a true old->new field diff (the Activity detail sheet +
+ * the Task Trail): [body] is the rendered new-value PATCH/POST JSON the outbox already computed (kept for
+ * every write); [before] is the matching old-value JSON, snapshotted just before the optimistic apply
+ * (Task field edits only). Both null on pre-diff rows / writers that don't snapshot — such a row renders
+ * the coarse [summaryInfo] with no diff. The typed diff is derived at read-time by [changes].
  */
 data class ActivityEntry(
     val seq: Long,
@@ -36,6 +42,8 @@ data class ActivityEntry(
     val target: String,
     val method: OutboxMethod,
     val path: List<String>,
+    val body: String? = null,
+    val before: String? = null,
 )
 
 /** The coarse verb of a recorded change — the typed twin of [summary] for locale-aware rendering. */
@@ -103,8 +111,12 @@ fun ActivityEntry.itemId(): String? {
  */
 interface ActivityLedgerStore {
 
-    /** Append one applied change: its [source], the outbox [target] + [request], at [now] (apply time). */
-    suspend fun record(source: ActivitySource, target: String, request: OutboxRequest, now: Instant)
+    /**
+     * Append one applied change: its [source], the outbox [target] + [request] (its `body` is the
+     * new-value JSON), the pre-apply old-value JSON [before] (null when not snapshotted), at [now]
+     * (apply time).
+     */
+    suspend fun record(source: ActivitySource, target: String, request: OutboxRequest, before: String?, now: Instant)
 
     /** The most-recent [limit] entries, newest first — observed so the feed re-emits as changes land. */
     fun recent(limit: Long = 200): Flow<List<ActivityEntry>>

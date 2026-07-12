@@ -23,9 +23,9 @@ class LedgerRecordingOutboxStore(
     private val ledger: ActivityLedgerStore,
 ) : OutboxStore {
 
-    override suspend fun enqueue(target: String, request: OutboxRequest, now: Instant) {
-        delegate.enqueue(target, request, now)
-        runCatching { ledger.record(ActivitySource.Mobile, target, request, now) }
+    override suspend fun enqueue(target: String, request: OutboxRequest, now: Instant, before: String?) {
+        delegate.enqueue(target, request, now, before)
+        runCatching { ledger.record(ActivitySource.Mobile, target, request, before, now) }
     }
 
     override suspend fun syncable(): List<OutboxEntry> = delegate.syncable()

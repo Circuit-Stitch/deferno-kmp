@@ -26,13 +26,15 @@ class SqlDelightActivityLedgerStore(
 
     private val queries get() = db.activityLedgerEntryQueries
 
-    override suspend fun record(source: ActivitySource, target: String, request: OutboxRequest, now: Instant) {
+    override suspend fun record(source: ActivitySource, target: String, request: OutboxRequest, before: String?, now: Instant) {
         queries.record(
             recorded_at = now.toString(),
             source = source.name,
             target = target,
             method = request.method.name,
             path = request.path.joinToString("\n"),
+            body = request.body,
+            before = before,
         )
     }
 
@@ -55,4 +57,6 @@ private fun ActivityRow.toDomain(): ActivityEntry = ActivityEntry(
     target = target,
     method = OutboxMethod.entries.firstOrNull { it.name == method } ?: OutboxMethod.Post,
     path = if (path.isEmpty()) emptyList() else path.split("\n"),
+    body = body,
+    before = before,
 )

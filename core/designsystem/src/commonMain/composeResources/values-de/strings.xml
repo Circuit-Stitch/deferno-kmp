@@ -945,6 +945,14 @@ Vielen Dank.</string>
     <!-- Vermenschlichte Feldnamen für die Liste geänderter Felder des Aktualisiert-Ereignisses. -->
     <string name="activity_field_title">Titel</string>
     <string name="activity_field_deadline">Frist</string>
+    <string name="activity_field_pinned">Angeheftet</string>
+    <string name="activity_field_status">Status</string>
+    <string name="activity_diff_empty">Keine Feldänderungen erfasst.</string>
+    <string name="activity_diff_open_item">Element öffnen</string>
+    <string name="activity_diff_value_cleared">Keine</string>
+    <string name="activity_diff_value_unavailable">Nicht erfasst</string>
+    <string name="activity_value_pinned">Angeheftet</string>
+    <string name="activity_value_unpinned">Nicht angeheftet</string>
     <!-- Leerer Verlauf (noch keine Kommentare und kein Verlauf). -->
     <string name="tasks_detail_trail_empty">Noch keine Aktivität</string>
 </resources>

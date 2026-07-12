@@ -46,8 +46,14 @@ interface OutboxStore {
     /**
      * Appends [request] to the tail of the queue, targeting [target], enqueued at [now] (a fresh
      * entry starts at `attempts = 0` and is immediately ready: `nextAttemptAt = now`).
+     *
+     * [before] is **audit-only** metadata for the activity ledger (#260): the pre-apply old-value JSON of
+     * the fields this write changes, snapshotted by the caller before its optimistic apply so the Activity
+     * feed can show a true old->new diff. The replay queue ignores it entirely (it is never persisted on
+     * the outbox row nor replayed); only the [LedgerRecordingOutboxStore] decorator forwards it to the
+     * ledger. Defaulted null — a caller that captures no pre-image (or any non-diffing write) omits it.
      */
-    suspend fun enqueue(target: String, request: OutboxRequest, now: Instant)
+    suspend fun enqueue(target: String, request: OutboxRequest, now: Instant, before: String? = null)
 
     /**
      * The **still-syncable** queue — live rows only (dead-lettered [OutboxEntry.failedAt] rows excluded)

@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.shell.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,18 +21,27 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivitySummary
 import com.circuitstitch.deferno.core.data.activity.ActivityVerb
+import com.circuitstitch.deferno.core.designsystem.component.ChangeDiffSheet
+import com.circuitstitch.deferno.core.designsystem.component.DayGroupHeader
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
+import com.circuitstitch.deferno.core.designsystem.format.changedFieldHint
 import com.circuitstitch.deferno.core.designsystem.format.formatInstant
+import com.circuitstitch.deferno.core.designsystem.format.localDayIso
+import com.circuitstitch.deferno.core.designsystem.format.toDiffRows
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.activity_change_count
 import com.circuitstitch.deferno.core.designsystem.resources.activity_empty_body
@@ -66,10 +76,11 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The **Activity** Destination View (#260): a calm, reverse-chronological feed of every change the app
- * has recorded in the offline-first ledger. A thin render of [ActivityComponent.state] — each row shows
- * what changed, who made it (a source chip), and when. Server-sourced ("via Website" / "via MCP") rows
- * land here too once the reconcile seam tags them, with no View change.
+ * The **Activity** Destination View (#260): a calm, reverse-chronological feed of every change the app has
+ * recorded in the offline-first ledger, bucketed under [DayGroupHeader] day dividers (the Trail's grouping,
+ * shared). Each row shows what changed, who made it (a source chip), the fields it touched, and when;
+ * tapping it opens a [ChangeDiffSheet] with the full old->new diff and an "Open item" action. Server-sourced
+ * ("via Website" / "via MCP") rows land here too once the reconcile seam tags them, with no View change.
  *
  * Shared between the Android shell and the desktop shell (ADR-0004 #27): the component is Compose-free in
  * `:app:shell`, the atoms are cross-platform, so one View serves both platforms (no per-platform drift).
@@ -77,6 +88,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) {
     val state by component.state.collectAsState()
+    var selected by remember { mutableStateOf<ActivityFeedRow?>(null) }
     Column(modifier.fillMaxSize()) {
         Surface(color = MaterialTheme.colorScheme.surface) {
             Column(
@@ -96,26 +108,53 @@ fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) 
                 // Empty inset on desktop; clears the nav bar on Android.
                 contentPadding = WindowInsets.systemBars.only(WindowInsetsSides.Bottom).asPaddingValues(),
             ) {
-                items(state.rows, key = { it.seq }) { row ->
-                    ActivityRowView(row)
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                // Bucket by the device-local day (rows are already newest-first, so groupBy keeps that order),
+                // and head each group with the shared TODAY-aware divider — the Trail's grouping, reused.
+                state.rows.groupBy { it.recordedAt.localDayIso() }.forEach { (day, rows) ->
+                    item(key = "day-$day") { DayGroupHeader(day) }
+                    items(rows, key = { it.seq }) { row ->
+                        ActivityRowView(row, onClick = { selected = row })
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
                 }
             }
         }
     }
+
+    selected?.let { row ->
+        ChangeDiffSheet(
+            title = row.summaryInfo.text,
+            subtitle = "${row.source.label} · ${formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern))}",
+            rows = row.changes.toDiffRows(),
+            onOpenItem = row.itemId?.let { id -> { component.openItem(id); selected = null } },
+            onDismiss = { selected = null },
+        )
+    }
 }
 
-/** One feed row: the change, a source chip, and the time it was applied. */
+/** One feed row: the change, a source chip, the fields it touched, and the time it was applied. Tap for detail. */
 @Composable
-private fun ActivityRowView(row: ActivityFeedRow) {
+private fun ActivityRowView(row: ActivityFeedRow, onClick: () -> Unit) {
+    val fieldHint = row.changes.changedFieldHint()
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(text = row.summaryInfo.text, style = MaterialTheme.typography.titleMedium)
-            TreeChip(text = row.source.label, filled = false)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TreeChip(text = row.source.label, filled = false)
+                if (fieldHint != null) {
+                    Text(
+                        text = fieldHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.defernoColors.inkMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
         // A calm absolute timestamp — "Jun 21 · 09:45" in the device's time zone and language.
         MonoMeta(text = formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern)))

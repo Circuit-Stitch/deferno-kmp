@@ -9,6 +9,7 @@ import com.arkivanov.decompose.router.stack.pop
 import com.arkivanov.decompose.value.Value
 import com.circuitstitch.deferno.core.common.asStateFlow
 import com.circuitstitch.deferno.core.common.componentScope
+import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.comment.CommentRepository
 import com.circuitstitch.deferno.core.data.comment.CommentWriter
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
@@ -19,7 +20,9 @@ import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 
@@ -60,6 +63,9 @@ class DefaultTaskDetailStackComponent(
     // + the device-local user id, threaded into every detail page of the macOS window stack.
     private val commentRepository: CommentRepository = CommentRepository.NONE,
     private val itemHistoryRepository: ItemHistoryRepository = ItemHistoryRepository.NONE,
+    // This item's local activity-ledger slice (#260), threaded into every detail page so the Trail can graft
+    // captured old->new values onto server `Updated` rows. Empty default — macOS window wiring is a follow-up.
+    private val observeItemLedger: (String) -> Flow<List<ActivityEntry>> = { flowOf(emptyList()) },
     // The cross-kind Item read the Trail resolves history peer titles from (ADR-0046), threaded into every
     // detail page. Null default leaves peers unresolved ("another item") — the macOS window wiring is a follow-up.
     private val itemRepository: ItemRepository? = null,
@@ -98,6 +104,7 @@ class DefaultTaskDetailStackComponent(
                     detailRepository = detailRepository,
                     commentRepository = commentRepository,
                     historyRepository = itemHistoryRepository,
+                    observeItemLedger = observeItemLedger,
                     itemRepository = itemRepository,
                     commentWriter = commentWriter,
                     currentUserId = currentUserId,

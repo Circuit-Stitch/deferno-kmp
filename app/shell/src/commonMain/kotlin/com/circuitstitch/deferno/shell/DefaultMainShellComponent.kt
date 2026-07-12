@@ -20,6 +20,7 @@ import com.circuitstitch.deferno.core.common.componentScope
 import com.circuitstitch.deferno.core.common.log.Logger
 import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.data.activity.ActivityEntry
+import com.circuitstitch.deferno.core.data.activity.itemId
 import com.circuitstitch.deferno.core.data.assistant.AssistantClient
 import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.auth.AuthRepository
@@ -481,6 +482,7 @@ class DefaultMainShellComponent(
                                     detailRepository = taskDetailRepository,
                                     commentRepository = commentRepository,
                                     historyRepository = itemHistoryRepository,
+                                    observeItemLedger = ::itemLedgerFor,
                                     itemRepository = itemRepository,
                                     commentWriter = commentWriter,
                                     currentUserId = currentUserId,
@@ -545,6 +547,7 @@ class DefaultMainShellComponent(
                         taskDetailRepository = taskDetailRepository,
                         commentRepository = commentRepository,
                         itemHistoryRepository = itemHistoryRepository,
+                        observeItemLedger = ::itemLedgerFor,
                         commentWriter = commentWriter,
                         currentUserId = currentUserId,
                         createSubtask = createSubtask,
@@ -602,6 +605,7 @@ class DefaultMainShellComponent(
                     DefaultActivityComponent(
                         componentContext = childContext,
                         observeActivity = observeActivity,
+                        output = ::onActivityOutput,
                         coroutineContext = coroutineContext,
                     ),
                 )
@@ -885,6 +889,24 @@ class DefaultMainShellComponent(
                 MainShellComponent.OverlayChild.Breakdown(breakdown)
             }
         }
+
+    // The Task-detail Trail's local old->new diff source (#260): this item's slice of the Account ledger,
+    // derived from the same `observeActivity` feed the Activity Destination reads (no new dependency), so
+    // an edit's captured values graft onto its server `Updated` history row.
+    private fun itemLedgerFor(id: String): Flow<List<ActivityEntry>> =
+        observeActivity().map { entries -> entries.filter { it.itemId() == id } }
+
+    private fun onActivityOutput(output: ActivityComponent.Output) {
+        when (output) {
+            // An Activity detail-sheet "Open item" tap: switch laterally to the Tasks Destination and route
+            // the open through the tree's public intent — the same deep-link path Search/Settings take.
+            is ActivityComponent.Output.OpenItem -> {
+                navigation.bringToFront(Config.Tasks)
+                val tasks = stack.value.active.instance as MainShellComponent.DestinationChild.Tasks
+                tasks.component.tree.onOpenDetail(output.id, ItemKind.Task)
+            }
+        }
+    }
 
     private fun onSearchOutput(output: SearchComponent.Output) {
         when (output) {

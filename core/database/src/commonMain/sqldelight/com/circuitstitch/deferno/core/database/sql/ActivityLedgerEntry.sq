@@ -12,6 +12,12 @@
 -- a local app-side write now; "Website" / "Mcp" once a server-sourced reconcile records remote changes
 -- (issue #260 follow-up). `recorded_at` is the RFC3339 instant the change was applied.
 --
+-- `body` / `before` carry the change payload for a true old->new field diff (the Activity feed's detail
+-- sheet + the Task Trail): `body` is the rendered new-value PATCH/POST JSON the outbox already computed
+-- (persisted for every write, so any row can show what was set); `before` is the matching old-value JSON,
+-- snapshotted just before the optimistic apply (Task field edits only — null elsewhere and on pre-diff
+-- rows). Both nullable; a null pair renders the coarse summary exactly as before.
+--
 -- `seq INTEGER PRIMARY KEY AUTOINCREMENT` is the monotonic, never-reused order key — the reverse-chron
 -- feed reads it `DESC`.
 CREATE TABLE activityLedgerEntry (
@@ -20,13 +26,15 @@ CREATE TABLE activityLedgerEntry (
     source      TEXT NOT NULL,
     target      TEXT NOT NULL,
     method      TEXT NOT NULL,
-    path        TEXT NOT NULL
+    path        TEXT NOT NULL,
+    body        TEXT,
+    before      TEXT
 );
 
 -- Append one applied change to the ledger. `seq` is assigned by AUTOINCREMENT.
 record:
-INSERT INTO activityLedgerEntry(recorded_at, source, target, method, path)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO activityLedgerEntry(recorded_at, source, target, method, path, body, before)
+VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- The most-recent [limit] entries, newest first — the Activity feed (observed as a Flow).
 recent:

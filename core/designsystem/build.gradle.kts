@@ -26,6 +26,11 @@ kotlin {
             // LocalizedDateFormats bridges kotlinx types (LocalDate/LocalTime/Instant) to java.time
             // formatting — this module is Android+JVM only, so commonMain sees java.time (ADR-0004).
             implementation(libs.kotlinx.datetime)
+            // ActivityDiffFormat maps the typed core/model ActivityField change onto the design system's
+            // generic DiffRow — the one shared old->new formatter both the Activity feed and the Task Trail
+            // render (ADR-0004 #27), so the surfaces can't drift. Pure Compose-free model module; mirrors
+            // formatDate already exposing a datetime type through an `implementation` dep.
+            implementation(project(":core:model"))
         }
     }
 }
