@@ -36,21 +36,16 @@ import com.circuitstitch.deferno.core.data.activity.ActivitySummary
 import com.circuitstitch.deferno.core.data.activity.ActivityVerb
 import com.circuitstitch.deferno.core.designsystem.component.ChangeDiffSheet
 import com.circuitstitch.deferno.core.designsystem.component.DayGroupHeader
-import com.circuitstitch.deferno.core.designsystem.component.DiffRow
-import com.circuitstitch.deferno.core.designsystem.component.DiffValue
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
-import com.circuitstitch.deferno.core.designsystem.format.activityStatusLabel
+import com.circuitstitch.deferno.core.designsystem.format.changedFieldHint
 import com.circuitstitch.deferno.core.designsystem.format.formatInstant
 import com.circuitstitch.deferno.core.designsystem.format.localDayIso
+import com.circuitstitch.deferno.core.designsystem.format.toDiffRows
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.activity_change_count
 import com.circuitstitch.deferno.core.designsystem.resources.activity_empty_body
 import com.circuitstitch.deferno.core.designsystem.resources.activity_empty_title
-import com.circuitstitch.deferno.core.designsystem.resources.activity_field_deadline
-import com.circuitstitch.deferno.core.designsystem.resources.activity_field_pinned
-import com.circuitstitch.deferno.core.designsystem.resources.activity_field_status
-import com.circuitstitch.deferno.core.designsystem.resources.activity_field_title
 import com.circuitstitch.deferno.core.designsystem.resources.activity_source_mcp
 import com.circuitstitch.deferno.core.designsystem.resources.activity_source_mobile
 import com.circuitstitch.deferno.core.designsystem.resources.activity_source_unknown
@@ -73,18 +68,10 @@ import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_up
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_occurrence_habit
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_plan
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_task
-import com.circuitstitch.deferno.core.designsystem.resources.activity_value_pinned
-import com.circuitstitch.deferno.core.designsystem.resources.activity_value_unpinned
 import com.circuitstitch.deferno.core.designsystem.resources.activity_when_pattern
-import com.circuitstitch.deferno.core.designsystem.resources.common_labels
-import com.circuitstitch.deferno.core.designsystem.resources.new_notes_label
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
-import com.circuitstitch.deferno.core.model.ActivityField
-import com.circuitstitch.deferno.core.model.ActivityFieldChange
-import com.circuitstitch.deferno.core.model.ActivityFieldValue
 import com.circuitstitch.deferno.shell.ActivityComponent
 import com.circuitstitch.deferno.shell.ActivityFeedRow
-import kotlin.time.Instant
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -172,56 +159,6 @@ private fun ActivityRowView(row: ActivityFeedRow, onClick: () -> Unit) {
         // A calm absolute timestamp — "Jun 21 · 09:45" in the device's time zone and language.
         MonoMeta(text = formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern)))
     }
-}
-
-/** The recognized changed-field names joined for the row's inline hint ("Title, Description"), or null. */
-@Composable
-private fun List<ActivityFieldChange>.changedFieldHint(): String? {
-    val names = filter { it.field != ActivityField.Unknown }.map { activityFieldLabel(it.field, it.rawKey) }
-    return if (names.isEmpty()) null else names.joinToString(", ")
-}
-
-/** The captured field diff → sheet rows: recognized fields only, each label + formatted old/new value. */
-@Composable
-private fun List<ActivityFieldChange>.toDiffRows(): List<DiffRow> =
-    filter { it.field != ActivityField.Unknown }.map { change ->
-        DiffRow(
-            label = activityFieldLabel(change.field, change.rawKey),
-            before = change.before.toDiffValue(change.field),
-            after = change.after.toDiffValue(change.field),
-        )
-    }
-
-/** The localized label for a changed field — reuses the property vocabulary; [Unknown] shows its raw key. */
-@Composable
-private fun activityFieldLabel(field: ActivityField, rawKey: String): String = when (field) {
-    ActivityField.Title -> stringResource(Res.string.activity_field_title)
-    ActivityField.Description -> stringResource(Res.string.new_notes_label)
-    ActivityField.Deadline -> stringResource(Res.string.activity_field_deadline)
-    ActivityField.Labels -> stringResource(Res.string.common_labels)
-    ActivityField.Status -> stringResource(Res.string.activity_field_status)
-    ActivityField.Pinned -> stringResource(Res.string.activity_field_pinned)
-    ActivityField.Unknown -> rawKey
-}
-
-/** One captured value → its display form, formatted per field (a deadline date, a status label, pinned yes/no). */
-@Composable
-private fun ActivityFieldValue.toDiffValue(field: ActivityField): DiffValue = when (this) {
-    ActivityFieldValue.Cleared -> DiffValue.Cleared
-    ActivityFieldValue.Unavailable -> DiffValue.Unavailable
-    is ActivityFieldValue.Present -> DiffValue.Text(formatFieldValue(field, raw))
-}
-
-@Composable
-private fun formatFieldValue(field: ActivityField, raw: String): String = when (field) {
-    ActivityField.Deadline -> {
-        val pattern = stringResource(Res.string.activity_when_pattern)
-        runCatching { formatInstant(Instant.parse(raw), pattern) }.getOrDefault(raw)
-    }
-    ActivityField.Status -> activityStatusLabel(raw)
-    ActivityField.Pinned ->
-        stringResource(if (raw == "true") Res.string.activity_value_pinned else Res.string.activity_value_unpinned)
-    else -> raw
 }
 
 /** The localized one-liner for a typed [ActivitySummary] — per-kind keys keep article/gender right. */

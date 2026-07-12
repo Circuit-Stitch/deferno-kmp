@@ -70,24 +70,18 @@ import com.circuitstitch.deferno.core.designsystem.component.CheckDot
 import com.circuitstitch.deferno.core.designsystem.component.ChangeDiffSheet
 import com.circuitstitch.deferno.core.designsystem.component.DayGroupHeader
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
-import com.circuitstitch.deferno.core.designsystem.component.DiffRow
-import com.circuitstitch.deferno.core.designsystem.component.DiffValue
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
-import com.circuitstitch.deferno.core.designsystem.format.activityStatusLabel
 import com.circuitstitch.deferno.core.designsystem.format.currentToday
 import com.circuitstitch.deferno.core.designsystem.format.formatInstant
 import com.circuitstitch.deferno.core.designsystem.format.localDayIso
 import com.circuitstitch.deferno.core.designsystem.format.localTime
+import com.circuitstitch.deferno.core.designsystem.format.toDiffRows
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.activity_field_deadline
-import com.circuitstitch.deferno.core.designsystem.resources.activity_field_pinned
-import com.circuitstitch.deferno.core.designsystem.resources.activity_field_status
 import com.circuitstitch.deferno.core.designsystem.resources.activity_field_title
-import com.circuitstitch.deferno.core.designsystem.resources.activity_value_pinned
-import com.circuitstitch.deferno.core.designsystem.resources.activity_value_unpinned
 import com.circuitstitch.deferno.core.designsystem.resources.activity_when_pattern
 import com.circuitstitch.deferno.core.designsystem.resources.activity_history_created
 import com.circuitstitch.deferno.core.designsystem.resources.activity_history_folded_peer
@@ -179,9 +173,6 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_subtas
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_uploading
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_progress_fraction
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
-import com.circuitstitch.deferno.core.model.ActivityField
-import com.circuitstitch.deferno.core.model.ActivityFieldChange
-import com.circuitstitch.deferno.core.model.ActivityFieldValue
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
@@ -1431,51 +1422,6 @@ private fun fieldLabel(token: String): String? = when (token) {
     "deadline", "complete_by" -> stringResource(Res.string.activity_field_deadline)
     "labels" -> stringResource(Res.string.common_labels)
     else -> null
-}
-
-/**
- * A captured old->new edit (#260) → the [ChangeDiffSheet]'s rows: recognized fields only, each with its
- * localized label and its two sides formatted per field (a deadline date, a status label, pinned yes/no).
- * The Activity destination formats these the same way — the two Views share the [DiffRow] contract.
- */
-@Composable
-private fun List<ActivityFieldChange>.toDiffRows(): List<DiffRow> =
-    filter { it.field != ActivityField.Unknown }.map { change ->
-        DiffRow(
-            label = activityDiffFieldLabel(change.field, change.rawKey),
-            before = change.before.toDiffValue(change.field),
-            after = change.after.toDiffValue(change.field),
-        )
-    }
-
-@Composable
-private fun activityDiffFieldLabel(field: ActivityField, rawKey: String): String = when (field) {
-    ActivityField.Title -> stringResource(Res.string.activity_field_title)
-    ActivityField.Description -> stringResource(Res.string.new_notes_label)
-    ActivityField.Deadline -> stringResource(Res.string.activity_field_deadline)
-    ActivityField.Labels -> stringResource(Res.string.common_labels)
-    ActivityField.Status -> stringResource(Res.string.activity_field_status)
-    ActivityField.Pinned -> stringResource(Res.string.activity_field_pinned)
-    ActivityField.Unknown -> rawKey
-}
-
-@Composable
-private fun ActivityFieldValue.toDiffValue(field: ActivityField): DiffValue = when (this) {
-    ActivityFieldValue.Cleared -> DiffValue.Cleared
-    ActivityFieldValue.Unavailable -> DiffValue.Unavailable
-    is ActivityFieldValue.Present -> DiffValue.Text(formatActivityDiffValue(field, raw))
-}
-
-@Composable
-private fun formatActivityDiffValue(field: ActivityField, raw: String): String = when (field) {
-    ActivityField.Deadline -> {
-        val pattern = stringResource(Res.string.activity_when_pattern)
-        runCatching { formatInstant(Instant.parse(raw), pattern) }.getOrDefault(raw)
-    }
-    ActivityField.Status -> activityStatusLabel(raw)
-    ActivityField.Pinned ->
-        stringResource(if (raw == "true") Res.string.activity_value_pinned else Res.string.activity_value_unpinned)
-    else -> raw
 }
 
 @Composable
