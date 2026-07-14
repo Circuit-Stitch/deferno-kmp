@@ -1,11 +1,14 @@
 [versions]
-agp = "9.2.1"
+agp = "9.3.0"
 kotlin = "2.4.0"
 kover = "0.9.8"
 # Compile-time DI (ADR-0003 / ADR-0008): kotlin-inject + kotlin-inject-anvil via KSP.
-# KSP2 is version-decoupled from the Kotlin compiler (no `<kotlin>-<ksp>` suffix); 2.3.9
-# is the pairing the official KSP quickstart shows for Kotlin 2.4.0.
-ksp = "2.3.9"
+# KSP2 is version-decoupled from the Kotlin compiler (no `<kotlin>-<ksp>` suffix); 2.3.10
+# is the pairing for Kotlin 2.4.0. 2.3.10 (over 2.3.9) sanitizes the ':' in Kotlin 2.4.0's
+# default module name `{group}:{project_name}` before it reaches a generated internal-name
+# suffix — google/ksp#2964. Not triggered here today (no project.group is set), but the DI
+# processors emit internal code, so this is the safe pairing.
+ksp = "2.3.10"
 kotlinInject = "0.9.0"
 kotlinInjectAnvil = "0.1.7"
 # Reactive core (issue #14, AccountManager): kotlinx-coroutines supplies StateFlow for the

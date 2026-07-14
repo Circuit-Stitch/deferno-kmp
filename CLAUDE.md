@@ -10,11 +10,11 @@ first to land.
 - **Language:** Kotlin
 - **UI:** Jetpack Compose (Material 3)
 - **Build:** Gradle (Kotlin DSL) with a version catalog at `gradle/libs.versions.toml` and `build-logic` convention plugins
-- **Min / target / compile SDK:** 27 / 36 / 36 — defined once in `build-logic` `ProjectConfig` (the source of truth)
+- **Min / target / compile SDK:** 27 / 36 / 37 — defined once in `build-logic` `ProjectConfig` (the source of truth)
 - **Application ID:** `com.circuitstitch.deferno`
-- **JDK:** 17 (toolchain). You don't need JDK 17 installed — the Gradle Daemon JVM toolchain (`gradle/gradle-daemon-jvm.properties`) and the project toolchain (`ProjectConfig.JVM_TOOLCHAIN`, applied via the convention plugins) auto-provision Eclipse Temurin 17 via the Foojay resolver. Launch Gradle with any JDK that can run Gradle 9.5.1 (17–25), e.g. Android Studio's bundled JDK.
+- **JDK:** project toolchain 21, Gradle daemon JVM 17 — two independent toolchains. You don't need either installed: the Gradle Daemon JVM toolchain (`gradle/gradle-daemon-jvm.properties`, Temurin 17) runs Gradle itself, and the project Kotlin/Java toolchain (`ProjectConfig.JVM_TOOLCHAIN` = 21, applied via the convention plugins) compiles the code and forks the JVM tests — both auto-provisioned via the Foojay resolver. Launch Gradle with any JDK that can run Gradle 9.5.1 (17–25), e.g. Android Studio's bundled JDK.
 - **Kotlin:** compiled by AGP's built-in Kotlin support (AGP 9+) — there is no `org.jetbrains.kotlin.android` plugin; only the Compose compiler plugin is applied explicitly.
-- **DI:** kotlin-inject + kotlin-inject-anvil — compile-time, KMP, via KSP (ADR-0003). The scope layering (process/app → Account → scene, ADR-0008) lives in `core/di`; the `deferno.di` convention wires the runtimes + per-target KSP processors into a shared module. KSP2 is version-decoupled from the Kotlin compiler, so `ksp = 2.3.9` pairs with Kotlin 2.4.0 (no `<kotlin>-<ksp>` suffix).
+- **DI:** kotlin-inject + kotlin-inject-anvil — compile-time, KMP, via KSP (ADR-0003). The scope layering (process/app → Account → scene, ADR-0008) lives in `core/di`; the `deferno.di` convention wires the runtimes + per-target KSP processors into a shared module. KSP2 is version-decoupled from the Kotlin compiler, so `ksp = 2.3.10` pairs with Kotlin 2.4.0 (no `<kotlin>-<ksp>` suffix).
 - **Coverage:** Kover (ADR-0006) on every shared module via the `deferno.coverage` convention. The hard ~85–90% gate runs over the *merged* shared-core report (`deferno.coverage.aggregation`, applied at the root): CI runs `:koverVerify` on every PR. It's deliberately not wired into `check` — measure logic, not boilerplate, so generated DI/serialization code and never-instantiated DI scope markers are excluded (see `CoverageConfig`).
 
 ## Layout
@@ -102,7 +102,8 @@ iOS-only framework and stays a hand-written build file.
 
 iOS klibs cross-compile on any host, but **running iOS tests and linking the iOS framework require macOS**
 (ADR-0006) — on Linux/Windows those tasks self-disable (`SKIPPED`). The first `./gradlew` run downloads
-Gradle 9.5.1, a Temurin JDK 17 toolchain, Kotlin/Native, and all dependencies, so it needs network access.
+Gradle 9.5.1, the Temurin JDK 17 daemon toolchain + the JDK 21 project toolchain, Kotlin/Native, and all
+dependencies, so it needs network access.
 Android Studio: **Open** this directory and let it sync.
 
 ## Conventions
