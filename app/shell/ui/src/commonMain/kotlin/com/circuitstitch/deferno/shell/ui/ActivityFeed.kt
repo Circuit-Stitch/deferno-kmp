@@ -32,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.circuitstitch.deferno.core.data.activity.ActivitySource
-import com.circuitstitch.deferno.core.data.activity.ActivitySummary
 import com.circuitstitch.deferno.core.data.activity.ActivityVerb
 import com.circuitstitch.deferno.core.designsystem.component.ChangeDiffSheet
 import com.circuitstitch.deferno.core.designsystem.component.DayGroupHeader
@@ -55,21 +54,32 @@ import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cl
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cleared_occurrence_event
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cleared_occurrence_habit
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_commented
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_commented_ref
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_chore
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_chore_ref
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_event
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_event_ref
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_habit
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_habit_ref
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_item
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_item_ref
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_task
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_task_ref
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_deleted_task
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_moved_item
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_moved_item_ref
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_item
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_occurrence_chore
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_occurrence_event
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_occurrence_habit
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_plan
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_task
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_task_ref
 import com.circuitstitch.deferno.core.designsystem.resources.activity_when_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.common_kind_task
+import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.shell.ActivityComponent
 import com.circuitstitch.deferno.shell.ActivityFeedRow
 import org.jetbrains.compose.resources.pluralStringResource
@@ -122,32 +132,42 @@ fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) 
     }
 
     selected?.let { row ->
+        // A confident "Open Task #99" only when the row opens to a Task (the shell deep-links as Task; a
+        // resolved Habit/Chore/Event would route wrong — see the ADR/plan). Others keep the generic label.
+        val openLabel = if (row.itemKind == ItemKind.Task && row.itemRef != null) {
+            stringResource(Res.string.common_open_named_cd, "${stringResource(Res.string.common_kind_task)} ${row.itemRef}")
+        } else {
+            null
+        }
         ChangeDiffSheet(
-            title = row.summaryInfo.text,
+            title = row.summaryText(),
             subtitle = "${row.source.label} · ${formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern))}",
             rows = row.changes.toDiffRows(),
+            note = row.commentBody,
             onOpenItem = row.itemId?.let { id -> { component.openItem(id); selected = null } },
+            openItemLabel = openLabel,
             onDismiss = { selected = null },
         )
     }
 }
 
-/** One feed row: the change, a source chip, the fields it touched, and the time it was applied. Tap for detail. */
+/** One feed row: the change, a source chip, the comment/fields it touched, and the time it was applied. Tap for detail. */
 @Composable
 private fun ActivityRowView(row: ActivityFeedRow, onClick: () -> Unit) {
-    val fieldHint = row.changes.changedFieldHint()
+    // A comment row carries its text here (its field diff is empty); every other row, the changed-field hint.
+    val subLabel = row.commentBody ?: row.changes.changedFieldHint()
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(text = row.summaryInfo.text, style = MaterialTheme.typography.titleMedium)
+            Text(text = row.summaryText(), style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TreeChip(text = row.source.label, filled = false)
-                if (fieldHint != null) {
+                if (subLabel != null) {
                     Text(
-                        text = fieldHint,
+                        text = subLabel,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.defernoColors.inkMuted,
                         maxLines = 1,
@@ -161,34 +181,42 @@ private fun ActivityRowView(row: ActivityFeedRow, onClick: () -> Unit) {
     }
 }
 
-/** The localized one-liner for a typed [ActivitySummary] — per-kind keys keep article/gender right. */
-private val ActivitySummary.text: String
-    @Composable get() = when (verb) {
+/**
+ * The localized one-liner for a feed row — per-kind keys keep article/gender right. When the item ref
+ * resolved ([ActivityFeedRow.itemRef] non-null) the ref-capable verbs read "Updated task #41"; otherwise
+ * the plain fallback ("Updated a task"). The four ref-capable verbs are Created, MovedItem, UpdatedTask,
+ * Commented; UpdatedItem/occurrence/plan/settings/deleted never resolve a ref, so they stay plain.
+ */
+@Composable
+private fun ActivityFeedRow.summaryText(): String {
+    val ref = itemRef
+    return when (summaryInfo.verb) {
         ActivityVerb.ChangedSettings -> stringResource(Res.string.activity_summary_changed_settings)
-        ActivityVerb.Created -> when (kindToken) {
-            "task" -> stringResource(Res.string.activity_summary_created_task)
-            "chore" -> stringResource(Res.string.activity_summary_created_chore)
-            "habit" -> stringResource(Res.string.activity_summary_created_habit)
-            "event" -> stringResource(Res.string.activity_summary_created_event)
-            else -> stringResource(Res.string.activity_summary_created_item)
+        ActivityVerb.Created -> when (summaryInfo.kindToken) {
+            "task" -> if (ref != null) stringResource(Res.string.activity_summary_created_task_ref, ref) else stringResource(Res.string.activity_summary_created_task)
+            "chore" -> if (ref != null) stringResource(Res.string.activity_summary_created_chore_ref, ref) else stringResource(Res.string.activity_summary_created_chore)
+            "habit" -> if (ref != null) stringResource(Res.string.activity_summary_created_habit_ref, ref) else stringResource(Res.string.activity_summary_created_habit)
+            "event" -> if (ref != null) stringResource(Res.string.activity_summary_created_event_ref, ref) else stringResource(Res.string.activity_summary_created_event)
+            else -> if (ref != null) stringResource(Res.string.activity_summary_created_item_ref, ref) else stringResource(Res.string.activity_summary_created_item)
         }
-        ActivityVerb.MovedItem -> stringResource(Res.string.activity_summary_moved_item)
+        ActivityVerb.MovedItem -> if (ref != null) stringResource(Res.string.activity_summary_moved_item_ref, ref) else stringResource(Res.string.activity_summary_moved_item)
         ActivityVerb.UpdatedPlan -> stringResource(Res.string.activity_summary_updated_plan)
         ActivityVerb.DeletedTask -> stringResource(Res.string.activity_summary_deleted_task)
-        ActivityVerb.UpdatedTask -> stringResource(Res.string.activity_summary_updated_task)
-        ActivityVerb.ClearedOccurrence -> when (kindToken) {
+        ActivityVerb.UpdatedTask -> if (ref != null) stringResource(Res.string.activity_summary_updated_task_ref, ref) else stringResource(Res.string.activity_summary_updated_task)
+        ActivityVerb.ClearedOccurrence -> when (summaryInfo.kindToken) {
             "chore" -> stringResource(Res.string.activity_summary_cleared_occurrence_chore)
             "habit" -> stringResource(Res.string.activity_summary_cleared_occurrence_habit)
             else -> stringResource(Res.string.activity_summary_cleared_occurrence_event)
         }
-        ActivityVerb.UpdatedOccurrence -> when (kindToken) {
+        ActivityVerb.UpdatedOccurrence -> when (summaryInfo.kindToken) {
             "chore" -> stringResource(Res.string.activity_summary_updated_occurrence_chore)
             "habit" -> stringResource(Res.string.activity_summary_updated_occurrence_habit)
             else -> stringResource(Res.string.activity_summary_updated_occurrence_event)
         }
         ActivityVerb.UpdatedItem -> stringResource(Res.string.activity_summary_updated_item)
-        ActivityVerb.Commented -> stringResource(Res.string.activity_summary_commented)
+        ActivityVerb.Commented -> if (ref != null) stringResource(Res.string.activity_summary_commented_ref, ref) else stringResource(Res.string.activity_summary_commented)
     }
+}
 
 /** The localized "who" chip: a local write reads "Mobile app"; remote writes name their surface. */
 private val ActivitySource.label: String

@@ -49,6 +49,15 @@
     <string name="activity_summary_updated_occurrence_habit">Gewohnheits-Termin aktualisiert</string>
     <string name="activity_summary_updated_plan">Deinen Plan aktualisiert</string>
     <string name="activity_summary_updated_task">Aufgabe aktualisiert</string>
+    <!-- Ref-enriched summaries (#260): "Updated task #41" — used when the item ref resolves; plain siblings above are the no-ref fallback -->
+    <string name="activity_summary_created_task_ref">Aufgabe %1$s erstellt</string>
+    <string name="activity_summary_created_chore_ref">Pflicht %1$s erstellt</string>
+    <string name="activity_summary_created_habit_ref">Gewohnheit %1$s erstellt</string>
+    <string name="activity_summary_created_event_ref">Ereignis %1$s erstellt</string>
+    <string name="activity_summary_created_item_ref">Element %1$s erstellt</string>
+    <string name="activity_summary_moved_item_ref">Element %1$s verschoben</string>
+    <string name="activity_summary_updated_task_ref">Aufgabe %1$s aktualisiert</string>
+    <string name="activity_summary_commented_ref">%1$s kommentiert</string>
 
     <!-- ── assistant ─────────────────────────────────────────────── -->
     <string name="assistant_action_working">Arbeitet…</string>

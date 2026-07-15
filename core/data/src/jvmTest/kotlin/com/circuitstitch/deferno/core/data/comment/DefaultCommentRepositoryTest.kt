@@ -81,7 +81,7 @@ class DefaultCommentRepositoryTest {
         val store = newStore()
         store.upsert(comment("c-1", body = "server"))
         store.setBody("c-1", "my optimistic edit", t1) // optimistic local edit
-        val outbox = FakeOutboxStore().apply { enqueue(CommentTargets.edit("c-1"), patch(), t1) }
+        val outbox = FakeOutboxStore().apply { enqueue(CommentTargets.edit("t-1", "c-1"), patch(), t1) }
         // Server still has the pre-edit body — the refresh must NOT overwrite the optimistic edit.
         val repo = DefaultCommentRepository(store, FakeRemote(RemoteSnapshot.Available(listOf(comment("c-1", body = "server")))), outbox)
 
@@ -128,7 +128,8 @@ class DefaultCommentRepositoryTest {
         val store = newStore()
         store.upsert(comment("c-1"))
         store.softDelete("c-1", t1) // optimistic delete
-        val outbox = FakeOutboxStore().apply { enqueue(CommentTargets.edit("c-1"), OutboxRequest(OutboxMethod.Delete, listOf("comments", "c-1")), t1) }
+        // Legacy `comment:<id>` target (pre-taskId-segment) — the clobber-guard must still protect it.
+        val outbox = FakeOutboxStore().apply { enqueue(CommentTargets.edit(null, "c-1"), OutboxRequest(OutboxMethod.Delete, listOf("comments", "c-1")), t1) }
         // Server still returns c-1 (the delete hasn't replayed) — the refresh must NOT resurrect it.
         val repo = DefaultCommentRepository(store, FakeRemote(RemoteSnapshot.Available(listOf(comment("c-1")))), outbox)
 

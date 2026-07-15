@@ -43,6 +43,9 @@ interface CommentLocalStore {
     /** Every cached comment id for [taskId] — the reconcile diffs these against the server thread. */
     suspend fun idsForTask(taskId: TaskId): List<String>
 
+    /** The task a cached comment belongs to (to tag an edit/delete's ledger target, #260); `null` if absent. */
+    suspend fun taskIdFor(commentId: String): TaskId?
+
     /** Drop every cached comment (account sign-out cleanup). */
     suspend fun clear()
 }
@@ -93,6 +96,9 @@ class SqlDelightCommentLocalStore(
 
     override suspend fun idsForTask(taskId: TaskId): List<String> =
         queries.selectIdsByTask(taskId.value).executeAsList()
+
+    override suspend fun taskIdFor(commentId: String): TaskId? =
+        queries.selectById(commentId).executeAsOneOrNull()?.let { TaskId(it.task_id) }
 
     override suspend fun clear() {
         queries.deleteAll()

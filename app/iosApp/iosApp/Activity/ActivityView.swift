@@ -67,6 +67,14 @@ private struct ActivityRowView: View {
                     .font(.defernoMono(15))
                     .foregroundColor(colors.onSurface)
                     .fixedSize(horizontal: false, vertical: true)
+                // A comment row carries its text here (the SwiftUI twin of the Compose sub-line snippet).
+                if let body = row.commentBody {
+                    Text(body)
+                        .font(.defernoMono(13))
+                        .foregroundColor(colors.inkMuted)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 TreeChip(text: L.activitySource(row), tone: .neutral)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

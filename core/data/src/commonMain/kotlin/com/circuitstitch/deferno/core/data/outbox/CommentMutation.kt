@@ -34,9 +34,13 @@ data class PostComment(val taskId: TaskId, val clientId: String, val body: Strin
     )
 }
 
-/** Edit comment [commentId]'s body (`PATCH comments/{id} {body}`) — idempotent. */
-data class EditComment(val commentId: String, val body: String) : CommentMutation {
-    override val target: String get() = CommentTargets.edit(commentId)
+/**
+ * Edit comment [commentId]'s body (`PATCH comments/{id} {body}`) — idempotent. [taskId] is carried only to
+ * tag the ledger target (`comment:<taskId>:<commentId>`) so the Activity feed can resolve which item this
+ * touched — it is display-only, never sent; `null` when the writer couldn't resolve it (legacy target).
+ */
+data class EditComment(val taskId: String?, val commentId: String, val body: String) : CommentMutation {
+    override val target: String get() = CommentTargets.edit(taskId, commentId)
     override fun toRequest(): OutboxRequest = OutboxRequest(
         OutboxMethod.Patch,
         listOf("comments", commentId),
@@ -44,8 +48,11 @@ data class EditComment(val commentId: String, val body: String) : CommentMutatio
     )
 }
 
-/** Delete comment [commentId] (`DELETE comments/{id}`, no body) — idempotent (404 = success). */
-data class DeleteComment(val commentId: String) : CommentMutation {
-    override val target: String get() = CommentTargets.edit(commentId)
+/**
+ * Delete comment [commentId] (`DELETE comments/{id}`, no body) — idempotent (404 = success). [taskId] tags
+ * the ledger target only (`comment:<taskId>:<commentId>`), display-only and never sent; `null` when unresolved.
+ */
+data class DeleteComment(val taskId: String?, val commentId: String) : CommentMutation {
+    override val target: String get() = CommentTargets.edit(taskId, commentId)
     override fun toRequest(): OutboxRequest = OutboxRequest(OutboxMethod.Delete, listOf("comments", commentId))
 }

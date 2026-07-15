@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.activity
 
+import com.circuitstitch.deferno.core.data.outbox.CommentTargets
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import kotlinx.coroutines.flow.Flow
@@ -102,6 +103,14 @@ fun ActivityEntry.itemId(): String? {
         else -> null // plan / settings / occurrence (keyed by series, not a single item) have no deep link yet
     }
 }
+
+/**
+ * The task a comment row (`comment-create:` / new-shape `comment:<taskId>:<id>`) touched, or null (legacy
+ * id-only comment target, or a non-comment row). Kept separate from [itemId] so a comment row can resolve
+ * its item ref + deep-link in the Activity feed **without** pulling comment entries into the Task Trail's
+ * `itemId()`-keyed ledger filter.
+ */
+fun ActivityEntry.commentTaskId(): String? = CommentTargets.taskId(target)
 
 /**
  * The local source-of-truth port for the activity ledger (#260) — the read-only twin of

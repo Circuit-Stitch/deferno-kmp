@@ -47,9 +47,11 @@ data class DiffRow(val label: String, val before: DiffValue, val after: DiffValu
  * The **change-detail bottom sheet** (#260) shared by the Activity destination and the Task Trail: a calm
  * old->new field diff of one recorded change. Each [DiffRow] shows its label, the struck-through old value,
  * then the new value; large text (a description edit) scrolls inside the sheet. [subtitle] carries the
- * calm meta line (source · time); [onOpenItem] — when non-null — adds an "Open item" action (omitted when
- * the viewer is already inside the item, e.g. the Trail). When [rows] is empty (a change with no captured
- * field diff) the sheet shows a quiet fallback so a tap is never a dead end.
+ * calm meta line (source · time); [note] — when non-null — is primary prose shown above the diff (the
+ * comment text on a "Commented on …" row, which has no field diff). [onOpenItem] — when non-null — adds an
+ * "Open item" action ([openItemLabel] overrides its text, e.g. "Open Task #99"); omitted when the viewer
+ * is already inside the item, e.g. the Trail. When there is neither a [note] nor any [rows] the sheet shows
+ * a quiet fallback so a tap is never a dead end.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,7 +60,9 @@ fun ChangeDiffSheet(
     rows: List<DiffRow>,
     onDismiss: () -> Unit,
     subtitle: String? = null,
+    note: String? = null,
     onOpenItem: (() -> Unit)? = null,
+    openItemLabel: String? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -78,22 +82,34 @@ fun ChangeDiffSheet(
                 MonoMeta(subtitle, modifier = Modifier.padding(top = 4.dp))
             }
             Spacer(Modifier.height(20.dp))
-            if (rows.isEmpty()) {
+            // A comment's own text: primary prose, selectable, scrolls with the sheet (no inner scroll).
+            if (note != null) {
+                SelectionContainer {
+                    Text(
+                        text = note,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                if (rows.isNotEmpty()) Spacer(Modifier.height(18.dp))
+            }
+            if (rows.isNotEmpty()) {
+                rows.forEachIndexed { index, row ->
+                    if (index > 0) Spacer(Modifier.height(18.dp))
+                    DiffRowView(row)
+                }
+            } else if (note == null) {
+                // Only a genuine dead end (no note, no field diff) shows the fallback.
                 Text(
                     text = stringResource(Res.string.activity_diff_empty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.defernoColors.inkMuted,
                 )
-            } else {
-                rows.forEachIndexed { index, row ->
-                    if (index > 0) Spacer(Modifier.height(18.dp))
-                    DiffRowView(row)
-                }
             }
             if (onOpenItem != null) {
                 Spacer(Modifier.height(24.dp))
                 OutlinedButton(onClick = onOpenItem, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(Res.string.activity_diff_open_item))
+                    Text(openItemLabel ?: stringResource(Res.string.activity_diff_open_item))
                 }
             }
         }

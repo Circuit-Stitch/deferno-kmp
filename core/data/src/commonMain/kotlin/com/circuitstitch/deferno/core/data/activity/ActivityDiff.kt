@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.activity
 
+import com.circuitstitch.deferno.core.data.outbox.CommentTargets
 import com.circuitstitch.deferno.core.model.ActivityField
 import com.circuitstitch.deferno.core.model.ActivityFieldChange
 import com.circuitstitch.deferno.core.model.ActivityFieldValue
@@ -9,6 +10,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 private val diffJson = Json { ignoreUnknownKeys = true }
@@ -48,6 +51,23 @@ fun ActivityEntry.changes(): List<ActivityFieldChange> {
 private fun String?.parseObjectOrNull(): JsonObject? {
     if (this == null) return null
     return runCatching { diffJson.parseToJsonElement(this) as? JsonObject }.getOrNull()
+}
+
+/**
+ * The comment text a comment post/edit row carries (#260) — the `"body"` of the captured request JSON on a
+ * `comment`/`comment-create` [ActivityEntry.target]. `null` for a non-comment row, a delete (no body), a
+ * malformed/blank body, or a **private** comment (`is_private == true`) — the feed never surfaces private
+ * text, cheap insurance for a future private-comment UI or a server-sourced reconcile row.
+ */
+fun ActivityEntry.commentBody(): String? {
+    if (!target.startsWith(CommentTargets.CREATE_PREFIX) &&
+        !target.startsWith(CommentTargets.EDIT_PREFIX)
+    ) {
+        return null
+    }
+    val obj = body.parseObjectOrNull() ?: return null
+    if ((obj["is_private"] as? JsonPrimitive)?.booleanOrNull == true) return null
+    return (obj["body"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 }
 
 /**
