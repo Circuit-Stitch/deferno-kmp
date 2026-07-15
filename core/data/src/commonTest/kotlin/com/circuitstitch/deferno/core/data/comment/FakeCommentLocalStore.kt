@@ -47,6 +47,8 @@ class FakeCommentLocalStore : CommentLocalStore {
     override suspend fun idsForTask(taskId: TaskId): List<String> =
         rows.value.values.filter { it.taskId == taskId }.map { it.id }
 
+    override suspend fun taskIdFor(commentId: String): TaskId? = rows.value[commentId]?.taskId
+
     override suspend fun clear() {
         rows.value = emptyMap()
     }

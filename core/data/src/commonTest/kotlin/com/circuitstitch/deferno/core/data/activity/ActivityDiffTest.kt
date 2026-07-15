@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.model.ActivityFieldValue
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -26,6 +27,34 @@ class ActivityDiffTest {
         body = body,
         before = before,
     )
+
+    private fun commentEntry(target: String, body: String?) = ActivityEntry(
+        seq = 1,
+        recordedAt = Instant.parse("2026-06-21T12:00:00Z"),
+        source = ActivitySource.Mobile,
+        target = target,
+        method = OutboxMethod.Post,
+        path = emptyList(),
+        body = body,
+    )
+
+    @Test
+    fun commentBodyReadsThePostedTextAndGuardsDeletePrivateAndNonComment() {
+        assertEquals("nice one", commentEntry("comment-create:t-1:c-1", """{"body":"nice one","is_private":false}""").commentBody())
+        assertEquals("edited", commentEntry("comment:t-1:c-1", """{"body":"edited"}""").commentBody())
+        assertNull(commentEntry("comment:t-1:c-1", null).commentBody()) // delete: no body
+        assertNull(commentEntry("comment-create:t-1:c-1", """{"body":"secret","is_private":true}""").commentBody()) // private
+        assertNull(commentEntry("comment-create:t-1:c-1", """{"body":"   "}""").commentBody()) // blank
+        assertNull(commentEntry("task:a", """{"body":"x"}""").commentBody()) // not a comment row
+    }
+
+    @Test
+    fun commentTaskIdResolvesCreateAndNewEditOnly() {
+        assertEquals("t-1", commentEntry("comment-create:t-1:c-1", null).commentTaskId())
+        assertEquals("t-1", commentEntry("comment:t-1:c-1", null).commentTaskId())
+        assertNull(commentEntry("comment:c-1", null).commentTaskId()) // legacy id-only edit target
+        assertNull(commentEntry("task:a", null).commentTaskId())
+    }
 
     @Test
     fun noPayloadYieldsNoDiff() {

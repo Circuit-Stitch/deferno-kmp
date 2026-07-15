@@ -45,6 +45,15 @@
     <string name="activity_summary_updated_occurrence_habit">Se actualizó una ocurrencia de hábito</string>
     <string name="activity_summary_updated_plan">Se actualizó tu plan</string>
     <string name="activity_summary_updated_task">Se actualizó una tarea</string>
+    <!-- Ref-enriched summaries (#260): "Updated task #41" — used when the item ref resolves; plain siblings above are the no-ref fallback -->
+    <string name="activity_summary_created_task_ref">Se creó la tarea %1$s</string>
+    <string name="activity_summary_created_chore_ref">Se creó el quehacer %1$s</string>
+    <string name="activity_summary_created_habit_ref">Se creó el hábito %1$s</string>
+    <string name="activity_summary_created_event_ref">Se creó el evento %1$s</string>
+    <string name="activity_summary_created_item_ref">Se creó el elemento %1$s</string>
+    <string name="activity_summary_moved_item_ref">Se movió el elemento %1$s</string>
+    <string name="activity_summary_updated_task_ref">Se actualizó la tarea %1$s</string>
+    <string name="activity_summary_commented_ref">Comentó en %1$s</string>
 
     <!-- ── assistant ─────────────────────────────────────────────── -->
     <string name="assistant_action_working">Trabajando…</string>

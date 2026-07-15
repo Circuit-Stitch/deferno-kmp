@@ -50,6 +50,15 @@
     <string name="activity_summary_updated_occurrence_habit">आदत की एक बारी अपडेट की</string>
     <string name="activity_summary_updated_plan">आपकी योजना अपडेट की</string>
     <string name="activity_summary_updated_task">एक कार्य अपडेट किया</string>
+    <!-- Ref-enriched summaries (#260): "Updated task #41" — used when the item ref resolves; plain siblings above are the no-ref fallback -->
+    <string name="activity_summary_created_task_ref">कार्य %1$s बनाया</string>
+    <string name="activity_summary_created_chore_ref">काम %1$s बनाया</string>
+    <string name="activity_summary_created_habit_ref">आदत %1$s बनाई</string>
+    <string name="activity_summary_created_event_ref">इवेंट %1$s बनाया</string>
+    <string name="activity_summary_created_item_ref">आइटम %1$s बनाया</string>
+    <string name="activity_summary_moved_item_ref">आइटम %1$s मूव किया</string>
+    <string name="activity_summary_updated_task_ref">कार्य %1$s अपडेट किया</string>
+    <string name="activity_summary_commented_ref">%1$s पर टिप्पणी की</string>
 
     <!-- ── assistant ─────────────────────────────────────────────── -->
     <string name="assistant_action_working">काम चल रहा है…</string>

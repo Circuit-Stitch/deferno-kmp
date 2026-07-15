@@ -25,24 +25,28 @@ class CommentMutationTest {
     }
 
     @Test
-    fun editTargetsTheCommentIdAndPatchesTheBody() {
-        val request = EditComment(commentId = "c-1", body = "edited").let {
-            assertEquals("comment:c-1", it.target)
+    fun editTargetsTaskAndCommentAndPatchesTheBody() {
+        val request = EditComment(taskId = "t-1", commentId = "c-1", body = "edited").let {
+            // The taskId tags the target (so the Activity feed resolves the item) but is NOT sent.
+            assertEquals("comment:t-1:c-1", it.target)
             it.toRequest()
         }
         assertEquals(OutboxMethod.Patch, request.method)
         assertEquals(listOf("comments", "c-1"), request.path)
         assertEquals("""{"body":"edited"}""", request.body)
+        // An unresolved task falls back to the legacy id-only target.
+        assertEquals("comment:c-1", EditComment(taskId = null, commentId = "c-1", body = "x").target)
     }
 
     @Test
-    fun deleteTargetsTheCommentIdAndSendsNoBody() {
-        val request = DeleteComment(commentId = "c-1").let {
-            assertEquals("comment:c-1", it.target)
+    fun deleteTargetsTaskAndCommentAndSendsNoBody() {
+        val request = DeleteComment(taskId = "t-1", commentId = "c-1").let {
+            assertEquals("comment:t-1:c-1", it.target)
             it.toRequest()
         }
         assertEquals(OutboxMethod.Delete, request.method)
         assertEquals(listOf("comments", "c-1"), request.path)
         assertNull(request.body)
+        assertEquals("comment:c-1", DeleteComment(taskId = null, commentId = "c-1").target)
     }
 }

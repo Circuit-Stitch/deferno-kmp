@@ -605,6 +605,8 @@ class DefaultMainShellComponent(
                     DefaultActivityComponent(
                         componentContext = childContext,
                         observeActivity = observeActivity,
+                        // The cross-kind item cache the feed joins each row against to resolve its ref + kind (#260).
+                        observeItems = itemRepository::observeItems,
                         output = ::onActivityOutput,
                         coroutineContext = coroutineContext,
                     ),

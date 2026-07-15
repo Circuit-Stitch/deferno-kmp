@@ -64,14 +64,18 @@ class OutboxCommentWriter(
     override suspend fun edit(commentId: String, body: String) {
         val at = now()
         localStore.setBody(commentId, body, at)
-        val mutation = EditComment(commentId, body)
+        // Tag the ledger target with the comment's task so the Activity feed can resolve which item it
+        // touched (#260); display-only, never sent. The row is present (you edit a loaded comment).
+        val mutation = EditComment(localStore.taskIdFor(commentId)?.value, commentId, body)
         outbox.enqueue(mutation.target, mutation.toRequest(), at)
     }
 
     override suspend fun delete(commentId: String) {
         val at = now()
+        // Resolve the task before the tombstone — softDelete keeps the row, so either order works.
+        val taskId = localStore.taskIdFor(commentId)?.value
         localStore.softDelete(commentId, at)
-        val mutation = DeleteComment(commentId)
+        val mutation = DeleteComment(taskId, commentId)
         outbox.enqueue(mutation.target, mutation.toRequest(), at)
     }
 }

@@ -57,6 +57,15 @@
     <string name="activity_summary_updated_occurrence_habit">Updated a habit occurrence</string>
     <string name="activity_summary_updated_plan">Updated your plan</string>
     <string name="activity_summary_updated_task">Updated a task</string>
+    <!-- Ref-enriched summaries (#260): "Updated task #41" — used when the item ref resolves; plain siblings above are the no-ref fallback -->
+    <string name="activity_summary_created_task_ref">Created task %1$s</string>
+    <string name="activity_summary_created_chore_ref">Created chore %1$s</string>
+    <string name="activity_summary_created_habit_ref">Created habit %1$s</string>
+    <string name="activity_summary_created_event_ref">Created event %1$s</string>
+    <string name="activity_summary_created_item_ref">Created item %1$s</string>
+    <string name="activity_summary_moved_item_ref">Moved item %1$s</string>
+    <string name="activity_summary_updated_task_ref">Updated task %1$s</string>
+    <string name="activity_summary_commented_ref">Commented on %1$s</string>
 
     <!-- ── assistant ─────────────────────────────────────────────── -->
     <!-- Fallback tool-activity line (via typed-state refactor) -->

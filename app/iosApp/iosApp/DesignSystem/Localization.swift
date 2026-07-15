@@ -83,24 +83,30 @@ enum L {
 
     // MARK: Activity feed (typed ActivitySummary / ActivitySource)
 
-    /// The localized one-liner for an Activity row, from its typed verb + optional item-kind token.
+    /// The localized one-liner for an Activity row, from its typed verb + optional item-kind token. When
+    /// the item ref resolved (`row.itemRef`, e.g. "#41") the ref-capable verbs read "Updated task #41";
+    /// otherwise the plain fallback. Mirrors the Compose `ActivityFeedRow.summaryText`.
     static func activitySummary(_ row: ActivityFeedRow) -> String {
         let verb = ShellBridgeKt.activitySummaryVerb(row: row)
         let kind = ShellBridgeKt.activitySummaryKindToken(row: row)
+        func s(_ plain: String, _ refKey: String) -> String {
+            if let itemRef = row.itemRef { return format(refKey, itemRef) }
+            return string(plain)
+        }
         switch verb {
         case "ChangedSettings": return string("activity_summary_changed_settings")
         case "Created":
             switch kind {
-            case "task": return string("activity_summary_created_task")
-            case "chore": return string("activity_summary_created_chore")
-            case "habit": return string("activity_summary_created_habit")
-            case "event": return string("activity_summary_created_event")
-            default: return string("activity_summary_created_item")
+            case "task": return s("activity_summary_created_task", "activity_summary_created_task_ref")
+            case "chore": return s("activity_summary_created_chore", "activity_summary_created_chore_ref")
+            case "habit": return s("activity_summary_created_habit", "activity_summary_created_habit_ref")
+            case "event": return s("activity_summary_created_event", "activity_summary_created_event_ref")
+            default: return s("activity_summary_created_item", "activity_summary_created_item_ref")
             }
-        case "MovedItem": return string("activity_summary_moved_item")
+        case "MovedItem": return s("activity_summary_moved_item", "activity_summary_moved_item_ref")
         case "UpdatedPlan": return string("activity_summary_updated_plan")
         case "DeletedTask": return string("activity_summary_deleted_task")
-        case "UpdatedTask": return string("activity_summary_updated_task")
+        case "UpdatedTask": return s("activity_summary_updated_task", "activity_summary_updated_task_ref")
         case "ClearedOccurrence":
             switch kind {
             case "chore": return string("activity_summary_cleared_occurrence_chore")
@@ -113,6 +119,8 @@ enum L {
             case "habit": return string("activity_summary_updated_occurrence_habit")
             default: return string("activity_summary_updated_occurrence_event")
             }
+        // Comment rows previously fell through to "Updated an item" — now their own line, with the ref.
+        case "Commented": return s("activity_summary_commented", "activity_summary_commented_ref")
         default: return string("activity_summary_updated_item")
         }
     }

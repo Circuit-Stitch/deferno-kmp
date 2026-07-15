@@ -48,7 +48,9 @@ class OutboxCommentWriterTest {
         writer(store, outbox).edit("c-1", "new")
 
         assertEquals("new", store.observe(task).first().single().body)
-        assertEquals("comment:c-1", outbox.all.single().target)
+        // The target now tags the comment's task (resolved from the store) so the Activity feed can
+        // resolve which item the edit touched (#260).
+        assertEquals("comment:t-1:c-1", outbox.all.single().target)
         assertEquals(OutboxMethod.Patch, outbox.all.single().request.method)
     }
 
@@ -60,7 +62,7 @@ class OutboxCommentWriterTest {
         writer(store, outbox).delete("c-1")
 
         assertEquals(emptyList(), store.observe(task).first().map { it.id }) // gone from the live thread
-        assertEquals("comment:c-1", outbox.all.single().target)
+        assertEquals("comment:t-1:c-1", outbox.all.single().target)
         assertEquals(OutboxMethod.Delete, outbox.all.single().request.method)
     }
 }
