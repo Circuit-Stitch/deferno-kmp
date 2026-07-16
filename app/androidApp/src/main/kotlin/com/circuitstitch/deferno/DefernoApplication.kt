@@ -58,14 +58,10 @@ class DefernoApplication : Application() {
         appComponent = createAppComponent(
             platform = PlatformContext(this),
             // Environment by product flavor, decoupled from build type (ADR-0047): the `environment`
-            // flavor dimension (prod/staging) injects DEFERNO_ENV, so a debuggable, dev-seeded build can
-            // target Production (prodDebug) alongside the release dogfood install. Falls back to
-            // Production for any unrecognized value.
-            environment = when (BuildConfig.DEFERNO_ENV) {
-                "Staging" -> DefernoEnvironment.Staging
-                "Local" -> DefernoEnvironment.Local
-                else -> DefernoEnvironment.Production
-            },
+            // flavor dimension (prod/staging) injects DEFERNO_ENV, which DefernoEnvironment.fromName maps
+            // to the backend enum (fail-safe Production for any unrecognized value), so a debuggable,
+            // dev-seeded build can target Production (prodDebug) alongside the release dogfood install.
+            environment = DefernoEnvironment.fromName(BuildConfig.DEFERNO_ENV),
         )
         appScope.launch {
             appComponent.accountManager.load()

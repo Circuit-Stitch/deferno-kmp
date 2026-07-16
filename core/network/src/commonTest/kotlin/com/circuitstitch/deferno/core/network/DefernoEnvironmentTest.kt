@@ -29,6 +29,22 @@ class DefernoEnvironmentTest {
     }
 
     @Test
+    fun fromNameResolvesEveryInjectedNameAndFailsSafeToProduction() {
+        // fromName is the single home for the build-injected env string → enum mapping (ADR-0047):
+        // Android's BuildConfig.DEFERNO_ENV and iOS's Info.plist DefernoEnv both flow through it. Each
+        // enum's own name must round-trip to it — this doubles as a totality guard, so a new environment
+        // added without a matching fromName arm fails here rather than silently falling back to Production.
+        DefernoEnvironment.entries.forEach { env ->
+            assertEquals(env, DefernoEnvironment.fromName(env.name), "fromName(${env.name}) must resolve to $env")
+        }
+        // Any unknown or absent value fails safe to Production (never throws); the match is case-sensitive.
+        assertEquals(DefernoEnvironment.Production, DefernoEnvironment.fromName(null))
+        assertEquals(DefernoEnvironment.Production, DefernoEnvironment.fromName(""))
+        assertEquals(DefernoEnvironment.Production, DefernoEnvironment.fromName("Prod"))
+        assertEquals(DefernoEnvironment.Production, DefernoEnvironment.fromName("staging"))
+    }
+
+    @Test
     fun everyRemoteEnvironmentIsHttps() {
         // Cleartext is allowed only for the loopback (local-dev) backend.
         DefernoEnvironment.entries.forEach { env ->

@@ -39,4 +39,23 @@ enum class DefernoEnvironment(val baseUrl: String) {
 
     /** Local development: `http://localhost:3000/api/` (loopback cleartext, spec `servers`). */
     Local("http://localhost:3000/api/"),
+    ;
+
+    companion object {
+        /**
+         * Resolve a build-injected environment name to the backend enum — the single home for how a
+         * variant's env string becomes a [DefernoEnvironment] (ADR-0047). The name is injected per build
+         * variant: Android reads `BuildConfig.DEFERNO_ENV` (a per-flavor `buildConfigField`), iOS reads
+         * the `DefernoEnv` `Info.plist` value (a per-config build setting). Any unknown or absent value
+         * fails safe to [Production] — the fail-safe backend for a misconfigured build.
+         *
+         * Matches on literal names (deliberately NOT [Enum.name]) so the selector is independent of R8
+         * field renaming: it runs in the minified `prodRelease`/`stagingRelease` variants too.
+         */
+        fun fromName(name: String?): DefernoEnvironment = when (name) {
+            "Staging" -> Staging
+            "Local" -> Local
+            else -> Production
+        }
+    }
 }
