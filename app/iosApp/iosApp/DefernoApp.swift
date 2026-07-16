@@ -19,6 +19,10 @@ struct DefernoApp: App {
     init() {
         let recorder = BrainDumpRecorder()
         _recorder = StateObject(wrappedValue: recorder)
+        // The backend environment is INJECTED per Xcode build configuration (ADR-0047): the per-config
+        // `DEFERNO_ENV` build setting surfaces through Info.plist as `DefernoEnv`; the Kotlin mapper turns
+        // that string into the `DefernoEnvironment` enum, decoupling the env from `Platform.isDebugBinary`.
+        let envName = Bundle.main.object(forInfoDictionaryKey: "DefernoEnv") as? String
         // On-device capabilities: dictation (#268, SFSpeech mic), and the Brain dump's on-device extraction
         // (#269) — the SpeechTranscriber file transcriber + the Apple Foundation Models inference engine.
         let host = DefernoRoot(
@@ -28,7 +32,8 @@ struct DefernoApp: App {
             fileTranscriber: IosFileTranscriber(),
             // The server-mediated Assistant SSE turn-stream (#282, ADR-0040): a raw URLSession SSE reader
             // bridged into the shared AssistantStream seam (Kotlin owns auth + base URL + parsing).
-            transport: IosAssistantTransport()
+            transport: IosAssistantTransport(),
+            environment: DefernoRootKt.defernoEnvironment(name: envName)
         )
         _host = State(initialValue: host)
         // Brain dump completion notification (#271): a tap routes to the Inbox through the shared shell.

@@ -1,0 +1,6 @@
+<resources>
+    <!-- ADR-0047: the stagingDebug install's launcher name, so it never gets confused with the prod
+         dogfood app or the prodDebug repro build. Framework-read app_name (NOT the Compose catalog);
+         reuses the existing key only, translatable, single value, no locale variants. -->
+    <string name="app_name" translatable="false">Deferno Dev</string>
+</resources>

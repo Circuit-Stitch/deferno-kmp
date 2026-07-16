@@ -82,6 +82,13 @@ class DefernoRoot(
     // The injected Swift SSE turn-stream transport (#282, ADR-0040). `null` (a unit host) leaves the
     // graceful no-op AssistantStream.NONE, so a turn says "not available here" rather than hanging.
     transport: NativeAssistantTransport? = null,
+    // The backend environment, INJECTED per Xcode build configuration (ADR-0047), decoupled from
+    // `Platform.isDebugBinary`. The real Swift entry point reads the `DefernoEnv` Info.plist value (fed
+    // by the per-config `DEFERNO_ENV` build setting) and resolves it via [defernoEnvironment] /
+    // [DefernoEnvironment.fromName], which fails safe to Production for an unknown/absent value. This
+    // Staging default is ONLY the fallback for a unit host that constructs DefernoRoot without an env
+    // (matching the prior debug-binary test behaviour) — shipping builds always pass one explicitly.
+    private val environment: DefernoEnvironment = DefernoEnvironment.Staging,
 ) {
 
     init {
@@ -94,14 +101,6 @@ class DefernoRoot(
         Logger.configure(minLogLevel = startupLogLevel(), prefix = "Deferno")
         logger.i { "Deferno (iOS) starting" }
     }
-
-    // Environment by build configuration: Debug dev builds talk to staging (the dev-PAT target,
-    // ADR-0012); Release builds (archives / TestFlight) talk to production. The Xcode build phase
-    // builds the Kotlin framework for the current Xcode CONFIGURATION (embedAndSignAppleFrameworkForXcode),
-    // so `Platform.isDebugBinary` tracks Debug↔Release exactly.
-    @OptIn(ExperimentalNativeApi::class)
-    private val environment =
-        if (Platform.isDebugBinary) DefernoEnvironment.Staging else DefernoEnvironment.Production
 
     private val appComponent: AppComponent = createAppComponent(
         platform = PlatformContext(),
@@ -362,6 +361,14 @@ class DefernoRoot(
 @OptIn(ExperimentalNativeApi::class)
 private fun startupLogLevel(): LogLevel =
     if (Platform.isDebugBinary) LogLevel.DEBUG else LogLevel.WARN
+
+/**
+ * Maps the Info.plist `DefernoEnv` string to the backend enum (ADR-0047), failing safe to Production.
+ * Kept as a top-level function purely to give the Swift entry point a clean `DefernoRootKt`-namespaced
+ * call site (`DefernoRootKt.defernoEnvironment(name:)`); the policy itself lives in the single source of
+ * truth [DefernoEnvironment.fromName], shared with the Android entry point (and, later, macOS/desktop).
+ */
+fun defernoEnvironment(name: String?): DefernoEnvironment = DefernoEnvironment.fromName(name)
 
 /**
  * Build a web-app URL for [path] from the configured backend [environment] (#72) — the iOS twin of

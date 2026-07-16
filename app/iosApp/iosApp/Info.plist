@@ -10,6 +10,11 @@
 	     both Debug-only). Empty in Release / CI / a fresh clone, so DefernoRoot seeds no dev account there. -->
 	<key>DevStagingToken</key>
 	<string>$(DEV_STAGING_TOKEN)</string>
+	<!-- The backend environment, injected per Xcode build configuration via the DEFERNO_ENV build
+	     setting (ADR-0047). DefernoApp reads this and maps it to DefernoEnvironment, decoupling the
+	     env from the debug/release build type. -->
+	<key>DefernoEnv</key>
+	<string>$(DEFERNO_ENV)</string>
 	<!-- The Brain dump recorder + New-form dictation capture the mic (ADR-0027/#92). -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Deferno uses the microphone to capture a brain dump or dictate a task by voice.</string>

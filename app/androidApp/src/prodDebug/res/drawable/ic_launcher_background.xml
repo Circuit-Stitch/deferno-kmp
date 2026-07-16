@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ADR-0047 prodDebug variant: same full-bleed adaptive-icon background as main, recolored to a
+     distinct muted purple so the Deferno β launcher icon is visually separable from the prod dogfood
+     install. Only the fillColor differs; the flame foreground + monochrome layers stay inherited from
+     main. Combined flavor+buildType source set, so it covers ONLY prodDebug (not prodRelease). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#2A1F3D"
+        android:pathData="M0,0h108v108h-108z" />
+</vector>

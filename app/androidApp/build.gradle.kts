@@ -64,11 +64,36 @@ android {
         localeFilters += listOf("en", "es", "de", "hi", "pt")
     }
 
-    buildTypes {
-        debug {
-            // Dev PAT login placeholder (#68): seed Accounts from local.properties on debug builds.
+    // Environment is a product-flavor dimension, decoupled from build type (ADR-0047): each flavor
+    // injects its DefernoEnvironment (read by DefernoApplication) and its own dev-account seeding, and
+    // carries a distinct applicationId suffix so prod/staging installs coexist and the OS isolates them.
+    flavorDimensions += "environment"
+    productFlavors {
+        create("prod") {
+            dimension = "environment"
+            // prodRelease keeps the base applicationId (com.circuitstitch.deferno) so existing installs
+            // upgrade cleanly; prodDebug gets the build type's .debug suffix -> ...deferno.debug.
+            buildConfigField("String", "DEFERNO_ENV", "\"Production\"")
+            // prodDebug seeds ONLY the disposable prod Test account (ADR-0047 phase 2). No staging token.
+            buildConfigField("String", "DEV_ACCOUNTS", stringLiteral(localProperty("deferno.prod.accounts")))
+            buildConfigField("String", "DEV_STAGING_TOKEN", "\"\"")
+        }
+        create("staging") {
+            dimension = "environment"
+            // ...deferno.staging (+ .debug from the debug build type -> ...deferno.staging.debug).
+            applicationIdSuffix = ".staging"
+            buildConfigField("String", "DEFERNO_ENV", "\"Staging\"")
+            // stagingDebug seeds the staging dev accounts (ADR-0012 paste path).
             buildConfigField("String", "DEV_ACCOUNTS", stringLiteral(localProperty("deferno.dev.accounts")))
             buildConfigField("String", "DEV_STAGING_TOKEN", stringLiteral(localProperty("deferno.staging.apiToken")))
+        }
+    }
+
+    buildTypes {
+        debug {
+            // .debug suffix so debug variants coexist with release; the DEV_ACCOUNTS/DEV_STAGING_TOKEN
+            // seeding now comes from the flavor (ADR-0047), not the build type.
+            applicationIdSuffix = ".debug"
         }
         release {
             isMinifyEnabled = true
@@ -77,7 +102,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // No PAT ever ships in a release build (#68 phase 5 verifies this).
+            // No PAT ever ships in a release build (#68 phase 5 verifies this). Build-type values WIN
+            // over flavor values, so NO release variant (prodRelease/stagingRelease) can ever seed a PAT
+            // regardless of flavor — the critical ADR-0047 safety property. release sets no DEFERNO_ENV,
+            // so it inherits the flavor's value (prodRelease -> Production).
             buildConfigField("String", "DEV_ACCOUNTS", "\"\"")
             buildConfigField("String", "DEV_STAGING_TOKEN", "\"\"")
         }
