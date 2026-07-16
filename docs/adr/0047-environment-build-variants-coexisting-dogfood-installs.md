@@ -121,7 +121,9 @@ Production alongside the real dogfood app.
 - **Desktop/macOS** are positioned but **deferred**: the shared inject-the-environment change lets them
   adopt variant-based selection later (desktop currently hardcodes `Staging`; macOS uses
   `isDebugBinary`). No wire, DTO, or DI-graph change anywhere — `createAppComponent` already takes the
-  environment.
+  environment. When they migrate, the shared seam is `DefernoEnvironment.fromName(name)` (`core/network`):
+  the single home for the build-injected env-string → enum mapping the Android/iOS entry points already
+  call, so they resolve their injected env through it rather than re-deriving a third/fourth copy.
 - `CONTEXT.md` is unchanged: `Account` (hard isolation + fast switch), `App setting` (device-local), and
   `Personal access token (PAT)` already name every concept this relies on; "Personal" vs "Test" are just
   two labeled Accounts, not new vocabulary.
