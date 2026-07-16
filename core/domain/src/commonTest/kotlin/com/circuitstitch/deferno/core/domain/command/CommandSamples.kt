@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 internal val SAMPLE_DEADLINE: Instant = Instant.parse("2026-06-07T12:00:00Z")
@@ -53,6 +54,7 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.MoveItem -> MoveItem("item-1", newParentId = "p1", position = 2)
     CommandKind.SetDefinitionState -> SetDefinitionState("h1", ItemKind.Habit, DefinitionState.Archived)
     CommandKind.SetTaskBlockedBy -> SetTaskBlockedBy(TaskId("t1"), listOf("b1", "b2"))
+    CommandKind.SetTaskDeadlineTime -> SetTaskDeadlineTime(TaskId("t1"), LocalTime(9, 0))
 }
 
 /** Concise [Task] fixture for the enablement tests. */

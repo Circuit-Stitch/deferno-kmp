@@ -64,6 +64,7 @@ fun openTaskDetailWindow(root: RootComponent, idValue: String): TaskDetailWindow
         commentWriter = session.commentWriter,
         currentUserId = session.currentUserId,
         setDeadline = session.setDeadline,
+        setDeadlineTime = session.setDeadlineTime,
         setLabels = session.setLabels,
     )
     lifecycle.resume()

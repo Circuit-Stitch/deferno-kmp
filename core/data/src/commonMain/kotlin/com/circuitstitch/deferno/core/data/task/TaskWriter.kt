@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
@@ -28,6 +29,12 @@ interface TaskWriter {
 
     /** Clear the Task's deadline — `null` = "clear it" (`PATCH tasks/{id} {"complete_by":null}`). */
     suspend fun clearDeadline(id: TaskId)
+
+    /**
+     * Set the Task's deadline **clock time** — the source-of-truth time axis (#348,
+     * `PATCH tasks/{id} {"deadline_time_of_day":"HH:MM"}`); a `null` [timeOfDay] = **all-day**.
+     */
+    suspend fun setDeadlineTime(id: TaskId, timeOfDay: LocalTime?)
 
     /** Set the Task's description (`PATCH tasks/{id} {"description":…}`). */
     suspend fun setDescription(id: TaskId, description: String)

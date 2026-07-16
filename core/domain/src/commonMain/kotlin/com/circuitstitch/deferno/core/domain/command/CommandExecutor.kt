@@ -66,6 +66,7 @@ class CommandExecutor(
             is RenameTask -> taskWriter.rename(command.taskId, command.title)
             is SetTaskDeadline -> taskWriter.setDeadline(command.taskId, command.completeBy)
             is ClearTaskDeadline -> taskWriter.clearDeadline(command.taskId)
+            is SetTaskDeadlineTime -> taskWriter.setDeadlineTime(command.taskId, command.timeOfDay)
             is SetTaskDescription -> taskWriter.setDescription(command.taskId, command.description)
             is ClearTaskDescription -> taskWriter.clearDescription(command.taskId)
             is SetTaskLabels -> taskWriter.setLabels(command.taskId, command.labels)

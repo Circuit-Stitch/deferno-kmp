@@ -9,6 +9,7 @@ import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -50,6 +51,8 @@ class CommandExecutorTest {
         ex.execute(RenameTask(id, "renamed"))
         ex.execute(SetTaskDeadline(id, SAMPLE_DEADLINE))
         ex.execute(ClearTaskDeadline(id))
+        ex.execute(SetTaskDeadlineTime(id, LocalTime(9, 0)))
+        ex.execute(SetTaskDeadlineTime(id, null))
         ex.execute(SetTaskDescription(id, "described"))
         ex.execute(ClearTaskDescription(id))
         ex.execute(SetTaskLabels(id, listOf("home")))
@@ -67,6 +70,8 @@ class CommandExecutorTest {
                 FakeTaskWriter.Call.Rename(id, "renamed"),
                 FakeTaskWriter.Call.SetDeadline(id, SAMPLE_DEADLINE),
                 FakeTaskWriter.Call.ClearDeadline(id),
+                FakeTaskWriter.Call.SetDeadlineTime(id, LocalTime(9, 0)),
+                FakeTaskWriter.Call.SetDeadlineTime(id, null),
                 FakeTaskWriter.Call.SetDescription(id, "described"),
                 FakeTaskWriter.Call.ClearDescription(id),
                 FakeTaskWriter.Call.SetLabels(id, listOf("home")),

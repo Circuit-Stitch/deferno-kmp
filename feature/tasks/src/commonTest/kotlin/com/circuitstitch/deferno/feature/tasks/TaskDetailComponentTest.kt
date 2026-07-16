@@ -47,6 +47,7 @@ private fun TestScope.taskDetailComponent(
     currentUserId: UserId? = null,
     createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
     setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit = { _, _ -> },
     setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     delete: suspend (TaskId) -> Unit = {},
     onDeviceAttachments: OnDeviceAttachments = OnDeviceAttachments.NONE,
@@ -65,6 +66,7 @@ private fun TestScope.taskDetailComponent(
     currentUserId = currentUserId,
     createSubtask = createSubtask,
     setDeadline = setDeadline,
+    setDeadlineTime = setDeadlineTime,
     setLabels = setLabels,
     delete = delete,
     onDeviceAttachments = onDeviceAttachments,
@@ -538,6 +540,29 @@ class TaskDetailComponentTest {
 
         // A null date reaches the seam as a null completeBy — the explicit clear.
         assertEquals(listOf<Pair<TaskId, Instant?>>(TaskId("a") to null), recorded)
+    }
+
+    @Test
+    fun onSetDeadlineTimeForwardsTheClockToTheSeam() = runTest {
+        // The source-of-truth time axis (#348): the picked clock forwards straight through to the seam — a
+        // real time sets it, a null makes the deadline all-day. (No completeBy recompute: the server discards
+        // complete_by's clock and lets deadline_time_of_day win, so this write alone changes the time.)
+        val recorded = mutableListOf<Pair<TaskId, LocalTime?>>()
+        val component = taskDetailComponent(
+            TaskId("a"),
+            FakeTaskRepository(listOf(task("a"))),
+            setDeadlineTime = { id, time -> recorded += id to time },
+        )
+        advanceUntilIdle()
+
+        component.onSetDeadlineTime(LocalTime(14, 30))
+        component.onSetDeadlineTime(null)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf<Pair<TaskId, LocalTime?>>(TaskId("a") to LocalTime(14, 30), TaskId("a") to null),
+            recorded,
+        )
     }
 
     @Test

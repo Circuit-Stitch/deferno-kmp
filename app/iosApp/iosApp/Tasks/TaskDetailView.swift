@@ -10,7 +10,8 @@ import UniformTypeIdentifiers
 /// the properties table, and the subtask tree) and `Trail` (the one merged, day-grouped comments +
 /// enriched-history feed with a tappable old→new `ChangeDiffSheet`). The task's top actions — Add subtask ·
 /// Add comment · Add to today's plan · Change status — live on an overlaid FAB + add sheet (ADR-0044 parity
-/// with Android). The component hydrates + loads comments/attachments on creation (#22); this View reflects its state.
+/// with Android); status is also changeable straight from the STATUS row's `Menu` action sheet.
+/// The component hydrates + loads comments/attachments on creation (#22); this View reflects its state.
 struct TaskDetailView: View {
     let component: TaskDetailComponent
     /// false when the View is **pushed** onto the compact `NavigationStack`: the native bar supplies the
@@ -31,17 +32,19 @@ struct TaskDetailView: View {
     @State private var showingAddSubtask = false
     @State private var addSubtaskTitle = ""
     @State private var confirmingDelete = false
-    // Tabbed sections + read-only journey STATUS picker (ADR-0044/ADR-0046): Info · Trail, the status sheet
-    // opened by tapping the STATUS row, the "View attachments" sheet, and the tapped-history change-diff sheet.
+    // Tabbed sections (ADR-0044/ADR-0046): Info · Trail. (The STATUS row's picker needs no state — it is a
+    // `Menu` action sheet on the row itself; the attachments + change-diff sheets keep their own flags below.)
     @State private var tab: DetailTab = .info
-    @State private var showingStatusPicker = false
+    // The combined date+time WHEN picker (#348): the summary chip toggles a popover holding the graphical
+    // [.date, .hourAndMinute] DatePicker (the iOS 26 UI-kit look — calendar + Time row in one surface).
+    @State private var showingDuePicker = false
     @State private var showingAttachmentsSheet = false
     // The FAB's add-actions sheet (ADR-0044 parity): the floating "+" opens a bottom sheet of the task's top
     // actions — Add subtask · Add comment · Add to today's plan · Change status — the native ModalBottomSheet
     // twin of Android's FAB + add sheet (which replaced the inline add-to-plan button).
     @State private var showingAddSheet = false
     // The action chosen from the add sheet, fired AFTER it dismisses (its onDismiss) so a follow-on
-    // presentation — the status picker sheet, the add-subtask alert — never races the add sheet's own
+    // presentation — the add-subtask alert — and the confirmation toast never race the add sheet's own
     // dismissal (no sheet-over-sheet). nil when the sheet closed without a choice.
     @State private var pendingAddAction: AddAction?
     // The transient confirmation toast (Android's Toast twin): [toastMessage] is the last message and
@@ -145,18 +148,8 @@ struct TaskDetailView: View {
         .sheet(isPresented: $showingAddSheet, onDismiss: firePendingAddAction) {
             AddActionsSheet { pendingAddAction = $0; showingAddSheet = false }
         }
-        // Tapping the read-only STATUS row (or the FAB's "Change status") opens the picker; selecting forwards
-        // the working-state intent and confirms it via a toast — the picker dismisses, so the new status isn't
-        // otherwise announced. A no-op re-select of the current state is skipped (the component gates that write).
-        .sheet(isPresented: $showingStatusPicker) {
-            StatusPickerSheet(current: task.workingState) { target in
-                component.onSetWorkingState(target: target)
-                if target != task.workingState {
-                    showToast(L.format("tasks_detail_set_working_state_a11y", target.label))
-                }
-                showingStatusPicker = false
-            }
-        }
+        // The STATUS picker has no presentation here: it is a `Menu` on the STATUS row itself (propertiesTable),
+        // which iOS anchors to the row as a grouped action sheet — no beaked popover over the whole pane.
         // "View" on the ATTACHMENTS row opens the full manage list (playback / delete / caption).
         .sheet(isPresented: $showingAttachmentsSheet) {
             AttachmentsSheet(
@@ -331,8 +324,8 @@ struct TaskDetailView: View {
     }
 
     /// Fire the add sheet's chosen action once the sheet has fully dismissed (its onDismiss) — deferring any
-    /// follow-on presentation (the status picker sheet / the add-subtask alert) past the sheet's own dismissal
-    /// so the two never overlap. Comment/plan carry no presentation, so they simply run here too.
+    /// follow-on presentation (the add-subtask alert) past the sheet's own dismissal so the two never overlap.
+    /// Comment/plan carry no presentation, so they simply run here too.
     private func firePendingAddAction() {
         guard let action = pendingAddAction else { return }
         pendingAddAction = nil
@@ -347,7 +340,14 @@ struct TaskDetailView: View {
         case .plan:
             component.onAddToPlanClicked()
             showToast(L.string("breakdown_msg_added_to_plan"))
-        case .status: showingStatusPicker = true
+        // The target was picked in the sheet's own status Menu; forward it once the sheet is gone so the
+        // confirmation toast (an overlay on the detail body) isn't hidden behind it. A no-op re-select of the
+        // current state is skipped (the component gates that write) — read live, since the sheet had no `task`.
+        case .status(let target):
+            component.onSetWorkingState(target: target)
+            if target != state.value.task?.workingState {
+                showToast(L.format("tasks_detail_set_working_state_a11y", target.label))
+            }
         }
     }
 
@@ -399,14 +399,38 @@ struct TaskDetailView: View {
                 PropertyTableRow(label: L.string("tasks_detail_property_when")) { dueCell(task) }
             ))
         }
-        // STATUS — always; the whole row opens the status picker sheet.
+        // STATUS — always; the whole row is the status **Action Sheet** trigger. A `Menu` (not
+        // `.confirmationDialog`): iOS 26 renders a confirmationDialog as a *beaked popover*, whereas a Menu is
+        // the source-anchored grouped action sheet this app wants (the Mail "Delete Draft / Save Draft" look) —
+        // a floating card of grouped options at the row, no beak. The `Section` supplies the "Set status" header.
+        // The Menu owns the row's tap (so no PropertyTableRow `onTap` — that would nest two tappables).
         let statusLabel = L.journeyLabel(BridgeKt.journeyLabelToken(task: task))
         rows.append(AnyView(
-            PropertyTableRow(
-                label: L.string("tasks_detail_property_status"),
-                onTap: { showingStatusPicker = true },
-                rowA11y: L.format("tasks_detail_status_row_a11y", statusLabel)
-            ) { JourneyStatusIndicator(task: task) }
+            PropertyTableRow(label: L.string("tasks_detail_property_status")) {
+                Menu {
+                    Section(L.string("tasks_detail_status_picker_title")) {
+                        ForEach(WorkingState.ordered, id: \.self) { target in
+                            Button(target.label) {
+                                component.onSetWorkingState(target: target)
+                                // Confirm via a toast — the sheet dismisses, so the new status isn't otherwise
+                                // announced. A no-op re-select of the current state is gated by the component.
+                                if target != task.workingState {
+                                    showToast(L.format("tasks_detail_set_working_state_a11y", target.label))
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    // minHeight rides the LABEL (not the Menu) so the Menu's hit area is the full-height cell —
+                    // on the Menu it only sized the container and left a sub-target 37pt tap area.
+                    JourneyStatusIndicator(task: task)
+                        .frame(maxWidth: .infinity, minHeight: Layout.minTouchTarget, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                // The indicator is a11y-hidden (it is colour+text reinforcement), so the Menu speaks the row.
+                .accessibilityLabel(L.format("tasks_detail_status_row_a11y", statusLabel))
+            }
         ))
         // LABELS — always.
         rows.append(AnyView(
@@ -444,22 +468,27 @@ struct TaskDetailView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(colors.outlineVariant, lineWidth: 1))
     }
 
-    /// The WHEN cell: a compact `DatePicker` over the deadline day + a relative-day suffix + a Clear button.
-    /// Confirming forwards the picked day; Clear forwards nil. (Only rendered when a deadline is set.)
+    /// The WHEN cell (#348): a summary chip ("Jul 17, 2026 · 9:00 AM", or date-only when all-day) that opens a
+    /// popover holding the graphical **date + time** `DatePicker` (the iOS 26 UI-kit look — calendar + Time row
+    /// in one surface), plus the relative-day suffix and a Clear button. The picker splits its selection into the
+    /// two deadline axes (date → `onSetDeadline`, clock → `onSetDeadlineTime`). (Only rendered when a deadline is set.)
     @ViewBuilder
     private func dueCell(_ task: Task) -> some View {
         let relToken = BridgeKt.taskDueRelativeToken(task: task)
-        HStack {
-            DatePicker(
-                "",
-                selection: Binding(
-                    get: { Date(timeIntervalSince1970: BridgeKt.taskDeadlineEpochSeconds(task: task)) },
-                    set: { BridgeKt.setTaskDeadline(component: component, epochSeconds: $0.timeIntervalSince1970) }
-                ),
-                displayedComponents: .date
-            )
-            .labelsHidden()
-            .datePickerStyle(.compact)
+        let hasTime = BridgeKt.taskDeadlineHasTime(task: task)
+        let seedEpoch = BridgeKt.taskDeadlinePickerEpochSeconds(task: task)
+        HStack(spacing: 8) {
+            Button { showingDuePicker = true } label: {
+                Text(dueChipLabel(epoch: seedEpoch, hasTime: hasTime))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(colors.primary)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(colors.surfaceVariant, in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L.string("tasks_detail_set_due_date"))
+            .popover(isPresented: $showingDuePicker) { deadlinePopover(task) }
             if let relToken {
                 Text(L.relativeDay(relToken, Int(BridgeKt.taskDueRelativeCount(task: task))))
                     .font(.caption)
@@ -471,6 +500,60 @@ struct TaskDetailView: View {
                 .accessibilityLabel(L.string("tasks_detail_clear_due_date_a11y"))
         }
     }
+
+    /// The WHEN popover content: the graphical `[.date, .hourAndMinute]` `DatePicker` (calendar + Time row —
+    /// the Figma iOS 26 combined field), then a "Clear time" affordance that drops the clock back to all-day.
+    /// On iPhone `.presentationCompactAdaptation(.popover)` keeps it a floating bubble (not a full sheet), so it
+    /// reads like the reference. Each change routes through `applyDeadlinePicker`, which fires only the moved axis.
+    @ViewBuilder
+    private func deadlinePopover(_ task: Task) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            DatePicker(
+                "",
+                selection: Binding(
+                    get: { Date(timeIntervalSince1970: BridgeKt.taskDeadlinePickerEpochSeconds(task: task)) },
+                    set: { BridgeKt.applyDeadlinePicker(component: component, epochSeconds: $0.timeIntervalSince1970) }
+                ),
+                displayedComponents: [.date, .hourAndMinute]
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .accessibilityLabel(L.string("new_deadline_time_cd"))
+            .frame(minWidth: 300)
+            if BridgeKt.taskDeadlineHasTime(task: task) {
+                Divider().overlay { colors.outlineVariant }
+                Button(L.string("new_deadline_time_clear_a11y")) { BridgeKt.clearTaskDeadlineTime(component: component) }
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, minHeight: Layout.minTouchTarget, alignment: .leading)
+            }
+        }
+        .padding(16)
+        .modifier(CompactPopoverAdaptation())
+    }
+
+    /// The WHEN summary chip label: the deadline day always (locale medium — "Jul 17, 2026"), with the clock
+    /// appended (locale short — "· 9:00 AM") only when the deadline carries a real time (else it is all-day).
+    private func dueChipLabel(epoch: Double, hasTime: Bool) -> String {
+        let date = Date(timeIntervalSince1970: epoch)
+        let day = Self.chipDateFormatter.string(from: date)
+        return hasTime ? "\(day) · \(Self.chipTimeFormatter.string(from: date))" : day
+    }
+
+    private static let chipDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
+    private static let chipTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
 
     /// The LABELS cell: the labels as removable chips + an inline "add label" field. Any add/remove forwards
     /// the whole normalized list (the component replaces the Task's labels wholesale).
@@ -793,6 +876,19 @@ struct TaskDetailView: View {
             let mime = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType?.preferredMIMEType
                 ?? "application/octet-stream"
             BridgeKt.addTaskAttachment(component: component, filename: url.lastPathComponent, contentType: mime, data: data)
+        }
+    }
+}
+
+/// Keeps the WHEN date+time picker a floating **popover** on iPhone (`presentationCompactAdaptation(.popover)`,
+/// iOS 16.4+) instead of adapting to a sheet — a no-op below 16.4 (deployment target is 16.0), where `.popover`
+/// falls back to its default compact presentation. Guarded so it compiles against the lower target.
+private struct CompactPopoverAdaptation: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content.presentationCompactAdaptation(.popover)
+        } else {
+            content
         }
     }
 }
@@ -1499,12 +1595,16 @@ private struct DrilledBackBar: View {
 
 /// The four actions on the Task detail's add sheet (ADR-0044 parity with Android's FAB add sheet). File-scoped
 /// so both `TaskDetailView` (which fires the choice) and `AddActionsSheet` (which offers it) share the type.
-private enum AddAction { case subtask, comment, plan, status }
+/// `status` carries its chosen `WorkingState`: SwiftUI cannot open a `Menu` programmatically, so the sheet's
+/// "Change status" row is itself a `Menu` (the same grouped action sheet as the STATUS row) and the target
+/// comes back with the choice rather than the presenter re-opening a picker.
+private enum AddAction { case subtask, comment, plan, status(WorkingState) }
 
 /// The Task detail's **add sheet** (ADR-0044 parity with Android's FAB + ModalBottomSheet): the task's top
 /// actions as large, full-width tappable rows — Add subtask · Add comment · Add to today's plan · Change
 /// status — the bottom-sheet twin of the Compose `AddActionRow` list (no icons, body-rank rows). [select]
-/// records the choice and the presenter dismisses + fires it in the sheet's onDismiss (no sheet-over-sheet).
+/// records the choice and the presenter dismisses + fires it in the sheet's onDismiss (no sheet-over-sheet);
+/// the Change-status row is a nested `Menu` that carries its picked state back with the choice ([statusRow]).
 /// The rows live in a `ScrollView` with `[.height(260), .large]` detents + a drag indicator: compact at
 /// default type, but at large Dynamic Type / long locales the rows grow + wrap so the content scrolls (and the
 /// sheet can be dragged to `.large`) — no row is ever clipped. A fixed-height detent alone would NOT scroll,
@@ -1519,7 +1619,7 @@ private struct AddActionsSheet: View {
                 row(L.string("tasks_menu_add_subtask"), .subtask)
                 row(L.string("tasks_menu_add_comment"), .comment)
                 row(L.string("tasks_menu_add_to_plan"), .plan)
-                row(L.string("tasks_menu_change_status"), .status)
+                statusRow
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 22)
@@ -1528,6 +1628,26 @@ private struct AddActionsSheet: View {
         }
         .presentationDetents([.height(260), .large])
         .presentationDragIndicator(.visible)
+    }
+
+    /// The sheet's **Change status** row: itself a `Menu` (not a plain row), because SwiftUI cannot open a Menu
+    /// programmatically — so the target is chosen here and travels back with the action. Renders the same
+    /// grouped action sheet as the STATUS row (`Section` header + the five states), anchored to this row.
+    private var statusRow: some View {
+        Menu {
+            Section(L.string("tasks_detail_status_picker_title")) {
+                ForEach(WorkingState.ordered, id: \.self) { target in
+                    Button(target.label) { select(.status(target)) }
+                }
+            }
+        } label: {
+            Text(L.string("tasks_menu_change_status"))
+                .font(.body)
+                .foregroundStyle(colors.onSurface)
+                .frame(maxWidth: .infinity, minHeight: Layout.minTouchTarget, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// One add-sheet row: a full-width, MinTouchTarget-tall tappable label — no icon, matching the Compose
@@ -1585,35 +1705,3 @@ private struct ConfirmationToast: View {
     }
 }
 
-/// The status picker sheet (ADR-0044): the state change moved off the removed inline chips onto a modal
-/// list over the five `WorkingState`s (the app's plain labels), the current one marked. Selecting forwards
-/// the working-state intent; the presenter clears `showingStatusPicker`.
-private struct StatusPickerSheet: View {
-    let current: WorkingState
-    let onSelect: (WorkingState) -> Void
-
-    @Environment(\.defernoColors) private var colors
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(WorkingState.ordered, id: \.self) { state in
-                    Button { onSelect(state) } label: {
-                        HStack {
-                            Text(state.label).foregroundStyle(colors.onSurface)
-                            Spacer()
-                            if state == current {
-                                DefernoIcon.check.image(size: 16).foregroundStyle(colors.primary)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .frame(minHeight: Layout.minTouchTarget)
-                    .accessibilityAddTraits(state == current ? [.isButton, .isSelected] : .isButton)
-                }
-            }
-            .navigationTitle(L.string("tasks_detail_status_picker_title"))
-        }
-    }
-}

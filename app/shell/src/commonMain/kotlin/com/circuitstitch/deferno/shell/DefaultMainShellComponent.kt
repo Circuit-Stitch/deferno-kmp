@@ -119,6 +119,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlin.time.Instant
@@ -172,6 +173,9 @@ class DefaultMainShellComponent(
     // The Task detail's editable-PROPERTIES write seams (DUE date + LABELS), threaded into the detail
     // (overlay + Tasks Destination). Defaulted to no-ops so the many shell tests build without them.
     private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    // The Task detail's deadline clock-TIME seam (#348), threaded into the detail (overlay + Tasks
+    // Destination) for the combined date+time WHEN picker (iOS). No-op default so shell tests build without it.
+    private val setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit = { _, _ -> },
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     // The Task detail's destructive Delete seam (kebab → confirm), threaded into the detail (overlay +
     // Tasks Destination). Defaults to a no-op so the many shell tests build without it.
@@ -488,6 +492,7 @@ class DefaultMainShellComponent(
                                     currentUserId = currentUserId,
                                     createSubtask = createSubtask,
                                     setDeadline = setDeadline,
+                                    setDeadlineTime = setDeadlineTime,
                                     setLabels = setLabels,
                                     delete = deleteTask,
                                     onDeviceAttachments = onDeviceAttachments,
@@ -552,6 +557,7 @@ class DefaultMainShellComponent(
                         currentUserId = currentUserId,
                         createSubtask = createSubtask,
                         setDeadline = setDeadline,
+                        setDeadlineTime = setDeadlineTime,
                         setLabels = setLabels,
                         deleteTask = deleteTask,
                         onDeviceAttachments = onDeviceAttachments,

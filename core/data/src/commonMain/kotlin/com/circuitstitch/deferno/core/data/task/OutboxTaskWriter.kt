@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.data.outbox.OutboxStore
 import com.circuitstitch.deferno.core.data.outbox.beforeValues
 import com.circuitstitch.deferno.core.data.outbox.Rename
 import com.circuitstitch.deferno.core.data.outbox.SetDeadline
+import com.circuitstitch.deferno.core.data.outbox.SetDeadlineTime
 import com.circuitstitch.deferno.core.data.outbox.SetDescription
 import com.circuitstitch.deferno.core.data.outbox.SetLabels
 import com.circuitstitch.deferno.core.data.outbox.SetPinned
@@ -14,6 +15,7 @@ import com.circuitstitch.deferno.core.data.outbox.SetWorkingState
 import com.circuitstitch.deferno.core.data.outbox.TaskMutation
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import kotlinx.datetime.LocalTime
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -48,6 +50,8 @@ class OutboxTaskWriter(
     override suspend fun setDeadline(id: TaskId, completeBy: Instant) = submit(SetDeadline(id, completeBy))
 
     override suspend fun clearDeadline(id: TaskId) = submit(ClearDeadline(id))
+
+    override suspend fun setDeadlineTime(id: TaskId, timeOfDay: LocalTime?) = submit(SetDeadlineTime(id, timeOfDay))
 
     override suspend fun setDescription(id: TaskId, description: String) = submit(SetDescription(id, description))
 

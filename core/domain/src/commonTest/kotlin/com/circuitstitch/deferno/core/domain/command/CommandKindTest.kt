@@ -52,6 +52,7 @@ class CommandKindTest {
                 CommandKind.MoveItem to "item.move",
                 CommandKind.SetDefinitionState to "definition.set-state",
                 CommandKind.SetTaskBlockedBy to "task.set-blocked-by",
+                CommandKind.SetTaskDeadlineTime to "task.set-deadline-time",
             ),
             CommandKind.entries.associateWith { it.id.value },
         )
