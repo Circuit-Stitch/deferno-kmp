@@ -6,9 +6,10 @@ import UniformTypeIdentifiers
 /// The Task detail pane (#207 / ADR-0044 / ADR-0046). Thin renderer of `TaskDetailComponent`: observes the
 /// hydrating row and forwards the close / add-to-plan / working-state intents plus the web-parity detail
 /// sections. Since ADR-0046 the body is **two tabs** — `Info` (the connected-parent header, NOTES markdown,
-/// Add-to-plan, the properties table, and the subtask tree) and `Trail` (the one merged, day-grouped
-/// comments + enriched-history feed with a tappable old→new `ChangeDiffSheet`). The component hydrates +
-/// loads comments/attachments on creation (#22); this View reflects its state.
+/// the properties table, and the subtask tree) and `Trail` (the one merged, day-grouped comments +
+/// enriched-history feed with a tappable old→new `ChangeDiffSheet`). The task's top actions — Add subtask ·
+/// Add comment · Add to today's plan · Change status — live on an overlaid FAB + add sheet (ADR-0044 parity
+/// with Android). The component hydrates + loads comments/attachments on creation (#22); this View reflects its state.
 struct TaskDetailView: View {
     let component: TaskDetailComponent
     /// false when the View is **pushed** onto the compact `NavigationStack`: the native bar supplies the
@@ -20,16 +21,28 @@ struct TaskDetailView: View {
     @State private var newSubtask = ""
     @State private var newLabel = ""
     @State private var commentDraft = ""
+    // Focuses the Trail comment composer when the FAB add sheet's "Add comment" fires — the iOS twin of
+    // Android's revealCommentComposer (switch to the Trail tab + pop the keyboard ready to type).
+    @FocusState private var composerFocused: Bool
     @State private var importing = false
-    // Kebab affordances (#262): the "Add subtask" prompt and the destructive Delete confirmation.
+    // The "Add subtask" title prompt (opened from the FAB add sheet — ADR-0044 parity, #262) and the
+    // destructive Delete confirmation (still the kebab).
     @State private var showingAddSubtask = false
-    @State private var kebabSubtask = ""
+    @State private var addSubtaskTitle = ""
     @State private var confirmingDelete = false
     // Tabbed sections + read-only journey STATUS picker (ADR-0044/ADR-0046): Info · Trail, the status sheet
     // opened by tapping the STATUS row, the "View attachments" sheet, and the tapped-history change-diff sheet.
     @State private var tab: DetailTab = .info
     @State private var showingStatusPicker = false
     @State private var showingAttachmentsSheet = false
+    // The FAB's add-actions sheet (ADR-0044 parity): the floating "+" opens a bottom sheet of the task's top
+    // actions — Add subtask · Add comment · Add to today's plan · Change status — the native ModalBottomSheet
+    // twin of Android's FAB + add sheet (which replaced the inline add-to-plan button).
+    @State private var showingAddSheet = false
+    // The action chosen from the add sheet, fired AFTER it dismisses (its onDismiss) so a follow-on
+    // presentation — the status picker sheet, the add-subtask alert — never races the add sheet's own
+    // dismissal (no sheet-over-sheet). nil when the sheet closed without a choice.
+    @State private var pendingAddAction: AddAction?
     // The tapped diff-carrying history row (#260) — its ChangeDiffSheet, presented via `.sheet(item:)`.
     @State private var openDiff: DiffPresentation?
     // Plays on-device brain-dump recordings (#272) over the bytes the bridge hands back — no network, no signed URL.
@@ -106,6 +119,18 @@ struct TaskDetailView: View {
             }
             .padding(.horizontal, Layout.gutter)
             .padding(.vertical, 12)
+            // Keep the last row clear of the overlaid FAB (Android pads the tail the same way).
+            .padding(.bottom, 72)
+        }
+        // The overlaid add-actions FAB (ADR-0044 parity): opens the add sheet below. Bottom-trailing over the
+        // scroll body; the trailing bottom padding above keeps it off the last row.
+        .overlay(alignment: .bottomTrailing) { addFab }
+        // The FAB's add sheet: the task's top actions as a bottom sheet (the native ModalBottomSheet twin —
+        // .sheet + detents, the same idiom this PR uses for ChangeDiffSheet). Each row records its choice and
+        // dismisses; the choice fires in onDismiss so a follow-on (status picker sheet / add-subtask alert)
+        // never races the sheet's own dismissal.
+        .sheet(isPresented: $showingAddSheet, onDismiss: firePendingAddAction) {
+            AddActionsSheet { pendingAddAction = $0; showingAddSheet = false }
         }
         // Tapping the read-only STATUS row opens the picker; selecting forwards the working-state intent.
         .sheet(isPresented: $showingStatusPicker) {
@@ -143,15 +168,15 @@ struct TaskDetailView: View {
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { addAttachments(urls) }
         }
-        // The kebab's "Add subtask" prompt: a calm inline title entry, mirroring the always-present
+        // The add sheet's "Add subtask" prompt: a calm inline title entry, mirroring the always-present
         // add-subtask field below — Add forwards a trimmed, non-empty title and clears.
         .alert(L.string("tasks_menu_add_subtask"), isPresented: $showingAddSubtask) {
-            TextField(L.string("tasks_detail_subtask_title_label"), text: $kebabSubtask)
-            Button(L.string("common_cancel"), role: .cancel) { kebabSubtask = "" }
+            TextField(L.string("tasks_detail_subtask_title_label"), text: $addSubtaskTitle)
+            Button(L.string("common_cancel"), role: .cancel) { addSubtaskTitle = "" }
             Button(L.string("common_add")) {
-                let trimmed = kebabSubtask.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmed = addSubtaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmed.isEmpty { component.onAddSubtask(title: trimmed) }
-                kebabSubtask = ""
+                addSubtaskTitle = ""
             }
         }
         // The destructive Delete, gated behind a confirmation (the kebab item is destructive).
@@ -252,12 +277,12 @@ struct TaskDetailView: View {
         return ref
     }
 
-    /// The detail's ⋮ more-actions kebab: Break this down, Add subtask (prompts for a title), and the
-    /// destructive Delete (gated behind a confirm). Icon-only trigger; self-describing label.
+    /// The detail's ⋮ more-actions kebab: Break this down and the destructive Delete (gated behind a
+    /// confirm). "Add subtask" moved to the FAB add sheet — parity with Android dropping it from the kebab
+    /// once the FAB owns the add actions (externalAddActions). Icon-only trigger; self-describing label.
     private var overflowMenu: some View {
         Menu {
             Button(L.string("tasks_menu_break_this_down")) { component.onBreakdownClicked() }
-            Button(L.string("tasks_menu_add_subtask")) { kebabSubtask = ""; showingAddSubtask = true }
             Button(L.string("common_delete"), role: .destructive) { confirmingDelete = true }
         } label: {
             DefernoIcon.moreVert.image
@@ -267,10 +292,49 @@ struct TaskDetailView: View {
         .accessibilityLabel(L.string("tasks_detail_more_actions"))
     }
 
-    // MARK: - Info tab: NOTES → add-to-plan → properties table → subtasks
+    /// The overlaid add-actions FAB (ADR-0044 parity with Android's FAB + ModalBottomSheet): a floating "+"
+    /// bottom-trailing over the task body, opening the add sheet ([showingAddSheet]). Replaces the inline
+    /// "Add to today's plan" button — the sheet now owns that action alongside Add subtask / Add comment /
+    /// Change status. The fill is the strong `primary` accent (matching the app's other primary CTAs — the
+    /// drawer's New task, the removed inline add-to-plan button), a deliberate iOS choice over Android's
+    /// softer M3 `primaryContainer` FAB default (the iOS palette has no container tone).
+    private var addFab: some View {
+        Button { showingAddSheet = true } label: {
+            DefernoIcon.plus.image(size: 24, weight: .semibold)
+                .foregroundStyle(colors.onPrimary)
+                .frame(width: 56, height: 56)
+                .background(colors.primary, in: Circle())
+                .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 3)
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, 20)
+        .padding(.bottom, 24)
+        .accessibilityLabel(L.string("common_add"))
+    }
 
-    /// The Info tab body: the NOTES markdown, the Add-to-plan button, the properties table
+    /// Fire the add sheet's chosen action once the sheet has fully dismissed (its onDismiss) — deferring any
+    /// follow-on presentation (the status picker sheet / the add-subtask alert) past the sheet's own dismissal
+    /// so the two never overlap. Comment/plan carry no presentation, so they simply run here too.
+    private func firePendingAddAction() {
+        guard let action = pendingAddAction else { return }
+        pendingAddAction = nil
+        switch action {
+        case .subtask: addSubtaskTitle = ""; showingAddSubtask = true
+        // Switch to the Trail tab, then focus the composer one runloop later — the composer only composes once
+        // the tab flips, so a same-tick focus wouldn't land (Android's revealCommentComposer focus twin).
+        case .comment:
+            tab = .trail
+            DispatchQueue.main.async { composerFocused = true }
+        case .plan: component.onAddToPlanClicked()
+        case .status: showingStatusPicker = true
+        }
+    }
+
+    // MARK: - Info tab: NOTES → properties table → subtasks
+
+    /// The Info tab body: the NOTES markdown, the properties table
     /// (WHEN · STATUS · LABELS · OWNER · SOURCE · ATTACHMENTS), and the Subtasks outline.
+    /// ("Add to today's plan" moved to the FAB add sheet — ADR-0044 parity with Android.)
     @ViewBuilder
     private func infoTab(_ task: Task, state value: TaskDetailState) -> some View {
         let hasDescription = (task.description_?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
@@ -286,14 +350,8 @@ struct TaskDetailView: View {
                 .font(.callout)
                 .foregroundStyle(colors.inkMuted)
         }
-        // The inline "Add to today's plan" Button — parity: shown inline on iOS (no FAB).
-        Button { component.onAddToPlanClicked() } label: {
-            Text(L.string("tasks_menu_add_to_plan")).frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .frame(minHeight: Layout.minTouchTarget)
-
+        // "Add to today's plan" moved to the FAB add sheet (ADR-0044 parity: Android replaced the inline
+        // button with a FAB + action sheet). The Info tab now runs NOTES → properties → subtasks.
         propertiesTable(task, state: value)
         subtasksSection(value)
     }
@@ -638,6 +696,7 @@ struct TaskDetailView: View {
             TextField(L.string("tasks_detail_add_comment_placeholder"), text: $commentDraft, axis: .vertical)
                 .lineLimit(2...5)
                 .textFieldStyle(.roundedBorder)
+                .focused($composerFocused)
                 .disabled(isPosting)
                 .accessibilityLabel(L.string("tasks_detail_comment_body_label"))
             Button {
@@ -1406,6 +1465,53 @@ private struct DrilledBackBar: View {
         .padding(.horizontal, 8)
         .frame(minHeight: 48)
         .background(colors.surface)
+    }
+}
+
+/// The four actions on the Task detail's add sheet (ADR-0044 parity with Android's FAB add sheet). File-scoped
+/// so both `TaskDetailView` (which fires the choice) and `AddActionsSheet` (which offers it) share the type.
+private enum AddAction { case subtask, comment, plan, status }
+
+/// The Task detail's **add sheet** (ADR-0044 parity with Android's FAB + ModalBottomSheet): the task's top
+/// actions as large, full-width tappable rows — Add subtask · Add comment · Add to today's plan · Change
+/// status — the bottom-sheet twin of the Compose `AddActionRow` list (no icons, body-rank rows). [select]
+/// records the choice and the presenter dismisses + fires it in the sheet's onDismiss (no sheet-over-sheet).
+/// The rows live in a `ScrollView` with `[.height(260), .large]` detents + a drag indicator: compact at
+/// default type, but at large Dynamic Type / long locales the rows grow + wrap so the content scrolls (and the
+/// sheet can be dragged to `.large`) — no row is ever clipped. A fixed-height detent alone would NOT scroll,
+/// so a grown 4th row (`Change status`) would fall off-screen; Android's `ModalBottomSheet` wrap-sizes instead.
+private struct AddActionsSheet: View {
+    let select: (AddAction) -> Void
+    @Environment(\.defernoColors) private var colors
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                row(L.string("tasks_menu_add_subtask"), .subtask)
+                row(L.string("tasks_menu_add_comment"), .comment)
+                row(L.string("tasks_menu_add_to_plan"), .plan)
+                row(L.string("tasks_menu_change_status"), .status)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 22)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
+        }
+        .presentationDetents([.height(260), .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// One add-sheet row: a full-width, MinTouchTarget-tall tappable label — no icon, matching the Compose
+    /// `AddActionRow` (a `bodyLarge` row). Tapping records the choice via [select].
+    private func row(_ label: String, _ action: AddAction) -> some View {
+        Button { select(action) } label: {
+            Text(label)
+                .font(.body)
+                .foregroundStyle(colors.onSurface)
+                .frame(maxWidth: .infinity, minHeight: Layout.minTouchTarget, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
