@@ -543,6 +543,22 @@ fun activityWhenLabel(row: ActivityFeedRow): String {
     return "${dt.date} $hh:$mm"
 }
 
+/**
+ * The old→new diff rows for a tapped Activity row's [ChangeDiffSheet] — the typed twin of Compose
+ * `row.changes.toDiffRows()`. Reuses the Trail's [diffFieldToken]/[diffSide] mapping (Bridge.kt, same
+ * module) so both surfaces render field diffs identically; Unknown fields dropped, order preserved, values
+ * RAW (Swift formats per `TrailDiffSide`/`fieldToken` via `L.diffValueText`).
+ */
+fun activityRowDiffRows(row: ActivityFeedRow): List<TrailDiffRow> =
+    row.changes.mapNotNull { change ->
+        val token = diffFieldToken(change.field) ?: return@mapNotNull null
+        TrailDiffRow(fieldToken = token, before = diffSide(change.before), after = diffSide(change.after))
+    }
+
+/** Whether an Activity row resolves to a Task — the only kind the sheet deep-links as "Open Task #N"
+ *  (a resolved Habit/Chore/Event would route wrong, so those keep the generic "Open item"). */
+fun activityRowIsTask(row: ActivityFeedRow): Boolean = row.itemKind == ItemKind.Task
+
 // ---------------------------------------------------------------------------------------------------
 // Brain dump overlay (ADR-0027) — the recorder surface; Phase is sealed, so Swift reads its name.
 // ---------------------------------------------------------------------------------------------------

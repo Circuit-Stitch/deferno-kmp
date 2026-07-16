@@ -11,6 +11,8 @@ struct ActivityView: View {
     let component: ActivityComponent
     @Environment(\.defernoColors) private var colors
     @StateObject private var state: StateFlowObserver<ActivityFeedState>
+    // The tapped row's change-detail sheet (parity with Android's ActivityScreen ChangeDiffSheet, #260).
+    @State private var selected: ActivityDetail?
 
     init(component: ActivityComponent) {
         self.component = component
@@ -29,15 +31,38 @@ struct ActivityView: View {
             } else {
                 List {
                     ForEach(rows, id: \.seq) { row in
-                        ActivityRowView(row: row)
-                            .listRowInsets(EdgeInsets(top: 12, leading: Layout.gutter, bottom: 12, trailing: Layout.gutter))
-                            .listRowBackground(colors.background)
+                        Button { selected = ActivityDetail(row: row) } label: {
+                            ActivityRowView(row: row)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowInsets(EdgeInsets(top: 12, leading: Layout.gutter, bottom: 12, trailing: Layout.gutter))
+                        .listRowBackground(colors.background)
                     }
                 }
                 .listStyle(.plain)
             }
         }
         .background(colors.background)
+        // Tapping a row opens the shared change-detail sheet (Android parity): the old→new field diff, the
+        // comment text (if any), and "Open Task #N" for rows that resolve to a Task.
+        .sheet(item: $selected) { detail in
+            let row = detail.row
+            ChangeDiffSheet(
+                title: L.activitySummary(row),
+                subtitle: "\(L.activitySource(row)) · \(ShellBridgeKt.activityWhenLabel(row: row))",
+                rows: ShellBridgeKt.activityRowDiffRows(row: row),
+                note: row.commentBody,
+                onOpenItem: row.itemId.map { id in { component.openItem(id: id); selected = nil } },
+                openItemLabel: openItemLabel(for: row)
+            )
+        }
+    }
+
+    /// "Open Task #41" only when the row resolves to a Task with a ref — a Habit/Chore/Event would deep-link
+    /// wrong, so those keep the generic "Open item" (Android parity, ActivityFeed.kt).
+    private func openItemLabel(for row: ActivityFeedRow) -> String? {
+        guard ShellBridgeKt.activityRowIsTask(row: row), let ref = row.itemRef else { return nil }
+        return L.format("common_open_named_cd", "\(L.string("common_kind_task")) \(ref)")
     }
 
     private func header(count: Int) -> some View {
@@ -82,5 +107,16 @@ private struct ActivityRowView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+}
+
+/// A stable-identity wrapper so a tapped `ActivityFeedRow` can drive `.sheet(item:)` — the Kotlin row has no
+/// `Identifiable`; its `seq` is the ledger's monotonic key. Mirrors `DiffPresentation` in TaskDetailView.
+private struct ActivityDetail: Identifiable {
+    let id: Int64
+    let row: ActivityFeedRow
+    init(row: ActivityFeedRow) {
+        self.id = row.seq
+        self.row = row
     }
 }

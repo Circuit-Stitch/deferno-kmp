@@ -1,12 +1,17 @@
 package com.circuitstitch.deferno.macos.bridge
 
+import com.circuitstitch.deferno.core.model.ActivityField
+import com.circuitstitch.deferno.core.model.ActivityFieldChange
+import com.circuitstitch.deferno.core.model.ActivityFieldValue
 import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.JourneyLabel
 import com.circuitstitch.deferno.core.model.JourneyStyle
 import com.circuitstitch.deferno.core.model.RelativeDay
 import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.model.journeyStatus
 import com.circuitstitch.deferno.core.model.relativeDay
 import kotlinx.datetime.TimeZone
@@ -166,4 +171,214 @@ private fun historyVerbToken(event: ItemHistoryEvent): String = when (event) {
     is ItemHistoryEvent.MergedChild -> "MergedChild"
     is ItemHistoryEvent.MergedIntoParent -> "MergedIntoParent"
     is ItemHistoryEvent.Unknown -> "Unknown"
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Enriched Trail parity (ADR-0046) — the macOS twin of the iOS bridge's Trail seam. Kept IDENTICAL to
+// app/iosApp .../ios/bridge/Bridge.kt. macOS TaskDetailView.swift isn't ported to the Trail in this pass,
+// so these are added ahead of that port to keep the hand-kept twins in sync (all date/time formatting
+// stays Swift-side: Kotlin/Native has no java.time). See SPEC §1.
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * The enriched render model for one Trail history row (ADR-0046) — the typed pieces the Swift
+ * `L.historyEnriched` assembles into a localized line, mirroring the Compose `historyLabel`. Only the
+ * fields relevant to [verb] are populated. `null` is returned by [activityHistoryLine] for a comment row.
+ */
+data class HistoryLine(
+    val verb: String,                 // CREATED|UPDATED|STATUS_CHANGED|MOVED|SPLIT|PARENT_ASSIGNED|
+                                      // FOLDED_INTO|MERGED_CHILD|MERGED_INTO_PARENT|UNKNOWN
+    val peerTitle: String?,           // resolved peer title for the peer verbs; null ⇒ Swift falls back to
+                                      // L "activity_history_peer_unknown" ("another item")
+    val statusFrom: WorkingState?,    // STATUS_CHANGED only — Swift renders via WorkingState.label
+    val statusTo: WorkingState?,      // STATUS_CHANGED only
+    val changedFields: List<String>,  // UPDATED only — humanizable subset as tokens:
+                                      // TITLE|DESCRIPTION|DEADLINE|LABELS (notes→DESCRIPTION,
+                                      // complete_by→DEADLINE); order-preserving, de-duped
+    val updatedIsGeneric: Boolean,    // UPDATED only — true ⇒ Swift shows the generic "activity_history_updated"
+                                      // (empty field list, or any field outside the humanizable subset)
+)
+
+/** One old→new field diff row for the ChangeDiffSheet — the typed twin of designsystem `DiffRow`. */
+data class TrailDiffRow(
+    val fieldToken: String,           // TITLE|DESCRIPTION|DEADLINE|LABELS|STATUS|PINNED (Unknown dropped)
+    val before: TrailDiffSide,
+    val after: TrailDiffSide,
+)
+
+/**
+ * One side (before/after) of a [TrailDiffRow]. [kind]=PRESENT carries [value]; CLEARED/UNAVAILABLE render
+ * a localized word Swift-side. For a PRESENT side the [value] is the RAW model value — Swift does the
+ * per-field formatting: DEADLINE = RFC3339 instant (Swift parses+formats), STATUS = wire token
+ * (open|in-progress|in-review|done|dropped), PINNED = "true"/"false", others verbatim. Mirrors
+ * `toDiffValue`/`formatFieldValue` with the formatting moved to Swift (Kotlin/Native has no java.time).
+ */
+data class TrailDiffSide(
+    val kind: String,                 // PRESENT|CLEARED|UNAVAILABLE
+    val value: String?,               // PRESENT only; null otherwise
+)
+
+/**
+ * The device-local ISO day key (yyyy-MM-dd) this Trail row buckets under — the day-group key AND the
+ * "TODAY" test. Instant→zoned day is the one piece Swift can't reproduce without re-deriving the zone;
+ * matches Compose `it.at.localDayIso()`. Pure kotlinx.datetime (no java.time).
+ */
+fun activityItemDayIso(item: ActivityItem): String =
+    item.at.toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+
+/** This row's instant as Unix epoch seconds — Swift renders the row time + diff subtitle via DateFormatter. */
+fun activityItemEpochSeconds(item: ActivityItem): Double =
+    item.at.toEpochMilliseconds() / 1000.0
+
+/**
+ * The leading unicode kind glyph for a history row (decorative, dependency-free), or null for a comment
+ * row (Swift renders 💬 for comments). Same table as Compose `historyGlyph`.
+ */
+fun activityHistoryGlyph(item: ActivityItem): String? {
+    val event = (item as? ActivityItem.HistoryEvent)?.event ?: return null
+    return when (event) {
+        is ItemHistoryEvent.Created -> "●"          // ●
+        is ItemHistoryEvent.Updated -> "✎"          // ✎
+        is ItemHistoryEvent.StatusChanged -> "↻"    // ↻
+        is ItemHistoryEvent.Split -> "✂"            // ✂
+        is ItemHistoryEvent.Moved -> "→"            // →
+        is ItemHistoryEvent.ParentAssigned -> "◈"   // ◈
+        is ItemHistoryEvent.FoldedInto -> "≡"       // ≡
+        is ItemHistoryEvent.MergedChild -> "≡"      // ≡
+        is ItemHistoryEvent.MergedIntoParent -> "≡" // ≡
+        is ItemHistoryEvent.Unknown -> "…"          // …
+    }
+}
+
+// The narrow humanize map for the UPDATED-fields summary — matches the Compose `fieldLabel` in
+// TaskDetailSections (which recognizes ONLY these four; status/pinned fall through to the generic line,
+// even though ActivityField.fromKey maps them). Do NOT use ActivityField.fromKey here.
+private val UpdatedFieldToken: Map<String, String> = mapOf(
+    "title" to "TITLE",
+    "description" to "DESCRIPTION",
+    "notes" to "DESCRIPTION",
+    "deadline" to "DEADLINE",
+    "complete_by" to "DEADLINE",
+    "labels" to "LABELS",
+)
+
+// The coarse activityHistoryVerb/activityHistoryDateLabel/historyVerbToken accessors above are retained
+// (deviating from SPEC §1g) until the macOS TaskDetailView.swift Trail port lands and drops their callers.
+/**
+ * The enriched render model for a Trail history row, or null for a comment row. Swift's
+ * `L.historyEnriched(line)` assembles the localized label from these typed pieces — mirroring the Compose
+ * `historyLabel()`/`updatedLabel()`.
+ */
+fun activityHistoryLine(item: ActivityItem): HistoryLine? {
+    val row = item as? ActivityItem.HistoryEvent ?: return null
+    return when (val event = row.event) {
+        is ItemHistoryEvent.StatusChanged -> HistoryLine(
+            verb = "STATUS_CHANGED",
+            peerTitle = null,
+            statusFrom = event.from,
+            statusTo = event.to,
+            changedFields = emptyList(),
+            updatedIsGeneric = false,
+        )
+        is ItemHistoryEvent.Updated -> {
+            val mapped = event.fields.map { UpdatedFieldToken[it] }   // nullable per raw token
+            HistoryLine(
+                verb = "UPDATED",
+                peerTitle = null,
+                statusFrom = null,
+                statusTo = null,
+                changedFields = mapped.filterNotNull().distinct(),
+                updatedIsGeneric = event.fields.isEmpty() || mapped.any { it == null },
+            )
+        }
+        else -> HistoryLine(
+            verb = historyLineVerb(event),
+            peerTitle = row.peerTitle,           // resolved at merge time; null ⇒ "another item"
+            statusFrom = null,
+            statusTo = null,
+            changedFields = emptyList(),
+            updatedIsGeneric = false,
+        )
+    }
+}
+
+private fun historyLineVerb(event: ItemHistoryEvent): String = when (event) {
+    is ItemHistoryEvent.Created -> "CREATED"
+    is ItemHistoryEvent.Updated -> "UPDATED"
+    is ItemHistoryEvent.StatusChanged -> "STATUS_CHANGED"
+    is ItemHistoryEvent.Moved -> "MOVED"
+    is ItemHistoryEvent.Split -> "SPLIT"
+    is ItemHistoryEvent.ParentAssigned -> "PARENT_ASSIGNED"
+    is ItemHistoryEvent.FoldedInto -> "FOLDED_INTO"
+    is ItemHistoryEvent.MergedChild -> "MERGED_CHILD"
+    is ItemHistoryEvent.MergedIntoParent -> "MERGED_INTO_PARENT"
+    is ItemHistoryEvent.Unknown -> "UNKNOWN"
+}
+
+/** True when this history row carries a captured old→new diff (#260) — a tappable ChangeDiffSheet row. */
+fun activityHistoryHasDiff(item: ActivityItem): Boolean =
+    (item as? ActivityItem.HistoryEvent)?.changes?.isNotEmpty() ?: false
+
+/**
+ * The diff rows for the ChangeDiffSheet — the typed twin of `changes.toDiffRows()`. Unknown fields
+ * dropped, order preserved. Values stay RAW (Swift formats per [TrailDiffSide]/`fieldToken`).
+ */
+fun activityHistoryDiffRows(item: ActivityItem): List<TrailDiffRow> {
+    val changes = (item as? ActivityItem.HistoryEvent)?.changes ?: return emptyList()
+    return changes.mapNotNull { change ->
+        val token = diffFieldToken(change.field) ?: return@mapNotNull null   // drops Unknown
+        TrailDiffRow(fieldToken = token, before = diffSide(change.before), after = diffSide(change.after))
+    }
+}
+
+private fun diffFieldToken(field: ActivityField): String? = when (field) {
+    ActivityField.Title -> "TITLE"
+    ActivityField.Description -> "DESCRIPTION"
+    ActivityField.Deadline -> "DEADLINE"
+    ActivityField.Labels -> "LABELS"
+    ActivityField.Status -> "STATUS"
+    ActivityField.Pinned -> "PINNED"
+    ActivityField.Unknown -> null
+}
+
+private fun diffSide(v: ActivityFieldValue): TrailDiffSide = when (v) {
+    is ActivityFieldValue.Present -> TrailDiffSide("PRESENT", v.raw)
+    ActivityFieldValue.Cleared -> TrailDiffSide("CLEARED", null)
+    ActivityFieldValue.Unavailable -> TrailDiffSide("UNAVAILABLE", null)
+}
+
+// A trailing issue/PR number on an opaque provider ref (`owner/repo#42` → `42`). A calendar id has no
+// trailing `#N`. Regex + names inlined here because the originals live in feature/tasks/ui (no iOS
+// target). PREFERRED future cleanup: hoist externalRefLabel/sourceLabel/sourceOriginLabel into core/model
+// (Compose-free, iOS-safe — the same move done for journeyStatus/relativeDay) so Compose, desktop, and
+// both native bridges share ONE implementation. Out of scope for this port.
+private val ExternalRefNumber = Regex("#(\\d+)$")
+
+private fun sourceDisplayName(source: ItemSource): String = when (source) {
+    ItemSource.GitHub -> "GitHub"
+    ItemSource.GoogleCalendar -> "Google Calendar"
+}
+
+/** The dimmed `[GitHub#N]` title prefix for an imported Task, or null (native item / ref with no #N). */
+fun taskExternalRefPrefix(task: Task): String? {
+    val ext = task.external ?: return null
+    val number = ExternalRefNumber.find(ext.id)?.groupValues?.get(1) ?: return null
+    return "[${sourceDisplayName(ext.source)}#$number]"
+}
+
+/** SOURCE-row origin label: the `owner/repo#N` tracker ref when present, else the provider name. */
+fun taskSourceOriginLabel(task: Task): String? {
+    val ext = task.external ?: return null
+    return if (ext.id.contains('#')) ext.id else sourceDisplayName(ext.source)
+}
+
+/** SOURCE-row link (opens in browser), or null when the provenance carries no URL. */
+fun taskSourceUrl(task: Task): String? = task.external?.url
+
+/** SOURCE-row provider token for the mark: GITHUB|GOOGLE_CALENDAR, or null when not imported. */
+fun taskSourceProviderToken(task: Task): String? = task.external?.let {
+    when (it.source) {
+        ItemSource.GitHub -> "GITHUB"
+        ItemSource.GoogleCalendar -> "GOOGLE_CALENDAR"
+    }
 }
