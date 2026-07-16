@@ -44,9 +44,11 @@ struct TaskDetailView: View {
     // presentation — the status picker sheet, the add-subtask alert — never races the add sheet's own
     // dismissal (no sheet-over-sheet). nil when the sheet closed without a choice.
     @State private var pendingAddAction: AddAction?
-    // Bumped when "Add to today's plan" fires so the confirmation toast re-arms + shows (Android's Toast
-    // twin — a transient acknowledgement, since today's plan isn't shown on this screen).
-    @State private var addedToPlanToastToken = 0
+    // The transient confirmation toast (Android's Toast twin): [toastMessage] is the last message and
+    // [toastToken] re-arms + re-shows it. Fired after add-to-plan and status changes — actions whose result
+    // isn't otherwise visible on this screen. See showToast(_:).
+    @State private var toastMessage = ""
+    @State private var toastToken = 0
     // The tapped diff-carrying history row (#260) — its ChangeDiffSheet, presented via `.sheet(item:)`.
     @State private var openDiff: DiffPresentation?
     // Plays on-device brain-dump recordings (#272) over the bytes the bridge hands back — no network, no signed URL.
@@ -129,10 +131,10 @@ struct TaskDetailView: View {
         // The overlaid add-actions FAB (ADR-0044 parity): opens the add sheet below. Bottom-trailing over the
         // scroll body; the trailing bottom padding above keeps it off the last row.
         .overlay(alignment: .bottomTrailing) { addFab }
-        // The "Added to today's plan" confirmation toast (Android's Toast twin): rides above the FAB when the
-        // add sheet's "Add to today's plan" fires, then auto-dismisses. Bumping addedToPlanToastToken re-arms it.
+        // The confirmation toast (Android's Toast twin): rides above the FAB when add-to-plan or a status
+        // change fires, then auto-dismisses. showToast(_:) sets the message + bumps the token to re-arm it.
         .overlay(alignment: .bottom) {
-            ConfirmationToast(message: L.string("breakdown_msg_added_to_plan"), token: addedToPlanToastToken)
+            ConfirmationToast(message: toastMessage, token: toastToken)
                 .padding(.horizontal, Layout.gutter)
                 .padding(.bottom, 96)
         }
@@ -143,10 +145,15 @@ struct TaskDetailView: View {
         .sheet(isPresented: $showingAddSheet, onDismiss: firePendingAddAction) {
             AddActionsSheet { pendingAddAction = $0; showingAddSheet = false }
         }
-        // Tapping the read-only STATUS row opens the picker; selecting forwards the working-state intent.
+        // Tapping the read-only STATUS row (or the FAB's "Change status") opens the picker; selecting forwards
+        // the working-state intent and confirms it via a toast — the picker dismisses, so the new status isn't
+        // otherwise announced. A no-op re-select of the current state is skipped (the component gates that write).
         .sheet(isPresented: $showingStatusPicker) {
-            StatusPickerSheet(current: task.workingState) {
-                component.onSetWorkingState(target: $0)
+            StatusPickerSheet(current: task.workingState) { target in
+                component.onSetWorkingState(target: target)
+                if target != task.workingState {
+                    showToast(L.format("tasks_detail_set_working_state_a11y", target.label))
+                }
                 showingStatusPicker = false
             }
         }
@@ -336,14 +343,20 @@ struct TaskDetailView: View {
         case .comment:
             tab = .trail
             DispatchQueue.main.async { composerFocused = true }
-        // Add to today's plan, then surface a transient confirmation (the plan isn't shown here): the toast
-        // below for sighted users + a VoiceOver announcement — the iOS twins of Android's Toast.
+        // Add to today's plan, then confirm it (the plan isn't shown here) via a transient toast.
         case .plan:
             component.onAddToPlanClicked()
-            addedToPlanToastToken += 1
-            UIAccessibility.post(notification: .announcement, argument: L.string("breakdown_msg_added_to_plan"))
+            showToast(L.string("breakdown_msg_added_to_plan"))
         case .status: showingStatusPicker = true
         }
+    }
+
+    /// Show a transient confirmation toast (Android's Toast twin) with [message] + announce it for VoiceOver.
+    /// Setting the message and bumping the token together re-arms + re-shows the single toast host (below).
+    private func showToast(_ message: String) {
+        toastMessage = message
+        toastToken += 1
+        UIAccessibility.post(notification: .announcement, argument: message)
     }
 
     // MARK: - Info tab: NOTES → properties table → subtasks
