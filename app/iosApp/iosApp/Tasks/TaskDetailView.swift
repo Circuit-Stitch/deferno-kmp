@@ -1,6 +1,7 @@
 import AVFoundation
 import Deferno
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 /// The Task detail pane (#207 / ADR-0044 / ADR-0046). Thin renderer of `TaskDetailComponent`: observes the
@@ -43,6 +44,9 @@ struct TaskDetailView: View {
     // presentation — the status picker sheet, the add-subtask alert — never races the add sheet's own
     // dismissal (no sheet-over-sheet). nil when the sheet closed without a choice.
     @State private var pendingAddAction: AddAction?
+    // Bumped when "Add to today's plan" fires so the confirmation toast re-arms + shows (Android's Toast
+    // twin — a transient acknowledgement, since today's plan isn't shown on this screen).
+    @State private var addedToPlanToastToken = 0
     // The tapped diff-carrying history row (#260) — its ChangeDiffSheet, presented via `.sheet(item:)`.
     @State private var openDiff: DiffPresentation?
     // Plays on-device brain-dump recordings (#272) over the bytes the bridge hands back — no network, no signed URL.
@@ -125,6 +129,13 @@ struct TaskDetailView: View {
         // The overlaid add-actions FAB (ADR-0044 parity): opens the add sheet below. Bottom-trailing over the
         // scroll body; the trailing bottom padding above keeps it off the last row.
         .overlay(alignment: .bottomTrailing) { addFab }
+        // The "Added to today's plan" confirmation toast (Android's Toast twin): rides above the FAB when the
+        // add sheet's "Add to today's plan" fires, then auto-dismisses. Bumping addedToPlanToastToken re-arms it.
+        .overlay(alignment: .bottom) {
+            ConfirmationToast(message: L.string("breakdown_msg_added_to_plan"), token: addedToPlanToastToken)
+                .padding(.horizontal, Layout.gutter)
+                .padding(.bottom, 96)
+        }
         // The FAB's add sheet: the task's top actions as a bottom sheet (the native ModalBottomSheet twin —
         // .sheet + detents, the same idiom this PR uses for ChangeDiffSheet). Each row records its choice and
         // dismisses; the choice fires in onDismiss so a follow-on (status picker sheet / add-subtask alert)
@@ -325,7 +336,12 @@ struct TaskDetailView: View {
         case .comment:
             tab = .trail
             DispatchQueue.main.async { composerFocused = true }
-        case .plan: component.onAddToPlanClicked()
+        // Add to today's plan, then surface a transient confirmation (the plan isn't shown here): the toast
+        // below for sighted users + a VoiceOver announcement — the iOS twins of Android's Toast.
+        case .plan:
+            component.onAddToPlanClicked()
+            addedToPlanToastToken += 1
+            UIAccessibility.post(notification: .announcement, argument: L.string("breakdown_msg_added_to_plan"))
         case .status: showingStatusPicker = true
         }
     }
@@ -1512,6 +1528,47 @@ private struct AddActionsSheet: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// A calm, auto-dismissing confirmation toast — the iOS twin of Android's `Toast`. A pill that fades/slides in,
+/// holds briefly, then hides itself; styled like the app's `UndoSnackbar` (surface card, hairline, soft
+/// shadow). [token] drives it: each bump re-arms the hold and re-shows (so a repeat action retriggers it), and
+/// the initial value never shows unbidden. VoiceOver is served by an explicit announcement at the call site, so
+/// the transient visual is a11y-hidden here (it would otherwise steal focus without being reliably read).
+private struct ConfirmationToast: View {
+    let message: String
+    let token: Int
+    @Environment(\.defernoColors) private var colors
+    @State private var shown = false
+
+    var body: some View {
+        Group {
+            if shown {
+                Text(message)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(colors.onSurface)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(colors.surfaceCard, in: Capsule())
+                    .overlay(Capsule().strokeBorder(colors.outlineVariant, lineWidth: 1))
+                    .shadow(color: .black.opacity(0.10), radius: 8, y: 2)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        // Re-arm on each new bump (a fresh add); onChange skips the initial value so it never shows unbidden.
+        .onChange(of: token) { _ in arm() }
+        .accessibilityHidden(true)
+    }
+
+    private func arm() {
+        withAnimation(.easeOut(duration: 0.2)) { shown = true }
+        let key = token
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
+            // Only hide if no newer bump re-armed us (key unchanged) — a later toast owns its own dismissal.
+            if key == token { withAnimation(.easeIn(duration: 0.25)) { shown = false } }
+        }
     }
 }
 
