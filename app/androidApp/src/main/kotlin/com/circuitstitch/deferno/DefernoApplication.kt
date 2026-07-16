@@ -57,9 +57,15 @@ class DefernoApplication : Application() {
 
         appComponent = createAppComponent(
             platform = PlatformContext(this),
-            // Environment by build type: debug dev builds talk to staging (the dev-PAT target,
-            // ADR-0012); release builds talk to production.
-            environment = if (BuildConfig.DEBUG) DefernoEnvironment.Staging else DefernoEnvironment.Production,
+            // Environment by product flavor, decoupled from build type (ADR-0047): the `environment`
+            // flavor dimension (prod/staging) injects DEFERNO_ENV, so a debuggable, dev-seeded build can
+            // target Production (prodDebug) alongside the release dogfood install. Falls back to
+            // Production for any unrecognized value.
+            environment = when (BuildConfig.DEFERNO_ENV) {
+                "Staging" -> DefernoEnvironment.Staging
+                "Local" -> DefernoEnvironment.Local
+                else -> DefernoEnvironment.Production
+            },
         )
         appScope.launch {
             appComponent.accountManager.load()

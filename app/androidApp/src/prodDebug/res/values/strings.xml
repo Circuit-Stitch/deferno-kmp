@@ -1,0 +1,7 @@
+<resources>
+    <!-- ADR-0047: the prodDebug (prod-backed repro/driving) install's launcher name. This is the
+         combined flavor+buildType source set, so it covers ONLY prodDebug — prodRelease keeps
+         src/main's "Deferno". Framework-read app_name (NOT the Compose catalog); reuses the existing
+         key only, translatable, single value, no locale variants. -->
+    <string name="app_name" translatable="false">Deferno β</string>
+</resources>

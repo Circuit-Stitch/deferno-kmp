@@ -11,6 +11,14 @@
 # After `pod install`, build via the generated `iosApp.xcworkspace` (not the `.xcodeproj`).
 platform :ios, '16.0'
 
+# Custom build configuration (ADR-0047): `prodDebug` is a NEW Xcode configuration named "ProdDebug" — a
+# Production-backed, debuggable, distinctly-bundled dogfood install that coexists with prodRelease
+# (Release) and stagingDebug (Debug). CocoaPods only knows Debug/Release by default and maps any unknown
+# configuration to :release; tell it ProdDebug builds like Debug so SQLCipher compiles with the same
+# (debug) settings and lands in the ProdDebug build dir the app links against. Run `pod install` after
+# changing this (Debug/Release auto-map, so only the non-standard config is listed).
+project 'iosApp', 'ProdDebug' => :debug
+
 target 'iosApp' do
   # :inhibit_warnings — sqlite3.c (the SQLite amalgamation SQLCipher vendors) emits ~117
   # -Wshorten-64-to-32 warnings under Xcode's default warning set. They're intentional, safe

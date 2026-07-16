@@ -93,6 +93,9 @@ iOS-only framework and stays a hand-written build file.
 ./gradlew :koverHtmlReport                 # merged shared-core coverage report (build/reports/kover/html)
 ./gradlew :app:androidApp:assembleDebug    # build the debug APK
 ./gradlew :app:androidApp:installDebug     # build + install on a connected device/emulator
+./gradlew :app:androidApp:assembleProdRelease     # dogfood daily-driver APK (Production, base app id com.circuitstitch.deferno)
+./gradlew :app:androidApp:installProdDebug        # Production + debuggable + dev-seeded (…deferno.debug) — Claude/prod repro
+./gradlew :app:androidApp:installStagingDebug     # Staging + debuggable (…deferno.staging.debug) — dev work
 ./gradlew :app:androidApp:connectedAndroidTest  # instrumented tests (needs a device/emulator)
 ./gradlew :app:androidApp:lint             # Android Lint
 ./gradlew :app:desktopApp:run              # run the desktop (JVM) Compose app
@@ -111,7 +114,9 @@ Android Studio: **Open** this directory and let it sync.
 - New dependencies go through `gradle/libs.versions.toml`, referenced as `libs.*` — don't hard-code versions in module build files.
 - **Localization (5 locales: en, es, de, hi, pt):** NO hardcoded user-facing strings in Compose code. Every string a user reads (Text, contentDescription, labels, notifications) lives in the shared catalog `core/designsystem/src/commonMain/composeResources/values{,-es,-de,-hi,-pt}/strings.xml` (public `Res` class, `com.circuitstitch.deferno.core.designsystem.resources`) and is read via `stringResource(Res.string.…)` / `pluralStringResource` — keep all five locale files in lockstep. The Apple (SwiftUI) side reads the single catalog `app/shared-l10n/Localizable.xcstrings` (symlinked into iosApp + macosApp — don't edit the symlink targets separately). `L10nCatalogParityTest` (on the `check` path) fails on any key drift: between the 5 Compose locale files, and between the Compose and Apple catalogs — a new string lands in BOTH catalogs, or gets a deliberate platform-only line in `app/shared-l10n/l10n-parity-overrides.txt` (stale override lines also fail, so the grandfathered baseline only shrinks). Compose resource XML is plain XML (bare apostrophes, NOT Android `\'` escaping); the small `app/androidApp/res/values*/strings.xml` (framework-read strings: app label, notification channels, App Actions) uses Android escaping. The `deferno.compose.library` convention sets `androidResources.enable = true` — without it the AGP 9 KMP android target silently drops composeResources from the APK (CMP-9547; guarded by `ComposeStringResourcesTest`). Dates/times localize through `core/designsystem` `LocalizedDateFormats` (java.time over per-locale `*_pattern` resources) — never hand-rolled month/weekday tables or AM/PM math. Strings in non-Compose component state carry a typed code (enum/sealed) the View maps to a resource; the English string stays alongside only where a SwiftUI bridge reads it.
 - Shared, cross-platform code is a KMP library under `core/*` (the right layer) or a vertical slice under `feature/*`; a new shared KMP module applies the `deferno.kmp.library` convention plugin (app entry points use `deferno.android.application` / `deferno.jvm.application`). Build config (SDK levels, toolchain) belongs in `build-logic` (`ProjectConfig` + the convention plugins), not in module build files. v1 keeps granularity small (ADR-0004) — modules earn further splitting rather than being split pre-emptively.
-- Keep secrets (keystores, `google-services.json`, API keys) out of git — see `.gitignore`.
+- Keep secrets (keystores, `google-services.json`, API keys) out of git — see `.gitignore`. The gitignored `local.properties` dev-PAT seeding keys are per-flavor (ADR-0012/0047):
+  - `deferno.dev.accounts` / `deferno.staging.apiToken` → seed the `stagingDebug` variant (Staging Test accounts).
+  - `deferno.prod.accounts` (NEW) → seeds the `prodDebug` variant with the disposable Production Test account (`id:label:token`, `;`-separated). Release variants seed nothing.
 
 ## Agent skills
 

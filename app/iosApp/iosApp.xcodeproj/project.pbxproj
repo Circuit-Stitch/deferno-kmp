@@ -26,8 +26,6 @@
 		DE0002000000000000000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000030 /* Assets.xcassets */; };
 		DE0002000000000000000031 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000031 /* LaunchScreen.storyboard */; };
 		DE0002000000000000000100 /* Atoms.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000100 /* Atoms.swift */; };
-		DE0002000000000000000200 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000200 /* Localization.swift */; };
-		DE0002000000000000000201 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000201 /* Localizable.xcstrings */; };
 		DE0002000000000000000101 /* DefernoIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000101 /* DefernoIcons.swift */; };
 		DE0002000000000000000102 /* TreeFiligree.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000102 /* TreeFiligree.swift */; };
 		DE0002000000000000000103 /* InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000103 /* InboxView.swift */; };
@@ -38,6 +36,8 @@
 		DE0002000000000000000120 /* IosDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000120 /* IosDictation.swift */; };
 		DE0002000000000000000130 /* IosInference.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000130 /* IosInference.swift */; };
 		DE0002000000000000000140 /* IosFileTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000140 /* IosFileTranscriber.swift */; };
+		DE0002000000000000000200 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000200 /* Localization.swift */; };
+		DE0002000000000000000201 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000201 /* Localizable.xcstrings */; };
 		DE0002000000000000000282 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000282 /* AssistantView.swift */; };
 		DE0002000000000000000283 /* IosAssistantTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000283 /* IosAssistantTransport.swift */; };
 		DE000200000000000000040 /* ShellObservers.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000040 /* ShellObservers.swift */; };
@@ -70,6 +70,7 @@
 		36899BF29966B0651819404F /* BreakdownView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownView.swift; sourceTree = "<group>"; };
 		46557F6D1755D00F5A110E02 /* BreakdownTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownTypes.swift; sourceTree = "<group>"; };
 		85FCC65B3A9A22AD7A207747 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
+		8F6CD701E892024FBD11D658 /* Pods-iosApp.proddebug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.proddebug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.proddebug.xcconfig"; sourceTree = "<group>"; };
 		A284BEEB3E5CB9DC5DAA6943 /* libPods-iosApp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-iosApp.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A814CF36BBC8D39E6948A223 /* BreakdownEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownEngine.swift; sourceTree = "<group>"; };
 		C348C4334E080672AAA79425 /* BreakdownEngineTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownEngineTests.swift; sourceTree = "<group>"; };
@@ -90,8 +91,6 @@
 		DE0001000000000000000030 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DE0001000000000000000031 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		DE0001000000000000000100 /* Atoms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atoms.swift; sourceTree = "<group>"; };
-		DE0001000000000000000200 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
-		DE0001000000000000000201 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		DE0001000000000000000101 /* DefernoIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoIcons.swift; sourceTree = "<group>"; };
 		DE0001000000000000000102 /* TreeFiligree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeFiligree.swift; sourceTree = "<group>"; };
 		DE0001000000000000000103 /* InboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxView.swift; sourceTree = "<group>"; };
@@ -102,6 +101,8 @@
 		DE0001000000000000000120 /* IosDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosDictation.swift; sourceTree = "<group>"; };
 		DE0001000000000000000130 /* IosInference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosInference.swift; sourceTree = "<group>"; };
 		DE0001000000000000000140 /* IosFileTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosFileTranscriber.swift; sourceTree = "<group>"; };
+		DE0001000000000000000200 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
+		DE0001000000000000000201 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		DE0001000000000000000282 /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
 		DE0001000000000000000283 /* IosAssistantTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosAssistantTransport.swift; sourceTree = "<group>"; };
 		DE000100000000000000040 /* ShellObservers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellObservers.swift; sourceTree = "<group>"; };
@@ -143,6 +144,7 @@
 			children = (
 				85FCC65B3A9A22AD7A207747 /* Pods-iosApp.debug.xcconfig */,
 				DC7FD732D8796105D096EC7A /* Pods-iosApp.release.xcconfig */,
+				8F6CD701E892024FBD11D658 /* Pods-iosApp.proddebug.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -666,6 +668,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEFERNO_ENV = Staging;
 				DEVELOPMENT_TEAM = GDV76FJJZ5;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -673,7 +676,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iosApp/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Deferno;
+				INFOPLIST_KEY_CFBundleDisplayName = "Deferno Dev";
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -689,7 +692,7 @@
 					"-weak_framework",
 					FoundationModels,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.circuitstitch.deferno;
+				PRODUCT_BUNDLE_IDENTIFIER = com.circuitstitch.deferno.staging.debug;
 				PRODUCT_MODULE_NAME = iosApp;
 				PRODUCT_NAME = Deferno;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -705,8 +708,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEFERNO_ENV = Production;
 				DEVELOPMENT_TEAM = GDV76FJJZ5;
-				// Never seed a dev account in Release — keep DevStagingToken empty regardless of any local Secrets.xcconfig.
 				DEV_STAGING_TOKEN = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -738,6 +741,75 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
+		};
+		DE0008000000000000000005 /* ProdDebug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = DE0009000000000000000001 /* Local.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFERNO_ENV = Production;
+				DEVELOPMENT_TEAM = GDV76FJJZ5;
+				DEV_STAGING_TOKEN = "";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iosApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Deferno β";
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				KOTLIN_FRAMEWORK_BUILD_TYPE = debug;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					Deferno,
+					"-weak_framework",
+					FoundationModels,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.circuitstitch.deferno.debug;
+				PRODUCT_MODULE_NAME = iosApp;
+				PRODUCT_NAME = Deferno;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = ProdDebug;
+		};
+		DE0008000000000000000006 /* ProdDebug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = ProdDebug;
 		};
 		DE0008000000000000000020 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -793,6 +865,33 @@
 			};
 			name = Release;
 		};
+		DE0008000000000000000022 /* ProdDebug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.circuitstitch.deferno.iosAppTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Deferno.app/Deferno";
+			};
+			name = ProdDebug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -801,6 +900,7 @@
 			buildConfigurations = (
 				DE0008000000000000000001 /* Debug */,
 				DE0008000000000000000002 /* Release */,
+				DE0008000000000000000006 /* ProdDebug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -810,6 +910,7 @@
 			buildConfigurations = (
 				DE0008000000000000000003 /* Debug */,
 				DE0008000000000000000004 /* Release */,
+				DE0008000000000000000005 /* ProdDebug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -819,6 +920,7 @@
 			buildConfigurations = (
 				DE0008000000000000000020 /* Debug */,
 				DE0008000000000000000021 /* Release */,
+				DE0008000000000000000022 /* ProdDebug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
