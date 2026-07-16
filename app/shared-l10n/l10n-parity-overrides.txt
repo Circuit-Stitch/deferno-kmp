@@ -234,7 +234,6 @@ android shell_window_title_destination
 android tasks_detail_comment_edited
 android tasks_detail_due_date_a11y
 android tasks_detail_play_attachment_a11y
-android tasks_detail_property_source
 android tasks_detail_remove_caption_a11y
 android tasks_detail_section_activity
 android tasks_detail_source_open_in

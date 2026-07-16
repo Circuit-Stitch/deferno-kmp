@@ -135,20 +135,89 @@ enum L {
         }
     }
 
-    /// The localized label for a Task-detail ACTIVITY history row (ADR-0043), from its typed verb token
-    /// (`BridgeKt.activityHistoryVerb`). Read-only; an unrecognized token degrades to the generic line.
-    static func activityHistory(_ token: String) -> String {
+    // MARK: Trail — enriched history line + change diff (ADR-0046)
+
+    /// The enriched Trail history label from a bridged `HistoryLine` — mirrors Kotlin `historyLabel()`.
+    /// Uses: activity_history_status_transition, activity_history_{split,moved,parent,folded,merged}_peer,
+    /// activity_history_peer_unknown, activity_history_merged_into_parent, activity_history_created,
+    /// activity_history_unknown (+ activity_history_updated[_fields] via historyUpdated).
+    static func historyEnriched(_ line: HistoryLine) -> String {
+        switch line.verb {
+        case "STATUS_CHANGED":
+            let from = line.statusFrom?.label ?? string("activity_history_unknown")
+            let to = line.statusTo?.label ?? string("activity_history_unknown")
+            return format("activity_history_status_transition", from, to)
+        case "SPLIT":            return peerLine("activity_history_split_peer", line.peerTitle)
+        case "MOVED":            return peerLine("activity_history_moved_peer", line.peerTitle)
+        case "PARENT_ASSIGNED":  return peerLine("activity_history_parent_peer", line.peerTitle)
+        case "FOLDED_INTO":      return peerLine("activity_history_folded_peer", line.peerTitle)
+        case "MERGED_CHILD":     return peerLine("activity_history_merged_peer", line.peerTitle)
+        case "MERGED_INTO_PARENT": return string("activity_history_merged_into_parent")
+        case "UPDATED":          return historyUpdated(line.changedFields, generic: line.updatedIsGeneric)
+        case "CREATED":          return string("activity_history_created")
+        default:                 return string("activity_history_unknown")
+        }
+    }
+
+    private static func peerLine(_ key: String, _ peer: String?) -> String {
+        format(key, peer ?? string("activity_history_peer_unknown"))
+    }
+
+    /// The UPDATED-fields summary — mirrors Kotlin `updatedLabel()`. Uses: activity_history_updated,
+    /// activity_history_updated_fields (+ diffFieldLabel for each token).
+    static func historyUpdated(_ fieldTokens: [String], generic: Bool) -> String {
+        if generic || fieldTokens.isEmpty { return string("activity_history_updated") }
+        let names = fieldTokens.map { diffFieldLabel($0) }.joined(separator: ", ")
+        return format("activity_history_updated_fields", names)
+    }
+
+    /// A diff-row / changed-field label from a field token — mirrors `ActivityDiffFormat.activityFieldLabel`.
+    /// Uses: activity_field_title, new_notes_label, activity_field_deadline, common_labels,
+    /// activity_field_status, activity_field_pinned.
+    static func diffFieldLabel(_ token: String) -> String {
         switch token {
-        case "Created": return string("activity_history_created")
-        case "Updated": return string("activity_history_updated")
-        case "StatusChanged": return string("activity_history_status_changed")
-        case "Moved": return string("activity_history_moved")
-        case "ParentAssigned": return string("activity_history_parent_assigned")
-        case "Split": return string("activity_history_split")
-        case "FoldedInto": return string("activity_history_folded_into")
-        case "MergedChild": return string("activity_history_merged_child")
-        case "MergedIntoParent": return string("activity_history_merged_into_parent")
-        default: return string("activity_history_unknown")
+        case "TITLE":       return string("activity_field_title")
+        case "DESCRIPTION": return string("new_notes_label")
+        case "DEADLINE":    return string("activity_field_deadline")
+        case "LABELS":      return string("common_labels")
+        case "STATUS":      return string("activity_field_status")
+        case "PINNED":      return string("activity_field_pinned")
+        default:            return token
+        }
+    }
+
+    /// The resolved display text for one diff side — mirrors `toDiffValue`/`formatFieldValue`. CLEARED /
+    /// UNAVAILABLE render a word (never struck); PRESENT is formatted per field. DEADLINE is parsed +
+    /// formatted Swift-side (see TrailDateFormat in the view); STATUS reuses the wire-token status label;
+    /// PINNED = yes/no. Uses: activity_diff_value_cleared, activity_diff_value_unavailable,
+    /// activity_value_pinned, activity_value_unpinned (+ statusWireLabel).
+    static func diffValueText(fieldToken: String, side: TrailDiffSide) -> String {
+        switch side.kind {
+        case "CLEARED":     return string("activity_diff_value_cleared")
+        case "UNAVAILABLE": return string("activity_diff_value_unavailable")
+        default:            break // PRESENT
+        }
+        let raw = side.value ?? ""
+        switch fieldToken {
+        case "DEADLINE": return TrailDateFormat.deadline(raw)      // defined in the view file
+        case "STATUS":   return statusWireLabel(raw)
+        case "PINNED":   return raw == "true" ? string("activity_value_pinned")
+                                              : string("activity_value_unpinned")
+        default:         return raw
+        }
+    }
+
+    /// A wire status token → localized label (the diff-row STATUS value). Reuses the same keys as the
+    /// shipping WorkingState.label so the vocabulary matches. Uses: tasks_menu_open,
+    /// common_status_in_progress, common_status_in_review, calendar_action_done, tasks_set_aside.
+    static func statusWireLabel(_ token: String) -> String {
+        switch token {
+        case "open":        return string("tasks_menu_open")
+        case "in-progress": return string("common_status_in_progress")
+        case "in-review":   return string("common_status_in_review")
+        case "done":        return string("calendar_action_done")
+        case "dropped":     return string("tasks_set_aside")
+        default:            return token
         }
     }
 
