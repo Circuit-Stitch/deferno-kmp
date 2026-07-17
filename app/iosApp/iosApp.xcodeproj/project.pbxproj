@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DE0002000000000000000300 /* ShellAccessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000300 /* ShellAccessibility.swift */; };
+		DE0002000000000000000301 /* ShellAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0001000000000000000301 /* ShellAccessibilityTests.swift */; };
 		1A6655907D3903195FFAE0AC /* BreakdownEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C348C4334E080672AAA79425 /* BreakdownEngineTests.swift */; };
 		2EBFC0B6B0CE77A73AE329BC /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36899BF29966B0651819404F /* BreakdownView.swift */; };
 		35CA9495C06B3D4381617242 /* BreakdownTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46557F6D1755D00F5A110E02 /* BreakdownTypes.swift */; };
@@ -113,6 +115,8 @@
 		DE000100000000000000043 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		DE000100000000000000044 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		DE000100000000000000045 /* MainShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainShellView.swift; sourceTree = "<group>"; };
+		DE0001000000000000000300 /* ShellAccessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellAccessibility.swift; sourceTree = "<group>"; };
+		DE0001000000000000000301 /* ShellAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellAccessibilityTests.swift; sourceTree = "<group>"; };
 		DE000100000000000000046 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		DE000100000000000000047 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
 		DE000100000000000000048 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -279,6 +283,7 @@
 				DE0001000000000000000023 /* DefernoThemeTests.swift */,
 				DE0001000000000000000022 /* StateBridgeTests.swift */,
 				C348C4334E080672AAA79425 /* BreakdownEngineTests.swift */,
+				DE0001000000000000000301 /* ShellAccessibilityTests.swift */,
 			);
 			path = iosAppTests;
 			sourceTree = "<group>";
@@ -339,6 +344,7 @@
 			isa = PBXGroup;
 			children = (
 				DE000100000000000000045 /* MainShellView.swift */,
+				DE0001000000000000000300 /* ShellAccessibility.swift */,
 			);
 			path = Shell;
 			sourceTree = "<group>";
@@ -575,6 +581,7 @@
 				DE000200000000000000043 /* RootView.swift in Sources */,
 				DE000200000000000000044 /* SignInView.swift in Sources */,
 				DE000200000000000000045 /* MainShellView.swift in Sources */,
+				DE0002000000000000000300 /* ShellAccessibility.swift in Sources */,
 				DE000200000000000000046 /* ProfileView.swift in Sources */,
 				DE000200000000000000047 /* CalendarView.swift in Sources */,
 				DE000200000000000000048 /* SettingsView.swift in Sources */,
@@ -603,6 +610,7 @@
 				DE0002000000000000000023 /* DefernoThemeTests.swift in Sources */,
 				DE0002000000000000000022 /* StateBridgeTests.swift in Sources */,
 				1A6655907D3903195FFAE0AC /* BreakdownEngineTests.swift in Sources */,
+				DE0002000000000000000301 /* ShellAccessibilityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
