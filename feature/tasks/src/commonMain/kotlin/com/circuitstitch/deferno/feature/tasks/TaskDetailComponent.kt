@@ -202,6 +202,16 @@ interface TaskDetailComponent {
     fun onSetDeadline(date: LocalDate?)
 
     /**
+     * Set or clear this Task's deadline **clock time** (#348) — issued through the injected
+     * [setDeadlineTime] seam (optimistic apply + outbox enqueue, ADR-0001). This is the source-of-truth
+     * time axis, separate from [onSetDeadline]'s date axis (the server discards `complete_by`'s clock and
+     * lets `deadline_time_of_day` win). A `null` [time] = **all-day**. Default no-op body so callers /
+     * fakes that don't drive the combined date+time picker (only the iOS detail does today) build
+     * without it. The local DB Flow then re-emits the new `deadlineTimeOfDay` into [state].
+     */
+    fun onSetDeadlineTime(time: LocalTime?) {}
+
+    /**
      * Replace this Task's LABELS with [labels] (an empty list clears them) — issued as a Command through
      * the injected [setLabels] seam (optimistic local apply + outbox enqueue, ADR-0001). The local DB Flow
      * then re-emits the new labels into [state].
@@ -329,6 +339,10 @@ class DefaultTaskDetailComponent(
     // `null` clears it. Wired from the shell's command executor (Set/ClearTaskDeadline); defaults to a
     // no-op like the editors above so the read/navigation-only tests build without it.
     private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    // The deadline clock-TIME write seam (taskId, timeOfDay) — a non-null LocalTime sets the time, a
+    // `null` makes it all-day (#348). Wired from the shell's command executor (SetTaskDeadlineTime);
+    // defaults to a no-op like the editors above (only the iOS combined date+time picker drives it today).
+    private val setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit = { _, _ -> },
     // The LABELS write seam (taskId, labels) — replaces the Task's label set (empty clears). Wired from
     // the shell's command executor (SetTaskLabels); defaults to a no-op for the same reason.
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
@@ -506,6 +520,12 @@ class DefaultTaskDetailComponent(
             it.atTime(timeOfDay).toInstant(TimeZone.currentSystemDefault())
         }
         scope.launch { setDeadline(taskId, completeBy) }
+    }
+
+    override fun onSetDeadlineTime(time: LocalTime?) {
+        // Forward the picked clock time (or null = all-day) straight to the source-of-truth time axis — the
+        // server discards `complete_by`'s clock, so this is the only write that changes the deadline time.
+        scope.launch { setDeadlineTime(taskId, time) }
     }
 
     override fun onSetLabels(labels: List<String>) {

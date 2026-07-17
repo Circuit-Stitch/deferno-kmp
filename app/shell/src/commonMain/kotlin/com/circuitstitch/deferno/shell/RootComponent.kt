@@ -439,6 +439,7 @@ class DefaultRootComponent(
                         // The Task detail's editable-PROPERTIES write seams (DUE date + LABELS), each
                         // routed through this Account's command executor (Set/ClearTaskDeadline, SetTaskLabels).
                         setDeadline = session.setDeadline,
+                        setDeadlineTime = session.setDeadlineTime,
                         setLabels = session.setLabels,
                         // The detail's destructive Delete seam (kebab → confirm), routed through this
                         // Account's command executor (DeleteTask). The Item-tree command menu (#231) reuses it.

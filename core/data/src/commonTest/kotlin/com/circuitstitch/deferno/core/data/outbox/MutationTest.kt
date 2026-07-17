@@ -13,6 +13,7 @@ import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -87,6 +88,24 @@ class MutationTest {
     fun clearDeadlineEmitsExplicitNull() {
         // null = "clear it" (ADR-0011), NOT an omitted field.
         assertEquals("""{"complete_by":null}""", ClearDeadline(TaskId("a")).toRequest().body)
+    }
+
+    @Test
+    fun setDeadlineTimeEmitsHourMinuteClock() {
+        // The source-of-truth time axis (#348): an "HH:MM" string on `deadline_time_of_day` alone.
+        assertEquals(
+            """{"deadline_time_of_day":"09:30"}""",
+            SetDeadlineTime(TaskId("a"), LocalTime(9, 30)).toRequest().body,
+        )
+    }
+
+    @Test
+    fun setDeadlineTimeWithNullEmitsExplicitNullForAllDay() {
+        // A null time = all-day — an explicit `null` (ADR-0011), distinct from omit, never a dropped field.
+        assertEquals(
+            """{"deadline_time_of_day":null}""",
+            SetDeadlineTime(TaskId("a"), null).toRequest().body,
+        )
     }
 
     @Test
@@ -213,6 +232,14 @@ class MutationTest {
         assertEquals(WorkingState.Done, SetWorkingState(TaskId("a"), WorkingState.Done).applyTo(base).workingState)
         assertEquals("new", Rename(TaskId("a"), "new").applyTo(base).title)
         assertEquals(null, ClearDeadline(TaskId("a")).applyTo(base.copy(completeBy = created)).completeBy)
+        assertEquals(
+            LocalTime(14, 30),
+            SetDeadlineTime(TaskId("a"), LocalTime(14, 30)).applyTo(base).deadlineTimeOfDay,
+        )
+        assertEquals(
+            null,
+            SetDeadlineTime(TaskId("a"), null).applyTo(base.copy(deadlineTimeOfDay = LocalTime(9, 0))).deadlineTimeOfDay,
+        )
         assertEquals(null, ClearDescription(TaskId("a")).applyTo(base.copy(description = "x")).description)
         assertEquals(listOf("home"), SetLabels(TaskId("a"), listOf("home")).applyTo(base).labels)
         assertTrue(SetPinned(TaskId("a"), true).applyTo(base).pinned)
@@ -227,6 +254,7 @@ class MutationTest {
             Rename(TaskId("a"), "x"),
             SetDeadline(TaskId("a"), created),
             ClearDeadline(TaskId("a")),
+            SetDeadlineTime(TaskId("a"), LocalTime(9, 0)),
             SetLabels(TaskId("a"), listOf("l")),
             SetPinned(TaskId("a"), true),
             DeleteTask(TaskId("a"), created),

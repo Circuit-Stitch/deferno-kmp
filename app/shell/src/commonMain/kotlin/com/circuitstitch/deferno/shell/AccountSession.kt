@@ -61,7 +61,9 @@ import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachments
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.coroutines.flow.Flow
+import com.circuitstitch.deferno.core.domain.command.SetTaskDeadlineTime
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
@@ -186,6 +188,14 @@ interface AccountSession {
      */
     val setDeadline: suspend (TaskId, Instant?) -> Unit
     val setLabels: suspend (TaskId, List<String>) -> Unit
+
+    /**
+     * The Task detail's deadline **clock-time** write seam (#348): maps a `(TaskId, LocalTime?)` to the
+     * `SetTaskDeadlineTime` Command and dispatches it through the command executor (optimistic apply +
+     * outbox enqueue). A `null` time = all-day. Paired with [setDeadline]'s date axis so the combined
+     * date+time WHEN picker (iOS) can edit the time. Defaulted to a no-op so test fakes build without it.
+     */
+    val setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit get() = { _, _ -> }
 
     /**
      * The Task detail's **Delete** write seam (the kebab → confirm): maps a [TaskId] to the destructive
@@ -369,6 +379,9 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val setDeadline: suspend (TaskId, Instant?) -> Unit =
         commandSetDeadline(component.commandExecutor)
 
+    override val setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit =
+        commandSetDeadlineTime(component.commandExecutor)
+
     override val setLabels: suspend (TaskId, List<String>) -> Unit =
         commandSetLabels(component.commandExecutor)
 
@@ -429,6 +442,17 @@ internal fun commandSetDeadline(executor: CommandExecutor): suspend (TaskId, Ins
         } else {
             executor.execute(SetTaskDeadline(id, completeBy))
         }
+    }
+
+/**
+ * The deadline **clock-time** write seam backed by a [CommandExecutor] (#348): dispatches the single
+ * [SetTaskDeadlineTime] command carrying the picked [LocalTime] (a `null` = all-day). No `current` row
+ * is passed — like [commandSetDeadline], a time set has no stale-transition gate. Shared by production
+ * and tests so the mapping isn't duplicated.
+ */
+internal fun commandSetDeadlineTime(executor: CommandExecutor): suspend (TaskId, LocalTime?) -> Unit =
+    { id, timeOfDay ->
+        executor.execute(SetTaskDeadlineTime(id, timeOfDay))
     }
 
 /**

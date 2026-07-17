@@ -158,6 +158,13 @@ enum class CommandKind(
     // 400 verdict the executor returns as Failed(message) so the menu can surface it, never a silent
     // outbox drop. Appended at the end (CommandIds are a public contract — never reorder/rename).
     SetTaskBlockedBy(CommandId("task.set-blocked-by"), CommandCategory.Organize, onlineOnly = true),
+
+    // The deadline **clock-time** write (#348): set/clear a Task's `deadline_time_of_day` — the
+    // source-of-truth time axis paired with [SetTaskDeadline]'s date axis, so the combined date+time
+    // WHEN picker (iOS) can edit the time. Schedule category + offline-first (optimistic apply + enqueue),
+    // so NOT onlineOnly; a time set is valid in any state, so it falls to [enabledFor]'s `else -> true`.
+    // Appended at the end (CommandIds are a public contract — never reorder/rename existing entries).
+    SetTaskDeadlineTime(CommandId("task.set-deadline-time"), CommandCategory.Schedule),
     ;
 
     /**

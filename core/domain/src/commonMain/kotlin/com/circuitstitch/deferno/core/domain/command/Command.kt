@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.core.network.dto.CreateEventPayload
 import com.circuitstitch.deferno.core.network.dto.CreateHabitPayload
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
@@ -134,6 +135,14 @@ data class SetTaskDeadline(override val taskId: TaskId, val completeBy: Instant)
 /** Clear the Task's deadline (distinct from setting one — the writer emits an explicit `null`). */
 data class ClearTaskDeadline(override val taskId: TaskId) : TaskCommand {
     override val kind: CommandKind get() = CommandKind.ClearTaskDeadline
+}
+
+/**
+ * Set the Task's deadline **clock time** (#348) — the source-of-truth time axis, separate from the
+ * `complete_by` date axis. A `null` [timeOfDay] means **all-day** (the writer emits an explicit `null`).
+ */
+data class SetTaskDeadlineTime(override val taskId: TaskId, val timeOfDay: LocalTime?) : TaskCommand {
+    override val kind: CommandKind get() = CommandKind.SetTaskDeadlineTime
 }
 
 /** Set the Task's description body. */

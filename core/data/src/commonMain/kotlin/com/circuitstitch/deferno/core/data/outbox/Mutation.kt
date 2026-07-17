@@ -18,6 +18,7 @@ import com.circuitstitch.deferno.core.network.mapper.OccurrenceKind
 import com.circuitstitch.deferno.core.network.mapper.toWireToken
 import com.circuitstitch.deferno.core.network.mapper.toWorkingState
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
@@ -51,6 +52,7 @@ import kotlin.time.Instant
  * | [Rename] | `PATCH tasks/{id}` | `{"title":"…"}` |
  * | [SetDeadline] | `PATCH tasks/{id}` | `{"complete_by":"<rfc3339>"}` |
  * | [ClearDeadline] | `PATCH tasks/{id}` | `{"complete_by":null}` |
+ * | [SetDeadlineTime] | `PATCH tasks/{id}` | `{"deadline_time_of_day":"HH:MM"}` (a `null` = all-day) |
  * | [SetDescription] | `PATCH tasks/{id}` | `{"description":"…"}` |
  * | [ClearDescription] | `PATCH tasks/{id}` | `{"description":null}` |
  * | [SetLabels] | `PATCH tasks/{id}` | `{"labels":[…]}` |
@@ -166,6 +168,19 @@ data class ClearDeadline(override val taskId: TaskId) : TaskMutation {
     override fun toRequest(): OutboxRequest = patchTask(taskId) { put("complete_by", JsonNull) }
 }
 
+/**
+ * Set (or clear) a Task's deadline **clock time** (#348) — the source-of-truth time axis, separate from
+ * the `complete_by` date axis (CONTRACT-NOTES: the server discards `complete_by`'s clock and lets
+ * `deadline_time_of_day` win). [timeOfDay] `null` = **all-day** (an explicit clear, distinct from omit —
+ * ADR-0011). Sent as an `"HH:MM"` string (the server reads it back leniently as `"HH:MM:SS"`).
+ */
+data class SetDeadlineTime(override val taskId: TaskId, val timeOfDay: LocalTime?) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(deadlineTimeOfDay = timeOfDay)
+    override fun toRequest(): OutboxRequest = patchTask(taskId) {
+        if (timeOfDay == null) put("deadline_time_of_day", JsonNull) else put("deadline_time_of_day", timeOfDay.toString())
+    }
+}
+
 /** Set a Task's description body. */
 data class SetDescription(override val taskId: TaskId, val description: String) : TaskMutation {
     override fun applyTo(task: Task): Task = task.copy(description = description)
@@ -220,6 +235,10 @@ internal fun TaskMutation.beforeValues(task: Task): JsonObject? = when (this) {
     is SetDeadline, is ClearDeadline -> buildJsonObject {
         val by = task.completeBy
         if (by == null) put("complete_by", JsonNull) else put("complete_by", by.toString())
+    }
+    is SetDeadlineTime -> buildJsonObject {
+        val at = task.deadlineTimeOfDay
+        if (at == null) put("deadline_time_of_day", JsonNull) else put("deadline_time_of_day", at.toString())
     }
     is SetDescription, is ClearDescription -> buildJsonObject {
         if (task.hydration == HydrationState.Full) {

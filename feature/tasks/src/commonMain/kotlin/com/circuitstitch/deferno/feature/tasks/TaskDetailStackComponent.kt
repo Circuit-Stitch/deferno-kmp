@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlin.coroutines.CoroutineContext
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
@@ -73,6 +74,9 @@ class DefaultTaskDetailStackComponent(
     private val currentUserId: UserId? = null,
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
     private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    // The deadline clock-TIME seam (#348), threaded into every detail page for the combined date+time
+    // picker (iOS). No-op default so existing tests/callers build without it.
+    private val setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit = { _, _ -> },
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     private val deleteTask: suspend (TaskId) -> Unit = { _ -> },
     private val coroutineContext: CoroutineContext = Dispatchers.Default,
@@ -110,6 +114,7 @@ class DefaultTaskDetailStackComponent(
                     currentUserId = currentUserId,
                     createSubtask = createSubtask,
                     setDeadline = setDeadline,
+                    setDeadlineTime = setDeadlineTime,
                     setLabels = setLabels,
                     delete = deleteTask,
                     coroutineContext = coroutineContext,

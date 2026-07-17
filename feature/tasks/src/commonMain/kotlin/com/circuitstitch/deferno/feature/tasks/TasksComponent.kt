@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlin.coroutines.CoroutineContext
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /** Which pane is foregrounded — the Item [Tree] (the primary Tasks pane) or a Task [Detail]. */
@@ -103,6 +104,9 @@ class DefaultTasksComponent(
     // The detail's editable-PROPERTIES write seams (DUE date + LABELS), threaded down into the detail
     // slot. Both default to no-ops so existing tests/callers build without supplying them.
     private val setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    // The deadline clock-TIME seam (#348), threaded down into the detail slot for the combined date+time
+    // picker (iOS). No-op default so existing tests/callers build without it.
+    private val setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit = { _, _ -> },
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     // The detail's destructive Delete seam (kebab → confirm), threaded down into the detail slot. Defaults
     // to a no-op so existing tests/callers build without supplying it. The Item tree's command menu (#231)
@@ -178,6 +182,7 @@ class DefaultTasksComponent(
                 currentUserId = currentUserId,
                 createSubtask = createSubtask,
                 setDeadline = setDeadline,
+                setDeadlineTime = setDeadlineTime,
                 setLabels = setLabels,
                 delete = deleteTask,
                 onDeviceAttachments = onDeviceAttachments,

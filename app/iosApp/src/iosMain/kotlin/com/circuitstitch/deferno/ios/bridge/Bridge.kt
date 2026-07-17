@@ -29,7 +29,10 @@ import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atTime
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import platform.Foundation.NSData
 import platform.Foundation.create
@@ -78,6 +81,60 @@ fun setTaskDeadline(component: TaskDetailComponent, epochSeconds: Double) {
 
 /** Clear the deadline DUE date (the explicit clear path). */
 fun clearTaskDeadline(component: TaskDetailComponent) = component.onSetDeadline(null)
+
+// --- Combined date+time WHEN picker (#348) — iOS. The deadline is two axes (CONTRACT-NOTES): the
+// `complete_by` DATE (the server discards its clock) and the source-of-truth `deadlineTimeOfDay` CLOCK
+// (null = all-day). The SwiftUI graphical `[.date, .hourAndMinute]` picker needs a seed instant that
+// carries a *real* time and a setter that dispatches only the changed axis. --------------------------
+
+/**
+ * The seed clock the combined picker shows for an **all-day** Task (no [Task.deadlineTimeOfDay]) — 9:00 AM,
+ * matching the create form's "Add time" default. [applyDeadlinePicker] compares against this same value so an
+ * all-day Task stays all-day on a pure date change (only an explicit clock move converts it to timed).
+ */
+private val PICKER_DEFAULT_TIME: LocalTime = LocalTime(9, 0)
+
+/** Whether the deadline carries a real clock time (#348); `false` = all-day (show date only, offer "add"/"clear time"). */
+fun taskDeadlineHasTime(task: Task): Boolean = task.deadlineTimeOfDay != null
+
+/**
+ * The seed instant (epoch seconds) for the combined `[.date, .hourAndMinute]` `DatePicker`: the deadline DUE
+ * date combined with the real [Task.deadlineTimeOfDay] (or [PICKER_DEFAULT_TIME] when all-day), at the device
+ * zone. `-1.0` when the Task has no deadline. NOT [taskDeadlineEpochSeconds] — that returns raw `completeBy`,
+ * whose clock is the end-of-day sentinel (23:59:59) for an all-day Task, which must NOT seed the time row.
+ */
+fun taskDeadlinePickerEpochSeconds(task: Task): Double {
+    val by = task.completeBy ?: return -1.0
+    val zone = TimeZone.currentSystemDefault()
+    val date = by.toLocalDateTime(zone).date
+    val time = task.deadlineTimeOfDay ?: PICKER_DEFAULT_TIME
+    return date.atTime(time).toInstant(zone).toEpochMilliseconds() / 1000.0
+}
+
+/**
+ * Apply a combined date+time picker selection, dispatching **only the changed axis** (#348): a changed DAY
+ * forwards [TaskDetailComponent.onSetDeadline] (date axis); a changed clock forwards
+ * [TaskDetailComponent.onSetDeadlineTime] (the source-of-truth time axis). The current values are read live
+ * from the component's state (not a Swift snapshot) so rapid edits within one open popover stay correct.
+ * Comparing the picked clock against the seed (real time, or [PICKER_DEFAULT_TIME] when all-day) is what keeps
+ * an all-day Task all-day on a pure date change — and converts it to timed only when the user moves the clock.
+ */
+fun applyDeadlinePicker(component: TaskDetailComponent, epochSeconds: Double) {
+    val task = component.state.value.task ?: return
+    val zone = TimeZone.currentSystemDefault()
+    val picked = Instant.fromEpochMilliseconds((epochSeconds * 1000).toLong()).toLocalDateTime(zone)
+    if (picked.date != task.completeBy?.toLocalDateTime(zone)?.date) component.onSetDeadline(picked.date)
+    val seedTime = task.deadlineTimeOfDay ?: PICKER_DEFAULT_TIME
+    if (picked.hour != seedTime.hour || picked.minute != seedTime.minute) {
+        component.onSetDeadlineTime(LocalTime(picked.hour, picked.minute))
+    }
+}
+
+/** Set the deadline clock time to [PICKER_DEFAULT_TIME] — the "add a time" affordance for an all-day Task (#348). */
+fun addTaskDeadlineTime(component: TaskDetailComponent) = component.onSetDeadlineTime(PICKER_DEFAULT_TIME)
+
+/** Clear the deadline clock time → all-day (#348); the DUE date stays. */
+fun clearTaskDeadlineTime(component: TaskDetailComponent) = component.onSetDeadlineTime(null)
 
 /** Read-only PROPERTIES labels for the Swift view — the opaque-typed fields it can't format itself. */
 fun taskTimeLabel(task: Task): String = task.deadlineTimeOfDay?.toString() ?: "—"

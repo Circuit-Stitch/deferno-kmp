@@ -8,6 +8,7 @@ import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -51,6 +52,23 @@ class OutboxTaskWriterTest {
         assertEquals(listOf("tasks", "a"), entry.request.path)
         assertEquals("""{"status":"done"}""", entry.request.body)
         assertEquals(now, entry.nextAttemptAt)
+    }
+
+    @Test
+    fun setDeadlineTimeAppliesTheClockOptimisticallyEnqueuesItAndCapturesTheOldClock() = runTest {
+        // #348 time axis: the optimistic apply updates `deadlineTimeOfDay`, the request patches
+        // `deadline_time_of_day` alone (an "HH:MM" string), and the ledger before-image carries the OLD clock.
+        val existing = task("a").copy(deadlineTimeOfDay = LocalTime(8, 0))
+        val local = FakeTaskLocalStore(mapOf(TaskId("a") to existing))
+        val outbox = FakeOutboxStore()
+
+        writer(local, outbox).setDeadlineTime(TaskId("a"), LocalTime(9, 30))
+
+        assertEquals(LocalTime(9, 30), local.all.getValue(TaskId("a")).deadlineTimeOfDay)
+        val entry = outbox.all.single()
+        assertEquals(OutboxMethod.Patch, entry.request.method)
+        assertEquals("""{"deadline_time_of_day":"09:30"}""", entry.request.body)
+        assertEquals("""{"deadline_time_of_day":"08:00"}""", outbox.enqueuedBefore.single())
     }
 
     @Test
