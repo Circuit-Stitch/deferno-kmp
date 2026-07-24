@@ -56,12 +56,18 @@ struct MainShellView: View {
             // window doesn't get an absurdly wide menu (mirrors ShellChrome's 0.82f / 320dp).
             let drawerWidth = min(geo.size.width * 0.82, 320)
             let fraction = openFraction(drawerWidth)
+            // VoiceOver has no z-order, so gate each overlaid layer on the drawer state: the closed
+            // drawer's off-screen nav rows are hidden, and the covered content is hidden while it's open
+            // (#358). Exactly one layer is reachable per state — see ShellAccessibility.
+            let a11y = ShellAccessibility(drawerOpen: drawerOpen)
             ZStack(alignment: .leading) {
                 drawer
                     .frame(width: drawerWidth)
                     .frame(maxHeight: .infinity)
+                    .accessibilityHidden(a11y.drawerHidden)
                 content
                     .frame(width: geo.size.width, height: geo.size.height)
+                    .accessibilityHidden(a11y.contentHidden)
                     .shadow(color: .black.opacity(0.18 * fraction), radius: 8, x: -2)
                     // The slid-aside content is the dismiss target: tap or drag-left to close. Sized to the
                     // content (NOT ignoresSafeArea, which would make the Color fill the whole screen and
