@@ -21,8 +21,10 @@ import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.CreateWriter
 import com.circuitstitch.deferno.core.data.create.DefaultCreateReplayListener
+import com.circuitstitch.deferno.core.data.create.ItemConverter
 import com.circuitstitch.deferno.core.data.create.ItemIdHealer
-import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
+import com.circuitstitch.deferno.core.data.create.KtorItemRemoteSource
+import com.circuitstitch.deferno.core.data.create.LedgerRecordingItemConverter
 import com.circuitstitch.deferno.core.data.create.OfflineCreateWriter
 import com.circuitstitch.deferno.core.data.create.PendingCreateStore
 import com.circuitstitch.deferno.core.data.create.SqlDelightPendingCreateStore
@@ -163,8 +165,8 @@ interface AccountDataBindings {
     ): ActivitySync = ActivitySync(remoteSource, ledger)
 
     /**
-     * Attachments are the one item-mutation surface that never reaches the outbox choke-point (they are
-     * online-only, ADR-0001), so they get their own ledger-recording decorator (#364).
+     * Attachments are one of the two item-mutation surfaces that never reach the outbox choke-point (they
+     * are online-only, ADR-0001), so they get their own ledger-recording decorator (#364).
      *
      * Bound **once, here** — the wire half is constructed inline, exactly as [outboxStore] does. Binding it
      * separately in AppScope would leave an undecorated [TaskDetailRepository] in the graph, and whichever
@@ -183,6 +185,23 @@ interface AccountDataBindings {
         ledger: ActivityLedgerStore,
     ): TaskDetailRepository =
         LedgerRecordingTaskDetailRepository(KtorTaskDetailRepository(client, uploadClient), ledger)
+
+    /**
+     * Convert is the other one (#364): online-only (ADR-0016), so it never enqueues and the choke-point
+     * never sees it. The decorator mints the stamp that rides the request and records the optimistic row
+     * under the same entry id — the merge key the `?since=` reconcile dedupes on.
+     *
+     * Bound once, over an inline wire half, for the same reason as [taskDetailRepository]: a separately
+     * bound `StampedItemConverter` would be an unstamped-capable convert sitting in the graph, and the
+     * split exists precisely so that is not reachable. The extra [KtorItemRemoteSource] instance costs
+     * nothing — it is stateless over the AppScope client, which resolves the Active Account's PAT per
+     * request — and the AppScope [com.circuitstitch.deferno.core.data.create.ItemRemoteSource] binding
+     * serves the four creates, which carry no stamp.
+     */
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun itemConverter(client: HttpClient, ledger: ActivityLedgerStore): ItemConverter =
+        LedgerRecordingItemConverter(KtorItemRemoteSource(client), ledger)
 
     // Every write funnels through OutboxStore.enqueue, so wrapping it in the ledger recorder captures the
     // whole app's mutations at one choke-point (no per-writer edits) — a write path cannot forget to log.
@@ -356,32 +375,30 @@ interface AccountDataBindings {
     /**
      * The offline-first create + (online-only) convert writer (#185, ADR-0001 forward path from
      * ADR-0016). A create mints a client id, inserts the optimistic row, records it pending, and
-     * enqueues a replayable `POST /{kind}` on the outbox; convert keeps the connectivity gate. The
-     * remote source + connectivity are AppScope (the shared client follows the Active Account per
-     * request — ADR-0014); the local stores, outbox, and pending-create table are this scope.
+     * enqueues a replayable `POST /{kind}` on the outbox; convert keeps the connectivity gate and is the
+     * writer's only remaining network call, through [itemConverter]. Connectivity is AppScope (ADR-0014);
+     * the local stores, outbox, pending-create table and the converter are this scope.
      */
     @Provides
     @SingleIn(AccountScope::class)
     fun createWriter(
         connectivity: Connectivity,
-        remoteSource: ItemRemoteSource,
+        converter: ItemConverter,
         taskStore: TaskLocalStore,
         habitStore: HabitLocalStore,
         choreStore: ChoreLocalStore,
         eventStore: EventLocalStore,
         outbox: OutboxStore,
         pendingCreateStore: PendingCreateStore,
-        ledger: ActivityLedgerStore,
     ): CreateWriter = OfflineCreateWriter(
         connectivity = connectivity,
-        remoteSource = remoteSource,
+        converter = converter,
         taskStore = taskStore,
         habitStore = habitStore,
         choreStore = choreStore,
         eventStore = eventStore,
         outbox = outbox,
         pendingCreateStore = pendingCreateStore,
-        ledger = ledger,
     )
 
     // The id-healer + replay listener (#185): when a create replays, the listener confirms its

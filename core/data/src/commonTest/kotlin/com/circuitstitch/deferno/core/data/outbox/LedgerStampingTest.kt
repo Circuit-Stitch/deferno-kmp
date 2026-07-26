@@ -7,13 +7,23 @@ import com.circuitstitch.deferno.core.data.activity.ActivityStamp
 import com.circuitstitch.deferno.core.data.activity.ActivitySummary
 import com.circuitstitch.deferno.core.data.activity.ActivityVerb
 import com.circuitstitch.deferno.core.data.activity.summaryInfo
+import com.circuitstitch.deferno.core.data.create.ConvertedItem
 import com.circuitstitch.deferno.core.data.create.FakeActivityLedgerStore
+import com.circuitstitch.deferno.core.data.create.LedgerRecordingItemConverter
 import com.circuitstitch.deferno.core.data.create.RecordedLocalActivity
+import com.circuitstitch.deferno.core.data.create.StampedItemConverter
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.data.task.LedgerRecordingTaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.StampedAttachmentSource
 import com.circuitstitch.deferno.core.model.Attachment
+import com.circuitstitch.deferno.core.model.Chore
+import com.circuitstitch.deferno.core.model.ChoreId
+import com.circuitstitch.deferno.core.model.DefinitionState
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.network.ApiError
+import com.circuitstitch.deferno.core.network.ApiResult
+import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -22,17 +32,19 @@ import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The client-minted [ActivityStamp] at the two write seams that record into the activity ledger (#364):
- * the outbox choke-point ([LedgerRecordingOutboxStore]) and the online-only attachment writes
- * ([LedgerRecordingTaskDetailRepository]).
+ * The client-minted [ActivityStamp] at the three write seams that record into the activity ledger (#364):
+ * the outbox choke-point ([LedgerRecordingOutboxStore]) and the two online-only surfaces that bypass it —
+ * the attachment writes ([LedgerRecordingTaskDetailRepository]) and convert ([LedgerRecordingItemConverter]).
  *
- * Both decorators exist to make one value — the stamp's `entryId` — appear on the wire and on the local
- * row simultaneously, because that id is the merge key the `?since=` reconcile dedupes on. So the tests
- * here are about **which body/stamp/verb reaches which side**, not about whether a row was written at all.
+ * All three decorators exist to make one value — the stamp's `entryId` — appear on the wire and on the
+ * local row simultaneously, because that id is the merge key the `?since=` reconcile dedupes on. So the
+ * tests here are about **which body/stamp/verb reaches which side**, not about whether a row was written
+ * at all.
  */
 class LedgerStampingTest {
 
@@ -202,9 +214,62 @@ class LedgerStampingTest {
         assertTrue(ledger.recorded.all { it.stamp?.occurredAt == t0 && it.now == t0 })
     }
 
+    // --- the online-only convert (no outbox either, so its own decorator) ---
+
+    @Test
+    fun aSuccessfulConvertRecordsTheConvertedVerbUnderTheStampItSent() = runTest {
+        val delegate = FakeStampedConvert(ApiResult.Success(ConvertedItem.AsChore(chore("item-1"))))
+        val ledger = FakeActivityLedgerStore()
+        val converter = LedgerRecordingItemConverter(delegate, ledger, now = { t0 }, mintStamp = SequentialStamps())
+
+        val result = converter.convert("item-1", ConvertItemPayload(type = "chore"))
+
+        // The delegate's answer reaches the caller untouched — the create writer seeds the new-kind row
+        // from it, so a decorator that swallowed it would lose the item from every list until a refresh.
+        assertEquals(ItemKind.Chore, assertIs<ApiResult.Success<ConvertedItem>>(result).data.kind)
+        val row = ledger.recorded.single()
+        // The same merge key on the wire and on the local row — convert never passes the outbox
+        // choke-point, so this decorator is the only place the two can be made to agree.
+        assertEquals(delegate.stamps.single(), row.stamp)
+        // The verb is named rather than derived: an `item:{id}` target reads as "Moved an item".
+        assertEquals(ActivityActionKind.Converted, row.actionKind)
+        assertEquals(ActivitySummary(ActivityVerb.Converted), row.asEntry().summaryInfo())
+        assertEquals("item:item-1", row.target)
+        assertEquals(ActivitySource.Mobile, row.source)
+        assertEquals(t0, row.now)
+    }
+
+    @Test
+    fun aFailedConvertRecordsNothing() = runTest {
+        val ledger = FakeActivityLedgerStore()
+        val converter = LedgerRecordingItemConverter(
+            FakeStampedConvert(ApiResult.Failure(ApiError.Transport(RuntimeException("offline")))),
+            ledger,
+            now = { t0 },
+            mintStamp = SequentialStamps(),
+        )
+
+        val result = converter.convert("item-1", ConvertItemPayload(type = "chore"))
+
+        // A convert that did not reach the server did not happen: a row for it would claim a kind change
+        // the user's data does not have, and no reconcile would ever take it back.
+        assertTrue(ledger.recorded.isEmpty())
+        // …and the failure still surfaces, so the writer can offer the gentle "reconnect to save".
+        assertIs<ApiResult.Failure>(result)
+    }
+
     /** The `activity.id` the stamped body actually put on the wire. */
     private fun OutboxRequest.activityId(): String? =
         body?.let { Json.parseToJsonElement(it).jsonObject["activity"]?.jsonObject?.get("id")?.jsonPrimitive?.content }
+
+    /** The item a convert reports back, minimal — only its id and kind matter to the ledger row. */
+    private fun chore(id: String) = Chore(
+        id = ChoreId(id),
+        orgSlug = "u-test",
+        title = "trash",
+        definitionState = DefinitionState.Active,
+        dateCreated = t0,
+    )
 
     /** The recorded row as the feed would read it back, for the read-time verb derivation. */
     private fun RecordedLocalActivity.asEntry() = ActivityEntry(
@@ -263,5 +328,26 @@ private class FakeAttachmentWrites(private val succeeds: Boolean = true) : Stamp
     ): Boolean {
         stamps += stamp
         return succeeds
+    }
+}
+
+/**
+ * A [StampedItemConverter] returning [result], recording the stamp it was handed.
+ *
+ * The wire half again, for the same reason as [FakeAttachmentWrites]: the stamp only ever crosses that
+ * side of the seam, so faking [com.circuitstitch.deferno.core.data.create.ItemConverter] instead could not
+ * observe what the decorator minted.
+ */
+private class FakeStampedConvert(private val result: ApiResult<ConvertedItem>) : StampedItemConverter {
+
+    val stamps = mutableListOf<ActivityStamp>()
+
+    override suspend fun convert(
+        id: String,
+        payload: ConvertItemPayload,
+        stamp: ActivityStamp,
+    ): ApiResult<ConvertedItem> {
+        stamps += stamp
+        return result
     }
 }

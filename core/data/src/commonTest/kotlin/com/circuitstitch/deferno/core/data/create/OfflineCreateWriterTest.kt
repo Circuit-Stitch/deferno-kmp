@@ -47,14 +47,13 @@ class OfflineCreateWriterTest {
         val pending = FakePendingCreateStore()
         val writer = OfflineCreateWriter(
             connectivity = connectivity,
-            remoteSource = remote,
+            converter = remote,
             taskStore = taskStore,
             habitStore = habitStore,
             choreStore = choreStore,
             eventStore = eventStore,
             outbox = outbox,
             pendingCreateStore = pending,
-            ledger = FakeActivityLedgerStore(),
             newId = { id },
             now = { Instant.parse("2026-06-07T12:00:00Z") },
             orgSlug = { "u-test" },
@@ -114,8 +113,9 @@ class OfflineCreateWriterTest {
         val result = f.writer.createTask(CreateTaskPayload(title = "x"))
 
         assertEquals(CreateResult.Created(ItemKind.Task, "client-1"), result)
-        // Create no longer POSTs directly — it always rides the outbox (the replay does the POST).
-        assertTrue(f.remote.calls.isEmpty(), "create must not call the remote source directly")
+        // Create no longer POSTs directly — it always rides the outbox (the replay does the POST). The
+        // converter is the writer's only network seam, so an empty transcript means nothing left here.
+        assertTrue(f.remote.calls.isEmpty(), "create must not reach the network directly")
         assertEquals(1, f.outbox.all.size)
     }
 

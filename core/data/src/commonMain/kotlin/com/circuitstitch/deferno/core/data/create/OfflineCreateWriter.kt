@@ -1,9 +1,5 @@
 package com.circuitstitch.deferno.core.data.create
 
-import com.circuitstitch.deferno.core.data.activity.ActivityActionKind
-import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
-import com.circuitstitch.deferno.core.data.activity.ActivitySource
-import com.circuitstitch.deferno.core.data.activity.ActivityStamp
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
@@ -13,8 +9,6 @@ import com.circuitstitch.deferno.core.data.outbox.CreateEventItem
 import com.circuitstitch.deferno.core.data.outbox.CreateHabitItem
 import com.circuitstitch.deferno.core.data.outbox.CreateMutation
 import com.circuitstitch.deferno.core.data.outbox.CreateTaskItem
-import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
-import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
 import com.circuitstitch.deferno.core.data.task.TaskLocalStore
 import com.circuitstitch.deferno.core.model.Chore
@@ -59,6 +53,11 @@ import kotlin.time.Instant
  * **Convert stays online-only.** Converting an *existing* item's kind has no client-id idempotency story
  * (it is a server-side mutation of a row that already exists), so [convert] keeps the ADR-0016 gate:
  * online → POST + reconcile the cache; offline → [CreateResult.Offline]; 4xx → [CreateResult.Failed].
+ * Bypassing the outbox also bypasses the ledger choke-point, but the Activity row for it is written by
+ * [LedgerRecordingItemConverter] on the [ItemConverter] seam rather than here — so this class stays a
+ * cache reconciler with no audit responsibilities and no stamp to mint. That seam is now this writer's
+ * only network dependency: since creates enqueue rather than POST, convert is the sole call that leaves
+ * the device from here.
  *
  * The optimistic rows carry only what the New form supplied (`hydration = Full` so the user's typed
  * description survives a summary refresh until the server's real row replaces it on confirm). `orgSlug`
@@ -67,15 +66,13 @@ import kotlin.time.Instant
  */
 class OfflineCreateWriter(
     private val connectivity: Connectivity,
-    private val remoteSource: ItemRemoteSource,
+    private val converter: ItemConverter,
     private val taskStore: TaskLocalStore,
     private val habitStore: HabitLocalStore,
     private val choreStore: ChoreLocalStore,
     private val eventStore: EventLocalStore,
     private val outbox: OutboxStore,
     private val pendingCreateStore: PendingCreateStore,
-    // Convert is the one write here that bypasses the outbox, so it records its own ledger row (#364).
-    private val ledger: ActivityLedgerStore,
     private val newId: () -> String = ::newItemId,
     private val now: () -> Instant = { Clock.System.now() },
     private val orgSlug: () -> String = { "" },
@@ -172,25 +169,9 @@ class OfflineCreateWriter(
 
     override suspend fun convert(id: String, fromKind: ItemKind, payload: ConvertItemPayload): CreateResult {
         if (!connectivity.isOnline()) return CreateResult.Offline
-        // Convert is online-only (it has no meaningful optimistic apply — the item changes KIND), so it
-        // never reaches the outbox choke-point that stamps every other mutation. Mint here instead, and
-        // record only on success: unlike an enqueued write, a failed convert did not happen.
-        val at = now()
-        val stamp = ActivityStamp.mint(at)
-        return when (val result = remoteSource.convert(id, payload, stamp)) {
+        return when (val result = converter.convert(id, payload)) {
             is ApiResult.Success -> {
                 removeOldKindRow(id, fromKind)
-                runCatching {
-                    ledger.recordLocal(
-                        source = ActivitySource.Mobile,
-                        target = "item:$id",
-                        request = OutboxRequest(OutboxMethod.Post, listOf("items", id, "convert"), body = null),
-                        before = null,
-                        now = at,
-                        stamp = stamp,
-                        actionKind = ActivityActionKind.Converted,
-                    )
-                }
                 seedConverted(result.data)
             }
             is ApiResult.Failure -> result.error.toResult()

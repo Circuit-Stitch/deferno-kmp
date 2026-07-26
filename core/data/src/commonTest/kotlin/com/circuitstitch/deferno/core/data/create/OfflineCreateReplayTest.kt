@@ -38,14 +38,13 @@ class OfflineCreateReplayTest {
         val sender = FakeOutboxRequestSender()
         val writer = OfflineCreateWriter(
             connectivity = FakeConnectivity(online = false),
-            remoteSource = FakeItemRemoteSource(),
+            converter = FakeItemRemoteSource(),
             taskStore = taskStore,
             habitStore = habitStore,
             choreStore = choreStore,
             eventStore = eventStore,
             outbox = outbox,
             pendingCreateStore = pending,
-            ledger = FakeActivityLedgerStore(),
             newId = { clientId },
             now = { Instant.parse("2026-06-07T12:00:00Z") },
             orgSlug = { "u-test" },

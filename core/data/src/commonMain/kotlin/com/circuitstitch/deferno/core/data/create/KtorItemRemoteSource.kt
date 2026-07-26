@@ -40,10 +40,14 @@ import io.ktor.http.contentType
  *
  * Create uses `requestApi<T>` (the envelope-unwrapping path) — the response *is* interesting (we need
  * the server-assigned id), unlike the outbox sender's fire-and-forget replay.
+ *
+ * It serves the [StampedItemConverter] half of convert and never [ItemConverter]: this class is a pure
+ * wire adapter, so the stamp is something it carries, never something it invents. `internal` follows from
+ * that supertype — outside core:data the only convert type is [ItemConverter].
  */
-class KtorItemRemoteSource(
+internal class KtorItemRemoteSource(
     private val client: HttpClient,
-) : ItemRemoteSource {
+) : ItemRemoteSource, StampedItemConverter {
 
     override suspend fun createTask(payload: CreateTaskPayload): ApiResult<Task> =
         client.requestApi<TaskDetailDto> { post("tasks", payload) }.map { it.toDomain() }
@@ -57,7 +61,7 @@ class KtorItemRemoteSource(
     override suspend fun createEvent(payload: CreateEventPayload): ApiResult<Event> =
         client.requestApi<EventDetailDto> { post("events", payload) }.map { it.toDomain() }
 
-    override suspend fun convert(id: String, payload: ConvertItemPayload, stamp: ActivityStamp?): ApiResult<ConvertedItem> =
+    override suspend fun convert(id: String, payload: ConvertItemPayload, stamp: ActivityStamp): ApiResult<ConvertedItem> =
         client.requestApi<ItemView> {
             method = HttpMethod.Post
             url { appendPathSegments("items", id, "convert") }
@@ -65,7 +69,7 @@ class KtorItemRemoteSource(
             // The stamp is a field on the payload, not a sibling spliced into an encoded copy of it: a body
             // assembled key-by-key drifts from the DTO the contract is pinned against, silently, the moment
             // either side changes. One @Serializable shape, one serializer.
-            setBody(payload.copy(activity = stamp?.toJson()))
+            setBody(payload.copy(activity = stamp.toJson()))
         }.map { it.toConvertedItem() }
 }
 

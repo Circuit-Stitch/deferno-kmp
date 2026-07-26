@@ -41,8 +41,12 @@ class FakeConnectivity(online: Boolean = true) : Connectivity {
  * An [ItemRemoteSource] whose responses the test configures, recording the payloads it received so a
  * test can assert "offline enqueued/called nothing" (ADR-0016). Each create returns its configured
  * [ApiResult]; unset defaults to a transport failure.
+ *
+ * It also serves [ItemConverter] — the create writer's two network dependencies, so one fake answers both
+ * and a `calls` list still reads as one chronological transcript. Only the app-facing (stamp-free) half:
+ * what the stamped half receives is [LedgerRecordingItemConverter]'s business, pinned in LedgerStampingTest.
  */
-class FakeItemRemoteSource : ItemRemoteSource {
+class FakeItemRemoteSource : ItemRemoteSource, ItemConverter {
     var taskResult: ApiResult<Task> = ApiResult.Failure(ApiError.Transport(RuntimeException("unset")))
     var habitResult: ApiResult<Habit> = ApiResult.Failure(ApiError.Transport(RuntimeException("unset")))
     var choreResult: ApiResult<Chore> = ApiResult.Failure(ApiError.Transport(RuntimeException("unset")))
@@ -67,11 +71,7 @@ class FakeItemRemoteSource : ItemRemoteSource {
         calls += "createEvent"; return eventResult
     }
 
-    override suspend fun convert(
-        id: String,
-        payload: ConvertItemPayload,
-        stamp: ActivityStamp?,
-    ): ApiResult<ConvertedItem> {
+    override suspend fun convert(id: String, payload: ConvertItemPayload): ApiResult<ConvertedItem> {
         calls += "convert:$id"; return convertResult
     }
 }
@@ -165,9 +165,10 @@ data class RecordedLocalActivity(
 )
 
 /**
- * A recording [ActivityLedgerStore] for the create tests. Only [recordLocal] is exercised — convert is
- * the one write here that bypasses the outbox choke-point and so records its own row (#364) — but the
- * whole port is implemented so a new method can't silently go untested by these fixtures.
+ * A recording [ActivityLedgerStore] for the write seams that record into the ledger (#364). Every
+ * [recordLocal] call is kept whole because their correctness lives in the arguments each seam chose; the
+ * rest of the port is implemented rather than stubbed away so a new ledger method can't slip past these
+ * fixtures unnoticed.
  */
 class FakeActivityLedgerStore : ActivityLedgerStore {
     val recorded = mutableListOf<RecordedLocalActivity>()

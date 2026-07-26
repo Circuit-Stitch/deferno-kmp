@@ -30,12 +30,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -144,11 +142,6 @@ class KtorItemRemoteSourceTest {
         assertEquals("chore", body.getValue("type").jsonPrimitive.content)
         assertEquals("weekly", body.getValue("recurrence").jsonObject.getValue("type").jsonPrimitive.content)
         assertEquals("entry-3", body.getValue("activity").jsonObject.getValue("id").jsonPrimitive.content)
-        // An unstamped convert is unchanged: the defaulted null is never encoded.
-        assertFalse(
-            DefernoJson.encodeToString(ConvertItemPayload(type = "chore")).contains("activity"),
-            "an unstamped convert omits the activity sibling entirely",
-        )
         val converted = assertIs<ApiResult.Success<ConvertedItem>>(result).data
         assertEquals(ItemKind.Chore, converted.kind)
     }

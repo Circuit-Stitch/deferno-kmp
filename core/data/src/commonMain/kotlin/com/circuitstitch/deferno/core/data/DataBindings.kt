@@ -233,7 +233,10 @@ interface DataBindings {
     @SingleIn(AppScope::class)
     fun authRemoteSource(client: HttpClient): AuthRemoteSource = KtorAuthRemoteSource(client)
 
-    /** The online-only create/convert remote source (#71, ADR-0016) over the shared client. */
+    /**
+     * The online-only create remote source (#71, ADR-0016) over the shared client. Convert is not on this
+     * port: it records an Activity row, so it is bound per-Account as `ItemConverter` (#364).
+     */
     @Provides
     @SingleIn(AppScope::class)
     fun itemRemoteSource(client: HttpClient): ItemRemoteSource = KtorItemRemoteSource(client)
