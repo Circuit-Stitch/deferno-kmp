@@ -150,14 +150,35 @@ class FakeEventLocalStore(initial: Map<EventId, Event> = emptyMap()) : EventLoca
 }
 
 /**
+ * One [ActivityLedgerStore.recordLocal] call captured whole. Every argument is kept because the ledger's
+ * correctness lives in the arguments a caller chose — which body it recorded, which stamp it reused,
+ * which verb it named — not in the fact that it recorded at all.
+ */
+data class RecordedLocalActivity(
+    val source: ActivitySource,
+    val target: String,
+    val request: OutboxRequest,
+    val before: String?,
+    val now: Instant,
+    val stamp: ActivityStamp?,
+    val actionKind: ActivityActionKind?,
+)
+
+/**
  * A recording [ActivityLedgerStore] for the create tests. Only [recordLocal] is exercised — convert is
  * the one write here that bypasses the outbox choke-point and so records its own row (#364) — but the
  * whole port is implemented so a new method can't silently go untested by these fixtures.
  */
 class FakeActivityLedgerStore : ActivityLedgerStore {
-    val recorded = mutableListOf<Triple<ActivitySource, String, ActivityStamp?>>()
+    val recorded = mutableListOf<RecordedLocalActivity>()
     val merged = mutableListOf<RemoteActivityEntry>()
     var cursor: String? = null
+
+    /**
+     * When set, every [recordLocal] throws it. Recording is best-effort at every call site — the user's
+     * actual write must survive a ledger that can't take the row — so the failure path needs exercising.
+     */
+    var recordLocalFailure: Throwable? = null
 
     override suspend fun recordLocal(
         source: ActivitySource,
@@ -168,7 +189,8 @@ class FakeActivityLedgerStore : ActivityLedgerStore {
         stamp: ActivityStamp?,
         actionKind: ActivityActionKind?,
     ) {
-        recorded += Triple(source, target, stamp)
+        recordLocalFailure?.let { throw it }
+        recorded += RecordedLocalActivity(source, target, request, before, now, stamp, actionKind)
     }
 
     override suspend fun upsertRemote(entries: List<RemoteActivityEntry>) {
