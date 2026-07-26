@@ -1,7 +1,6 @@
 package com.circuitstitch.deferno.core.data.activity
 
 import com.circuitstitch.deferno.core.network.dto.ActivityEntryDto
-import kotlinx.serialization.json.JsonNull
 import kotlin.time.Instant
 
 /**
@@ -37,8 +36,9 @@ data class RemoteActivityEntry(
  * reads as `Unknown` — because dropping an entry the client merely doesn't *recognise* would silently
  * under-report a forensic stream, which is the one thing this feed must not do.
  *
- * A JSON-`null` `detail` (the server's degradation when it cannot unwrap the org DEK) is normalised to
- * Kotlin `null`, so readers have one absent-case to handle rather than two.
+ * A JSON-`null` `detail` — the server's degradation when it cannot unwrap the org DEK, which it prefers
+ * to dropping the row — already reaches here as Kotlin `null`: the shared reader's `explicitNulls = false`
+ * collapses a wire null onto the nullable property, so there is one absent-case, not two.
  */
 fun ActivityEntryDto.toRemote(): RemoteActivityEntry? {
     val occurred = runCatching { Instant.parse(occurredAt) }.getOrNull() ?: return null
@@ -55,6 +55,6 @@ fun ActivityEntryDto.toRemote(): RemoteActivityEntry? {
         occurrence = occurrence,
         seriesId = seriesId,
         changedFields = changedFields,
-        detail = detail?.takeIf { it !is JsonNull }?.toString(),
+        detail = detail?.toString(),
     )
 }
