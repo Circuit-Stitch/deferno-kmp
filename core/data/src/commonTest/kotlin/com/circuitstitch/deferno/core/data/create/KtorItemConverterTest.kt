@@ -1,18 +1,10 @@
 package com.circuitstitch.deferno.core.data.create
 
 import com.circuitstitch.deferno.core.data.activity.ActivityStamp
-import com.circuitstitch.deferno.core.model.DefinitionState
-import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.ItemKind
-import com.circuitstitch.deferno.core.model.RecurrenceFrequency
-import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
-import com.circuitstitch.deferno.core.network.dto.CreateChorePayload
-import com.circuitstitch.deferno.core.network.dto.CreateEventPayload
-import com.circuitstitch.deferno.core.network.dto.CreateHabitPayload
-import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import com.circuitstitch.deferno.core.network.dto.RecurrenceDto
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -41,87 +33,17 @@ import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /**
- * Behaviour of [KtorItemRemoteSource] (#71, ADR-0016) over Ktor's MockEngine (ADR-0006 JVM-fast path).
- * Proves the four creates POST to the right `/tasks|/habits|/chores|/events` path, condense the full
- * single-item `Envelope<item>` response to the domain entity, and that a 4xx maps to [ApiResult.Failure]
- * (so the writer can surface the gentle error). Plus convert → `POST /items/{id}/convert`.
+ * Behaviour of [KtorItemConverter] (ADR-0016, #364) over Ktor's MockEngine (ADR-0006 JVM-fast path):
+ * convert POSTs the contract's body to `/items/{id}/convert` and condenses the polymorphic response to the
+ * kind the item became, and a 4xx maps to [ApiResult.Failure] so the writer can surface the gentle error.
  */
-class KtorItemRemoteSourceTest {
-
-    @Test
-    fun createTaskPostsToTasksAndMapsTheFullItemResponse() = runTest {
-        var captured: HttpRequestData? = null
-        val source = KtorItemRemoteSource(
-            client { req ->
-                captured = req
-                respondJson("""{"version":"0.1","data":{"id":"server-1","org_slug":"u-e4h2qk","title":"buy milk","status":"open","date_created":"2026-05-20T16:11:42Z","owner_org_id":"org-1","description":"body"}}""")
-            },
-        )
-
-        val result = source.createTask(CreateTaskPayload(title = "buy milk"))
-
-        assertEquals(HttpMethod.Post, captured?.method)
-        assertTrue(captured?.url?.encodedPath?.endsWith("/tasks") == true)
-        val task = assertIs<ApiResult.Success<*>>(result).data
-        assertEquals(TaskId("server-1"), (task as com.circuitstitch.deferno.core.model.Task).id)
-    }
-
-    @Test
-    fun createHabitPostsToHabitsAndCondensesRecurrence() = runTest {
-        var captured: HttpRequestData? = null
-        val source = KtorItemRemoteSource(
-            client { req ->
-                captured = req
-                respondJson("""{"version":"0.1","data":{"id":"h-1","org_slug":"u-e4h2qk","title":"stretch","status":"active","date_created":"2026-05-04T01:53:05Z","recurrence":{"type":"daily"}}}""")
-            },
-        )
-
-        val result = source.createHabit(CreateHabitPayload(title = "stretch", recurrence = RecurrenceDto("daily")))
-
-        assertTrue(captured?.url?.encodedPath?.endsWith("/habits") == true)
-        val habit = assertIs<ApiResult.Success<*>>(result).data as com.circuitstitch.deferno.core.model.Habit
-        assertEquals(HabitId("h-1"), habit.id)
-        assertEquals(DefinitionState.Active, habit.definitionState)
-        assertEquals(RecurrenceFrequency.Daily, habit.recurrence?.frequency)
-    }
-
-    @Test
-    fun createChoreAndEventHitTheirPaths() = runTest {
-        var chorePath: String? = null
-        val choreSource = KtorItemRemoteSource(
-            client { req ->
-                chorePath = req.url.encodedPath
-                respondJson("""{"version":"0.1","data":{"id":"c-1","org_slug":"u-e4h2qk","title":"trash","status":"active","date_created":"2026-05-12T19:52:01Z","cadence_mode":"rolling","recurrence":{"type":"weekly","days":["Tue"]}}}""")
-            },
-        )
-        choreSource.createChore(CreateChorePayload(title = "trash", recurrence = RecurrenceDto("weekly", days = listOf("Tue"))))
-        assertTrue(chorePath?.endsWith("/chores") == true)
-
-        var eventPath: String? = null
-        val eventSource = KtorItemRemoteSource(
-            client { req ->
-                eventPath = req.url.encodedPath
-                respondJson("""{"version":"0.1","data":{"id":"e-1","org_slug":"u-e4h2qk","title":"standup","status":"active","date_created":"2026-05-02T15:00:34Z","complete_by":"2026-04-18T16:00:00Z","end_time":"2026-04-18T17:30:00Z","all_day":false}}""")
-            },
-        )
-        eventSource.createEvent(CreateEventPayload(title = "standup", completeBy = "2026-04-18T16:00:00Z"))
-        assertTrue(eventPath?.endsWith("/events") == true)
-    }
-
-    @Test
-    fun aServerRejectionMapsToFailure() = runTest {
-        val source = KtorItemRemoteSource(client { respond("", HttpStatusCode.UnprocessableEntity) })
-
-        val result = source.createTask(CreateTaskPayload(title = ""))
-
-        assertIs<ApiResult.Failure>(result)
-    }
+class KtorItemConverterTest {
 
     @Test
     fun convertPostsToItemsConvertAndMapsTheNewKind() = runTest {
         var captured: HttpRequestData? = null
         var sentBody: String? = null
-        val source = KtorItemRemoteSource(
+        val source = KtorItemConverter(
             client { req ->
                 captured = req
                 sentBody = (req.body as? TextContent)?.text
@@ -157,6 +79,19 @@ class KtorItemRemoteSourceTest {
         )
         val converted = assertIs<ApiResult.Success<ConvertedItem>>(result).data
         assertEquals(ItemKind.Chore, converted.kind)
+    }
+
+    @Test
+    fun aServerRejectionMapsToFailure() = runTest {
+        val source = KtorItemConverter(client { respond("", HttpStatusCode.UnprocessableEntity) })
+
+        val result = source.convert(
+            "item-1",
+            ConvertItemPayload(to = "chore"),
+            ActivityStamp("entry-3", Instant.parse("2026-04-17T10:00:00Z")),
+        )
+
+        assertIs<ApiResult.Failure>(result)
     }
 
     // --- helpers ---

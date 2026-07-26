@@ -29,7 +29,7 @@ import kotlin.time.Instant
  *
  * Same reason as the other two decorators: the stamp's `entryId` is the merge key between the optimistic
  * row written here and the authoritative row the server files for the same action, so it must be minted
- * once by whoever writes both. [KtorItemRemoteSource] stays a pure wire adapter carrying what it is handed.
+ * once by whoever writes both. [KtorItemConverter] stays a pure wire adapter carrying what it is handed.
  *
  * ## Recorded only on success
  *

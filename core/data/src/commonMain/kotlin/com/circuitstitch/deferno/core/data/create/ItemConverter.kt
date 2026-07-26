@@ -35,7 +35,7 @@ interface ItemConverter {
  * parameter with a default made that failure reachable from every caller and every fake; requiring the
  * value makes it a compile error.
  *
- * That is also why [KtorItemRemoteSource] implements ONLY this half. If it implemented [ItemConverter] too
+ * That is also why [KtorItemConverter] implements ONLY this half. If it implemented [ItemConverter] too
  * it would hand any caller an unstamped convert straight onto the wire — the exact failure the split
  * exists to prevent.
  *

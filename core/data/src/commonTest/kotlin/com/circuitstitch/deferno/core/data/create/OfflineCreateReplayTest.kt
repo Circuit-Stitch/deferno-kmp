@@ -38,7 +38,7 @@ class OfflineCreateReplayTest {
         val sender = FakeOutboxRequestSender()
         val writer = OfflineCreateWriter(
             connectivity = FakeConnectivity(online = false),
-            converter = FakeItemRemoteSource(),
+            converter = FakeItemConverter(),
             taskStore = taskStore,
             habitStore = habitStore,
             choreStore = choreStore,

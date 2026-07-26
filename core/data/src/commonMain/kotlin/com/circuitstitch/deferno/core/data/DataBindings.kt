@@ -32,8 +32,6 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.calendar.KtorCalendarRemoteSource
 import com.circuitstitch.deferno.core.data.comment.CommentRemoteSource
 import com.circuitstitch.deferno.core.data.comment.KtorCommentRemoteSource
-import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
-import com.circuitstitch.deferno.core.data.create.KtorItemRemoteSource
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.feedback.KtorFeedbackRepository
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRemoteSource
@@ -232,14 +230,6 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun authRemoteSource(client: HttpClient): AuthRemoteSource = KtorAuthRemoteSource(client)
-
-    /**
-     * The online-only create remote source (#71, ADR-0016) over the shared client. Convert is not on this
-     * port: it records an Activity row, so it is bound per-Account as `ItemConverter` (#364).
-     */
-    @Provides
-    @SingleIn(AppScope::class)
-    fun itemRemoteSource(client: HttpClient): ItemRemoteSource = KtorItemRemoteSource(client)
 
     /** The outbox's network sender (#23), replaying queued requests over the shared client. */
     @Provides

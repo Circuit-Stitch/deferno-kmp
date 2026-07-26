@@ -17,15 +17,9 @@ import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.EventId
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
-import com.circuitstitch.deferno.core.model.Task
-import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.ApiError
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
-import com.circuitstitch.deferno.core.network.dto.CreateChorePayload
-import com.circuitstitch.deferno.core.network.dto.CreateEventPayload
-import com.circuitstitch.deferno.core.network.dto.CreateHabitPayload
-import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -38,38 +32,18 @@ class FakeConnectivity(online: Boolean = true) : Connectivity {
 }
 
 /**
- * An [ItemRemoteSource] whose responses the test configures, recording the payloads it received so a
- * test can assert "offline enqueued/called nothing" (ADR-0016). Each create returns its configured
- * [ApiResult]; unset defaults to a transport failure.
+ * An [ItemConverter] whose response the test configures, recording each call so a test can assert that an
+ * offline convert reached the network zero times (ADR-0016). Unset defaults to a transport failure.
  *
- * It also serves [ItemConverter] — the create writer's two network dependencies, so one fake answers both
- * and a `calls` list still reads as one chronological transcript. Only the app-facing (stamp-free) half:
- * what the stamped half receives is [LedgerRecordingItemConverter]'s business, pinned in LedgerStampingTest.
+ * Only the app-facing (stamp-free) half: what the stamped half receives is
+ * [LedgerRecordingItemConverter]'s business, pinned in LedgerStampingTest. It is the create writer's only
+ * network dependency — creates enqueue on the outbox (ADR-0034), so convert is the sole call that leaves
+ * the device from there.
  */
-class FakeItemRemoteSource : ItemRemoteSource, ItemConverter {
-    var taskResult: ApiResult<Task> = ApiResult.Failure(ApiError.Transport(RuntimeException("unset")))
-    var habitResult: ApiResult<Habit> = ApiResult.Failure(ApiError.Transport(RuntimeException("unset")))
-    var choreResult: ApiResult<Chore> = ApiResult.Failure(ApiError.Transport(RuntimeException("unset")))
-    var eventResult: ApiResult<Event> = ApiResult.Failure(ApiError.Transport(RuntimeException("unset")))
+class FakeItemConverter : ItemConverter {
     var convertResult: ApiResult<ConvertedItem> = ApiResult.Failure(ApiError.Transport(RuntimeException("unset")))
 
     val calls = mutableListOf<String>()
-
-    override suspend fun createTask(payload: CreateTaskPayload): ApiResult<Task> {
-        calls += "createTask"; return taskResult
-    }
-
-    override suspend fun createHabit(payload: CreateHabitPayload): ApiResult<Habit> {
-        calls += "createHabit"; return habitResult
-    }
-
-    override suspend fun createChore(payload: CreateChorePayload): ApiResult<Chore> {
-        calls += "createChore"; return choreResult
-    }
-
-    override suspend fun createEvent(payload: CreateEventPayload): ApiResult<Event> {
-        calls += "createEvent"; return eventResult
-    }
 
     override suspend fun convert(id: String, payload: ConvertItemPayload): ApiResult<ConvertedItem> {
         calls += "convert:$id"; return convertResult

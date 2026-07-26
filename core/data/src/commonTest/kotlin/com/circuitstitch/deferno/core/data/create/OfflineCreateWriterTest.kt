@@ -38,7 +38,7 @@ class OfflineCreateWriterTest {
 
     private class Fixture(online: Boolean = true, private val id: String = "client-1") {
         val connectivity = FakeConnectivity(online = online)
-        val remote = FakeItemRemoteSource()
+        val converter = FakeItemConverter()
         val taskStore = FakeTaskLocalStore()
         val habitStore = FakeHabitLocalStore()
         val choreStore = FakeChoreLocalStore()
@@ -47,7 +47,7 @@ class OfflineCreateWriterTest {
         val pending = FakePendingCreateStore()
         val writer = OfflineCreateWriter(
             connectivity = connectivity,
-            converter = remote,
+            converter = converter,
             taskStore = taskStore,
             habitStore = habitStore,
             choreStore = choreStore,
@@ -115,7 +115,7 @@ class OfflineCreateWriterTest {
         assertEquals(CreateResult.Created(ItemKind.Task, "client-1"), result)
         // Create no longer POSTs directly — it always rides the outbox (the replay does the POST). The
         // converter is the writer's only network seam, so an empty transcript means nothing left here.
-        assertTrue(f.remote.calls.isEmpty(), "create must not reach the network directly")
+        assertTrue(f.converter.calls.isEmpty(), "create must not reach the network directly")
         assertEquals(1, f.outbox.all.size)
     }
 
@@ -129,14 +129,14 @@ class OfflineCreateWriterTest {
         val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(to = "chore"))
 
         assertEquals(CreateResult.Offline, result)
-        assertTrue(f.remote.calls.isEmpty(), "offline convert must make no network call")
+        assertTrue(f.converter.calls.isEmpty(), "offline convert must make no network call")
     }
 
     @Test
     fun convertOnlineReconcilesTheCache() = runTest {
         val f = Fixture(online = true)
         f.taskStore.upsert(task("item-1"))
-        f.remote.convertResult = ApiResult.Success(ConvertedItem.AsChore(chore("item-1")))
+        f.converter.convertResult = ApiResult.Success(ConvertedItem.AsChore(chore("item-1")))
 
         val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(to = "chore", recurrence = RecurrenceDto("weekly")))
 
@@ -149,7 +149,7 @@ class OfflineCreateWriterTest {
     fun convertServerRejectionSurfacesAsFailed() = runTest {
         val f = Fixture(online = true)
         f.taskStore.upsert(task("item-1"))
-        f.remote.convertResult = ApiResult.Failure(ApiError.Endpoint(status = 422, code = "invalid", message = "nope"))
+        f.converter.convertResult = ApiResult.Failure(ApiError.Endpoint(status = 422, code = "invalid", message = "nope"))
 
         val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(to = "chore"))
 

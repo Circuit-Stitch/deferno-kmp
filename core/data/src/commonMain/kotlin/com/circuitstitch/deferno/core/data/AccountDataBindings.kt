@@ -23,7 +23,7 @@ import com.circuitstitch.deferno.core.data.create.CreateWriter
 import com.circuitstitch.deferno.core.data.create.DefaultCreateReplayListener
 import com.circuitstitch.deferno.core.data.create.ItemConverter
 import com.circuitstitch.deferno.core.data.create.ItemIdHealer
-import com.circuitstitch.deferno.core.data.create.KtorItemRemoteSource
+import com.circuitstitch.deferno.core.data.create.KtorItemConverter
 import com.circuitstitch.deferno.core.data.create.LedgerRecordingItemConverter
 import com.circuitstitch.deferno.core.data.create.OfflineCreateWriter
 import com.circuitstitch.deferno.core.data.create.PendingCreateStore
@@ -193,15 +193,13 @@ interface AccountDataBindings {
      *
      * Bound once, over an inline wire half, for the same reason as [taskDetailRepository]: a separately
      * bound `StampedItemConverter` would be an unstamped-capable convert sitting in the graph, and the
-     * split exists precisely so that is not reachable. The extra [KtorItemRemoteSource] instance costs
-     * nothing — it is stateless over the AppScope client, which resolves the Active Account's PAT per
-     * request — and the AppScope [com.circuitstitch.deferno.core.data.create.ItemRemoteSource] binding
-     * serves the four creates, which carry no stamp.
+     * split exists precisely so that is not reachable. The inline [KtorItemConverter] costs nothing — it
+     * is stateless over the AppScope client, which resolves the Active Account's PAT per request.
      */
     @Provides
     @SingleIn(AccountScope::class)
     fun itemConverter(client: HttpClient, ledger: ActivityLedgerStore): ItemConverter =
-        LedgerRecordingItemConverter(KtorItemRemoteSource(client), ledger)
+        LedgerRecordingItemConverter(KtorItemConverter(client), ledger)
 
     // Every write funnels through OutboxStore.enqueue, so wrapping it in the ledger recorder captures the
     // whole app's mutations at one choke-point (no per-writer edits) — a write path cannot forget to log.

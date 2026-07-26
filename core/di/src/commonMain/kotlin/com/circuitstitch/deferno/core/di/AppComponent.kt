@@ -17,7 +17,6 @@ import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPref
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.comment.CommentRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
-import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRemoteSource
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
@@ -281,11 +280,9 @@ abstract class AppComponent(
     abstract val activityRemoteSource: ActivityRemoteSource
     abstract val outboxRequestSender: OutboxRequestSender
     abstract val accountDatabaseFactory: AccountDatabaseFactory
-    // The online-only create flow (#71, ADR-0016): the CreateWriter (AccountScope) gates on this
-    // process-global connectivity + POSTs through this shared remote source, so both are re-exposed
-    // here for the child AccountScope to consume. The connectivity monitor is also what the shell's
-    // outbox driver observes for the reconnect-triggered flush (#158).
-    abstract val itemRemoteSource: ItemRemoteSource
+    // Process-global connectivity, re-exposed for the child AccountScope: the CreateWriter gates convert
+    // on it (the one write still online-only, ADR-0016/0034), and the shell's outbox driver observes it
+    // for the reconnect-triggered flush (#158).
     abstract val connectivity: Connectivity
 
     // The process-wide re-auth signal (#20/#297): the shell folds its `sessionExpired` flag into the
