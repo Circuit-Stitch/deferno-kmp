@@ -31,6 +31,7 @@ data class PostComment(val taskId: TaskId, val clientId: String, val body: Strin
         // valid so it lands. ponytail: hardcoded false — this client has no private-comment UI yet; thread
         // it through PostComment when one lands.
         buildJsonObject { put("body", body); put("is_private", false) }.toString(),
+        acceptsActivityStamp = true,
     )
 }
 
@@ -45,6 +46,7 @@ data class EditComment(val taskId: String?, val commentId: String, val body: Str
         OutboxMethod.Patch,
         listOf("comments", commentId),
         buildJsonObject { put("body", body) }.toString(),
+        acceptsActivityStamp = true,
     )
 }
 
@@ -61,5 +63,10 @@ data class DeleteComment(val taskId: String?, val commentId: String) : CommentMu
     override fun toRequest(): OutboxRequest =
         // An empty object rather than a null body: a null body sends no entity, leaving the stamping
         // decorator nothing to merge `activity` into.
-        OutboxRequest(OutboxMethod.Post, listOf("comments", commentId, "delete"), "{}")
+        OutboxRequest(
+            OutboxMethod.Post,
+            listOf("comments", commentId, "delete"),
+            "{}",
+            acceptsActivityStamp = true,
+        )
 }

@@ -104,8 +104,18 @@ class ActivityLedgerTest {
         val ledger = SqlDelightActivityLedgerStore(db, Dispatchers.Unconfined)
         val outbox = LedgerRecordingOutboxStore(SqlDelightOutboxStore(db), ledger)
 
-        outbox.enqueue("task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"x"}"""), t0)
-        outbox.enqueue("create:Task:b", OutboxRequest(OutboxMethod.Post, listOf("tasks"), """{"id":"b"}"""), t1)
+        // The first two declare the `activity` stamp as their real routes do, so each writes a distinct
+        // `entry_id` through the unique index; the bodiless delete cannot, and records with none.
+        outbox.enqueue(
+            "task:a",
+            OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"x"}""", acceptsActivityStamp = true),
+            t0,
+        )
+        outbox.enqueue(
+            "create:Task:b",
+            OutboxRequest(OutboxMethod.Post, listOf("tasks"), """{"id":"b"}""", acceptsActivityStamp = true),
+            t1,
+        )
         outbox.enqueue("task:a", OutboxRequest(OutboxMethod.Delete, listOf("tasks", "a")), t2)
 
         // The durable journal mirrors all three, newest first, every one tagged the local source.
@@ -134,7 +144,7 @@ class ActivityLedgerTest {
 
         outbox.enqueue(
             "task:a",
-            OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"new"}"""),
+            OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"new"}""", acceptsActivityStamp = true),
             t0,
             before = """{"title":"old"}""",
         )

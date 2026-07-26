@@ -5,6 +5,7 @@ import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 /**
  * The settings intent → endpoint → minimal-body table (#72, ADR-0001/0011). Pins the EXACT wire
@@ -23,6 +24,10 @@ class SettingsMutationTest {
         assertEquals(OutboxMethod.Patch, request.method)
         assertEquals(listOf("auth", "me", "settings"), request.path)
         assertEquals("""{"theme_family":"mono","theme_mode":"dark"}""", request.body)
+        // The one non-Item write on the outbox, and so the one that declares no `activity` stamp (#364):
+        // this payload is strict, so a stamp would 422 — Terminal — and the outbox would dead-letter the
+        // user's theme change rather than merely leave it un-audited.
+        assertFalse(request.acceptsActivityStamp)
     }
 
     @Test

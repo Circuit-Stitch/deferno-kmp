@@ -92,6 +92,9 @@ internal class LedgerRecordingTaskDetailRepository(
             ledger.recordLocal(
                 source = ActivitySource.Mobile,
                 target = "task:${taskId.value}",
+                // A ledger descriptor, never enqueued: attachments are online-only, and the stamp already
+                // went to the wire half above. `acceptsActivityStamp` is inert here, so it stays at the
+                // default rather than claiming to do something it cannot.
                 request = OutboxRequest(method, path, body = null),
                 before = null,
                 now = at,

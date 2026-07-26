@@ -58,7 +58,7 @@ class LedgerStampingTest {
 
         outbox.enqueue(
             "task:a",
-            OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"New"}"""),
+            OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"New"}""", acceptsActivityStamp = true),
             t0,
             before = """{"title":"Old"}""",
         )
@@ -89,8 +89,16 @@ class LedgerStampingTest {
         val outbox = LedgerRecordingOutboxStore(delegate, ledger, SequentialStamps())
 
         // Two writes, so a per-write id can't pass by accidentally being a shared constant.
-        outbox.enqueue("task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"x"}"""), t0)
-        outbox.enqueue("create:Task:b", OutboxRequest(OutboxMethod.Post, listOf("tasks"), """{"id":"b"}"""), t0)
+        outbox.enqueue(
+            "task:a",
+            OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"x"}""", acceptsActivityStamp = true),
+            t0,
+        )
+        outbox.enqueue(
+            "create:Task:b",
+            OutboxRequest(OutboxMethod.Post, listOf("tasks"), """{"id":"b"}""", acceptsActivityStamp = true),
+            t0,
+        )
 
         val wireIds = delegate.all.map { it.request.activityId() }
         val rowIds = ledger.recorded.map { it.stamp?.entryId }
@@ -110,8 +118,10 @@ class LedgerStampingTest {
         val stamps = SequentialStamps()
         val outbox = LedgerRecordingOutboxStore(delegate, ledger, stamps)
 
-        // A user-preferences write — not an item mutation, and a strict payload: an unexpected `activity`
-        // key would 422, which the sender dead-letters as Terminal, losing the write rather than an audit row.
+        // Neither route opts in, and the *default* is the load-bearing part: a user-preferences write has
+        // a strict payload, so an unexpected `activity` key would 422 — Terminal — and the sender would
+        // dead-letter the write rather than merely lose an audit row. A route that forgets to declare the
+        // flag lands here too, which is exactly why the field is opt-in.
         val settings = OutboxRequest(OutboxMethod.Patch, listOf("auth", "me", "settings"), """{"tracking_enabled":true}""")
         // The item soft-delete is still a bodiless DELETE upstream, so it can't carry one either.
         val delete = OutboxRequest(OutboxMethod.Delete, listOf("tasks", "a"))
@@ -136,7 +146,11 @@ class LedgerStampingTest {
         // Must not throw: the outbox row is the durable source of truth for the user's actual change, and
         // an audit row that couldn't be written is not a reason to drop it. (The feed self-heals anyway —
         // the write still syncs, and its server twin arrives on the next reconcile.)
-        outbox.enqueue("task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"x"}"""), t0)
+        outbox.enqueue(
+            "task:a",
+            OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), """{"title":"x"}""", acceptsActivityStamp = true),
+            t0,
+        )
 
         assertEquals(1, delegate.all.size)
         assertEquals(1L, outbox.count())

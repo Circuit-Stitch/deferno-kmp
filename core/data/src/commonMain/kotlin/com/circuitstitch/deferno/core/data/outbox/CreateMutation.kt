@@ -69,5 +69,8 @@ private fun createRequest(kindPath: String, id: String, payload: JsonObject): Ou
         put("id", id)
         payload.forEach { (key, value) -> put(key, value) }
     }
-    return OutboxRequest(OutboxMethod.Post, listOf(kindPath), body.toString())
+    // All four create routes accept the `activity` sibling (#364); it rides beside the client-supplied
+    // `id` that already makes the create idempotent, so an offline create lands in the feed at the time
+    // the user made it rather than at flush time.
+    return OutboxRequest(OutboxMethod.Post, listOf(kindPath), body.toString(), acceptsActivityStamp = true)
 }

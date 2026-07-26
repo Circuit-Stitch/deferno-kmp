@@ -36,10 +36,13 @@ Three facts constrain the answer:
   row under that id, so the optimistic row and its server twin share an identity and the reconcile
   **replaces rather than duplicates**. Minting happens at the single outbox choke-point
   (`LedgerRecordingOutboxStore`) so a new write path is covered for free.
-- **The whitelist fails closed.** `acceptsActivityStamp()` is derived from the pinned contract, not
-  guessed. A false positive sends an unexpected key to a strict payload → `422` → Terminal → the outbox
-  **dead-letters the user's write**. Losing an audit row is cheap; losing a write is not. Routes that
-  refuse it (`PATCH auth/me/settings`, `DELETE tasks/{id}`) simply get a server-minted id.
+- **The route declares it, and the default fails closed.** `OutboxRequest.acceptsActivityStamp` is set by
+  whoever picked the route, beside the path itself, and defaults to `false`. It is *not* re-derived
+  downstream by matching path segments: a whitelist written against path shape drifts loose from the
+  contract, and a false positive sends an unexpected key to a strict payload → `422` → Terminal → the
+  outbox **dead-letters the user's write**. Losing an audit row is cheap; losing a write is not — so a
+  route that forgets to declare it, like the ones that genuinely refuse it (`PATCH auth/me/settings`,
+  `DELETE tasks/{id}`), simply gets a server-minted id.
 - **The ledger records the *unstamped* body.** `activity` is metadata about the change, not a field the
   user changed, and the read-time diff treats every body key as changed — recording the stamped body would
   put a bogus row in the Activity detail sheet and the Task Trail.

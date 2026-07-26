@@ -58,6 +58,9 @@ internal class LedgerRecordingItemConverter(
                 ledger.recordLocal(
                     source = ActivitySource.Mobile,
                     target = "item:$id",
+                    // A ledger descriptor, never enqueued: convert is online-only, and its stamp already
+                    // went out via the delegate above. `acceptsActivityStamp` is inert here, so it stays
+                    // at the default rather than claiming to do something it cannot.
                     request = OutboxRequest(OutboxMethod.Post, listOf("items", id, "convert"), body = null),
                     before = null,
                     now = at,

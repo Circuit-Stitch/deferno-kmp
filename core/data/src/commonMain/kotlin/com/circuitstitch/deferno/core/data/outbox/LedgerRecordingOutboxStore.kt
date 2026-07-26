@@ -3,7 +3,6 @@ package com.circuitstitch.deferno.core.data.outbox
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
 import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivityStamp
-import com.circuitstitch.deferno.core.data.activity.acceptsActivityStamp
 import com.circuitstitch.deferno.core.data.activity.withActivityStamp
 import kotlin.time.Instant
 
@@ -46,11 +45,11 @@ class LedgerRecordingOutboxStore(
 ) : OutboxStore {
 
     override suspend fun enqueue(target: String, request: OutboxRequest, now: Instant, before: String?) {
-        // Only mint where the route can actually carry it: an unexpected key on a strict payload is a 422,
-        // which the sender treats as Terminal and dead-letters — losing the user's write, not just an
-        // audit row. A route that can't carry a stamp still gets a local row; it is simply superseded by
-        // the server's own rather than merged with it.
-        val stamp = if (request.acceptsActivityStamp()) mintStamp(now) else null
+        // Only mint where the route declared it can carry one ([OutboxRequest.acceptsActivityStamp]): an
+        // unexpected key on a strict payload is a 422, which the sender treats as Terminal and
+        // dead-letters — losing the user's write, not just an audit row. A route that can't carry a stamp
+        // still gets a local row; it is simply superseded by the server's own rather than merged with it.
+        val stamp = if (request.acceptsActivityStamp) mintStamp(now) else null
         val outbound = stamp?.let(request::withActivityStamp) ?: request
         delegate.enqueue(target, outbound, now, before)
         runCatching { ledger.recordLocal(ActivitySource.Mobile, target, request, before, now, stamp) }

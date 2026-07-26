@@ -215,8 +215,9 @@ is signed, the **PUT body length must equal the `size_bytes` sent at presign** (
   array, not a null cursor** (the last non-empty page still returns one).
   Note the envelope *also* declares a sibling top-level `next_since` on every `Envelope_*` schema —
   `GET /activity` never populates it (`Versioned::ok` hard-sets it to `None`), so read `data.next_since`.
-- **Mutation bodies accept an optional `activity: { id, at, source }` sibling** (`ActivityMeta`) on 35
-  routes. `id` is a **client-minted `entry_id` — the merge/dedup key**: the server files its
+- **Mutation bodies accept an optional `activity: { id, at, source }` sibling** (`ActivityMeta`) on 36
+  routes (see the `oneOf` caveat above — a `$ref`-only scan finds 35). `id` is a **client-minted
+  `entry_id` — the merge/dedup key**: the server files its
   authoritative ledger row under that id, so a client that mints one can union its optimistic rows with
   the `?since=` feed instead of double-counting them. Every field is individually optional (absent ⇒
   server supplies it). An unrecognized `source` is tolerated (⇒ `unknown`), but a typo'd `?kind=`/
