@@ -680,7 +680,6 @@
     <string name="tasks_detail_loading">विवरण लोड हो रहा है…</string>
     <string name="tasks_detail_more_actions">अन्य क्रियाएँ</string>
     <string name="tasks_detail_no_attachments">कोई अटैचमेंट नहीं।</string>
-    <string name="tasks_detail_no_comments">अभी कोई टिप्पणी नहीं।</string>
     <string name="tasks_detail_no_description">अभी कोई विवरण नहीं।</string>
     <string name="tasks_detail_not_found_body">हो सकता है यह कार्य हटाया जा चुका हो। अपनी सूची पर वापस जाएँ।</string>
     <string name="tasks_detail_not_found_title">कार्य नहीं मिला</string>
@@ -721,8 +720,6 @@
     <string name="tasks_journey_not_doing">नहीं करना</string>
     <string name="tasks_journey_blocked">अवरुद्ध</string>
     <string name="tasks_detail_tab_info">जानकारी</string>
-    <string name="tasks_detail_tab_comments">टिप्पणियाँ</string>
-    <string name="tasks_detail_tab_history">इतिहास</string>
     <string name="tasks_detail_section_history">इतिहास</string>
     <string name="tasks_detail_property_when">कब</string>
     <string name="tasks_detail_property_status">स्थिति</string>
@@ -957,12 +954,6 @@
     <string name="inbox_accept_button">स्वीकारें</string>
     <string name="activity_history_created">यह कार्य बनाया</string>
     <string name="activity_history_updated">यह कार्य संपादित किया</string>
-    <string name="activity_history_status_changed">स्थिति बदली</string>
-    <string name="activity_history_moved">यह कार्य स्थानांतरित किया</string>
-    <string name="activity_history_parent_assigned">मूल कार्य बदला</string>
-    <string name="activity_history_split">एक कार्य अलग किया</string>
-    <string name="activity_history_folded_into">दूसरे कार्य में मिला दिया</string>
-    <string name="activity_history_merged_child">एक कार्य विलय किया</string>
     <string name="activity_history_merged_into_parent">मूल कार्य में विलय किया</string>
     <string name="activity_history_unknown">एक बदलाव किया</string>
     <string name="tasks_detail_tab_trail">पगडंडी</string>

@@ -1,10 +1,12 @@
 import Deferno
 import SwiftUI
 
-/// The Task detail pane (#195, reshaped by ADR-0044). Thin renderer of `TaskDetailComponent`: observes the
-/// hydrating row and forwards the close / add-to-plan / status intents. The single heading is now a
-/// **connected-parent header** (the immediate parent, tappable → pushes its detail) and the body is three
-/// tabs — **Info** (NOTES → Add-to-plan → PROPERTIES → SUBTASKS) · **Comments** · **History**. STATUS is a
+/// The Task detail pane (#195, reshaped by ADR-0044, re-merged by ADR-0046). Thin renderer of
+/// `TaskDetailComponent`: observes the hydrating row and forwards the close / add-to-plan / status intents.
+/// The single heading is a **connected-parent header** (the immediate parent, tappable → pushes its detail)
+/// and the body is two tabs — **Info** (NOTES → Add-to-plan → PROPERTIES → SUBTASKS) · **Trail**, the one
+/// interleaved newest-first feed of comments + enriched read-only history (ADR-0046 collapsed ADR-0044's
+/// Comments/History split; the enriched rows and the change-diff sheet are the iOS twin). STATUS is a
 /// read-only journey indicator that opens a status-picker sheet on tap (the inline working-state chips are
 /// gone). The component hydrates on creation (summary → full, #22); this View just reflects its state, and
 /// is shared with the inline pane and the (future) detached window (#196). Attachments stay deferred on macOS.
@@ -22,16 +24,18 @@ struct TaskDetailView: View {
     @State private var newLabel = ""
     @State private var newSubtask = ""
     @State private var commentDraft = ""
-    /// The active body tab (ADR-0044: Info · Comments · History, Info default). The View is re-created
-    /// per Task via `.id(detailKey)`, so this resets when the pane re-keys to another item.
+    /// The active body tab (ADR-0046: Info · Trail, Info default — the Comments/History split of ADR-0044
+    /// is gone). The View is re-created per Task via `.id(detailKey)`, so this resets when the pane re-keys.
     @State private var tab: DetailTab = .info
     /// Whether the status-picker sheet is up (opened by tapping the STATUS row — the inline chips are gone).
     @State private var showingStatusPicker = false
     /// Whether the overflow's Delete confirmation is up.
     @State private var showingDeleteConfirm = false
+    /// The Trail row whose old→new change diff is open in a sheet, or nil (ADR-0046 / #260).
+    @State private var openDiff: DiffPresentation?
     @FocusState private var subtaskFieldFocused: Bool
 
-    enum DetailTab { case info, comments, history }
+    enum DetailTab { case info, trail }
 
     init(component: TaskDetailComponent, hidesBackControl: Bool = false, showsHeader: Bool = true) {
         self.component = component
@@ -83,16 +87,14 @@ struct TaskDetailView: View {
 
                 Picker("", selection: $tab) {
                     Text(L.string("tasks_detail_tab_info")).tag(DetailTab.info)
-                    Text(L.string("tasks_detail_tab_comments")).tag(DetailTab.comments)
-                    Text(L.string("tasks_detail_tab_history")).tag(DetailTab.history)
+                    Text(L.string("tasks_detail_tab_trail")).tag(DetailTab.trail)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
 
                 switch tab {
                 case .info: infoTab(task, value)
-                case .comments: commentsTab(value)
-                case .history: historyTab(value)
+                case .trail: trailSection(value)
                 }
             }
             .padding(.horizontal, Layout.gutter)
@@ -103,6 +105,17 @@ struct TaskDetailView: View {
                 component.onSetWorkingState(target: $0)
                 showingStatusPicker = false
             }
+        }
+        // The tapped Trail row's old→new change diff (#260). `.sheet(item:)` — unlike the five other
+        // macosApp sheets — because the content derives wholly from the tapped row. No "Open item" action:
+        // the viewer is already inside this item. No reset on re-key: `.id(detailKey)` rebuilds the View.
+        .sheet(item: $openDiff) { presentation in
+            let line = BridgeKt.activityHistoryLine(item: presentation.item)
+            ChangeDiffSheet(
+                title: line.map { L.historyEnriched($0) } ?? "",
+                subtitle: TrailDateFormat.whenLabel(BridgeKt.activityItemEpochSeconds(item: presentation.item)),
+                rows: BridgeKt.activityHistoryDiffRows(item: presentation.item)
+            )
         }
         .confirmationDialog(
             L.string("tasks_detail_delete_confirm_title"),
@@ -145,49 +158,70 @@ struct TaskDetailView: View {
         subtasksSection(value)
     }
 
+    /// The **Trail** (ADR-0046) — the one interleaved feed that replaced the ADR-0044 Comments/History tab
+    /// split: comments and enriched read-only server history merged newest-first (the component's own sort —
+    /// never re-sort or filter here), the composer inline at the top, then the feed grouped by device-local
+    /// day under a TODAY-aware `DayGroupHeader`. Each row is a comment or an enriched, glyph-prefixed history
+    /// line (clickable when it carries an old→new change diff).
     @ViewBuilder
-    private func commentsTab(_ value: TaskDetailState) -> some View {
-        let comments = value.activity.filter { BridgeKt.activityItemComment(item: $0) != nil }
+    private func trailSection(_ value: TaskDetailState) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+            SectionTitle(L.string("tasks_detail_tab_trail"), trailing: "\(value.activity.count)")
             commentComposer(isPosting: value.isPostingComment)
-            if value.commentsLoading && comments.isEmpty {
+            if value.commentsLoading && value.activity.isEmpty {
                 MutedLine(L.string("common_loading"))
-            } else if comments.isEmpty {
-                MutedLine(L.string("tasks_detail_no_comments"))
+            } else if value.activity.isEmpty {
+                // An empty Trail is a valid terminal state — no error branch (ADR-0043).
+                MutedLine(L.string("tasks_detail_trail_empty"))
             } else {
-                ForEach(comments.map(ActivityRow.init)) { row in
-                    if let comment = BridgeKt.activityItemComment(item: row.item) {
-                        CommentRow(
-                            comment: comment,
-                            isMine: BridgeKt.commentIsMine(state: value, comment: comment),
-                            dateLabel: BridgeKt.commentDateLabel(comment: comment),
-                            onEdit: { component.onEditComment(commentId: $0, body: $1) },
-                            onDelete: { component.onDeleteComment(commentId: $0) }
-                        )
+                // Group by the device-local day, preserving the merged newest-first order (first-seen day order).
+                ForEach(groupActivity(value.activity)) { group in
+                    DayGroupHeader(dayIso: group.id)
+                    ForEach(group.rows) { entry in
+                        trailRow(entry.item, state: value)
                     }
                 }
             }
         }
     }
 
+    /// One Trail feed row: a comment (own Edit/Delete when the current user authored it) or an enriched,
+    /// glyph-prefixed history line (clickable — opening the change diff — when the row carries one).
     @ViewBuilder
-    private func historyTab(_ value: TaskDetailState) -> some View {
-        let history = value.activity.filter { BridgeKt.activityHistoryVerb(item: $0) != nil }
-        VStack(alignment: .leading, spacing: 8) {
-            if value.commentsLoading && history.isEmpty {
-                MutedLine(L.string("common_loading"))
-            } else {
-                // An empty history is a valid terminal state — no error/placeholder branch (ADR-0043).
-                ForEach(history.map(ActivityRow.init)) { row in
-                    if let verb = BridgeKt.activityHistoryVerb(item: row.item) {
-                        HistoryRow(
-                            label: L.activityHistory(verb),
-                            dateLabel: BridgeKt.activityHistoryDateLabel(item: row.item) ?? ""
-                        )
-                    }
-                }
-            }
+    private func trailRow(_ item: ActivityItem, state value: TaskDetailState) -> some View {
+        let time = TrailDateFormat.time(BridgeKt.activityItemEpochSeconds(item: item))
+        if let comment = BridgeKt.activityItemComment(item: item) {
+            CommentRow(
+                comment: comment,
+                isMine: BridgeKt.commentIsMine(state: value, comment: comment),
+                time: time,
+                edited: comment.editedAt != nil,
+                onEdit: { component.onEditComment(commentId: $0, body: $1) },
+                onDelete: { component.onDeleteComment(commentId: $0) }
+            )
+        } else {
+            HistoryEventRow(
+                item: item,
+                time: time,
+                onTap: BridgeKt.activityHistoryHasDiff(item: item) ? { openDiff = DiffPresentation(item: item) } : nil
+            )
         }
+    }
+
+    /// Group the merged (newest-first) feed by device-local ISO day, keeping first-seen day order so a row
+    /// never lands under the wrong header at a day boundary (mirrors Compose `groupBy { it.at.localDayIso() }`).
+    private func groupActivity(_ activity: [ActivityItem]) -> [TrailDay] {
+        var order: [String] = []
+        var buckets: [String: [TrailEntry]] = [:]
+        for item in activity {
+            let day = BridgeKt.activityItemDayIso(item: item)
+            if buckets[day] == nil {
+                order.append(day)
+                buckets[day] = []
+            }
+            buckets[day]?.append(TrailEntry(item))
+        }
+        return order.map { TrailDay(id: $0, rows: buckets[$0] ?? []) }
     }
 
     // MARK: - Overflow (Add subtask · Break this down · Delete)
@@ -430,6 +464,8 @@ struct TaskDetailView: View {
                 Text(isPosting ? L.string("tasks_detail_posting") : L.string("tasks_detail_post"))
             }
             .buttonStyle(.borderedProminent)
+            // The desktop send idiom — the field itself takes plain Return for a newline.
+            .keyboardShortcut(.return, modifiers: .command)
             .disabled(isPosting || commentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
@@ -667,23 +703,31 @@ private struct MutedLine: View {
     var body: some View { Text(text).font(.subheadline).foregroundStyle(.secondary) }
 }
 
-/// One Activity comment (ADR-0043): author + date, the body (or the encrypted placeholder), and — for the
-/// current user's own comment — inline Edit / Delete. The server enforces the real authorization; `isMine`
-/// (from the bridge) only chooses which affordances to show. Editing state is local so each row toggles alone.
+// MARK: - Trail feed rows (comment · enriched history · day header · change diff)
+
+/// One Trail comment (ADR-0046): 💬 + author + time (+ an edited marker), the body (or the encrypted
+/// placeholder), and — for the current user's own — inline Edit / Delete. The server enforces the real
+/// authorization; `isMine` (from the bridge) only chooses which affordances to show. Editing state is local
+/// so each row toggles alone. Trail-styled as a calm card.
 private struct CommentRow: View {
     let comment: Comment
     let isMine: Bool
-    let dateLabel: String
+    let time: String
+    let edited: Bool
     let onEdit: (String, String) -> Void
     let onDelete: (String) -> Void
     @State private var editing = false
     @State private var draft = ""
+    @Environment(\.defernoColors) private var colors
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
+                Text("💬").font(.caption).accessibilityHidden(true)
                 Text(isMine ? L.string("tasks_detail_comment_author_you") : L.string("tasks_detail_comment_author_member")).font(.caption.weight(.medium))
-                Text(dateLabel).font(.caption2).foregroundStyle(.secondary)
+                Text(edited ? "\(time) \(L.string("tasks_detail_comment_edited"))" : time)
+                    .font(.caption2)
+                    .foregroundStyle(colors.inkMuted)
             }
             if editing {
                 TextField(L.string("tasks_detail_comment_button"), text: $draft, axis: .vertical)
@@ -710,15 +754,17 @@ private struct CommentRow: View {
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(colors.surfaceCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
-/// A stable-identity wrapper for one ACTIVITY row. The sealed `ActivityItem` bridges to a Swift protocol
+/// A stable-identity wrapper for one Trail row. The sealed `ActivityItem` bridges to a Swift protocol
 /// (an existential with no id-KeyPath), so `ForEach` keys on the bridge's stable id — the comment id or
 /// "history:<index>" — instead of a positional index, keeping a CommentRow's edit `@State` bound to its
 /// own comment across feed shifts (ADR-0043).
-private struct ActivityRow: Identifiable {
+private struct TrailEntry: Identifiable {
     let id: String
     let item: ActivityItem
     init(_ item: ActivityItem) {
@@ -727,18 +773,107 @@ private struct ActivityRow: Identifiable {
     }
 }
 
-/// One read-only item-history row (ADR-0043): a localized verb line + its date. History is server-recorded
-/// and immutable — no affordances; it sits beside comments in the merged chronological feed.
-private struct HistoryRow: View {
-    let label: String
-    let dateLabel: String
+/// One device-local day bucket of the Trail feed — a header + its rows, keyed on the ISO day.
+private struct TrailDay: Identifiable {
+    let id: String
+    let rows: [TrailEntry]
+}
+
+/// The day-group header for the Trail (ADR-0046): a dotted rule with the raw ISO day pinned leading and an
+/// uppercased localized "TODAY" centred when the day is the device-local today. The Swift twin of the Compose
+/// `DayGroupHeader`/`DottedLabelDivider` — opaque `background` chips break the dots around each label.
+///
+/// The chips paint `Color(nsColor: .windowBackgroundColor)`, NOT `colors.background`: they must match this
+/// pane's own background (set in `TaskDetailView.body`) exactly, or they read as floating rectangles on the
+/// rule. If that pane background ever changes, change these with it.
+private struct DayGroupHeader: View {
+    let dayIso: String
+    @Environment(\.defernoColors) private var colors
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Spacer()
-            Text(dateLabel).font(.caption2).foregroundStyle(.secondary)
+        ZStack {
+            Canvas { ctx, size in
+                var line = Path()
+                line.move(to: CGPoint(x: 0, y: size.height / 2))
+                line.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+                ctx.stroke(line, with: .color(colors.inkMuted), style: StrokeStyle(lineWidth: 1, dash: [2, 6]))
+            }
+            HStack {
+                Text(dayIso)
+                    .font(.defernoMono(11, weight: .semibold))
+                    .foregroundStyle(colors.inkMuted)
+                    .padding(.trailing, 8)
+                    .background(Color(nsColor: .windowBackgroundColor))
+                Spacer(minLength: 0)
+            }
+            if TrailDateFormat.dayIsoIsToday(dayIso) {
+                Text(L.string("tasks_detail_due_today").uppercased())
+                    .font(.defernoMono(11, weight: .semibold))
+                    .foregroundStyle(colors.inkMuted)
+                    .padding(.horizontal, 8)
+                    .background(Color(nsColor: .windowBackgroundColor))
+            }
         }
+        .padding(.horizontal, Layout.gutter)
+        .padding(.top, 8)
+        .padding(.bottom, 2)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A read-only server-history row (ADR-0046): a leading unicode kind glyph then the enriched, payload-rendered
+/// line (the status transition, the peer-title verbs, or the humanized changed-field list) with the recorded
+/// time trailing. [onTap] is non-nil only when the row carries a captured old→new diff (#260): the label then
+/// reads in full ink, the row highlights on hover (ink alone is an invisible affordance to a pointer), and a
+/// click opens the [ChangeDiffSheet].
+private struct HistoryEventRow: View {
+    let item: ActivityItem
+    let time: String
+    let onTap: (() -> Void)?
+    @State private var hovering = false
+    @Environment(\.defernoColors) private var colors
+
+    var body: some View {
+        // Safe: `trailRow` only builds this branch once `activityItemComment` proved nil, and the bridge
+        // returns a line for every non-comment row.
+        let content = HStack(spacing: 8) {
+            Text(BridgeKt.activityHistoryGlyph(item: item) ?? "")
+                .font(.caption)
+                .foregroundStyle(colors.inkMuted)
+                .accessibilityHidden(true)
+            Text(L.historyEnriched(BridgeKt.activityHistoryLine(item: item)!))
+                .font(.caption)
+                .foregroundStyle(onTap != nil ? colors.onSurface : colors.inkMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(time)
+                .font(.caption2)
+                .foregroundStyle(colors.inkMuted)
+        }
+        .padding(.horizontal, Layout.gutter)
         .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(onTap != nil && hovering ? colors.surfaceVariant : .clear)
+        )
+        .accessibilityElement(children: .combine)
+
+        if let onTap {
+            Button(action: onTap) { content.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .onHover { hovering = $0 }
+        } else {
+            content
+        }
+    }
+}
+
+/// A stable-identity wrapper for the open change-diff sheet — `.sheet(item:)` needs Identifiable, and the
+/// sealed `ActivityItem` bridges to a Swift existential without one. Keyed on the bridge's stable row id.
+private struct DiffPresentation: Identifiable {
+    let id: String
+    let item: ActivityItem
+    init(item: ActivityItem) {
+        self.id = BridgeKt.activityItemId(item: item)
+        self.item = item
     }
 }

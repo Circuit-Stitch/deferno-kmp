@@ -682,7 +682,6 @@ Agradeço.</string>
     <string name="tasks_detail_loading">Carregando detalhes…</string>
     <string name="tasks_detail_more_actions">Mais ações</string>
     <string name="tasks_detail_no_attachments">Nenhum anexo.</string>
-    <string name="tasks_detail_no_comments">Nenhum comentário ainda.</string>
     <string name="tasks_detail_no_description">Nenhuma descrição ainda.</string>
     <string name="tasks_detail_not_found_body">Esta tarefa pode ter sido removida. Volte para a sua lista.</string>
     <string name="tasks_detail_not_found_title">Tarefa não encontrada</string>
@@ -724,8 +723,6 @@ Agradeço.</string>
     <string name="tasks_journey_not_doing">NÃO FAREI</string>
     <string name="tasks_journey_blocked">BLOQUEADO</string>
     <string name="tasks_detail_tab_info">Info</string>
-    <string name="tasks_detail_tab_comments">Comentários</string>
-    <string name="tasks_detail_tab_history">Histórico</string>
     <string name="tasks_detail_section_history">Histórico</string>
     <string name="tasks_detail_property_when">Quando</string>
     <string name="tasks_detail_property_status">Status</string>
@@ -958,12 +955,6 @@ Agradeço.</string>
     <string name="inbox_accept_button">Aceitar</string>
     <string name="activity_history_created">Criou esta tarefa</string>
     <string name="activity_history_updated">Editou esta tarefa</string>
-    <string name="activity_history_status_changed">Alterou o status</string>
-    <string name="activity_history_moved">Moveu esta tarefa</string>
-    <string name="activity_history_parent_assigned">Alterou a tarefa principal</string>
-    <string name="activity_history_split">Separou uma tarefa</string>
-    <string name="activity_history_folded_into">Incorporou em outra tarefa</string>
-    <string name="activity_history_merged_child">Combinou uma tarefa</string>
     <string name="activity_history_merged_into_parent">Combinou com a tarefa principal</string>
     <string name="activity_history_unknown">Fez uma alteração</string>
     <string name="tasks_detail_tab_trail">Pista</string>

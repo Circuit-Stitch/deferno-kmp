@@ -680,7 +680,6 @@ Vielen Dank.</string>
     <string name="tasks_detail_loading">Details werden geladen…</string>
     <string name="tasks_detail_more_actions">Weitere Aktionen</string>
     <string name="tasks_detail_no_attachments">Keine Anhänge.</string>
-    <string name="tasks_detail_no_comments">Noch keine Kommentare.</string>
     <string name="tasks_detail_no_description">Noch keine Beschreibung.</string>
     <string name="tasks_detail_not_found_body">Diese Aufgabe wurde vielleicht entfernt. Geh zurück zu deiner Liste.</string>
     <string name="tasks_detail_not_found_title">Aufgabe nicht gefunden</string>
@@ -721,8 +720,6 @@ Vielen Dank.</string>
     <string name="tasks_journey_not_doing">NICHT GEPLANT</string>
     <string name="tasks_journey_blocked">BLOCKIERT</string>
     <string name="tasks_detail_tab_info">Info</string>
-    <string name="tasks_detail_tab_comments">Kommentare</string>
-    <string name="tasks_detail_tab_history">Verlauf</string>
     <string name="tasks_detail_tab_trail">Pfad</string>
     <string name="tasks_detail_section_history">Verlauf</string>
     <string name="tasks_detail_property_when">Wann</string>
@@ -956,12 +953,6 @@ Vielen Dank.</string>
     <string name="inbox_accept_button">Übernehmen</string>
     <string name="activity_history_created">Diese Aufgabe erstellt</string>
     <string name="activity_history_updated">Diese Aufgabe bearbeitet</string>
-    <string name="activity_history_status_changed">Status geändert</string>
-    <string name="activity_history_moved">Diese Aufgabe verschoben</string>
-    <string name="activity_history_parent_assigned">Übergeordnete Aufgabe geändert</string>
-    <string name="activity_history_split">Eine Aufgabe abgespalten</string>
-    <string name="activity_history_folded_into">In eine andere Aufgabe eingefügt</string>
-    <string name="activity_history_merged_child">Eine Aufgabe zusammengeführt</string>
     <string name="activity_history_merged_into_parent">Mit der übergeordneten Aufgabe zusammengeführt</string>
     <string name="activity_history_unknown">Eine Änderung vorgenommen</string>
     <!-- Trail (ADR-0046): die angereicherten, aus den Payloads gerenderten Verlaufseinträge. Die Peer-Titel-Verben bekommen einen aufgelösten Elementtitel (oder „ein anderes Element“); der Statusübergang bekommt die beiden Editor-Statuslabels. -->
