@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.data.activity.ActivityActorKind
 import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivityVerb
 import com.circuitstitch.deferno.core.designsystem.component.ChangeDiffSheet
@@ -42,19 +43,29 @@ import com.circuitstitch.deferno.core.designsystem.format.formatInstant
 import com.circuitstitch.deferno.core.designsystem.format.localDayIso
 import com.circuitstitch.deferno.core.designsystem.format.toDiffRows
 import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.activity_actor_assistant
+import com.circuitstitch.deferno.core.designsystem.resources.activity_actor_integration
 import com.circuitstitch.deferno.core.designsystem.resources.activity_change_count
 import com.circuitstitch.deferno.core.designsystem.resources.activity_empty_body
 import com.circuitstitch.deferno.core.designsystem.resources.activity_empty_title
+import com.circuitstitch.deferno.core.designsystem.resources.activity_source_api
 import com.circuitstitch.deferno.core.designsystem.resources.activity_source_mcp
 import com.circuitstitch.deferno.core.designsystem.resources.activity_source_mobile
+import com.circuitstitch.deferno.core.designsystem.resources.activity_source_system
 import com.circuitstitch.deferno.core.designsystem.resources.activity_source_unknown
 import com.circuitstitch.deferno.core.designsystem.resources.activity_source_website
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_attachment_added
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_attachment_captioned
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_attachment_deleted
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_changed_settings
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cleared_occurrence_chore
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cleared_occurrence_event
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cleared_occurrence_habit
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_comment_deleted
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_comment_edited
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_commented
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_commented_ref
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_converted
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_chore
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_chore_ref
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_event
@@ -65,9 +76,17 @@ import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_cr
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_item_ref
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_task
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_created_task_ref
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_deleted_item
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_deleted_task
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_merged
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_moved_item
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_moved_item_ref
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_plan_added
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_plan_removed
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_plan_reordered
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_rescheduled
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_split
+import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_status_changed
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_item
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_occurrence_chore
 import com.circuitstitch.deferno.core.designsystem.resources.activity_summary_updated_occurrence_event
@@ -141,7 +160,7 @@ fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) 
         }
         ChangeDiffSheet(
             title = row.summaryText(),
-            subtitle = "${row.source.label} · ${formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern))}",
+            subtitle = "${row.actorLabel} · ${formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern))}",
             rows = row.changes.toDiffRows(),
             note = row.commentBody,
             onOpenItem = row.itemId?.let { id -> { component.openItem(id); selected = null } },
@@ -164,7 +183,7 @@ private fun ActivityRowView(row: ActivityFeedRow, onClick: () -> Unit) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(text = row.summaryText(), style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TreeChip(text = row.source.label, filled = false)
+                TreeChip(text = row.actorLabel, filled = false)
                 if (subLabel != null) {
                     Text(
                         text = subLabel,
@@ -215,15 +234,50 @@ private fun ActivityFeedRow.summaryText(): String {
         }
         ActivityVerb.UpdatedItem -> stringResource(Res.string.activity_summary_updated_item)
         ActivityVerb.Commented -> if (ref != null) stringResource(Res.string.activity_summary_commented_ref, ref) else stringResource(Res.string.activity_summary_commented)
+        // The server ledger's own vocabulary (#364) — kind-agnostic, and none is ref-capable yet: these
+        // verbs arrive on rows from other surfaces, where the touched item is often not in the local
+        // cache at all, so a ref would resolve to null more often than not.
+        ActivityVerb.StatusChanged -> stringResource(Res.string.activity_summary_status_changed)
+        ActivityVerb.DeletedItem -> stringResource(Res.string.activity_summary_deleted_item)
+        ActivityVerb.Split -> stringResource(Res.string.activity_summary_split)
+        ActivityVerb.Merged -> stringResource(Res.string.activity_summary_merged)
+        ActivityVerb.Converted -> stringResource(Res.string.activity_summary_converted)
+        ActivityVerb.Rescheduled -> stringResource(Res.string.activity_summary_rescheduled)
+        ActivityVerb.CommentEdited -> stringResource(Res.string.activity_summary_comment_edited)
+        ActivityVerb.CommentDeleted -> stringResource(Res.string.activity_summary_comment_deleted)
+        ActivityVerb.AttachmentAdded -> stringResource(Res.string.activity_summary_attachment_added)
+        ActivityVerb.AttachmentDeleted -> stringResource(Res.string.activity_summary_attachment_deleted)
+        ActivityVerb.AttachmentCaptioned -> stringResource(Res.string.activity_summary_attachment_captioned)
+        ActivityVerb.PlanAdded -> stringResource(Res.string.activity_summary_plan_added)
+        ActivityVerb.PlanRemoved -> stringResource(Res.string.activity_summary_plan_removed)
+        ActivityVerb.PlanReordered -> stringResource(Res.string.activity_summary_plan_reordered)
     }
 }
 
-/** The localized "who" chip: a local write reads "Mobile app"; remote writes name their surface. */
+/**
+ * The localized "who" chip.
+ *
+ * The **actor** outranks the source when the server named a non-human one (#364): an Assistant write
+ * carries the driving human's session, so its source is whatever surface they were on — reporting "via
+ * Website" for something the Assistant did would be true but useless. A webhook row names its integration
+ * where the server provided one (e.g. "github"), since the provider is more informative than the category.
+ * Otherwise the source stands: a local write reads "Mobile app", remote writes name their surface.
+ */
+private val ActivityFeedRow.actorLabel: String
+    @Composable get() = when (actorKind) {
+        ActivityActorKind.Assistant -> stringResource(Res.string.activity_actor_assistant)
+        ActivityActorKind.Webhook -> provider ?: stringResource(Res.string.activity_actor_integration)
+        // Human, System, Unknown and an un-reconciled row all fall through to the surface that acted.
+        else -> source.label
+    }
+
 private val ActivitySource.label: String
     @Composable get() = when (this) {
         ActivitySource.Mobile -> stringResource(Res.string.activity_source_mobile)
         ActivitySource.Website -> stringResource(Res.string.activity_source_website)
         ActivitySource.Mcp -> stringResource(Res.string.activity_source_mcp)
+        ActivitySource.Api -> stringResource(Res.string.activity_source_api)
+        ActivitySource.System -> stringResource(Res.string.activity_source_system)
         ActivitySource.Unknown -> stringResource(Res.string.activity_source_unknown)
     }
 

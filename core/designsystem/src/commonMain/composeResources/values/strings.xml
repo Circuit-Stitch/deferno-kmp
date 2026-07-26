@@ -34,6 +34,13 @@
     <string name="activity_source_mobile">Mobile app</string>
     <string name="activity_source_unknown">Unknown</string>
     <string name="activity_source_website">via Website</string>
+    <!-- Server ledger sources (#364): a raw API caller, and a server-driven action with no human actor -->
+    <string name="activity_source_api">via API</string>
+    <string name="activity_source_system">Automatic</string>
+    <!-- Actor chips (#364): shown INSTEAD of the source when the server attributes the action to a
+         non-human actor — the Assistant acting on your behalf, or a connected integration -->
+    <string name="activity_actor_assistant">Assistant</string>
+    <string name="activity_actor_integration">Integration</string>
     <!-- Feed row summaries — via ActivityLedger structured-summary refactor -->
     <string name="activity_summary_changed_settings">Changed settings</string>
     <string name="activity_summary_cleared_occurrence_chore">Cleared a chore occurrence</string>
@@ -66,6 +73,23 @@
     <string name="activity_summary_moved_item_ref">Moved item %1$s</string>
     <string name="activity_summary_updated_task_ref">Updated task %1$s</string>
     <string name="activity_summary_commented_ref">Commented on %1$s</string>
+    <!-- Server ledger verbs (#364): actions the local outbox-derived vocabulary could not name, now that
+         the feed carries rows from every surface. Kind-agnostic on purpose — the row links to the thing
+         it changed, so the verb need only orient -->
+    <string name="activity_summary_status_changed">Changed the status</string>
+    <string name="activity_summary_deleted_item">Deleted an item</string>
+    <string name="activity_summary_split">Split an item</string>
+    <string name="activity_summary_merged">Merged items</string>
+    <string name="activity_summary_converted">Converted an item</string>
+    <string name="activity_summary_rescheduled">Rescheduled an occurrence</string>
+    <string name="activity_summary_comment_edited">Edited a comment</string>
+    <string name="activity_summary_comment_deleted">Deleted a comment</string>
+    <string name="activity_summary_attachment_added">Added an attachment</string>
+    <string name="activity_summary_attachment_deleted">Deleted an attachment</string>
+    <string name="activity_summary_attachment_captioned">Captioned an attachment</string>
+    <string name="activity_summary_plan_added">Added to your plan</string>
+    <string name="activity_summary_plan_removed">Removed from your plan</string>
+    <string name="activity_summary_plan_reordered">Reordered your plan</string>
 
     <!-- ── assistant ─────────────────────────────────────────────── -->
     <!-- Fallback tool-activity line (via typed-state refactor) -->

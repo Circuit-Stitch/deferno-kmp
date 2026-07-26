@@ -32,6 +32,13 @@
     <string name="activity_source_mobile">App móvel</string>
     <string name="activity_source_unknown">Desconhecida</string>
     <string name="activity_source_website">via Site</string>
+    <!-- Server ledger sources (#364): a raw API caller, and a server-driven action with no human actor -->
+    <string name="activity_source_api">via API</string>
+    <string name="activity_source_system">Automática</string>
+    <!-- Actor chips (#364): shown INSTEAD of the source when the server attributes the action to a
+         non-human actor — the Assistant acting on your behalf, or a connected integration -->
+    <string name="activity_actor_assistant">Assistente</string>
+    <string name="activity_actor_integration">Integração</string>
     <string name="activity_summary_changed_settings">Alterou as configurações</string>
     <string name="activity_summary_cleared_occurrence_chore">Limpou uma ocorrência de afazer</string>
     <string name="activity_summary_cleared_occurrence_event">Limpou uma ocorrência de evento</string>
@@ -59,6 +66,23 @@
     <string name="activity_summary_moved_item_ref">Moveu o item %1$s</string>
     <string name="activity_summary_updated_task_ref">Atualizou a tarefa %1$s</string>
     <string name="activity_summary_commented_ref">Comentou em %1$s</string>
+    <!-- Server ledger verbs (#364): actions the local outbox-derived vocabulary could not name, now that
+         the feed carries rows from every surface. Kind-agnostic on purpose — the row links to the thing
+         it changed, so the verb need only orient -->
+    <string name="activity_summary_status_changed">Alterou o status</string>
+    <string name="activity_summary_deleted_item">Excluiu um item</string>
+    <string name="activity_summary_split">Dividiu um item</string>
+    <string name="activity_summary_merged">Mesclou itens</string>
+    <string name="activity_summary_converted">Converteu um item</string>
+    <string name="activity_summary_rescheduled">Reagendou uma ocorrência</string>
+    <string name="activity_summary_comment_edited">Editou um comentário</string>
+    <string name="activity_summary_comment_deleted">Excluiu um comentário</string>
+    <string name="activity_summary_attachment_added">Adicionou um anexo</string>
+    <string name="activity_summary_attachment_deleted">Excluiu um anexo</string>
+    <string name="activity_summary_attachment_captioned">Legendou um anexo</string>
+    <string name="activity_summary_plan_added">Adicionou ao seu plano</string>
+    <string name="activity_summary_plan_removed">Removeu do seu plano</string>
+    <string name="activity_summary_plan_reordered">Reordenou seu plano</string>
 
     <!-- ── assistant ─────────────────────────────────────────────── -->
     <string name="assistant_action_working">Trabalhando…</string>

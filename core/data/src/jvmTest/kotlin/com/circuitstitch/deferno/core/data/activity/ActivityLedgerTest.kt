@@ -87,7 +87,7 @@ class ActivityLedgerTest {
     fun clearEmptiesLedger() = runTest {
         val db = newDb()
         val ledger = SqlDelightActivityLedgerStore(db, Dispatchers.Unconfined)
-        ledger.record(ActivitySource.Mobile, "task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), "{}"), before = null, now = t0)
+        ledger.recordLocal(ActivitySource.Mobile, "task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), "{}"), before = null, now = t0)
         assertEquals(1, ledger.recent().first().size)
         ledger.clear()
         assertTrue(ledger.recent().first().isEmpty())
@@ -95,8 +95,8 @@ class ActivityLedgerTest {
 
     @Test
     fun summaryAndItemIdCoverEveryTargetShape() {
-        fun entry(target: String, method: OutboxMethod) =
-            ActivityEntry(seq = 1, recordedAt = t0, source = ActivitySource.Mobile, target = target, method = method, path = emptyList())
+        fun entry(target: String, method: OutboxMethod, path: List<String> = emptyList()) =
+            ActivityEntry(seq = 1, recordedAt = t0, source = ActivitySource.Mobile, target = target, method = method, path = path)
 
         assertEquals(ActivitySummary(ActivityVerb.UpdatedTask), entry("task:abc", OutboxMethod.Patch).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.DeletedTask), entry("task:abc", OutboxMethod.Delete).summaryInfo())
@@ -105,12 +105,24 @@ class ActivityLedgerTest {
         assertEquals(ActivitySummary(ActivityVerb.UpdatedPlan), entry("plan:2026-06-21:UTC", OutboxMethod.Post).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.ChangedSettings), entry("settings", OutboxMethod.Patch).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.UpdatedOccurrence, "event"), entry("occurrence:Event:s1:2026-06-21", OutboxMethod.Patch).summaryInfo())
-        assertEquals(ActivitySummary(ActivityVerb.ClearedOccurrence, "event"), entry("occurrence:Event:s1:2026-06-21", OutboxMethod.Delete).summaryInfo())
+        // #364: clear is a POST soft-delete (`…/occurrences/{date}/clear`), so the METHOD no longer
+        // distinguishes it from a mark — the path's trailing segment does.
+        assertEquals(
+            ActivitySummary(ActivityVerb.ClearedOccurrence, "event"),
+            entry(
+                "occurrence:Event:s1:2026-06-21",
+                OutboxMethod.Post,
+                listOf("events", "s1", "occurrences", "2026-06-21", "clear"),
+            ).summaryInfo(),
+        )
         assertEquals(ActivitySummary(ActivityVerb.UpdatedItem), entry("weird:thing", OutboxMethod.Patch).summaryInfo())
         // Comment writes (ADR-0043): post/edit (comment-create: / comment:) and delete all read "Commented".
         assertEquals(ActivitySummary(ActivityVerb.Commented), entry("comment-create:t1:c1", OutboxMethod.Post).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.Commented), entry("comment:c1", OutboxMethod.Patch).summaryInfo())
-        assertEquals(ActivitySummary(ActivityVerb.Commented), entry("comment:c1", OutboxMethod.Delete).summaryInfo())
+        assertEquals(
+            ActivitySummary(ActivityVerb.Commented),
+            entry("comment:c1", OutboxMethod.Post, listOf("comments", "c1", "delete")).summaryInfo(),
+        )
 
         assertEquals("abc", entry("task:abc", OutboxMethod.Patch).itemId())
         assertEquals("i1", entry("item:i1", OutboxMethod.Patch).itemId())

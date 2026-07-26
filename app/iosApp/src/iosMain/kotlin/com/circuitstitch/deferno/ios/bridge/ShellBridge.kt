@@ -535,6 +535,17 @@ fun activitySummaryVerb(row: ActivityFeedRow): String = row.summaryInfo.verb.nam
 fun activitySummaryKindToken(row: ActivityFeedRow): String? = row.summaryInfo.kindToken
 fun activitySourceName(row: ActivityFeedRow): String = row.source.name
 
+/**
+ * The server's actor attribution for an Activity row (#364), as a stable enum-name token ("Human" /
+ * "Assistant" / "System" / "Webhook" / "Unknown") — or null on a row the reconcile hasn't reached, where
+ * only the source is known. Paired with [activityActorProvider], this is what lets the chip say
+ * "Assistant" instead of naming the surface the Assistant happened to act through.
+ */
+fun activityActorKindName(row: ActivityFeedRow): String? = row.actorKind?.name
+
+/** The integration that drove a `Webhook` row (e.g. "github"), where the server named one. */
+fun activityActorProvider(row: ActivityFeedRow): String? = row.provider
+
 /** A render-ready "when" label for an Activity row (Instant → local "yyyy-MM-dd HH:mm"). */
 fun activityWhenLabel(row: ActivityFeedRow): String {
     val dt = row.recordedAt.toLocalDateTime(TimeZone.currentSystemDefault())

@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.shell
 
 import com.arkivanov.decompose.ComponentContext
 import com.circuitstitch.deferno.core.common.componentScope
+import com.circuitstitch.deferno.core.data.activity.ActivityActorKind
 import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivitySummary
@@ -26,6 +27,10 @@ import kotlin.time.Instant
 /**
  * One row of the Activity feed — a render-ready projection of an [ActivityEntry] (#260): what changed
  * ([summaryInfo], typed for locale-aware rendering), who made it ([source]), and when ([recordedAt]).
+ * [actorKind] / [provider] are the server's attribution, present only once the row has been reconciled:
+ * they let the chip say "Assistant" or name an integration instead of the surface the write came from,
+ * which is the difference between "via Website" and "the Assistant did this on the website".
+ *
  * [itemId] is the thing it touched — the tap-to-open target the detail sheet's "Open item" routes to
  * (null where there's no single item, e.g. a plan/settings row). [changes] is the typed old->new field
  * diff the detail sheet renders (empty when nothing was captured). Every platform View localizes from the
@@ -48,6 +53,8 @@ data class ActivityFeedRow(
     val itemRef: String? = null,
     val itemKind: ItemKind? = null,
     val commentBody: String? = null,
+    val actorKind: ActivityActorKind? = null,
+    val provider: String? = null,
 )
 
 /** The Activity Destination render state: the recorded changes, newest first. */
@@ -110,7 +117,10 @@ private fun ActivityEntry.toRow(byId: Map<String, Item>): ActivityFeedRow {
     val item = effectiveId?.let(byId::get)
     return ActivityFeedRow(
         seq = seq,
-        recordedAt = recordedAt,
+        // The DISPLAY instant — the actor's wall-clock where the row has one, else the local apply time.
+        // Sorting or labelling by server-receive time would make a phone's offline morning work appear to
+        // happen at the moment its outbox flushed, hours later.
+        recordedAt = displayAt,
         itemId = effectiveId,
         summaryInfo = summaryInfo(),
         source = source,
@@ -118,5 +128,7 @@ private fun ActivityEntry.toRow(byId: Map<String, Item>): ActivityFeedRow {
         itemRef = item?.sequence?.let { "#$it" },
         itemKind = item?.kind,
         commentBody = commentBody(),
+        actorKind = actorKind,
+        provider = provider,
     )
 }
