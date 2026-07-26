@@ -1,21 +1,20 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.data.activity.ActivityStamp
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.UploadHttpClient
-import com.circuitstitch.deferno.core.network.dto.AttachmentIntentDto
 import com.circuitstitch.deferno.core.network.dto.AttachmentPresignBatchRequestDto
 import com.circuitstitch.deferno.core.network.dto.AttachmentPresignBatchResponseDto
 import com.circuitstitch.deferno.core.network.dto.AttachmentViewDto
-import com.circuitstitch.deferno.core.network.dto.CommitAttachmentsPayload
 import com.circuitstitch.deferno.core.network.dto.PresignRequestDto
 import com.circuitstitch.deferno.core.network.dto.PresignResponseDto
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import com.circuitstitch.deferno.core.network.requestApi
 import io.ktor.client.HttpClient
-import io.ktor.client.request.delete
 import io.ktor.client.request.header
+import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -25,8 +24,10 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.appendPathSegments
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 /**
  * The production [TaskDetailRepository] over the shared authed Deferno [HttpClient] — online-only
@@ -44,7 +45,7 @@ class KtorTaskDetailRepository(
 
     override suspend fun attachments(taskId: TaskId): List<Attachment>? {
         val result = client.requestApi<List<AttachmentViewDto>> {
-            url { appendPathSegments("tasks", taskId.value, "attachments") }
+            url { appendPathSegments("items", taskId.value, "attachments") }
         }
         return when (result) {
             is ApiResult.Success -> result.data.map { it.toDomain() }
@@ -52,14 +53,14 @@ class KtorTaskDetailRepository(
         }
     }
 
-    override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>): Boolean {
+    override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>, stamp: ActivityStamp?): Boolean {
         if (files.isEmpty()) return true
         val upload = uploadClient ?: return false
 
         // 1. Presign the batch — one signed PUT URL per file, in request order.
         val presign = client.requestApi<AttachmentPresignBatchResponseDto> {
             method = HttpMethod.Post
-            url { appendPathSegments("tasks", taskId.value, "attachments", "presign") }
+            url { appendPathSegments("items", taskId.value, "attachments", "presign") }
             contentType(ContentType.Application.Json)
             setBody(
                 AttachmentPresignBatchRequestDto(
@@ -78,12 +79,23 @@ class KtorTaskDetailRepository(
             if (!put(upload, p, files[i])) return false
         }
 
-        // 3. Commit the uploaded ids onto the Task.
+        // 3. Commit the uploaded ids onto the item. Only this step mints a ledger entry server-side — the
+        //    presign handshake and the S3 PUTs are not item mutations — so the stamp rides here alone.
         val commit = client.requestApi<List<AttachmentViewDto>> {
             method = HttpMethod.Post
-            url { appendPathSegments("tasks", taskId.value, "attachments") }
+            url { appendPathSegments("items", taskId.value, "attachments") }
             contentType(ContentType.Application.Json)
-            setBody(CommitAttachmentsPayload(intents = presigned.map { AttachmentIntentDto(it.attachmentId) }))
+            // Hand-built rather than the typed CommitAttachmentsPayload: `activity` is an untyped sibling
+            // (core:data has no serialization compiler plugin, so the stamp is a raw JsonObject), and a
+            // body must be one shape or the other. JSON it is — the same call the typed payload rendered.
+            setBody(
+                buildJsonObject {
+                    putJsonArray("intents") {
+                        presigned.forEach { p -> addJsonObject { put("attachment_id", p.attachmentId) } }
+                    }
+                    stamp?.let { put("activity", it.toJson()) }
+                },
+            )
         }
         return commit is ApiResult.Success
     }
@@ -110,25 +122,40 @@ class KtorTaskDetailRepository(
         return response.status.isSuccess()
     }
 
-    override suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String?): Boolean {
+    override suspend fun updateAttachmentCaption(
+        taskId: TaskId,
+        attachmentId: String,
+        caption: String?,
+        stamp: ActivityStamp?,
+    ): Boolean {
         val result = client.requestApi<AttachmentViewDto> {
             method = HttpMethod.Patch
-            url { appendPathSegments("tasks", taskId.value, "attachments", attachmentId) }
+            url { appendPathSegments("items", taskId.value, "attachments", attachmentId) }
             contentType(ContentType.Application.Json)
             // #416: hand-build the body so a null clear is emitted explicitly as `caption: null`.
             // The shared DefernoJson (explicitNulls = false) would drop a null on a typed payload,
             // reaching the server as an omitted field it rejects (422). A JsonObject's JsonNull is
             // serialized structurally, independent of explicitNulls.
-            setBody(buildJsonObject { put("caption", caption) })
+            setBody(
+                buildJsonObject {
+                    put("caption", caption)
+                    stamp?.let { put("activity", it.toJson()) }
+                },
+            )
         }
         return result is ApiResult.Success
     }
 
-    // Bypasses `requestApi` deliberately: this DELETE replies 204 No Content, whose empty body the
-    // version-probe would treat as malformed (cf. the auth-token revoke). Check the status directly.
-    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String): Boolean = try {
-        val response = client.delete {
-            url { appendPathSegments("tasks", taskId.value, "attachments", attachmentId) }
+    // A POST soft-delete, not a DELETE (#364): the backend retired `DELETE /tasks/{id}/attachments/{aid}`
+    // so ledger metadata could ride in a body, and left no alias. Still bypasses `requestApi`
+    // deliberately: the reply is 204 No Content, whose empty body the version-probe would treat as
+    // malformed (cf. the auth-token revoke). Check the status directly.
+    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String, stamp: ActivityStamp?): Boolean = try {
+        val response = client.post {
+            url { appendPathSegments("items", taskId.value, "attachments", attachmentId, "delete") }
+            contentType(ContentType.Application.Json)
+            // ActivityBody: every field optional, so an empty object is a valid delete.
+            setBody(buildJsonObject { stamp?.let { put("activity", it.toJson()) } })
         }
         response.status.isSuccess()
     } catch (t: Throwable) {

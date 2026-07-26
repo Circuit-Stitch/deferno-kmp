@@ -47,7 +47,7 @@ class KtorTaskDetailRepositoryTest {
 
         val attachments = repo.attachments(TaskId("t1"))
 
-        assertTrue(captured?.url?.encodedPath?.endsWith("/tasks/t1/attachments") == true)
+        assertTrue(captured?.url?.encodedPath?.endsWith("/items/t1/attachments") == true)
         assertEquals(listOf("receipt.pdf"), attachments?.map { it.filename })
         assertEquals(1234L, attachments?.first()?.size)
     }
@@ -64,7 +64,7 @@ class KtorTaskDetailRepositoryTest {
         var commitBody: String? = null
         val api = client { request ->
             when {
-                request.url.encodedPath.endsWith("/tasks/t1/attachments/presign") -> {
+                request.url.encodedPath.endsWith("/items/t1/attachments/presign") -> {
                     presignCalled = true
                     respondJson(
                         """{"version":"0.1","data":{"attachments":[{
@@ -75,7 +75,7 @@ class KtorTaskDetailRepositoryTest {
                         }]}}""",
                     )
                 }
-                request.url.encodedPath.endsWith("/tasks/t1/attachments") -> {
+                request.url.encodedPath.endsWith("/items/t1/attachments") -> {
                     commitBody = (request.body as? TextContent)?.text
                     respondJson(attachmentsEnvelope, HttpStatusCode.Created)
                 }
@@ -160,13 +160,16 @@ class KtorTaskDetailRepositoryTest {
     }
 
     @Test
-    fun deleteAttachmentHitsThePathAndReturnsTrueOn204() = runTest {
+    fun deleteAttachmentPostsToTheDeleteSubresourceAndReturnsTrueOn204() = runTest {
+        // #364: `DELETE /tasks/{id}/attachments/{aid}` is gone twice over — the surface became
+        // kind-neutral (/items/...) AND the delete became a POST soft-delete so it can carry the
+        // client-minted Activity stamp in a body. No alias exists for either old form.
         var captured: HttpRequestData? = null
         val repo = KtorTaskDetailRepository(client { req -> captured = req; respond("", HttpStatusCode.NoContent) })
 
         assertTrue(repo.deleteAttachment(TaskId("t1"), "att-1"))
-        assertEquals(HttpMethod.Delete, captured?.method)
-        assertTrue(captured?.url?.encodedPath?.endsWith("/tasks/t1/attachments/att-1") == true)
+        assertEquals(HttpMethod.Post, captured?.method)
+        assertTrue(captured?.url?.encodedPath?.endsWith("/items/t1/attachments/att-1/delete") == true)
     }
 
     @Test
@@ -187,7 +190,7 @@ class KtorTaskDetailRepositoryTest {
 
         assertTrue(repo.updateAttachmentCaption(TaskId("t1"), "att-1", "Receipt"))
         assertEquals(HttpMethod.Patch, captured?.method)
-        assertTrue(captured?.url?.encodedPath?.endsWith("/tasks/t1/attachments/att-1") == true)
+        assertTrue(captured?.url?.encodedPath?.endsWith("/items/t1/attachments/att-1") == true)
         assertTrue((captured?.body as? TextContent)?.text?.contains("Receipt") == true)
     }
 
