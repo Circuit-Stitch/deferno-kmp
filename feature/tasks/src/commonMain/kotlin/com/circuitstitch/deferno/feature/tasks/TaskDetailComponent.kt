@@ -459,11 +459,14 @@ class DefaultTaskDetailComponent(
         scope.launch {
             observeItemLedger(taskId.value).collect { entries ->
                 val edits = entries.mapNotNull { entry ->
-                    // occurredAt, not recordedAt: the Trail dates an edit by when it was made. This filter
-                    // now sees rows this device never applied (the reconcile pulls in every surface's edits
-                    // for the item), and on those recordedAt holds the server's observe time — dating
-                    // another device's offline edit at the moment its outbox happened to flush.
-                    entry.changes().takeIf { it.isNotEmpty() }?.let { LedgerEdit(entry.occurredAt, it) }
+                    // recordedAt, NOT occurredAt: [LedgerEdit.at] is never rendered — it is the key
+                    // [mergeActivity] correlates against [ItemHistoryEvent.recordedAt], a SERVER record time,
+                    // and recordedAt is the ledger's twin of that axis (the server's observe time on a
+                    // reconciled row, the apply time on a local write). occurredAt is the actor's wall-clock
+                    // and runs hours behind it on any offline edit, so keying on it lets an unrelated recent
+                    // local edit out-score a peer's own row and graft this device's values onto the peer's
+                    // Trail entry.
+                    entry.changes().takeIf { it.isNotEmpty() }?.let { LedgerEdit(entry.recordedAt, it) }
                 }
                 extras.update { it.copy(localEdits = edits) }
             }
