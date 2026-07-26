@@ -127,11 +127,11 @@ fun taskDueRelativeCount(task: Task): Int = task.completeBy?.let { instant ->
 } ?: 0
 
 // ---------------------------------------------------------------------------------------------------
-// ACTIVITY feed (ADR-0043) — the macOS twin of the iOS bridge's comment/activity seam. macOS newly gains
-// the ACTIVITY section, so these are added here (kept IDENTICAL to app/iosApp .../ios/bridge/Bridge.kt).
-// The sealed [ActivityItem] is cracked open with the app's manual-discriminator idiom: Swift keys ForEach
-// on [activityItemId], unwraps a comment via [activityItemComment] (nil ⇒ history), and renders a history
-// row from the verb token + date label. UserId is header-erased (Swift can't ==) and Instant can't be
+// ACTIVITY feed (ADR-0043) — the macOS twin of the iOS bridge's comment/activity seam (kept IDENTICAL to
+// app/iosApp .../ios/bridge/Bridge.kt). The sealed [ActivityItem] is cracked open with the app's
+// manual-discriminator idiom: the View keys ForEach on [activityItemId], unwraps a comment via
+// [activityItemComment] (nil ⇒ history), and renders a history row from the enriched [activityHistoryLine]
+// + [activityHistoryGlyph] below (ADR-0046). UserId is header-erased (Swift can't ==) and Instant can't be
 // formatted in Swift, so those stay here.
 // ---------------------------------------------------------------------------------------------------
 
@@ -151,33 +151,10 @@ fun activityItemId(item: ActivityItem): String = item.id
 /** The comment an [item] wraps, or `nil` for a history row (the `as?` discriminator). */
 fun activityItemComment(item: ActivityItem): Comment? = (item as? ActivityItem.Comment)?.comment
 
-/** A history row's typed verb token (Swift maps it to a localized label), or `nil` for a comment row. */
-fun activityHistoryVerb(item: ActivityItem): String? =
-    (item as? ActivityItem.HistoryEvent)?.event?.let(::historyVerbToken)
-
-/** A history row's display date ("2026-04-17"), or `nil` for a comment — Instant formatting Swift can't do. */
-fun activityHistoryDateLabel(item: ActivityItem): String? =
-    (item as? ActivityItem.HistoryEvent)?.event?.recordedAt?.toString()?.substringBefore('T')
-
-/** The stable verb token per history variant — kept in sync with the Compose `label()` mapping (ADR-0043). */
-private fun historyVerbToken(event: ItemHistoryEvent): String = when (event) {
-    is ItemHistoryEvent.Created -> "Created"
-    is ItemHistoryEvent.Updated -> "Updated"
-    is ItemHistoryEvent.StatusChanged -> "StatusChanged"
-    is ItemHistoryEvent.Moved -> "Moved"
-    is ItemHistoryEvent.ParentAssigned -> "ParentAssigned"
-    is ItemHistoryEvent.Split -> "Split"
-    is ItemHistoryEvent.FoldedInto -> "FoldedInto"
-    is ItemHistoryEvent.MergedChild -> "MergedChild"
-    is ItemHistoryEvent.MergedIntoParent -> "MergedIntoParent"
-    is ItemHistoryEvent.Unknown -> "Unknown"
-}
-
 // ---------------------------------------------------------------------------------------------------
 // Enriched Trail parity (ADR-0046) — the macOS twin of the iOS bridge's Trail seam. Kept IDENTICAL to
-// app/iosApp .../ios/bridge/Bridge.kt. macOS TaskDetailView.swift isn't ported to the Trail in this pass,
-// so these are added ahead of that port to keep the hand-kept twins in sync (all date/time formatting
-// stays Swift-side: Kotlin/Native has no java.time). See SPEC §1.
+// app/iosApp .../ios/bridge/Bridge.kt, and consumed by macOS TaskDetailView.swift's Trail. All date/time
+// formatting stays Swift-side (Kotlin/Native has no java.time) — see `TrailDateFormat`.
 // ---------------------------------------------------------------------------------------------------
 
 /**
@@ -262,8 +239,6 @@ private val UpdatedFieldToken: Map<String, String> = mapOf(
     "labels" to "LABELS",
 )
 
-// The coarse activityHistoryVerb/activityHistoryDateLabel/historyVerbToken accessors above are retained
-// (deviating from SPEC §1g) until the macOS TaskDetailView.swift Trail port lands and drops their callers.
 /**
  * The enriched render model for a Trail history row, or null for a comment row. Swift's
  * `L.historyEnriched(line)` assembles the localized label from these typed pieces — mirroring the Compose
@@ -331,7 +306,7 @@ fun activityHistoryDiffRows(item: ActivityItem): List<TrailDiffRow> {
     }
 }
 
-private fun diffFieldToken(field: ActivityField): String? = when (field) {
+internal fun diffFieldToken(field: ActivityField): String? = when (field) {
     ActivityField.Title -> "TITLE"
     ActivityField.Description -> "DESCRIPTION"
     ActivityField.Deadline -> "DEADLINE"
@@ -341,7 +316,7 @@ private fun diffFieldToken(field: ActivityField): String? = when (field) {
     ActivityField.Unknown -> null
 }
 
-private fun diffSide(v: ActivityFieldValue): TrailDiffSide = when (v) {
+internal fun diffSide(v: ActivityFieldValue): TrailDiffSide = when (v) {
     is ActivityFieldValue.Present -> TrailDiffSide("PRESENT", v.raw)
     ActivityFieldValue.Cleared -> TrailDiffSide("CLEARED", null)
     ActivityFieldValue.Unavailable -> TrailDiffSide("UNAVAILABLE", null)

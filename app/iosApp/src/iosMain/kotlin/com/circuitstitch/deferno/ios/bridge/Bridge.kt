@@ -206,8 +206,9 @@ fun commentDateLabel(comment: Comment): String =
 // --- ACTIVITY feed (ADR-0043): the sealed [ActivityItem] cracked open for Swift with the app's
 // manual-discriminator idiom (Swift can't match a Kotlin sealed type or format an Instant — same seam as
 // ShellBridge's inboxNote*/activitySummary*). The View keys ForEach on [activityItemId], unwraps a
-// comment via [activityItemComment] (nil ⇒ history), and renders a history row from the verb token +
-// date label. commentIsMine/commentDateLabel keep taking the unwrapped [Comment].
+// comment via [activityItemComment] (nil ⇒ history), and renders a history row from the enriched
+// [activityHistoryLine] + [activityHistoryGlyph] below (ADR-0046). commentIsMine/commentDateLabel keep
+// taking the unwrapped [Comment].
 
 /** A stable Swift-visible row id for `ForEach(id:)` — the comment id, or "history:<index>". */
 fun activityItemId(item: ActivityItem): String = item.id

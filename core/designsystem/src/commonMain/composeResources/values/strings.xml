@@ -869,7 +869,6 @@ Thank you.</string>
     <!-- Kebab cd -->
     <string name="tasks_detail_more_actions">More actions</string>
     <string name="tasks_detail_no_attachments">No attachments.</string>
-    <string name="tasks_detail_no_comments">No comments yet.</string>
     <string name="tasks_detail_no_description">No description yet.</string>
     <string name="tasks_detail_not_found_body">This task may have been removed. Head back to your list.</string>
     <string name="tasks_detail_not_found_title">Task not found</string>
@@ -923,8 +922,6 @@ Thank you.</string>
     <string name="tasks_journey_not_doing">NOT DOING</string>
     <string name="tasks_journey_blocked">BLOCKED</string>
     <string name="tasks_detail_tab_info">Info</string>
-    <string name="tasks_detail_tab_comments">Comments</string>
-    <string name="tasks_detail_tab_history">History</string>
     <string name="tasks_detail_tab_trail">Trail</string>
     <string name="tasks_detail_section_history">History</string>
     <string name="tasks_detail_property_when">When</string>
@@ -1192,12 +1189,6 @@ Thank you.</string>
     <string name="inbox_accept_button">Accept</string>
     <string name="activity_history_created">Created this task</string>
     <string name="activity_history_updated">Edited this task</string>
-    <string name="activity_history_status_changed">Changed the status</string>
-    <string name="activity_history_moved">Moved this task</string>
-    <string name="activity_history_parent_assigned">Changed the parent</string>
-    <string name="activity_history_split">Split off a task</string>
-    <string name="activity_history_folded_into">Folded into another task</string>
-    <string name="activity_history_merged_child">Merged in a task</string>
     <string name="activity_history_merged_into_parent">Merged into the parent</string>
     <string name="activity_history_unknown">Made a change</string>
     <!-- Trail (ADR-0046): the enriched, payload-rendered history rows. The peer-title verbs take a resolved item title (or "another item"); the status transition takes the two editor state labels. -->

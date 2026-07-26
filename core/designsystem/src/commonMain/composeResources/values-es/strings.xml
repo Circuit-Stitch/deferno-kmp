@@ -666,7 +666,6 @@ Gracias.</string>
     <string name="tasks_detail_loading">Cargando detalles…</string>
     <string name="tasks_detail_more_actions">Más acciones</string>
     <string name="tasks_detail_no_attachments">Sin archivos adjuntos.</string>
-    <string name="tasks_detail_no_comments">Aún no hay comentarios.</string>
     <string name="tasks_detail_no_description">Aún no hay descripción.</string>
     <string name="tasks_detail_not_found_body">Puede que esta tarea se haya quitado. Vuelve a tu lista.</string>
     <string name="tasks_detail_not_found_title">Tarea no encontrada</string>
@@ -707,8 +706,6 @@ Gracias.</string>
     <string name="tasks_journey_not_doing">SIN HACER</string>
     <string name="tasks_journey_blocked">BLOQUEADO</string>
     <string name="tasks_detail_tab_info">Info</string>
-    <string name="tasks_detail_tab_comments">Comentarios</string>
-    <string name="tasks_detail_tab_history">Historial</string>
     <string name="tasks_detail_section_history">Historial</string>
     <string name="tasks_detail_property_when">Cuándo</string>
     <string name="tasks_detail_property_status">Estado</string>
@@ -937,12 +934,6 @@ Gracias.</string>
     <string name="inbox_accept_button">Aceptar</string>
     <string name="activity_history_created">Creó esta tarea</string>
     <string name="activity_history_updated">Editó esta tarea</string>
-    <string name="activity_history_status_changed">Cambió el estado</string>
-    <string name="activity_history_moved">Movió esta tarea</string>
-    <string name="activity_history_parent_assigned">Cambió la tarea principal</string>
-    <string name="activity_history_split">Separó una tarea</string>
-    <string name="activity_history_folded_into">Fusionó con otra tarea</string>
-    <string name="activity_history_merged_child">Combinó una tarea</string>
     <string name="activity_history_merged_into_parent">Combinó con la tarea principal</string>
     <string name="activity_history_unknown">Hizo un cambio</string>
     <string name="tasks_detail_tab_trail">Recorrido</string>
