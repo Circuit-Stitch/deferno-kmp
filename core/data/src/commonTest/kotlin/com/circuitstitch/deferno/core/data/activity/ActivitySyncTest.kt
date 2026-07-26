@@ -1,11 +1,14 @@
 package com.circuitstitch.deferno.core.data.activity
 
 import com.circuitstitch.deferno.core.data.RemoteSnapshot
-import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import com.circuitstitch.deferno.core.network.dto.ActivityEntryDto
 import com.circuitstitch.deferno.core.network.dto.ActivityFeedDto
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.time.Instant
 import kotlin.test.Test
@@ -24,6 +27,7 @@ import kotlin.test.assertTrue
  * and an entry dropped merely because this build doesn't recognise its verb (which under-reports a
  * forensic stream).
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ActivitySyncTest {
 
     /** Injected everywhere, so `now - bootstrapWindow` / `now - retention` are assertable literals. */
@@ -230,6 +234,49 @@ class ActivitySyncTest {
         assertEquals(listOf(Instant.parse("2026-01-26T09:30:00Z")), ledger.pruneCutoffs)
     }
 
+    // --- single-flight: the shell fires this from three legs, two of which can overlap ---
+
+    @Test
+    fun aPassThatFindsOneAlreadyInFlightDropsOutRatherThanRacingTheCursor() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val remote = GatedActivityRemoteSource(gate, page(entries = listOf(entry("a")), nextSince = "c1"))
+        val ledger = RecordingActivityLedgerStore(initialCursor = opaqueCursor)
+        val sync = ActivitySync(remoteSource = remote, ledger = ledger, now = { fixedNow }, pageSize = 2)
+
+        val inFlight = launch { sync.sync() }
+        runCurrent() // the first pass is now parked inside the remote source, holding the lock
+
+        sync.sync() // the overlapping caller — the reconnect edge landing on top of the periodic tick
+
+        gate.complete(Unit)
+        inFlight.join()
+
+        // Unguarded, both passes would read the SAME watermark, re-fetch the same page, and the slower one
+        // would then write its older cursor last — rewinding the watermark so the next tick re-pulls a page
+        // that had already landed. One request, one merge, one cursor write is the whole point.
+        assertEquals(listOf(opaqueCursor), remote.calls)
+        assertEquals(1, ledger.merges.size)
+        assertEquals(listOf<Pair<String?, Instant>>("c1" to fixedNow), ledger.cursorWrites)
+    }
+
+    @Test
+    fun theLockIsReleasedSoALaterPassStillRuns() = runTest {
+        val remote = FakeActivityRemoteSource(
+            page(entries = listOf(entry("a")), nextSince = "c1"),
+            page(entries = listOf(entry("b")), nextSince = "c2"),
+        )
+        val ledger = RecordingActivityLedgerStore(initialCursor = opaqueCursor)
+        val sync = sync(remote, ledger)
+
+        sync.sync()
+        sync.sync()
+
+        // A dropped pass must not be a permanently closed door: the guard is per-pass, and the second call
+        // resumes from the watermark the first left behind.
+        assertEquals(listOf(opaqueCursor, "c1"), remote.sinceValues)
+        assertEquals(listOf("a", "b"), ledger.mergedIds)
+    }
+
     // --- fixtures ---
 
     private fun page(entries: List<ActivityEntryDto>, nextSince: String?): RemoteSnapshot<ActivityFeedDto> =
@@ -279,6 +326,24 @@ private class FakeActivityRemoteSource(
 }
 
 /**
+ * An [ActivityRemoteSource] that parks inside its first request until [gate] completes — the window an
+ * overlapping caller has to arrive in, which is what the single-flight guard has to survive.
+ */
+private class GatedActivityRemoteSource(
+    private val gate: CompletableDeferred<Unit>,
+    private val page: RemoteSnapshot<ActivityFeedDto>,
+) : ActivityRemoteSource {
+
+    val calls = mutableListOf<String>()
+
+    override suspend fun sync(since: String, limit: Int): RemoteSnapshot<ActivityFeedDto> {
+        calls += since
+        gate.await()
+        return page
+    }
+}
+
+/**
  * A recording [ActivityLedgerStore] for the reconcile tests: captures every merged page, every cursor
  * write (with the instant it was stamped at), and every prune cutoff, while serving the stored watermark.
  *
@@ -297,11 +362,8 @@ private class RecordingActivityLedgerStore(initialCursor: String? = null) : Acti
     val pruneCutoffs = mutableListOf<Instant>()
 
     override suspend fun recordLocal(
-        source: ActivitySource,
-        target: String,
-        request: OutboxRequest,
-        before: String?,
-        now: Instant,
+        change: LocalActivityChange,
+        at: Instant,
         stamp: ActivityStamp?,
         actionKind: ActivityActionKind?,
     ) {

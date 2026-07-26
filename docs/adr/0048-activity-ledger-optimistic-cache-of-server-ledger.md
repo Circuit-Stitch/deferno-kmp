@@ -46,12 +46,28 @@ Three facts constrain the answer:
 - **The ledger records the *unstamped* body.** `activity` is metadata about the change, not a field the
   user changed, and the read-time diff treats every body key as changed — recording the stamped body would
   put a bogus row in the Activity detail sheet and the Task Trail.
+- **The ledger's write port takes the ledger's own shape**, `LocalActivityChange`, not an `OutboxRequest`.
+  Two of the three recording seams never enqueue, so handing them the outbox's replay type meant building
+  a request that would never be sent, carrying an `acceptsActivityStamp` flag each had to document as
+  inert. The port also stopped taking a `source` (`recordLocal` is *the* local path — every other surface
+  arrives via the reconcile) and takes the apply instant once: a local write's two time axes are one clock
+  reading, so writing them from one value is what stops them being two derivations that can disagree.
+- **The reconcile is single-flight.** It is fired from three legs (activation, the reconnect edge, the
+  periodic tick) and two of those can overlap. Unguarded, both passes read the same watermark and re-page
+  the same rows, and the slower one writes its *older* cursor last — rewinding the watermark. A pass that
+  finds one already in flight returns; nothing is lost, because the in-flight pass pages until caught up.
 - **Reconcile is grow-only, unioned by `entry_id`, server wins** — never a purge. The `?since=` cursor is
   the only durable state and is **replayed verbatim**, never re-derived from a timestamp: the axis is
   gapless by construction, and inventing a watermark reintroduces the skip the backend already fixed once.
 - **Two vocabularies coexist in one row.** The server's typed `action_kind` wins where present; the
   outbox-derived derivation remains the fallback for a not-yet-reconciled or pre-#364 row. `action_kind`
   is open (`Other(raw)`) so a stale build renders a newer verb instead of dropping a forensic entry.
+- **Attribution is decided in the shared projection, not per platform View.** Whether the server's actor
+  or the acting surface names a row (`ActivityAttribution`) is a fact about the row, so the feed row
+  carries the *answer* — one typed value, flattened to one token for the Apple bridge — rather than the
+  raw `actor_kind` + `source` + `provider` inputs. Handing the Views the inputs meant writing the same
+  three-way precedence in Compose and again in Swift, string-matched across the ObjC boundary, where
+  nothing would catch the two drifting apart. Same rule as the typed `summaryInfo` beside it (#327).
 - **The feed sorts on `occurred_at`, not insertion order.** A reconcile appends rows *older* than rows
   already stored; insertion order would file a colleague's yesterday-morning edit above this morning's own
   work. Migration 16 back-fills `occurred_at` from `recorded_at` so the column is universal and the sort,
