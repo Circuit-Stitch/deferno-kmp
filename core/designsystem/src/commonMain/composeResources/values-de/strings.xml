@@ -31,6 +31,13 @@
     <string name="activity_source_mobile">Mobile App</string>
     <string name="activity_source_unknown">Unbekannt</string>
     <string name="activity_source_website">über Website</string>
+    <!-- Quellen aus dem Server-Ledger (#364): ein direkter API-Aufrufer und eine vom Server ausgelöste Aktion ohne menschlichen Urheber -->
+    <string name="activity_source_api">über API</string>
+    <string name="activity_source_system">Automatisch</string>
+    <!-- Akteur-Chips (#364): werden ANSTELLE der Quelle angezeigt, wenn der Server die Aktion einem
+         nicht-menschlichen Akteur zuschreibt — dem Assistenten in deinem Auftrag oder einer verbundenen Integration -->
+    <string name="activity_actor_assistant">Assistent</string>
+    <string name="activity_actor_integration">Integration</string>
     <string name="activity_summary_changed_settings">Einstellungen geändert</string>
     <string name="activity_summary_cleared_occurrence_chore">Pflicht-Termin zurückgesetzt</string>
     <string name="activity_summary_cleared_occurrence_event">Ereignis-Termin zurückgesetzt</string>
@@ -58,6 +65,23 @@
     <string name="activity_summary_moved_item_ref">Element %1$s verschoben</string>
     <string name="activity_summary_updated_task_ref">Aufgabe %1$s aktualisiert</string>
     <string name="activity_summary_commented_ref">%1$s kommentiert</string>
+    <!-- Verben aus dem Server-Ledger (#364): Aktionen, die das lokale, aus der Outbox abgeleitete Vokabular
+         nicht benennen konnte, jetzt wo der Feed Einträge von allen Oberflächen trägt. Bewusst art-unabhängig —
+         die Zeile verlinkt auf das geänderte Element, das Verb muss nur orientieren -->
+    <string name="activity_summary_status_changed">Status geändert</string>
+    <string name="activity_summary_deleted_item">Element gelöscht</string>
+    <string name="activity_summary_split">Element aufgeteilt</string>
+    <string name="activity_summary_merged">Elemente zusammengeführt</string>
+    <string name="activity_summary_converted">Element umgewandelt</string>
+    <string name="activity_summary_rescheduled">Termin umgeplant</string>
+    <string name="activity_summary_comment_edited">Kommentar bearbeitet</string>
+    <string name="activity_summary_comment_deleted">Kommentar gelöscht</string>
+    <string name="activity_summary_attachment_added">Anhang hinzugefügt</string>
+    <string name="activity_summary_attachment_deleted">Anhang gelöscht</string>
+    <string name="activity_summary_attachment_captioned">Anhang beschriftet</string>
+    <string name="activity_summary_plan_added">Zu deinem Plan hinzugefügt</string>
+    <string name="activity_summary_plan_removed">Aus deinem Plan entfernt</string>
+    <string name="activity_summary_plan_reordered">Deinen Plan umsortiert</string>
 
     <!-- ── assistant ─────────────────────────────────────────────── -->
     <string name="assistant_action_working">Arbeitet…</string>

@@ -53,6 +53,11 @@ import kotlin.time.Instant
  * **Convert stays online-only.** Converting an *existing* item's kind has no client-id idempotency story
  * (it is a server-side mutation of a row that already exists), so [convert] keeps the ADR-0016 gate:
  * online → POST + reconcile the cache; offline → [CreateResult.Offline]; 4xx → [CreateResult.Failed].
+ * Bypassing the outbox also bypasses the ledger choke-point, but the Activity row for it is written by
+ * [LedgerRecordingItemConverter] on the [ItemConverter] seam rather than here — so this class stays a
+ * cache reconciler with no audit responsibilities and no stamp to mint. That seam is now this writer's
+ * only network dependency: since creates enqueue rather than POST, convert is the sole call that leaves
+ * the device from here.
  *
  * The optimistic rows carry only what the New form supplied (`hydration = Full` so the user's typed
  * description survives a summary refresh until the server's real row replaces it on confirm). `orgSlug`
@@ -61,7 +66,7 @@ import kotlin.time.Instant
  */
 class OfflineCreateWriter(
     private val connectivity: Connectivity,
-    private val remoteSource: ItemRemoteSource,
+    private val converter: ItemConverter,
     private val taskStore: TaskLocalStore,
     private val habitStore: HabitLocalStore,
     private val choreStore: ChoreLocalStore,
@@ -164,7 +169,7 @@ class OfflineCreateWriter(
 
     override suspend fun convert(id: String, fromKind: ItemKind, payload: ConvertItemPayload): CreateResult {
         if (!connectivity.isOnline()) return CreateResult.Offline
-        return when (val result = remoteSource.convert(id, payload)) {
+        return when (val result = converter.convert(id, payload)) {
             is ApiResult.Success -> {
                 removeOldKindRow(id, fromKind)
                 seedConverted(result.data)

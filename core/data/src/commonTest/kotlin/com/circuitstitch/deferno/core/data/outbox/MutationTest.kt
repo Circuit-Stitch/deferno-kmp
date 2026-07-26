@@ -17,6 +17,7 @@ import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -25,6 +26,11 @@ import kotlin.test.assertTrue
  * explicit `null` (distinct from omit), the omit-only `status` is only ever set, and **no intent ever
  * serialises an absent field** (every body lists only the keys it changes). Also proves the optimistic
  * [TaskMutation.applyTo]/[PlanMutation.applyTo] transforms are correct and idempotent (replay-safe).
+ *
+ * Each route family also pins its [OutboxRequest.acceptsActivityStamp] declaration (#364) right beside
+ * the endpoint it belongs to, so the two can't drift apart: a `true` on a route with a strict payload
+ * 422s — Terminal — and dead-letters the user's write, which is far worse than the missing audit row a
+ * wrong `false` costs.
  */
 class MutationTest {
 
@@ -65,6 +71,9 @@ class MutationTest {
         assertEquals(OutboxMethod.Patch, request.method)
         assertEquals(listOf("tasks", "a"), request.path)
         assertEquals("""{"status":"done"}""", request.body)
+        // `PATCH tasks/{id}` carries the `activity` ingest sibling (#364), declared on the shared
+        // patchTask builder — so every Task field edit inherits it from this one assertion.
+        assertTrue(request.acceptsActivityStamp)
     }
 
     @Test
@@ -132,11 +141,15 @@ class MutationTest {
     }
 
     @Test
-    fun deleteTaskIsBodilessDelete() {
+    fun deleteTaskIsBodilessDeleteAndDeclaresNoActivityStamp() {
         val request = DeleteTask(TaskId("a"), created).toRequest()
         assertEquals(OutboxMethod.Delete, request.method)
         assertEquals(listOf("tasks", "a"), request.path)
         assertEquals(null, request.body)
+        // Item delete is still a bodiless DELETE upstream — declaring a stamp would push a key onto a
+        // route that accepts no entity: a 422, i.e. a dead-lettered delete that leaves the row alive on
+        // the server while the UI shows it gone.
+        assertFalse(request.acceptsActivityStamp)
     }
 
     @Test
@@ -145,6 +158,8 @@ class MutationTest {
         assertEquals(OutboxMethod.Post, request.method)
         assertEquals(listOf("tasks", "plan", "add"), request.path)
         assertEquals("""{"task_id":"t1","date":"2026-06-07","tz":"America/Los_Angeles"}""", request.body)
+        // Shared with plan remove + reorder via the postPlan builder.
+        assertTrue(request.acceptsActivityStamp)
     }
 
     @Test
@@ -167,6 +182,7 @@ class MutationTest {
         assertEquals(OutboxMethod.Post, request.method)
         assertEquals(listOf("items", "x", "move"), request.path)
         assertEquals("""{"new_parent_id":"p","position":2}""", request.body)
+        assertTrue(request.acceptsActivityStamp)
     }
 
     @Test
@@ -192,6 +208,12 @@ class MutationTest {
         val event = SetDefinitionState("e1", ItemKind.Event, DefinitionState.InReview).toRequest()
         assertEquals(listOf("events", "e1"), event.path)
         assertEquals("""{"status":"in-review"}""", event.body)
+
+        // All three kind-scoped PATCHes accept the `activity` sibling (#364) — asserted per kind because
+        // the endpoint is kind-selected, so a kind that lost its declaration would lose it silently.
+        for (request in listOf(habit, chore, event)) {
+            assertTrue(request.acceptsActivityStamp, "${request.path} must declare the activity stamp")
+        }
     }
 
     @Test

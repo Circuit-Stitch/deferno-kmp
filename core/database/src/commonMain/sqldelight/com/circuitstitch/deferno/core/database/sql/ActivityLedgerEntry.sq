@@ -1,48 +1,148 @@
--- The offline-first activity ledger (issue #260): a durable, append-only record of EVERY mutation the
--- app makes, shown in the Activity destination in reverse-chronological order. It is the read-only twin
--- of the `outboxEntry` queue — where the outbox is a transient replay queue (rows are deleted once
--- dispatched), the ledger is a permanent journal that survives sync. Every write the app applies is
--- recorded here at apply-time via the single outbox choke-point (a `LedgerRecordingOutboxStore`
--- decorator), so a new write path cannot forget to log.
+-- The activity ledger (issue #260, server-backed since #364): the local cache of the **server's**
+-- Activity ledger, plus the optimistic rows for writes that haven't synced yet. Shown in the Activity
+-- destination in reverse-chronological order.
 --
--- A row mirrors the outbox's already-rendered shape — `target` (the structured partition key, e.g.
--- "task:{id}" / "create:Task:{id}" / "plan:{date}:{tz}", which encodes the entity kind + id), `method`
--- (POST/PATCH/PUT/DELETE), and `path` (the `\n`-joined request segments) — so the human summary can be
--- derived at read-time and refined without a migration. `source` is who made the change: "Mobile" for
--- a local app-side write now; "Website" / "Mcp" once a server-sourced reconcile records remote changes
--- (issue #260 follow-up). `recorded_at` is the RFC3339 instant the change was applied.
+-- It began as a device-local journal of every mutation the app made, captured at the single outbox
+-- choke-point (a `LedgerRecordingOutboxStore` decorator). The backend now owns an append-only,
+-- org-scoped, actor-attributed Activity ledger of its own (Deferno ADR 2026-07-06), so this table is
+-- demoted from source-of-truth to an **optimistic cache**: the client mints an `entry_id` at write time
+-- and sends it on the mutation, the server files its authoritative row under that same id, and the
+-- `?since=` reconcile unions the two — **grow-only, keyed by `entry_id`, server wins**. A locally
+-- recorded row is therefore *replaced in place* by its authoritative twin rather than double-counted.
 --
--- `body` / `before` carry the change payload for a true old->new field diff (the Activity feed's detail
--- sheet + the Task Trail): `body` is the rendered new-value PATCH/POST JSON the outbox already computed
--- (persisted for every write, so any row can show what was set); `before` is the matching old-value JSON,
--- snapshotted just before the optimistic apply (Task field edits only — null elsewhere and on pre-diff
--- rows). Both nullable; a null pair renders the coarse summary exactly as before.
+-- ## Two vocabularies in one row
 --
--- `seq INTEGER PRIMARY KEY AUTOINCREMENT` is the monotonic, never-reused order key — the reverse-chron
--- feed reads it `DESC`.
+-- Every row carries the ORIGINAL outbox-derived columns — `target` (the structured partition key, e.g.
+-- "task:{id}" / "create:Task:{id}" / "plan:{date}:{tz}"), `method`, and `path` (`\n`-joined segments) —
+-- and, once known, the SERVER's typed vocabulary: `action_kind` ("created"/"status_changed"/…),
+-- `actor_kind`, `item_id`, `occurrence`, `series_id`, `changed_fields`, `detail`. The read model prefers
+-- the server columns when present and falls back to deriving a verb from `target`+`method` when they are
+-- null (a legacy row, or an optimistic row for a route that can't carry activity metadata).
+--
+-- `source` is who made the change: "Mobile" for a local app-side write; "Website"/"Mcp"/"Api"/"System"
+-- for rows the reconcile pulls back from another surface.
+--
+-- ## Times
+--
+-- `recorded_at` is when the row entered THIS device's ledger, which is two different instants by
+-- provenance: the apply time on a locally-recorded write, and the server's `observed_at` on a row the
+-- reconcile inserted with no optimistic twin — a change that was never applied here at all. It is the one
+-- NOT NULL time column (it pre-dates the other two), which is why `insertRemoteIfAbsent` has to put
+-- something in it; nothing reads it back for display. Read `occurred_at` for anything a user sees.
+-- `occurred_at` is the actor's wall-clock — what the feed sorts and displays, and what the client sends
+-- as `activity.at`. `observed_at` is the server clock: the forensic anchor and the axis the `?since=`
+-- cursor pages. `occurred_at` is nullable only because SQLite cannot add a NOT NULL column to an existing
+-- table: migration 16 back-fills it from `recorded_at` and every writer sets it, so the feed sorts and
+-- prunes on it bare. A row that somehow arrived with a NULL one would sort last and never prune (SQLite
+-- orders NULL smallest, and `NULL < ?` is never true) — which is why the back-fill is not optional.
+--
+-- `body` / `before` carry the change payload for a true old->new field diff on a LOCAL row: `body` is the
+-- rendered new-value PATCH/POST JSON the outbox computed (recorded WITHOUT the injected `activity`
+-- sibling, so it never shows up as a bogus diff row), `before` the matching old-value JSON. A
+-- server-sourced row carries the equivalent in `detail` instead.
+--
+-- `seq INTEGER PRIMARY KEY AUTOINCREMENT` stays the stable, never-reused row identity (the feed's list
+-- key and the tie-breaker when two rows share an instant).
 CREATE TABLE activityLedgerEntry (
-    seq         INTEGER PRIMARY KEY AUTOINCREMENT,
-    recorded_at TEXT NOT NULL,
-    source      TEXT NOT NULL,
-    target      TEXT NOT NULL,
-    method      TEXT NOT NULL,
-    path        TEXT NOT NULL,
-    body        TEXT,
-    before      TEXT
+    seq            INTEGER PRIMARY KEY AUTOINCREMENT,
+    recorded_at    TEXT NOT NULL,
+    source         TEXT NOT NULL,
+    target         TEXT NOT NULL,
+    method         TEXT NOT NULL,
+    path           TEXT NOT NULL,
+    body           TEXT,
+    before         TEXT,
+    entry_id       TEXT,
+    occurred_at    TEXT,
+    observed_at    TEXT,
+    action_kind    TEXT,
+    actor_kind     TEXT,
+    provider       TEXT,
+    item_id        TEXT,
+    occurrence     TEXT,
+    series_id      TEXT,
+    changed_fields TEXT,
+    detail         TEXT
 );
 
--- Append one applied change to the ledger. `seq` is assigned by AUTOINCREMENT.
-record:
-INSERT INTO activityLedgerEntry(recorded_at, source, target, method, path, body, before)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+-- The merge key. SQLite treats NULLs as distinct in a UNIQUE index, so every pre-#364 row (and any
+-- optimistic row for a route that cannot carry `activity`) coexists happily with a NULL `entry_id`;
+-- only real ids are forced unique, which is what makes the reconcile's upsert idempotent.
+-- It is also load-bearing for `upsertRemote`: its `INSERT OR IGNORE` has nothing to ignore without a
+-- unique index on exactly this column, and would append a duplicate row on every sync instead.
+CREATE UNIQUE INDEX activityLedgerEntry_entry_id ON activityLedgerEntry(entry_id);
 
--- The most-recent [limit] entries, newest first — the Activity feed (observed as a Flow).
+-- The sort axis. `recent` is observed as a Flow, so it re-runs on EVERY write to this table — each local
+-- enqueue and each merged page — and unindexed that is a full scan plus a temp-B-tree sort before the
+-- LIMIT can bite. Reverse-scanning this index satisfies `ORDER BY occurred_at DESC, seq DESC` outright,
+-- and `pruneOlderThan` becomes a range delete instead of a full-table scan on every reconcile tick.
+CREATE INDEX activityLedgerEntry_occurred_at ON activityLedgerEntry(occurred_at, seq);
+
+-- Append one locally-applied change. `seq` is assigned by AUTOINCREMENT; `entry_id` is the client-minted
+-- merge key that also rode on the mutation body, null for a route that can't carry it. `occurred_at` is
+-- NOT null even then — the caller passes the apply time — because it is the sort and prune axis, and a
+-- row missing it would sort last and outlive every prune.
+recordLocal:
+INSERT INTO activityLedgerEntry(
+    recorded_at, source, target, method, path, body, before,
+    entry_id, occurred_at, action_kind, item_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- Merge one server-sourced entry: insert it, or overwrite the optimistic twin already filed under the
+-- same `entry_id` (server wins, per the ADR). The outbox-derived columns are deliberately NOT touched on
+-- conflict — an optimistic row keeps the `body`/`before` it captured, which is richer than `detail` for
+-- a local edit, while every authoritative field is replaced.
+--
+-- Deliberately a SKELETON, not a full row: it writes only what is NOT NULL plus the merge key, because
+-- `updateRemote` below sets every authoritative column immediately afterwards, in the same transaction,
+-- on both branches. Binding the same eleven values twice only creates a way for the two lists to drift.
+--
+-- `target`/`method`/`path` are NOT NULL and a server row has no outbox shape to put there, so they are
+-- literal '' — the read model's signal that there is no outbox derivation to fall back on, safe precisely
+-- because such a row always carries an `action_kind`, the vocabulary the read model prefers anyway.
+-- Split into insert-then-update rather than written as `ON CONFLICT … DO UPDATE`: SQLDelight's default
+-- SQLite dialect predates UPSERT (3.24), and raising the project dialect to reach it would put the whole
+-- schema on a floor no lower than the SQLite the oldest supported Android actually ships. The pair is
+-- exactly equivalent here because `entry_id` is UNIQUE — the INSERT lands only when the row is new, and
+-- the UPDATE then sets the authoritative columns whichever way it got there. Both run inside the caller's
+-- page transaction, so they are one atomic merge and the skeleton is never observable.
+insertRemoteIfAbsent:
+INSERT OR IGNORE INTO activityLedgerEntry(recorded_at, source, target, method, path, entry_id)
+VALUES (?, ?, '', '', '', ?);
+
+updateRemote:
+UPDATE activityLedgerEntry SET
+    source         = ?,
+    occurred_at    = ?,
+    observed_at    = ?,
+    action_kind    = ?,
+    actor_kind     = ?,
+    provider       = ?,
+    item_id        = ?,
+    occurrence     = ?,
+    series_id      = ?,
+    changed_fields = ?,
+    detail         = ?
+WHERE entry_id = ?;
+
+-- The most-recent [limit] entries, newest first — the Activity feed (observed as a Flow). Sorted on the
+-- display axis (the actor's wall-clock), NOT on insertion order: a reconcile appends rows whose
+-- occurred_at is older than rows already stored, and the feed must interleave them by when they happened.
 recent:
-SELECT * FROM activityLedgerEntry ORDER BY seq DESC LIMIT ?;
+SELECT * FROM activityLedgerEntry
+ORDER BY occurred_at DESC, seq DESC
+LIMIT ?;
 
 -- The total recorded count (diagnostics / a possible "N changes" header).
 count:
 SELECT count(*) FROM activityLedgerEntry;
+
+-- Retention: drop rows older than [occurred_at], keeping the local window a subset of the server's. Cuts
+-- the SAME axis the feed sorts on — cutting `recorded_at` instead would keep a backdated row (fresh apply
+-- time, ancient position) while dropping one the user can still see. Never touches rows the reconcile
+-- could not re-fetch, because the server's own window is strictly wider.
+pruneOlderThan:
+DELETE FROM activityLedgerEntry WHERE occurred_at < ?;
 
 -- Clear the ledger (account sign-out cleanup, mirroring the outbox's deleteAll).
 deleteAll:

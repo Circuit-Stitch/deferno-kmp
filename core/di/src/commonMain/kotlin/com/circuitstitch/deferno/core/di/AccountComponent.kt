@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
+import com.circuitstitch.deferno.core.data.activity.ActivitySync
 import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.backup.BackupExporter
@@ -65,8 +66,9 @@ abstract class AccountComponent(
      * (DB → driver → key/Context/databasesDir, repositories → AppScope remote sources).
      */
     abstract val taskRepository: TaskRepository
-    // Online-only Task detail extras (attachments); an AppScope binding resolved through here. Comments
-    // moved to the offline-first [commentRepository] below (ADR-0043).
+    // Online-only Task detail extras (attachments) — AccountScope, because the port's only binding is the
+    // ledger-recording decorator: attachments never reach the outbox choke-point, so that wrapper is what
+    // gets them into the activity ledger (#364). Comments moved to [commentRepository] (ADR-0043).
     abstract val taskDetailRepository: TaskDetailRepository
     abstract val planRepository: PlanRepository
 
@@ -167,6 +169,13 @@ abstract class AccountComponent(
      * validation of its AccountScope chain (store → DB) and gives the shell its read accessor.
      */
     abstract val activityLedgerStore: ActivityLedgerStore
+
+    /**
+     * The `?since=` reconcile that merges the server's Activity ledger into [activityLedgerStore] (#364).
+     * Exposing it anchors anvil's validation of its chain (sync → ledger → DB, sync → AppScope wire
+     * source) and gives the shell the seam its sync driver calls.
+     */
+    abstract val activitySync: ActivitySync
 
     /**
      * The on-device [[Assistant]] Conversation cache (#282, ADR-0040): local-only persisted chat history

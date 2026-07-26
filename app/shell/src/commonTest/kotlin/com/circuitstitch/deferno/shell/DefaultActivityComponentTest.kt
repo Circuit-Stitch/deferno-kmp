@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.shell
 
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.circuitstitch.deferno.core.data.activity.ActivityActorKind
 import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivityVerb
@@ -26,14 +27,34 @@ import kotlin.time.Instant
  * `commentTaskId()`. An id absent from the cache (a brand-new sequence, or an aged-out/deleted item)
  * resolves to no ref, so the View falls back to the plain copy. Driven on [UnconfinedTestDispatcher] so the
  * `combine` + `stateIn(WhileSubscribed)` upstream runs eagerly when `first` subscribes.
+ *
+ * Also the home of the **attribution** precedence (#364) — which of the server's actor, an integration's
+ * provider, or the acting surface names a row. That decision lives here rather than in each platform's
+ * View precisely so it can be tested once, in one place, for both.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultActivityComponentTest {
 
     private val at = Instant.parse("2026-06-21T12:00:00Z")
 
-    private fun entry(target: String, method: OutboxMethod = OutboxMethod.Patch, body: String? = null) =
-        ActivityEntry(seq = 1, recordedAt = at, source = ActivitySource.Mobile, target = target, method = method, path = emptyList(), body = body)
+    private fun entry(
+        target: String,
+        method: OutboxMethod = OutboxMethod.Patch,
+        body: String? = null,
+        source: ActivitySource = ActivitySource.Mobile,
+        actorKind: ActivityActorKind? = null,
+        provider: String? = null,
+    ) = ActivityEntry(
+        seq = 1,
+        recordedAt = at,
+        source = source,
+        target = target,
+        method = method,
+        path = emptyList(),
+        body = body,
+        actorKind = actorKind,
+        provider = provider,
+    )
 
     private fun item(id: String, kind: ItemKind = ItemKind.Task, sequence: Long? = 41) =
         Item(id = id, kind = kind, title = "Ship it", sequence = sequence)
@@ -91,5 +112,83 @@ class DefaultActivityComponentTest {
         val row = c.state.first { it.rows.isNotEmpty() }.rows.single()
         assertNull(row.itemRef)
         assertEquals(ItemKind.Task, row.itemKind)
+    }
+
+    // --- attribution: which of actor / integration / surface names a row (#364) ---
+    //
+    // This precedence used to be written twice, once in the Compose View and once in Swift, keyed by
+    // string across the ObjC bridge — two copies of one decision with nothing to catch them drifting.
+    // It is decided here now, so it is testable once and both platforms render the same answer.
+
+    @Test
+    fun anUnreconciledRowIsAttributedToTheSurfaceThatActed() = runTest(UnconfinedTestDispatcher()) {
+        // No actor_kind yet: the reconcile hasn't reached this optimistic row, and the source is all we know.
+        val c = component(listOf(entry("task:t-1")), listOf(item("t-1")), UnconfinedTestDispatcher(testScheduler))
+        val row = c.state.first { it.rows.isNotEmpty() }.rows.single()
+        assertEquals(ActivityAttribution.Surface(ActivitySource.Mobile), row.attribution)
+    }
+
+    @Test
+    fun aHumanActorAddsNothingOverTheSurfaceSoTheSurfaceStillNamesTheRow() = runTest(UnconfinedTestDispatcher()) {
+        val c = component(
+            listOf(entry("task:t-1", actorKind = ActivityActorKind.Human, source = ActivitySource.Website)),
+            listOf(item("t-1")),
+            UnconfinedTestDispatcher(testScheduler),
+        )
+        val row = c.state.first { it.rows.isNotEmpty() }.rows.single()
+        assertEquals(ActivityAttribution.Surface(ActivitySource.Website), row.attribution)
+        assertEquals("Website", row.attribution.token)
+    }
+
+    @Test
+    fun anAssistantWriteOutranksTheSurfaceItsHumanHappenedToBeOn() = runTest(UnconfinedTestDispatcher()) {
+        // The Assistant runs inside the driving human's session, so the row's source is that human's
+        // surface. Reporting "via Website" here would be true and useless — the interesting actor is the
+        // Assistant, which is exactly why this cannot be a plain source lookup.
+        val c = component(
+            listOf(entry("task:t-1", actorKind = ActivityActorKind.Assistant, source = ActivitySource.Website)),
+            listOf(item("t-1")),
+            UnconfinedTestDispatcher(testScheduler),
+        )
+        val row = c.state.first { it.rows.isNotEmpty() }.rows.single()
+        assertEquals(ActivityAttribution.Assistant, row.attribution)
+        assertEquals("Assistant", row.attribution.token)
+    }
+
+    @Test
+    fun aWebhookRowNamesItsIntegrationAndFallsBackToTheGenericWhenTheServerNamedNone() =
+        runTest(UnconfinedTestDispatcher()) {
+            val named = component(
+                listOf(entry("task:t-1", actorKind = ActivityActorKind.Webhook, provider = "github")),
+                listOf(item("t-1")),
+                UnconfinedTestDispatcher(testScheduler),
+            ).state.first { it.rows.isNotEmpty() }.rows.single()
+            assertEquals(ActivityAttribution.Integration("github"), named.attribution)
+
+            // A provider the server didn't supply still reads as an integration — the View picks the
+            // generic label, rather than the row silently falling back to the surface.
+            val anonymous = component(
+                listOf(entry("task:t-1", actorKind = ActivityActorKind.Webhook, provider = null)),
+                listOf(item("t-1")),
+                UnconfinedTestDispatcher(testScheduler),
+            ).state.first { it.rows.isNotEmpty() }.rows.single()
+            assertEquals(ActivityAttribution.Integration(null), anonymous.attribution)
+            assertEquals("Integration", anonymous.attribution.token)
+        }
+
+    @Test
+    fun everySurfaceTokenIsItsOwnSourceNameSoTheAppleSwitchStaysAFlatMap() {
+        // The bridge flattens the sealed type to one token; a Surface must keep reporting the source name
+        // the Swift side already switches on, and "Assistant"/"Integration" must not collide with any of
+        // them. A rename on either side breaks here rather than silently landing every row on `default`.
+        assertEquals(
+            ActivitySource.entries.map { it.name },
+            ActivitySource.entries.map { ActivityAttribution.Surface(it).token },
+        )
+        assertEquals(
+            emptyList(),
+            listOf(ActivityAttribution.Assistant.token, ActivityAttribution.Integration(null).token)
+                .filter { it in ActivitySource.entries.map(ActivitySource::name) },
+        )
     }
 }

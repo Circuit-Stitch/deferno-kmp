@@ -1,6 +1,8 @@
 package com.circuitstitch.deferno.core.data
 
 import com.circuitstitch.deferno.core.data.account.AccountBearerTokenProvider
+import com.circuitstitch.deferno.core.data.activity.ActivityRemoteSource
+import com.circuitstitch.deferno.core.data.activity.KtorActivityRemoteSource
 import com.circuitstitch.deferno.core.data.account.AccountContext
 import com.circuitstitch.deferno.core.data.account.AccountDataStore
 import com.circuitstitch.deferno.core.data.account.AccountManager
@@ -30,8 +32,6 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.calendar.KtorCalendarRemoteSource
 import com.circuitstitch.deferno.core.data.comment.CommentRemoteSource
 import com.circuitstitch.deferno.core.data.comment.KtorCommentRemoteSource
-import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
-import com.circuitstitch.deferno.core.data.create.KtorItemRemoteSource
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.feedback.KtorFeedbackRepository
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRemoteSource
@@ -42,11 +42,9 @@ import com.circuitstitch.deferno.core.data.plan.KtorPlanRemoteSource
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.KtorSettingsRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
-import com.circuitstitch.deferno.core.data.task.KtorTaskDetailRepository
 import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
 import com.circuitstitch.deferno.core.data.item.KtorItemSnapshotSource
 import com.circuitstitch.deferno.core.data.task.KtorTaskRemoteSource
-import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.network.AuthSessionListener
 import com.circuitstitch.deferno.core.network.BearerTokenProvider
@@ -189,18 +187,6 @@ interface DataBindings {
     @SingleIn(AppScope::class)
     fun itemSnapshotSource(client: HttpClient): ItemSnapshotSource = KtorItemSnapshotSource(client)
 
-    /**
-     * The Task detail's online-only comments + attachments source over the shared authed [client]
-     * (read-on-open) plus the bare [uploadClient] for the presigned attachment PUTs (no base/no auth —
-     * an extra Authorization header would break S3 SigV4, same as the feedback upload above).
-     */
-    @Provides
-    @SingleIn(AppScope::class)
-    fun taskDetailRepository(
-        client: HttpClient,
-        uploadClient: UploadHttpClient,
-    ): TaskDetailRepository = KtorTaskDetailRepository(client, uploadClient)
-
     @Provides
     @SingleIn(AppScope::class)
     fun planRemoteSource(client: HttpClient): PlanRemoteSource = KtorPlanRemoteSource(client)
@@ -219,6 +205,14 @@ interface DataBindings {
     @SingleIn(AppScope::class)
     fun commentRemoteSource(client: HttpClient): CommentRemoteSource = KtorCommentRemoteSource(client)
 
+    /**
+     * The server Activity-ledger source (`GET /activity`, #364) — the client's one delta-cursor endpoint.
+     * AppScope like every other Ktor source; the per-Account watermark lives with `ActivitySync`.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun activityRemoteSource(client: HttpClient): ActivityRemoteSource = KtorActivityRemoteSource(client)
+
     /** The cached item-history source (`GET /items/{id}/history`, ADR-0043). */
     @Provides
     @SingleIn(AppScope::class)
@@ -236,11 +230,6 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun authRemoteSource(client: HttpClient): AuthRemoteSource = KtorAuthRemoteSource(client)
-
-    /** The online-only create/convert remote source (#71, ADR-0016) over the shared client. */
-    @Provides
-    @SingleIn(AppScope::class)
-    fun itemRemoteSource(client: HttpClient): ItemRemoteSource = KtorItemRemoteSource(client)
 
     /** The outbox's network sender (#23), replaying queued requests over the shared client. */
     @Provides

@@ -18,13 +18,15 @@ import kotlin.coroutines.ContinuationInterceptor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /**
  * The [OutboxDriver] contract (#143/#158), tested directly on the virtual clock — extracted from
  * `RootComponent` so the subtle flush timing has one home: flush-before-reconcile ordering, the
- * periodic cadence, the offline→online edge, and the known-offline skip. `RootComponentTest` keeps
+ * periodic cadence, the offline→online edge, the known-offline skip, and the Activity ledger's own,
+ * slower reconcile cadence (#364). `RootComponentTest` keeps
  * only the lifecycle **wiring** (the shell drives on Main, stops on Auth, re-points on switch), so the
  * shell test no longer carries this timing logic. The driver runs on [TestScope.backgroundScope], which
  * the scheduler auto-cancels at the end of each test — no `stop()` needed for cleanup (the [stop] test
@@ -215,7 +217,7 @@ class OutboxDriverTest {
             flushInterceptor = currentCoroutineContext()[ContinuationInterceptor]
         })
 
-        OutboxDriver(backgroundScope, AssumeOnlineConnectivity(), { t0 }, 30.seconds, flushDispatcher)
+        OutboxDriver(backgroundScope, AssumeOnlineConnectivity(), { t0 }, 30.seconds, flushContext = flushDispatcher)
             .drive(session)
         runCurrent()
 
@@ -247,6 +249,72 @@ class OutboxDriverTest {
 
         // The reconnect edge re-runs the sequence — flush FIRST, then the settings reconcile.
         assertEquals(listOf("settings.refresh", "flush", "settings.refresh"), events)
+    }
+
+    @Test
+    fun activationAndTheReconnectEdgeBothReconcileTheActivityLedger() = runTest {
+        val session = FakeAccountSession()
+        val connectivity = FakeConnectivity(online = true)
+        driver(connectivity).drive(session)
+        runCurrent()
+        assertEquals(1, session.activitySyncs, "the activation reconcile")
+
+        connectivity.online.value = false
+        runCurrent() // let the edge collector observe the drop — a StateFlow conflates false→true away
+        connectivity.online.value = true
+        runCurrent()
+
+        // The legs that matter for correctness fire immediately (#364); the slow tick below only covers a
+        // long foreground idle, so a user who reconnects and looks at the feed must not wait it out.
+        assertEquals(2, session.activitySyncs, "the reconnect edge reconciles without waiting out the tick")
+    }
+
+    @Test
+    fun theActivationReconcileRunsEvenWhileKnownOffline() = runTest {
+        val session = FakeAccountSession()
+        driver(FakeConnectivity(online = false)).drive(session)
+        runCurrent()
+
+        // Deliberately unconditional, like the settings refresh beside it and unlike the flush: a read can
+        // never walk a queued write into the replay engine's give-up policy, and the sync bails on an
+        // unavailable snapshot without touching the cursor or the rows. Gating it on a signal that is only
+        // advisory (AssumeOnlineConnectivity is a real binding) would buy a doomed request back at the price
+        // of a stale feed on every false negative.
+        assertEquals(1, session.activitySyncs, "the activation reconcile ignores the advisory offline signal")
+    }
+
+    @Test
+    fun theActivityReconcileRunsOnItsOwnSlowCadence_notTheFlushTick() = runTest {
+        val session = FakeAccountSession()
+        OutboxDriver(backgroundScope, AssumeOnlineConnectivity(), { t0 }, 30.seconds, activitySyncPeriod = 5.minutes)
+            .drive(session)
+        runCurrent()
+
+        advanceTimeBy(61.seconds)
+        // Two flush ticks have passed. Folding a paged network read of a feed nobody is looking at into the
+        // 30s loop would multiply the app's steady-state request count for freshness no user perceives.
+        assertEquals(3, session.flushes.size)
+        assertEquals(1, session.activitySyncs, "still just the activation reconcile")
+
+        advanceTimeBy(5.minutes)
+        assertEquals(2, session.activitySyncs, "one reconcile per activitySyncPeriod")
+    }
+
+    @Test
+    fun theActivityTickIsSkippedWhileKnownOffline() = runTest {
+        val session = FakeAccountSession()
+        val connectivity = FakeConnectivity(online = true)
+        OutboxDriver(backgroundScope, connectivity, { t0 }, 30.seconds, activitySyncPeriod = 5.minutes)
+            .drive(session)
+        runCurrent()
+        assertEquals(1, session.activitySyncs)
+
+        connectivity.online.value = false
+        advanceTimeBy(11.minutes) // two ticks' worth of flight mode
+
+        // The periodic tick answers a different question from activation — steady-state request volume over
+        // an unbounded number of ticks — so it answers it differently and issues no doomed reads.
+        assertEquals(1, session.activitySyncs, "offline ticks issue no doomed requests")
     }
 }
 

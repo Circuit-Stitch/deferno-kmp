@@ -761,6 +761,13 @@ internal class FakeAccountSession(
     override fun observeActivity() =
         kotlinx.coroutines.flow.flowOf<List<com.circuitstitch.deferno.core.data.activity.ActivityEntry>>(emptyList())
 
+    var activitySyncs = 0
+        private set
+
+    override suspend fun syncActivity() {
+        activitySyncs++
+    }
+
     override suspend fun upsertBrainDumpDraft(draft: com.circuitstitch.deferno.core.model.BrainDumpDraft) {}
 
     override suspend fun attachBrainDumpRecording(

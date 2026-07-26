@@ -54,9 +54,15 @@ sealed interface ActivityItem {
 }
 
 /**
- * One captured local edit from this device's activity ledger (#260) — its apply-time [at] and the typed
- * old->new [changes] the reader parsed from the ledger payload. [mergeActivity] grafts these onto the
- * matching server [ItemHistoryEvent.Updated] row so the Trail shows real values, not just field names.
+ * One captured edit from the activity ledger (#260) — the typed old->new [changes] the reader parsed from
+ * the ledger payload, which [mergeActivity] grafts onto the matching server [ItemHistoryEvent.Updated] row
+ * so the Trail shows real values, not just field names.
+ *
+ * [at] is a **correlation key, not a display value** — nothing renders it. It is matched against
+ * [ItemHistoryEvent.recordedAt], a server record time, so it must be fed the ledger's *record* axis
+ * (`ActivityEntry.recordedAt`), never the actor's wall-clock `occurredAt`: since the `?since=` reconcile
+ * this pool also holds edits made on other surfaces, and on those the two axes disagree by however long the
+ * peer was offline — enough for an unrelated recent edit to win the match.
  */
 data class LedgerEdit(val at: Instant, val changes: List<ActivityFieldChange>)
 
@@ -102,11 +108,13 @@ fun mergeActivity(
     localEdits: List<LedgerEdit> = emptyList(),
     peerTitle: (peerId: String) -> String? = { null },
 ): List<ActivityItem> {
-    // A consume-once pool of this device's captured edits, grafted onto matching server `Updated` rows so
-    // the Trail shows real old->new values. Correlation is by field overlap + nearest apply-time (the local
-    // apply and the server record differ by sync latency), each edit used at most once — a best-effort
-    // enrichment: an unmatched row simply keeps its field-name summary, and the worst case in a rare
-    // multi-surface same-field race is a slightly-off old value, never a crash or a dropped/dup row.
+    // A consume-once pool of the ledger's captured edits for this item — this device's writes plus the
+    // peers' rows the reconcile pulled back — grafted onto matching server `Updated` rows so the Trail shows
+    // real old->new values. Correlation is by field overlap + nearest [LedgerEdit.at], which is the same
+    // record axis as the event's `recordedAt` (they differ only by sync latency), each edit used at most
+    // once — a best-effort enrichment: an unmatched row simply keeps its field-name summary, and the worst
+    // case in a rare multi-surface same-field race is a slightly-off old value, never a crash or a
+    // dropped/dup row.
     val pool = localEdits.toMutableList()
     val historyItems = history.mapIndexed { index, event ->
         ActivityItem.HistoryEvent(
@@ -120,9 +128,10 @@ fun mergeActivity(
 }
 
 /**
- * Pull (and consume) this pool's local edit that best matches a server [ItemHistoryEvent.Updated] — the
- * unconsumed edit whose changed field is one the event names, nearest in time. Returns its typed changes,
- * or empty when nothing matches (the row then keeps its field-name summary).
+ * Pull (and consume) this pool's ledger edit that best matches a server [ItemHistoryEvent.Updated] — the
+ * unconsumed edit whose changed field is one the event names, nearest on the record axis both instants
+ * share ([LedgerEdit.at] vs [ItemHistoryEvent.recordedAt]). Returns its typed changes, or empty when nothing
+ * matches (the row then keeps its field-name summary).
  */
 private fun MutableList<LedgerEdit>.takeMatchFor(event: ItemHistoryEvent.Updated): List<ActivityFieldChange> {
     val eventFields = event.fields.map { ActivityField.fromKey(it) }.filterNot { it == ActivityField.Unknown }.toSet()

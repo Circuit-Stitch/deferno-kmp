@@ -151,10 +151,32 @@ Created / Updated / Moved / ParentAssigned / Split / FoldedInto / Merged\* / Sta
 read-only half of the **Trail** feed. Cached **free by construction** (it already rides the `/items` snapshot
 the tolerant reader dropped; ADR-0042/0043), reconciled by replacing an item's rows on each hydrate. Carries
 **no stable event id** (identity is synthesized; reconcile is wholesale-replace, not merge).
-_Avoid_: **Activity ledger** (#260 — the app's *own* global, device-local, outbox-derived journal of writes,
-source Mobile/Website/Mcp, wiped on sign-out; different cardinality, source of truth, and lifecycle — it can
-never be item history's source of truth), [[Comment thread]] (the writable, user-authored half), the
-**Activity** Destination (where the ledger renders — the **Trail** tab is per-item, not that Destination).
+_Avoid_: **Activity ledger** (the global cross-surface change stream — a different store, cardinality and
+lifecycle), [[Comment thread]] (the writable, user-authored half), the **Activity** Destination (where the
+ledger renders — the **Trail** tab is per-item, not that Destination).
+
+**Activity ledger** *(client; an optimistic cache of the server's ledger)*:
+The global, cross-surface record of every action taken on the user's [[Item]]s — this device's, the
+website's, an MCP agent's, the API's, the server's own — rendered by the **Activity** Destination. It began
+as a device-local journal of the app's outbox writes (#260) and is now, since #364, a **cache of the
+server's authoritative Activity ledger**, which is the source of truth (Deferno ADR 2026-07-06).
+The client mints an `entry_id` at write time and sends it on the mutation, so the server files its
+authoritative row under the *same* id; the reconcile then unions the two — **grow-only, keyed by
+`entry_id`, server wins** — and an optimistic row is *replaced in place* rather than double-counted.
+Pulled by the client's only delta cursor (`GET /activity?since=`, paging the server's `observed_at` axis
+gaplessly); the local window is a bounded **subset** of the server's, so a prune can never lose anything
+the reconcile could not re-fetch. Rows carry two times: `occurred_at` (the actor's wall-clock — what the
+feed sorts and shows, so offline morning work reads as morning work) and `observed_at` (the server clock,
+the sync axis). A row this device wrote but the server has not yet confirmed is **superseded** by its
+authoritative twin when it arrives — not "unsynced", and never shown as failed.
+Who acted is a row's **attribution**, which is not the same as its source: the server's `actor_kind`
+outranks the surface where it named a non-human one (an [[Assistant]] write runs inside its human's
+session, so its *source* is whatever surface that human was on, and naming it would be true but useless;
+a webhook is better named by its integration than its category). Decided once, in the shared feed
+projection, so every platform View renders the same answer rather than re-deriving the precedence.
+_Avoid_: audit log / activity log / history (all overloaded — [[Item history]] is the per-item, read-only
+`actions[]` feed), "device-local" or "wiped on sign-out" (true only before #364), calling it the source of
+truth (the server is).
 
 ### Credentials
 

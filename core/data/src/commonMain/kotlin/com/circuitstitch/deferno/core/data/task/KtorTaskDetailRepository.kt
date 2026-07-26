@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.data.activity.ActivityStamp
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.ApiResult
@@ -14,8 +15,8 @@ import com.circuitstitch.deferno.core.network.dto.PresignResponseDto
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import com.circuitstitch.deferno.core.network.requestApi
 import io.ktor.client.HttpClient
-import io.ktor.client.request.delete
 import io.ktor.client.request.header
+import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -29,22 +30,26 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * The production [TaskDetailRepository] over the shared authed Deferno [HttpClient] — online-only
+ * The production [StampedAttachmentSource] over the shared authed Deferno [HttpClient] — online-only
  * (ADR-0001), mirroring [KtorTaskRemoteSource.search]. Each call condenses the wire DTO to the domain
  * type at the boundary (ADR-0011); a failure degrades to `null`/`false` rather than throwing, so the
  * detail can show an inline "couldn't load" / "couldn't post" state without crashing.
+ *
+ * A pure wire adapter: it never mints an [ActivityStamp], it only carries the one
+ * [LedgerRecordingTaskDetailRepository] minted — so the id on the request and the id on the optimistic
+ * ledger row are one value. Reachable only through that decorator, which is why the stamp is non-null.
  */
-class KtorTaskDetailRepository(
+internal class KtorTaskDetailRepository(
     private val client: HttpClient,
     // The bare client (no base URL, no auth) for the presigned PUTs — an Authorization header would
-    // break S3 SigV4 (see [UploadHttpClient]). Defaults to a non-uploading no-op so the comment-only
-    // tests can still construct the repo with just `client`.
+    // break S3 SigV4 (see [UploadHttpClient]). Defaults to a non-uploading no-op so the tests that only
+    // exercise the read/caption/delete paths can construct the repo with just `client`.
     private val uploadClient: UploadHttpClient? = null,
-) : TaskDetailRepository {
+) : StampedAttachmentSource {
 
     override suspend fun attachments(taskId: TaskId): List<Attachment>? {
         val result = client.requestApi<List<AttachmentViewDto>> {
-            url { appendPathSegments("tasks", taskId.value, "attachments") }
+            url { appendPathSegments("items", taskId.value, "attachments") }
         }
         return when (result) {
             is ApiResult.Success -> result.data.map { it.toDomain() }
@@ -52,14 +57,14 @@ class KtorTaskDetailRepository(
         }
     }
 
-    override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>): Boolean {
+    override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>, stamp: ActivityStamp): Boolean {
         if (files.isEmpty()) return true
         val upload = uploadClient ?: return false
 
         // 1. Presign the batch — one signed PUT URL per file, in request order.
         val presign = client.requestApi<AttachmentPresignBatchResponseDto> {
             method = HttpMethod.Post
-            url { appendPathSegments("tasks", taskId.value, "attachments", "presign") }
+            url { appendPathSegments("items", taskId.value, "attachments", "presign") }
             contentType(ContentType.Application.Json)
             setBody(
                 AttachmentPresignBatchRequestDto(
@@ -78,12 +83,22 @@ class KtorTaskDetailRepository(
             if (!put(upload, p, files[i])) return false
         }
 
-        // 3. Commit the uploaded ids onto the Task.
+        // 3. Commit the uploaded ids onto the item. Only this step mints a ledger entry server-side — the
+        //    presign handshake and the S3 PUTs are not item mutations — so the stamp rides here alone.
         val commit = client.requestApi<List<AttachmentViewDto>> {
             method = HttpMethod.Post
-            url { appendPathSegments("tasks", taskId.value, "attachments") }
+            url { appendPathSegments("items", taskId.value, "attachments") }
             contentType(ContentType.Application.Json)
-            setBody(CommitAttachmentsPayload(intents = presigned.map { AttachmentIntentDto(it.attachmentId) }))
+            // Typed, not hand-built: the commit's IntentEntry key is `id` while the presign response hands
+            // back `attachment_id`, and a body that carries the response's key straight over parses to zero
+            // intents — the upload is lost after its bytes are already stored. The stamp rides as the
+            // payload's own `activity` field so one serializer owns the whole body.
+            setBody(
+                CommitAttachmentsPayload(
+                    intents = presigned.map { AttachmentIntentDto(it.attachmentId) },
+                    activity = stamp.toJson(),
+                ),
+            )
         }
         return commit is ApiResult.Success
     }
@@ -110,25 +125,41 @@ class KtorTaskDetailRepository(
         return response.status.isSuccess()
     }
 
-    override suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String?): Boolean {
+    override suspend fun updateAttachmentCaption(
+        taskId: TaskId,
+        attachmentId: String,
+        caption: String?,
+        stamp: ActivityStamp,
+    ): Boolean {
         val result = client.requestApi<AttachmentViewDto> {
             method = HttpMethod.Patch
-            url { appendPathSegments("tasks", taskId.value, "attachments", attachmentId) }
+            url { appendPathSegments("items", taskId.value, "attachments", attachmentId) }
             contentType(ContentType.Application.Json)
             // #416: hand-build the body so a null clear is emitted explicitly as `caption: null`.
             // The shared DefernoJson (explicitNulls = false) would drop a null on a typed payload,
             // reaching the server as an omitted field it rejects (422). A JsonObject's JsonNull is
             // serialized structurally, independent of explicitNulls.
-            setBody(buildJsonObject { put("caption", caption) })
+            setBody(
+                buildJsonObject {
+                    put("caption", caption)
+                    put("activity", stamp.toJson())
+                },
+            )
         }
         return result is ApiResult.Success
     }
 
-    // Bypasses `requestApi` deliberately: this DELETE replies 204 No Content, whose empty body the
-    // version-probe would treat as malformed (cf. the auth-token revoke). Check the status directly.
-    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String): Boolean = try {
-        val response = client.delete {
-            url { appendPathSegments("tasks", taskId.value, "attachments", attachmentId) }
+    // A POST soft-delete, not a DELETE (#364): the backend retired `DELETE /tasks/{id}/attachments/{aid}`
+    // so ledger metadata could ride in a body, and left no alias. Still bypasses `requestApi`
+    // deliberately: the reply is 204 No Content, whose empty body the version-probe would treat as
+    // malformed (cf. the auth-token revoke). Check the status directly.
+    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String, stamp: ActivityStamp): Boolean = try {
+        val response = client.post {
+            url { appendPathSegments("items", taskId.value, "attachments", attachmentId, "delete") }
+            contentType(ContentType.Application.Json)
+            // ActivityBody: every field is optional server-side, but this client always names its own entry
+            // id — a server-minted id is one the `?since=` reconcile can never match back to the local row.
+            setBody(buildJsonObject { put("activity", stamp.toJson()) })
         }
         response.status.isSuccess()
     } catch (t: Throwable) {

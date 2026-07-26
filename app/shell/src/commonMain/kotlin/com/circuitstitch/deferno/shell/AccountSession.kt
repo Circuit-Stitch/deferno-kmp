@@ -247,6 +247,14 @@ interface AccountSession {
     fun observeActivity(): Flow<List<ActivityEntry>>
 
     /**
+     * Reconcile the Activity ledger against the server (#364): pull everything observed since the stored
+     * watermark, merge it by `entry_id` (server wins), advance the cursor. Best-effort by construction —
+     * an unreachable or unconfigured ledger leaves the cached feed exactly as it was — so the caller needs
+     * no error handling and the shell's sync driver simply calls it on its cadence.
+     */
+    suspend fun syncActivity()
+
+    /**
      * Attach this Account's retained brain-dump recording for [draft] to the just-created Task [taskId]
      * (#211, ADR-0015 Inbox accept). A no-op when no recording was retained (the setting was off at
      * capture, or this isn't a brain-dump platform). The Inbox accept calls it with the created Task id
@@ -325,6 +333,8 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override fun observeBrainDumpDrafts() = component.brainDumpDraftRepository.observeDrafts()
 
     override fun observeActivity() = component.activityLedgerStore.recent()
+
+    override suspend fun syncActivity() = component.activitySync.sync()
 
     override suspend fun upsertBrainDumpDraft(draft: BrainDumpDraft) {
         component.brainDumpDraftRepository.upsert(draft)

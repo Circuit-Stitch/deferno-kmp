@@ -32,6 +32,13 @@
     <string name="activity_source_mobile">मोबाइल ऐप</string>
     <string name="activity_source_unknown">अज्ञात</string>
     <string name="activity_source_website">वेबसाइट से</string>
+    <!-- सर्वर लेजर के स्रोत (#364): कच्चा API कॉलर, और बिना किसी मानव कर्ता के सर्वर-चालित कार्रवाई -->
+    <string name="activity_source_api">API से</string>
+    <string name="activity_source_system">स्वचालित</string>
+    <!-- कर्ता चिप (#364): जब सर्वर कार्रवाई का श्रेय किसी ग़ैर-मानव कर्ता को देता है, तो स्रोत की जगह
+         ये दिखते हैं — आपकी ओर से काम करता सहायक, या कोई जुड़ा हुआ इंटीग्रेशन -->
+    <string name="activity_actor_assistant">सहायक</string>
+    <string name="activity_actor_integration">इंटीग्रेशन</string>
     <string name="activity_summary_changed_settings">सेटिंग्स बदलीं</string>
     <string name="activity_summary_cleared_occurrence_chore">काम की एक बारी साफ़ की</string>
     <string name="activity_summary_cleared_occurrence_event">इवेंट की एक बारी साफ़ की</string>
@@ -59,6 +66,23 @@
     <string name="activity_summary_moved_item_ref">आइटम %1$s मूव किया</string>
     <string name="activity_summary_updated_task_ref">कार्य %1$s अपडेट किया</string>
     <string name="activity_summary_commented_ref">%1$s पर टिप्पणी की</string>
+    <!-- सर्वर लेजर की क्रियाएँ (#364): वे कार्रवाइयाँ जिन्हें स्थानीय outbox से बनी शब्दावली नाम नहीं दे
+         पाती थी, अब जब फ़ीड में हर सतह की पंक्तियाँ आती हैं। जानबूझकर प्रकार-निरपेक्ष — पंक्ति उसी चीज़ से
+         लिंक करती है जो बदली, इसलिए क्रिया को बस दिशा भर देनी है -->
+    <string name="activity_summary_status_changed">स्थिति बदली</string>
+    <string name="activity_summary_deleted_item">एक आइटम हटाया</string>
+    <string name="activity_summary_split">एक आइटम बाँटा</string>
+    <string name="activity_summary_merged">आइटम विलय किए</string>
+    <string name="activity_summary_converted">एक आइटम का प्रकार बदला</string>
+    <string name="activity_summary_rescheduled">एक बारी का दिन बदला</string>
+    <string name="activity_summary_comment_edited">एक टिप्पणी संपादित की</string>
+    <string name="activity_summary_comment_deleted">एक टिप्पणी हटाई</string>
+    <string name="activity_summary_attachment_added">एक अटैचमेंट जोड़ा</string>
+    <string name="activity_summary_attachment_deleted">एक अटैचमेंट हटाया</string>
+    <string name="activity_summary_attachment_captioned">एक अटैचमेंट का कैप्शन सेट किया</string>
+    <string name="activity_summary_plan_added">आपकी योजना में जोड़ा</string>
+    <string name="activity_summary_plan_removed">आपकी योजना से निकाला</string>
+    <string name="activity_summary_plan_reordered">आपकी योजना का क्रम बदला</string>
 
     <!-- ── assistant ─────────────────────────────────────────────── -->
     <string name="assistant_action_working">काम चल रहा है…</string>

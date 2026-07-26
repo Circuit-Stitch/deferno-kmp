@@ -19,6 +19,11 @@ class AttachmentUpload(
  *
  * Reads return `null` to mean "couldn't load" (transport/server failure), distinct from an empty
  * list; writes return `true` on success so the caller can re-fetch and surface a failure toast.
+ *
+ * Deliberately **stamp-free**. The Activity stamp each write carries on the wire (#364, ADR-0048) is minted
+ * inside [LedgerRecordingTaskDetailRepository] and never supplied by a caller, so it lives on the internal
+ * [StampedAttachmentSource] half instead — a `stamp` parameter here would be an argument every
+ * implementation must accept and every implementation must ignore.
  */
 interface TaskDetailRepository {
     /** The attachments on [taskId]; `null` if they couldn't load. */

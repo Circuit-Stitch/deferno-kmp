@@ -8,7 +8,7 @@ import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /**
@@ -16,6 +16,10 @@ import kotlin.time.Instant
  * per-kind endpoint + minimal body the outbox replays (the habit-binary / chore-PUT / event-action
  * asymmetry), the [OutboxMethod] each uses (incl. the new `PUT` for a chore set-status), and the pure,
  * idempotent optimistic [applyTo] on the cached [CalendarItem] (the no-`missed` WorkingState axis).
+ *
+ * Every route here also pins its [OutboxRequest.acceptsActivityStamp] declaration (#364) beside the
+ * endpoint, per kind: the occurrence surface is where the route shapes diverge most (three verbs, three
+ * path shapes), so a kind that lost its declaration would otherwise lose its client entry id in silence.
  */
 class OccurrenceMutationTest {
 
@@ -41,6 +45,7 @@ class OccurrenceMutationTest {
         assertEquals(OutboxMethod.Post, request.method)
         assertEquals(listOf("habits", "hab-3", "occurrences"), request.path)
         assertEquals("""{"done":true,"date":"2026-06-08"}""", request.body)
+        assertTrue(request.acceptsActivityStamp)
 
         // A non-Complete action on a habit clears done (the UI only offers Complete, but the body is total).
         assertEquals(
@@ -55,6 +60,7 @@ class OccurrenceMutationTest {
         assertEquals(OutboxMethod.Put, start.method)
         assertEquals(listOf("chores", "cho-1", "occurrences", "2026-06-08"), start.path)
         assertEquals("""{"status":"in_progress"}""", start.body)
+        assertTrue(start.acceptsActivityStamp)
 
         // A chore skip is the `skipped` token (not `dropped`).
         assertEquals(
@@ -69,6 +75,7 @@ class OccurrenceMutationTest {
         assertEquals(OutboxMethod.Post, complete.method)
         assertEquals(listOf("events", "evt-1", "occurrences", "2026-06-08"), complete.path)
         assertEquals("""{"action":"done"}""", complete.body)
+        assertTrue(complete.acceptsActivityStamp)
 
         // An event skip diverges from a chore: the wire token is `dropped`.
         assertEquals(
@@ -78,11 +85,25 @@ class OccurrenceMutationTest {
     }
 
     @Test
-    fun clearIsABodilessDeleteOnTheKindScopedPath() {
+    fun clearIsAPostSoftDeleteOnTheKindScopedClearSubresource() {
+        // #364: the backend retired the bodiless `DELETE …/occurrences/{date}` in favour of a POST
+        // soft-delete so Activity-ledger metadata can ride in a body, and left NO alias — the old route
+        // 404s. The body is an empty object, not null: a null body sends no HTTP entity at all, leaving
+        // the stamping decorator nothing to merge `activity` into.
         val request = ClearOccurrence("ce-1", ItemKind.Chore, "cho-1", date).toRequest()
-        assertEquals(OutboxMethod.Delete, request.method)
-        assertEquals(listOf("chores", "cho-1", "occurrences", "2026-06-08"), request.path)
-        assertNull(request.body)
+        assertEquals(OutboxMethod.Post, request.method)
+        assertEquals(listOf("chores", "cho-1", "occurrences", "2026-06-08", "clear"), request.path)
+        assertEquals("{}", request.body)
+
+        // All three kinds carry the stamp. Event-clear declares its body `oneOf [null, ActivityBody]`
+        // rather than a bare `$ref`, so a contract scan that skips `oneOf` arms wrongly reads it as
+        // body-less — the reason CONTRACT-NOTES pins the ingest surface at 36 routes, not 35.
+        for (kind in listOf(ItemKind.Habit, ItemKind.Chore, ItemKind.Event)) {
+            assertTrue(
+                ClearOccurrence("ce-1", kind, "s-1", date).toRequest().acceptsActivityStamp,
+                "clear for $kind must declare the activity stamp",
+            )
+        }
     }
 
     @Test
@@ -91,6 +112,13 @@ class OccurrenceMutationTest {
         assertEquals(OutboxMethod.Post, request.method)
         assertEquals(listOf("events", "evt-1", "occurrences", "2026-06-08", "reschedule"), request.path)
         assertEquals("""{"new_date":"2026-06-10"}""", request.body)
+
+        for (kind in listOf(ItemKind.Habit, ItemKind.Chore, ItemKind.Event)) {
+            assertTrue(
+                RescheduleOccurrence("ce-1", kind, "s-1", date, LocalDate(2026, 6, 10)).toRequest().acceptsActivityStamp,
+                "reschedule for $kind must declare the activity stamp",
+            )
+        }
     }
 
     @Test

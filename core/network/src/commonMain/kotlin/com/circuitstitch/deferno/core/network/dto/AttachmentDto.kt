@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.core.network.dto
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 /**
  * The **attachment** view DTO (`GET /tasks/{id}/attachments`, and the `POST` commit's 201 body): one
@@ -72,13 +73,27 @@ data class AttachmentPresignBatchResponseDto(
 )
 
 /**
- * `POST /tasks/{id}/attachments` (commit) body — the presigned uploads to attach, referenced by their
- * `attachment_id`s. The wire also accepts `urls` (link attachments); the client uploads files only, so
- * that field is omitted.
+ * `POST /items/{id}/attachments` (commit) body — the presigned uploads to attach.
+ *
+ * Each entry is the contract's `IntentEntry`, whose one required key is **`id`** — deliberately NOT the
+ * `attachment_id` the *presign response* hands back. The two names sit on opposite ends of the same
+ * handshake, and a body echoing the response key parses to zero intents server-side: the upload is lost
+ * after its bytes are already stored, with no error the user can see. A hand-rolled body made exactly
+ * that mistake once (#364), which is why the shape lives here — one place to get it right.
+ *
+ * [activity] is the client-minted Activity-ledger stamp (#364), kept as a raw [JsonObject] rather than a
+ * typed `ActivityMeta`: it is minted in `core:data`, which carries the serialization runtime but not the
+ * compiler plugin. Hanging the untyped sibling off the typed payload is what keeps the body under a
+ * single serializer instead of forcing the whole thing to be hand-built. An unstamped commit is
+ * byte-identical to the pre-ledger one — the shared [com.circuitstitch.deferno.core.network.DefernoJson]
+ * leaves defaults unencoded (`encodeDefaults` off) and drops nulls (`explicitNulls = false`).
+ *
+ * The wire also accepts `urls` (link attachments); the client uploads files only, so that field is omitted.
  */
 @Serializable
 data class CommitAttachmentsPayload(
     val intents: List<AttachmentIntentDto>,
+    val activity: JsonObject? = null,
 )
 
 /** One commit intent: a previously-presigned [id], with an optional [caption] (unused in v1). */

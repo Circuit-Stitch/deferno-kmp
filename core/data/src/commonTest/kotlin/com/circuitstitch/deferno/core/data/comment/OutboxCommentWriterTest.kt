@@ -63,6 +63,9 @@ class OutboxCommentWriterTest {
 
         assertEquals(emptyList(), store.observe(task).first().map { it.id }) // gone from the live thread
         assertEquals("comment:t-1:c-1", outbox.all.single().target)
-        assertEquals(OutboxMethod.Delete, outbox.all.single().request.method)
+        // A POST soft-delete since #364 (`POST comments/{id}/delete`), still idempotent: replaying it
+        // against an already-gone comment is a 404 the sender maps to success.
+        assertEquals(OutboxMethod.Post, outbox.all.single().request.method)
+        assertEquals(listOf("comments", "c-1", "delete"), outbox.all.single().request.path)
     }
 }

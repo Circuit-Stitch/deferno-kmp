@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.di
 
+import com.circuitstitch.deferno.core.data.activity.ActivityRemoteSource
 import com.circuitstitch.deferno.core.data.account.AccountContext
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.account.ReauthRequester
@@ -16,7 +17,6 @@ import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPref
 import com.circuitstitch.deferno.core.data.calendar.CalendarRemoteSource
 import com.circuitstitch.deferno.core.data.comment.CommentRemoteSource
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
-import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRemoteSource
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
@@ -25,13 +25,13 @@ import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
-import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.agent.InferenceEngine
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.database.AccountDatabaseFactory
 import com.circuitstitch.deferno.core.network.BearerTokenProvider
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
+import com.circuitstitch.deferno.core.network.UploadHttpClient
 import com.circuitstitch.deferno.core.scopes.AppScope
 import com.circuitstitch.deferno.core.speech.DictationPermissionSettings
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
@@ -263,8 +263,10 @@ abstract class AppComponent(
     // The item-wide cold-snapshot source (`GET /items`, ADR-0034 #226): the AccountScope ItemSync pulls
     // the windowed snapshot through it, reconciling every kind into its store on refresh.
     abstract val itemSnapshotSource: ItemSnapshotSource
-    // Online-only Task detail extras (comments + attachments); the child AccountComponent re-exposes it.
-    abstract val taskDetailRepository: TaskDetailRepository
+    // The bare presigned-upload client (no base URL, no bearer — an Authorization header would break S3
+    // SigV4). Re-exposed because the AccountScope attachment repository builds its Ktor wire half inline
+    // (AccountDataBindings.taskDetailRepository) and so needs the same client the AppScope feedback upload uses.
+    abstract val uploadHttpClient: UploadHttpClient
     abstract val planRemoteSource: PlanRemoteSource
     // The windowed Calendar feed source (#74): the OfflineCalendarRepository (AccountScope) refreshes through it.
     abstract val calendarRemoteSource: CalendarRemoteSource
@@ -273,13 +275,14 @@ abstract class AppComponent(
     // comment/history repositories reconcile the cache through them on task-detail open.
     abstract val commentRemoteSource: CommentRemoteSource
     abstract val itemHistoryRemoteSource: ItemHistoryRemoteSource
+    // The server Activity-ledger source (`GET /activity`, #364): the AccountScope ActivitySync pages the
+    // `?since=` axis through it and merges each page into that Account's ledger cache.
+    abstract val activityRemoteSource: ActivityRemoteSource
     abstract val outboxRequestSender: OutboxRequestSender
     abstract val accountDatabaseFactory: AccountDatabaseFactory
-    // The online-only create flow (#71, ADR-0016): the CreateWriter (AccountScope) gates on this
-    // process-global connectivity + POSTs through this shared remote source, so both are re-exposed
-    // here for the child AccountScope to consume. The connectivity monitor is also what the shell's
-    // outbox driver observes for the reconnect-triggered flush (#158).
-    abstract val itemRemoteSource: ItemRemoteSource
+    // Process-global connectivity, re-exposed for the child AccountScope: the CreateWriter gates convert
+    // on it (the one write still online-only, ADR-0016/0034), and the shell's outbox driver observes it
+    // for the reconnect-triggered flush (#158).
     abstract val connectivity: Connectivity
 
     // The process-wide re-auth signal (#20/#297): the shell folds its `sessionExpired` flag into the

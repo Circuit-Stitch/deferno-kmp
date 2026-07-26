@@ -74,6 +74,9 @@ private fun OutboxRow.toDomain(): OutboxEntry = OutboxEntry(
         method = method.toOutboxMethodOrDefault(),
         path = if (path.isEmpty()) emptyList() else path.split("\n"),
         body = body,
+        // `acceptsActivityStamp` is deliberately not a column: it is an enqueue-time question, and by the
+        // time a row is read back the stamp is already inside `body` (the choke-point merged it before
+        // this row was written). Replay re-sends those bytes verbatim, so the default `false` is correct.
     ),
     attempts = attempts.toInt(),
     nextAttemptAt = Instant.parse(next_attempt_at),

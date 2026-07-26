@@ -63,6 +63,7 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
+import com.circuitstitch.deferno.shell.ActivityAttribution
 import com.circuitstitch.deferno.shell.ActivityFeedRow
 import com.circuitstitch.deferno.shell.BrainDumpState
 import com.circuitstitch.deferno.shell.DictationField
@@ -526,18 +527,33 @@ fun inboxDraftDeadlineLabel(draft: BrainDumpDraft): String {
     return date + time
 }
 
-// The typed feed summary + source, cracked open for Swift to localize (#327). [activitySummaryVerb] is
-// the coarse verb as a stable enum-name token ("Created" / "UpdatedTask" / …); [activitySummaryKindToken]
-// is the lowercase item-kind it acted on ("task" / "chore" / "habit" / "event") for the kind-qualified
-// verbs, else null; [activitySourceName] is the "who" as a stable token ("Mobile" / "Website" / "Mcp" /
-// "Unknown"). The View maps these to the shared string catalog.
+// The typed feed summary, cracked open for Swift to localize (#327). [activitySummaryVerb] is the coarse
+// verb as a stable enum-name token ("Created" / "UpdatedTask" / …); [activitySummaryKindToken] is the
+// lowercase item-kind it acted on ("task" / "chore" / "habit" / "event") for the kind-qualified verbs,
+// else null. The View maps these to the shared string catalog.
 fun activitySummaryVerb(row: ActivityFeedRow): String = row.summaryInfo.verb.name
 fun activitySummaryKindToken(row: ActivityFeedRow): String? = row.summaryInfo.kindToken
-fun activitySourceName(row: ActivityFeedRow): String = row.source.name
+
+/**
+ * The "who" chip's attribution as a stable token — `ActivityAttribution.token`, unwrapped for Swift
+ * (#364).
+ *
+ * Already **decided**: `ActivityAttribution` settles whether the server's actor or the acting surface
+ * names a row, so this hands Swift the answer rather than the inputs. A surface flattens to its own name
+ * ("Mobile" / "Website" / "Mcp" / "Api" / "System" / "Unknown"), so the Apple switch is the same flat map
+ * over the same tokens it always was — plus "Assistant" and "Integration", which cannot collide with a
+ * source name. The alternative — exporting actor kind and source separately — meant writing the
+ * precedence rule a second time in Swift, where it would drift from the Compose one unnoticed.
+ */
+fun activityAttributionToken(row: ActivityFeedRow): String = row.attribution.token
+
+/** The integration that drove an `"Integration"` row (e.g. "github"), where the server named one. */
+fun activityAttributionProvider(row: ActivityFeedRow): String? =
+    (row.attribution as? ActivityAttribution.Integration)?.provider
 
 /** A render-ready "when" label for an Activity row (Instant → local "yyyy-MM-dd HH:mm"). */
 fun activityWhenLabel(row: ActivityFeedRow): String {
-    val dt = row.recordedAt.toLocalDateTime(TimeZone.currentSystemDefault())
+    val dt = row.displayAt.toLocalDateTime(TimeZone.currentSystemDefault())
     val hh = dt.hour.toString().padStart(2, '0')
     val mm = dt.minute.toString().padStart(2, '0')
     return "${dt.date} $hh:$mm"

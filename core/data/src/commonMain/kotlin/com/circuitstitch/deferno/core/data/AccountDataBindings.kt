@@ -21,8 +21,10 @@ import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.CreateWriter
 import com.circuitstitch.deferno.core.data.create.DefaultCreateReplayListener
+import com.circuitstitch.deferno.core.data.create.ItemConverter
 import com.circuitstitch.deferno.core.data.create.ItemIdHealer
-import com.circuitstitch.deferno.core.data.create.ItemRemoteSource
+import com.circuitstitch.deferno.core.data.create.KtorItemConverter
+import com.circuitstitch.deferno.core.data.create.LedgerRecordingItemConverter
 import com.circuitstitch.deferno.core.data.create.OfflineCreateWriter
 import com.circuitstitch.deferno.core.data.create.PendingCreateStore
 import com.circuitstitch.deferno.core.data.create.SqlDelightPendingCreateStore
@@ -41,6 +43,8 @@ import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
+import com.circuitstitch.deferno.core.data.activity.ActivityRemoteSource
+import com.circuitstitch.deferno.core.data.activity.ActivitySync
 import com.circuitstitch.deferno.core.data.activity.SqlDelightActivityLedgerStore
 import com.circuitstitch.deferno.core.data.comment.CommentLocalStore
 import com.circuitstitch.deferno.core.data.comment.CommentRemoteSource
@@ -84,16 +88,20 @@ import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.settings.SqlDelightSettingsLocalStore
 import com.circuitstitch.deferno.core.data.task.BlockedByWriter
 import com.circuitstitch.deferno.core.data.task.KtorBlockedByWriter
+import com.circuitstitch.deferno.core.data.task.KtorTaskDetailRepository
+import com.circuitstitch.deferno.core.data.task.LedgerRecordingTaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.OfflineTaskRepository
 import com.circuitstitch.deferno.core.data.task.OutboxTaskWriter
 import com.circuitstitch.deferno.core.data.task.SqlDelightTaskLocalStore
 import com.circuitstitch.deferno.core.data.task.TaskLocalStore
+import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskWriter
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.UserId
+import com.circuitstitch.deferno.core.network.UploadHttpClient
 import com.circuitstitch.deferno.core.scopes.AccountScope
 import io.ktor.client.HttpClient
 import me.tatarka.inject.annotations.Provides
@@ -142,6 +150,56 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun activityLedgerStore(db: DefernoDatabase): ActivityLedgerStore = SqlDelightActivityLedgerStore(db)
+
+    /**
+     * The `?since=` reconcile that merges the SERVER's Activity ledger into the local cache (#364) — the
+     * client's one delta sync. AccountScope because its watermark is per-Account state living in that
+     * Account's DB; the wire source it reads through is AppScope like every other (the shared client
+     * follows the Active Account per request).
+     */
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun activitySync(
+        remoteSource: ActivityRemoteSource,
+        ledger: ActivityLedgerStore,
+    ): ActivitySync = ActivitySync(remoteSource, ledger)
+
+    /**
+     * Attachments are one of the two item-mutation surfaces that never reach the outbox choke-point (they
+     * are online-only, ADR-0001), so they get their own ledger-recording decorator (#364).
+     *
+     * Bound **once, here** — the wire half is constructed inline, exactly as [outboxStore] does. Binding it
+     * separately in AppScope would leave an undecorated [TaskDetailRepository] in the graph, and whichever
+     * consumer resolved that one would write attachments that never reach the ledger: a silent hole in the
+     * feed, indistinguishable from a write that did not happen.
+     *
+     * AccountScope because the ledger is. The wire half being per-Account rather than per-process (ADR-0014
+     * puts the Ktor sources in AppScope) costs nothing — it is stateless over the two AppScope clients,
+     * which still resolve the Active Account's PAT per request. Same shape as [securityRemoteSource].
+     */
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun taskDetailRepository(
+        client: HttpClient,
+        uploadClient: UploadHttpClient,
+        ledger: ActivityLedgerStore,
+    ): TaskDetailRepository =
+        LedgerRecordingTaskDetailRepository(KtorTaskDetailRepository(client, uploadClient), ledger)
+
+    /**
+     * Convert is the other one (#364): online-only (ADR-0016), so it never enqueues and the choke-point
+     * never sees it. The decorator mints the stamp that rides the request and records the optimistic row
+     * under the same entry id — the merge key the `?since=` reconcile dedupes on.
+     *
+     * Bound once, over an inline wire half, for the same reason as [taskDetailRepository]: a separately
+     * bound `StampedItemConverter` would be an unstamped-capable convert sitting in the graph, and the
+     * split exists precisely so that is not reachable. The inline [KtorItemConverter] costs nothing — it
+     * is stateless over the AppScope client, which resolves the Active Account's PAT per request.
+     */
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun itemConverter(client: HttpClient, ledger: ActivityLedgerStore): ItemConverter =
+        LedgerRecordingItemConverter(KtorItemConverter(client), ledger)
 
     // Every write funnels through OutboxStore.enqueue, so wrapping it in the ledger recorder captures the
     // whole app's mutations at one choke-point (no per-writer edits) — a write path cannot forget to log.
@@ -315,15 +373,15 @@ interface AccountDataBindings {
     /**
      * The offline-first create + (online-only) convert writer (#185, ADR-0001 forward path from
      * ADR-0016). A create mints a client id, inserts the optimistic row, records it pending, and
-     * enqueues a replayable `POST /{kind}` on the outbox; convert keeps the connectivity gate. The
-     * remote source + connectivity are AppScope (the shared client follows the Active Account per
-     * request — ADR-0014); the local stores, outbox, and pending-create table are this scope.
+     * enqueues a replayable `POST /{kind}` on the outbox; convert keeps the connectivity gate and is the
+     * writer's only remaining network call, through [itemConverter]. Connectivity is AppScope (ADR-0014);
+     * the local stores, outbox, pending-create table and the converter are this scope.
      */
     @Provides
     @SingleIn(AccountScope::class)
     fun createWriter(
         connectivity: Connectivity,
-        remoteSource: ItemRemoteSource,
+        converter: ItemConverter,
         taskStore: TaskLocalStore,
         habitStore: HabitLocalStore,
         choreStore: ChoreLocalStore,
@@ -332,7 +390,7 @@ interface AccountDataBindings {
         pendingCreateStore: PendingCreateStore,
     ): CreateWriter = OfflineCreateWriter(
         connectivity = connectivity,
-        remoteSource = remoteSource,
+        converter = converter,
         taskStore = taskStore,
         habitStore = habitStore,
         choreStore = choreStore,

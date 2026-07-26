@@ -215,6 +215,10 @@ data class SetPinned(override val taskId: TaskId, val pinned: Boolean) : TaskMut
  */
 data class DeleteTask(override val taskId: TaskId, val deletedAt: Instant) : TaskMutation {
     override fun applyTo(task: Task): Task = task.copy(deletedAt = deletedAt)
+
+    // No `activity` stamp (#364): the backend's soft-delete migration covered comments, attachments and
+    // occurrence-clears but NOT item delete, so this stays a bodiless `DELETE` with no entity to merge
+    // one into. The server mints that entry id and the optimistic row is superseded, not merged.
     override fun toRequest(): OutboxRequest = OutboxRequest(OutboxMethod.Delete, listOf("tasks", taskId.value))
 }
 
@@ -305,6 +309,7 @@ data class Move(val id: String, val newParentId: String?, val position: Int) : M
             if (newParentId == null) put("new_parent_id", JsonNull) else put("new_parent_id", newParentId)
             put("position", position)
         }.toString(),
+        acceptsActivityStamp = true,
     )
 }
 
@@ -382,13 +387,29 @@ data class SetDoneVisibility(
 
 /** A `PATCH tasks/{id}` whose body is exactly the keys [build] sets — nothing absent (ADR-0011). */
 private fun patchTask(id: TaskId, build: JsonObjectBuilder.() -> Unit): OutboxRequest =
-    OutboxRequest(OutboxMethod.Patch, listOf("tasks", id.value), buildJsonObject(build).toString())
+    OutboxRequest(
+        OutboxMethod.Patch,
+        listOf("tasks", id.value),
+        buildJsonObject(build).toString(),
+        acceptsActivityStamp = true,
+    )
 
 /** A `POST tasks/plan/{action}` whose body is exactly the keys [build] sets. */
 private fun postPlan(action: String, build: JsonObjectBuilder.() -> Unit): OutboxRequest =
-    OutboxRequest(OutboxMethod.Post, listOf("tasks", "plan", action), buildJsonObject(build).toString())
+    OutboxRequest(
+        OutboxMethod.Post,
+        listOf("tasks", "plan", action),
+        buildJsonObject(build).toString(),
+        acceptsActivityStamp = true,
+    )
 
-/** A `PATCH auth/me/settings` whose body is exactly the keys [build] sets — nothing absent (ADR-0011). */
+/**
+ * A `PATCH auth/me/settings` whose body is exactly the keys [build] sets — nothing absent (ADR-0011).
+ *
+ * The one builder here that does **not** opt into the `activity` stamp (#364): a user-preferences write
+ * against a strict payload, not an Item mutation, so an unexpected key would `422` — Terminal — and the
+ * outbox would dead-letter the user's theme/tracking change rather than merely fail to audit it.
+ */
 private fun patchSettings(build: JsonObjectBuilder.() -> Unit): OutboxRequest =
     OutboxRequest(OutboxMethod.Patch, listOf("auth", "me", "settings"), buildJsonObject(build).toString())
 
@@ -398,7 +419,12 @@ private fun patchSettings(build: JsonObjectBuilder.() -> Unit): OutboxRequest =
  * (`habits`/`chores`/`events`); a `Task` is rejected (it has no definition state).
  */
 private fun patchRecurring(kind: ItemKind, id: String, build: JsonObjectBuilder.() -> Unit): OutboxRequest =
-    OutboxRequest(OutboxMethod.Patch, listOf(kind.recurringPath(), id), buildJsonObject(build).toString())
+    OutboxRequest(
+        OutboxMethod.Patch,
+        listOf(kind.recurringPath(), id),
+        buildJsonObject(build).toString(),
+        acceptsActivityStamp = true,
+    )
 
 /**
  * A [Mutation] against one dated firing (an Occurrence) of a recurring definition (#74) — the
@@ -463,16 +489,19 @@ data class MarkOccurrence(
                 put("done", action == OccurrenceAction.Complete)
                 put("date", date.toString())
             }.toString(),
+            acceptsActivityStamp = true,
         )
         ItemKind.Chore -> OutboxRequest(
             OutboxMethod.Put,
             listOf("chores", seriesId, "occurrences", date.toString()),
             buildJsonObject { put("status", action.toWireToken(OccurrenceKind.Chore)) }.toString(),
+            acceptsActivityStamp = true,
         )
         ItemKind.Event -> OutboxRequest(
             OutboxMethod.Post,
             listOf("events", seriesId, "occurrences", date.toString()),
             buildJsonObject { put("action", action.toWireToken(OccurrenceKind.Event)) }.toString(),
+            acceptsActivityStamp = true,
         )
         ItemKind.Task -> error("MarkOccurrence is only valid for a recurring kind, not Task")
     }
@@ -480,8 +509,14 @@ data class MarkOccurrence(
 
 /**
  * Clear a firing's status (#74) — the forgiving "let it go back to Scheduled" undo (design-principle #8),
- * uniform across kinds via `DELETE …/occurrences/{date}`. Optimistically resets the cached row to
+ * uniform across kinds via `POST …/occurrences/{date}/clear`. Optimistically resets the cached row to
  * [WorkingState.Open].
+ *
+ * The verb is a **POST soft-delete, not a `DELETE`** (#364): the backend retired the bodiless
+ * `DELETE …/occurrences/{date}` so Activity-ledger metadata could ride in a body without depending on
+ * CDN `DELETE`-body behavior, and it left no alias — the old route is simply gone. The body is
+ * `ActivityBody`, whose every field is optional, so an empty `{}` is a valid clear; the `activity`
+ * stamp is injected at the outbox choke-point ([ActivityStamp]) rather than built here.
  */
 data class ClearOccurrence(
     override val itemId: String,
@@ -491,8 +526,17 @@ data class ClearOccurrence(
 ) : OccurrenceMutation {
     override fun applyTo(item: CalendarItem): CalendarItem = item.copy(status = WorkingState.Open)
 
-    override fun toRequest(): OutboxRequest =
-        OutboxRequest(OutboxMethod.Delete, listOf(kind.recurringPath(), seriesId, "occurrences", date.toString()))
+    override fun toRequest(): OutboxRequest = OutboxRequest(
+        OutboxMethod.Post,
+        listOf(kind.recurringPath(), seriesId, "occurrences", date.toString(), "clear"),
+        // An empty object, not null: a null body sends no entity at all, and the stamping decorator
+        // needs an object to merge `activity` into. Event-clear declares its body `oneOf [null,
+        // ActivityBody]` (the Rust handler types it `Option<Json<…>>`) rather than a bare `$ref`, so it
+        // still accepts `activity` — all three kinds carry a client entry id (CONTRACT-NOTES: 36 routes,
+        // not the 35 a scan that skips `oneOf` arms finds).
+        "{}",
+        acceptsActivityStamp = true,
+    )
 }
 
 /**
@@ -515,6 +559,7 @@ data class RescheduleOccurrence(
         OutboxMethod.Post,
         listOf(kind.recurringPath(), seriesId, "occurrences", date.toString(), "reschedule"),
         buildJsonObject { put("new_date", newDate.toString()) }.toString(),
+        acceptsActivityStamp = true,
     )
 }
 

@@ -27,6 +27,13 @@
     <string name="activity_source_mobile">App móvil</string>
     <string name="activity_source_unknown">Desconocido</string>
     <string name="activity_source_website">vía sitio web</string>
+    <!-- Server ledger sources (#364): a raw API caller, and a server-driven action with no human actor -->
+    <string name="activity_source_api">vía API</string>
+    <string name="activity_source_system">Automático</string>
+    <!-- Actor chips (#364): shown INSTEAD of the source when the server attributes the action to a
+         non-human actor — the Assistant acting on your behalf, or a connected integration -->
+    <string name="activity_actor_assistant">Asistente</string>
+    <string name="activity_actor_integration">Integración</string>
     <string name="activity_summary_changed_settings">Se cambió la configuración</string>
     <string name="activity_summary_cleared_occurrence_chore">Se restableció una ocurrencia de quehacer</string>
     <string name="activity_summary_cleared_occurrence_event">Se restableció una ocurrencia de evento</string>
@@ -54,6 +61,23 @@
     <string name="activity_summary_moved_item_ref">Se movió el elemento %1$s</string>
     <string name="activity_summary_updated_task_ref">Se actualizó la tarea %1$s</string>
     <string name="activity_summary_commented_ref">Comentó en %1$s</string>
+    <!-- Server ledger verbs (#364): actions the local outbox-derived vocabulary could not name, now that
+         the feed carries rows from every surface. Kind-agnostic on purpose — the row links to the thing
+         it changed, so the verb need only orient -->
+    <string name="activity_summary_status_changed">Se cambió el estado</string>
+    <string name="activity_summary_deleted_item">Se eliminó un elemento</string>
+    <string name="activity_summary_split">Se dividió un elemento</string>
+    <string name="activity_summary_merged">Se combinaron elementos</string>
+    <string name="activity_summary_converted">Se convirtió un elemento</string>
+    <string name="activity_summary_rescheduled">Se reprogramó una ocurrencia</string>
+    <string name="activity_summary_comment_edited">Se editó un comentario</string>
+    <string name="activity_summary_comment_deleted">Se eliminó un comentario</string>
+    <string name="activity_summary_attachment_added">Se agregó un archivo adjunto</string>
+    <string name="activity_summary_attachment_deleted">Se eliminó un archivo adjunto</string>
+    <string name="activity_summary_attachment_captioned">Se cambió la leyenda de un archivo adjunto</string>
+    <string name="activity_summary_plan_added">Se agregó a tu plan</string>
+    <string name="activity_summary_plan_removed">Se quitó de tu plan</string>
+    <string name="activity_summary_plan_reordered">Se reordenó tu plan</string>
 
     <!-- ── assistant ─────────────────────────────────────────────── -->
     <string name="assistant_action_working">Trabajando…</string>
