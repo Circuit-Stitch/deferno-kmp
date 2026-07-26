@@ -1,5 +1,9 @@
 package com.circuitstitch.deferno.core.data.create
 
+import com.circuitstitch.deferno.core.data.activity.ActivityActionKind
+import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
+import com.circuitstitch.deferno.core.data.activity.ActivitySource
+import com.circuitstitch.deferno.core.data.activity.ActivityStamp
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
@@ -9,6 +13,8 @@ import com.circuitstitch.deferno.core.data.outbox.CreateEventItem
 import com.circuitstitch.deferno.core.data.outbox.CreateHabitItem
 import com.circuitstitch.deferno.core.data.outbox.CreateMutation
 import com.circuitstitch.deferno.core.data.outbox.CreateTaskItem
+import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
+import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
 import com.circuitstitch.deferno.core.data.task.TaskLocalStore
 import com.circuitstitch.deferno.core.model.Chore
@@ -68,6 +74,8 @@ class OfflineCreateWriter(
     private val eventStore: EventLocalStore,
     private val outbox: OutboxStore,
     private val pendingCreateStore: PendingCreateStore,
+    // Convert is the one write here that bypasses the outbox, so it records its own ledger row (#364).
+    private val ledger: ActivityLedgerStore,
     private val newId: () -> String = ::newItemId,
     private val now: () -> Instant = { Clock.System.now() },
     private val orgSlug: () -> String = { "" },
@@ -164,9 +172,25 @@ class OfflineCreateWriter(
 
     override suspend fun convert(id: String, fromKind: ItemKind, payload: ConvertItemPayload): CreateResult {
         if (!connectivity.isOnline()) return CreateResult.Offline
-        return when (val result = remoteSource.convert(id, payload)) {
+        // Convert is online-only (it has no meaningful optimistic apply — the item changes KIND), so it
+        // never reaches the outbox choke-point that stamps every other mutation. Mint here instead, and
+        // record only on success: unlike an enqueued write, a failed convert did not happen.
+        val at = now()
+        val stamp = ActivityStamp.mint(at)
+        return when (val result = remoteSource.convert(id, payload, stamp)) {
             is ApiResult.Success -> {
                 removeOldKindRow(id, fromKind)
+                runCatching {
+                    ledger.recordLocal(
+                        source = ActivitySource.Mobile,
+                        target = "item:$id",
+                        request = OutboxRequest(OutboxMethod.Post, listOf("items", id, "convert"), body = null),
+                        before = null,
+                        now = at,
+                        stamp = stamp,
+                        actionKind = ActivityActionKind.Converted,
+                    )
+                }
                 seedConverted(result.data)
             }
             is ApiResult.Failure -> result.error.toResult()

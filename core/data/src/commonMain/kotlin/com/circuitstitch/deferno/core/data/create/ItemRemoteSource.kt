@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.create
 
+import com.circuitstitch.deferno.core.data.activity.ActivityStamp
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.Habit
@@ -39,8 +40,11 @@ interface ItemRemoteSource {
      * `POST /items/{id}/convert` — change an existing item's [ConvertItemPayload.type]. Returns the
      * converted item's new kind ([ConvertedItem]) so the caller can reconcile the local cache (remove
      * the old-kind row, seed the new-kind row).
+     *
+     * [stamp] is the client-minted Activity-ledger merge key (#364). Convert is online-only, so it never
+     * reaches the outbox choke-point that stamps every other mutation — the caller mints it instead.
      */
-    suspend fun convert(id: String, payload: ConvertItemPayload): ApiResult<ConvertedItem>
+    suspend fun convert(id: String, payload: ConvertItemPayload, stamp: ActivityStamp? = null): ApiResult<ConvertedItem>
 }
 
 /**
