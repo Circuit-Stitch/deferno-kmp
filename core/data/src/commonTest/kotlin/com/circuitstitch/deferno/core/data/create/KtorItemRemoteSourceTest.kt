@@ -1,11 +1,13 @@
 package com.circuitstitch.deferno.core.data.create
 
+import com.circuitstitch.deferno.core.data.activity.ActivityStamp
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.RecurrenceFrequency
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.ApiResult
+import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
 import com.circuitstitch.deferno.core.network.dto.CreateChorePayload
 import com.circuitstitch.deferno.core.network.dto.CreateEventPayload
@@ -21,17 +23,23 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
 import io.ktor.client.request.url
+import io.ktor.content.TextContent
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /**
  * Behaviour of [KtorItemRemoteSource] (#71, ADR-0016) over Ktor's MockEngine (ADR-0006 JVM-fast path).
@@ -113,17 +121,34 @@ class KtorItemRemoteSourceTest {
     @Test
     fun convertPostsToItemsConvertAndMapsTheNewKind() = runTest {
         var captured: HttpRequestData? = null
+        var sentBody: String? = null
         val source = KtorItemRemoteSource(
             client { req ->
                 captured = req
+                sentBody = (req.body as? TextContent)?.text
                 respondJson("""{"version":"0.1","data":{"type":"chore","id":"item-1","org_slug":"u-e4h2qk","title":"trash","status":"active","date_created":"2026-05-12T19:52:01Z","cadence_mode":"rolling","recurrence":{"type":"weekly","days":["Tue"]}}}""")
             },
         )
 
-        val result = source.convert("item-1", ConvertItemPayload(type = "chore", recurrence = RecurrenceDto("weekly")))
+        val result = source.convert(
+            "item-1",
+            ConvertItemPayload(type = "chore", recurrence = RecurrenceDto("weekly")),
+            ActivityStamp("entry-3", Instant.parse("2026-04-17T10:00:00Z")),
+        )
 
         assertEquals(HttpMethod.Post, captured?.method)
         assertTrue(captured?.url?.encodedPath?.endsWith("/items/item-1/convert") == true)
+        // The stamp is a field on the payload now, so it must not have displaced the payload's own keys —
+        // the failure mode of assembling a body key-by-key is losing one silently.
+        val body = DefernoJson.parseToJsonElement(assertNotNull(sentBody, "the convert body was sent")).jsonObject
+        assertEquals("chore", body.getValue("type").jsonPrimitive.content)
+        assertEquals("weekly", body.getValue("recurrence").jsonObject.getValue("type").jsonPrimitive.content)
+        assertEquals("entry-3", body.getValue("activity").jsonObject.getValue("id").jsonPrimitive.content)
+        // An unstamped convert is unchanged: the defaulted null is never encoded.
+        assertFalse(
+            DefernoJson.encodeToString(ConvertItemPayload(type = "chore")).contains("activity"),
+            "an unstamped convert omits the activity sibling entirely",
+        )
         val converted = assertIs<ApiResult.Success<ConvertedItem>>(result).data
         assertEquals(ItemKind.Chore, converted.kind)
     }
@@ -134,7 +159,9 @@ class KtorItemRemoteSourceTest {
         handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
     ): HttpClient = HttpClient(MockEngine(handler)) {
         expectSuccess = false
-        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        // The production DefernoJson, not a stand-in: a default Json emits explicit nulls, so a body pinned
+        // against a stand-in would pass here and diverge from the bytes the app actually POSTs.
+        install(ContentNegotiation) { json(DefernoJson) }
         defaultRequest { url("https://api.example.test/") }
     }
 

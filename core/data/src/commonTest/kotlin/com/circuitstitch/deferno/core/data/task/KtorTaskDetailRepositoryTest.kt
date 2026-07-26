@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.data.activity.ActivityStamp
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.UploadHttpClient
@@ -19,11 +20,16 @@ import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /**
  * Behaviour of [KtorTaskDetailRepository] (the Task detail's online-only attachments — comments + item
@@ -106,7 +112,66 @@ class KtorTaskDetailRepositoryTest {
         assertEquals("https://s3.example.test/bucket/att-1?sig=abc", putUrl, "PUT goes to the presigned URL")
         assertEquals(listOf<Byte>(1, 2, 3), putBytes?.toList(), "the file bytes are PUT byte-exact")
         assertEquals("aws:kms", sseHeader, "the signed SSE header is sent byte-exact")
-        assertTrue(commitBody?.contains("\"att-1\"") == true, "the commit references the uploaded id")
+
+        // The commit's IntentEntry key is `id` — NOT the `attachment_id` the presign RESPONSE uses. A
+        // substring check for "att-1" passes either way, which is how a body the server parses as zero
+        // intents shipped once: the bytes reach S3, the commit succeeds, and the attachment never exists.
+        val body = assertNotNull(commitBody, "the commit was sent")
+        val intent = DefernoJson.parseToJsonElement(body).jsonObject.getValue("intents").jsonArray.single().jsonObject
+        assertEquals(listOf("id"), intent.keys.toList(), "the intent carries exactly the contract's `id` key")
+        assertEquals("att-1", intent.getValue("id").jsonPrimitive.content)
+        assertFalse(body.contains("attachment_id"), "the presign response's key never appears on the commit")
+        // An unstamped commit is byte-identical to the pre-ledger one: DefernoJson drops the defaulted null.
+        assertEquals("""{"intents":[{"id":"att-1"}]}""", body)
+    }
+
+    @Test
+    fun aStampedUploadCarriesTheActivitySiblingOnTheCommitAndNowhereElse() = runTest {
+        var presignBody: String? = null
+        var commitBody: String? = null
+        val api = client { request ->
+            when {
+                request.url.encodedPath.endsWith("/presign") -> {
+                    presignBody = (request.body as? TextContent)?.text
+                    respondJson(
+                        """{"version":"0.1","data":{"attachments":[{
+                           "attachment_id":"att-1","put_url":"https://s3.example.test/x",
+                           "expires_at":"2026-06-12T00:00:00Z","headers":{}
+                        }]}}""",
+                    )
+                }
+                else -> {
+                    commitBody = (request.body as? TextContent)?.text
+                    respondJson(attachmentsEnvelope, HttpStatusCode.Created)
+                }
+            }
+        }
+        val upload = UploadHttpClient(HttpClient(MockEngine { respond("", HttpStatusCode.OK) }) { expectSuccess = false })
+
+        val ok = KtorTaskDetailRepository(api, upload).uploadAttachments(
+            TaskId("t1"),
+            listOf(AttachmentUpload("r.pdf", "application/pdf", byteArrayOf(1))),
+            ActivityStamp("entry-1", Instant.parse("2026-04-17T10:00:00Z")),
+        )
+
+        assertTrue(ok)
+        // Presign is a handshake, not an item mutation — it mints no ledger row, and its payload is strict:
+        // an unexpected `activity` key would 422 and sink the upload before a single byte moved.
+        assertFalse(presignBody?.contains("activity") == true, "the presign handshake carries no stamp")
+
+        val body = assertNotNull(commitBody, "the commit was sent")
+        val activity = DefernoJson.parseToJsonElement(body).jsonObject.getValue("activity").jsonObject
+        // The entry id is the merge key the `?since=` reconcile dedupes on, so it must reach the server
+        // verbatim; `at` is the client wall-clock the feed sorts by, not the server's receive time.
+        assertEquals("entry-1", activity.getValue("id").jsonPrimitive.content)
+        assertEquals("2026-04-17T10:00:00Z", activity.getValue("at").jsonPrimitive.content)
+        assertEquals("mobile", activity.getValue("source").jsonPrimitive.content)
+        // The stamp is a sibling of `intents`, not a replacement for it.
+        assertEquals(
+            "att-1",
+            DefernoJson.parseToJsonElement(body).jsonObject.getValue("intents")
+                .jsonArray.single().jsonObject.getValue("id").jsonPrimitive.content,
+        )
     }
 
     @Test
@@ -178,6 +243,25 @@ class KtorTaskDetailRepositoryTest {
         assertFalse(repo.deleteAttachment(TaskId("t1"), "att-1"))
     }
 
+    @Test
+    fun deleteAttachmentSendsAnEmptyBodyUnstampedAndTheStampWhenGiven() = runTest {
+        // The route's body is `ActivityBody` — every field optional — so `{}` is a valid delete. That is why
+        // this one stays a buildJsonObject: there is no second field for a hand-rolled body to get wrong.
+        var captured: HttpRequestData? = null
+        val repo = KtorTaskDetailRepository(client { req -> captured = req; respond("", HttpStatusCode.NoContent) })
+
+        assertTrue(repo.deleteAttachment(TaskId("t1"), "att-1"))
+        assertEquals("{}", (captured?.body as? TextContent)?.text)
+
+        assertTrue(
+            repo.deleteAttachment(TaskId("t1"), "att-1", ActivityStamp("entry-9", Instant.parse("2026-04-17T10:00:00Z"))),
+        )
+        assertEquals(
+            """{"activity":{"id":"entry-9","at":"2026-04-17T10:00:00Z","source":"mobile"}}""",
+            (captured?.body as? TextContent)?.text,
+        )
+    }
+
     private val attachmentEnvelope = """
         {"version":"0.1","data":{"id":"a1","filename":"receipt.pdf","mime":"application/pdf","size":1234,
          "url":"https://files/a1","caption":"Receipt","created_by":"u1","created_at":"2026-04-17T10:00:00Z"}}
@@ -204,6 +288,25 @@ class KtorTaskDetailRepositoryTest {
         assertTrue(repo.updateAttachmentCaption(TaskId("t1"), "att-1", null))
         assertEquals(HttpMethod.Patch, captured?.method)
         assertEquals("""{"caption":null}""", (captured?.body as? TextContent)?.text)
+    }
+
+    @Test
+    fun aStampedCaptionClearKeepsTheExplicitNullBesideTheActivitySibling() = runTest {
+        // The reason this body alone stays hand-built: a typed payload cannot express "send caption as an
+        // explicit null" AND "omit an absent activity" under one Json config — explicitNulls governs both.
+        var captured: HttpRequestData? = null
+        val repo = KtorTaskDetailRepository(client { req -> captured = req; respondJson(attachmentEnvelope) })
+
+        assertTrue(
+            repo.updateAttachmentCaption(
+                TaskId("t1"), "att-1", null,
+                ActivityStamp("entry-7", Instant.parse("2026-04-17T10:00:00Z")),
+            ),
+        )
+        assertEquals(
+            """{"caption":null,"activity":{"id":"entry-7","at":"2026-04-17T10:00:00Z","source":"mobile"}}""",
+            (captured?.body as? TextContent)?.text,
+        )
     }
 
     @Test

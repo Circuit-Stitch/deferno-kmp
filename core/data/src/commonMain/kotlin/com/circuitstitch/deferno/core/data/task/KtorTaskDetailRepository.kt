@@ -5,9 +5,11 @@ import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.UploadHttpClient
+import com.circuitstitch.deferno.core.network.dto.AttachmentIntentDto
 import com.circuitstitch.deferno.core.network.dto.AttachmentPresignBatchRequestDto
 import com.circuitstitch.deferno.core.network.dto.AttachmentPresignBatchResponseDto
 import com.circuitstitch.deferno.core.network.dto.AttachmentViewDto
+import com.circuitstitch.deferno.core.network.dto.CommitAttachmentsPayload
 import com.circuitstitch.deferno.core.network.dto.PresignRequestDto
 import com.circuitstitch.deferno.core.network.dto.PresignResponseDto
 import com.circuitstitch.deferno.core.network.mapper.toDomain
@@ -24,10 +26,8 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.appendPathSegments
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 
 /**
  * The production [TaskDetailRepository] over the shared authed Deferno [HttpClient] — online-only
@@ -85,16 +85,15 @@ class KtorTaskDetailRepository(
             method = HttpMethod.Post
             url { appendPathSegments("items", taskId.value, "attachments") }
             contentType(ContentType.Application.Json)
-            // Hand-built rather than the typed CommitAttachmentsPayload: `activity` is an untyped sibling
-            // (core:data has no serialization compiler plugin, so the stamp is a raw JsonObject), and a
-            // body must be one shape or the other. JSON it is — the same call the typed payload rendered.
+            // Typed, not hand-built: the commit's IntentEntry key is `id` while the presign response hands
+            // back `attachment_id`, and a body that carries the response's key straight over parses to zero
+            // intents — the upload is lost after its bytes are already stored. The stamp rides as the
+            // payload's own `activity` field so one serializer owns the whole body.
             setBody(
-                buildJsonObject {
-                    putJsonArray("intents") {
-                        presigned.forEach { p -> addJsonObject { put("attachment_id", p.attachmentId) } }
-                    }
-                    stamp?.let { put("activity", it.toJson()) }
-                },
+                CommitAttachmentsPayload(
+                    intents = presigned.map { AttachmentIntentDto(it.attachmentId) },
+                    activity = stamp?.toJson(),
+                ),
             )
         }
         return commit is ApiResult.Success

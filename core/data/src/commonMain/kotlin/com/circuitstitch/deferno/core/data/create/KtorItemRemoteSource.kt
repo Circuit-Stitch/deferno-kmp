@@ -6,7 +6,6 @@ import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.network.ApiResult
-import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.dto.ChoreDetailDto
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
 import com.circuitstitch.deferno.core.network.dto.CreateChorePayload
@@ -30,9 +29,6 @@ import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.appendPathSegments
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.put
 import io.ktor.http.contentType
 
 /**
@@ -66,16 +62,10 @@ class KtorItemRemoteSource(
             method = HttpMethod.Post
             url { appendPathSegments("items", id, "convert") }
             contentType(ContentType.Application.Json)
-            // Rendered through the shared Json so the typed payload keeps its own serializer, then the
-            // untyped `activity` sibling is merged in — the two can't share one @Serializable shape
-            // (core:data has no serialization compiler plugin, so the stamp is a raw JsonObject).
-            setBody(
-                buildJsonObject {
-                    val encoded = DefernoJson.encodeToJsonElement(ConvertItemPayload.serializer(), payload)
-                    for ((k, v) in encoded.jsonObject) put(k, v)
-                    stamp?.let { put("activity", it.toJson()) }
-                },
-            )
+            // The stamp is a field on the payload, not a sibling spliced into an encoded copy of it: a body
+            // assembled key-by-key drifts from the DTO the contract is pinned against, silently, the moment
+            // either side changes. One @Serializable shape, one serializer.
+            setBody(payload.copy(activity = stamp?.toJson()))
         }.map { it.toConvertedItem() }
 }
 
