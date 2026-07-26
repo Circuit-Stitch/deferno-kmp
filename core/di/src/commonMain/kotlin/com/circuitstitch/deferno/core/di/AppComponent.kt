@@ -26,13 +26,13 @@ import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
-import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.agent.InferenceEngine
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
 import com.circuitstitch.deferno.core.database.AccountDatabaseFactory
 import com.circuitstitch.deferno.core.network.BearerTokenProvider
 import com.circuitstitch.deferno.core.network.DefernoEnvironment
+import com.circuitstitch.deferno.core.network.UploadHttpClient
 import com.circuitstitch.deferno.core.scopes.AppScope
 import com.circuitstitch.deferno.core.speech.DictationPermissionSettings
 import com.circuitstitch.deferno.core.speech.SpeechEngineCatalog
@@ -264,8 +264,10 @@ abstract class AppComponent(
     // The item-wide cold-snapshot source (`GET /items`, ADR-0034 #226): the AccountScope ItemSync pulls
     // the windowed snapshot through it, reconciling every kind into its store on refresh.
     abstract val itemSnapshotSource: ItemSnapshotSource
-    // Online-only Task detail extras (comments + attachments); the child AccountComponent re-exposes it.
-    abstract val taskDetailRepository: TaskDetailRepository
+    // The bare presigned-upload client (no base URL, no bearer — an Authorization header would break S3
+    // SigV4). Re-exposed because the AccountScope attachment repository builds its Ktor wire half inline
+    // (AccountDataBindings.taskDetailRepository) and so needs the same client the AppScope feedback upload uses.
+    abstract val uploadHttpClient: UploadHttpClient
     abstract val planRemoteSource: PlanRemoteSource
     // The windowed Calendar feed source (#74): the OfflineCalendarRepository (AccountScope) refreshes through it.
     abstract val calendarRemoteSource: CalendarRemoteSource

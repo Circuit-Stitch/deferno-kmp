@@ -39,6 +39,10 @@ import kotlin.time.Instant
  */
 class KtorTaskDetailRepositoryTest {
 
+    // The wire adapter never mints a stamp — it carries the one the ledger decorator handed it (#364) — so
+    // every write here supplies a fixed one and the assertions can pin the exact bytes it puts on the wire.
+    private val stamp = ActivityStamp("entry-1", Instant.parse("2026-04-17T10:00:00Z"))
+
     private val attachmentsEnvelope = """
         {"version":"0.1","data":[
             {"id":"a1","filename":"receipt.pdf","mime":"application/pdf","size":1234,
@@ -104,8 +108,11 @@ class KtorTaskDetailRepositoryTest {
             ) { expectSuccess = false },
         )
 
-        val ok = KtorTaskDetailRepository(api, upload)
-            .uploadAttachments(TaskId("t1"), listOf(AttachmentUpload("r.pdf", "application/pdf", byteArrayOf(1, 2, 3))))
+        val ok = KtorTaskDetailRepository(api, upload).uploadAttachments(
+            TaskId("t1"),
+            listOf(AttachmentUpload("r.pdf", "application/pdf", byteArrayOf(1, 2, 3))),
+            stamp,
+        )
 
         assertTrue(ok)
         assertTrue(presignCalled, "presign was called")
@@ -121,12 +128,17 @@ class KtorTaskDetailRepositoryTest {
         assertEquals(listOf("id"), intent.keys.toList(), "the intent carries exactly the contract's `id` key")
         assertEquals("att-1", intent.getValue("id").jsonPrimitive.content)
         assertFalse(body.contains("attachment_id"), "the presign response's key never appears on the commit")
-        // An unstamped commit is byte-identical to the pre-ledger one: DefernoJson drops the defaulted null.
-        assertEquals("""{"intents":[{"id":"att-1"}]}""", body)
+        // The whole commit body, pinned: the intent list plus the stamp as its sibling and nothing else. A
+        // new defaulted field on CommitAttachmentsPayload breaks this deliberately — whether it belongs on
+        // the wire is a decision to make, not a detail to absorb into a looser `contains` check.
+        assertEquals(
+            """{"intents":[{"id":"att-1"}],"activity":{"id":"entry-1","at":"2026-04-17T10:00:00Z","source":"mobile"}}""",
+            body,
+        )
     }
 
     @Test
-    fun aStampedUploadCarriesTheActivitySiblingOnTheCommitAndNowhereElse() = runTest {
+    fun theUploadCommitCarriesTheStampAndThePresignHandshakeDoesNot() = runTest {
         var presignBody: String? = null
         var commitBody: String? = null
         val api = client { request ->
@@ -151,7 +163,7 @@ class KtorTaskDetailRepositoryTest {
         val ok = KtorTaskDetailRepository(api, upload).uploadAttachments(
             TaskId("t1"),
             listOf(AttachmentUpload("r.pdf", "application/pdf", byteArrayOf(1))),
-            ActivityStamp("entry-1", Instant.parse("2026-04-17T10:00:00Z")),
+            stamp,
         )
 
         assertTrue(ok)
@@ -180,7 +192,7 @@ class KtorTaskDetailRepositoryTest {
         val api = client { anyCall = true; respond("", HttpStatusCode.OK) }
         val upload = UploadHttpClient(HttpClient(MockEngine { respond("", HttpStatusCode.OK) }) { expectSuccess = false })
 
-        assertTrue(KtorTaskDetailRepository(api, upload).uploadAttachments(TaskId("t1"), emptyList()))
+        assertTrue(KtorTaskDetailRepository(api, upload).uploadAttachments(TaskId("t1"), emptyList(), stamp))
         assertFalse(anyCall, "an empty upload makes no network calls")
     }
 
@@ -190,8 +202,11 @@ class KtorTaskDetailRepositoryTest {
         val upload = UploadHttpClient(HttpClient(MockEngine { respond("", HttpStatusCode.OK) }) { expectSuccess = false })
 
         assertFalse(
-            KtorTaskDetailRepository(api, upload)
-                .uploadAttachments(TaskId("t1"), listOf(AttachmentUpload("r.pdf", "application/pdf", byteArrayOf(1)))),
+            KtorTaskDetailRepository(api, upload).uploadAttachments(
+                TaskId("t1"),
+                listOf(AttachmentUpload("r.pdf", "application/pdf", byteArrayOf(1))),
+                stamp,
+            ),
         )
     }
 
@@ -210,8 +225,11 @@ class KtorTaskDetailRepositoryTest {
         }
         val upload = UploadHttpClient(HttpClient(MockEngine { respond("denied", HttpStatusCode.Forbidden) }) { expectSuccess = false })
 
-        val ok = KtorTaskDetailRepository(api, upload)
-            .uploadAttachments(TaskId("t1"), listOf(AttachmentUpload("r.pdf", "application/pdf", byteArrayOf(1))))
+        val ok = KtorTaskDetailRepository(api, upload).uploadAttachments(
+            TaskId("t1"),
+            listOf(AttachmentUpload("r.pdf", "application/pdf", byteArrayOf(1))),
+            stamp,
+        )
 
         assertFalse(ok)
         assertFalse(commitCalled, "a rejected upload aborts before the commit")
@@ -219,9 +237,16 @@ class KtorTaskDetailRepositoryTest {
 
     @Test
     fun uploadAttachmentsReturnsFalseWithoutAnUploadClient() = runTest {
-        // Constructed with only the api client (no uploadClient) — the comment-only path.
+        // Constructed with only the api client (no uploadClient) — there is nothing to PUT the bytes with,
+        // so the upload must fail outright rather than commit an intent whose object never reached S3.
         val repo = KtorTaskDetailRepository(client { respondJson(attachmentsEnvelope) })
-        assertFalse(repo.uploadAttachments(TaskId("t1"), listOf(AttachmentUpload("r.pdf", "application/pdf", byteArrayOf(1)))))
+        assertFalse(
+            repo.uploadAttachments(
+                TaskId("t1"),
+                listOf(AttachmentUpload("r.pdf", "application/pdf", byteArrayOf(1))),
+                stamp,
+            ),
+        )
     }
 
     @Test
@@ -232,7 +257,7 @@ class KtorTaskDetailRepositoryTest {
         var captured: HttpRequestData? = null
         val repo = KtorTaskDetailRepository(client { req -> captured = req; respond("", HttpStatusCode.NoContent) })
 
-        assertTrue(repo.deleteAttachment(TaskId("t1"), "att-1"))
+        assertTrue(repo.deleteAttachment(TaskId("t1"), "att-1", stamp))
         assertEquals(HttpMethod.Post, captured?.method)
         assertTrue(captured?.url?.encodedPath?.endsWith("/items/t1/attachments/att-1/delete") == true)
     }
@@ -240,24 +265,21 @@ class KtorTaskDetailRepositoryTest {
     @Test
     fun deleteAttachmentReturnsFalseOnFailure() = runTest {
         val repo = KtorTaskDetailRepository(client { respond("", HttpStatusCode.Forbidden) })
-        assertFalse(repo.deleteAttachment(TaskId("t1"), "att-1"))
+        assertFalse(repo.deleteAttachment(TaskId("t1"), "att-1", stamp))
     }
 
     @Test
-    fun deleteAttachmentSendsAnEmptyBodyUnstampedAndTheStampWhenGiven() = runTest {
-        // The route's body is `ActivityBody` — every field optional — so `{}` is a valid delete. That is why
-        // this one stays a buildJsonObject: there is no second field for a hand-rolled body to get wrong.
+    fun deleteAttachmentSendsTheStampAsItsWholeBody() = runTest {
+        // The route's body is `ActivityBody` — every field optional server-side, so `{}` would parse — but
+        // the client never sends that shape: a delete the server stamps itself lands under an entry id the
+        // `?since=` reconcile can never match to the local row. With one mandatory field there is nothing
+        // for a hand-rolled body to get wrong, which is why this one stays a buildJsonObject.
         var captured: HttpRequestData? = null
         val repo = KtorTaskDetailRepository(client { req -> captured = req; respond("", HttpStatusCode.NoContent) })
 
-        assertTrue(repo.deleteAttachment(TaskId("t1"), "att-1"))
-        assertEquals("{}", (captured?.body as? TextContent)?.text)
-
-        assertTrue(
-            repo.deleteAttachment(TaskId("t1"), "att-1", ActivityStamp("entry-9", Instant.parse("2026-04-17T10:00:00Z"))),
-        )
+        assertTrue(repo.deleteAttachment(TaskId("t1"), "att-1", stamp))
         assertEquals(
-            """{"activity":{"id":"entry-9","at":"2026-04-17T10:00:00Z","source":"mobile"}}""",
+            """{"activity":{"id":"entry-1","at":"2026-04-17T10:00:00Z","source":"mobile"}}""",
             (captured?.body as? TextContent)?.text,
         )
     }
@@ -272,39 +294,25 @@ class KtorTaskDetailRepositoryTest {
         var captured: HttpRequestData? = null
         val repo = KtorTaskDetailRepository(client { req -> captured = req; respondJson(attachmentEnvelope) })
 
-        assertTrue(repo.updateAttachmentCaption(TaskId("t1"), "att-1", "Receipt"))
+        assertTrue(repo.updateAttachmentCaption(TaskId("t1"), "att-1", "Receipt", stamp))
         assertEquals(HttpMethod.Patch, captured?.method)
         assertTrue(captured?.url?.encodedPath?.endsWith("/items/t1/attachments/att-1") == true)
         assertTrue((captured?.body as? TextContent)?.text?.contains("Receipt") == true)
     }
 
     @Test
-    fun updateAttachmentCaptionClearSendsExplicitNull() = runTest {
+    fun updateAttachmentCaptionClearSendsExplicitNullBesideTheStamp() = runTest {
         // #416: clearing must reach the wire as `caption: null`, not an omitted field — the shared
-        // DefernoJson (explicitNulls = false) would drop a null, which the server rejects as 422.
+        // DefernoJson (explicitNulls = false) would drop a null, which the server rejects as 422. That is
+        // also why this one body stays hand-built: no typed payload can say "send caption as an explicit
+        // null" and "carry the stamp's own object" under a single Json config — explicitNulls governs both.
         var captured: HttpRequestData? = null
         val repo = KtorTaskDetailRepository(client { req -> captured = req; respondJson(attachmentEnvelope) })
 
-        assertTrue(repo.updateAttachmentCaption(TaskId("t1"), "att-1", null))
+        assertTrue(repo.updateAttachmentCaption(TaskId("t1"), "att-1", null, stamp))
         assertEquals(HttpMethod.Patch, captured?.method)
-        assertEquals("""{"caption":null}""", (captured?.body as? TextContent)?.text)
-    }
-
-    @Test
-    fun aStampedCaptionClearKeepsTheExplicitNullBesideTheActivitySibling() = runTest {
-        // The reason this body alone stays hand-built: a typed payload cannot express "send caption as an
-        // explicit null" AND "omit an absent activity" under one Json config — explicitNulls governs both.
-        var captured: HttpRequestData? = null
-        val repo = KtorTaskDetailRepository(client { req -> captured = req; respondJson(attachmentEnvelope) })
-
-        assertTrue(
-            repo.updateAttachmentCaption(
-                TaskId("t1"), "att-1", null,
-                ActivityStamp("entry-7", Instant.parse("2026-04-17T10:00:00Z")),
-            ),
-        )
         assertEquals(
-            """{"caption":null,"activity":{"id":"entry-7","at":"2026-04-17T10:00:00Z","source":"mobile"}}""",
+            """{"caption":null,"activity":{"id":"entry-1","at":"2026-04-17T10:00:00Z","source":"mobile"}}""",
             (captured?.body as? TextContent)?.text,
         )
     }
@@ -312,7 +320,7 @@ class KtorTaskDetailRepositoryTest {
     @Test
     fun updateAttachmentCaptionReturnsFalseOnFailure() = runTest {
         val repo = KtorTaskDetailRepository(client { respond("", HttpStatusCode.UnprocessableEntity) })
-        assertFalse(repo.updateAttachmentCaption(TaskId("t1"), "att-1", "Receipt"))
+        assertFalse(repo.updateAttachmentCaption(TaskId("t1"), "att-1", "Receipt", stamp))
     }
 
     // --- test helpers ---

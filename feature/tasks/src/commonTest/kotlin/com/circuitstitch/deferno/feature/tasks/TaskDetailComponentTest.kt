@@ -8,7 +8,6 @@ import com.circuitstitch.deferno.core.data.comment.CommentWriter
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
-import com.circuitstitch.deferno.core.data.activity.ActivityStamp
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
@@ -101,20 +100,15 @@ private class FakeTaskDetailRepository(
     val captioned = mutableListOf<Pair<String, String?>>()
 
     override suspend fun attachments(taskId: TaskId): List<Attachment>? { attachmentsCalls++; return attachmentsResult }
-    override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>, stamp: ActivityStamp?): Boolean {
+    override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>): Boolean {
         uploaded += taskId to files
         return uploadResult
     }
-    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String, stamp: ActivityStamp?): Boolean {
+    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String): Boolean {
         deletedAttachments += taskId to attachmentId
         return true
     }
-    override suspend fun updateAttachmentCaption(
-        taskId: TaskId,
-        attachmentId: String,
-        caption: String?,
-        stamp: ActivityStamp?,
-    ): Boolean {
+    override suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String?): Boolean {
         captioned += attachmentId to caption
         return true
     }

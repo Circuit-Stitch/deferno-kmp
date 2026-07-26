@@ -11,7 +11,7 @@ import com.circuitstitch.deferno.core.data.create.FakeActivityLedgerStore
 import com.circuitstitch.deferno.core.data.create.RecordedLocalActivity
 import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.data.task.LedgerRecordingTaskDetailRepository
-import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
+import com.circuitstitch.deferno.core.data.task.StampedAttachmentSource
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.test.runTest
@@ -197,7 +197,7 @@ class LedgerStampingTest {
         // Same merge key on the request the server files its row under and on the optimistic row here —
         // the whole reason the stamp is minted at this seam rather than down in the Ktor wire adapter.
         assertEquals(delegate.stamps, ledger.recorded.map { it.stamp })
-        assertEquals(listOf("entry-1", "entry-2"), delegate.stamps.map { it?.entryId })
+        assertEquals(listOf("entry-1", "entry-2"), delegate.stamps.map { it.entryId })
         // The stamp carries the write's apply-time, the axis the feed sorts on.
         assertTrue(ledger.recorded.all { it.stamp?.occurredAt == t0 && it.now == t0 })
     }
@@ -229,23 +229,28 @@ private class SequentialStamps : (Instant) -> ActivityStamp {
     override fun invoke(at: Instant): ActivityStamp = ActivityStamp("entry-${++minted}", at)
 }
 
-/** A [TaskDetailRepository] whose writes all report [succeeds], recording the stamp each was handed. */
-private class FakeAttachmentWrites(private val succeeds: Boolean = true) : TaskDetailRepository {
+/**
+ * A [StampedAttachmentSource] whose writes all report [succeeds], recording the stamp each was handed.
+ *
+ * It fakes the *wire* half deliberately: the stamp is an argument only that side of the seam ever receives,
+ * so a fake of the app-facing port could not observe what the decorator minted at all.
+ */
+private class FakeAttachmentWrites(private val succeeds: Boolean = true) : StampedAttachmentSource {
 
-    val stamps = mutableListOf<ActivityStamp?>()
+    val stamps = mutableListOf<ActivityStamp>()
 
     override suspend fun attachments(taskId: TaskId): List<Attachment> = emptyList()
 
     override suspend fun uploadAttachments(
         taskId: TaskId,
         files: List<AttachmentUpload>,
-        stamp: ActivityStamp?,
+        stamp: ActivityStamp,
     ): Boolean {
         stamps += stamp
         return succeeds
     }
 
-    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String, stamp: ActivityStamp?): Boolean {
+    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String, stamp: ActivityStamp): Boolean {
         stamps += stamp
         return succeeds
     }
@@ -254,7 +259,7 @@ private class FakeAttachmentWrites(private val succeeds: Boolean = true) : TaskD
         taskId: TaskId,
         attachmentId: String,
         caption: String?,
-        stamp: ActivityStamp?,
+        stamp: ActivityStamp,
     ): Boolean {
         stamps += stamp
         return succeeds

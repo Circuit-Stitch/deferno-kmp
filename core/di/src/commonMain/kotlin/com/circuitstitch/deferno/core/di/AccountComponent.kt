@@ -21,7 +21,7 @@ import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.security.SecurityRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
-import com.circuitstitch.deferno.core.data.task.LedgerRecordingTaskDetailRepository
+import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.model.Account
@@ -66,10 +66,10 @@ abstract class AccountComponent(
      * (DB → driver → key/Context/databasesDir, repositories → AppScope remote sources).
      */
     abstract val taskRepository: TaskRepository
-    // Online-only Task detail extras (attachments). The AccountScope decorator, NOT the bare Ktor
-    // binding: attachments never reach the outbox choke-point, so this wrapper is what records them into
-    // the activity ledger (#364). Comments moved to the offline-first [commentRepository] (ADR-0043).
-    abstract val taskDetailRepository: LedgerRecordingTaskDetailRepository
+    // Online-only Task detail extras (attachments) — AccountScope, because the port's only binding is the
+    // ledger-recording decorator: attachments never reach the outbox choke-point, so that wrapper is what
+    // gets them into the activity ledger (#364). Comments moved to [commentRepository] (ADR-0043).
+    abstract val taskDetailRepository: TaskDetailRepository
     abstract val planRepository: PlanRepository
 
     // The offline-first Task-comment thread + cached server item-history (ADR-0043): the Task detail's

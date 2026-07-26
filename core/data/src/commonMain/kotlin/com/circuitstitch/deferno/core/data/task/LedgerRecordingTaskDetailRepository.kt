@@ -29,6 +29,10 @@ import kotlin.time.Instant
  * here and the authoritative row the server files, so it must be minted once by whoever writes both. The
  * Ktor repository stays a pure wire adapter and simply carries the stamp it is handed.
  *
+ * That is why the delegate is [StampedAttachmentSource] and not [TaskDetailRepository]: the stamp is an
+ * output this seam produces, so it belongs on the half below it, not on the app-facing port above — where
+ * it would be a parameter no caller can fill and this class would have to discard.
+ *
  * ## Failure semantics differ from the outbox — on purpose
  *
  * An outbox write is durable the moment it is enqueued, so its ledger row is written unconditionally. An
@@ -37,8 +41,8 @@ import kotlin.time.Instant
  * did not occur. The record itself stays best-effort — a ledger failure must not turn a successful upload
  * into a reported one.
  */
-class LedgerRecordingTaskDetailRepository(
-    private val delegate: TaskDetailRepository,
+internal class LedgerRecordingTaskDetailRepository(
+    private val delegate: StampedAttachmentSource,
     private val ledger: ActivityLedgerStore,
     private val now: () -> Instant = { Clock.System.now() },
     private val mintStamp: (Instant) -> ActivityStamp = ActivityStamp::mint,
@@ -46,32 +50,25 @@ class LedgerRecordingTaskDetailRepository(
 
     override suspend fun attachments(taskId: TaskId): List<Attachment>? = delegate.attachments(taskId)
 
-    override suspend fun uploadAttachments(
-        taskId: TaskId,
-        files: List<AttachmentUpload>,
-        stamp: ActivityStamp?,
-    ): Boolean = record(taskId, ActivityActionKind.AttachmentAdded, listOf("items", taskId.value, "attachments")) {
-        delegate.uploadAttachments(taskId, files, it)
-    }
+    override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>): Boolean =
+        record(taskId, ActivityActionKind.AttachmentAdded, listOf("items", taskId.value, "attachments")) {
+            delegate.uploadAttachments(taskId, files, it)
+        }
 
-    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String, stamp: ActivityStamp?): Boolean =
+    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String): Boolean =
         record(
             taskId,
             ActivityActionKind.AttachmentDeleted,
             listOf("items", taskId.value, "attachments", attachmentId, "delete"),
         ) { delegate.deleteAttachment(taskId, attachmentId, it) }
 
-    override suspend fun updateAttachmentCaption(
-        taskId: TaskId,
-        attachmentId: String,
-        caption: String?,
-        stamp: ActivityStamp?,
-    ): Boolean = record(
-        taskId,
-        ActivityActionKind.AttachmentCaptioned,
-        listOf("items", taskId.value, "attachments", attachmentId),
-        OutboxMethod.Patch,
-    ) { delegate.updateAttachmentCaption(taskId, attachmentId, caption, it) }
+    override suspend fun updateAttachmentCaption(taskId: TaskId, attachmentId: String, caption: String?): Boolean =
+        record(
+            taskId,
+            ActivityActionKind.AttachmentCaptioned,
+            listOf("items", taskId.value, "attachments", attachmentId),
+            OutboxMethod.Patch,
+        ) { delegate.updateAttachmentCaption(taskId, attachmentId, caption, it) }
 
     /**
      * Mint a stamp, run [write] with it, and record the ledger row iff the write reported success.

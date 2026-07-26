@@ -30,18 +30,22 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * The production [TaskDetailRepository] over the shared authed Deferno [HttpClient] — online-only
+ * The production [StampedAttachmentSource] over the shared authed Deferno [HttpClient] — online-only
  * (ADR-0001), mirroring [KtorTaskRemoteSource.search]. Each call condenses the wire DTO to the domain
  * type at the boundary (ADR-0011); a failure degrades to `null`/`false` rather than throwing, so the
  * detail can show an inline "couldn't load" / "couldn't post" state without crashing.
+ *
+ * A pure wire adapter: it never mints an [ActivityStamp], it only carries the one
+ * [LedgerRecordingTaskDetailRepository] minted — so the id on the request and the id on the optimistic
+ * ledger row are one value. Reachable only through that decorator, which is why the stamp is non-null.
  */
-class KtorTaskDetailRepository(
+internal class KtorTaskDetailRepository(
     private val client: HttpClient,
     // The bare client (no base URL, no auth) for the presigned PUTs — an Authorization header would
-    // break S3 SigV4 (see [UploadHttpClient]). Defaults to a non-uploading no-op so the comment-only
-    // tests can still construct the repo with just `client`.
+    // break S3 SigV4 (see [UploadHttpClient]). Defaults to a non-uploading no-op so the tests that only
+    // exercise the read/caption/delete paths can construct the repo with just `client`.
     private val uploadClient: UploadHttpClient? = null,
-) : TaskDetailRepository {
+) : StampedAttachmentSource {
 
     override suspend fun attachments(taskId: TaskId): List<Attachment>? {
         val result = client.requestApi<List<AttachmentViewDto>> {
@@ -53,7 +57,7 @@ class KtorTaskDetailRepository(
         }
     }
 
-    override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>, stamp: ActivityStamp?): Boolean {
+    override suspend fun uploadAttachments(taskId: TaskId, files: List<AttachmentUpload>, stamp: ActivityStamp): Boolean {
         if (files.isEmpty()) return true
         val upload = uploadClient ?: return false
 
@@ -92,7 +96,7 @@ class KtorTaskDetailRepository(
             setBody(
                 CommitAttachmentsPayload(
                     intents = presigned.map { AttachmentIntentDto(it.attachmentId) },
-                    activity = stamp?.toJson(),
+                    activity = stamp.toJson(),
                 ),
             )
         }
@@ -125,7 +129,7 @@ class KtorTaskDetailRepository(
         taskId: TaskId,
         attachmentId: String,
         caption: String?,
-        stamp: ActivityStamp?,
+        stamp: ActivityStamp,
     ): Boolean {
         val result = client.requestApi<AttachmentViewDto> {
             method = HttpMethod.Patch
@@ -138,7 +142,7 @@ class KtorTaskDetailRepository(
             setBody(
                 buildJsonObject {
                     put("caption", caption)
-                    stamp?.let { put("activity", it.toJson()) }
+                    put("activity", stamp.toJson())
                 },
             )
         }
@@ -149,12 +153,13 @@ class KtorTaskDetailRepository(
     // so ledger metadata could ride in a body, and left no alias. Still bypasses `requestApi`
     // deliberately: the reply is 204 No Content, whose empty body the version-probe would treat as
     // malformed (cf. the auth-token revoke). Check the status directly.
-    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String, stamp: ActivityStamp?): Boolean = try {
+    override suspend fun deleteAttachment(taskId: TaskId, attachmentId: String, stamp: ActivityStamp): Boolean = try {
         val response = client.post {
             url { appendPathSegments("items", taskId.value, "attachments", attachmentId, "delete") }
             contentType(ContentType.Application.Json)
-            // ActivityBody: every field optional, so an empty object is a valid delete.
-            setBody(buildJsonObject { stamp?.let { put("activity", it.toJson()) } })
+            // ActivityBody: every field is optional server-side, but this client always names its own entry
+            // id — a server-minted id is one the `?since=` reconcile can never match back to the local row.
+            setBody(buildJsonObject { put("activity", stamp.toJson()) })
         }
         response.status.isSuccess()
     } catch (t: Throwable) {

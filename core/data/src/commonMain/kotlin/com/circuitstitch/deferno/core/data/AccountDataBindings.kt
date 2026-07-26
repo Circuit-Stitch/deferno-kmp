@@ -86,6 +86,7 @@ import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.settings.SqlDelightSettingsLocalStore
 import com.circuitstitch.deferno.core.data.task.BlockedByWriter
 import com.circuitstitch.deferno.core.data.task.KtorBlockedByWriter
+import com.circuitstitch.deferno.core.data.task.KtorTaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.LedgerRecordingTaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.OfflineTaskRepository
 import com.circuitstitch.deferno.core.data.task.OutboxTaskWriter
@@ -98,6 +99,7 @@ import com.circuitstitch.deferno.core.data.task.TaskWriter
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.UserId
+import com.circuitstitch.deferno.core.network.UploadHttpClient
 import com.circuitstitch.deferno.core.scopes.AccountScope
 import io.ktor.client.HttpClient
 import me.tatarka.inject.annotations.Provides
@@ -162,15 +164,25 @@ interface AccountDataBindings {
 
     /**
      * Attachments are the one item-mutation surface that never reaches the outbox choke-point (they are
-     * online-only, ADR-0001), so they get their own ledger-recording decorator (#364). AccountScope
-     * because the ledger is; the Ktor half it wraps stays AppScope.
+     * online-only, ADR-0001), so they get their own ledger-recording decorator (#364).
+     *
+     * Bound **once, here** — the wire half is constructed inline, exactly as [outboxStore] does. Binding it
+     * separately in AppScope would leave an undecorated [TaskDetailRepository] in the graph, and whichever
+     * consumer resolved that one would write attachments that never reach the ledger: a silent hole in the
+     * feed, indistinguishable from a write that did not happen.
+     *
+     * AccountScope because the ledger is. The wire half being per-Account rather than per-process (ADR-0014
+     * puts the Ktor sources in AppScope) costs nothing — it is stateless over the two AppScope clients,
+     * which still resolve the Active Account's PAT per request. Same shape as [securityRemoteSource].
      */
     @Provides
     @SingleIn(AccountScope::class)
-    fun ledgerRecordingTaskDetailRepository(
-        delegate: TaskDetailRepository,
+    fun taskDetailRepository(
+        client: HttpClient,
+        uploadClient: UploadHttpClient,
         ledger: ActivityLedgerStore,
-    ): LedgerRecordingTaskDetailRepository = LedgerRecordingTaskDetailRepository(delegate, ledger)
+    ): TaskDetailRepository =
+        LedgerRecordingTaskDetailRepository(KtorTaskDetailRepository(client, uploadClient), ledger)
 
     // Every write funnels through OutboxStore.enqueue, so wrapping it in the ledger recorder captures the
     // whole app's mutations at one choke-point (no per-writer edits) — a write path cannot forget to log.
