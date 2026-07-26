@@ -161,8 +161,13 @@ Separately, the attachment surface became **kind-neutral**: `/tasks/{id}/attachm
 delete is still a bodiless `DELETE` and therefore cannot carry `activity` (the server mints that entry id).
 
 The body on the new POST deletes is `ActivityBody` — `{ "activity": {…} }`, every field optional, so an
-**empty `{}` is valid**. One asymmetry to know: `POST /events/{id}/occurrences/{date}/clear` takes **no
-body at all**, unlike its chore/habit twins — Event clear cannot carry a client-minted entry id.
+**empty `{}` is valid** and a clear needs no payload of its own.
+
+Reading the spec for these: `POST /events/{id}/occurrences/{date}/clear` declares its body as
+`{"oneOf": [{"type":"null"}, {"$ref": "ActivityBody"}]}` rather than a bare `$ref`, because the Rust
+handler types it `Option<Json<ActivityBody>>`. It **does** accept `activity` — a naive scan that only
+resolves direct `$ref`s will wrongly conclude the route takes no body. Resolve `oneOf`/`anyOf` when
+enumerating the ingest surface; the true count is **36 routes**, not 35.
 
 ## Time-of-day (#348) — verified live against staging 2026-06-12
 

@@ -78,11 +78,15 @@ class OccurrenceMutationTest {
     }
 
     @Test
-    fun clearIsABodilessDeleteOnTheKindScopedPath() {
+    fun clearIsAPostSoftDeleteOnTheKindScopedClearSubresource() {
+        // #364: the backend retired the bodiless `DELETE …/occurrences/{date}` in favour of a POST
+        // soft-delete so Activity-ledger metadata can ride in a body, and left NO alias — the old route
+        // 404s. The body is an empty object, not null: a null body sends no HTTP entity at all, leaving
+        // the stamping decorator nothing to merge `activity` into.
         val request = ClearOccurrence("ce-1", ItemKind.Chore, "cho-1", date).toRequest()
-        assertEquals(OutboxMethod.Delete, request.method)
-        assertEquals(listOf("chores", "cho-1", "occurrences", "2026-06-08"), request.path)
-        assertNull(request.body)
+        assertEquals(OutboxMethod.Post, request.method)
+        assertEquals(listOf("chores", "cho-1", "occurrences", "2026-06-08", "clear"), request.path)
+        assertEquals("{}", request.body)
     }
 
     @Test

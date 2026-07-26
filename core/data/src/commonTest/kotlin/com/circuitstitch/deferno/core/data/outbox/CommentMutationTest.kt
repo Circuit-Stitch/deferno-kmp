@@ -39,14 +39,17 @@ class CommentMutationTest {
     }
 
     @Test
-    fun deleteTargetsTaskAndCommentAndSendsNoBody() {
+    fun deleteTargetsTaskAndCommentAndPostsToTheDeleteSubresource() {
+        // #364: `DELETE comments/{id}` is gone (no alias) — deletes became POST soft-deletes so the
+        // request can carry Activity-ledger metadata. The empty-object body is what the outbox
+        // choke-point merges the client-minted `activity` stamp into.
         val request = DeleteComment(taskId = "t-1", commentId = "c-1").let {
             assertEquals("comment:t-1:c-1", it.target)
             it.toRequest()
         }
-        assertEquals(OutboxMethod.Delete, request.method)
-        assertEquals(listOf("comments", "c-1"), request.path)
-        assertNull(request.body)
+        assertEquals(OutboxMethod.Post, request.method)
+        assertEquals(listOf("comments", "c-1", "delete"), request.path)
+        assertEquals("{}", request.body)
         assertEquals("comment:c-1", DeleteComment(taskId = null, commentId = "c-1").target)
     }
 }

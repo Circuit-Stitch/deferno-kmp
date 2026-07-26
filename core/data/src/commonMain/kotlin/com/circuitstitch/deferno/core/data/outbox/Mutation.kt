@@ -480,8 +480,14 @@ data class MarkOccurrence(
 
 /**
  * Clear a firing's status (#74) — the forgiving "let it go back to Scheduled" undo (design-principle #8),
- * uniform across kinds via `DELETE …/occurrences/{date}`. Optimistically resets the cached row to
+ * uniform across kinds via `POST …/occurrences/{date}/clear`. Optimistically resets the cached row to
  * [WorkingState.Open].
+ *
+ * The verb is a **POST soft-delete, not a `DELETE`** (#364): the backend retired the bodiless
+ * `DELETE …/occurrences/{date}` so Activity-ledger metadata could ride in a body without depending on
+ * CDN `DELETE`-body behavior, and it left no alias — the old route is simply gone. The body is
+ * `ActivityBody`, whose every field is optional, so an empty `{}` is a valid clear; the `activity`
+ * stamp is injected at the outbox choke-point ([ActivityStamp]) rather than built here.
  */
 data class ClearOccurrence(
     override val itemId: String,
@@ -491,8 +497,14 @@ data class ClearOccurrence(
 ) : OccurrenceMutation {
     override fun applyTo(item: CalendarItem): CalendarItem = item.copy(status = WorkingState.Open)
 
-    override fun toRequest(): OutboxRequest =
-        OutboxRequest(OutboxMethod.Delete, listOf(kind.recurringPath(), seriesId, "occurrences", date.toString()))
+    override fun toRequest(): OutboxRequest = OutboxRequest(
+        OutboxMethod.Post,
+        listOf(kind.recurringPath(), seriesId, "occurrences", date.toString(), "clear"),
+        // An empty object, not null: a null body sends no entity at all, and the stamping decorator
+        // needs an object to merge `activity` into. Event-clear is the one route that takes no body
+        // server-side — it tolerates the empty object, and simply never carries a client entry id.
+        "{}",
+    )
 }
 
 /**

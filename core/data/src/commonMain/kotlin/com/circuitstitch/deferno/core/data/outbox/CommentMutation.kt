@@ -12,7 +12,7 @@ import kotlinx.serialization.json.put
  * rule (ADR-0011): the request carries only `body`.
  *
  * - **Edit / delete** address an existing comment (`comment:<id>`, [CommentTargets.edit]) and replay
- *   fire-and-forget — both are naturally idempotent (a re-sent `PATCH body` is safe; a `DELETE` on a
+ *   fire-and-forget — both are naturally idempotent (a re-sent `PATCH body` is safe; a delete of a
  *   gone comment is a `404` the sender maps to success). No client id needed.
  * - **Create** ([PostComment]) is response-bearing (`comment-create:<taskId>:<clientId>`,
  *   [CommentTargets.create]): it POSTs *without* an id (the backend does not accept one), so the client
@@ -49,10 +49,17 @@ data class EditComment(val taskId: String?, val commentId: String, val body: Str
 }
 
 /**
- * Delete comment [commentId] (`DELETE comments/{id}`, no body) — idempotent (404 = success). [taskId] tags
+ * Delete comment [commentId] (`POST comments/{id}/delete`) — idempotent (404 = success). [taskId] tags
  * the ledger target only (`comment:<taskId>:<commentId>`), display-only and never sent; `null` when unresolved.
+ *
+ * A **POST soft-delete, not a `DELETE`** (#364): the backend retired `DELETE comments/{id}` so
+ * Activity-ledger metadata could ride in a body, and left no alias. The body is `ActivityBody` (every
+ * field optional ⇒ `{}` is valid); the `activity` stamp is merged in at the outbox choke-point.
  */
 data class DeleteComment(val taskId: String?, val commentId: String) : CommentMutation {
     override val target: String get() = CommentTargets.edit(taskId, commentId)
-    override fun toRequest(): OutboxRequest = OutboxRequest(OutboxMethod.Delete, listOf("comments", commentId))
+    override fun toRequest(): OutboxRequest =
+        // An empty object rather than a null body: a null body sends no entity, leaving the stamping
+        // decorator nothing to merge `activity` into.
+        OutboxRequest(OutboxMethod.Post, listOf("comments", commentId, "delete"), "{}")
 }
