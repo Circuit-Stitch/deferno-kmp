@@ -2,10 +2,9 @@ package com.circuitstitch.deferno.core.data.create
 
 import com.circuitstitch.deferno.core.data.activity.ActivityActionKind
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
-import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivityStamp
+import com.circuitstitch.deferno.core.data.activity.LocalActivityChange
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
-import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
 import kotlin.time.Clock
@@ -56,14 +55,8 @@ internal class LedgerRecordingItemConverter(
         if (result is ApiResult.Success) {
             runCatching {
                 ledger.recordLocal(
-                    source = ActivitySource.Mobile,
-                    target = "item:$id",
-                    // A ledger descriptor, never enqueued: convert is online-only, and its stamp already
-                    // went out via the delegate above. `acceptsActivityStamp` is inert here, so it stays
-                    // at the default rather than claiming to do something it cannot.
-                    request = OutboxRequest(OutboxMethod.Post, listOf("items", id, "convert"), body = null),
-                    before = null,
-                    now = at,
+                    LocalActivityChange("item:$id", OutboxMethod.Post, listOf("items", id, "convert")),
+                    at = at,
                     stamp = stamp,
                     actionKind = ActivityActionKind.Converted,
                 )

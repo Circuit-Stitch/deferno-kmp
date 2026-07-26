@@ -2,10 +2,9 @@ package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.data.activity.ActivityActionKind
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
-import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivityStamp
+import com.circuitstitch.deferno.core.data.activity.LocalActivityChange
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
-import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlin.time.Clock
@@ -90,14 +89,8 @@ internal class LedgerRecordingTaskDetailRepository(
         if (!write(stamp)) return false
         runCatching {
             ledger.recordLocal(
-                source = ActivitySource.Mobile,
-                target = "task:${taskId.value}",
-                // A ledger descriptor, never enqueued: attachments are online-only, and the stamp already
-                // went to the wire half above. `acceptsActivityStamp` is inert here, so it stays at the
-                // default rather than claiming to do something it cannot.
-                request = OutboxRequest(method, path, body = null),
-                before = null,
-                now = at,
+                LocalActivityChange("task:${taskId.value}", method, path),
+                at = at,
                 stamp = stamp,
                 actionKind = kind,
             )

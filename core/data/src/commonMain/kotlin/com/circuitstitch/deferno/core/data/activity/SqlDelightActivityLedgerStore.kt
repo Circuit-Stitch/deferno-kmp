@@ -3,7 +3,6 @@ package com.circuitstitch.deferno.core.data.activity
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
-import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -29,26 +28,27 @@ class SqlDelightActivityLedgerStore(
     private val syncQueries get() = db.activitySyncStateQueries
 
     override suspend fun recordLocal(
-        source: ActivitySource,
-        target: String,
-        request: OutboxRequest,
-        before: String?,
-        now: Instant,
+        change: LocalActivityChange,
+        at: Instant,
         stamp: ActivityStamp?,
         actionKind: ActivityActionKind?,
     ) {
+        val instant = at.toString()
         queries.recordLocal(
-            recorded_at = now.toString(),
-            source = source.name,
-            target = target,
-            method = request.method.name,
-            path = request.path.joinToString("\n"),
-            body = request.body,
-            before = before,
+            recorded_at = instant,
+            // Always Mobile: this is the local write path by definition, and every other surface's rows
+            // arrive through `upsertRemote`.
+            source = ActivitySource.Mobile.name,
+            target = change.target,
+            method = change.method.name,
+            path = change.path.joinToString("\n"),
+            body = change.body,
+            before = change.before,
             entry_id = stamp?.entryId,
-            // The optimistic row sorts by the same instant it asserted on the wire, so a local write and
-            // its eventual server twin occupy the same position in the feed and the swap is invisible.
-            occurred_at = (stamp?.occurredAt ?: now).toString(),
+            // The same instant, not a second derivation of it: a local write's apply time IS the actor's
+            // wall-clock, and [stamp] asserted that reading on the wire. So the optimistic row sorts where
+            // it displays, and lands where its eventual server twin will — the swap is invisible.
+            occurred_at = instant,
             action_kind = actionKind?.token,
             item_id = null,
         )

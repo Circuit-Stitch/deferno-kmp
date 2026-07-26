@@ -70,11 +70,8 @@ class ActivityLedgerTest {
         body: String = "{}",
         before: String? = null,
     ) = recordLocal(
-        source = ActivitySource.Mobile,
-        target = target,
-        request = OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), body),
-        before = before,
-        now = now,
+        LocalActivityChange(target, OutboxMethod.Patch, listOf("tasks", "a"), body, before),
+        at = now,
         stamp = stamp,
     )
 
@@ -85,14 +82,7 @@ class ActivityLedgerTest {
      * back-fills them (see [migration16BackfillsOccurredAtSoAnUpgradedRowKeepsItsPlaceInTheFeed]).
      */
     private suspend fun SqlDelightActivityLedgerStore.recordUnstamped(target: String, now: Instant) =
-        recordLocal(
-            source = ActivitySource.Mobile,
-            target = target,
-            request = OutboxRequest(OutboxMethod.Patch, listOf("tasks"), null),
-            before = null,
-            now = now,
-            stamp = null,
-        )
+        recordLocal(LocalActivityChange(target, OutboxMethod.Patch, listOf("tasks")), at = now)
 
     @Test
     fun decoratorRecordsEveryEnqueueReverseChronAsLocal() = runTest {
@@ -159,7 +149,7 @@ class ActivityLedgerTest {
     fun clearEmptiesLedger() = runTest {
         val db = newDb()
         val ledger = SqlDelightActivityLedgerStore(db, Dispatchers.Unconfined)
-        ledger.recordLocal(ActivitySource.Mobile, "task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), "{}"), before = null, now = t0)
+        ledger.recordLocal(LocalActivityChange("task:a", OutboxMethod.Patch, listOf("tasks", "a"), "{}"), at = t0)
         assertEquals(1, ledger.recent().first().size)
         ledger.clear()
         assertTrue(ledger.recent().first().isEmpty())
@@ -283,12 +273,8 @@ class ActivityLedgerTest {
         ledger.recordUnstamped("task:unstamped-1", now = t0)
         ledger.recordUnstamped("task:unstamped-2", now = t1)
         ledger.recordLocal(
-            ActivitySource.Mobile,
-            "settings",
-            OutboxRequest(OutboxMethod.Patch, listOf("auth", "me", "settings"), "{}"),
-            before = null,
-            now = t2,
-            stamp = null,
+            LocalActivityChange("settings", OutboxMethod.Patch, listOf("auth", "me", "settings"), "{}"),
+            at = t2,
         )
 
         // SQLite treats NULLs as DISTINCT in a UNIQUE index. That is the whole reason migration 16 can add

@@ -73,13 +73,12 @@ class LedgerStampingTest {
         // the Activity detail sheet and the Task Trail, because the read-time diff treats every body key
         // as a field the user changed — one that can never be diffed away since `before` never has it.
         val row = ledger.recorded.single()
-        assertEquals("""{"title":"New"}""", row.request.body)
-        assertFalse(row.request.body!!.contains("activity"))
-        // The rest of the row is the write as the caller described it, tagged as this device's own.
-        assertEquals(ActivitySource.Mobile, row.source)
+        assertEquals("""{"title":"New"}""", row.change.body)
+        assertFalse(row.change.body!!.contains("activity"))
+        // The rest of the row is the write as the caller described it.
         assertEquals("task:a", row.target)
         assertEquals("""{"title":"Old"}""", row.before)
-        assertEquals(t0, row.now)
+        assertEquals(t0, row.at)
     }
 
     @Test
@@ -188,7 +187,7 @@ class LedgerStampingTest {
             ),
             ledger.recorded.map { it.asEntry().summaryInfo() },
         )
-        assertTrue(ledger.recorded.all { it.source == ActivitySource.Mobile && it.target == "task:t1" })
+        assertTrue(ledger.recorded.all { it.target == "task:t1" })
     }
 
     @Test
@@ -225,7 +224,7 @@ class LedgerStampingTest {
         assertEquals(delegate.stamps, ledger.recorded.map { it.stamp })
         assertEquals(listOf("entry-1", "entry-2"), delegate.stamps.map { it.entryId })
         // The stamp carries the write's apply-time, the axis the feed sorts on.
-        assertTrue(ledger.recorded.all { it.stamp?.occurredAt == t0 && it.now == t0 })
+        assertTrue(ledger.recorded.all { it.stamp?.occurredAt == t0 && it.at == t0 })
     }
 
     // --- the online-only convert (no outbox either, so its own decorator) ---
@@ -249,8 +248,7 @@ class LedgerStampingTest {
         assertEquals(ActivityActionKind.Converted, row.actionKind)
         assertEquals(ActivitySummary(ActivityVerb.Converted), row.asEntry().summaryInfo())
         assertEquals("item:item-1", row.target)
-        assertEquals(ActivitySource.Mobile, row.source)
-        assertEquals(t0, row.now)
+        assertEquals(t0, row.at)
     }
 
     @Test
@@ -288,15 +286,16 @@ class LedgerStampingTest {
     /** The recorded row as the feed would read it back, for the read-time verb derivation. */
     private fun RecordedLocalActivity.asEntry() = ActivityEntry(
         seq = 1,
-        recordedAt = now,
-        source = source,
-        target = target,
-        method = request.method,
-        path = request.path,
-        body = request.body,
+        recordedAt = at,
+        // Exactly what `recordLocal` stores: the local write path tags every row as this device's own,
+        // and both time axes are the one clock reading the caller passed.
+        source = ActivitySource.Mobile,
+        target = change.target,
+        method = change.method,
+        path = change.path,
+        body = change.body,
         entryId = stamp?.entryId,
-        // Exactly what `recordLocal` stores: the stamped wall-clock, or the apply time for an unstampable route.
-        occurredAt = stamp?.occurredAt ?: now,
+        occurredAt = at,
         actionKind = actionKind,
     )
 }

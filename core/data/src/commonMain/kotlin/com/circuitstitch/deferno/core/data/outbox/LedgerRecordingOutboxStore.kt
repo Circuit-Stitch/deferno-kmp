@@ -1,8 +1,8 @@
 package com.circuitstitch.deferno.core.data.outbox
 
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
-import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivityStamp
+import com.circuitstitch.deferno.core.data.activity.LocalActivityChange
 import com.circuitstitch.deferno.core.data.activity.withActivityStamp
 import kotlin.time.Instant
 
@@ -30,8 +30,9 @@ import kotlin.time.Instant
  * as a changed field — so recording the stamped body would surface a bogus row in the Activity detail
  * sheet and the Task Trail.
  *
- * Records as [ActivitySource.Mobile] — these are local app-side writes. Rows from every other surface
- * ("via Website" / "via MCP agent" / API / system) arrive through the ledger's `?since=` reconcile.
+ * Every row lands as a local app-side write — the ledger's own invariant rather than an argument this
+ * decorator supplies. Rows from every other surface ("via Website" / "via MCP agent" / API / system)
+ * arrive through the ledger's `?since=` reconcile instead.
  *
  * The ledger write stays best-effort: a ledger failure must never lose or block the user's actual write,
  * so it is swallowed — the outbox enqueue, the durable and replayed source of truth, has already
@@ -52,7 +53,9 @@ class LedgerRecordingOutboxStore(
         val stamp = if (request.acceptsActivityStamp) mintStamp(now) else null
         val outbound = stamp?.let(request::withActivityStamp) ?: request
         delegate.enqueue(target, outbound, now, before)
-        runCatching { ledger.recordLocal(ActivitySource.Mobile, target, request, before, now, stamp) }
+        // `request`, not `outbound`: the ledger keeps the UNSTAMPED body (see above).
+        val change = LocalActivityChange(target, request.method, request.path, request.body, before)
+        runCatching { ledger.recordLocal(change, at = now, stamp = stamp) }
     }
 
     override suspend fun syncable(): List<OutboxEntry> = delegate.syncable()

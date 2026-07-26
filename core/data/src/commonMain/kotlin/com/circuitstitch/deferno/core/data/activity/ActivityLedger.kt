@@ -2,7 +2,6 @@ package com.circuitstitch.deferno.core.data.activity
 
 import com.circuitstitch.deferno.core.data.outbox.CommentTargets
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
-import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonObject
 import kotlin.time.Instant
@@ -84,8 +83,8 @@ data class ActivityEntry(
     val body: String? = null,
     val before: String? = null,
     val entryId: String? = null,
-    // Defaults to the apply time — exactly what `recordLocal` writes for an unstamped route and what
-    // migration 16 back-filled — so a caller holding only a local write need not restate it.
+    // Defaults to the apply time — exactly what `recordLocal` writes for a local row (its two axes are
+    // one clock reading) and what migration 16 back-filled — so a caller holding one need not restate it.
     val occurredAt: Instant = recordedAt,
     val observedAt: Instant? = null,
     val actionKind: ActivityActionKind? = null,
@@ -264,6 +263,31 @@ fun ActivityEntry.itemId(): String? {
 fun ActivityEntry.commentTaskId(): String? = CommentTargets.taskId(target)
 
 /**
+ * One locally-applied change, in the shape the ledger stores it — the local-write twin of
+ * [RemoteActivityEntry], and the argument [ActivityLedgerStore.recordLocal] takes.
+ *
+ * Deliberately **not** an [com.circuitstitch.deferno.core.data.outbox.OutboxRequest]: that type is "the
+ * already-computed wire request an outbox entry replays", persisted and re-sent verbatim, and two of the
+ * three write seams that record here never enqueue at all (attachments and convert are online-only). They
+ * were building a request that would never be sent, carrying an `acceptsActivityStamp` flag each had to
+ * document as inert. This carries only what a ledger row actually keeps.
+ *
+ * - [target] — the structured partition key (`"task:{id}"`, `"create:Task:{id}"`, `"plan:{date}:{tz}"`),
+ *   which the read model derives a verb from when no [ActivityActionKind] was named.
+ * - [method] / [path] — the route the change took, the other half of that derivation (a trailing `clear`
+ *   segment is what tells an occurrence clear from an occurrence mark).
+ * - [body] / [before] — the rendered new-value JSON and the pre-apply old-value JSON, the pair the detail
+ *   sheet diffs. Both null for a seam that captured no payload.
+ */
+data class LocalActivityChange(
+    val target: String,
+    val method: OutboxMethod,
+    val path: List<String> = emptyList(),
+    val body: String? = null,
+    val before: String? = null,
+)
+
+/**
  * The local source-of-truth port for the activity ledger — an **optimistic cache** of the server's
  * Activity ledger since #364, not a source of truth. The write path records through [recordLocal] (via the
  * [com.circuitstitch.deferno.core.data.outbox.LedgerRecordingOutboxStore] decorator, so every outbox write
@@ -273,19 +297,25 @@ fun ActivityEntry.commentTaskId(): String? = CommentTargets.taskId(target)
 interface ActivityLedgerStore {
 
     /**
-     * Append one locally-applied change: its [source], the outbox [target] + [request] (its `body` is the
-     * new-value JSON), the pre-apply old-value JSON [before] (null when not snapshotted), at [now] (apply
-     * time). [stamp] is the client-minted merge key that also rode on the mutation body — null for a route
-     * that cannot carry activity metadata, in which case the row can never be deduped against its server
-     * twin and is simply superseded by it. [actionKind] names the verb outright for a write path that
-     * knows it (the online-only attachment/convert seams, whose outbox target says nothing useful).
+     * Append one locally-applied [change], applied at [at].
+     *
+     * Every row this writes is [ActivitySource.Mobile] by construction — it is *the local write path*, and
+     * rows from every other surface arrive through [upsertRemote] — so the source is not a parameter a
+     * caller could get wrong.
+     *
+     * [at] is one clock reading serving both time axes: a local write's apply time and the actor's
+     * wall-clock are the same instant, so the row's `recorded_at` and `occurred_at` are that value and the
+     * optimistic row cannot sort anywhere other than where it displays. [stamp], when present, was minted
+     * from that same reading and asserted it on the wire — it is the client-minted merge key the `?since=`
+     * reconcile dedupes on. Null for a route that cannot carry activity metadata, in which case the row can
+     * never be deduped against its server twin and is simply superseded by it.
+     *
+     * [actionKind] names the verb outright for a write path that knows it (the online-only
+     * attachment/convert seams, whose outbox target says nothing useful).
      */
     suspend fun recordLocal(
-        source: ActivitySource,
-        target: String,
-        request: OutboxRequest,
-        before: String?,
-        now: Instant,
+        change: LocalActivityChange,
+        at: Instant,
         stamp: ActivityStamp? = null,
         actionKind: ActivityActionKind? = null,
     )

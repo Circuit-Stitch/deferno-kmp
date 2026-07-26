@@ -3,14 +3,13 @@ package com.circuitstitch.deferno.core.data.create
 import com.circuitstitch.deferno.core.data.activity.ActivityActionKind
 import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
-import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivityStamp
+import com.circuitstitch.deferno.core.data.activity.LocalActivityChange
 import com.circuitstitch.deferno.core.data.activity.RemoteActivityEntry
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
-import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.Event
@@ -129,14 +128,14 @@ class FakeEventLocalStore(initial: Map<EventId, Event> = emptyMap()) : EventLoca
  * which verb it named — not in the fact that it recorded at all.
  */
 data class RecordedLocalActivity(
-    val source: ActivitySource,
-    val target: String,
-    val request: OutboxRequest,
-    val before: String?,
-    val now: Instant,
+    val change: LocalActivityChange,
+    val at: Instant,
     val stamp: ActivityStamp?,
     val actionKind: ActivityActionKind?,
-)
+) {
+    val target: String get() = change.target
+    val before: String? get() = change.before
+}
 
 /**
  * A recording [ActivityLedgerStore] for the write seams that record into the ledger (#364). Every
@@ -156,16 +155,13 @@ class FakeActivityLedgerStore : ActivityLedgerStore {
     var recordLocalFailure: Throwable? = null
 
     override suspend fun recordLocal(
-        source: ActivitySource,
-        target: String,
-        request: OutboxRequest,
-        before: String?,
-        now: Instant,
+        change: LocalActivityChange,
+        at: Instant,
         stamp: ActivityStamp?,
         actionKind: ActivityActionKind?,
     ) {
         recordLocalFailure?.let { throw it }
-        recorded += RecordedLocalActivity(source, target, request, before, now, stamp, actionKind)
+        recorded += RecordedLocalActivity(change, at, stamp, actionKind)
     }
 
     override suspend fun upsertRemote(entries: List<RemoteActivityEntry>) {
