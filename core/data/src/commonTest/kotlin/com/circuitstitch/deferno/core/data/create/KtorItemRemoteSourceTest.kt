@@ -34,6 +34,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -130,18 +131,30 @@ class KtorItemRemoteSourceTest {
 
         val result = source.convert(
             "item-1",
-            ConvertItemPayload(type = "chore", recurrence = RecurrenceDto("weekly")),
+            ConvertItemPayload(to = "chore", recurrence = RecurrenceDto("weekly")),
             ActivityStamp("entry-3", Instant.parse("2026-04-17T10:00:00Z")),
         )
 
         assertEquals(HttpMethod.Post, captured?.method)
         assertTrue(captured?.url?.encodedPath?.endsWith("/items/item-1/convert") == true)
-        // The stamp is a field on the payload now, so it must not have displaced the payload's own keys —
-        // the failure mode of assembling a body key-by-key is losing one silently.
-        val body = DefernoJson.parseToJsonElement(assertNotNull(sentBody, "the convert body was sent")).jsonObject
-        assertEquals("chore", body.getValue("type").jsonPrimitive.content)
+        // The destination kind's key is `to` — the server's ConvertItemPayload requires it with no alias
+        // and no default, so a body naming it `type` is a 422 on every convert. The client sent exactly
+        // that for months because the test pinned the client's own DTO instead of the contract. A
+        // `contains("type")` check cannot catch it either: `recurrence.type` is a legitimate nested key,
+        // which is why the absence assertion is scoped to the top-level key set.
+        val raw = assertNotNull(sentBody, "the convert body was sent")
+        val body = DefernoJson.parseToJsonElement(raw).jsonObject
+        assertEquals("chore", body.getValue("to").jsonPrimitive.content)
+        assertFalse("type" in body, "the destination kind is never sent under the client-only `type` key")
         assertEquals("weekly", body.getValue("recurrence").jsonObject.getValue("type").jsonPrimitive.content)
         assertEquals("entry-3", body.getValue("activity").jsonObject.getValue("id").jsonPrimitive.content)
+        // The whole body, pinned: a new defaulted field on ConvertItemPayload breaks this deliberately —
+        // whether it belongs on the wire is a decision to make, not a detail to absorb.
+        assertEquals(
+            """{"to":"chore","recurrence":{"type":"weekly"},""" +
+                """"activity":{"id":"entry-3","at":"2026-04-17T10:00:00Z","source":"mobile"}}""",
+            raw,
+        )
         val converted = assertIs<ApiResult.Success<ConvertedItem>>(result).data
         assertEquals(ItemKind.Chore, converted.kind)
     }

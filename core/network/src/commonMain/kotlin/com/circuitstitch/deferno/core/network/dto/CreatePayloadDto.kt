@@ -71,8 +71,13 @@ data class CreateEventPayload(
 
 /**
  * `POST /items/{id}/convert` (ADR-0016 post-creation counterpart): change an existing item's kind.
- * Carries the target [type] (`task`/`habit`/`chore`/`event`) plus the fields the new kind needs that
+ * Carries the target kind [to] (`task`/`habit`/`chore`/`event`) plus the fields the new kind needs that
  * the old kind lacked (a recurrence when converting *to* a recurring kind, an `end_time` for an event).
+ *
+ * [to] is named for its wire key, like every other property here. It shipped as `type` for a while, which
+ * the server's `ConvertItemPayload` — where `to` is required with no alias and no default — rejects with a
+ * 422 on every call; the Kotlin name divergence is what let that survive review. `to` is a stdlib infix
+ * function, not a keyword, so it is a legal property name.
  *
  * [activity] is the client-minted Activity-ledger stamp (#364), a raw [JsonObject] for the same reason
  * [CommitAttachmentsPayload.activity] is. It is **stamped by the wire adapter at send time**, never by
@@ -83,7 +88,7 @@ data class CreateEventPayload(
  */
 @Serializable
 data class ConvertItemPayload(
-    val type: String,
+    val to: String,
     @SerialName("complete_by") val completeBy: String? = null,
     @SerialName("end_time") val endTime: String? = null,
     val recurrence: RecurrenceDto? = null,

@@ -357,7 +357,7 @@ class CommandExecutorTest {
 
         val result = executor(tw, pw, cw)
             .execute(ConvertItem("item-1", com.circuitstitch.deferno.core.model.ItemKind.Task,
-                com.circuitstitch.deferno.core.network.dto.ConvertItemPayload(type = "habit")))
+                com.circuitstitch.deferno.core.network.dto.ConvertItemPayload(to = "habit")))
 
         assertEquals(CommandResult.Offline(CommandKind.ConvertItem), result)
         assertTrue(tw.calls.isEmpty(), "offline convert must not enqueue via the task writer")
@@ -371,7 +371,7 @@ class CommandExecutorTest {
         ))
         val result = executor(FakeTaskWriter(), FakePlanWriter(), cw)
             .execute(ConvertItem("item-1", com.circuitstitch.deferno.core.model.ItemKind.Task,
-                com.circuitstitch.deferno.core.network.dto.ConvertItemPayload(type = "habit")))
+                com.circuitstitch.deferno.core.network.dto.ConvertItemPayload(to = "habit")))
 
         assertEquals(CommandResult.Accepted(CommandKind.ConvertItem, itemId = "item-1"), result)
         assertEquals(listOf("convert:item-1:Task"), cw.calls)

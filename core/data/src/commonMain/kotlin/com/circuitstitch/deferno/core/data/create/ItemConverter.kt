@@ -10,7 +10,7 @@ import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
 
 /**
- * `POST /items/{id}/convert` — change an existing item's [ConvertItemPayload.type]. Returns the converted
+ * `POST /items/{id}/convert` — change an existing item's kind to [ConvertItemPayload.to]. Returns the converted
  * item's new kind ([ConvertedItem]) so the caller can reconcile the local cache (remove the old-kind row,
  * seed the new-kind row).
  *

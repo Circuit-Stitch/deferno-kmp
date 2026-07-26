@@ -236,7 +236,7 @@ class LedgerStampingTest {
         val ledger = FakeActivityLedgerStore()
         val converter = LedgerRecordingItemConverter(delegate, ledger, now = { t0 }, mintStamp = SequentialStamps())
 
-        val result = converter.convert("item-1", ConvertItemPayload(type = "chore"))
+        val result = converter.convert("item-1", ConvertItemPayload(to = "chore"))
 
         // The delegate's answer reaches the caller untouched — the create writer seeds the new-kind row
         // from it, so a decorator that swallowed it would lose the item from every list until a refresh.
@@ -263,7 +263,7 @@ class LedgerStampingTest {
             mintStamp = SequentialStamps(),
         )
 
-        val result = converter.convert("item-1", ConvertItemPayload(type = "chore"))
+        val result = converter.convert("item-1", ConvertItemPayload(to = "chore"))
 
         // A convert that did not reach the server did not happen: a row for it would claim a kind change
         // the user's data does not have, and no reconcile would ever take it back.

@@ -126,7 +126,7 @@ class OfflineCreateWriterTest {
         val f = Fixture(online = false)
         f.taskStore.upsert(task("item-1"))
 
-        val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(type = "chore"))
+        val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(to = "chore"))
 
         assertEquals(CreateResult.Offline, result)
         assertTrue(f.remote.calls.isEmpty(), "offline convert must make no network call")
@@ -138,7 +138,7 @@ class OfflineCreateWriterTest {
         f.taskStore.upsert(task("item-1"))
         f.remote.convertResult = ApiResult.Success(ConvertedItem.AsChore(chore("item-1")))
 
-        val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(type = "chore", recurrence = RecurrenceDto("weekly")))
+        val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(to = "chore", recurrence = RecurrenceDto("weekly")))
 
         assertEquals(CreateResult.Created(ItemKind.Chore, "item-1"), result)
         assertTrue(f.taskStore.all.isEmpty(), "the pre-convert Task row must be removed")
@@ -151,7 +151,7 @@ class OfflineCreateWriterTest {
         f.taskStore.upsert(task("item-1"))
         f.remote.convertResult = ApiResult.Failure(ApiError.Endpoint(status = 422, code = "invalid", message = "nope"))
 
-        val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(type = "chore"))
+        val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(to = "chore"))
 
         assertEquals("nope", assertIs<CreateResult.Failed>(result).message)
     }

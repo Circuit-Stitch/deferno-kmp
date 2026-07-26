@@ -43,7 +43,7 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.SendTaskToReview -> SendTaskToReview(TaskId("t1"))
     CommandKind.OpenTask -> OpenTask(TaskId("t1"))
     CommandKind.CreateItem -> CreateItem(CreateItem.Payload.Task(CreateTaskPayload(title = "new")))
-    CommandKind.ConvertItem -> ConvertItem("item-1", ItemKind.Task, ConvertItemPayload(type = "habit"))
+    CommandKind.ConvertItem -> ConvertItem("item-1", ItemKind.Task, ConvertItemPayload(to = "habit"))
     CommandKind.MarkOccurrence -> MarkOccurrence("ce-1", OccurrenceAction.Complete)
     CommandKind.ClearOccurrence -> ClearOccurrence("ce-1")
     CommandKind.RescheduleOccurrence -> RescheduleOccurrence("ce-1", SAMPLE_DATE)
