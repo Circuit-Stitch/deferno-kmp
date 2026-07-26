@@ -144,6 +144,26 @@ fine read state (`scheduled`, `missed`, and the `done_on_time`/`done_late` split
   **intent-shaped minimal bodies**: each outbox intent emits a `JsonObject` with only the keys it
   changes (value or explicit null per intent). Hard serializer rule: **never emit an absent field.**
 
+### ⚠️ Deletes moved from `DELETE` to `POST …/delete` (Activity ledger, backend ADR 2026-07-06)
+
+So activity metadata can ride in a body without depending on CDN `DELETE`-body behavior, the in-scope
+deletes became POST soft-deletes. **The old `DELETE` routes are gone — there is no back-compat alias**
+(verified against the live router's full path list, not just the spec):
+
+| Old | Live |
+|---|---|
+| `DELETE /comments/{id}` | `POST /comments/{comment_id}/delete` |
+| `DELETE /{habits,chores,events}/{id}/occurrences/{date}` | `POST /{…}/{id}/occurrences/{date}/clear` |
+| `DELETE /tasks/{id}/attachments/{aid}` | `POST /items/{id}/attachments/{att_id}/delete` |
+
+Separately, the attachment surface became **kind-neutral**: `/tasks/{id}/attachments*` → `/items/{id}/attachments*`
+(presign, commit, list, caption). `DELETE /tasks/{id}` and `DELETE /items/{id}` are **unchanged** — item
+delete is still a bodiless `DELETE` and therefore cannot carry `activity` (the server mints that entry id).
+
+The body on the new POST deletes is `ActivityBody` — `{ "activity": {…} }`, every field optional, so an
+**empty `{}` is valid**. One asymmetry to know: `POST /events/{id}/occurrences/{date}/clear` takes **no
+body at all**, unlike its chore/habit twins — Event clear cannot carry a client-minted entry id.
+
 ## Time-of-day (#348) — verified live against staging 2026-06-12
 
 The deadline/start "WHEN" is split into a **date axis** (`complete_by`/`end_time`, RFC3339 instants) and a
@@ -178,9 +198,24 @@ is signed, the **PUT body length must equal the `size_bytes` sent at presign** (
 
 ## Sync (ADR-0001, #22)
 
-- **No `?since=`/delta/sync-token; no cursor paging** (offset-only `$top`/`$skip` on `/items`).
+- **The *item* surfaces have no `?since=`/delta cursor** (offset-only `$top`/`$skip` on `/items`).
   Soft-delete tombstones (`deleted_at`) are visible. Sync stays **last-write-wins** — the client owns
   conflict resolution.
+- ⚠️ **`GET /activity` is the one exception, and it is a real keyset cursor** (added after this doc
+  first said "no `?since=` anywhere"). It pages **two mutually exclusive axes**: `before` scrolls back
+  over `occurred_at` (newest-first), `since` catches up over `observed_at` (oldest-first, gapless).
+  Supplying both is a **400**. The next-cursor rides *inside* the payload — `data.next_before` /
+  `data.next_since` — and only the one matching the axis you paged is non-null; the other is `null`.
+  A first sync may pass a bare RFC-3339 timestamp as `since`. **End-of-feed is an empty `entries`
+  array, not a null cursor** (the last non-empty page still returns one).
+  Note the envelope *also* declares a sibling top-level `next_since` on every `Envelope_*` schema —
+  `GET /activity` never populates it (`Versioned::ok` hard-sets it to `None`), so read `data.next_since`.
+- **Mutation bodies accept an optional `activity: { id, at, source }` sibling** (`ActivityMeta`) on 35
+  routes. `id` is a **client-minted `entry_id` — the merge/dedup key**: the server files its
+  authoritative ledger row under that id, so a client that mints one can union its optimistic rows with
+  the `?since=` feed instead of double-counting them. Every field is individually optional (absent ⇒
+  server supplies it). An unrecognized `source` is tolerated (⇒ `unknown`), but a typo'd `?kind=`/
+  `?source=` **filter** is a 400 — reads are strict, ingest is tolerant.
 - ⚠️ **`rev` + `updated_at` now appear on the wire** (verified on staging 2026-06-12; a Task read carries
   `"rev":8,"updated_at":…` — they were absent when this doc first said "no `updated_at`/`rev` anywhere").
   The backend added optimistic-concurrency fields; **the client still ignores them** (tolerant reader),
