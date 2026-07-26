@@ -1,6 +1,8 @@
 package com.circuitstitch.deferno.core.data
 
 import com.circuitstitch.deferno.core.data.account.AccountBearerTokenProvider
+import com.circuitstitch.deferno.core.data.activity.ActivityRemoteSource
+import com.circuitstitch.deferno.core.data.activity.KtorActivityRemoteSource
 import com.circuitstitch.deferno.core.data.account.AccountContext
 import com.circuitstitch.deferno.core.data.account.AccountDataStore
 import com.circuitstitch.deferno.core.data.account.AccountManager
@@ -218,6 +220,14 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun commentRemoteSource(client: HttpClient): CommentRemoteSource = KtorCommentRemoteSource(client)
+
+    /**
+     * The server Activity-ledger source (`GET /activity`, #364) — the client's one delta-cursor endpoint.
+     * AppScope like every other Ktor source; the per-Account watermark lives with `ActivitySync`.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun activityRemoteSource(client: HttpClient): ActivityRemoteSource = KtorActivityRemoteSource(client)
 
     /** The cached item-history source (`GET /items/{id}/history`, ADR-0043). */
     @Provides

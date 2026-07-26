@@ -29,14 +29,26 @@ private val diffJson = Json { ignoreUnknownKeys = true }
  * swallowed to an empty diff — a diagnostics feature must never crash the screen.
  */
 fun ActivityEntry.changes(): List<ActivityFieldChange> {
+    // A locally-captured body/before pair is RICHER than the server's `detail` for the same edit: it holds
+    // the values this device actually sent, including fields the server's whitelist doesn't snapshot. So
+    // the local capture wins where it exists, and `detail` fills in for rows this device never wrote.
+    localChanges()?.let { return it }
+    return detailChanges()
+}
+
+/** The pre-#364 derivation: zip the captured new-value [ActivityEntry.body] and old-value `before`. */
+private fun ActivityEntry.localChanges(): List<ActivityFieldChange>? {
     val after = body.parseObjectOrNull()
     val before = before.parseObjectOrNull()
-    if (after == null && before == null) return emptyList()
+    if (after == null && before == null) return null
 
     val afterObj = after ?: JsonObject(emptyMap())
     val beforeObj = before ?: JsonObject(emptyMap())
     // Body keys first (the change's own order), then any before-only keys — a stable, meaningful order.
+    // `activity` is skipped: the outbox choke-point merges the client-minted stamp into the body that goes
+    // on the wire, and it is metadata about the change, not a field the user changed.
     val keys = LinkedHashSet<String>().apply { addAll(afterObj.keys); addAll(beforeObj.keys) }
+        .filterNot { it == ACTIVITY_STAMP_KEY }
 
     return keys.map { key ->
         ActivityFieldChange(
@@ -47,6 +59,65 @@ fun ActivityEntry.changes(): List<ActivityFieldChange> {
         )
     }
 }
+
+/**
+ * The server-sourced diff, read out of the encrypted-at-rest `detail` blob the reconcile brought back.
+ *
+ * Two action kinds carry a renderable diff and they are shaped differently:
+ * - `updated` → `{"fields": {"<key>": {"old": …, "new": …}}}`, the whitelisted before/after snapshot pair.
+ * - `status_changed` → `{"from": …, "to": …}` at the top level, the dedicated "mark done" verb the server
+ *   splits out when `status` is the only field that moved.
+ *
+ * Every other verb says everything in its summary line and returns an empty diff. Order follows the
+ * server's own key order, which `json_field_diff` emits sorted, so it is stable across pages.
+ */
+private fun ActivityEntry.detailChanges(): List<ActivityFieldChange> {
+    val obj = detail.parseObjectOrNull() ?: return emptyList()
+    return when (actionKind) {
+        ActivityActionKind.Updated -> {
+            val fields = obj["fields"] as? JsonObject ?: return emptyList()
+            fields.map { (key, pair) ->
+                val sides = pair as? JsonObject
+                ActivityFieldChange(
+                    field = ActivityField.fromKey(key),
+                    rawKey = key,
+                    before = sides?.get("old").toFieldValue(),
+                    after = sides?.get("new").toFieldValue(),
+                )
+            }
+        }
+        ActivityActionKind.StatusChanged -> {
+            // An occurrence status change carries `{to}` or `{cleared:true}` rather than a from/to pair —
+            // its summary verb already says which, so there is no diff worth rendering.
+            val from = obj["from"]
+            val to = obj["to"]
+            if (from == null && to == null) {
+                emptyList()
+            } else {
+                listOf(
+                    ActivityFieldChange(
+                        field = ActivityField.Status,
+                        rawKey = "status",
+                        before = from.toFieldValue(),
+                        after = to.toFieldValue(),
+                    ),
+                )
+            }
+        }
+        else -> emptyList()
+    }
+}
+
+/** The lowercase item-kind token the server puts on most `detail` blobs ("task"/"chore"/"habit"/"event"). */
+internal fun ActivityEntry.detailItemKind(): String? =
+    (detail.parseObjectOrNull()?.get("item_kind") as? JsonPrimitive)?.contentOrNull?.lowercase()
+
+/** Whether an occurrence-scoped `status_changed` was a CLEAR (`{"cleared": true}`) rather than a mark. */
+internal fun ActivityEntry.detailCleared(): Boolean =
+    (detail.parseObjectOrNull()?.get("cleared") as? JsonPrimitive)?.booleanOrNull == true
+
+/** The body key the outbox choke-point merges the client-minted stamp under — never a user-facing field. */
+private const val ACTIVITY_STAMP_KEY = "activity"
 
 private fun String?.parseObjectOrNull(): JsonObject? {
     if (this == null) return null

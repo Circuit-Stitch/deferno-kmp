@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.di
 
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
+import com.circuitstitch.deferno.core.data.activity.ActivitySync
 import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.backup.BackupExporter
@@ -20,7 +21,7 @@ import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.security.SecurityRepository
 import com.circuitstitch.deferno.core.data.settings.SettingsRepository
-import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
+import com.circuitstitch.deferno.core.data.task.LedgerRecordingTaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.model.Account
@@ -65,9 +66,10 @@ abstract class AccountComponent(
      * (DB → driver → key/Context/databasesDir, repositories → AppScope remote sources).
      */
     abstract val taskRepository: TaskRepository
-    // Online-only Task detail extras (attachments); an AppScope binding resolved through here. Comments
-    // moved to the offline-first [commentRepository] below (ADR-0043).
-    abstract val taskDetailRepository: TaskDetailRepository
+    // Online-only Task detail extras (attachments). The AccountScope decorator, NOT the bare Ktor
+    // binding: attachments never reach the outbox choke-point, so this wrapper is what records them into
+    // the activity ledger (#364). Comments moved to the offline-first [commentRepository] (ADR-0043).
+    abstract val taskDetailRepository: LedgerRecordingTaskDetailRepository
     abstract val planRepository: PlanRepository
 
     // The offline-first Task-comment thread + cached server item-history (ADR-0043): the Task detail's
@@ -167,6 +169,13 @@ abstract class AccountComponent(
      * validation of its AccountScope chain (store → DB) and gives the shell its read accessor.
      */
     abstract val activityLedgerStore: ActivityLedgerStore
+
+    /**
+     * The `?since=` reconcile that merges the server's Activity ledger into [activityLedgerStore] (#364).
+     * Exposing it anchors anvil's validation of its chain (sync → ledger → DB, sync → AppScope wire
+     * source) and gives the shell the seam its sync driver calls.
+     */
+    abstract val activitySync: ActivitySync
 
     /**
      * The on-device [[Assistant]] Conversation cache (#282, ADR-0040): local-only persisted chat history

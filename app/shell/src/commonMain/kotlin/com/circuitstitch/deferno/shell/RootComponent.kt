@@ -250,7 +250,8 @@ class DefaultRootComponent(
     private var themeJob: Job? = null
 
     /** The active session's outbox driver (#143/#158): flush, settings reconcile, then the periodic loop. */
-    private val outboxDriver = OutboxDriver(scope, connectivity, now, outboxFlushPeriod, outboxFlushContext)
+    private val outboxDriver =
+        OutboxDriver(scope, connectivity, now, outboxFlushPeriod, flushContext = outboxFlushContext)
 
     private sealed interface Config {
         data object Auth : Config

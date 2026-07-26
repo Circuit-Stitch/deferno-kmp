@@ -215,7 +215,7 @@ class OutboxDriverTest {
             flushInterceptor = currentCoroutineContext()[ContinuationInterceptor]
         })
 
-        OutboxDriver(backgroundScope, AssumeOnlineConnectivity(), { t0 }, 30.seconds, flushDispatcher)
+        OutboxDriver(backgroundScope, AssumeOnlineConnectivity(), { t0 }, 30.seconds, flushContext = flushDispatcher)
             .drive(session)
         runCurrent()
 

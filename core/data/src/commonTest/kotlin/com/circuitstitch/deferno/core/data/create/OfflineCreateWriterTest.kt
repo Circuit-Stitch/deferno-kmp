@@ -54,6 +54,7 @@ class OfflineCreateWriterTest {
             eventStore = eventStore,
             outbox = outbox,
             pendingCreateStore = pending,
+            ledger = FakeActivityLedgerStore(),
             newId = { id },
             now = { Instant.parse("2026-06-07T12:00:00Z") },
             orgSlug = { "u-test" },

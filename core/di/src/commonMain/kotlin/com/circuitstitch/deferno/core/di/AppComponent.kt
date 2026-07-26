@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.di
 
+import com.circuitstitch.deferno.core.data.activity.ActivityRemoteSource
 import com.circuitstitch.deferno.core.data.account.AccountContext
 import com.circuitstitch.deferno.core.data.account.AccountManager
 import com.circuitstitch.deferno.core.data.account.ReauthRequester
@@ -273,6 +274,9 @@ abstract class AppComponent(
     // comment/history repositories reconcile the cache through them on task-detail open.
     abstract val commentRemoteSource: CommentRemoteSource
     abstract val itemHistoryRemoteSource: ItemHistoryRemoteSource
+    // The server Activity-ledger source (`GET /activity`, #364): the AccountScope ActivitySync pages the
+    // `?since=` axis through it and merges each page into that Account's ledger cache.
+    abstract val activityRemoteSource: ActivityRemoteSource
     abstract val outboxRequestSender: OutboxRequestSender
     abstract val accountDatabaseFactory: AccountDatabaseFactory
     // The online-only create flow (#71, ADR-0016): the CreateWriter (AccountScope) gates on this

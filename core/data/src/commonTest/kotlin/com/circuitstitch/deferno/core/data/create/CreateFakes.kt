@@ -1,9 +1,16 @@
 package com.circuitstitch.deferno.core.data.create
 
+import com.circuitstitch.deferno.core.data.activity.ActivityActionKind
+import com.circuitstitch.deferno.core.data.activity.ActivityEntry
+import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
+import com.circuitstitch.deferno.core.data.activity.ActivitySource
+import com.circuitstitch.deferno.core.data.activity.ActivityStamp
+import com.circuitstitch.deferno.core.data.activity.RemoteActivityEntry
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.Event
@@ -21,7 +28,9 @@ import com.circuitstitch.deferno.core.network.dto.CreateHabitPayload
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlin.time.Instant
 
 /** A [Connectivity] whose online/offline state is set by the test (`online.value = …`). */
 class FakeConnectivity(online: Boolean = true) : Connectivity {
@@ -58,7 +67,11 @@ class FakeItemRemoteSource : ItemRemoteSource {
         calls += "createEvent"; return eventResult
     }
 
-    override suspend fun convert(id: String, payload: ConvertItemPayload): ApiResult<ConvertedItem> {
+    override suspend fun convert(
+        id: String,
+        payload: ConvertItemPayload,
+        stamp: ActivityStamp?,
+    ): ApiResult<ConvertedItem> {
         calls += "convert:$id"; return convertResult
     }
 }
@@ -133,5 +146,48 @@ class FakeEventLocalStore(initial: Map<EventId, Event> = emptyMap()) : EventLoca
     private suspend fun runStaged(block: suspend () -> Unit) {
         inTransaction = true; staged = rows.value.toMutableMap()
         try { block(); rows.value = staged.toMap() } finally { inTransaction = false }
+    }
+}
+
+/**
+ * A recording [ActivityLedgerStore] for the create tests. Only [recordLocal] is exercised — convert is
+ * the one write here that bypasses the outbox choke-point and so records its own row (#364) — but the
+ * whole port is implemented so a new method can't silently go untested by these fixtures.
+ */
+class FakeActivityLedgerStore : ActivityLedgerStore {
+    val recorded = mutableListOf<Triple<ActivitySource, String, ActivityStamp?>>()
+    val merged = mutableListOf<RemoteActivityEntry>()
+    var cursor: String? = null
+
+    override suspend fun recordLocal(
+        source: ActivitySource,
+        target: String,
+        request: OutboxRequest,
+        before: String?,
+        now: Instant,
+        stamp: ActivityStamp?,
+        actionKind: ActivityActionKind?,
+    ) {
+        recorded += Triple(source, target, stamp)
+    }
+
+    override suspend fun upsertRemote(entries: List<RemoteActivityEntry>) {
+        merged += entries
+    }
+
+    override fun recent(limit: Long): Flow<List<ActivityEntry>> = flowOf(emptyList())
+
+    override suspend fun pruneOlderThan(cutoff: Instant) = Unit
+
+    override suspend fun syncCursor(): String? = cursor
+
+    override suspend fun setSyncCursor(cursor: String?, now: Instant) {
+        this.cursor = cursor
+    }
+
+    override suspend fun clear() {
+        recorded.clear()
+        merged.clear()
+        cursor = null
     }
 }

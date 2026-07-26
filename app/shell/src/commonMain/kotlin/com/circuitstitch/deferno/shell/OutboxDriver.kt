@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
@@ -38,6 +39,13 @@ class OutboxDriver(
     private val now: () -> Instant,
     private val flushPeriod: Duration,
     /**
+     * How often to reconcile the Activity ledger against the server (#364) while online. Deliberately far
+     * slower than [flushPeriod]: the flush drains the user's OWN pending writes (latency the user feels),
+     * whereas this pulls in what happened on other surfaces (latency nobody is waiting on). Activation and
+     * the reconnect edge sync immediately regardless, so this tick only covers a long foreground idle.
+     */
+    private val activitySyncPeriod: Duration = DEFAULT_ACTIVITY_SYNC_PERIOD,
+    /**
      * The context the flush loop runs on. The flush + settings reconcile do **synchronous** SQLite I/O
      * (`SqlDelightOutboxStore` runs its queries straight through on the calling dispatcher), so this must
      * be a background context — [scope] is the component's *Main* lifecycle scope, and running the flush
@@ -56,12 +64,25 @@ class OutboxDriver(
             val online = connectivity.online
             if (online.value) guarded { flushToQuiescence(session) }
             guarded { session.settingsRepository.refresh() }
+            guarded { session.syncActivity() }
             launch {
                 // The reconnect edge: `online` is distinct-until-changed, so after dropping the current
                 // value every `true` is an offline→online transition.
                 online.drop(1).filter { it }.collect {
                     guarded { flushToQuiescence(session) }
                     guarded { session.settingsRepository.refresh() }
+                    guarded { session.syncActivity() }
+                }
+            }
+            launch {
+                // The activity reconcile runs on its OWN, slower cadence rather than riding the flush
+                // tick: it is a paged network read on a feed the user is usually not looking at, and
+                // folding it into a 30s loop would multiply the app's steady-state request count for no
+                // freshness the user perceives. The legs that matter for correctness — activation and the
+                // reconnect edge — fire it immediately above.
+                while (true) {
+                    delay(activitySyncPeriod)
+                    if (online.value) guarded { session.syncActivity() }
                 }
             }
             while (true) {
@@ -105,5 +126,10 @@ class OutboxDriver(
         } catch (_: Throwable) {
             // ponytail: swallow — no structured logging yet; the loop retries next tick. Log here once it lands.
         }
+    }
+
+    companion object {
+        /** The default Activity-ledger reconcile cadence — see [activitySyncPeriod]. */
+        val DEFAULT_ACTIVITY_SYNC_PERIOD: Duration = 5.minutes
     }
 }

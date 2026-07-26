@@ -41,6 +41,8 @@ import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceLocalStore
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
+import com.circuitstitch.deferno.core.data.activity.ActivityRemoteSource
+import com.circuitstitch.deferno.core.data.activity.ActivitySync
 import com.circuitstitch.deferno.core.data.activity.SqlDelightActivityLedgerStore
 import com.circuitstitch.deferno.core.data.comment.CommentLocalStore
 import com.circuitstitch.deferno.core.data.comment.CommentRemoteSource
@@ -84,10 +86,12 @@ import com.circuitstitch.deferno.core.data.settings.SettingsWriter
 import com.circuitstitch.deferno.core.data.settings.SqlDelightSettingsLocalStore
 import com.circuitstitch.deferno.core.data.task.BlockedByWriter
 import com.circuitstitch.deferno.core.data.task.KtorBlockedByWriter
+import com.circuitstitch.deferno.core.data.task.LedgerRecordingTaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.OfflineTaskRepository
 import com.circuitstitch.deferno.core.data.task.OutboxTaskWriter
 import com.circuitstitch.deferno.core.data.task.SqlDelightTaskLocalStore
 import com.circuitstitch.deferno.core.data.task.TaskLocalStore
+import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskWriter
@@ -142,6 +146,31 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun activityLedgerStore(db: DefernoDatabase): ActivityLedgerStore = SqlDelightActivityLedgerStore(db)
+
+    /**
+     * The `?since=` reconcile that merges the SERVER's Activity ledger into the local cache (#364) — the
+     * client's one delta sync. AccountScope because its watermark is per-Account state living in that
+     * Account's DB; the wire source it reads through is AppScope like every other (the shared client
+     * follows the Active Account per request).
+     */
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun activitySync(
+        remoteSource: ActivityRemoteSource,
+        ledger: ActivityLedgerStore,
+    ): ActivitySync = ActivitySync(remoteSource, ledger)
+
+    /**
+     * Attachments are the one item-mutation surface that never reaches the outbox choke-point (they are
+     * online-only, ADR-0001), so they get their own ledger-recording decorator (#364). AccountScope
+     * because the ledger is; the Ktor half it wraps stays AppScope.
+     */
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun ledgerRecordingTaskDetailRepository(
+        delegate: TaskDetailRepository,
+        ledger: ActivityLedgerStore,
+    ): LedgerRecordingTaskDetailRepository = LedgerRecordingTaskDetailRepository(delegate, ledger)
 
     // Every write funnels through OutboxStore.enqueue, so wrapping it in the ledger recorder captures the
     // whole app's mutations at one choke-point (no per-writer edits) — a write path cannot forget to log.
@@ -330,6 +359,7 @@ interface AccountDataBindings {
         eventStore: EventLocalStore,
         outbox: OutboxStore,
         pendingCreateStore: PendingCreateStore,
+        ledger: ActivityLedgerStore,
     ): CreateWriter = OfflineCreateWriter(
         connectivity = connectivity,
         remoteSource = remoteSource,
@@ -339,6 +369,7 @@ interface AccountDataBindings {
         eventStore = eventStore,
         outbox = outbox,
         pendingCreateStore = pendingCreateStore,
+        ledger = ledger,
     )
 
     // The id-healer + replay listener (#185): when a create replays, the listener confirms its
