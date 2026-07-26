@@ -1,0 +1,42 @@
+-- Migration 16 -> 17: back the activity ledger with the SERVER's Activity ledger (#364).
+--
+-- The backend now owns an append-only, org-scoped, actor-attributed Activity ledger (Deferno ADR
+-- 2026-07-06) and this table is demoted from source-of-truth to an optimistic cache of it. Two things
+-- have to become expressible on an existing row:
+--
+--   1. the merge key (`entry_id`) the client mints at write time and sends on the mutation, so the
+--      server's authoritative row lands on TOP of the optimistic one instead of beside it; and
+--   2. the server's typed vocabulary (`action_kind`/`actor_kind`/`item_id`/…), which the read model
+--      prefers over deriving a verb from the outbox `target`+`method`.
+--
+-- Every column is additive and nullable, so an existing row keeps rendering exactly as it did: NULL
+-- `action_kind` means "no server vocabulary yet — derive from target", which is the pre-migration
+-- behaviour by construction. Mirrors ActivityLedgerEntry.sq exactly
+-- (verifyCommonMainDefernoDatabaseMigration checks it).
+--
+-- The UNIQUE index is what makes the reconcile idempotent: `upsertRemote`'s `ON CONFLICT(entry_id)`
+-- requires it. SQLite treats NULLs as distinct in a unique index, so every pre-migration row (all of
+-- which have a NULL entry_id) coexists without collision.
+--
+-- Never edit a released migration or snapshot — ADR-0022 runbook.
+ALTER TABLE activityLedgerEntry ADD COLUMN entry_id TEXT;
+ALTER TABLE activityLedgerEntry ADD COLUMN occurred_at TEXT;
+ALTER TABLE activityLedgerEntry ADD COLUMN observed_at TEXT;
+ALTER TABLE activityLedgerEntry ADD COLUMN action_kind TEXT;
+ALTER TABLE activityLedgerEntry ADD COLUMN actor_kind TEXT;
+ALTER TABLE activityLedgerEntry ADD COLUMN provider TEXT;
+ALTER TABLE activityLedgerEntry ADD COLUMN item_id TEXT;
+ALTER TABLE activityLedgerEntry ADD COLUMN occurrence TEXT;
+ALTER TABLE activityLedgerEntry ADD COLUMN series_id TEXT;
+ALTER TABLE activityLedgerEntry ADD COLUMN changed_fields TEXT;
+ALTER TABLE activityLedgerEntry ADD COLUMN detail TEXT;
+
+CREATE UNIQUE INDEX activityLedgerEntry_entry_id ON activityLedgerEntry(entry_id);
+
+-- The delta cursor. New table, so nothing to back-fill: a NULL/absent row is the "never synced" signal
+-- that bootstraps the first pull from a bare RFC-3339 timestamp.
+CREATE TABLE activitySyncState (
+    id        INTEGER NOT NULL PRIMARY KEY CHECK (id = 0),
+    cursor    TEXT,
+    synced_at TEXT
+);

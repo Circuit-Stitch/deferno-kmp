@@ -1,0 +1,33 @@
+-- The Activity-ledger sync high-water mark (#364) — the client's first and only delta cursor.
+--
+-- `GET /activity?since=<cursor>` pages the server's `observed_at` axis ascending and gaplessly, handing
+-- back an opaque `data.next_since` to replay on the following call. That token is the ONLY thing the
+-- client must not lose: drop it and the next sync either re-pulls the whole retention window or (worse,
+-- if it guessed a timestamp) silently skips entries observed in between.
+--
+-- Singleton, exactly like `userSettingsEntity`: the per-Account encrypted DB is already scoped to one
+-- Account (ADR-0002/0014), so `id` is pinned to 0 by a CHECK and the upsert always targets the same row.
+-- Deliberately NOT multiplatform-settings — every Settings binding in this app is device-global
+-- ("App setting — device-local, never per-Account"), and a cursor that outlived its account would
+-- resume another account's sync from a foreign watermark.
+--
+-- `cursor` is the opaque `next_since` token, or NULL before the first successful sync — which is the
+-- signal to bootstrap from a bare RFC-3339 timestamp instead (the endpoint accepts either).
+-- `synced_at` is the client clock at the last successful page, for diagnostics and for deciding whether
+-- a sync is due at all.
+CREATE TABLE activitySyncState (
+    id        INTEGER NOT NULL PRIMARY KEY CHECK (id = 0),
+    cursor    TEXT,
+    synced_at TEXT
+);
+
+-- The cursor row, or no rows before the first sync.
+selectState:
+SELECT * FROM activitySyncState WHERE id = 0;
+
+-- Advance the watermark (id pinned to 0 by the CHECK, so this always replaces the same row).
+upsertState:
+INSERT OR REPLACE INTO activitySyncState(id, cursor, synced_at) VALUES (0, ?, ?);
+
+deleteAll:
+DELETE FROM activitySyncState;
