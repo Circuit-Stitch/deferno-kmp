@@ -169,6 +169,11 @@ the reconcile could not re-fetch. Rows carry two times: `occurred_at` (the actor
 feed sorts and shows, so offline morning work reads as morning work) and `observed_at` (the server clock,
 the sync axis). A row this device wrote but the server has not yet confirmed is **superseded** by its
 authoritative twin when it arrives — not "unsynced", and never shown as failed.
+Who acted is a row's **attribution**, which is not the same as its source: the server's `actor_kind`
+outranks the surface where it named a non-human one (an [[Assistant]] write runs inside its human's
+session, so its *source* is whatever surface that human was on, and naming it would be true but useless;
+a webhook is better named by its integration than its category). Decided once, in the shared feed
+projection, so every platform View renders the same answer rather than re-deriving the precedence.
 _Avoid_: audit log / activity log / history (all overloaded — [[Item history]] is the per-item, read-only
 `actions[]` feed), "device-local" or "wiped on sign-out" (true only before #364), calling it the source of
 truth (the server is).

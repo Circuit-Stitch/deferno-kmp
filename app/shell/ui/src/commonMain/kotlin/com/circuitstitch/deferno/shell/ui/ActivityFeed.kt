@@ -31,7 +31,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.circuitstitch.deferno.core.data.activity.ActivityActorKind
 import com.circuitstitch.deferno.core.data.activity.ActivitySource
 import com.circuitstitch.deferno.core.data.activity.ActivityVerb
 import com.circuitstitch.deferno.core.designsystem.component.ChangeDiffSheet
@@ -99,6 +98,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.common_kind_task
 import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.shell.ActivityAttribution
 import com.circuitstitch.deferno.shell.ActivityComponent
 import com.circuitstitch.deferno.shell.ActivityFeedRow
 import org.jetbrains.compose.resources.pluralStringResource
@@ -255,20 +255,17 @@ private fun ActivityFeedRow.summaryText(): String {
 }
 
 /**
- * The localized "who" chip.
+ * The localized "who" chip — a pure render of the already-decided [ActivityAttribution] (#364).
  *
- * The **actor** outranks the source when the server named a non-human one (#364): an Assistant write
- * carries the driving human's session, so its source is whatever surface they were on — reporting "via
- * Website" for something the Assistant did would be true but useless. A webhook row names its integration
- * where the server provided one (e.g. "github"), since the provider is more informative than the category.
- * Otherwise the source stands: a local write reads "Mobile app", remote writes name their surface.
+ * Which of actor / integration / surface names a row is a fact about the row, not a rendering choice, so
+ * it is settled once in `ActivityComponent` and read here (and in the SwiftUI twin) rather than re-derived
+ * per platform from the raw actor + source.
  */
 private val ActivityFeedRow.actorLabel: String
-    @Composable get() = when (actorKind) {
-        ActivityActorKind.Assistant -> stringResource(Res.string.activity_actor_assistant)
-        ActivityActorKind.Webhook -> provider ?: stringResource(Res.string.activity_actor_integration)
-        // Human, System, Unknown and an un-reconciled row all fall through to the surface that acted.
-        else -> source.label
+    @Composable get() = when (val who = attribution) {
+        ActivityAttribution.Assistant -> stringResource(Res.string.activity_actor_assistant)
+        is ActivityAttribution.Integration -> who.provider ?: stringResource(Res.string.activity_actor_integration)
+        is ActivityAttribution.Surface -> who.source.label
     }
 
 private val ActivitySource.label: String

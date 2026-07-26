@@ -143,20 +143,17 @@ enum L {
         }
     }
 
-    /// The localized "who" chip for an Activity row.
+    /// The localized "who" chip for an Activity row — a flat map over the already-decided attribution.
     ///
-    /// The ACTOR outranks the source when the server named a non-human one (#364): an Assistant write
-    /// carries the driving human's session, so its source is whatever surface they were on — reporting
-    /// "via Website" for something the Assistant did would be true but useless. A webhook row names its
-    /// integration where the server supplied one. Mirrors the Compose `ActivityFeedRow.actorLabel`.
+    /// Whether the server's actor or the acting surface names a row is settled once, in the shared
+    /// `ActivityAttribution` (#364), and reaches here as a single token. This deliberately does NOT
+    /// re-derive it from actor kind + source: that rule used to live here *and* in Compose, two copies of
+    /// one decision that nothing would have caught drifting apart.
     static func activitySource(_ row: ActivityFeedRow) -> String {
-        switch ShellBridgeKt.activityActorKindName(row: row) {
+        switch ShellBridgeKt.activityAttributionToken(row: row) {
         case "Assistant": return string("activity_actor_assistant")
-        case "Webhook":
-            return ShellBridgeKt.activityActorProvider(row: row) ?? string("activity_actor_integration")
-        default: break
-        }
-        switch ShellBridgeKt.activitySourceName(row: row) {
+        case "Integration":
+            return ShellBridgeKt.activityAttributionProvider(row: row) ?? string("activity_actor_integration")
         case "Mobile": return string("activity_source_mobile")
         case "Website": return string("activity_source_website")
         case "Mcp": return string("activity_source_mcp")

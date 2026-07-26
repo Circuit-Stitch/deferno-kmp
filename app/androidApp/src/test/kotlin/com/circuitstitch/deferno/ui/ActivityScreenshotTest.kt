@@ -18,6 +18,7 @@ import com.circuitstitch.deferno.core.model.ActivityField
 import com.circuitstitch.deferno.core.model.ActivityFieldChange
 import com.circuitstitch.deferno.core.model.ActivityFieldValue
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.shell.ActivityAttribution
 import com.circuitstitch.deferno.shell.ActivityComponent
 import com.circuitstitch.deferno.shell.ActivityFeedRow
 import com.circuitstitch.deferno.shell.ActivityFeedState
@@ -83,7 +84,7 @@ class ActivityScreenshotTest {
         itemRef: String? = null,
         itemKind: ItemKind? = null,
         commentBody: String? = null,
-    ) = ActivityFeedRow(seq, Instant.parse(at), itemId, ActivitySummary(verb, kindToken), source, changes, itemRef, itemKind, commentBody)
+    ) = ActivityFeedRow(seq, Instant.parse(at), itemId, ActivitySummary(verb, kindToken), ActivityAttribution.Surface(source), changes, itemRef, itemKind, commentBody)
 
     // Ref-enriched rows (#260): a "#41" task update + a comment showing its item ref and text.
     private val refRows = listOf(
