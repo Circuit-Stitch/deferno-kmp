@@ -459,7 +459,11 @@ class DefaultTaskDetailComponent(
         scope.launch {
             observeItemLedger(taskId.value).collect { entries ->
                 val edits = entries.mapNotNull { entry ->
-                    entry.changes().takeIf { it.isNotEmpty() }?.let { LedgerEdit(entry.recordedAt, it) }
+                    // occurredAt, not recordedAt: the Trail dates an edit by when it was made. This filter
+                    // now sees rows this device never applied (the reconcile pulls in every surface's edits
+                    // for the item), and on those recordedAt holds the server's observe time — dating
+                    // another device's offline edit at the moment its outbox happened to flush.
+                    entry.changes().takeIf { it.isNotEmpty() }?.let { LedgerEdit(entry.occurredAt, it) }
                 }
                 extras.update { it.copy(localEdits = edits) }
             }

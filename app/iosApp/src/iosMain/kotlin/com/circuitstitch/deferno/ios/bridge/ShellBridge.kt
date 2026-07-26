@@ -548,7 +548,7 @@ fun activityActorProvider(row: ActivityFeedRow): String? = row.provider
 
 /** A render-ready "when" label for an Activity row (Instant → local "yyyy-MM-dd HH:mm"). */
 fun activityWhenLabel(row: ActivityFeedRow): String {
-    val dt = row.recordedAt.toLocalDateTime(TimeZone.currentSystemDefault())
+    val dt = row.displayAt.toLocalDateTime(TimeZone.currentSystemDefault())
     val hh = dt.hour.toString().padStart(2, '0')
     val mm = dt.minute.toString().padStart(2, '0')
     return "${dt.date} $hh:$mm"

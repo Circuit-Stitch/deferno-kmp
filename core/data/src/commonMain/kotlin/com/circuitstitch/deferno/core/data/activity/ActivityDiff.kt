@@ -38,8 +38,8 @@ fun ActivityEntry.changes(): List<ActivityFieldChange> {
 
 /** The pre-#364 derivation: zip the captured new-value [ActivityEntry.body] and old-value `before`. */
 private fun ActivityEntry.localChanges(): List<ActivityFieldChange>? {
-    val after = body.parseObjectOrNull()
-    val before = before.parseObjectOrNull()
+    val after = bodyObject
+    val before = beforeObject
     if (after == null && before == null) return null
 
     val afterObj = after ?: JsonObject(emptyMap())
@@ -72,7 +72,7 @@ private fun ActivityEntry.localChanges(): List<ActivityFieldChange>? {
  * server's own key order, which `json_field_diff` emits sorted, so it is stable across pages.
  */
 private fun ActivityEntry.detailChanges(): List<ActivityFieldChange> {
-    val obj = detail.parseObjectOrNull() ?: return emptyList()
+    val obj = detailObject ?: return emptyList()
     return when (actionKind) {
         ActivityActionKind.Updated -> {
             val fields = obj["fields"] as? JsonObject ?: return emptyList()
@@ -110,16 +110,17 @@ private fun ActivityEntry.detailChanges(): List<ActivityFieldChange> {
 
 /** The lowercase item-kind token the server puts on most `detail` blobs ("task"/"chore"/"habit"/"event"). */
 internal fun ActivityEntry.detailItemKind(): String? =
-    (detail.parseObjectOrNull()?.get("item_kind") as? JsonPrimitive)?.contentOrNull?.lowercase()
+    (detailObject?.get("item_kind") as? JsonPrimitive)?.contentOrNull?.lowercase()
 
 /** Whether an occurrence-scoped `status_changed` was a CLEAR (`{"cleared": true}`) rather than a mark. */
 internal fun ActivityEntry.detailCleared(): Boolean =
-    (detail.parseObjectOrNull()?.get("cleared") as? JsonPrimitive)?.booleanOrNull == true
+    (detailObject?.get("cleared") as? JsonPrimitive)?.booleanOrNull == true
 
 /** The body key the outbox choke-point merges the client-minted stamp under — never a user-facing field. */
 private const val ACTIVITY_STAMP_KEY = "activity"
 
-private fun String?.parseObjectOrNull(): JsonObject? {
+/** Internal, not private: [ActivityEntry] caches its three parsed blobs through this (same package, other file). */
+internal fun String?.parseObjectOrNull(): JsonObject? {
     if (this == null) return null
     return runCatching { diffJson.parseToJsonElement(this) as? JsonObject }.getOrNull()
 }
@@ -136,7 +137,7 @@ fun ActivityEntry.commentBody(): String? {
     ) {
         return null
     }
-    val obj = body.parseObjectOrNull() ?: return null
+    val obj = bodyObject ?: return null
     if ((obj["is_private"] as? JsonPrimitive)?.booleanOrNull == true) return null
     return (obj["body"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 }

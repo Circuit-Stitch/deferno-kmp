@@ -15,10 +15,11 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
- * Drives an Active Account's offline outbox (#143/#158). On [drive] it flushes the queued writes (when
- * online) **before** the settings reconcile — sequenced so the settings pull can't fetch a snapshot that
- * predates the just-flushed writes (the #143 cold-start theme revert) — then re-runs that pair on the
- * offline→online edge and re-flushes every [flushPeriod] while online. [drive] cancels any prior
+ * Drives an Active Account's offline outbox (#143/#158). On [drive] it runs one [reconcilePass] — the
+ * queued writes (when online) **before** the settings reconcile, sequenced so the settings pull can't fetch
+ * a snapshot that predates the just-flushed writes (the #143 cold-start theme revert), then the Activity
+ * ledger (#364) — re-runs that same pass on the offline→online edge, and re-flushes every [flushPeriod]
+ * while online (the Activity reconcile keeps its own slower tick). [drive] cancels any prior
  * session's loop first, so the driver is bound to exactly the Active Account (account isolation,
  * ADR-0002/0014); [stop] tears it down on sign-out so a signed-out Account's outbox is never flushed again.
  * Both cancel cooperatively (no join), so an in-flight flush from the prior session may still complete —
@@ -62,17 +63,12 @@ class OutboxDriver(
         job?.cancel()
         job = scope.launch(flushContext) {
             val online = connectivity.online
-            if (online.value) guarded { flushToQuiescence(session) }
-            guarded { session.settingsRepository.refresh() }
-            guarded { session.syncActivity() }
+            reconcilePass(session, flushFirst = online.value)
             launch {
                 // The reconnect edge: `online` is distinct-until-changed, so after dropping the current
-                // value every `true` is an offline→online transition.
-                online.drop(1).filter { it }.collect {
-                    guarded { flushToQuiescence(session) }
-                    guarded { session.settingsRepository.refresh() }
-                    guarded { session.syncActivity() }
-                }
+                // value every `true` is an offline→online transition — so this leg flushes
+                // unconditionally, where activation still has to ask.
+                online.drop(1).filter { it }.collect { reconcilePass(session) }
             }
             launch {
                 // The activity reconcile runs on its OWN, slower cadence rather than riding the flush
@@ -90,6 +86,24 @@ class OutboxDriver(
                 if (online.value) guarded { flushToQuiescence(session) }
             }
         }
+    }
+
+    /**
+     * One full pass: the queued writes, then the settings reconcile, then the Activity reconcile. The order
+     * is the #143 fix — the settings pull must not fetch a snapshot that predates the writes just flushed
+     * (the cold-start theme revert) — and having activation and the reconnect edge share this body is what
+     * stops the two legs spelling the sequence out separately and drifting apart.
+     *
+     * [flushFirst] is false only when the caller already knows it is offline. That asymmetry is deliberate:
+     * a flush pass while known-offline can walk a queued write toward the replay engine's give-up policy
+     * (`maxAttempts` measures real server failures, not flight mode — #158), whereas the two reads merely
+     * fail and leave their caches untouched. Gating them on the same advisory signal would trade a doomed
+     * request for a stale screen on every false negative.
+     */
+    private suspend fun reconcilePass(session: AccountSession, flushFirst: Boolean = true) {
+        if (flushFirst) guarded { flushToQuiescence(session) }
+        guarded { session.settingsRepository.refresh() }
+        guarded { session.syncActivity() }
     }
 
     /**

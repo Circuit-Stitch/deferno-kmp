@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.data.outbox.CommentTargets
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.json.JsonObject
 import kotlin.time.Instant
 
 /**
@@ -63,12 +64,15 @@ enum class ActivitySource {
  *
  * ## Times
  *
- * [recordedAt] is when this device applied the change. [occurredAt] is the actor's wall-clock — the axis
- * the feed sorts and displays; it equals [recordedAt] for a local write and comes from the server for a
- * remote one. It is always present: migration 16 back-filled it from [recordedAt] on every upgraded row,
- * so the sort axis and the displayed instant are one value rather than two derivations that can disagree.
- * [observedAt] is the server clock, the axis `?since=` pages; it is the marker that a row has an
- * authoritative twin.
+ * [recordedAt] is when this row entered THIS device's ledger — the apply time on a locally-recorded write,
+ * but the server's [observedAt] on a row the reconcile inserted with no optimistic twin, because such a
+ * change was never applied here. Never render it: on that second kind of row it dates another device's
+ * offline edit at the moment its outbox flushed. [occurredAt] is the actor's wall-clock — the axis the feed
+ * sorts and displays, and the one to read for anything a user sees; it equals [recordedAt] for a local write
+ * and comes from the server for a remote one. It is always present: migration 16 back-filled it from
+ * [recordedAt] on every upgraded row, so the sort axis and the displayed instant are one value rather than
+ * two derivations that can disagree. [observedAt] is the server clock, the axis `?since=` pages; it is the
+ * marker that a row has an authoritative twin.
  */
 data class ActivityEntry(
     val seq: Long,
@@ -99,6 +103,24 @@ data class ActivityEntry(
      * authoritative twin hasn't arrived.
      */
     val isAcknowledged: Boolean get() = observedAt != null
+
+    /**
+     * The three stored JSON blobs, parsed at most once per entry.
+     *
+     * Every read-time derivation used to re-parse from the string: `summaryInfo()` reads [detail] for the
+     * item kind and again for the clear flag, `changes()` reads it a third time, and [body]/[before] are
+     * parsed by both `changes()` and `commentBody()`. The feed re-maps every visible row on every emission
+     * of *either* source flow, so an item-cache refresh that touched no ledger row still re-parsed the whole
+     * window. Caching on the entry fixes that at the root — the ledger Flow hands the same instances back
+     * across an item-cache emission, so the second map costs nothing.
+     *
+     * Declared in the class BODY, so — like [isAcknowledged] — they stay out of the generated
+     * `equals`/`hashCode`/`copy`/`toString`: two entries are still equal iff their stored columns are.
+     * `PUBLICATION` because the value is idempotent and a row may be read from several dispatchers.
+     */
+    internal val bodyObject: JsonObject? by lazy(LazyThreadSafetyMode.PUBLICATION) { body.parseObjectOrNull() }
+    internal val beforeObject: JsonObject? by lazy(LazyThreadSafetyMode.PUBLICATION) { before.parseObjectOrNull() }
+    internal val detailObject: JsonObject? by lazy(LazyThreadSafetyMode.PUBLICATION) { detail.parseObjectOrNull() }
 }
 
 /**

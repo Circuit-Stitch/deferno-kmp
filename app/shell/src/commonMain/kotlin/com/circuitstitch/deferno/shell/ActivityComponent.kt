@@ -26,7 +26,14 @@ import kotlin.time.Instant
 
 /**
  * One row of the Activity feed — a render-ready projection of an [ActivityEntry] (#260): what changed
- * ([summaryInfo], typed for locale-aware rendering), who made it ([source]), and when ([recordedAt]).
+ * ([summaryInfo], typed for locale-aware rendering), who made it ([source]), and when ([displayAt]).
+ *
+ * [displayAt] is named for the axis, not for the column it happens to come from: it is the actor's
+ * wall-clock ([ActivityEntry.occurredAt]), which is also what the ledger sorts on, so the instant a row
+ * shows and the position it holds in the list cannot disagree. Projecting [ActivityEntry.recordedAt]
+ * would break that — on a row this device never applied, that column holds the server's observe time,
+ * which dates another device's offline morning work at the moment its outbox happened to flush.
+ *
  * [actorKind] / [provider] are the server's attribution, present only once the row has been reconciled:
  * they let the chip say "Assistant" or name an integration instead of the surface the write came from,
  * which is the difference between "via Website" and "the Assistant did this on the website".
@@ -45,7 +52,7 @@ import kotlin.time.Instant
  */
 data class ActivityFeedRow(
     val seq: Long,
-    val recordedAt: Instant,
+    val displayAt: Instant,
     val itemId: String?,
     val summaryInfo: ActivitySummary,
     val source: ActivitySource,
@@ -117,10 +124,7 @@ private fun ActivityEntry.toRow(byId: Map<String, Item>): ActivityFeedRow {
     val item = effectiveId?.let(byId::get)
     return ActivityFeedRow(
         seq = seq,
-        // The actor's wall-clock, which is also the axis the feed is sorted on. Labelling by server-receive
-        // time would make a phone's offline morning work appear to happen at the moment its outbox flushed,
-        // hours later — and would disagree with the row's own position in the list.
-        recordedAt = occurredAt,
+        displayAt = occurredAt,
         itemId = effectiveId,
         summaryInfo = summaryInfo(),
         source = source,

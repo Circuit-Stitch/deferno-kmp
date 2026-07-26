@@ -139,7 +139,7 @@ fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) 
             ) {
                 // Bucket by the device-local day (rows are already newest-first, so groupBy keeps that order),
                 // and head each group with the shared TODAY-aware divider — the Trail's grouping, reused.
-                state.rows.groupBy { it.recordedAt.localDayIso() }.forEach { (day, rows) ->
+                state.rows.groupBy { it.displayAt.localDayIso() }.forEach { (day, rows) ->
                     item(key = "day-$day") { DayGroupHeader(day) }
                     items(rows, key = { it.seq }) { row ->
                         ActivityRowView(row, onClick = { selected = row })
@@ -160,7 +160,7 @@ fun ActivityScreen(component: ActivityComponent, modifier: Modifier = Modifier) 
         }
         ChangeDiffSheet(
             title = row.summaryText(),
-            subtitle = "${row.actorLabel} · ${formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern))}",
+            subtitle = "${row.actorLabel} · ${formatInstant(row.displayAt, stringResource(Res.string.activity_when_pattern))}",
             rows = row.changes.toDiffRows(),
             note = row.commentBody,
             onOpenItem = row.itemId?.let { id -> { component.openItem(id); selected = null } },
@@ -196,7 +196,7 @@ private fun ActivityRowView(row: ActivityFeedRow, onClick: () -> Unit) {
             }
         }
         // A calm absolute timestamp — "Jun 21 · 09:45" in the device's time zone and language.
-        MonoMeta(text = formatInstant(row.recordedAt, stringResource(Res.string.activity_when_pattern)))
+        MonoMeta(text = formatInstant(row.displayAt, stringResource(Res.string.activity_when_pattern)))
     }
 }
 

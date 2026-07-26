@@ -24,7 +24,11 @@
 --
 -- ## Times
 --
--- `recorded_at` is when the client applied the change (kept for every row, including legacy ones).
+-- `recorded_at` is when the row entered THIS device's ledger, which is two different instants by
+-- provenance: the apply time on a locally-recorded write, and the server's `observed_at` on a row the
+-- reconcile inserted with no optimistic twin — a change that was never applied here at all. It is the one
+-- NOT NULL time column (it pre-dates the other two), which is why `insertRemoteIfAbsent` has to put
+-- something in it; nothing reads it back for display. Read `occurred_at` for anything a user sees.
 -- `occurred_at` is the actor's wall-clock — what the feed sorts and displays, and what the client sends
 -- as `activity.at`. `observed_at` is the server clock: the forensic anchor and the axis the `?since=`
 -- cursor pages. `occurred_at` is nullable only because SQLite cannot add a NOT NULL column to an existing
