@@ -117,10 +117,10 @@ private fun ActivityEntry.toRow(byId: Map<String, Item>): ActivityFeedRow {
     val item = effectiveId?.let(byId::get)
     return ActivityFeedRow(
         seq = seq,
-        // The DISPLAY instant — the actor's wall-clock where the row has one, else the local apply time.
-        // Sorting or labelling by server-receive time would make a phone's offline morning work appear to
-        // happen at the moment its outbox flushed, hours later.
-        recordedAt = displayAt,
+        // The actor's wall-clock, which is also the axis the feed is sorted on. Labelling by server-receive
+        // time would make a phone's offline morning work appear to happen at the moment its outbox flushed,
+        // hours later — and would disagree with the row's own position in the list.
+        recordedAt = occurredAt,
         itemId = effectiveId,
         summaryInfo = summaryInfo(),
         source = source,

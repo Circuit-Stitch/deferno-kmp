@@ -127,6 +127,20 @@ class ActivitySyncTest {
         assertTrue(ledger.cursorWrites.isEmpty())
     }
 
+    @Test
+    fun aPassThatMergedNothingSkipsThePruneEntirely() = runTest {
+        val remote = FakeActivityRemoteSource(page(entries = emptyList(), nextSince = null))
+        val ledger = RecordingActivityLedgerStore(initialCursor = opaqueCursor)
+
+        sync(remote, ledger, pageSize = 2).sync()
+
+        // This pass fires every five minutes for the whole session, and the reconcile is the only thing that
+        // grows the ledger — so a pass that merged nothing cannot have pushed anything past the retention
+        // window that was not already past it. Spending a DELETE (a write transaction, through SQLCipher on
+        // Android) per tick to rediscover that is pure overhead on a surface nobody is looking at.
+        assertTrue(ledger.pruneCutoffs.isEmpty())
+    }
+
     // --- offline-first: an unavailable pull changes nothing ---
 
     @Test
@@ -143,6 +157,7 @@ class ActivitySyncTest {
         assertEquals(opaqueCursor, ledger.storedCursor) // next tick resumes from exactly the same point
         assertTrue(ledger.merges.isEmpty()) // and the cached rows keep rendering
         assertTrue(ledger.cursorWrites.isEmpty())
+        assertTrue(ledger.pruneCutoffs.isEmpty()) // …including the rows retention would otherwise trim blind
     }
 
     // --- one pass is bounded, however much the server has ---

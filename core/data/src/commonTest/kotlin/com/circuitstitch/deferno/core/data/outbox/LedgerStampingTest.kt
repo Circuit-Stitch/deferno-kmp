@@ -295,7 +295,8 @@ class LedgerStampingTest {
         path = request.path,
         body = request.body,
         entryId = stamp?.entryId,
-        occurredAt = stamp?.occurredAt,
+        // Exactly what `recordLocal` stores: the stamped wall-clock, or the apply time for an unstampable route.
+        occurredAt = stamp?.occurredAt ?: now,
         actionKind = actionKind,
     )
 }

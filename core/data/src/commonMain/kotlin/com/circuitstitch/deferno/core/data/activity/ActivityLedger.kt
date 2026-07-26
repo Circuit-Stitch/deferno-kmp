@@ -65,8 +65,10 @@ enum class ActivitySource {
  *
  * [recordedAt] is when this device applied the change. [occurredAt] is the actor's wall-clock — the axis
  * the feed sorts and displays; it equals [recordedAt] for a local write and comes from the server for a
- * remote one, and is null only on rows written before #364. [observedAt] is the server clock, the axis
- * `?since=` pages; it is the marker that a row has an authoritative twin.
+ * remote one. It is always present: migration 16 back-filled it from [recordedAt] on every upgraded row,
+ * so the sort axis and the displayed instant are one value rather than two derivations that can disagree.
+ * [observedAt] is the server clock, the axis `?since=` pages; it is the marker that a row has an
+ * authoritative twin.
  */
 data class ActivityEntry(
     val seq: Long,
@@ -78,7 +80,9 @@ data class ActivityEntry(
     val body: String? = null,
     val before: String? = null,
     val entryId: String? = null,
-    val occurredAt: Instant? = null,
+    // Defaults to the apply time — exactly what `recordLocal` writes for an unstamped route and what
+    // migration 16 back-filled — so a caller holding only a local write need not restate it.
+    val occurredAt: Instant = recordedAt,
     val observedAt: Instant? = null,
     val actionKind: ActivityActionKind? = null,
     val actorKind: ActivityActorKind? = null,
@@ -89,12 +93,6 @@ data class ActivityEntry(
     val changedFields: List<String> = emptyList(),
     val detail: String? = null,
 ) {
-    /**
-     * The instant the feed sorts and displays. [occurredAt] where known, else the local apply time — so a
-     * pre-#364 row keeps its previous position rather than sinking to the epoch.
-     */
-    val displayAt: Instant get() = occurredAt ?: recordedAt
-
     /**
      * Whether the server has confirmed this change. `false` means "optimistic, not yet reconciled" — the
      * ADR's *superseded* distinction: an un-acknowledged row is not a failed one, merely one whose
@@ -277,10 +275,10 @@ interface ActivityLedgerStore {
      */
     suspend fun upsertRemote(entries: List<RemoteActivityEntry>)
 
-    /** The most-recent [limit] entries, newest first by display instant — observed so the feed re-emits as changes land. */
+    /** The most-recent [limit] entries, newest first by [ActivityEntry.occurredAt] — observed so the feed re-emits as changes land. */
     fun recent(limit: Long = 200): Flow<List<ActivityEntry>>
 
-    /** Drop rows whose display instant is older than [cutoff], keeping the local window a subset of the server's. */
+    /** Drop rows whose [ActivityEntry.occurredAt] is older than [cutoff], keeping the local window a subset of the server's. */
     suspend fun pruneOlderThan(cutoff: Instant)
 
     /** The stored `?since=` watermark, or null before the first successful sync. */

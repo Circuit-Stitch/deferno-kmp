@@ -14,9 +14,16 @@
 -- behaviour by construction. Mirrors ActivityLedgerEntry.sq exactly
 -- (verifyCommonMainDefernoDatabaseMigration checks it).
 --
--- The UNIQUE index is what makes the reconcile idempotent: `upsertRemote`'s `ON CONFLICT(entry_id)`
--- requires it. SQLite treats NULLs as distinct in a unique index, so every pre-migration row (all of
--- which have a NULL entry_id) coexists without collision.
+-- `occurred_at` is the one exception: it is back-filled rather than left NULL. It is the axis the feed
+-- sorts and retention cuts on, and SQLite orders NULL smallest — so an un-back-filled upgraded row would
+-- sink BELOW the user's entire history in a DESC feed and outlive every prune (`NULL < ?` is never true):
+-- an immortal row nobody can see. Back-filling it is what lets the queries read the column bare instead
+-- of through a COALESCE repeated at every read site.
+--
+-- The UNIQUE index is what makes the reconcile idempotent: `upsertRemote` is spelled INSERT OR IGNORE +
+-- UPDATE (the dialect predates UPSERT), and the IGNORE has nothing to ignore without it. SQLite treats
+-- NULLs as distinct in a unique index, so every pre-migration row (all of which have a NULL entry_id)
+-- coexists without collision.
 --
 -- Never edit a released migration or snapshot — ADR-0022 runbook.
 ALTER TABLE activityLedgerEntry ADD COLUMN entry_id TEXT;
@@ -31,7 +38,18 @@ ALTER TABLE activityLedgerEntry ADD COLUMN series_id TEXT;
 ALTER TABLE activityLedgerEntry ADD COLUMN changed_fields TEXT;
 ALTER TABLE activityLedgerEntry ADD COLUMN detail TEXT;
 
+-- The back-fill. Every writer since #364 sets `occurred_at` unconditionally (recordLocal stamps
+-- `stamp?.occurredAt ?: now`; the reconcile's UPDATE sets it on every merged row), so after this runs no
+-- row has a NULL one and the queries below can drop their COALESCE.
+UPDATE activityLedgerEntry SET occurred_at = recorded_at WHERE occurred_at IS NULL;
+
 CREATE UNIQUE INDEX activityLedgerEntry_entry_id ON activityLedgerEntry(entry_id);
+
+-- The sort axis, created AFTER the back-fill so it is built once over final values rather than churned by
+-- it. A plain column index, not the expression index over COALESCE the .sq previously argued against —
+-- that objection dies with the COALESCE. `recent` re-runs on every write to this table (it is observed as
+-- a Flow), and unindexed each run is a full scan plus a temp-B-tree sort before the LIMIT can bite.
+CREATE INDEX activityLedgerEntry_occurred_at ON activityLedgerEntry(occurred_at, seq);
 
 -- The delta cursor. New table, so nothing to back-fill: a NULL/absent row is the "never synced" signal
 -- that bootstraps the first pull from a bare RFC-3339 timestamp.

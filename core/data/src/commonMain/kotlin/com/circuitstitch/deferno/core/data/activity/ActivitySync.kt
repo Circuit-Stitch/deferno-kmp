@@ -54,12 +54,13 @@ class ActivitySync(
     suspend fun sync() {
         var cursor = ledger.syncCursor() ?: bootstrapCursor()
         var pages = 0
+        var merged = 0
         while (pages < maxPages) {
             val page = when (val result = remoteSource.sync(cursor, pageSize)) {
                 is RemoteSnapshot.Available -> result.value
                 RemoteSnapshot.Unavailable -> return
             }
-            merge(page)
+            merged += merge(page)
             // Only advance past rows that actually landed. An empty page yields no cursor, which is the
             // caught-up signal: keep the watermark we already have rather than resetting it.
             cursor = page.nextSince ?: break
@@ -67,13 +68,17 @@ class ActivitySync(
             pages++
             if (page.entries.size < pageSize) break
         }
-        prune()
+        if (merged > 0) prune()
     }
 
-    /** Merge one page, dropping only entries whose timestamps cannot be parsed (see [toRemote]). */
-    private suspend fun merge(page: ActivityFeedDto) {
+    /**
+     * Merge one page, dropping only entries whose timestamps cannot be parsed (see [toRemote]). Returns how
+     * many rows actually landed — the signal [sync] gates the prune on.
+     */
+    private suspend fun merge(page: ActivityFeedDto): Int {
         val entries = page.entries.mapNotNull { it.toRemote() }
         ledger.upsertRemote(entries)
+        return entries.size
     }
 
     /**
@@ -83,7 +88,16 @@ class ActivitySync(
      */
     private fun bootstrapCursor(): String = (now() - bootstrapWindow).toString()
 
-    /** Keep the local window a strict subset of the server's, so nothing pruned here is unrecoverable. */
+    /**
+     * Keep the local window a strict subset of the server's, so nothing pruned here is unrecoverable.
+     *
+     * Run only after a pass that merged something. This tick fires every five minutes for the life of the
+     * session and the reconcile is the only thing that GROWS this table — so a pass that merged nothing
+     * cannot have pushed anything past the window that was not already past it, and paying a DELETE (a
+     * write transaction, through SQLCipher on Android) to rediscover that is pure overhead. The cost is
+     * that a wholly idle account keeps rows slightly past 180 days until its next merge, which is
+     * invisible: the feed reads with a LIMIT and the server's own window is 18 months.
+     */
     private suspend fun prune() {
         ledger.pruneOlderThan(now() - retention)
     }

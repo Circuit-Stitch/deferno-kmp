@@ -12,7 +12,7 @@ import kotlin.time.Instant
 
 /**
  * The read-time derivations for rows carrying the **server** vocabulary (#364): [ActivityEntry.summaryInfo],
- * [ActivityEntry.itemId], [ActivityEntry.changes], [ActivityEntry.displayAt] and
+ * [ActivityEntry.itemId], [ActivityEntry.changes], [ActivityEntry.occurredAt] and
  * [ActivityEntry.isAcknowledged].
  *
  * Every `detail` blob below is a real shape the backend emits — copied from `handlers/common.rs`
@@ -41,7 +41,7 @@ class ActivityServerReadModelTest {
         method: OutboxMethod = OutboxMethod.Post,
         body: String? = null,
         before: String? = null,
-        occurredAt: Instant? = occurred,
+        occurredAt: Instant = occurred,
         observedAt: Instant? = observed,
     ) = ActivityEntry(
         seq = 1,
@@ -534,13 +534,12 @@ class ActivityServerReadModelTest {
     // ── the three time axes ────────────────────────────────────────────────────────────────────────
 
     @Test
-    fun displayAtFollowsTheActorsClockAndFallsBackToTheLocalApplyTime() {
+    fun occurredAtFollowsTheActorsClockAndIsNotTheLocalApplyTime() {
         // The offline case: acted at 09:00, reconciled/applied at 17:00. The feed must show 09:00 or a
         // day's offline work all lands in one lump at flush time, in the wrong order.
-        assertEquals(occurred, serverEntry(ActivityActionKind.Updated).displayAt)
-        // A row written before #364 has no occurredAt at all; falling back to recordedAt keeps it in its
-        // existing feed position instead of sinking it to the epoch.
-        assertEquals(recorded, serverEntry(ActivityActionKind.Updated, occurredAt = null).displayAt)
+        assertEquals(occurred, serverEntry(ActivityActionKind.Updated).occurredAt)
+        // The apply time is still kept, but it is NOT the display axis — conflating them IS the bug above.
+        assertEquals(recorded, serverEntry(ActivityActionKind.Updated).recordedAt)
     }
 
     @Test
@@ -550,6 +549,8 @@ class ActivityServerReadModelTest {
         // both of which a purely local row already has.
         assertFalse(serverEntry(ActivityActionKind.Updated, observedAt = null).isAcknowledged)
         assertTrue(serverEntry(ActivityActionKind.Updated).isAcknowledged)
-        assertTrue(serverEntry(ActivityActionKind.Updated, occurredAt = null).isAcknowledged)
+        // Acknowledgement is the server clock and nothing else: a row whose actor clock happens to equal
+        // its apply time — i.e. carries no independent signal — is still acknowledged.
+        assertTrue(serverEntry(ActivityActionKind.Updated, occurredAt = recorded).isAcknowledged)
     }
 }

@@ -65,25 +65,14 @@ class SqlDelightActivityLedgerStore(
                 // the UNIQUE entry_id (see the .sq). The insert is a no-op when an optimistic row already
                 // holds this id, and the update then overwrites only the authoritative columns — leaving
                 // that row's captured body/before/target, which are richer than `detail`, untouched.
+                //
+                // The insert carries only the NOT NULL skeleton: the update below sets every authoritative
+                // column on both branches, so binding the same values twice would buy nothing and give the
+                // two argument lists a way to drift apart.
                 queries.insertRemoteIfAbsent(
                     recorded_at = e.observedAt.toString(),
                     source = e.source.name,
-                    // A server row has no outbox shape. Empty is the read model's "no outbox derivation
-                    // available" signal, which is safe because such a row always carries an action_kind.
-                    target = "",
-                    method = "",
-                    path = "",
                     entry_id = e.entryId,
-                    occurred_at = e.occurredAt.toString(),
-                    observed_at = e.observedAt.toString(),
-                    action_kind = e.actionKind.token,
-                    actor_kind = e.actorKind.token,
-                    provider = e.provider,
-                    item_id = e.itemId,
-                    occurrence = e.occurrence,
-                    series_id = e.seriesId,
-                    changed_fields = changedFields,
-                    detail = e.detail,
                 )
                 queries.updateRemote(
                     source = e.source.name,
@@ -131,24 +120,30 @@ class SqlDelightActivityLedgerStore(
 }
 
 /** Decodes a stored `activityLedgerEntry` row into the domain [ActivityEntry]. Defensive on every enum column. */
-private fun ActivityRow.toDomain(): ActivityEntry = ActivityEntry(
-    seq = seq,
-    recordedAt = Instant.parse(recorded_at),
-    source = ActivitySource.fromToken(source),
-    target = target,
-    method = OutboxMethod.entries.firstOrNull { it.name == method } ?: OutboxMethod.Post,
-    path = if (path.isEmpty()) emptyList() else path.split("\n"),
-    body = body,
-    before = before,
-    entryId = entry_id,
-    occurredAt = occurred_at?.let { runCatching { Instant.parse(it) }.getOrNull() },
-    observedAt = observed_at?.let { runCatching { Instant.parse(it) }.getOrNull() },
-    actionKind = action_kind?.let(ActivityActionKind::fromToken),
-    actorKind = actor_kind?.let(ActivityActorKind::fromToken),
-    provider = provider,
-    serverItemId = item_id,
-    occurrence = occurrence,
-    seriesId = series_id,
-    changedFields = changed_fields?.split("\n").orEmpty(),
-    detail = detail,
-)
+private fun ActivityRow.toDomain(): ActivityEntry {
+    val appliedAt = Instant.parse(recorded_at)
+    return ActivityEntry(
+        seq = seq,
+        recordedAt = appliedAt,
+        source = ActivitySource.fromToken(source),
+        target = target,
+        method = OutboxMethod.entries.firstOrNull { it.name == method } ?: OutboxMethod.Post,
+        path = if (path.isEmpty()) emptyList() else path.split("\n"),
+        body = body,
+        before = before,
+        entryId = entry_id,
+        // Migration 16 back-filled this column and every writer sets it, so the fallback survives only as
+        // a decode guard: an unparseable stored string must degrade to the apply time, not sink the row to
+        // the epoch (or throw — a diagnostics screen must never be the thing that crashes).
+        occurredAt = occurred_at?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: appliedAt,
+        observedAt = observed_at?.let { runCatching { Instant.parse(it) }.getOrNull() },
+        actionKind = action_kind?.let(ActivityActionKind::fromToken),
+        actorKind = actor_kind?.let(ActivityActorKind::fromToken),
+        provider = provider,
+        serverItemId = item_id,
+        occurrence = occurrence,
+        seriesId = series_id,
+        changedFields = changed_fields?.split("\n").orEmpty(),
+        detail = detail,
+    )
+}

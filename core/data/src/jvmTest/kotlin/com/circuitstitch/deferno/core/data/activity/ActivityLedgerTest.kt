@@ -24,7 +24,8 @@ import kotlin.test.assertTrue
  *
  * Since #364 the table is an optimistic *cache* of the server's ledger rather than the source of truth, so
  * this also covers the SQL that makes that work: the `entry_id` merge (server wins, local capture kept),
- * the display-axis sort and prune, and the delta cursor's lifecycle.
+ * the `occurred_at` sort and prune (including migration 16's back-fill of it), and the delta cursor's
+ * lifecycle.
  */
 class ActivityLedgerTest {
 
@@ -78,25 +79,20 @@ class ActivityLedgerTest {
     )
 
     /**
-     * A genuine pre-#364 row, written straight through the query: NULL on every column migration 16 added.
-     * [SqlDelightActivityLedgerStore.recordLocal] can no longer produce one — it always stamps `occurred_at`
-     * — but a device that upgraded is full of them, and they must keep sorting and pruning correctly.
+     * A local write on a route that cannot carry the `activity` sibling (`PATCH auth/me/settings`,
+     * `DELETE tasks/{id}`): no stamp, so no `entry_id` to merge on — but `occurred_at` is still written,
+     * because every insert path stamps it. The only rows without one predate migration 16, which
+     * back-fills them (see [migration16BackfillsOccurredAtSoAnUpgradedRowKeepsItsPlaceInTheFeed]).
      */
-    private fun DefernoDatabase.insertLegacyRow(target: String, recordedAt: Instant) {
-        activityLedgerEntryQueries.recordLocal(
-            recorded_at = recordedAt.toString(),
-            source = ActivitySource.Mobile.name,
+    private suspend fun SqlDelightActivityLedgerStore.recordUnstamped(target: String, now: Instant) =
+        recordLocal(
+            source = ActivitySource.Mobile,
             target = target,
-            method = OutboxMethod.Patch.name,
-            path = "tasks",
-            body = null,
+            request = OutboxRequest(OutboxMethod.Patch, listOf("tasks"), null),
             before = null,
-            entry_id = null,
-            occurred_at = null,
-            action_kind = null,
-            item_id = null,
+            now = now,
+            stamp = null,
         )
-    }
 
     @Test
     fun decoratorRecordsEveryEnqueueReverseChronAsLocal() = runTest {
@@ -283,9 +279,9 @@ class ActivityLedgerTest {
     fun rowsWithNoEntryIdCoexistRatherThanCollidingOnTheUniqueIndex() = runTest {
         val db = newDb()
         val ledger = SqlDelightActivityLedgerStore(db, Dispatchers.Unconfined)
-        db.insertLegacyRow("task:legacy-1", recordedAt = t0)
-        db.insertLegacyRow("task:legacy-2", recordedAt = t1)
         // A route that cannot carry the `activity` sibling records with no stamp, so it mints no id either.
+        ledger.recordUnstamped("task:unstamped-1", now = t0)
+        ledger.recordUnstamped("task:unstamped-2", now = t1)
         ledger.recordLocal(
             ActivitySource.Mobile,
             "settings",
@@ -312,7 +308,7 @@ class ActivityLedgerTest {
         // order and occurred_at deliberately disagree here — a dataset where they agree cannot catch an
         // `ORDER BY seq` regression, because both spellings would pass it.
         ledger.recordStamped("task:a", stamp = ActivityStamp("entry-newest", t2), now = t2)
-        db.insertLegacyRow("task:legacy", recordedAt = t3)
+        ledger.recordUnstamped("task:unstamped", now = t3)
         ledger.upsertRemote(
             listOf(
                 remote("entry-oldest", occurredAt = t0, observedAt = t4),
@@ -321,9 +317,9 @@ class ActivityLedgerTest {
         )
 
         val feed = ledger.recent().first()
-        // Sorted on COALESCE(occurred_at, recorded_at) DESC: the two last-inserted rows sort BELOW, and the
-        // legacy row with no occurred_at falls back to its recorded_at rather than sinking to the epoch.
-        assertEquals(listOf(t3, t2, t1, t0), feed.map { it.displayAt })
+        // Sorted on occurred_at DESC: the two last-inserted rows sort BELOW, and the unstamped row — which
+        // has no entry_id to merge on but still carries its apply time — takes its place among them.
+        assertEquals(listOf(t3, t2, t1, t0), feed.map { it.occurredAt })
         assertEquals(listOf(null, "entry-newest", "entry-middle", "entry-oldest"), feed.map { it.entryId })
         // Guards the guard: if a later edit "tidies" the seeding so insertion order and occurred_at line
         // up again, this test would silently stop discriminating between the two ORDER BY clauses.
@@ -332,23 +328,93 @@ class ActivityLedgerTest {
     }
 
     @Test
-    fun pruneOlderThanCutsOnTheDisplayAxisIncludingRowsWithNoOccurredAt() = runTest {
+    fun pruneOlderThanCutsOnTheOccurredAtAxisNotTheApplyTime() = runTest {
         val db = newDb()
         val ledger = SqlDelightActivityLedgerStore(db, Dispatchers.Unconfined)
-        db.insertLegacyRow("task:legacy-old", recordedAt = t0)
-        db.insertLegacyRow("task:legacy-kept", recordedAt = t4)
+        ledger.recordUnstamped("task:unstamped-old", now = t0)
+        ledger.recordUnstamped("task:unstamped-kept", now = t4)
         ledger.recordStamped("task:a", stamp = ActivityStamp("entry-kept", t3), now = t3)
         // Backdated: the server observed it at t4 (so recorded_at is fresh) but the actor did it at t0.
         ledger.upsertRemote(listOf(remote("entry-backdated", occurredAt = t0, observedAt = t4)))
 
         ledger.pruneOlderThan(t2)
 
-        // Retention trims the same axis the feed sorts on, so what survives is exactly the visible tail.
-        // A prune on recorded_at instead would keep the backdated row (fresh recorded_at, ancient position)
-        // and drop the legacy one (no occurred_at at all) — both the wrong way round.
+        // Retention trims the same axis the feed sorts on, so what survives is exactly the visible tail. A
+        // prune on recorded_at instead would keep the backdated row — fresh recorded_at, ancient position —
+        // i.e. hold on to precisely the row the user can no longer see.
         val feed = ledger.recent().first()
-        assertEquals(listOf(t4, t3), feed.map { it.displayAt })
+        assertEquals(listOf(t4, t3), feed.map { it.occurredAt })
         assertEquals(listOf(null, "entry-kept"), feed.map { it.entryId })
+    }
+
+    /**
+     * A device that upgraded across #364. Its rows predate every column migration 16 adds, so `occurred_at`
+     * would be NULL on all of them — and with the COALESCE gone that is not cosmetic: SQLite orders NULL
+     * smallest, so a DESC feed files the row BELOW the user's entire history, and `NULL < ?` is never true,
+     * so no prune ever reaches it. The back-fill is what stops that being an immortal invisible row.
+     *
+     * The v16 shape is spelled out here because there is nothing to load it from: the generated `Schema`
+     * can only `create()` the CURRENT version, and `databases/16.db` is a build input, not a test resource.
+     * Only this one table is needed — migration 16 touches nothing else.
+     */
+    @Test
+    fun migration16BackfillsOccurredAtSoAnUpgradedRowKeepsItsPlaceInTheFeed() = runTest {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        driver.execute(
+            null,
+            """
+            CREATE TABLE activityLedgerEntry (
+                seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+                recorded_at TEXT NOT NULL,
+                source      TEXT NOT NULL,
+                target      TEXT NOT NULL,
+                method      TEXT NOT NULL,
+                path        TEXT NOT NULL,
+                body        TEXT,
+                before      TEXT
+            );
+            """.trimIndent(),
+            parameters = 0,
+        )
+        driver.execute(
+            null,
+            "INSERT INTO activityLedgerEntry(recorded_at, source, target, method, path) " +
+                "VALUES ('$t1', 'Mobile', 'task:upgraded', 'Patch', 'tasks');",
+            parameters = 0,
+        )
+
+        DefernoDatabase.Schema.migrate(driver, 16L, 17L)
+        val ledger = SqlDelightActivityLedgerStore(DefernoDatabase(driver), Dispatchers.Unconfined)
+
+        // The upgraded row now sorts and displays at its apply time…
+        assertEquals(listOf(t1), ledger.recent().first().map { it.occurredAt })
+        // …and — the assertion that actually discriminates — retention can see it at all. The decoder's
+        // `?: appliedAt` guard masks a stored NULL on READ, so the line above passes either way; only the
+        // prune can tell a back-filled column from a NULL one. Deleting it disarms this whole test.
+        ledger.pruneOlderThan(t2)
+        assertTrue(ledger.recent().first().isEmpty())
+    }
+
+    /** The decoder's last line of defence: a stored instant that will not parse must not sink the row. */
+    @Test
+    fun anUnparseableStoredOccurredAtDecodesToTheApplyTimeRatherThanTheEpoch() = runTest {
+        val db = newDb()
+        val ledger = SqlDelightActivityLedgerStore(db, Dispatchers.Unconfined)
+        db.activityLedgerEntryQueries.recordLocal(
+            recorded_at = t1.toString(),
+            source = ActivitySource.Mobile.name,
+            target = "task:corrupt",
+            method = OutboxMethod.Patch.name,
+            path = "tasks",
+            body = null,
+            before = null,
+            entry_id = null,
+            occurred_at = "yesterday afternoon",
+            action_kind = null,
+            item_id = null,
+        )
+
+        assertEquals(t1, ledger.recent().first().single().occurredAt)
     }
 
     @Test

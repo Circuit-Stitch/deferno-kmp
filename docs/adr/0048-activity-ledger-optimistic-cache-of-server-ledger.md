@@ -54,7 +54,8 @@ Three facts constrain the answer:
   is open (`Other(raw)`) so a stale build renders a newer verb instead of dropping a forensic entry.
 - **The feed sorts on `occurred_at`, not insertion order.** A reconcile appends rows *older* than rows
   already stored; insertion order would file a colleague's yesterday-morning edit above this morning's own
-  work. `COALESCE(occurred_at, recorded_at)` keeps legacy rows in place.
+  work. Migration 16 back-fills `occurred_at` from `recorded_at` so the column is universal and the sort,
+  the prune and the rendered timestamp are one value rather than three derivations that can disagree.
 - **The local window is a bounded subset of the server's** (180 days local vs. the server's 18 months), so
   a prune can never drop something the reconcile could not re-fetch. A first sync bootstraps from
   `now - 30d` rather than all of history.
@@ -86,9 +87,13 @@ Three facts constrain the answer:
 **Consequences.**
 
 - Schema migration 16 → 17: `activityLedgerEntry` gains the server columns plus a `UNIQUE` index on
-  `entry_id` (which SQLite treats as distinct-per-NULL, so pre-migration rows coexist), and a singleton
-  `activitySyncState` holds the cursor. The upsert is spelled `INSERT OR IGNORE` + `UPDATE` because
-  SQLDelight's default dialect predates `ON CONFLICT DO UPDATE`.
+  `entry_id` (which SQLite treats as distinct-per-NULL, so pre-migration rows coexist), an index on the
+  `occurred_at` sort axis, a back-fill of `occurred_at` from `recorded_at`, and a singleton
+  `activitySyncState` holding the cursor. The upsert is spelled `INSERT OR IGNORE` + `UPDATE` because
+  SQLDelight's default dialect predates `ON CONFLICT DO UPDATE`; the `INSERT` writes only the NOT NULL
+  skeleton, since the `UPDATE` sets every authoritative column on both branches anyway.
+- The retention prune runs only after a pass that actually merged rows. The reconcile is the only thing
+  that grows this table, so a no-op pass has nothing to trim — and the pass fires every five minutes.
 - Three mutation surfaces changed route as part of this: comment-delete and occurrence-clear became POST
   soft-deletes, and the whole attachment surface became kind-neutral (`/items/...`). Those were **already
   broken** against the live backend and only surfaced when the contract pin was refreshed.
