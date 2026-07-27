@@ -22,8 +22,8 @@ The iOS application entry point. Two halves live here:
 - **`iosApp.xcodeproj/`** — the committed **Xcode project** (universal iPhone + iPad,
   `TARGETED_DEVICE_FAMILY = 1,2`, deployment target **iOS 16** for `NavigationSplitView`
   + size classes). It links the static `Deferno` framework produced above and drives its
-  build via a Gradle Run Script phase (see below). Built + run on the iOS 17.2 simulator
-  — iPhone *and* iPad — under Xcode 15.2 (#35).
+  build via a Gradle Run Script phase (see below). Built + run on the iOS 26.5 simulator
+  — iPhone *and* iPad — under Xcode 26.6 / Swift 6.3 (#35).
 
 ## What the Views render (#51)
 
@@ -89,23 +89,16 @@ with an integrated pod links only from its workspace). `Podfile` + `Podfile.lock
 lock pins the resolved pod version so local + CI match); the integrated `Pods/` and `iosApp.xcworkspace`
 are reproduced by `pod install` and are gitignored.
 
-> **Local Ruby caveat — this dev machine only (Intel Ventura).** CocoaPods is a Ruby gem, and the macOS
-> *system* Ruby (2.6) is too old for it (modern CocoaPods' `ffi` needs Ruby ≥ 3.0), while Homebrew can't
-> install a Ruby *bottle* on Intel Ventura — `brew install ruby/cocoapods` falls back to building LLVM +
-> Rust + Ruby **from source** (hours). The one-time fix used here, which leaves the system Ruby untouched:
-> ```sh
-> rbenv install 3.3.11            # compiles ONLY Ruby (~10 min), not the brew toolchain
-> rbenv shell 3.3.11 && gem install cocoapods
-> # that Ruby links Homebrew openssl@3, whose CA path is unpopulated → point it at a bundle:
-> ln -sf /usr/local/etc/ca-certificates/cert.pem /usr/local/etc/openssl@3/cert.pem
-> LANG=en_US.UTF-8 pod install   # CocoaPods needs a UTF-8 locale
-> ```
-> **CI needs none of this** — GitHub's macOS runners ship Ruby 3 + CocoaPods preinstalled, so the iOS
-> workflow (`.github/workflows/ios.yml`) just runs `pod install`.
+> **CocoaPods is a Ruby gem.** Any Ruby ≥ 3.0 plus `gem install cocoapods` is the whole setup on Apple
+> Silicon (Homebrew Ruby is fine — the macOS *system* Ruby 2.6 is too old for modern CocoaPods' `ffi`).
+> **CI needs nothing extra** — GitHub's macOS runners ship Ruby 3 + CocoaPods preinstalled, so the iOS
+> workflow (`.github/workflows/ios.yml`) just runs `pod install`. (The rbenv-build-Ruby-from-source dance
+> this section used to document was an Intel/Ventura artifact — Homebrew shipped no Ruby bottle for that
+> pair. It retired with the machine.)
 
 ## Building & running (macOS + Xcode)
 
-The Xcode project is **committed** (`iosApp.xcodeproj`), verified on Xcode 15.2 / iOS 17.2 SDK. The one
+The Xcode project is **committed** (`iosApp.xcodeproj`), verified on Xcode 26.6 / iOS 26 SDK. The one
 setup step is **`pod install`** (SQLCipher, above) — it generates `iosApp.xcworkspace`, which you build
 from then on. Klibs cross-compile on any host, but **linking the framework + running the app require
 macOS** (ADR-0006).
@@ -118,9 +111,12 @@ shared framework via Gradle first.
 `CODE_SIGNING_ALLOWED=NO`** when you intend to *run* the app — an unsigned iOS app has no
 entitlements, so the Keychain (`SecItem*`, used by the token `SecretVault` + the SQLCipher
 `DatabaseKeyProvider`, ADR-0009) returns `errSecMissingEntitlement (-34018)` and sign-in aborts. The
-default ad-hoc "Sign to Run Locally" signature is enough for the Simulator Keychain. (`CODE_SIGNING_ALLOWED=NO`
-is fine for a *compile-only* check or the unit tests, which use the in-memory `DefernoDemo` — that's
-what the iOS CI does.) The product is `Deferno.app` (`PRODUCT_NAME = Deferno`; the target/scheme are
+default ad-hoc "Sign to Run Locally" signature is enough for the Simulator Keychain. That now applies to
+the **unit tests too**: they are a host-app bundle, and `DefernoApp.init` builds the real DI graph at
+launch (it stopped being the in-memory `DefernoDemo` at ADR-0013/0017), so the host aborts on startup
+before the runner connects. `CODE_SIGNING_ALLOWED=NO` is therefore only good for a *compile-only* check;
+the iOS CI signs ad-hoc (`CODE_SIGN_IDENTITY="-"`, no cert needed). The product is `Deferno.app`
+(`PRODUCT_NAME = Deferno`; the target/scheme are
 still named `iosApp`).
 ```sh
 # from app/iosApp
@@ -155,9 +151,10 @@ xcrun simctl launch booted com.circuitstitch.deferno
   which would leave a white box behind the flame. It emits two assets into `iosApp/Assets.xcassets`:
     - `AppIcon.appiconset/AppIcon-1024.png` — the home-screen icon (`ASSETCATALOG_COMPILER_APPICON_NAME
       = AppIcon`): the flame on the Deferno dark surface (`#1F1B16`), matching the Android adaptive
-      icon. iOS app icons **must** be raster PNG (the catalog doesn't accept SVG; the vector Icon
-      Composer `.icon` needs Xcode 16+, and this project targets 15.2), so the SVG is rasterized once
-      and iOS derives every size from the 1024. No alpha (App Store requirement).
+      icon. iOS app icons **must** be raster PNG (the catalog doesn't accept SVG), so the SVG is
+      rasterized once and iOS derives every size from the 1024. No alpha (App Store requirement).
+      Xcode 26 does ship Icon Composer's vector `.icon`; the PNG path stays until the Liquid Glass
+      layering is actually designed.
     - `Flame.imageset/Flame.png` — the bare flame on a transparent background, shared by the launch
       screen and the in-app `Brandmark` (the flame beside the Plan "Today" header — `CommonViews.swift`,
       enabled via `PaneHeader(showsBrand:)`).
@@ -176,7 +173,7 @@ xcrun simctl launch booted com.circuitstitch.deferno
 
 Unit coverage for the iOS View layer lives in the **`iosAppTests`** target — a host-app
 unit-test bundle (`@testable import iosApp` + `import Deferno`), wired into the `iosApp`
-scheme's Test action. Green on the iOS 17.2 simulator under Xcode 15.2:
+scheme's Test action. Green on the iOS 26.5 simulator under Xcode 26.6:
 
 - **`StateBridgeTests`** — the SKIE-free bridge end to end: it drives the *real* `DefernoDemo`
   components and asserts list state and the co-resident **detail** slot reach the SwiftUI

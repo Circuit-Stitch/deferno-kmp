@@ -7,8 +7,9 @@
 #   2. Flame.imageset/Flame.png — the bare flame on a transparent background, trimmed to its artwork.
 #      Shared by the LaunchScreen.storyboard (on the same #1F1B16 background) and the in-app `Brandmark`.
 #
-# iOS app icons must be raster PNG (the asset catalog doesn't accept SVG, and the vector Icon Composer
-# `.icon` format needs Xcode 16+; this repo targets 15.2), so we rasterize the SVG once and let iOS
+# iOS app icons must be raster PNG (the asset catalog doesn't accept SVG). Xcode 26 does ship Icon
+# Composer's vector `.icon`, but the PNG path stays until the Liquid Glass layers are designed — so we
+# rasterize the SVG once and let iOS
 # derive the rest. The SVG is rasterized with `NSImage`, which decodes it natively *with a transparent
 # background* and as a vector (crisp at any size) — `qlmanage`/QuickLook flattens the transparent page
 # onto opaque white, which would leave a white box behind the flame. macOS only. Run from anywhere:

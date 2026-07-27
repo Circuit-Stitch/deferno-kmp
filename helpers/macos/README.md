@@ -72,7 +72,7 @@ Three complementary legs:
 
 ```sh
 scripts/build.sh                          # universal (x86_64+arm64), Developer ID signed → dist/deferno-sidecar
-SIDECAR_ARCHS="x86_64" scripts/build.sh   # single-arch (the slice verifiable on an Intel Mac)
+SIDECAR_ARCHS="arm64" scripts/build.sh    # single-arch (the slice the dev machine runs)
 SIDECAR_SIGN_IDENTITY="-" scripts/build.sh    # ad-hoc (CI without the cert)
 ```
 
@@ -164,7 +164,9 @@ default `dist/` location.
 
 ## Verified vs. human-gated
 
-What the automated build/tests prove on this machine (Xcode 15.2 / Ventura 13.7.8 / Intel):
+What the automated build/tests proved when this shipped (Xcode 15.2 / Ventura 13.7.8 / Intel — the dev
+machine at the time). That machine has since been replaced by an M4 Mac mini on macOS 26 / Xcode 26.6,
+which inverts the first line: arm64 is now the slice that runs and x86_64 the cross-built one.
 
 - ✅ Builds with Xcode 15.2, macOS 13 deployment target; universal (x86_64 verified, arm64 cross-built).
 - ✅ Serves the protocol over the socket and **passes the same client tests the stub did** (the real JVM

@@ -70,3 +70,12 @@ state machine + capability ports, the in-app permission UX, and the Conveyor pac
 behavior and TCC prompts need the Mac. The shared `DictationStatus.Permission*` states and
 `onOpenOsAppSettings` (Android-only today) now **activate on macOS**. Packaging grows a LaunchAgent
 install/registration + uninstall path, and a second signed inner binary to notarize.
+
+**Amendment (2026-07-26) — the dev machine changed.** The "2019 Intel MacBook Pro, Ventura ceiling"
+premise running through the alternatives and consequences above is history: the dev machine is now an
+**M4 Mac mini on macOS 26 / Xcode 26.6**. The decision stands unchanged — a Developer-ID-signed Swift
+helper over the AF_UNIX JSON contract, dictation on `SFSpeechRecognizer`, macOS 13 deployment target
+(now a product floor rather than a machine ceiling). Two consequences invert: the **arm64 slice is the
+verified one** and x86_64 is the cross-built one, and `SpeechTranscriber` (macOS 26+) is no longer
+unreachable locally — so ADR-0018's native fast path became testable on the dev machine rather than
+only in theory. Neither reopens this ADR; both are noted so the rationale above isn't read as current.
