@@ -6,9 +6,12 @@
 # `sqlite3_*` symbols the framework references *plus* `PRAGMA key`), drives the Gradle framework build
 # via the project's Run Script phase, and compiles + links the app for the iOS Simulator.
 #
-# Runner: macos-14 (Apple Silicon) — GitHub's current, long-lived macOS image (macos-13 Intel is being
-# retired). It ships Ruby 3 + CocoaPods preinstalled, so the local Ruby dance (this repo's dev machine is
-# an old Intel Mac) is a non-issue here. The arm64 simulator uses the `iosSimulatorArm64` framework slice.
+# Runner: macos-26 (Apple Silicon), which carries the Xcode 26 line. It ships Ruby 3 + CocoaPods +
+# xcbeautify preinstalled. The arm64 simulator uses the `iosSimulatorArm64` framework slice.
+#
+# It was macos-14 until the Apple toolchain floor rose to Xcode 26 (below): that image tops out at Xcode
+# 15.4 / the iOS 17 SDK, which cannot compile this app's sources at all — and it is deprecated besides
+# (brownouts from 2026-10, removed 2026-11-02).
 name: iOS
 
 on:
@@ -28,7 +31,7 @@ permissions:
 jobs:
   build:
     name: Build & test iOS app (framework + SwiftUI, SQLCipher)
-    runs-on: macos-14
+    runs-on: macos-26
     # Generous for the cold-cache first run: the Gradle Run Script downloads the Kotlin/Native compiler
     # + konan deps (~1 GB) before linking. setup-gradle caches the Gradle home, so warm runs are faster.
     timeout-minutes: 60
@@ -77,17 +80,46 @@ jobs:
           echo "::error::sdkmanager NDK/CMake install failed after 3 attempts." >&2
           exit 1
 
-      # Match the iOS 17 SDK the app is developed against (the dev machine is pinned to Xcode 15.2).
-      # Pick the newest Xcode 15.x on the image; fall back to the runner default if the image has
-      # dropped the 15.x line (a newer Xcode is a useful signal, and the deployment target is iOS 16).
-      - name: Select Xcode 15.x (match the iOS 17 SDK)
+      # Match the dev machine (Xcode 26.x). Two source-level requirements put a hard floor here, both
+      # introduced with the Apple warning sweep: `@retroactive` on the Bridge/Identity.swift conformances
+      # needs the **Swift 6 compiler** (Xcode 16+), and `.allowBluetoothHFP` in BrainDumpRecorder needs the
+      # **iOS 26 SDK** (the symbol is back-deployed to iOS 1.0 but only *declared* from that SDK on). The
+      # deployment target is still iOS 16 — this is a toolchain floor, not a product one.
+      #
+      # FAIL LOUDLY when the image has no Xcode 26, the way testflight.yml already does. The old form here
+      # was `if [ -n "$XC" ]; then …; fi` — a silent no-op fall-through that left the runner default
+      # selected, which is half of how this gate went green on a toolchain that couldn't build the branch.
+      - name: Select Xcode 26 (iOS 26 SDK, Swift 6 compiler)
         run: |
-          XC="$(ls -d /Applications/Xcode_15.*.app 2>/dev/null | sort -V | tail -1)"
-          if [ -n "$XC" ]; then sudo xcode-select -s "$XC/Contents/Developer"; fi
+          XC="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$XC" ]; then
+            echo "::error::No Xcode 26 found — this app needs the iOS 26 SDK and the Swift 6 compiler."
+            ls -d /Applications/Xcode_*.app 2>/dev/null || true
+            exit 1
+          fi
+          sudo xcode-select -s "$XC/Contents/Developer"
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-version
 
-      # CocoaPods is preinstalled on macos-14. Cache the CDN spec data + the integrated Pods so repeat
+      # Pick a simulator that actually exists on the image instead of naming a model. The hardcoded
+      # `iPhone 15` here outlived the iOS 17 runtime that carried it, and a destination that resolves to
+      # nothing is a failure mode this gate has already proven it can swallow. Resolve at runtime, and
+      # carry the **UDID** rather than the name: two simulators may share a model name (a second one gets
+      # created easily), and `name:` then fails with "multiple devices matched" — an id never does.
+      - name: Resolve an iOS Simulator destination
+        run: |
+          DEVICE="$(xcrun simctl list devices available --json \
+            | jq -c '[.devices | to_entries[] | select(.key | test("SimRuntime.iOS"))
+                      | .value[] | select(.name | startswith("iPhone"))] | first')"
+          if [ -z "$DEVICE" ] || [ "$DEVICE" = "null" ]; then
+            echo "::error::No iPhone simulator available on this image."
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Simulator destination: $(jq -r '"\(.name) (\(.udid))"' <<<"$DEVICE")"
+          echo "SIM_ID=$(jq -r .udid <<<"$DEVICE")" >> "$GITHUB_ENV"
+
+      # CocoaPods is preinstalled on the runner. Cache the CDN spec data + the integrated Pods so repeat
       # runs skip the network. Keyed on the committed Podfile.lock (Pods/ itself is gitignored).
       - name: Cache CocoaPods
         uses: actions/cache@v4
@@ -108,22 +140,39 @@ jobs:
       # framework + the SQLCipher pod, and runs the iosAppTests suite (#28) on the simulator — the real
       # signal that the framework, the SKIE-free bridge, SQLCipher, and the tests all resolve and pass
       # (#38). The Pods workspace (not the bare .xcodeproj) is required once a pod is integrated.
-      # CODE_SIGNING_ALLOWED=NO is fine here: the tests drive the in-memory DefernoDemo, which touches no
-      # Keychain (an unsigned iOS app can't use the Keychain — see app/iosApp/README.md), so they pass
-      # unsigned. iPhone 15 (iOS 17.x) ships on the macos-14 image alongside the Xcode 15.x selected above.
+      # **Ad-hoc** signing (`CODE_SIGN_IDENTITY="-"`, no team, no profile) rather than the old
+      # CODE_SIGNING_ALLOWED=NO. That flag's rationale — "the tests drive the in-memory DefernoDemo, which
+      # touches no Keychain" — stopped being true when DefernoApp.init started building the REAL DI graph
+      # at launch (ADR-0013/0017): the test *host app* now opens the Keychain-backed vault on startup, and
+      # an unsigned iOS app can't use the Keychain, so it aborts before the test runner ever connects.
+      # Ad-hoc signing gives the simulator build the entitlement it needs and needs no certificate, so it
+      # works on a bare runner. The destination comes from the resolve step above.
+      #
+      # SWIFT_TREAT_WARNINGS_AS_ERRORS is the ratchet: the app compiles warning-free on the Xcode this
+      # job selects, and a build-warnings cleanup with nothing holding the line just decays. Passed on the
+      # command line, not set in the project, so a local Xcode build still only warns — and so a future
+      # image bumping Xcode under us breaks CI loudly (which is the signal) rather than silently
+      # reaccumulating warnings. Drop the flag here if that day needs an escape hatch.
       - name: Build & test (framework + app, iOS Simulator)
         working-directory: app/iosApp
-        # GitHub's default shell is `bash -eo pipefail`, so an xcodebuild failure propagates through the
-        # formatter pipe. xcbeautify is preinstalled on macos-14; fall back to cat if a future image drops it.
+        # `set -o pipefail` is the whole gate. GitHub's default `run:` shell is `bash -e {0}` — with NO
+        # pipefail — so piping xcodebuild into a formatter hands the step xcbeautify's exit status and a
+        # failed build reports green. That is exactly what happened before this line existed. (testflight.yml
+        # already sets it.) xcbeautify is preinstalled; fall back to cat if a future image drops it.
         run: |
+          set -o pipefail
           if command -v xcbeautify >/dev/null 2>&1; then FMT=(xcbeautify --renderer github-actions); else FMT=(cat); fi
           xcodebuild \
             -workspace iosApp.xcworkspace \
             -scheme iosApp \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -destination "platform=iOS Simulator,id=$SIM_ID" \
             -derivedDataPath build/dd \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             test | "${FMT[@]}"
 
       - name: Upload xcodebuild logs on failure
