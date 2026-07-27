@@ -1,8 +1,10 @@
-import co.touchlab.skie.configuration.SuppressSkieWarning
-
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.skie)
+    // Everything this module and its macOS twin (app/macosApp) must agree on, since they link the SAME
+    // `Deferno.framework`: the JVM toolchain, the framework's CFBundleIdentifier, and the SKIE
+    // name-collision suppression policy. What stays below is genuinely per-OS.
+    id("deferno.apple.framework")
 }
 
 // The iOS entry point: bundles the shared app shell + feature slices into a single `Deferno`
@@ -10,12 +12,6 @@ plugins {
 // Apple-only module — no android/jvm targets. Klibs cross-compile on any host;
 // linking the framework binary happens on a macOS runner (ADR-0006).
 kotlin {
-    // Keep in lockstep with ProjectConfig.JVM_TOOLCHAIN (the build's source of truth,
-    // used by the deferno.* conventions). This bespoke iOS-only framework module can't
-    // apply those conventions (different target set, no jvm()), and a dedicated
-    // convention for a single module isn't earned yet (ADR-0004).
-    jvmToolchain(21)
-
     // iosX64 (Intel-Mac simulator) is dropped to match the `deferno.kmp` target set: the shared
     // modules this framework links no longer build an iosX64 variant (amzn/kmp-logger ships none),
     // so the framework can only assemble for iosArm64 + iosSimulatorArm64 (Apple-Silicon).
@@ -23,10 +19,6 @@ kotlin {
         target.binaries.framework {
             baseName = "Deferno"
             isStatic = true
-            // Kotlin/Native can't infer a CFBundleIdentifier for a framework whose sources span this many
-            // packages, and warns on every link. Name it — distinct from the app's own id, which varies
-            // per env flavour (ADR-0047) while the framework's stays put.
-            binaryOption("bundleId", "com.circuitstitch.deferno.Deferno")
             // Surface the shared presentation layer to SwiftUI (#51, #35). The SwiftUI Views render
             // the **whole shared shell** now (RootComponent → Auth/Main → the five Destinations +
             // the Search/New overlays, ADR-0013/0017), not just the Tasks+Plan demo — so the shell
@@ -101,37 +93,6 @@ kotlin {
             // (not `api`/exported) — Swift never names the Logger types, only Kotlin's iosMain does
             // (amzn/kmp-logger). Declared directly here, not relied upon transitively from core/common.
             implementation(libs.kmp.logger.log)
-        }
-    }
-}
-
-// A Kotlin `description`/`first()`/`last()` member collides with `-[NSObject description]` (and with
-// Swift's own `first`/`last`) in the Obj-C export, so SKIE renames it to `description_`/`first_()` and
-// warns on every link. Ours are named explicitly at the declaration instead (`@ObjCName`), which leaves
-// only the ones we can't annotate: SQLDelight-generated row types, and two third-party libraries. Silence
-// exactly those — narrowly, by fully-qualified-name prefix, so a *new* collision in our own code still
-// gets flagged.
-skie {
-    features {
-        // SQLDelight-generated `*Entity` rows (their `description` column). Generated source — nowhere
-        // to put an annotation. They only reach the header at all because core:database is transitively
-        // reachable from the exported shell API; Swift never names them.
-        group("com.circuitstitch.deferno.core.database.sql") {
-            SuppressSkieWarning.NameCollision(true)
-        }
-        // Ktor's `HttpStatusCode.description`.
-        group("io.ktor.http.HttpStatusCode") {
-            SuppressSkieWarning.NameCollision(true)
-        }
-        // kotlinx-datetime's `LocalDateProgression`/`YearMonthProgression`: the `first()`/`last()`
-        // *extension functions* (top-level in `kotlinx.datetime`, hence these FQNs rather than the
-        // receivers') collide with the progressions' own `first`/`last` properties. Exported on purpose
-        // (LocalDate/YearMonth are Swift-facing), so the progressions come along for the ride.
-        group("kotlinx.datetime.first") {
-            SuppressSkieWarning.NameCollision(true)
-        }
-        group("kotlinx.datetime.last") {
-            SuppressSkieWarning.NameCollision(true)
         }
     }
 }

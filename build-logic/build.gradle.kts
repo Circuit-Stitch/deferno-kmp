@@ -19,6 +19,7 @@ dependencies {
     compileOnly(libs.ksp.gradlePlugin)
     compileOnly(libs.compose.gradlePlugin)
     compileOnly(libs.compose.compiler.gradlePlugin)
+    compileOnly(libs.skie.gradlePlugin)
 }
 
 // build-logic's convention plugins run INSIDE the Gradle daemon, so their classes must target the

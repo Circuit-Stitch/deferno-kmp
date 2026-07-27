@@ -346,6 +346,12 @@ ksp-gradlePlugin = { group = "com.google.devtools.ksp", name = "symbol-processin
 # root build (the INVARIANT) since app/desktopApp applies them directly.
 compose-gradlePlugin = { group = "org.jetbrains.compose", name = "compose-gradle-plugin", version.ref = "composeMultiplatform" }
 compose-compiler-gradlePlugin = { group = "org.jetbrains.kotlin", name = "compose-compiler-gradle-plugin", version.ref = "kotlin" }
+# SKIE's Gradle plugin on the build-logic classpath, so `deferno.apple.framework` can type-check the
+# `skie { features { group(...) } }` DSL it configures. This is the REAL artifact — `alias(libs.plugins.skie)`
+# resolves the `co.touchlab.skie:co.touchlab.skie.gradle.plugin` *marker*, a pom-only redirect to this one.
+# The published jar is shadowed and carries both halves the convention imports (the `SkieExtension` DSL and
+# the `SuppressSkieWarning` configuration keys), so this single entry covers both.
+skie-gradlePlugin = { group = "co.touchlab.skie", name = "gradle-plugin", version.ref = "skie" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 # The on-device instrumentation runner (AndroidJUnitRunner) for the whisper native-correctness device
