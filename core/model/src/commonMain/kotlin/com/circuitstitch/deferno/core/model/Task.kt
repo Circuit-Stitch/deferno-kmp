@@ -49,8 +49,10 @@ data class Task(
     // Full-only enrichment — populated when [hydration] == [HydrationState.Full].
     val ownerOrgId: OrgId? = null,
     // `description` collides with `-[NSObject description]` in the Apple export, where it would land as
-    // the compiler-picked (and therefore unstable) `description_`. Name it explicitly instead — the same
-    // `itemDescription` across all four item kinds, so Swift reads one name.
+    // the compiler-picked (and therefore unstable) `description_`. The item kinds are what SwiftUI
+    // actually reads, so they get a stable name at the declaration — the same `itemDescription` across
+    // all four. Everything else that collides is code Swift never names (generated rows, wire DTOs,
+    // third-party); that's silenced in one place, by FQN prefix, in build-logic's AppleFrameworkConfig.
     @property:ObjCName("itemDescription") val description: String? = null,
     val nextTaskId: TaskId? = null,
     // Server-computed subtree progress carried by the `/items` snapshot (ADR-0034): done / total

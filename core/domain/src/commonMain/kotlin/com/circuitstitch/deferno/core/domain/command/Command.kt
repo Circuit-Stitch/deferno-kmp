@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalObjCName::class)
-
 package com.circuitstitch.deferno.core.domain.command
 
 import com.circuitstitch.deferno.core.model.DefinitionState
@@ -15,8 +13,6 @@ import com.circuitstitch.deferno.core.network.dto.CreateHabitPayload
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
-import kotlin.experimental.ExperimentalObjCName
-import kotlin.native.ObjCName
 import kotlin.time.Instant
 
 /**
@@ -149,14 +145,8 @@ data class SetTaskDeadlineTime(override val taskId: TaskId, val timeOfDay: Local
     override val kind: CommandKind get() = CommandKind.SetTaskDeadlineTime
 }
 
-/**
- * Set the Task's description body. `description` is `@ObjCName`d for the Apple export — bare
- * `description` collides with `-[NSObject description]` and would land in Swift as `description_`.
- */
-data class SetTaskDescription(
-    override val taskId: TaskId,
-    @property:ObjCName("itemDescription") val description: String,
-) : TaskCommand {
+/** Set the Task's description body. */
+data class SetTaskDescription(override val taskId: TaskId, val description: String) : TaskCommand {
     override val kind: CommandKind get() = CommandKind.SetTaskDescription
 }
 

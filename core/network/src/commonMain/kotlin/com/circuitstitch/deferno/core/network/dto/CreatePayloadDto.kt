@@ -1,12 +1,8 @@
-@file:OptIn(ExperimentalObjCName::class)
-
 package com.circuitstitch.deferno.core.network.dto
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
-import kotlin.experimental.ExperimentalObjCName
-import kotlin.native.ObjCName
 
 /**
  * The **write** wire DTOs the create flow POSTs (ADR-0016, #71): `CreateTaskPayload` → `POST /tasks`,
@@ -18,16 +14,13 @@ import kotlin.native.ObjCName
  *
  * The Chore "Shared with a Group" / rotation control is **deferred** (Groups are backend-blocked,
  * ADR-0015), so [CreateChorePayload] carries no group field — a Chore is creatable without one.
- *
- * `description` is `@ObjCName`d to `itemDescription` on all four: bare `description` collides with
- * `-[NSObject description]` in the Apple export and would land in Swift as the unstable `description_`.
  */
 
 /** `POST /tasks`. Only [title] is required; the rest is optional New-form input. */
 @Serializable
 data class CreateTaskPayload(
     val title: String,
-    @property:ObjCName("itemDescription") val description: String? = null,
+    val description: String? = null,
     @SerialName("complete_by") val completeBy: String? = null,
     @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
     val labels: List<String>? = null,
@@ -41,7 +34,7 @@ data class CreateTaskPayload(
 data class CreateHabitPayload(
     val title: String,
     val recurrence: RecurrenceDto,
-    @property:ObjCName("itemDescription") val description: String? = null,
+    val description: String? = null,
     @SerialName("complete_by") val completeBy: String? = null,
     @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
     val labels: List<String>? = null,
@@ -53,7 +46,7 @@ data class CreateChorePayload(
     val title: String,
     val recurrence: RecurrenceDto,
     @SerialName("cadence_mode") val cadenceMode: String? = null,
-    @property:ObjCName("itemDescription") val description: String? = null,
+    val description: String? = null,
     @SerialName("complete_by") val completeBy: String? = null,
     @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
     val labels: List<String>? = null,
@@ -72,7 +65,7 @@ data class CreateEventPayload(
     @SerialName("start_time_of_day") val startTimeOfDay: String? = null,
     @SerialName("end_time_of_day") val endTimeOfDay: String? = null,
     val recurrence: RecurrenceDto? = null,
-    @property:ObjCName("itemDescription") val description: String? = null,
+    val description: String? = null,
     val labels: List<String>? = null,
 )
 
