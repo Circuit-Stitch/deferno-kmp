@@ -43,7 +43,7 @@ struct BreakdownView: View {
             // title edit on the live row doesn't rebuild it — the flow stays on the item you opened.
             BreakdownChat(
                 component: component,
-                root: ItemContext(id: component.taskId, title: task.title, notes: task.description_)
+                root: ItemContext(id: component.taskId, title: task.title, notes: task.itemDescription)
             )
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)

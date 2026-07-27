@@ -137,7 +137,7 @@ struct TaskDetailView: View {
 
     @ViewBuilder
     private func infoTab(_ task: Task, _ value: TaskDetailState) -> some View {
-        if let description = task.description_, !description.isEmpty {
+        if let description = task.itemDescription, !description.isEmpty {
             Text(description).font(.body)
         } else if !value.isHydrating {
             Text(L.string("tasks_detail_no_description"))

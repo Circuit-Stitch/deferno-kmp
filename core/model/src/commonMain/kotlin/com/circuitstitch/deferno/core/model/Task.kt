@@ -1,6 +1,10 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model
 
 import kotlinx.datetime.LocalTime
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 import kotlin.time.Instant
 
 /**
@@ -44,7 +48,10 @@ data class Task(
     val hydration: HydrationState = HydrationState.Summary,
     // Full-only enrichment — populated when [hydration] == [HydrationState.Full].
     val ownerOrgId: OrgId? = null,
-    val description: String? = null,
+    // `description` collides with `-[NSObject description]` in the Apple export, where it would land as
+    // the compiler-picked (and therefore unstable) `description_`. Name it explicitly instead — the same
+    // `itemDescription` across all four item kinds, so Swift reads one name.
+    @property:ObjCName("itemDescription") val description: String? = null,
     val nextTaskId: TaskId? = null,
     // Server-computed subtree progress carried by the `/items` snapshot (ADR-0034): done / total
     // descendants, for a collapsed tree node's progress badge. `null` when the source omits them

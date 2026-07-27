@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.agent
 
 import com.circuitstitch.deferno.core.model.ItemKind
@@ -5,7 +7,9 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.experimental.ExperimentalObjCName
 import kotlin.jvm.JvmInline
+import kotlin.native.ObjCName
 import kotlin.time.Instant
 
 /**
@@ -151,7 +155,9 @@ data class ItemAnchor(
     val parentId: String? = null,
     val completeBy: LocalDate? = null,
     val dateCreated: Instant? = null,
-    val description: String? = null,
+    // `@ObjCName`d for the Apple export: bare `description` collides with `-[NSObject description]`
+    // and would land in Swift as the unstable `description_`.
+    @property:ObjCName("itemDescription") val description: String? = null,
     val deadlineTimeOfDay: LocalTime? = null,
 ) {
     init {
