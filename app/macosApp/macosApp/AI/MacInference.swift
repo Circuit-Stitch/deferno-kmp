@@ -51,9 +51,11 @@ final class MacInference: NativeInference {
             // `_Concurrency.Task` — bare `Task` resolves to the exported Kotlin `Deferno.Task` domain model.
             _Concurrency.Task {
                 do {
-                    let response = try await session.respond(to: content)
+                    // Unwrap to the `String` here: `LanguageModelSession.Response` is non-Sendable, so
+                    // carrying it into the `@Sendable` `MainActor.run` closure is a Swift 6 error.
+                    let json = try await session.respond(to: content).content
                     // Always hop to main: the seam's coroutine resumes here and the demo renders on main.
-                    await MainActor.run { onJson(response.content) }
+                    await MainActor.run { onJson(json) }
                 } catch {
                     await MainActor.run { onError(Self.category(of: error)) }
                 }

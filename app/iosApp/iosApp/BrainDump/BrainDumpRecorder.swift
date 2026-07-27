@@ -34,11 +34,13 @@ final class BrainDumpRecorder: ObservableObject, NativeAudioRecorder {
         DispatchQueue.main.async { [self] in
             guard !running else { return }
             let session = AVAudioSession.sharedInstance()
-            // `.allowBluetooth` lets the input route use a connected Bluetooth (AirPods) mic over HFP — without
-            // it the session can't open an input while AirPods are connected (e.g. right after a call), which
-            // is exactly the "Couldn't record" the user hit. `.playAndRecord` + `.voiceChat` is what Apple's
-            // Voice Processing I/O (below) needs, and `.voiceChat` is Bluetooth-HFP-friendly (unlike `.measurement`).
-            try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth])
+            // `.allowBluetoothHFP` (the iOS 26 SDK's name for the long-deprecated `.allowBluetooth` — same
+            // raw value, available since iOS 1.0, so no `#available` guard) lets the input route use a
+            // connected Bluetooth (AirPods) mic over HFP — without it the session can't open an input while
+            // AirPods are connected (e.g. right after a call), which is exactly the "Couldn't record" the user
+            // hit. `.playAndRecord` + `.voiceChat` is what Apple's Voice Processing I/O (below) needs, and
+            // `.voiceChat` is Bluetooth-HFP-friendly (unlike `.measurement`).
+            try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])
             try? session.setActive(true, options: [])
 
             let input = engine.inputNode
