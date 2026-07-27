@@ -3,10 +3,12 @@ package com.circuitstitch.deferno.core.data.account
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
 import kotlinx.coroutines.test.runTest
+import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSString
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSUTF8StringEncoding
+import platform.Foundation.create
 import platform.Foundation.writeToFile
 import kotlin.random.Random
 import kotlin.test.Test
@@ -20,7 +22,7 @@ import kotlin.test.assertTrue
  * the property the in-memory placeholder could never give — **a fresh instance reads what a previous
  * one wrote** (the cold-start session-restore regression, the "sign in again on every launch" defect).
  */
-@OptIn(ExperimentalForeignApi::class)
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 class FileAccountRegistryTest {
 
     private val dir = "${NSTemporaryDirectory()}roster-test-${Random.nextLong()}"
@@ -78,7 +80,9 @@ class FileAccountRegistryTest {
         val registry = FileAccountRegistry(dir)
         registry.put(work)
 
-        ("{corrupt" as NSString).writeToFile(
+        // `NSString.create(string = …)`, not a `String as NSString` cast — the same interop mapping the
+        // registry itself writes through (Kotlin's String and NSString are mapped, not subtypes).
+        NSString.create(string = "{corrupt").writeToFile(
             "$dir/account_roster.json",
             atomically = true,
             encoding = NSUTF8StringEncoding,
