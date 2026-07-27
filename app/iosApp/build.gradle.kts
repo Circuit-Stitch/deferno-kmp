@@ -1,3 +1,5 @@
+import co.touchlab.skie.configuration.SuppressSkieWarning
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.skie)
@@ -21,6 +23,10 @@ kotlin {
         target.binaries.framework {
             baseName = "Deferno"
             isStatic = true
+            // Kotlin/Native can't infer a CFBundleIdentifier for a framework whose sources span this many
+            // packages, and warns on every link. Name it — distinct from the app's own id, which varies
+            // per env flavour (ADR-0047) while the framework's stays put.
+            binaryOption("bundleId", "com.circuitstitch.deferno.Deferno")
             // Surface the shared presentation layer to SwiftUI (#51, #35). The SwiftUI Views render
             // the **whole shared shell** now (RootComponent → Auth/Main → the five Destinations +
             // the Search/New overlays, ADR-0013/0017), not just the Tasks+Plan demo — so the shell
@@ -95,6 +101,37 @@ kotlin {
             // (not `api`/exported) — Swift never names the Logger types, only Kotlin's iosMain does
             // (amzn/kmp-logger). Declared directly here, not relied upon transitively from core/common.
             implementation(libs.kmp.logger.log)
+        }
+    }
+}
+
+// A Kotlin `description`/`first()`/`last()` member collides with `-[NSObject description]` (and with
+// Swift's own `first`/`last`) in the Obj-C export, so SKIE renames it to `description_`/`first_()` and
+// warns on every link. Ours are named explicitly at the declaration instead (`@ObjCName`), which leaves
+// only the ones we can't annotate: SQLDelight-generated row types, and two third-party libraries. Silence
+// exactly those — narrowly, by fully-qualified-name prefix, so a *new* collision in our own code still
+// gets flagged.
+skie {
+    features {
+        // SQLDelight-generated `*Entity` rows (their `description` column). Generated source — nowhere
+        // to put an annotation. They only reach the header at all because core:database is transitively
+        // reachable from the exported shell API; Swift never names them.
+        group("com.circuitstitch.deferno.core.database.sql") {
+            SuppressSkieWarning.NameCollision(true)
+        }
+        // Ktor's `HttpStatusCode.description`.
+        group("io.ktor.http.HttpStatusCode") {
+            SuppressSkieWarning.NameCollision(true)
+        }
+        // kotlinx-datetime's `LocalDateProgression`/`YearMonthProgression`: the `first()`/`last()`
+        // *extension functions* (top-level in `kotlinx.datetime`, hence these FQNs rather than the
+        // receivers') collide with the progressions' own `first`/`last` properties. Exported on purpose
+        // (LocalDate/YearMonth are Swift-facing), so the progressions come along for the ride.
+        group("kotlinx.datetime.first") {
+            SuppressSkieWarning.NameCollision(true)
+        }
+        group("kotlinx.datetime.last") {
+            SuppressSkieWarning.NameCollision(true)
         }
     }
 }

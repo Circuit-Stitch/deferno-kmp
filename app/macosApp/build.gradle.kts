@@ -1,3 +1,5 @@
+import co.touchlab.skie.configuration.SuppressSkieWarning
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.skie)
@@ -22,6 +24,10 @@ kotlin {
     macosArm64().binaries.framework {
         baseName = "Deferno"
         isStatic = true
+        // Kotlin/Native can't infer a CFBundleIdentifier for a framework whose sources span this many
+        // packages, and warns on every link. Name it — distinct from the app's own id (app/iosApp does
+        // the same for its twin framework).
+        binaryOption("bundleId", "com.circuitstitch.deferno.Deferno")
         // Surface the shared presentation layer to SwiftUI, mirroring app/iosApp (ADR-0017/0029): the
         // SwiftUI Views render the whole shared shell (RootComponent → Auth/Main → the five
         // Destinations + the Search/New overlays), so the shell module, every feature slice whose
@@ -87,6 +93,31 @@ kotlin {
             // Foundation Models engine drives. NOT exported — Swift names only the app-module bridge
             // types (NativeInference / DraftTasksBridge / DraftPreview), never a core:agent symbol.
             implementation(project(":core:agent"))
+        }
+    }
+}
+
+// SKIE name-collision suppression, mirroring app/iosApp (see that build file for the full rationale):
+// our own `description` members are named explicitly at the declaration via `@ObjCName`, so all that's
+// left are the collisions in code we can't annotate — SQLDelight-generated rows and two third-party
+// libraries. Scoped by fully-qualified-name prefix so a new collision in our own code still gets flagged.
+skie {
+    features {
+        // SQLDelight-generated `*Entity` rows (their `description` column).
+        group("com.circuitstitch.deferno.core.database.sql") {
+            SuppressSkieWarning.NameCollision(true)
+        }
+        // Ktor's `HttpStatusCode.description`.
+        group("io.ktor.http.HttpStatusCode") {
+            SuppressSkieWarning.NameCollision(true)
+        }
+        // kotlinx-datetime's `LocalDateProgression`/`YearMonthProgression` `first()`/`last()` extensions
+        // (top-level in `kotlinx.datetime`, hence these FQNs rather than the receivers').
+        group("kotlinx.datetime.first") {
+            SuppressSkieWarning.NameCollision(true)
+        }
+        group("kotlinx.datetime.last") {
+            SuppressSkieWarning.NameCollision(true)
         }
     }
 }
