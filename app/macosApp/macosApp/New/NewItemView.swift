@@ -118,7 +118,7 @@ struct NewItemView: View {
         TextField(L.string("new_date_label"), text: $dateText)
             .textFieldStyle(.roundedBorder)
             .autocorrectionDisabled(true)
-            .onChange(of: dateText) { _ in component.setDate(date: ShellBridgeKt.parseLocalDate(text: dateText)) }
+            .onChange(of: dateText) { _, text in component.setDate(date: ShellBridgeKt.parseLocalDate(text: text)) }
             .accessibilityLabel(L.string("new_date_cd"))
     }
 
@@ -127,12 +127,12 @@ struct NewItemView: View {
             TextField(L.string("new_event_start_label"), text: $startText)
                 .textFieldStyle(.roundedBorder)
                 .autocorrectionDisabled(true)
-                .onChange(of: startText) { _ in component.setStart(start: ShellBridgeKt.parseInstant(text: startText)) }
+                .onChange(of: startText) { _, text in component.setStart(start: ShellBridgeKt.parseInstant(text: text)) }
                 .accessibilityLabel(L.string("new_event_start_cd"))
             TextField(L.string("new_event_end_label"), text: $endText)
                 .textFieldStyle(.roundedBorder)
                 .autocorrectionDisabled(true)
-                .onChange(of: endText) { _ in component.setEnd(end: ShellBridgeKt.parseInstant(text: endText)) }
+                .onChange(of: endText) { _, text in component.setEnd(end: ShellBridgeKt.parseInstant(text: text)) }
                 .accessibilityLabel(L.string("new_event_end_cd"))
         }
     }

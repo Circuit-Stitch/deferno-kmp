@@ -1,6 +1,10 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.skie)
+    // Everything this module and its macOS twin (app/macosApp) must agree on, since they link the SAME
+    // `Deferno.framework`: the JVM toolchain, the framework's CFBundleIdentifier, and the SKIE
+    // name-collision suppression policy. What stays below is genuinely per-OS.
+    id("deferno.apple.framework")
 }
 
 // The iOS entry point: bundles the shared app shell + feature slices into a single `Deferno`
@@ -8,12 +12,6 @@ plugins {
 // Apple-only module — no android/jvm targets. Klibs cross-compile on any host;
 // linking the framework binary happens on a macOS runner (ADR-0006).
 kotlin {
-    // Keep in lockstep with ProjectConfig.JVM_TOOLCHAIN (the build's source of truth,
-    // used by the deferno.* conventions). This bespoke iOS-only framework module can't
-    // apply those conventions (different target set, no jvm()), and a dedicated
-    // convention for a single module isn't earned yet (ADR-0004).
-    jvmToolchain(21)
-
     // iosX64 (Intel-Mac simulator) is dropped to match the `deferno.kmp` target set: the shared
     // modules this framework links no longer build an iosX64 variant (amzn/kmp-logger ships none),
     // so the framework can only assemble for iosArm64 + iosSimulatorArm64 (Apple-Silicon).

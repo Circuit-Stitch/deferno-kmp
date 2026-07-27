@@ -366,13 +366,13 @@ struct TaskDetailView: View {
     /// ("Add to today's plan" moved to the FAB add sheet — ADR-0044 parity with Android.)
     @ViewBuilder
     private func infoTab(_ task: Task, state value: TaskDetailState) -> some View {
-        let hasDescription = (task.description_?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+        let hasDescription = (task.itemDescription?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
         // NOTES: a caps section header over the (markdown) description, or a muted "no description" once
         // hydration settles. The header hides only during the brief pre-hydration gap.
         if hasDescription || !value.isHydrating {
             SectionLabel(L.string("new_notes_label"))
         }
-        if hasDescription, let description = task.description_ {
+        if hasDescription, let description = task.itemDescription {
             MarkdownDescription(markdown: description, sheetTitle: L.string("new_notes_label"))
         } else if !value.isHydrating {
             Text(L.string("tasks_detail_no_description"))

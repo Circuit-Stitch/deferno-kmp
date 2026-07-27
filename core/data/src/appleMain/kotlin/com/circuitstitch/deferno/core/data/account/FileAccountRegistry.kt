@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.core.data.account
 
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSFileManager
@@ -12,6 +13,7 @@ import platform.Foundation.NSURL
 import platform.Foundation.NSURLIsExcludedFromBackupKey
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.NSUserDomainMask
+import platform.Foundation.create
 import platform.Foundation.stringWithContentsOfFile
 import platform.Foundation.writeToFile
 
@@ -29,7 +31,7 @@ import platform.Foundation.writeToFile
  * to an empty roster); write errors degrade silently to the same re-auth posture. Device-only IO —
  * the round-trip logic is measured via [AccountRosterCodec] in commonTest, the file IO in iosTest.
  */
-@OptIn(ExperimentalForeignApi::class)
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 class FileAccountRegistry(
     private val directoryPath: String = defaultDirectoryPath(),
 ) : AccountRegistry {
@@ -69,7 +71,9 @@ class FileAccountRegistry(
             attributes = null,
             error = null,
         )
-        (AccountRosterCodec.encodeDocument(document.accounts, document.activeId) as NSString)
+        // `NSString.create(string = …)` rather than a `String as NSString` cast: Kotlin's String and
+        // NSString are interop-mapped, not subtypes, so the cast is one the compiler rejects outright.
+        NSString.create(string = AccountRosterCodec.encodeDocument(document.accounts, document.activeId))
             .writeToFile(filePath, atomically = true, encoding = NSUTF8StringEncoding, error = null)
         // Device-bound cache: keep the roster out of iCloud/iTunes backups (see class doc).
         NSURL.fileURLWithPath(filePath)

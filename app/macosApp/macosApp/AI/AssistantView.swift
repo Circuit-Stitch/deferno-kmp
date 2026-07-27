@@ -146,9 +146,9 @@ struct AssistantView: View {
                 .padding(.horizontal, Layout.gutter).padding(.vertical, 12)
             }
             // Keep the latest line in view as the reply streams in / a turn is sent.
-            .onChange(of: s.messages.count) { _ in scrollToEnd(proxy) }
-            .onChange(of: s.actions.count) { _ in scrollToEnd(proxy) }
-            .onChange(of: s.streaming) { _ in scrollToEnd(proxy) }
+            .onChange(of: s.messages.count) { scrollToEnd(proxy) }
+            .onChange(of: s.actions.count) { scrollToEnd(proxy) }
+            .onChange(of: s.streaming) { scrollToEnd(proxy) }
         }
     }
 

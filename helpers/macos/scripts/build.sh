@@ -9,7 +9,7 @@
 #
 # Usage:
 #   scripts/build.sh                      # release build, universal (x86_64+arm64), Developer ID sign
-#   SIDECAR_ARCHS="x86_64" scripts/build.sh   # single-arch (faster; what you can verify on an Intel Mac)
+#   SIDECAR_ARCHS="arm64" scripts/build.sh    # single-arch (faster; the slice the dev machine runs)
 #   SIDECAR_SIGN_IDENTITY="-" scripts/build.sh   # ad-hoc sign (CI without the cert)
 #   SIDECAR_TIMESTAMP=1 scripts/build.sh  # secure timestamp (notarization-ready; needs network)
 #

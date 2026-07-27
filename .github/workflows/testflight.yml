@@ -1,11 +1,13 @@
-# TestFlight upload (manual). The local dev machine is pinned to Xcode 15.2 (Intel/Ventura), but since
-# 2026-04-28 App Store Connect rejects any upload not built with the iOS 26 SDK / Xcode 26+ — so the
-# TestFlight build can only be produced on a runner with Xcode 26. This workflow archives the Release
-# device build (the static Deferno.framework's iosArm64 slice + the SwiftUI app + the SQLCipher pod) on
-# a macOS 15 runner under Xcode 26, then signs + uploads it to TestFlight using an App Store Connect API
-# key with cloud-managed signing — no certificates or provisioning profiles are stored in the repo.
+# TestFlight upload (manual). Since 2026-04-28 App Store Connect rejects any upload not built with the
+# iOS 26 SDK / Xcode 26+. That used to make this workflow the odd one out — the dev machine and ios.yml
+# were both on Xcode 15 — but the Apple toolchain floor has since risen to Xcode 26 everywhere, so this
+# now differs from the PR gate only in what it does (archive + sign + upload), not in what it builds
+# with. It archives the Release device build (the static Deferno.framework's iosArm64 slice + the SwiftUI
+# app + the SQLCipher pod), then signs + uploads to TestFlight using an App Store Connect API key with
+# cloud-managed signing — no certificates or provisioning profiles are stored in the repo.
 #
-# Kotlin/Native 2.4.0 supports up to Xcode 26.4, so the framework links cleanly against the iOS 26 SDK.
+# Kotlin/Native 2.4.0's maxTested Xcode is 26.4; past that KGP only warns (XcodeVersionTooHighWarning)
+# and konan links against its own bundled toolchain regardless, so the framework links cleanly.
 #
 # Trigger it by hand: Actions → TestFlight → Run workflow. The build number is the workflow run number
 # (monotonic), so each run produces a TestFlight build strictly newer than the last for marketing
@@ -26,9 +28,9 @@ permissions:
 jobs:
   upload:
     name: Archive & upload to TestFlight (Xcode 26)
-    # macОS 15 (Sequoia) ships Xcode 26.x — the SDK App Store Connect now requires. (macos-14 in ios.yml
-    # carries Xcode 15.x, which is fine for the simulator build/test but is rejected at upload.)
-    runs-on: macos-15
+    # macos-26 (Tahoe) carries the Xcode 26 line App Store Connect requires — the same image and the same
+    # Xcode selection ios.yml now uses, so a green PR gate actually predicts a successful archive here.
+    runs-on: macos-26
     # Generous for the cold-cache first run: the Gradle Run Script downloads the Kotlin/Native compiler +
     # konan deps (~1 GB) before linking the framework.
     timeout-minutes: 60

@@ -11,8 +11,9 @@
 //   • `SidecarKit`        — all logic (protocol codec, AF_UNIX transport, peer-auth, SFSpeech, TCC).
 //   • `deferno-sidecar`   — the executable: argument parsing + launchd socket activation + serve loop.
 //
-// macOS 13 deployment target (Ventura is the OS ceiling of the 2019 Intel dev machine — #115); the
-// dictation engine is on-device **SFSpeechRecognizer**, not the macOS-26-only SpeechTranscriber.
+// macOS 13 deployment target — chosen when Ventura was the dev machine's ceiling (#115), kept since as
+// the product floor; the dictation engine is on-device **SFSpeechRecognizer**, not SpeechTranscriber
+// (macOS 26+, now reachable on the dev machine but still above that floor).
 import PackageDescription
 import Foundation
 

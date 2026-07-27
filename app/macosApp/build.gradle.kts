@@ -1,6 +1,10 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.skie)
+    // Everything this module and its iOS twin (app/iosApp) must agree on, since they link the SAME
+    // `Deferno.framework`: the JVM toolchain, the framework's CFBundleIdentifier, and the SKIE
+    // name-collision suppression policy. What stays below is genuinely per-OS.
+    id("deferno.apple.framework")
 }
 
 // The macOS entry point (ADR-0029): bundles the shared app shell + feature slices into a single
@@ -14,11 +18,6 @@ plugins {
 // Auth shell + paste-PAT sign-in, and an Active Account opens the encrypted per-Account DB (SQLCipher,
 // linked in the Xcode app). Mirrors app/iosApp's DefernoRoot.
 kotlin {
-    // Keep in lockstep with ProjectConfig.JVM_TOOLCHAIN (the build's source of truth). Bespoke
-    // Apple-only framework module — can't apply the deferno.* conventions (different target set), and
-    // a dedicated convention for one module isn't earned yet (ADR-0004 / ADR-0029).
-    jvmToolchain(21)
-
     macosArm64().binaries.framework {
         baseName = "Deferno"
         isStatic = true

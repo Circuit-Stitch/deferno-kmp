@@ -34,8 +34,8 @@ kotlin {
     // (`kmp-logger-log` 0.0.1, api-exposed from core/common) publishes only iosArm64 +
     // iosSimulatorArm64. Re-adding iosX64 here fails `:*:compileKotlinIosX64` with an
     // unresolved-variant error until the logger (or any other commonMain dep) ships an iosX64
-    // build. Trade-off: an Intel Mac can't run the iOS app in the simulator (Apple-Silicon Macs
-    // use the iosSimulatorArm64 variant and are unaffected).
+    // build. No cost left in practice: the dev machine and both macOS CI images are Apple Silicon,
+    // and they all run the simulator off the iosSimulatorArm64 variant.
     iosArm64()
     iosSimulatorArm64()
 

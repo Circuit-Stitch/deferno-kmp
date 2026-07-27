@@ -1,6 +1,10 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model
 
 import kotlinx.datetime.LocalTime
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 import kotlin.time.Instant
 
 /**
@@ -35,7 +39,9 @@ data class Chore(
     val hydration: HydrationState = HydrationState.Summary,
     // Full-only enrichment — populated when [hydration] == [HydrationState.Full].
     val ownerOrgId: OrgId? = null,
-    val description: String? = null,
+    // Named explicitly for the Apple export: `description` collides with `-[NSObject description]`
+    // and would otherwise land in Swift as the unstable `description_` (see [Task.description]).
+    @property:ObjCName("itemDescription") val description: String? = null,
     val seriesId: String? = null,
     // Server-derived dependency flags (ADR-0034, #289), read-only truth: [blocked] when an ancestor is
     // blocked (the flag inherits down the tree across kinds); [isBlocker] when this gates another. Both

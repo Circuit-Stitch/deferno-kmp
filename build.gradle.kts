@@ -36,6 +36,12 @@ plugins {
     // speech-model asset-pack module via alias, so `apply false` here lands it on that module's
     // classpath — same per-module pattern as roborazzi/sqldelight/baselineprofile above.
     alias(libs.plugins.android.asset.pack) apply false
+    // SKIE (ADR-0003) is applied per-module by app/iosApp + app/macosApp via alias, which on its own
+    // needs no entry here. It is listed because `deferno.apple.framework` *references* SKIE's extension
+    // type: build-logic.jar lives in the root's plugin ClassLoaderScope, which can't see a class that
+    // only ever reaches a child scope — without this the convention fails at apply-time with
+    // NoClassDefFoundError. Same reason KGP is listed above (the INVARIANT).
+    alias(libs.plugins.skie) apply false
 
     // The repo root is Kover's aggregation point: this convention applies Kover here and
     // enforces the merged shared-core coverage gate (ADR-0006, issue #11). Kover stays

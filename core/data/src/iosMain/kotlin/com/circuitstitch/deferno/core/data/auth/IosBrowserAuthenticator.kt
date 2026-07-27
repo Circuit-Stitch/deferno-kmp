@@ -80,7 +80,8 @@ class IosBrowserAuthenticator : BrowserAuthenticator {
 /** Anchors the session's sheet on the app's key window (asked via this protocol at presentation). */
 private class KeyWindowPresentationContext :
     NSObject(), ASWebAuthenticationPresentationContextProvidingProtocol {
+    // `ASPresentationAnchor` is already a nullable typealias (`UIWindow?`) — no second `?`.
     override fun presentationAnchorForWebAuthenticationSession(
         session: ASWebAuthenticationSession,
-    ): ASPresentationAnchor? = UIApplication.sharedApplication.keyWindow ?: UIWindow()
+    ): ASPresentationAnchor = UIApplication.sharedApplication.keyWindow ?: UIWindow()
 }
