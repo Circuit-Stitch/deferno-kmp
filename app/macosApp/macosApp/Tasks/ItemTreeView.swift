@@ -250,7 +250,7 @@ private struct ItemRowContainer: View {
         } message: {
             Text(L.format("tasks_new_subtask_under_a11y", row.item.title))
         }
-        .onChange(of: addSubtaskOpen) { open in
+        .onChange(of: addSubtaskOpen) { _, open in
             if open { newSubtaskTitle = "" } // fresh prompt each time
         }
     }

@@ -128,7 +128,7 @@ struct TaskDetailView: View {
         // ADR-0044: the drilled-overflow "Add subtask" reveals the inline composer. macOS has no compact
         // shell bar, so the overflow lives in the header; reacting here focuses the add-subtask field.
         // TODO(port-verify): confirm the focus lands and the Info tab is showing after an Xcode build.
-        .onChange(of: value.revealAddSubtaskComposer) { token in
+        .onChange(of: value.revealAddSubtaskComposer) { _, token in
             if token > 0 { tab = .info; subtaskFieldFocused = true }
         }
     }

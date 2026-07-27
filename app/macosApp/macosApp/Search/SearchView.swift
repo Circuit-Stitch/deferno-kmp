@@ -116,7 +116,7 @@ struct SearchView: View {
         TextField(placeholder, text: text)
             .textFieldStyle(.roundedBorder)
             .autocorrectionDisabled(true)
-            .onChange(of: text.wrappedValue) { _ in
+            .onChange(of: text.wrappedValue) {
                 component.onDateRangeChanged(from: ShellBridgeKt.parseLocalDate(text: fromText),
                                              to: ShellBridgeKt.parseLocalDate(text: toText))
             }
