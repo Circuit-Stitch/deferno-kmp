@@ -134,3 +134,75 @@ targets:
           fi
           cd "$SRCROOT/../.."
           ./gradlew :app:macosApp:embedAndSignAppleFrameworkForXcode
+
+  # The XCTest bundle — the macOS twin of app/iosApp's `iosAppTests` target, and what
+  # .github/workflows/macos.yml runs. Hosted by the app (`dependencies: target: macosApp` makes
+  # XcodeGen set TEST_HOST/BUNDLE_LOADER), so `@testable import macosApp` resolves the app module and
+  # the statically-linked `Deferno.framework` symbols come from the host at load time — the test bundle
+  # links neither the framework nor the pod itself (see OTHER_LDFLAGS below).
+  macosAppTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: macosAppTests
+    dependencies:
+      - target: macosApp
+    # `settings.base` above is written to the PROJECT-level configuration, so every one of its
+    # app-shaped values lands on this target too. Most are harmless; the ones below are not, and each is
+    # overridden WITHOUT `$(inherited)` so the project value is genuinely replaced, not appended to.
+    settings:
+      base:
+        # PRODUCT_MODULE_NAME is the load-bearing one: inheriting `macosApp` would name the *test*
+        # module `macosApp`, and `@testable import macosApp` would then self-import. PRODUCT_NAME rides
+        # along so the bundle is macosAppTests.xctest rather than a second "Deferno" product.
+        PRODUCT_NAME: "$(TARGET_NAME)"
+        PRODUCT_MODULE_NAME: "$(TARGET_NAME)"
+        PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macosAppTests
+        # …and because PRODUCT_NAME is Deferno, XcodeGen's inferred TEST_HOST is WRONG: it derives the
+        # host path from the TARGET name (…/macosApp.app/Contents/MacOS/macosApp), but the built product
+        # is Deferno.app/Contents/MacOS/Deferno (#189). Spell it out — a bad TEST_HOST fails the test run
+        # with "Failed to load the test bundle", not a build error. (iosAppTests pins the same path.)
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Deferno.app/Contents/MacOS/Deferno"
+        # Do NOT re-link the shared Kotlin framework here. It is a *static* framework, so linking it
+        # into the bundle as well as the host would load a second copy of the Kotlin/Native runtime and
+        # duplicate every Obj-C class in the test process. BUNDLE_LOADER already resolves those symbols
+        # (and SQLCipher's) against the host executable, exactly as iosAppTests does.
+        OTHER_LDFLAGS: ""
+        # The app's Obj-C bridging header (DFNExceptionCatcher) and its partial Info.plist (URL scheme,
+        # single-instance keys) describe the *application*; a test bundle wants neither. Clearing
+        # INFOPLIST_FILE leaves GENERATE_INFOPLIST_FILE = YES to synthesize the bundle's plist.
+        SWIFT_OBJC_BRIDGING_HEADER: ""
+        INFOPLIST_FILE: ""
+
+# XcodeGen writes no scheme unless one is declared, and Xcode's implicit scheme autocreation is what
+# `xcodebuild -scheme macosApp` has been leaning on. That is fine for `build`, but leaves the Test
+# action's membership to chance — so declare it: a shared, committed-by-generation scheme whose Test
+# action runs macosAppTests, which is what makes `xcodebuild -scheme macosApp test` (build.sh --test,
+# and the CI gate) actually run the suite.
+#
+# The per-action configs match what Xcode's implicit scheme did, so replacing it changes nothing:
+# Debug for run/test/analyze, **Release for profile and archive** — Instruments must measure an
+# optimised build, not a Debug one.
+#
+# Heads-up on a benign divergence: XcodeGen derives each action's BuildableName from the TARGET name, so
+# the generated scheme says `macosApp.app` while the built product is `Deferno.app` (the PRODUCT_NAME
+# override, #189). Xcode resolves buildables by BlueprintIdentifier, so this works — do NOT "fix" it, and
+# do NOT re-derive the explicit TEST_HOST above from it (that one is a real path and must stay Deferno).
+schemes:
+  macosApp:
+    build:
+      targets:
+        macosApp: all
+        macosAppTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - macosAppTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
