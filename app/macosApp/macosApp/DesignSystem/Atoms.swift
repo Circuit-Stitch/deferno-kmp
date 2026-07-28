@@ -377,6 +377,5 @@ struct Breadcrumb: View {
 //
 //   iOS `TreeChip(text:tone:)` + `ChipTone`
 //     → `DependencyBadge` (Common/CommonViews.swift), the same mono badge with a REQUIRED `semanticLabel`
-//       so the uppercased glyphs are never what VoiceOver reads. It covers `.neutral` and `.accent`; it
-//       has no `.warn` (error) tone yet — the one iOS use of `.warn` is the Task-detail subtask "Blocked"
-//       chip, which macOS currently renders `.neutral`.
+//       so the uppercased glyphs are never what VoiceOver reads. It covers all three tones — `.neutral`,
+//       `.accent` and (since #368 G17c) `.warn`, the error-toned Task-detail subtask "Blocked" chip.

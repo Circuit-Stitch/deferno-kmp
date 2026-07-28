@@ -43,8 +43,14 @@ struct DefernoApp: App {
                 .onOpenURL { url in
                     host.forwardAuthRedirect(url: url.absoluteString)
                 }
+                // Themed from the ROOT, not from `RootView`'s environment: this modifier is attached to
+                // the `RootView(...)` value from outside, while `.defernoTheme` is applied *inside*
+                // `RootView`'s own body — so a sheet presented here would resolve `\.defernoColors` to
+                // the `EnvironmentKey` default (`defernoLight`) no matter what the person picked. Same
+                // shape as the detached `task-detail` scene (TaskDetailWindowView), which observes
+                // `root.themeSettings` for the same reason (#368 G18).
                 .sheet(isPresented: $showExtractor) {
-                    DraftExtractorView(bridge: host.draftTasks)
+                    ThemedSheet(root: host.root) { DraftExtractorView(bridge: host.draftTasks) }
                 }
         }
         // Honour the content's min frame as the window's minimum size (the window still resizes up).

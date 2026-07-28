@@ -14,6 +14,7 @@ struct DraftExtractorView: View {
     @State private var status: String?
     @State private var running = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.defernoColors) private var colors
 
     private static let sample = """
     Pick up the dry cleaning tomorrow afternoon. Email Dana the budget before Friday — it's blocking \
@@ -26,12 +27,12 @@ struct DraftExtractorView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L.string("draft_extract_title")).font(.title2.bold())
             Text(L.string("draft_extract_intro"))
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption).foregroundStyle(colors.inkMuted)
 
             TextEditor(text: $transcript)
                 .font(.body)
                 .frame(minHeight: 96)
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(colors.outlineVariant))
 
             HStack {
                 Button(running ? L.string("draft_extract_running") : L.string("draft_extract_button"), action: run)
@@ -44,10 +45,10 @@ struct DraftExtractorView: View {
 
             if !available {
                 Label(L.string("draft_extract_unavailable"), systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(colors.inkMuted)
             }
             if let status {
-                Text(status).font(.caption).foregroundStyle(.secondary)
+                Text(status).font(.caption).foregroundStyle(colors.inkMuted)
             }
 
             if !drafts.isEmpty {
@@ -58,7 +59,7 @@ struct DraftExtractorView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(draft.title).font(.body.weight(.medium))
                                 if let subtitle = draft.subtitle {
-                                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                                    Text(subtitle).font(.caption).foregroundStyle(colors.inkMuted)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)

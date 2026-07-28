@@ -3,9 +3,10 @@ import SwiftUI
 
 // The macOS View layer is SwiftUI with **its own design system** (ADR-0003/0004) — not Compose tokens.
 // This is the small token set the Tasks + Plan Views share (#51, ADR-0010): plain, non-shaming
-// working-state labels (matching the Android badge), accessible colour pairs (colour is always
-// reinforcement, never the sole signal — WCAG), and **desktop-density** row metrics — pointer targets,
-// not the touch-first ≥44–48pt the iOS twin uses (a mouse hits a tighter row just fine).
+// working-state labels (matching the Android badge), accessible colour pairs drawn from the ACTIVE
+// [DefernoColors] palette (colour is always reinforcement, never the sole signal — WCAG), and
+// **desktop-density** row metrics — pointer targets, not the touch-first ≥44–48pt the iOS twin uses (a
+// mouse hits a tighter row just fine).
 
 enum Layout {
     /// Minimum height for a clickable row/control — desktop pointer target (the iOS twin uses 48pt touch).
@@ -29,21 +30,6 @@ extension WorkingState {
         if self == WorkingState.done { return L.string("calendar_action_done") }
         if self == WorkingState.dropped { return L.string("tasks_set_aside") }
         return name
-    }
-
-    var badgeBackground: Color {
-        if self == WorkingState.inProgress { return Color.blue.opacity(0.18) }
-        if self == WorkingState.inReview { return Color.purple.opacity(0.18) }
-        if self == WorkingState.done { return Color.green.opacity(0.20) }
-        return Color(.secondarySystemFill) // Open + Set aside: calm neutral
-    }
-
-    var badgeForeground: Color {
-        if self == WorkingState.inProgress { return Color(.systemBlue) }
-        if self == WorkingState.inReview { return Color(.systemPurple) }
-        if self == WorkingState.done { return Color(.systemGreen) }
-        if self == WorkingState.dropped { return Color.secondary }
-        return Color.primary // Open
     }
 
     /// The five states, in lifecycle order — drives the detail pane's working-state editor chips.

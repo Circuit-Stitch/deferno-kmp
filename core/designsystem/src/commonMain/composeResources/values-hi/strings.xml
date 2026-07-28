@@ -927,6 +927,7 @@
     <string name="tasks_moved_undo_available">मूव हो गया। %1$s पूर्ववत किया जा सकता है।</string>
     <string name="tasks_new_subtask_under_a11y">“%1$s” के नीचे नया उपकार्य।</string>
     <string name="tasks_row_long_press_hint">कार्रवाइयों के लिए देर तक दबाएँ</string>
+    <string name="tasks_row_right_click_hint">कार्रवाइयों के लिए राइट-क्लिक करें</string>
     <string name="tasks_tree_search_empty_body">आपकी खोज से कोई पेड़ मेल नहीं खाता। सभी देखने के लिए खोज साफ़ करें।</string>
     <plurals name="common_item_count">
         <item quantity="one">1 आइटम</item>

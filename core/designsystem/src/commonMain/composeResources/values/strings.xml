@@ -1162,6 +1162,7 @@ Thank you.</string>
     <string name="tasks_moved_undo_available">Moved. Undo %1$s available.</string>
     <string name="tasks_new_subtask_under_a11y">New subtask under “%1$s”.</string>
     <string name="tasks_row_long_press_hint">Long press for actions</string>
+    <string name="tasks_row_right_click_hint">Right-click for actions</string>
     <string name="tasks_tree_search_empty_body">No tree matches your search. Clear it to see them all.</string>
     <plurals name="common_item_count">
         <item quantity="one">1 item</item>
