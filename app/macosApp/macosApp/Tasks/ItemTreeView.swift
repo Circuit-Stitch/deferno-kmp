@@ -13,7 +13,7 @@ import SwiftUI
 /// slim `{n} trees` count + a local filter (In today / Active / All) lead the list.
 ///
 /// ponytail: keyboard move (Alt+↑↓ / Tab) is out of #237's "buttons + undo" scope; the move math already
-/// lives in the shared component, so add the key handlers here when the desktop keyboard pass lands.
+/// lives in the shared component, so add the key handlers here when the desktop keyboard pass lands (#368).
 struct ItemTreeView: View {
     let component: ItemTreeComponent
     @StateObject private var state: StateFlowObserver<ItemTreeState>
@@ -179,14 +179,21 @@ struct ItemTreeView: View {
 /// `DropdownMenu` (`ItemTreeUi.kt`). A dedicated view so it can own the two menu-spawned dialogs' `@State`
 /// (the Add-subtask prompt + the Delete confirmation), which a `@ViewBuilder` func on the parent can't.
 ///
-/// The menu is **kind-aware** (ADR-0034 decision 7): a Task row gets Open · Add subtask · Move · Undo move ·
-/// Pin/Unpin · Add/Remove from plan · the working-state block (Start working / Mark done / Set aside) ·
-/// Delete; a recurring (non-Task) row gets the cross-kind subset Add subtask · Move · Undo move plus the
-/// **definition-state block** Activate / Send to review / Archive (#299). `Pin`, plan, the working-state block and `Delete` stay
-/// Task-only (mirrors Android). Each handler computes its target from the row's current value — the
-/// "args from the row" rule — since the tree row is a cross-kind `Item` projection that may have no joined
-/// state. `isTask` is the shared bridge helper (`BridgeKt.itemKindIsTask`); per-row status comes from the
-/// joined `menuState` (Task) or `item.definitionState` (non-Task, `nil` for a Task).
+/// The menu is **kind-aware** (ADR-0034 decision 7): a Task row gets Open · Open in New Window · Add
+/// subtask · Move · Undo move · Pin/Unpin · Add/Remove from plan · the working-state block (Start working /
+/// Mark done / Set aside) · Delete; a recurring (non-Task) row gets the cross-kind subset Add subtask ·
+/// Move · Undo move plus the **definition-state block** Activate / Send to review / Archive (#299). `Pin`,
+/// plan, the working-state block and `Delete` stay Task-only (mirrors Android). Each handler computes its
+/// target from the row's current value — the "args from the row" rule — since the tree row is a cross-kind
+/// `Item` projection that may have no joined state. `isTask` is the shared bridge helper
+/// (`BridgeKt.itemKindIsTask`); per-row status comes from the joined `menuState` (Task) or
+/// `item.definitionState` (non-Task, `nil` for a Task).
+///
+/// This row is also the **entry point for the detached detail window** (#196, ADR-0033) — the `task-detail`
+/// scene in `DefernoApp` and `TaskDetailWindowRoot.openTaskDetailWindow` were both live but unreachable
+/// after the flat `TaskListView` that used to carry the trigger was subsumed by the tree (#227): the
+/// context-menu item, the double-click accelerator and the VoiceOver rotor action below are that restored
+/// trigger, all three routed through `openDetailWindow()` so they share one set of gates (#368).
 private struct ItemRowContainer: View {
     let row: ItemRow
     let moveMode: MoveMode?
@@ -197,6 +204,9 @@ private struct ItemRowContainer: View {
     let component: ItemTreeComponent
 
     @Environment(\.defernoColors) private var colors
+    /// Opens the `task-detail` scene declared in `DefernoApp` (#196, ADR-0033). Value-based (`String`, the
+    /// raw item id), so re-opening an already-open task raises its existing window instead of duplicating it.
+    @Environment(\.openWindow) private var openWindow
 
     /// The two menu-spawned dialogs (#231): the destructive Delete confirm and the Add-subtask title prompt.
     @State private var confirmDelete = false
@@ -206,6 +216,17 @@ private struct ItemRowContainer: View {
     private var inMoveMode: Bool { moveMode != nil }
     private var isLifted: Bool { moveMode?.liftedId == row.item.id }
     private var isTask: Bool { BridgeKt.itemKindIsTask(kind: row.item.kind) }
+
+    /// The single detached-window trigger (#196, ADR-0033), shared by all three entry points — the context
+    /// menu item, the double-click accelerator and the VoiceOver rotor action — so the gates can't drift
+    /// apart between them: Task rows only (nothing else has a detail surface) and never mid-move (the move
+    /// bar owns the surface). The `openWindow` payload is the raw item id, which `openTaskDetailWindow`
+    /// re-wraps as a `TaskId` over the live account session, so the window shares this shell's SQLite
+    /// driver and edits sync between them.
+    private func openDetailWindow() {
+        guard isTask, !inMoveMode else { return }
+        openWindow(id: "task-detail", value: row.item.id)
+    }
 
     var body: some View {
         ItemRowView(
@@ -227,6 +248,30 @@ private struct ItemRowContainer: View {
         // "more actions"), in place of iOS's touch long-press. Empty in move mode so a mid-move right-click
         // is a no-op (the move bar owns the surface).
         .contextMenu { rowMenu() }
+        // Double-click → detached detail window (#196, ADR-0033) — the Finder/Mail accelerator for the
+        // context menu's "Open in New Window", and the reason the `task-detail` scene is value-based.
+        // `simultaneousGesture` (not `.gesture`) because `ItemRowView`'s own body tap-to-fold is a CHILD
+        // gesture and would otherwise win outright.
+        //
+        // The price of simultaneous recognition is that BOTH clicks also reach whatever child control sits
+        // under the pointer: two folds when the pointer is over the title region, two `onOpenDetail` calls
+        // when it is over the trailing ›. Neither is destructive — both are idempotent *destinations*, and
+        // the second `onOpenDetail` re-selects the task the new window is showing anyway. But do not read
+        // the double fold as a guaranteed no-op: both calls pass the `row.isExpanded` this row was rendered
+        // with, so if SwiftUI has not re-rendered between the two clicks they send the same target twice
+        // and the row nets a *change* rather than settling back. The real fix is scoping the gesture to the
+        // title region, which needs a hook inside `ItemRowView` (Common/CommonViews.swift — shared with the
+        // other tree surfaces) rather than a modifier out here, so it is deferred to #368 rather than
+        // bodged from this side.
+        //
+        // Task rows only (nothing else has a detail surface) and never mid-move — see `openDetailWindow()`,
+        // which owns those gates for all three triggers.
+        .simultaneousGesture(TapGesture(count: 2).onEnded { openDetailWindow() })
+        // The non-pointer equivalent of that accelerator (#368): a VoiceOver rotor action. The context-menu
+        // item is the keyboard route, but VoiceOver reaches per-row commands through the rotor, not a
+        // right-click, so without this "Open in New Window" was mouse-or-menu only. Gated identically to
+        // the double-click, so on a non-Task row it is inert exactly as the double-click is.
+        .accessibilityAction(named: Text(L.string("tasks_menu_open_in_new_window"))) { openDetailWindow() }
         // Delete confirm (destructive, #231) — mirrors the Task-detail kebab's confirm.
         .confirmationDialog(
             L.format("tasks_delete_item_confirm_title", row.item.title),
@@ -263,6 +308,13 @@ private struct ItemRowContainer: View {
             if isTask {
                 Button { component.onOpenDetail(id: row.item.id, kind: row.item.kind) } label: {
                     Label(L.string("tasks_menu_open"), systemImage: "arrow.up.right.square")
+                }
+                // …and the macOS-only sibling: the same detail in its own detached, navigable window
+                // (#196, ADR-0033) instead of the inline pane. Routed through `openDetailWindow()` — the
+                // one place that owns the Task-only / not-mid-move gates — even though this branch is
+                // already inside both, so the three triggers can never diverge.
+                Button { openDetailWindow() } label: {
+                    Label(L.string("tasks_menu_open_in_new_window"), systemImage: "macwindow.badge.plus")
                 }
             }
             Button { addSubtaskOpen = true } label: {
