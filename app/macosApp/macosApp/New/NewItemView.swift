@@ -37,7 +37,12 @@ struct NewItemView: View {
                     kindPicker(value)
                     titleField(value)
                     notesField(value)
-                    if isEvent(value) { eventFields } else { dateField }
+                    if isEvent(value) {
+                        eventFields
+                    } else {
+                        dateField
+                        deadlineTimeField(value)
+                    }
                     dictationMessage(value)
                     statusMessage(value)
                     createButton(value)
@@ -120,6 +125,73 @@ struct NewItemView: View {
             .autocorrectionDisabled(true)
             .onChange(of: dateText) { _, text in component.setDate(date: ShellBridgeKt.parseLocalDate(text: text)) }
             .accessibilityLabel(L.string("new_date_cd"))
+    }
+
+    /// The deadline time-of-day row (#348/#368 G12) — shown for the non-Event kinds alongside the date
+    /// (an Event's clock lives in its start/end instants instead). Until this landed, macOS had **no**
+    /// time control at all, so every item created on a Mac posted `deadlineTimeOfDay = null` however the
+    /// person had set the item up elsewhere — a data-fidelity gap, not a cosmetic one.
+    ///
+    /// The bridge encodes "no time set" as -1 (avoids a boxed `KotlinInt?`), so the row starts as an
+    /// explicit "Add" affordance rather than silently defaulting to a time nobody chose, and offers
+    /// "Clear" to unset it again. Note the shared rule this row deliberately does not fight: the time only
+    /// reaches the wire when a date is also set (`NewComponent`) — a time with no day is meaningless.
+    @ViewBuilder
+    private func deadlineTimeField(_ value: NewState) -> some View {
+        let hour = Int(ShellBridgeKt.doNewDeadlineTimeHour(state: value))
+        let minute = Int(ShellBridgeKt.doNewDeadlineTimeMinute(state: value))
+        let hasTime = hour >= 0 && minute >= 0
+        HStack(spacing: 8) {
+            Text(L.string("tasks_detail_property_time"))
+                .font(.subheadline)
+                .foregroundStyle(colors.onSurfaceVariant)
+            Spacer()
+            if hasTime {
+                // No `.datePickerStyle`: macOS's default for a non-graphical picker is `.stepperField`,
+                // the desktop idiom (an editable HH:MM field + stepper). `.graphical` would draw an
+                // analog clock face for `.hourAndMinute`. `.labelsHidden()` is required — the empty ""
+                // title still reserves leading label width on macOS and mis-aligns the row.
+                DatePicker(
+                    "",
+                    selection: deadlineTimeBinding(hour: hour, minute: minute),
+                    displayedComponents: .hourAndMinute
+                )
+                .labelsHidden()
+                .accessibilityLabel(L.string("new_deadline_time_cd"))
+                Button(L.string("common_clear")) { ShellBridgeKt.clearNewDeadlineTime(component: component) }
+                    .font(.footnote)
+                    .accessibilityLabel(L.string("new_deadline_time_clear_a11y"))
+            } else {
+                Button(L.string("common_add")) { ShellBridgeKt.setNewDeadlineTime(component: component, hour: 9, minute: 0) }
+                    .font(.subheadline)
+                    .accessibilityLabel(L.string("new_deadline_time_add_a11y"))
+            }
+        }
+        .frame(minHeight: Layout.minTouchTarget)
+    }
+
+    /// A `Date` binding over the shared deadline-time hour/minute. The wall-clock components are the only
+    /// meaningful payload (the day is irrelevant); reading composes today's date with the stored time,
+    /// writing extracts the picked hour/minute back through `setNewDeadlineTime`.
+    private func deadlineTimeBinding(hour: Int, minute: Int) -> Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(
+                    bySettingHour: max(0, hour),
+                    minute: max(0, minute),
+                    second: 0,
+                    of: Date()
+                ) ?? Date()
+            },
+            set: { picked in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: picked)
+                ShellBridgeKt.setNewDeadlineTime(
+                    component: component,
+                    hour: Int32(parts.hour ?? 0),
+                    minute: Int32(parts.minute ?? 0)
+                )
+            }
+        )
     }
 
     private var eventFields: some View {
