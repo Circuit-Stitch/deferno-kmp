@@ -99,6 +99,10 @@ struct ProfileView: View {
             Text(L.string("common_account")).font(.headline).foregroundStyle(colors.onSurface)
                 .accessibilityAddTraits(.isHeader)
             labeledRow(L.string("profile_account_active_label"), component.account.label)
+            // Time zone moved into Profile (#72) — offline-first, from the local settings cache. Settings →
+            // Account is the account *switcher* now (#368 G7), so this is the only place it is shown.
+            labeledRow(L.string("profile_account_time_zone_label"),
+                       ShellBridgeKt.profileTimeZone(component: component) ?? L.string("profile_account_time_zone_default"))
             labeledRow(L.string("profile_account_credential_label"), L.string("auth_token_field_label"))
             Text(L.string("profile_account_stored_on_device"))
                 .font(.caption).foregroundStyle(colors.inkMuted)
