@@ -34,6 +34,10 @@ struct ItemTreeView: View {
     /// case-insensitive title match over the **loaded** forest that keeps each match's ancestor chain.
     /// Cross-everything search stays the shell toolbar's ⌕ (the Search overlay), not this — the two are
     /// deliberately different scopes, which is why this one never leaves the View.
+    ///
+    /// Scope caveat, shared with the iOS twin: `ItemTreeState.rows` is already fold-flattened, and
+    /// `buildItemTree` emits "only an expanded parent's children", so a match inside a COLLAPSED subtree
+    /// is not in `rows` and this cannot find it. The Search overlay is the everything-scope answer.
     @State private var query = ""
     @FocusState private var searchFocused: Bool
 
@@ -136,6 +140,15 @@ struct ItemTreeView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: value.lastMove?.id)
         .animation(.easeInOut(duration: 0.2), value: value.moveMode?.liftedId)
+        // Move mode hides `treeHeader`, which OWNS the search field and its clear button — so a query
+        // left standing would keep `filteredRows` narrowing the forest with nothing on screen to explain
+        // why, and no way to clear it until the move ends. Worse than cosmetic: you would be choosing a
+        // destination among siblings that aren't drawn. Dropping the query restores the whole forest,
+        // which is the right set of move targets anyway. (No iOS twin for this: its field lives in the
+        // nav bar and never hides.)
+        .onChange(of: inMoveMode) { _, moving in
+            if moving { query = "" }
+        }
         .background(colors.background)
     }
 
