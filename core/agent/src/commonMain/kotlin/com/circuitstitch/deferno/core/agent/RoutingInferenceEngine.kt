@@ -13,7 +13,9 @@ package com.circuitstitch.deferno.core.agent
  *
  * The registered [engines] are a `Map<InferenceEngineId, InferenceEngine>` multibinding: each platform
  * contributes the engines it can actually run (`@IntoMap`) — the cloud relay on Android/JVM/iOS, the
- * on-device floor on Android. Bound at AppScope, identity-independent like speech (ADR-0014).
+ * on-device floor on Android, Apple Foundation Models on iOS + macOS. macOS contributes *only* that last
+ * one: no Koog klib there, so it registers no cloud entry (ADR-0029). Bound at AppScope,
+ * identity-independent like speech (ADR-0014).
  */
 class RoutingInferenceEngine(
     private val engines: Map<InferenceEngineId, InferenceEngine>,

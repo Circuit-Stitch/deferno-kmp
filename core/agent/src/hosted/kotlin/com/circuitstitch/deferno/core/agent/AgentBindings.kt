@@ -13,8 +13,11 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
  *
  * Compiled into Android/JVM/iOS (the `hosted` source dir) — the targets that run Koog. The seam itself
  * is the [RoutingInferenceEngine] over the `Map<InferenceEngineId, InferenceEngine>` multibinding; the
- * Koog cloud engine is one `@IntoMap` entry (Android adds the on-device floor). macOS has neither (no
- * Koog klib) and binds [NotConfiguredInferenceEngine] directly (`MacosAgentBindings`).
+ * Koog cloud engine is one `@IntoMap` entry (Android adds the on-device floor). macOS doesn't compile
+ * this dir (no Koog klib), so it can't inherit the router binding either: `MacosAgentBindings`
+ * (src/macosMain) declares its own router plus its on-device Foundation Models entry — and still no
+ * cloud engine, only the cloud *descriptor* from commonMain (ADR-0029). Hoisting the router out of
+ * here so macOS doesn't need a second copy is tracked in #368.
  */
 @ContributesTo(AppScope::class)
 interface AgentBindings {

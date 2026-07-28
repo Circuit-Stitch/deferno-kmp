@@ -40,6 +40,11 @@ kotlin {
         export(project(":feature:settings"))
         export(project(":feature:assistant"))
         export(project(":feature:signin"))
+        // The Inbox Destination renders feature:braindumps' InboxComponent/InboxState (the macOS twin
+        // of #260). app/shell depends on the slice with `implementation`, so it is NOT transitive —
+        // without this export (+ the matching `api` below) those types never reach the generated
+        // header and SwiftUI can't name them.
+        export(project(":feature:braindumps"))
         export(project(":core:model"))
         export(project(":core:speech"))
         export(libs.decompose)
@@ -59,6 +64,7 @@ kotlin {
             api(project(":feature:settings"))
             api(project(":feature:assistant"))
             api(project(":feature:signin"))
+            api(project(":feature:braindumps"))
             api(project(":core:model"))
             api(project(":core:speech"))
             api(libs.decompose)

@@ -38,8 +38,10 @@ object IosOnDeviceInference : InferenceEngine {
  * iOS Apple Foundation Models bindings (#269, ADR-0037): register the on-device system-language-model engine
  * as a selectable catalog engine (`@IntoSet` descriptor — OnDevice, so ungated) and as the routable engine
  * the [RoutingInferenceEngine] runs when it is the selection (`@IntoMap`, the iOS default). iOS-only (this
- * `src/iosMain` source set, not the appleMain shared with macOS) — macOS keeps its own NotConfigured floor
- * (`MacosAgentBindings`) and routes Foundation Models through a separate dev bridge (ADR-0029).
+ * `src/iosMain` source set, not the appleMain shared with macOS) — macOS declares the same two entries
+ * itself in `MacosAgentBindings`, which must additionally bind the router iOS inherits from the hosted
+ * `AgentBindings` (no Koog klib on macosArm64, so that source dir isn't compiled there — ADR-0029).
+ * Folding the shared halves into appleMain/commonMain is tracked in #368.
  */
 @ContributesTo(AppScope::class)
 interface IosFoundationModelsBindings {

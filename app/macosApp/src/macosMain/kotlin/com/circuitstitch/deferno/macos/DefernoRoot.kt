@@ -5,6 +5,7 @@ import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.arkivanov.essenty.lifecycle.destroy
 import com.arkivanov.essenty.lifecycle.resume
 import com.circuitstitch.deferno.DevAccounts
+import com.circuitstitch.deferno.core.agent.MacosOnDeviceInference
 import com.circuitstitch.deferno.core.common.log.LogLevel
 import com.circuitstitch.deferno.core.common.log.Logger
 import com.circuitstitch.deferno.core.di.AppComponent
@@ -16,6 +17,7 @@ import com.circuitstitch.deferno.core.speech.SpeechToText
 import com.circuitstitch.deferno.feature.assistant.AssistantStream
 import com.circuitstitch.deferno.macos.agent.DraftTasksBridge
 import com.circuitstitch.deferno.macos.agent.NativeInference
+import com.circuitstitch.deferno.macos.agent.NativeInferenceEngine
 import com.circuitstitch.deferno.macos.assistant.NativeAssistantStream
 import com.circuitstitch.deferno.macos.assistant.NativeAssistantTransport
 import com.circuitstitch.deferno.macos.speech.NativeDictation
@@ -53,8 +55,10 @@ import platform.Foundation.preferredLanguages
  *
  * The macOS native capabilities run **in-process** (ADR-0029): [dictation] wraps `SidecarKit`'s
  * on-device `SpeechTranscriber` (Phase 2) and [inference] wraps Apple Intelligence's Foundation Models
- * (Phase 3, exposed to SwiftUI as [draftTasks]). Both are optional — `null` falls back to the AppScope
- * speech engine / leaves [draftTasks] `null`, so the host still runs without them.
+ * (Phase 3) — installed into the DI graph's on-device forwarder so the routed AppScope `InferenceEngine`
+ * will resolve to it once a macOS surface reads that seam (#368), and exposed today to SwiftUI's dev
+ * Extractor panel as [draftTasks]. Both are optional — `null` falls back to the AppScope speech engine /
+ * leaves the NotConfigured inference floor + a `null` [draftTasks], so the host still runs without them.
  *
  * Per-Account data (the encrypted SQLite DB the [AccountComponentSession] opens) needs SQLCipher linked
  * in the Xcode app (project.yml); the Auth shell + paste-PAT sign-in path need only the AppScope network
@@ -109,10 +113,25 @@ class DefernoRoot(
         transport?.let { NativeAssistantStream(it, environment.baseUrl, appComponent.bearerTokenProvider::currentToken) }
             ?: AssistantStream.NONE
 
+    init {
+        // In-process inference (ADR-0029 Phase 3, ADR-0037): install the Swift Foundation Models engine into
+        // the DI graph's OnDeviceFoundationModels forwarder, so the **routed** appComponent.inferenceEngine
+        // resolves to a real engine — live for when a macOS Brain-dump pipeline lands. Nothing on this target
+        // reads that seam today: the twin of iOS's `BrainDumpRecording` is still missing (#368), and the only
+        // macOS Extractor surface is the dev panel below, which holds the engine directly. `MacosAgentBindings`
+        // binds the router and this forwarder; the Apple-wide persisted default is already
+        // OnDeviceFoundationModels, so a fresh Mac routes here with no setting touched. A null engine (a unit
+        // host) or a Mac without Apple Intelligence leaves the NotConfigured floor — a typed failure the
+        // caller salvages from, never a silent nothing. The macOS twin of iOS's `IosOnDeviceInference.install`.
+        inference?.let { MacosOnDeviceInference.install(NativeInferenceEngine(it)) }
+    }
+
     /**
-     * In-process inference (Phase 3): the on-device Brain-dump Extractor over the injected Foundation
-     * Models engine, or `null` when no engine is injected. Bridge injection for now — the real DI graph
-     * binds the same engine via `MacosAgentBindings` once the engine-choice App setting lands (#150).
+     * The Phase-3 Extractor **dev surface** (`AI/DraftExtractorView.swift`): the on-device Brain-dump
+     * Extractor over the injected engine, or `null` when none is injected. It deliberately holds the
+     * engine directly rather than the routed seam — it is a developer probe of *this* engine, unaffected
+     * by the inference-engine App setting (#150). It is also the *only* macOS Extractor surface today; the
+     * product path will go through the graph (above) once the Brain-dump pipeline lands here (#368).
      */
     val draftTasks: DraftTasksBridge? =
         inference?.let { DraftTasksBridge(it, today, timeZone.id) }
@@ -154,8 +173,9 @@ class DefernoRoot(
             speechToText = speechToText,
             locale = currentLocaleTag(),
             speechEngineCatalog = appComponent.speechEngineCatalog,
-            // Agent inference-engine choice + entitlement gate (#150): threaded from the AppScope graph; macOS
-            // has no Agent Settings surface yet and the inference floor is NotConfigured, but the gate exists app-wide.
+            // Agent inference-engine choice + entitlement gate (#150): threaded from the AppScope graph. On macOS
+            // the catalog offers Apple Foundation Models (on-device, ungated, the default) plus the cloud relay
+            // as a disabled premium row — no Koog klib here, so a cloud selection routes to NotConfigured.
             inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
             // The AppScope connectivity monitor (#158): the outbox driver flushes on the
             // offline→online edge and skips passes while known-offline.

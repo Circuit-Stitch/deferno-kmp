@@ -36,9 +36,12 @@ kotlin {
 
         // The Koog-backed engine (KoogInferenceEngine + the AppScope AgentBindings) lives in the
         // shared `src/hosted` directory, compiled into Android/JVM/iOS only — Koog publishes no
-        // macosArm64 klib (ADR-0029), so macOS gets the NotConfiguredInferenceEngine floor + its own
-        // MacosAgentBindings (src/macosMain) until the Swift FoundationModels engine is injected at
-        // the seam (Phase 3). Sharing one srcDir across the three targets keeps a single copy without
+        // macosArm64 klib (ADR-0029). The RoutingInferenceEngine binding rides along in that same
+        // file, so macOS inherits neither: MacosAgentBindings (src/macosMain) declares its own router
+        // plus the on-device Foundation Models entry the Swift app installs into at launch (Phase 3).
+        // macOS still has no *cloud* engine — only the cloud descriptor, which reaches the catalog
+        // from commonMain so Settings can show the relay as a disabled upsell (#368 tracks deduping
+        // the router). Sharing one srcDir across the three targets keeps a single copy without
         // a custom intermediate source set (which fights KMP's default hierarchy template).
         // ponytail: one shared dir, not three copies and not a hand-wired hierarchy.
         androidMain {

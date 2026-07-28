@@ -27,11 +27,12 @@ value class InferenceEngineId(val value: String) {
         val OnDeviceFloor: InferenceEngineId = InferenceEngineId("on-device-floor")
 
         /**
-         * The on-device **Apple Foundation Models** engine (iOS 26 + Apple-Intelligence hardware, ADR-0037):
-         * transcript → draft Tasks via the system language model, validated against the Kotlin schema
-         * (propose-only). [InferenceEngineOrigin.OnDevice] → ungated. The iOS default; the actual engine
-         * registers under this id from the app layer (#269) — until then a selection routes to NotConfigured
-         * (and the Salvage draft covers it).
+         * The on-device **Apple Foundation Models** engine (iOS/macOS 26 + Apple-Intelligence hardware,
+         * ADR-0037): transcript → draft Tasks via the system language model, validated against the Kotlin
+         * schema (propose-only). [InferenceEngineOrigin.OnDevice] → ungated. The Apple default on both
+         * targets; the engine itself registers under this id from the app layer (#269 on iOS, ADR-0029
+         * Phase 3 on macOS). A device without Apple Intelligence answers NotConfigured (and the Salvage
+         * draft covers it).
          */
         val OnDeviceFoundationModels: InferenceEngineId = InferenceEngineId("on-device-foundation-models")
     }

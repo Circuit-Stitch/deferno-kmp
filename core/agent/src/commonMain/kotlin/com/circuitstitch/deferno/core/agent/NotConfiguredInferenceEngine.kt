@@ -5,9 +5,11 @@ package com.circuitstitch.deferno.core.agent
  * [InferenceResult.Failure.NotConfigured] **without making any network request**, so the merged DI
  * graph always resolves an [InferenceEngine] and nothing off-device can ever happen silently.
  *
- * Bound on targets where no concrete engine ships — currently macOS, until its Swift FoundationModels
- * engine is injected at this same seam (ADR-0029, Phase 3). The Koog-backed engine fills the seam on
- * Android/JVM/iOS.
+ * No longer any target's whole binding: every platform now binds the [RoutingInferenceEngine], and this
+ * is what the router falls through to when the selected id has no `@IntoMap` entry — [InferenceEngineId.Off]
+ * anywhere, and a **cloud** selection on macOS, which ships no Koog klib and so registers no cloud engine
+ * (ADR-0029). It is also what the Apple on-device forwarders delegate to until the Swift Foundation Models
+ * adapter is installed at app launch (ADR-0037).
  */
 object NotConfiguredInferenceEngine : InferenceEngine {
     override suspend fun <T : Any> infer(request: InferenceRequest<T>): InferenceResult<T> =
