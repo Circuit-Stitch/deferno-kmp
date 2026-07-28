@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.macos.bridge
 
+import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.model.ActivityField
 import com.circuitstitch.deferno.core.model.ActivityFieldChange
 import com.circuitstitch.deferno.core.model.ActivityFieldValue
@@ -14,8 +15,23 @@ import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.model.journeyStatus
 import com.circuitstitch.deferno.core.model.relativeDay
+import kotlinx.cinterop.BetaInteropApi
+import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.readBytes
+import kotlinx.cinterop.reinterpret
+import kotlinx.cinterop.usePinned
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atTime
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+import platform.Foundation.NSData
+import platform.Foundation.create
 import kotlin.time.Instant
 import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.ParentSummary
@@ -69,9 +85,105 @@ fun setTaskDeadline(component: TaskDetailComponent, epochSeconds: Double) {
 /** Clear the deadline DUE date (the explicit clear path). */
 fun clearTaskDeadline(component: TaskDetailComponent) = component.onSetDeadline(null)
 
+// --- Combined date+time WHEN picker (#348) — kept IDENTICAL to app/iosApp .../ios/bridge/Bridge.kt. The
+// deadline is two axes (CONTRACT-NOTES): the `complete_by` DATE (the server discards its clock) and the
+// source-of-truth `deadlineTimeOfDay` CLOCK (null = all-day). The SwiftUI graphical
+// `[.date, .hourAndMinute]` picker needs a seed instant that carries a *real* time and a setter that
+// dispatches only the changed axis. -------------------------------------------------------------------
+
+/**
+ * The seed clock the combined picker shows for an **all-day** Task (no [Task.deadlineTimeOfDay]) — 9:00 AM,
+ * matching the create form's "Add time" default. [applyDeadlinePicker] compares against this same value so an
+ * all-day Task stays all-day on a pure date change (only an explicit clock move converts it to timed).
+ */
+private val PICKER_DEFAULT_TIME: LocalTime = LocalTime(9, 0)
+
+/** Whether the deadline carries a real clock time (#348); `false` = all-day (show date only, offer "add"/"clear time"). */
+fun taskDeadlineHasTime(task: Task): Boolean = task.deadlineTimeOfDay != null
+
+/**
+ * The seed instant (epoch seconds) for the combined `[.date, .hourAndMinute]` `DatePicker`: the deadline DUE
+ * date combined with the real [Task.deadlineTimeOfDay] (or [PICKER_DEFAULT_TIME] when all-day), at the device
+ * zone. `-1.0` when the Task has no deadline. NOT [taskDeadlineEpochSeconds] — that returns raw `completeBy`,
+ * whose clock is the end-of-day sentinel (23:59:59) for an all-day Task, which must NOT seed the time row.
+ */
+fun taskDeadlinePickerEpochSeconds(task: Task): Double {
+    val by = task.completeBy ?: return -1.0
+    val zone = TimeZone.currentSystemDefault()
+    val date = by.toLocalDateTime(zone).date
+    val time = task.deadlineTimeOfDay ?: PICKER_DEFAULT_TIME
+    return date.atTime(time).toInstant(zone).toEpochMilliseconds() / 1000.0
+}
+
+/**
+ * Apply a combined date+time picker selection, dispatching **only the changed axis** (#348): a changed DAY
+ * forwards [TaskDetailComponent.onSetDeadline] (date axis); a changed clock forwards
+ * [TaskDetailComponent.onSetDeadlineTime] (the source-of-truth time axis). The current values are read live
+ * from the component's state (not a Swift snapshot) so rapid edits within one open popover stay correct.
+ * Comparing the picked clock against the seed (real time, or [PICKER_DEFAULT_TIME] when all-day) is what keeps
+ * an all-day Task all-day on a pure date change — and converts it to timed only when the user moves the clock.
+ */
+fun applyDeadlinePicker(component: TaskDetailComponent, epochSeconds: Double) {
+    val task = component.state.value.task ?: return
+    val zone = TimeZone.currentSystemDefault()
+    val picked = Instant.fromEpochMilliseconds((epochSeconds * 1000).toLong()).toLocalDateTime(zone)
+    if (picked.date != task.completeBy?.toLocalDateTime(zone)?.date) component.onSetDeadline(picked.date)
+    val seedTime = task.deadlineTimeOfDay ?: PICKER_DEFAULT_TIME
+    if (picked.hour != seedTime.hour || picked.minute != seedTime.minute) {
+        component.onSetDeadlineTime(LocalTime(picked.hour, picked.minute))
+    }
+}
+
+/** Set the deadline clock time to [PICKER_DEFAULT_TIME] — the "add a time" affordance for an all-day Task (#348). */
+fun addTaskDeadlineTime(component: TaskDetailComponent) = component.onSetDeadlineTime(PICKER_DEFAULT_TIME)
+
+/** Clear the deadline clock time → all-day (#348); the DUE date stays. */
+fun clearTaskDeadlineTime(component: TaskDetailComponent) = component.onSetDeadlineTime(null)
+
 /** Read-only PROPERTIES labels for the Swift view — the opaque-typed fields it can't format itself. */
 fun taskTimeLabel(task: Task): String = task.deadlineTimeOfDay?.toString() ?: "—"
 fun taskOwnerLabel(task: Task): String = task.ownerOrgId?.value ?: "—"
+
+// ---------------------------------------------------------------------------------------------------
+// ATTACHMENTS (#207/#272) — the macOS twin of the iOS bridge's attachment seam. Swift picks files with
+// `.fileImporter`/`NSOpenPanel` and hands their bytes across as `NSData`; the reverse codec feeds
+// `AVAudioPlayer` for a retained on-device brain-dump recording.
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * Upload a file the macOS picker resolved to this Task (#207). Swift can't build an [AttachmentUpload]
+ * (its `bytes` is a Kotlin `ByteArray`), so it passes the picked file's [data] as `NSData` and this
+ * copies it across — the same `NSData`→`ByteArray` idiom as `feedbackAddAttachment`.
+ */
+@OptIn(ExperimentalForeignApi::class)
+fun addTaskAttachment(component: TaskDetailComponent, filename: String, contentType: String, data: NSData) {
+    val bytes = data.bytes?.reinterpret<ByteVar>()?.readBytes(data.length.toInt()) ?: ByteArray(0)
+    component.onAddAttachments(listOf(AttachmentUpload(filename = filename, contentType = contentType, bytes = bytes)))
+}
+
+/**
+ * The reverse of [addTaskAttachment]'s `NSData`→`ByteArray`: copy a Kotlin [ByteArray] into an `NSData`
+ * for Swift. `internal` (not `private`) so the sibling `ShellBridge.kt` export bridge can reuse it (#313).
+ */
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
+internal fun ByteArray.toNSData(): NSData =
+    if (isEmpty()) NSData() else usePinned { NSData.create(bytes = it.addressOf(0), length = size.toULong()) }
+
+/**
+ * Read an **on-device** attachment's bytes for playback (#272) — the retained brain-dump recording the synced
+ * `attachments` path never has. The repository read is local + quick, so it runs in a one-shot
+ * [Dispatchers.Main] coroutine; [onData] then gets the bytes as `NSData` for `AVAudioPlayer`, or `null` if the
+ * row was already deleted. `TaskDetailState.onDeviceAttachments` and
+ * `TaskDetailComponent.onDeleteOnDeviceAttachment` are plain enough that Swift reads/calls them directly.
+ *
+ * macOS captures no brain dumps yet (that host is Tranche 5 of #368), so this reads empty today — it is here
+ * because the SAME seam serves the synced-attachment path the Task-detail sheet does exercise.
+ */
+fun onDeviceAttachmentData(component: TaskDetailComponent, attachmentId: String, onData: (NSData?) -> Unit) {
+    CoroutineScope(Dispatchers.Main).launch {
+        onData(component.onDeviceAttachmentBytes(attachmentId)?.toNSData())
+    }
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Connected-parent header + journey-status + relative-day readings (ADR-0044). Kept IDENTICAL to

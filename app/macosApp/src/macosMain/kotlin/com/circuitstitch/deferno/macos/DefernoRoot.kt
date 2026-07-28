@@ -177,6 +177,15 @@ class DefernoRoot(
             // the catalog offers Apple Foundation Models (on-device, ungated, the default) plus the cloud relay
             // as a disabled premium row — no Koog klib here, so a cloud selection routes to NotConfigured.
             inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
+            // The two device-local brain-dump [[App setting]]s Settings → Storage now surfaces (#368 G5).
+            // Both default to an IN-MEMORY stub inside DefaultRootComponent, so without threading them the
+            // toggles would write to a throwaway that dies with the process while the NSUserDefaults-backed
+            // DI binding silently held a different value — two sources of truth disagreeing. macOS captures
+            // no brain dumps yet (#368 Tranche 5); the settings still have to persist.
+            // (iOS omits `keepBrainDumpRecordingsPreference` from its own call — a pre-existing iOS defect,
+            // not a template to copy.)
+            keepBrainDumpRecordingsPreference = appComponent.keepBrainDumpRecordingsPreference,
+            brainDumpNotificationPreference = appComponent.brainDumpNotificationPreference,
             // The AppScope connectivity monitor (#158): the outbox driver flushes on the
             // offline→online edge and skips passes while known-offline.
             connectivity = appComponent.connectivity,

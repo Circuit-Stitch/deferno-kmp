@@ -85,10 +85,18 @@ class NativeSpeechToText(private val native: NativeDictation) : SpeechToText {
     }
 }
 
-/** Map the Swift transcriber's non-PII reason string to the typed [SpeechError] the New surface renders. */
+/**
+ * Map the Swift transcriber's non-PII reason string to the typed [SpeechError] the New surface renders.
+ *
+ * macOS emits one token iOS never does: `"audio-setup-failed"`, raised by `MacDictation.swift`'s
+ * `DFNExceptionCatcher` wrapper around `installTapOnBus` (an `NSException` Kotlin/Native can't catch). It is a
+ * capture-side failure, so it joins the [SpeechError.Capture] arm rather than falling through to the generic
+ * `Engine`. `"audio-engine-start-failed"` stays — SidecarKit's `SpeechTranscriber` still emits it and
+ * `MacDictation` forwards it verbatim (#368 G25; the issue is wrong that this arm is dead).
+ */
 private fun String.toSpeechError(): SpeechError = when (this) {
     "permission-denied" -> SpeechError.PermissionDenied
-    "no-audio-input", "audio-engine-start-failed" -> SpeechError.Capture
+    "no-audio-input", "audio-engine-start-failed", "audio-setup-failed" -> SpeechError.Capture
     "recognizer-unavailable", "on-device-unsupported", "unsupported-locale" -> SpeechError.Unavailable
     else -> SpeechError.Engine
 }

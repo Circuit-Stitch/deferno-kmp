@@ -4,15 +4,16 @@ import com.circuitstitch.deferno.core.data.account.AccountDataStore
 import com.circuitstitch.deferno.core.data.account.AccountRegistry
 import com.circuitstitch.deferno.core.data.account.FileAccountRegistry
 import com.circuitstitch.deferno.core.data.account.NoOpAccountDataStore
+import com.circuitstitch.deferno.core.data.attachment.AppleFileAttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
-import com.circuitstitch.deferno.core.data.attachment.InMemoryAttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.InMemoryStorageProviderPreference
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpNotificationPreference
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpSalvageCounter
-import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpNotificationPreference
-import com.circuitstitch.deferno.core.data.braindump.InMemoryBrainDumpSalvageCounter
-import com.circuitstitch.deferno.core.data.braindump.InMemoryKeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
+import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpNotificationPreference
+import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpSalvageCounter
+import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
+import com.russhwolf.settings.NSUserDefaultsSettings
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
@@ -67,33 +68,56 @@ interface MacosDataBindings {
     fun connectivity(): Connectivity = PathMonitorConnectivity()
 
     /**
-     * Storage-provider [[App setting]] + on-device byte store (#210). macOS placeholders for now (the twin
-     * of [IosDataBindings]) — the real NSUserDefaults preference + NSFileManager byte store are an Apple
-     * follow-up; these keep the graph complete and the macOS klib compiling.
+     * The storage-provider [[App setting]] (#210) — still an in-memory placeholder on macOS, exactly as on
+     * iOS ([IosDataBindings]): nothing on either Apple surface lets the person *pick* a provider yet, so a
+     * persisted choice would have no writer. This keeps the graph complete and the macOS klib compiling.
+     * (Its sibling [attachmentBytesStore] moved off in-memory below — the two are no longer symmetric.)
      */
     @Provides
     @SingleIn(AppScope::class)
     fun storageProviderPreference(): StorageProviderPreference = InMemoryStorageProviderPreference()
 
+    /**
+     * The on-device attachment byte store (#210/#267): real now — `NSFileManager`-backed, the SAME shared
+     * `appleMain` implementation iOS binds. macOS gained a Task-detail attachments surface (#368 G11), so an
+     * attachment's bytes must survive relaunch instead of dying with the process. The app is unsandboxed, so
+     * this resolves under `~/Library/Application Support`.
+     */
     @Provides
     @SingleIn(AppScope::class)
-    fun attachmentBytesStore(): AttachmentBytesStore = InMemoryAttachmentBytesStore()
+    fun attachmentBytesStore(): AttachmentBytesStore = AppleFileAttachmentBytesStore()
 
-    /** "Keep brain-dump recordings" [[App setting]] (#211). macOS doesn't capture brain dumps — in-memory placeholder. */
+    /**
+     * "Keep brain-dump recordings" [[App setting]] (#211/#267) — `NSUserDefaults`-backed, sharing the
+     * device-local `deferno_storage` bag with the salvage counter and the notification opt-in. macOS does not
+     * capture brain dumps yet (#368 Tranche 5), but Settings → Storage now *shows* this toggle (#368 G5), and
+     * a toggle whose value dies with the process is worse than no toggle. `DefernoRoot` threads the same
+     * binding into `DefaultRootComponent`, so the Settings surface and the (future) pipeline agree.
+     */
     @Provides
     @SingleIn(AppScope::class)
     fun keepBrainDumpRecordingsPreference(): KeepBrainDumpRecordingsPreference =
-        InMemoryKeepBrainDumpRecordingsPreference()
+        SettingsKeepBrainDumpRecordingsPreference(NSUserDefaultsSettings.Factory().create("deferno_storage"))
 
-    /** Salvage-draft `Brain dump #n` counter (#265, [[App setting]]). macOS doesn't capture brain dumps — in-memory placeholder. */
+    /**
+     * The Salvage-draft `Brain dump #n` counter (#265/#267, [[App setting]]) — `NSUserDefaults`-backed so the
+     * numbering survives relaunch, keeping the three `deferno_storage` bindings symmetric with iOS. Nothing on
+     * macOS writes a salvage draft until the capture host lands (#368 Tranche 5).
+     */
     @Provides
     @SingleIn(AppScope::class)
-    fun brainDumpSalvageCounter(): BrainDumpSalvageCounter = InMemoryBrainDumpSalvageCounter()
+    fun brainDumpSalvageCounter(): BrainDumpSalvageCounter =
+        SettingsBrainDumpSalvageCounter(NSUserDefaultsSettings.Factory().create("deferno_storage"))
 
-    /** "Brain dump notifications" opt-in (#266, [[App setting]], default off). macOS doesn't capture brain dumps — in-memory placeholder. */
+    /**
+     * The "Brain dump notifications" opt-in (#266/#271, [[App setting]], **default off**) — `NSUserDefaults`-backed
+     * now that macOS surfaces the toggle in Settings → Storage (#368 G5). See [keepBrainDumpRecordingsPreference]
+     * on why persistence lands before the capture pipeline does.
+     */
     @Provides
     @SingleIn(AppScope::class)
-    fun brainDumpNotificationPreference(): BrainDumpNotificationPreference = InMemoryBrainDumpNotificationPreference()
+    fun brainDumpNotificationPreference(): BrainDumpNotificationPreference =
+        SettingsBrainDumpNotificationPreference(NSUserDefaultsSettings.Factory().create("deferno_storage"))
 
     /** "Shake to undo" [[App setting]] (ADR-0034 decision 8, #230). macOS has no accelerometer path — in-memory placeholder. */
     @Provides
