@@ -224,17 +224,25 @@ struct TaskDetailView: View {
         return order.map { TrailDay(id: $0, rows: buckets[$0] ?? []) }
     }
 
-    // MARK: - Overflow (Add subtask · Break this down · Delete)
+    // MARK: - Overflow (Add subtask · Delete)
 
     /// The self-contained detail overflow (ADR-0044) — replaces the old always-visible chips' "Set aside"
     /// (Dropped now reaches only via the status picker). Add subtask bumps the reveal token; Delete confirms.
+    ///
+    /// **"Break this down" is deliberately absent** (it is present on iOS). The intent itself is sound —
+    /// `onBreakdownClicked()` really does push `OverlayRoute.Breakdown` on the shared shell — but macOS has
+    /// no Breakdown surface yet, and `MainShellView.overlayPresented` derives only from Search / New /
+    /// Feedback. So the route would silently occupy the shell's single overlay slot while presenting
+    /// nothing, and the next `onBack()` would spend itself dismissing that invisible overlay instead of the
+    /// user's actual back intent. On the Tasks path the chrome is non-drilled (there is no ← at all), so the
+    /// stale slot is unrecoverable through the UI: an enabled item here is a silent dead end, strictly worse
+    /// than a missing one. Restore it together with the Breakdown SwiftUI port (the iOS twin is ~635 LOC
+    /// across the four files in `app/iosApp/iosApp/Breakdown/`) **and** the matching `overlayBreakdown`
+    /// branch in `MainShellView` — both tracked in **#368** (the macOS parity issue).
     private var overflowMenu: some View {
         Menu {
             Button { component.onAddSubtaskRequested() } label: {
                 Label(L.string("tasks_menu_add_subtask"), systemImage: "plus")
-            }
-            Button { component.onBreakdownClicked() } label: {
-                Label(L.string("tasks_menu_break_this_down"), systemImage: "wand.and.stars")
             }
             Button(role: .destructive) { showingDeleteConfirm = true } label: {
                 Label(L.string("common_delete"), systemImage: "trash")

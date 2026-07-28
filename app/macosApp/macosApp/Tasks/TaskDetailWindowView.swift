@@ -13,12 +13,23 @@ import SwiftUI
 struct TaskDetailWindowView: View {
     @StateObject private var model: TaskDetailWindowModel
     @StateObject private var rootStack: StateFlowObserver<RootComponentChild>
+    /// **Every scene themes itself** (#368). SwiftUI environment values do NOT cross a scene boundary:
+    /// `RootView` applies `.defernoTheme` *inside* the `main` `Window` scene, and this `task-detail`
+    /// `WindowGroup` is a separate scene, so none of that reaches here. Without this observer the window
+    /// would render off the `\.defernoColors` `EnvironmentKey` default (`DefernoColors.defernoLight`,
+    /// DefernoTheme.swift) with no `.tint` and no `preferredColorScheme` — a light-amber window with dark
+    /// native chrome for any Mono / Dark / Auto-dark user, in a `TaskDetailView` that reads the palette in
+    /// ~17 places. It was latent only because the scene was unreachable; restoring the Open-in-New-Window
+    /// trigger (#196, ADR-0033) is what ships it. Same `root.themeSettings` mirror `RootView` drives, so
+    /// both scenes re-theme live and together.
+    @StateObject private var theme: StateFlowObserver<UserSettings>
     @Environment(\.dismiss) private var dismiss
     @State private var boundChild: RootComponentChild?
 
     init(host: DefernoRoot, rawId: String) {
         _model = StateObject(wrappedValue: TaskDetailWindowModel(host: host, rawId: rawId))
         _rootStack = StateObject(wrappedValue: StateFlowObserver(host.root.activeChild))
+        _theme = StateObject(wrappedValue: StateFlowObserver(host.root.themeSettings))
     }
 
     var body: some View {
@@ -33,6 +44,7 @@ struct TaskDetailWindowView: View {
                 Color.clear.onAppear { dismiss() }
             }
         }
+        .defernoTheme(theme.value)
         .frame(minWidth: 360, minHeight: 360)
         // Title the window with the task's ref (e.g. "u-e4h2qk-1") so multiple detail windows are
         // distinguishable in the title bar / Window menu / Mission Control (#196).

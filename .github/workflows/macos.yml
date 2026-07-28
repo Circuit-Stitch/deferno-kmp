@@ -1,0 +1,216 @@
+# macOS build CI (ADR-0029) — the twin of ios.yml for `app/macosApp`, the native SwiftUI/AppKit app over
+# a bespoke Kotlin/Native **macosArm64** `Deferno.framework` (distinct from `app/desktopApp`, the Compose
+# Desktop JVM app that ci.yml already covers). The shared core's JVM tests + coverage gate run on Linux in
+# ci.yml; linking the macOS framework and compiling the SwiftUI layer can only happen on macOS.
+#
+# KNOWN GAP, deliberately out of scope here: no Kotlin `macosArm64Test` step. `deferno.kmp` declares that
+# target, but its tests only RUN on a macOS host — and ci.yml is Linux, so today the shared core's common
+# code is verified on JVM/Android only (ios.yml has the identical `iosSimulatorArm64Test` gap). Adding it
+# to a brand-new gate risks surfacing unrelated pre-existing failures; tracked in #368.
+#
+# There was NO macOS CI at all until this file, and it showed: the `ThemeMode` → `preferredColorScheme`
+# regression iOS fixed in cacc8bce sat live on this side for months because nothing built, let alone
+# tested, `app/macosApp` on a PR. Everything below mirrors ios.yml deliberately — its comments record
+# traps this gate must not re-introduce (chiefly `set -o pipefail` and failing loudly on a missing Xcode).
+#
+# Runner: macos-26 (Apple Silicon — the framework is macosArm64-only, so an Intel image could not link it
+# at all). Ruby 3 + CocoaPods + xcbeautify are preinstalled; XcodeGen is not, so brew installs it.
+name: macOS
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & test macOS app (framework + SwiftUI, SQLCipher)
+    runs-on: macos-26
+    # Generous for the cold-cache first run: the Gradle Run Script downloads the Kotlin/Native compiler
+    # + konan deps (~1 GB) before linking. setup-gradle caches the Gradle home, so warm runs are faster.
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        # submodules: recursive — Gradle configures every module for any task (no configure-on-demand),
+        # so :speech-whisper-jni's build script (it points at the vendored third_party/whisper.cpp) must
+        # have its submodule present even though the macOS framework never executes that native build.
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          # third_party/shacl-aio is a PRIVATE repo; the default GITHUB_TOKEN can't reach it, so recursive
+          # submodule checkout 403s. SUBMODULES_TOKEN: fine-grained PAT, Contents:read on deferno-kmp +
+          # shacl-aio. checkout rewrites the SSH submodule URL to HTTPS and auths with it.
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+
+      # Temurin 17 is the toolchain the build pins (ProjectConfig.JVM_TOOLCHAIN /
+      # gradle-daemon-jvm.properties). The Gradle run inside the Xcode pre-build phase (below) uses it
+      # as the daemon + project toolchain, so Foojay does not download a second JDK.
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      # Configuring the whole build touches the Android modules + :speech-whisper-jni (which declares
+      # ndkVersion = ProjectConfig.NDK_VERSION + an externalNativeBuild). The macOS runner preinstalls
+      # the Android SDK but not this exact NDK; install it + accept licences so full-project
+      # configuration — which the macOS framework task triggers — succeeds. Keep in lockstep with
+      # ProjectConfig.NDK_VERSION (and with ci.yml's + ios.yml's matching steps).
+      - name: Install Android NDK + CMake for full-project configuration (#92)
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          # Retry: a transient corrupt mirror download ("Error on ZipFile unknown archive") otherwise
+          # fails the whole gate (see memory ci-ndk-probe-flake — a no-code re-run went green).
+          # sdkmanager is idempotent, so a retry only re-fetches the missing/corrupt package.
+          for attempt in 1 2 3; do
+            "$SDKMANAGER" "ndk;30.0.14904198" "cmake;3.22.1" && exit 0
+            echo "::warning::sdkmanager install attempt $attempt failed; retrying in 10s…" >&2
+            sleep 10
+          done
+          echo "::error::sdkmanager NDK/CMake install failed after 3 attempts." >&2
+          exit 1
+
+      # Match the dev machine (Xcode 26.x) — the same hard floor ios.yml documents: `@retroactive` on the
+      # Bridge/Identity conformances needs the **Swift 6 compiler**, and the Phase-3 Apple Intelligence
+      # sources (`FoundationModels`, MacInference.swift) need the **macOS 26 SDK** to compile their
+      # `@available(macOS 26, *)` bodies at all. The deployment target is still macOS 14 — a toolchain
+      # floor, not a product one.
+      #
+      # FAIL LOUDLY when the image has no Xcode 26 rather than silently falling through to the runner
+      # default: a silent no-op `if` here is half of how the iOS gate once went green on a toolchain that
+      # could not build the branch.
+      - name: Select Xcode 26 (macOS 26 SDK, Swift 6 compiler)
+        run: |
+          XC="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$XC" ]; then
+            echo "::error::No Xcode 26 found — this app needs the macOS 26 SDK and the Swift 6 compiler."
+            ls -d /Applications/Xcode_*.app 2>/dev/null || true
+            exit 1
+          fi
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
+
+      # No simulator-resolution step: the destination is this machine (`platform=macOS,arch=arm64`).
+
+      # project.yml wires the GITIGNORED Local.xcconfig as the project-level base config, and XcodeGen
+      # refuses to generate when a referenced config file is missing. build.sh seeds an ad-hoc one for a
+      # fresh clone; CI needs the same file to exist before `xcodegen generate`. An EMPTY file is right
+      # here: every value build.sh would seed is either overridden on the xcodebuild command line below
+      # (the ad-hoc signing triple) or deliberately absent on CI (DEV_STAGING_TOKEN — no PAT on a runner).
+      - name: Seed an empty Local.xcconfig (build.sh does this for a fresh clone)
+        run: touch app/macosApp/Local.xcconfig
+
+      # Unlike iosApp (whose .xcodeproj is committed), app/macosApp's project is GENERATED from
+      # project.yml by XcodeGen and is gitignored — so the gate must generate it. XcodeGen is not
+      # preinstalled on the image.
+      - name: Install XcodeGen
+        # HOMEBREW_NO_AUTO_UPDATE: a cold `brew install` otherwise runs a full `brew update` first —
+        # minutes of churn for one formula. The version is unpinned (brew has no usable per-formula pin
+        # for a one-shot install), so ECHO it: XcodeGen generates the ENTIRE project from project.yml, so
+        # a silent upgrade under us can change the build as much as an Xcode bump — which is exactly why
+        # the step above echoes `xcodebuild -version`.
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+        run: |
+          brew install --quiet xcodegen
+          xcodegen --version
+
+      # CocoaPods is preinstalled on the runner. Cache the CDN spec data + the integrated Pods so repeat
+      # runs skip the network. Keyed on the committed Podfile.lock (Pods/ itself is gitignored).
+      #
+      # The `macosapp` discriminator is deliberate and must NOT be shortened back to `macos`: GitHub's
+      # cache key matching is CASE-INSENSITIVE, so a `pods-macos-…` key here collides with ios.yml's
+      # `pods-${{ runner.os }}-` restore-key (= `pods-macOS-`) — on an exact-key miss the iOS job would
+      # happily restore THIS job's macOS Pods into app/iosApp's cache slot while its own Pods/ stayed
+      # empty. Nothing breaks (pod install still runs) but both caches are wasted. runner.os is omitted
+      # for the same reason it is redundant: this job is pinned to macos-26.
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cocoapods
+            app/macosApp/Pods
+          key: pods-macosapp-${{ hashFiles('app/macosApp/Podfile.lock') }}
+          restore-keys: pods-macosapp-
+
+      # ORDER MATTERS, and it is the one real difference from ios.yml: CocoaPods integrates by editing
+      # the generated .xcodeproj and layering the .xcworkspace on top, so regenerating the project DROPS
+      # the pod integration. `pod install` must therefore follow `xcodegen generate`, never precede it
+      # (app/macosApp/README.md documents the same two-step flow; build.sh runs it in this order).
+      - name: xcodegen generate
+        working-directory: app/macosApp
+        run: xcodegen generate
+
+      - name: pod install (SQLCipher)
+        working-directory: app/macosApp
+        run: pod install
+
+      # The single command that exercises the whole stack: xcodebuild runs the project's pre-build phase
+      # first (./gradlew :app:macosApp:embedAndSignAppleFrameworkForXcode → the static Deferno.framework
+      # for this SDK/arch), then compiles the SwiftUI sources, links them against the framework + the
+      # SQLCipher pod, and runs the macosAppTests suite in the app host — the real signal that the
+      # framework, the SKIE bridge, SQLCipher and the tests all resolve and pass. The Pods **workspace**
+      # (not the bare .xcodeproj) is required once a pod is integrated, and the scheme's Test action is
+      # declared explicitly in project.yml so the suite is genuinely part of `-scheme macosApp test`.
+      #
+      # **Ad-hoc** signing (`CODE_SIGN_IDENTITY="-"`, no team, no profile), matching ios.yml: the test
+      # host is the REAL app, whose DefernoRoot builds the live DI graph at launch (ADR-0029 Phase 1b) —
+      # including the Keychain-backed vault — so it must be signed, but must not need a certificate.
+      #
+      # ⚠️ THESE THREE SIGNING FLAGS ARE CI-ONLY. NEVER run this command on a dev Mac.
+      # An ad-hoc signature changes on EVERY rebuild, so it does not match the login-Keychain ACL on the
+      # bearer-token item (service com.circuitstitch.deferno.bearer) — the app then re-prompts
+      # `"Deferno" wants to use your keychain` on every single launch and "Always Allow" never sticks.
+      # That is the exact failure app/macosApp/Local.xcconfig exists to prevent, and passing these flags
+      # locally overrides it (a command-line setting outranks the project base config). It has already
+      # happened once by copying this recipe onto a dev machine.
+      # Locally use `./build.sh` / `./build.sh --test`, which pass NO signing flags and therefore inherit
+      # the stable identity from Local.xcconfig. To repair a Mac that got ad-hoc signed:
+      #   codesign --force --sign "Apple Development: <you> (TEAMID)" <path>/Deferno.app
+      #
+      # SWIFT_TREAT_WARNINGS_AS_ERRORS is the ratchet ios.yml already carries: passed on the command line
+      # rather than set in project.yml, so a local Xcode build still only warns, and a future image
+      # bumping Xcode under us breaks CI loudly instead of silently reaccumulating warnings.
+      - name: Build & test (framework + app, macOS)
+        working-directory: app/macosApp
+        # `set -o pipefail` is the whole gate. GitHub's default `run:` shell is `bash -e {0}` — with NO
+        # pipefail — so piping xcodebuild into a formatter hands the step xcbeautify's exit status and a
+        # failed build reports green. That is exactly what ios.yml did until PR #367. xcbeautify is
+        # preinstalled; fall back to cat if a future image drops it.
+        run: |
+          set -o pipefail
+          if command -v xcbeautify >/dev/null 2>&1; then FMT=(xcbeautify --renderer github-actions); else FMT=(cat); fi
+          xcodebuild \
+            -workspace macosApp.xcworkspace \
+            -scheme macosApp \
+            -configuration Debug \
+            -destination "platform=macOS,arch=arm64" \
+            -derivedDataPath build/dd \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            test | "${FMT[@]}"
+
+      - name: Upload xcodebuild logs on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-build-logs
+          path: app/macosApp/build/dd/Logs/**
+          if-no-files-found: warn

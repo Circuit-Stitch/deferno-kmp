@@ -15,7 +15,7 @@
 # screen gains one, add the string to Localizable.xcstrings and DELETE its line here (a stale entry fails
 # the test). New strings should land in BOTH catalogs — add here only for a deliberate platform-only one.
 
-# --- grandfathered Compose-only keys (248) ---
+# --- grandfathered Compose-only keys ---
 android about_version
 android activity_when_pattern
 android assistant_action_working
@@ -267,3 +267,11 @@ android update_updating
 android update_version_available
 android update_version_line
 android update_view_releases
+
+# --- deliberate Apple-only keys ---
+# Detached, navigable per-task detail windows are a macOS-only capability (ADR-0033 / #196): a second
+# SwiftUI `WindowGroup` scene the Tasks tree row opens by double-click / "Open in New Window". No Compose
+# surface has them — Android has nowhere to put a second window, and the Compose Desktop app renders every
+# Destination inside its one shell window — so this command has no Compose counterpart to keep in lockstep.
+# Delete this line if a Compose surface ever grows the affordance (a stale entry fails the test).
+apple tasks_menu_open_in_new_window
