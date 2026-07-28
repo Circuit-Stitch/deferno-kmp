@@ -20,18 +20,28 @@ struct TasksScreen: View {
     }
 
     var body: some View {
-        if let detail = detail.value {
-            HStack(spacing: 0) {
-                ItemTreeView(component: root.tree)
-                    .frame(minWidth: 280, idealWidth: 340)
+        // ONE tree instance, always the leading child of the same `HStack` — never one per branch of an
+        // `if/else`. The tree owns View state the user can see (the In today / Active / All filter and,
+        // since #368, the inline search text + its scroll position), and SwiftUI tears down the state of a
+        // View that moves between the two branches of a conditional: opening a task's detail would clear
+        // the very search the user typed to find it, and re-subscribe the row Flow behind a visible blink.
+        // The detail column is the only thing that appears and disappears here.
+        HStack(spacing: 0) {
+            ItemTreeView(component: root.tree)
+                // Alone the tree fills the window; beside a detail it settles at its ideal 340 and lets
+                // the detail take the slack (both greedy would split the window down the middle).
+                .frame(
+                    minWidth: 280,
+                    idealWidth: 340,
+                    maxWidth: detail.value == nil ? CGFloat.infinity : nil,
+                    maxHeight: .infinity
+                )
+            if let detail = detail.value {
                 Divider()
                 TaskDetailView(component: detail)
                     .id(BridgeKt.detailKey(component: detail))
                     .frame(minWidth: 250, maxWidth: .infinity, maxHeight: .infinity)
             }
-        } else {
-            ItemTreeView(component: root.tree)
-                .frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

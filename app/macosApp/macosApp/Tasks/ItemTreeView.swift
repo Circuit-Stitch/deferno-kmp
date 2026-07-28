@@ -12,6 +12,11 @@ import SwiftUI
 /// touch long-press; the ↑ ↓ ‹ › move controls + Done and the top undo snackbar mirror iOS exactly. A
 /// slim `{n} trees` count + a local filter (In today / Active / All) lead the list.
 ///
+/// The column also carries its own **identity + inline search** (#263 parity, #368): iOS gets "Everything"
+/// from a large nav title and the filter field from `.searchable(placement: .navigationBarDrawer)`, neither
+/// of which exists here — the macOS window title for Tasks reads "Tasks" and there is no navigation bar to
+/// hang a drawer on — so both live in a `treeHeader` pinned above the scroll, with the field bound to ⌘F.
+///
 /// ponytail: keyboard move (Alt+↑↓ / Tab) is out of #237's "buttons + undo" scope; the move math already
 /// lives in the shared component, so add the key handlers here when the desktop keyboard pass lands (#368).
 struct ItemTreeView: View {
@@ -24,6 +29,13 @@ struct ItemTreeView: View {
     /// only `isTerminal` (no working state on the cross-kind projection yet), so In today / Active both map
     /// to "non-terminal" and All shows everything (terminal rows de-emphasized).
     @State private var filterIndex: Int = 2
+
+    /// The inline tree filter text (#263 parity, ⌘F-focusable). Empty → no filtering; otherwise a
+    /// case-insensitive title match over the **loaded** forest that keeps each match's ancestor chain.
+    /// Cross-everything search stays the shell toolbar's ⌕ (the Search overlay), not this — the two are
+    /// deliberately different scopes, which is why this one never leaves the View.
+    @State private var query = ""
+    @FocusState private var searchFocused: Bool
 
     private static let filters = [
         L.string("tasks_filter_in_today"),
@@ -44,6 +56,11 @@ struct ItemTreeView: View {
 
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
+                // Pinned above the scroll, not folded into `metaFilterBar`: a list row scrolls away, and
+                // ⌘F focusing a `TextField` the List has scrolled out of view (or recycled) silently does
+                // nothing. Hidden in move mode like the meta bar — the lifted row owns the surface.
+                if !inMoveMode { treeHeader }
+
                 List {
                     // A slim count + the local filter as the first row; hidden in move mode (the lifted-row
                     // focus owns the surface).
@@ -62,7 +79,10 @@ struct ItemTreeView: View {
                     }
 
                     if visibleRows.isEmpty && !value.isRefreshing {
-                        emptyState(allEmpty: value.rows.isEmpty)
+                        emptyState(
+                            allEmpty: value.rows.isEmpty,
+                            searching: !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        )
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
@@ -119,6 +139,54 @@ struct ItemTreeView: View {
         .background(colors.background)
     }
 
+    // MARK: - Pinned header (column identity + inline search)
+
+    /// The tree column's identity + its inline filter field (#263 parity). "Everything" is the forest's
+    /// own name — the window title says "Tasks" (the Destination), so without this the column reads as
+    /// anonymous — and the field is the macOS shape of iOS's nav-bar-drawer `.searchable`.
+    @ViewBuilder
+    private var treeHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L.string("tasks_tree_title"))
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(colors.onSurface)
+                .accessibilityAddTraits(.isHeader)
+            HStack(spacing: 6) {
+                DefernoIcon.search.image(size: 12)
+                    .foregroundStyle(colors.inkMuted)
+                    // Decoration: the field beside it is already labelled "Search".
+                    .accessibilityHidden(true)
+                TextField(L.string("search_initial_title"), text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($searchFocused)
+                    .accessibilityLabel(L.string("common_search"))
+                if !query.isEmpty {
+                    // Clearing leaves the caret where it is — the native search-field behaviour, and the
+                    // user is usually retyping rather than leaving.
+                    Button { query = "" } label: {
+                        DefernoIcon.close.image(size: 11)
+                            .foregroundStyle(colors.inkMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L.string("common_clear"))
+                }
+            }
+            // ⌘F focuses the field. A zero-sized, a11y-hidden Button is how a **view-scoped** SwiftUI
+            // shortcut is declared: it lives in this window's responder chain, unlike a `DefernoApp`
+            // `.commands` entry, which would have to reach across the View tree to find this field.
+            // `.frame(0) + .opacity(0)` rather than `.hidden()` — the latter can drop the view from
+            // layout and take its shortcut registration with it.
+            Button("") { searchFocused = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .buttonStyle(.plain)
+                .frame(width: 0, height: 0)
+                .opacity(0)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, Layout.gutter)
+        .padding(.top, 8)
+    }
+
     // MARK: - In-list header (count + filter)
 
     @ViewBuilder
@@ -152,22 +220,49 @@ struct ItemTreeView: View {
     }
 
     private func filteredRows(_ rows: [ItemRow]) -> [ItemRow] {
-        // In today / Active → non-terminal only; All → everything.
-        // ponytail: filtering a terminal parent can leave a child's rail rooted at a hidden node — the same
-        // minor imperfection iOS accepts; far better than re-deriving the spine. Upgrade only if it reads wrong.
-        switch filterIndex {
-        case 0, 1: return rows.filter { !$0.item.isTerminal }
-        default: return rows
+        // In today / Active → non-terminal only; All → everything. Applied to the *match*, never to a
+        // kept ancestor (an ancestor shows to root the match even if it's terminal).
+        func stateMatch(_ row: ItemRow) -> Bool {
+            switch filterIndex {
+            case 0, 1: return !row.item.isTerminal
+            default: return true
+            }
         }
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return rows.filter(stateMatch) }
+
+        // Title search keeps each match **plus its ancestor chain**, so the filigree spine + indentation
+        // stay rooted (a bare leaf match would otherwise draw a rail hanging from a filtered-out parent).
+        // The ancestor at each column is the most recent earlier row of shallower depth — reconstructed
+        // from the pre-order `depth` sequence, no parentId on the bridged item needed.
+        // ponytail: spine bools are still the full-tree ones, so a kept ancestor whose siblings were
+        // filtered out can imply a sibling that isn't shown — same minor imperfection the segmented
+        // filter already has, and far better than orphaned rails. Upgrade only if it reads wrong.
+        var keep = Set<Int>()   // indices into `rows` to render
+        var chain: [Int] = []   // chain[d] = index of the current ancestor at depth d; last entry is self
+        for (i, row) in rows.enumerated() {
+            let d = Int(row.depth)
+            if chain.count > d { chain.removeLast(chain.count - d) }
+            chain.append(i)
+            if stateMatch(row) && row.item.title.localizedCaseInsensitiveContains(q) {
+                keep.formUnion(chain) // the match (chain.last) + every ancestor
+            }
+        }
+        return rows.enumerated().filter { keep.contains($0.offset) }.map(\.element)
     }
 
+    /// `allEmpty` → the forest itself is empty. Otherwise rows exist but the active narrowing hid them:
+    /// `searching` distinguishes a no-match query (clear the search) from the segmented filter hiding
+    /// everything (switch to All) — one copy for both would misdirect half the time.
     @ViewBuilder
-    private func emptyState(allEmpty: Bool) -> some View {
+    private func emptyState(allEmpty: Bool, searching: Bool) -> some View {
         EmptyStateView(
-            title: allEmpty ? L.string("tasks_tree_empty_title") : L.string("tasks_tree_filtered_empty_title"),
+            title: allEmpty ? L.string("tasks_tree_empty_title") : (searching ? L.string("search_no_matches_title") : L.string("tasks_tree_filtered_empty_title")),
             message: allEmpty
                 ? L.string("tasks_tree_empty_body")
-                : L.string("tasks_tree_filtered_empty_body")
+                : (searching
+                    ? L.string("tasks_tree_search_empty_body")
+                    : L.string("tasks_tree_filtered_empty_body"))
         )
     }
 
@@ -298,6 +393,11 @@ private struct ItemRowContainer: View {
         .onChange(of: addSubtaskOpen) { _, open in
             if open { newSubtaskTitle = "" } // fresh prompt each time
         }
+        // Nothing on a row announces that it carries a command menu, so VoiceOver users had no way to
+        // learn the right-click/rotor commands exist (#368 G23). The macOS wording is its own key — the
+        // iOS `tasks_row_long_press_hint` names a gesture this platform doesn't have. Empty in move mode,
+        // where `rowMenu()` is deliberately empty, so the hint can't promise commands that aren't there.
+        .accessibilityHint(inMoveMode ? "" : L.string("tasks_row_right_click_hint"))
     }
 
     @ViewBuilder
