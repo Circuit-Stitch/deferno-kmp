@@ -21,14 +21,21 @@ import com.circuitstitch.deferno.macos.agent.NativeInferenceEngine
 import com.circuitstitch.deferno.macos.assistant.NativeAssistantStream
 import com.circuitstitch.deferno.macos.assistant.NativeAssistantTransport
 import com.circuitstitch.deferno.macos.speech.NativeDictation
+import com.circuitstitch.deferno.macos.speech.NativeFileTranscriber
 import com.circuitstitch.deferno.macos.speech.NativeSpeechToText
 import com.circuitstitch.deferno.shell.AccountComponentSession
 import com.circuitstitch.deferno.shell.DefaultRootComponent
 import com.circuitstitch.deferno.shell.RootComponent
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import kotlin.experimental.ExperimentalNativeApi
@@ -56,17 +63,24 @@ import platform.Foundation.preferredLanguages
  * The macOS native capabilities run **in-process** (ADR-0029): [dictation] wraps `SidecarKit`'s
  * on-device `SpeechTranscriber` (Phase 2) and [inference] wraps Apple Intelligence's Foundation Models
  * (Phase 3) — installed into the DI graph's on-device forwarder so the routed AppScope `InferenceEngine`
- * will resolve to it once a macOS surface reads that seam (#368), and exposed today to SwiftUI's dev
- * Extractor panel as [draftTasks]. Both are optional — `null` falls back to the AppScope speech engine /
- * leaves the NotConfigured inference floor + a `null` [draftTasks], so the host still runs without them.
+ * resolves to it for the Brain-dump pipeline (#368 Tranche 5), and exposed to SwiftUI's dev Extractor
+ * panel as [draftTasks]. Both are optional — `null` falls back to the AppScope speech engine / leaves the
+ * NotConfigured inference floor + a `null` [draftTasks], so the host still runs without them.
+ *
+ * [recorder] is the injected Swift `AVAudioEngine` mic recorder (#368 Tranche 5, ADR-0037) the Brain dump
+ * `record` seam drives; `null` (a unit host) leaves that seam the inert no-op default. [fileTranscriber] is
+ * the injected Swift macOS-26 `SpeechTranscriber` the pipeline transcribes the finalized WAV with; `null`
+ * (a pre-macOS-26 Mac, or a unit host) leaves the take to **salvage** — input is never wasted (ADR-0037).
  *
  * Per-Account data (the encrypted SQLite DB the [AccountComponentSession] opens) needs SQLCipher linked
  * in the Xcode app (project.yml); the Auth shell + paste-PAT sign-in path need only the AppScope network
  * client + the Keychain vault, so first-run login works regardless.
  */
 class DefernoRoot(
+    private val recorder: NativeAudioRecorder? = null,
     dictation: NativeDictation? = null,
     inference: NativeInference? = null,
+    private val fileTranscriber: NativeFileTranscriber? = null,
     // The injected Swift SSE turn-stream transport (#282, ADR-0040). `null` (a unit host) leaves the
     // graceful no-op AssistantStream.NONE, so a turn says "not available here" rather than hanging.
     transport: NativeAssistantTransport? = null,
@@ -97,6 +111,16 @@ class DefernoRoot(
     // StateFlows then drive the reactive shell. SupervisorJob so one failure doesn't cancel the rest.
     private val bootstrapScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    // One-time startup hydration — the account roster load + dev seeding. A memoized [Deferred] so the single
+    // [DefaultAccountManager.load] (not thread-safe across concurrent callers) runs exactly once, and the
+    // brain-dump relaunch sweep awaits the same result before touching the pipeline — so a sweep never races
+    // the load and sees a null Active Account (which would otherwise strand the take, #270/#368 Tranche 5).
+    // Eager (async starts now); failures surface on await, caught there.
+    private val bootstrapped: Deferred<Unit> = bootstrapScope.async {
+        appComponent.accountManager.load()
+        seedDevAccounts()
+    }
+
     private val lifecycle = LifecycleRegistry()
     private val timeZone = TimeZone.currentSystemDefault()
     private val today = Clock.System.todayIn(timeZone)
@@ -116,13 +140,13 @@ class DefernoRoot(
     init {
         // In-process inference (ADR-0029 Phase 3, ADR-0037): install the Swift Foundation Models engine into
         // the DI graph's OnDeviceFoundationModels forwarder, so the **routed** appComponent.inferenceEngine
-        // resolves to a real engine — live for when a macOS Brain-dump pipeline lands. Nothing on this target
-        // reads that seam today: the twin of iOS's `BrainDumpRecording` is still missing (#368), and the only
-        // macOS Extractor surface is the dev panel below, which holds the engine directly. `MacosAgentBindings`
-        // binds the router and this forwarder; the Apple-wide persisted default is already
-        // OnDeviceFoundationModels, so a fresh Mac routes here with no setting touched. A null engine (a unit
-        // host) or a Mac without Apple Intelligence leaves the NotConfigured floor — a typed failure the
-        // caller salvages from, never a silent nothing. The macOS twin of iOS's `IosOnDeviceInference.install`.
+        // resolves to a real engine. That seam is on the live product path since #368 Tranche 5: the Brain-dump
+        // pipeline builds `Extractor(appComponent.inferenceEngine)` (see BrainDumpRecording.kt), so this install
+        // is what turns a transcript into real drafts rather than a salvage. `MacosAgentBindings` binds the
+        // router and this forwarder; the Apple-wide persisted default is already OnDeviceFoundationModels, so a
+        // fresh Mac routes here with no setting touched. A null engine (a unit host) or a Mac without Apple
+        // Intelligence leaves the NotConfigured floor — a typed failure the caller salvages from, never a
+        // silent nothing. The macOS twin of iOS's `IosOnDeviceInference.install`.
         inference?.let { MacosOnDeviceInference.install(NativeInferenceEngine(it)) }
     }
 
@@ -130,19 +154,34 @@ class DefernoRoot(
      * The Phase-3 Extractor **dev surface** (`AI/DraftExtractorView.swift`): the on-device Brain-dump
      * Extractor over the injected engine, or `null` when none is injected. It deliberately holds the
      * engine directly rather than the routed seam — it is a developer probe of *this* engine, unaffected
-     * by the inference-engine App setting (#150). It is also the *only* macOS Extractor surface today; the
-     * product path will go through the graph (above) once the Brain-dump pipeline lands here (#368).
+     * by the inference-engine App setting (#150). The product path now goes through the graph (above): the
+     * Brain-dump pipeline landed in #368 Tranche 5 and reads the routed seam.
      */
     val draftTasks: DraftTasksBridge? =
         inference?.let { DraftTasksBridge(it, today, timeZone.id) }
+
+    // Brain dump's record→Inbox seam (#368 Tranche 5, ADR-0037): records the mic to a durable WAV, then on
+    // Stop hands the take to the shared pipeline on an app-scope coroutine — the WorkManager-less macOS twin
+    // of Android's background worker, and the smaller twin of iOS's (no grace window, no BGTask backstop —
+    // see BrainDumpRecording.kt). A null recorder keeps the inert no-op default (the unit-host behaviour).
+    // The lambda params are named for the CAPTURE context rather than `today`/`timeZone`, which would shadow
+    // this class's own properties of those names (iOS has neither, so its twin can use the plain names).
+    private val recordBrainDump: suspend (LocalDate, String) -> Unit = { captureDay, captureZone ->
+        recorder?.let { recordBrainDumpTake(it, captureDay, captureZone) }
+    }
 
     /** The shared navigation root the SwiftUI `RootView` renders (Auth ↔ Main → the Destination graph). */
     val root: RootComponent
 
     init {
+        // #270 relaunch sweep: after the roster has hydrated (so processBrainDumpTake sees the Active Account),
+        // recover any take whose processing was killed mid-flight — its drafts or salvage land now. Awaiting the
+        // memoized [bootstrapped] is what makes this safe: a sweep that raced the load would see a null Active
+        // Account and strand the take. On macOS this is the ONLY recovery path — iOS also has a BGProcessingTask
+        // backstop, which does not exist on this target (see BrainDumpRecording.kt for why).
         bootstrapScope.launch {
-            appComponent.accountManager.load()
-            seedDevAccounts()
+            runCatching { bootstrapped.await() }
+            sweepPendingBrainDumps(appComponent, currentLocaleTag(), fileTranscriber, timeZone.id)
         }
 
         root = DefaultRootComponent(
@@ -161,6 +200,15 @@ class DefernoRoot(
             // Settings → App Permissions: macOS has no per-app settings deep-link, so open the
             // system Privacy & Security pane (the closest equivalent of iOS's per-app Settings screen).
             onOpenOsAppSettings = { openExternalUrl(MACOS_PRIVACY_PANE_URL) },
+            // The Brain dump overlay's foreclosed-mic arm (#368 Tranche 5b). This is a SEPARATE seam from
+            // `onOpenOsAppSettings` above, and leaving it at its `{}` default compiles silently — the button
+            // is simply inert. That matters more here than on iOS: macOS TCC never re-prompts once a person
+            // denies the mic, so `Phase.PermissionPermanentlyDenied` is genuinely reachable on a Mac (the
+            // Swift mapping treats `.denied`/`.restricted` as permanent), and this button is then the only
+            // route out. Deep-link straight to the Microphone list rather than the generic Privacy pane.
+            // (iOS's own `DefernoRoot` never passes this parameter either — this is a macOS improvement,
+            // not a port. Worth filing back against iOS.)
+            onOpenDictationPermissionSettings = { openExternalUrl(MACOS_MICROPHONE_PANE_URL) },
             // Settings → Data & Privacy: no client endpoint at v0.1 (ADR-0015), so open the web app's
             // surface (origin tracks the env), mirroring iOS.
             onOpenDataExportImport = { openExternalUrl(webAppUrl(environment, "settings/data")) },
@@ -177,15 +225,22 @@ class DefernoRoot(
             // the catalog offers Apple Foundation Models (on-device, ungated, the default) plus the cloud relay
             // as a disabled premium row — no Koog klib here, so a cloud selection routes to NotConfigured.
             inferenceEngineCatalog = appComponent.inferenceEngineCatalog,
-            // The two device-local brain-dump [[App setting]]s Settings → Storage now surfaces (#368 G5).
+            // The two device-local brain-dump [[App setting]]s Settings → Storage surfaces (#368 G5).
             // Both default to an IN-MEMORY stub inside DefaultRootComponent, so without threading them the
             // toggles would write to a throwaway that dies with the process while the NSUserDefaults-backed
-            // DI binding silently held a different value — two sources of truth disagreeing. macOS captures
-            // no brain dumps yet (#368 Tranche 5); the settings still have to persist.
+            // DI binding silently held a different value — two sources of truth disagreeing. Since #368
+            // Tranche 5 that would be a live bug, not a latent one: the capture pipeline reads the SAME
+            // bindings (`keepRecordings` / `notifications` in BrainDumpPipeline), so threading them here is
+            // what keeps the Settings toggles and the pipeline one source of truth.
             // (iOS omits `keepBrainDumpRecordingsPreference` from its own call — a pre-existing iOS defect,
             // not a template to copy.)
             keepBrainDumpRecordingsPreference = appComponent.keepBrainDumpRecordingsPreference,
             brainDumpNotificationPreference = appComponent.brainDumpNotificationPreference,
+            // Brain dump's record→Inbox seam (#368 Tranche 5, ADR-0037): records the mic to a durable WAV and
+            // hands the take to the shared pipeline on Stop. Real drafts when the Mac is macOS 26 + Apple
+            // Intelligence (the injected file transcriber + the routed on-device engine); otherwise the take
+            // salvages to the Inbox — never wasted.
+            recordBrainDump = recordBrainDump,
             // The AppScope connectivity monitor (#158): the outbox driver flushes on the
             // offline→online edge and skips passes while known-offline.
             connectivity = appComponent.connectivity,
@@ -211,6 +266,73 @@ class DefernoRoot(
     }
 
     /**
+     * Open the Inbox in the Main shell (#271) — the target of the Brain dump completion notification's tap.
+     * The Swift `UNUserNotificationCenterDelegate` (`BrainDumpNotificationDelegate` in `DefernoApp.swift`)
+     * calls this on a `didReceive` whose category is [BRAIN_DUMP_NOTIFICATION_CATEGORY];
+     * [RootComponent.openInbox] switches the shell to the Inbox now, or defers if the Auth shell is up.
+     */
+    fun forwardOpenInbox() = root.openInbox()
+
+    /**
+     * The macOS recorder seam (#368 Tranche 5, ADR-0037): start the mic, suspend until either the overlay's
+     * Stop cancels this job **or** the mic engine fails to open, then — under [NonCancellable] so a closing
+     * overlay never half-writes — finalize the WAV and, on a real Stop, launch the shared pipeline on the
+     * app-lifetime [bootstrapScope] (so processing outlives the overlay). A mic-open failure rethrows, so the
+     * shared `DefaultBrainDumpComponent` flips to its gentle Failed state (Android/iOS parity — a take is
+     * never silently lost), and the empty WAV is dropped.
+     *
+     * Threading: this seam runs on the Decompose component context, which is [Dispatchers.Main] (the root's
+     * default, threaded through the overlay scope) — so [NativeAudioRecorder.stop]'s synchronous Swift
+     * teardown runs **on the main thread**. The Swift `Thread.isMainThread` guard (which runs the teardown
+     * inline rather than `DispatchQueue.main.sync`-ing onto the queue it is already on) is what keeps it
+     * deadlock-free — it is load-bearing, not defensive, and a hard contract on `MacBrainDumpRecorder`, which
+     * must reproduce it exactly as iOS's `BrainDumpRecorder.swift` does. The heavy pipeline work runs off-main
+     * on [bootstrapScope] ([Dispatchers.Default]). [createdAt] is the take's single instant — the retained
+     * recording's key — captured here at the recorder boundary (the host's job; the pipeline stays clock-free).
+     */
+    private suspend fun recordBrainDumpTake(
+        recorder: NativeAudioRecorder,
+        captureDay: LocalDate,
+        captureZone: String,
+    ) {
+        val createdAt = Clock.System.now()
+        val wavPath = brainDumpPendingWavPath(createdAt)
+        ensureBrainDumpPendingDir()
+        // Completed exceptionally only if the mic engine never opened (start() is async, so it can't throw).
+        // On a normal Stop the job is cancelled, this stays incomplete, and the take is handed off.
+        val micFailed = CompletableDeferred<Unit>()
+        recorder.start(wavPath) {
+            micFailed.completeExceptionally(IllegalStateException("brain-dump mic engine failed to start"))
+        }
+        try {
+            micFailed.await() // suspends until Stop cancels this job; throws if the mic never opened
+        } finally {
+            withContext(NonCancellable) {
+                recorder.stop() // finalizes the WAV synchronously (inline on main — see the threading note)
+                if (micFailed.isCompleted) {
+                    deleteFile(wavPath) // mic never opened — nothing captured; the rethrow flips Phase.Failed
+                } else {
+                    bootstrapScope.launch {
+                        // #270: atomically claim the finalized WAV (rename to .processing) so the relaunch
+                        // sweep can't also grab it; if the claim is lost (a sweep already took it), this
+                        // in-process run stands down.
+                        val claimed = claimPendingTake(wavPath) ?: return@launch
+                        processBrainDumpTake(
+                            appComponent = appComponent,
+                            wavPath = claimed,
+                            locale = currentLocaleTag(),
+                            transcriber = fileTranscriber,
+                            today = captureDay,
+                            timeZone = captureZone,
+                            createdAt = createdAt,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * The OAuth redirect hand-off **fallback** (ADR-0026, #137): the Swift URL handler (`onOpenURL`)
      * forwards every incoming URL here; a custom-scheme auth redirect is published into the AppScope
      * [com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox]. The macOS twin of iOS's
@@ -229,6 +351,12 @@ class DefernoRoot(
         // macOS has no per-app Settings deep-link; this opens System Settings' Privacy & Security pane.
         const val MACOS_PRIVACY_PANE_URL =
             "x-apple.systempreferences:com.apple.preference.security?Privacy"
+
+        // …and this lands directly on its Microphone list — where a person whose mic grant is foreclosed has
+        // to go to re-enable Deferno (#368 Tranche 5b). Worth the second constant: the generic pane above
+        // leaves them hunting through a dozen categories at the exact moment the app has told them what to do.
+        const val MACOS_MICROPHONE_PANE_URL =
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
     }
 
     /**
