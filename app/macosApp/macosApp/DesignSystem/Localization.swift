@@ -5,8 +5,9 @@ import Foundation
 /// The 5-locale Compose catalog (en/es/de/hi/pt) is the source of truth; its subset the bridges carry is
 /// ported here. The shell hands Swift **typed** state (ADR-0003): the bridge accessors return stable
 /// enum-name tokens (the Kotlin twins — `ChromeTitle`, `NewStatus.FailedReason`,
-/// `FeedbackResult.Failed.Reason`, `AssistantError`, `InferenceFailureReason`), and these helpers map each
-/// token to a catalog key. Server-authored prose (feedback / assistant `ServerMessage`) renders verbatim.
+/// `FeedbackResult.Failed.Reason`, `InboxNote`, `AssistantError`, `InferenceFailureReason`), and these
+/// helpers map each token to a catalog key. Server-authored prose (feedback / inbox / assistant
+/// `ServerMessage`) renders verbatim.
 enum L {
 
     /// A localized string by catalog key.
@@ -184,6 +185,14 @@ enum L {
         case "AppOutOfDate": return string("common_error_app_out_of_date")
         default: return ShellBridgeKt.feedbackStatusFailedMessage(state: state)
         }
+    }
+
+    // MARK: Inbox note (typed InboxNote)
+
+    /// The gentle row note: the fixed Offline arm localizes, a server message renders verbatim, else nil.
+    static func inboxNote(_ row: InboxRow) -> String? {
+        if ShellBridgeKt.inboxNoteIsOffline(row: row) { return string("common_reconnect_to_save") }
+        return ShellBridgeKt.inboxNoteServerMessage(row: row)
     }
 
     // MARK: Assistant error (typed AssistantError)
