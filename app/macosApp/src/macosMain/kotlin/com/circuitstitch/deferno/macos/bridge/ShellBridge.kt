@@ -1,5 +1,8 @@
 package com.circuitstitch.deferno.macos.bridge
 
+import com.circuitstitch.deferno.feature.braindumps.InboxComponent
+import com.circuitstitch.deferno.feature.braindumps.InboxNote
+import com.circuitstitch.deferno.feature.braindumps.InboxRow
 import com.circuitstitch.deferno.feature.calendar.CalendarState
 import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileState
@@ -19,6 +22,7 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineOrigin
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
 import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.model.BrainDumpDraft
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.ChatMessage
 import com.circuitstitch.deferno.core.model.ChatRole
@@ -32,6 +36,7 @@ import com.circuitstitch.deferno.macos.TasksRoot
 import com.circuitstitch.deferno.shell.ActivityAttribution
 import com.circuitstitch.deferno.shell.ActivityFeedRow
 import com.circuitstitch.deferno.shell.AuthShellComponent
+import com.circuitstitch.deferno.shell.BrainDumpState
 import com.circuitstitch.deferno.shell.ChromeActionKind
 import com.circuitstitch.deferno.shell.ChromeSpec
 import com.circuitstitch.deferno.shell.ChromeTitle
@@ -49,6 +54,7 @@ import com.circuitstitch.deferno.shell.NewComponent
 import com.circuitstitch.deferno.shell.NewState
 import com.circuitstitch.deferno.shell.NewStatus
 import com.circuitstitch.deferno.shell.OverlayRoute
+import com.circuitstitch.deferno.shell.Phase
 import com.circuitstitch.deferno.shell.RootComponent
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -515,16 +521,63 @@ fun openSearchOverlay(component: MainShellComponent) = component.openOverlay(Ove
 /** Open the New create overlay, undated (the shell FAB on a non-Calendar Destination, #71). */
 fun openNewOverlay(component: MainShellComponent) = component.openOverlay(OverlayRoute.New(null))
 
+/** Open the Brain dump record overlay (the shell top-bar voice action, ADR-0027). */
+fun openBrainDumpOverlay(component: MainShellComponent) = component.openOverlay(OverlayRoute.BrainDump)
+
 // ---------------------------------------------------------------------------------------------------
-// Activity Destination (#260) — the Secondary Destination the macOS sidebar now reaches (#368 G9). The
-// ledger was already live on macOS (`RootComponent.kt` wires `observeActivity = session::observeActivity`);
-// only these accessors and the SwiftUI feed were missing. Kept IDENTICAL to
-// app/iosApp .../ios/bridge/ShellBridge.kt. (The sibling Inbox Destination stays out of reach until the
-// macOS brain-dump capture host lands — Tranche 5 of #368 — since its feed is empty by construction.)
+// Inbox + Activity Destinations (ADR-0015 amendment / #260) — the two Secondary Destinations the macOS
+// sidebar now reaches (#368 G9). Inbox lives in feature:braindumps (exported in `build.gradle.kts`, which
+// is the only reason Swift can name `InboxComponent` at all); Activity in app:shell. Both feeds were
+// already live on macOS — `RootComponent.kt` wires `observeActivity = session::observeActivity` and
+// `observeBrainDumpDrafts = session::observeBrainDumpDrafts` off the same `AccountComponentSession` the
+// Mac builds — so only these accessors and the SwiftUI surfaces were missing. The bodies below are kept
+// IDENTICAL to app/iosApp .../ios/bridge/ShellBridge.kt; the note that follows is macOS-only.
+//
+// The earlier note here ("Inbox stays out of reach until the macOS brain-dump capture host lands") no
+// longer holds as a *reachability* claim: the Destination and its triage acts work today, and a draft the
+// person accepts becomes a real Task exactly as on iOS. Reachability and supply are separate things,
+// though — do NOT read the accessors below as a claim that the queue fills. A draft never crosses devices:
+// `BrainDumpDraftRepository` "has no remote source and no reconcile" and a `BrainDumpDraft` is "ephemeral
+// and client-only" (core:model). So the queue fills only once THIS Mac has a local producer — i.e. once
+// the host threads a real `recordBrainDump` into `DefaultRootComponent` (#368 Tranche 5b's
+// `MacBrainDumpRecorder`, via `DefernoRoot`). Left at the no-op default, the Inbox is empty by
+// construction, exactly as it was before. Either way the triage half is what lives here.
 // ---------------------------------------------------------------------------------------------------
+
+fun destInbox(child: MainShellComponent.DestinationChild) =
+    (child as? MainShellComponent.DestinationChild.Inbox)?.component
 
 fun destActivity(child: MainShellComponent.DestinationChild) =
     (child as? MainShellComponent.DestinationChild.Activity)?.component
+
+/** Stable identity of a draft for SwiftUI list diffing (BrainDumpDraftId value class is header-erased). */
+fun inboxDraftKey(draft: BrainDumpDraft): String = draft.id.value
+
+// Accept / dismiss / clear-note take the draft (Swift can't name its BrainDumpDraftId). Undo needs no
+// seam — `onUndoDismiss()` is arg-free, so SKIE surfaces it on the component directly.
+fun acceptInboxDraft(component: InboxComponent, draft: BrainDumpDraft) = component.onAccept(draft.id)
+fun dismissInboxDraft(component: InboxComponent, draft: BrainDumpDraft) = component.onDismiss(draft.id)
+fun clearInboxNote(component: InboxComponent, draft: BrainDumpDraft) = component.onClearNote(draft.id)
+
+// The gentle row note, typed for Swift (#327): the fixed Offline arm localizes ("Reconnect to save",
+// common_reconnect_to_save), a server-authored message renders verbatim, and no note = neither.
+fun inboxNoteIsOffline(row: InboxRow): Boolean = row.noteKind is InboxNote.Offline
+fun inboxNoteServerMessage(row: InboxRow): String? = (row.noteKind as? InboxNote.ServerMessage)?.text
+
+/**
+ * A draft's deadline subtitle (LocalDate + optional LocalTime), or empty when undated.
+ *
+ * Deliberately a raw ISO concatenation ("2026-07-28" / "2026-07-28 09:30") and kept BYTE-IDENTICAL to the
+ * iOS twin, so the two Apple surfaces read the same for the same draft. Do NOT route it through
+ * `TrailDateFormat.deadline` on the Swift side: that parses RFC-3339 and echoes anything else straight
+ * back (`TrailDateFormat.swift`), so it would localize nothing and only make the two surfaces drift.
+ * Localizing this properly means changing BOTH surfaces at once — tracked on #368, not fixed here.
+ */
+fun inboxDraftDeadlineLabel(draft: BrainDumpDraft): String {
+    val date = draft.completeBy?.toString() ?: return ""
+    val time = draft.deadlineTimeOfDay?.let { " $it" } ?: ""
+    return date + time
+}
 
 // The typed feed summary, cracked open for Swift to localize (#327). [activitySummaryVerb] is the coarse
 // verb as a stable enum-name token ("Created" / "UpdatedTask" / …); [activitySummaryKindToken] is the
@@ -573,6 +626,36 @@ fun activityRowDiffRows(row: ActivityFeedRow): List<TrailDiffRow> =
 /** Whether an Activity row resolves to a Task — the only kind the sheet deep-links as "Open Task #N"
  *  (a resolved Habit/Chore/Event would route wrong, so those keep the generic "Open item"). */
 fun activityRowIsTask(row: ActivityFeedRow): Boolean = row.itemKind == ItemKind.Task
+
+// ---------------------------------------------------------------------------------------------------
+// Brain dump overlay (ADR-0027) — the recorder surface; Phase is sealed, so Swift reads its name.
+// Same seams as app/iosApp, and deliberately producer-agnostic: the phase walk they expose is driven by
+// whichever `recordBrainDump` the host threads into `DefaultRootComponent` (iOS passes a real
+// `NativeAudioRecorder`; macOS gets `MacBrainDumpRecorder` through `DefernoRoot`, #368 Tranche 5b). Left
+// at `DefaultMainShellComponent`'s no-op default, the walk still reads Idle → Recording → Enqueued while
+// capturing nothing — so a silent take is a wiring gap at THAT seam, never a defect in these accessors.
+// ---------------------------------------------------------------------------------------------------
+
+fun overlayBrainDump(child: MainShellComponent.OverlayChild) =
+    (child as? MainShellComponent.OverlayChild.BrainDump)?.component
+
+/** The active recorder phase as a stable String the View maps to its UI. */
+fun brainDumpPhaseName(state: BrainDumpState): String = when (state.phase) {
+    Phase.Idle -> "Idle"
+    Phase.Recording -> "Recording"
+    Phase.Enqueued -> "Enqueued"
+    Phase.Failed -> "Failed"
+    Phase.PermissionDenied -> "PermissionDenied"
+    Phase.PermissionPermanentlyDenied -> "PermissionPermanentlyDenied"
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Breakdown overlay (Deferno#525) — the macOS-native "what's stopping you?" flow over one stuck item.
+// ---------------------------------------------------------------------------------------------------
+
+/** The active Breakdown overlay's holder, or null — Swift's BreakdownView renders it when present. */
+fun overlayBreakdown(child: MainShellComponent.OverlayChild) =
+    (child as? MainShellComponent.OverlayChild.Breakdown)?.component
 
 // ---------------------------------------------------------------------------------------------------
 // New form — deadline time-of-day (#348). LocalTime isn't built in Swift, so these seams own it. Without
