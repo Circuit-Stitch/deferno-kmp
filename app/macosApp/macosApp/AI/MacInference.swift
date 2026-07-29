@@ -4,6 +4,23 @@ import Foundation
 import FoundationModels
 #endif
 
+/// The one canonical "can on-device Apple Intelligence actually run here?" gate — the FoundationModels
+/// weak-link (macOS 26+, app deploys to 14.0), the `#available` guard, and `SystemLanguageModel`
+/// availability in a single place. Three readers share it: the inference seam below, the Breakdown
+/// classifier, and the Breakdown View's unavailable state (#525, #368 G10) — so there's one answer to keep
+/// correct, not three. The macOS twin of iosApp's `AppleIntelligence` in `IosInference.swift`: same shape,
+/// this platform's own OS floor.
+enum AppleIntelligence {
+    static var isAvailable: Bool {
+        #if canImport(FoundationModels)
+        if #available(macOS 26, *) {
+            if case .available = SystemLanguageModel.default.availability { return true }
+        }
+        #endif
+        return false
+    }
+}
+
 /// In-process inference (ADR-0029 Phase 3): implements the shared Kotlin `NativeInference` port over
 /// Apple Intelligence's **Foundation Models** (`LanguageModelSession`). The model runs fully on-device,
 /// so the person's transcript never leaves the Mac (ADR-0009/0027). Kotlin owns the schema + validation;
@@ -15,14 +32,7 @@ import FoundationModels
 /// `NotConfigured`, so nothing ever runs silently.
 final class MacInference: NativeInference {
 
-    func isAvailable() -> Bool {
-        #if canImport(FoundationModels)
-        if #available(macOS 26, *) {
-            if case .available = SystemLanguageModel.default.availability { return true }
-        }
-        #endif
-        return false
-    }
+    func isAvailable() -> Bool { AppleIntelligence.isAvailable }
 
     func infer(
         instructions: String,
