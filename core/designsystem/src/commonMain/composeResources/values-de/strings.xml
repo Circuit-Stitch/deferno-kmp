@@ -926,6 +926,7 @@ Vielen Dank.</string>
     <string name="tasks_moved_undo_available">Verschoben. %1$s rückgängig möglich.</string>
     <string name="tasks_new_subtask_under_a11y">Neue Unteraufgabe unter „%1$s“.</string>
     <string name="tasks_row_long_press_hint">Lange drücken für Aktionen</string>
+    <string name="tasks_row_right_click_hint">Rechtsklick für Aktionen</string>
     <string name="tasks_tree_search_empty_body">Kein Baum passt zu deiner Suche. Lösch sie, um alle zu sehen.</string>
     <plurals name="common_item_count">
         <item quantity="one">1 Element</item>

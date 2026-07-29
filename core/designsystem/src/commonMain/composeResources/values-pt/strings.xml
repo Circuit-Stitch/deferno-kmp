@@ -928,6 +928,7 @@ Agradeço.</string>
     <string name="tasks_moved_undo_available">Movida. Desfazer %1$s disponível.</string>
     <string name="tasks_new_subtask_under_a11y">Nova subtarefa sob “%1$s”.</string>
     <string name="tasks_row_long_press_hint">Toque e segure para ver ações</string>
+    <string name="tasks_row_right_click_hint">Clique com o botão direito para ver ações</string>
     <string name="tasks_tree_search_empty_body">Nenhuma árvore corresponde à sua busca. Limpe a busca para ver todas.</string>
     <plurals name="common_item_count">
         <item quantity="one">1 item</item>

@@ -79,6 +79,88 @@ enum L {
         return string(key)
     }
 
+    // MARK: Activity feed (typed ActivitySummary / ActivitySource)
+
+    /// The localized one-liner for an Activity row, from its typed verb + optional item-kind token. When
+    /// the item ref resolved (`row.itemRef`, e.g. "#41") the ref-capable verbs read "Updated task #41";
+    /// otherwise the plain fallback. Mirrors the Compose `ActivityFeedRow.summaryText`.
+    static func activitySummary(_ row: ActivityFeedRow) -> String {
+        let verb = ShellBridgeKt.activitySummaryVerb(row: row)
+        let kind = ShellBridgeKt.activitySummaryKindToken(row: row)
+        func s(_ plain: String, _ refKey: String) -> String {
+            if let itemRef = row.itemRef { return format(refKey, itemRef) }
+            return string(plain)
+        }
+        switch verb {
+        case "ChangedSettings": return string("activity_summary_changed_settings")
+        case "Created":
+            switch kind {
+            case "task": return s("activity_summary_created_task", "activity_summary_created_task_ref")
+            case "chore": return s("activity_summary_created_chore", "activity_summary_created_chore_ref")
+            case "habit": return s("activity_summary_created_habit", "activity_summary_created_habit_ref")
+            case "event": return s("activity_summary_created_event", "activity_summary_created_event_ref")
+            default: return s("activity_summary_created_item", "activity_summary_created_item_ref")
+            }
+        case "MovedItem": return s("activity_summary_moved_item", "activity_summary_moved_item_ref")
+        case "UpdatedPlan": return string("activity_summary_updated_plan")
+        case "DeletedTask": return string("activity_summary_deleted_task")
+        case "UpdatedTask": return s("activity_summary_updated_task", "activity_summary_updated_task_ref")
+        case "ClearedOccurrence":
+            switch kind {
+            case "chore": return string("activity_summary_cleared_occurrence_chore")
+            case "habit": return string("activity_summary_cleared_occurrence_habit")
+            default: return string("activity_summary_cleared_occurrence_event")
+            }
+        case "UpdatedOccurrence":
+            switch kind {
+            case "chore": return string("activity_summary_updated_occurrence_chore")
+            case "habit": return string("activity_summary_updated_occurrence_habit")
+            default: return string("activity_summary_updated_occurrence_event")
+            }
+        // Comment rows previously fell through to "Updated an item" — now their own line, with the ref.
+        case "Commented": return s("activity_summary_commented", "activity_summary_commented_ref")
+        // The server ledger's own vocabulary (#364). None is ref-capable: these arrive on rows from
+        // other surfaces, where the touched item is often not in this device's cache at all.
+        case "StatusChanged": return string("activity_summary_status_changed")
+        case "DeletedItem": return string("activity_summary_deleted_item")
+        case "Split": return string("activity_summary_split")
+        case "Merged": return string("activity_summary_merged")
+        case "Converted": return string("activity_summary_converted")
+        case "Rescheduled": return string("activity_summary_rescheduled")
+        case "CommentEdited": return string("activity_summary_comment_edited")
+        case "CommentDeleted": return string("activity_summary_comment_deleted")
+        case "AttachmentAdded": return string("activity_summary_attachment_added")
+        case "AttachmentDeleted": return string("activity_summary_attachment_deleted")
+        case "AttachmentCaptioned": return string("activity_summary_attachment_captioned")
+        case "PlanAdded": return string("activity_summary_plan_added")
+        case "PlanRemoved": return string("activity_summary_plan_removed")
+        case "PlanReordered": return string("activity_summary_plan_reordered")
+        // Kotlin's ActivityVerb `when` is exhaustive, so a verb added there is a compile error on
+        // Compose but would silently land here — this arm is the safety net, not the design.
+        default: return string("activity_summary_updated_item")
+        }
+    }
+
+    /// The localized "who" chip for an Activity row — a flat map over the already-decided attribution.
+    ///
+    /// Whether the server's actor or the acting surface names a row is settled once, in the shared
+    /// `ActivityAttribution` (#364), and reaches here as a single token. This deliberately does NOT
+    /// re-derive it from actor kind + source: that rule used to live here *and* in Compose, two copies of
+    /// one decision that nothing would have caught drifting apart.
+    static func activitySource(_ row: ActivityFeedRow) -> String {
+        switch ShellBridgeKt.activityAttributionToken(row: row) {
+        case "Assistant": return string("activity_actor_assistant")
+        case "Integration":
+            return ShellBridgeKt.activityAttributionProvider(row: row) ?? string("activity_actor_integration")
+        case "Mobile": return string("activity_source_mobile")
+        case "Website": return string("activity_source_website")
+        case "Mcp": return string("activity_source_mcp")
+        case "Api": return string("activity_source_api")
+        case "System": return string("activity_source_system")
+        default: return string("activity_source_unknown")
+        }
+    }
+
     // MARK: New / Feedback failure (typed reasons)
 
     /// The localized create-failure note, or nil when New isn't in a Failed state.

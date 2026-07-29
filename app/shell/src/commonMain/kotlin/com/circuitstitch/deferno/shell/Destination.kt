@@ -33,9 +33,9 @@ enum class Destination(val slot: NavSlot) {
     // Secondary peer (reached via "More" on compact), ordered first among the secondaries.
     Inbox(NavSlot.Secondary),
     // Activity: a global cross-surface action ledger (every action across what's visible to the person —
-    // MCP / Website / Mobile app / Google Voice). A PLACEHOLDER for now (a ComingSoon body) until the
-    // global history feed lands — tracked in #260. Still a real Secondary Destination with its
-    // own retained back stack, so the slice drops in later with no structural change (ADR-0015).
+    // MCP / Website / Mobile app / Google Voice). REAL since #260 — the shell builds a live
+    // ActivityComponent over `observeActivity`, and Android, iOS and macOS all render the feed. A real
+    // Secondary Destination with its own retained back stack (ADR-0015).
     Activity(NavSlot.Secondary),
     // Profile: the Active Account's identity + sign-out. NOT a drawer row — the shell's `destinations`
     // filters it out; it's reached by drilling from Settings → Account (a ← back detail), back to Settings.

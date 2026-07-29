@@ -134,6 +134,26 @@ extension View {
     }
 }
 
+/// Themes a subtree that sits OUTSIDE the themed view hierarchy — a `.sheet` attached to `RootView`
+/// from the App body, or any second scene. `RootView` applies `.defernoTheme` *inside* its own body, so
+/// a modifier chained onto the `RootView(...)` value never inherits it and `\.defernoColors` falls back
+/// to the `EnvironmentKey` default (`defernoLight`): a light-amber panel with dark native chrome for a
+/// Mono / Dark / Auto-dark user. Observing `root.themeSettings` directly — the same mirror `RootView`
+/// and the detached `task-detail` scene drive — makes every surface re-theme live and together (#368 G18).
+struct ThemedSheet<Content: View>: View {
+    @StateObject private var theme: StateFlowObserver<UserSettings>
+    private let content: () -> Content
+
+    init(root: RootComponent, @ViewBuilder content: @escaping () -> Content) {
+        _theme = StateObject(wrappedValue: StateFlowObserver(root.themeSettings))
+        self.content = content
+    }
+
+    var body: some View {
+        content().defernoTheme(theme.value)
+    }
+}
+
 extension Color {
     /// Build a `Color` from a 6-digit RGB hex string (e.g. `"C97A1B"`), `#` optional.
     init(hex: String) {

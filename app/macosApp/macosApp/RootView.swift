@@ -30,7 +30,10 @@ struct RootView: View {
         if let main = ShellBridgeKt.rootChildMain(child: child) {
             MainShellView(component: main, onBrainDump: onBrainDump)
         } else if let auth = ShellBridgeKt.rootChildAuth(child: child) {
-            SignInView(component: auth.signIn)
+            // `onCancel` is non-nil only when re-entered to add an account (#368) — it shows a Cancel-back.
+            // Without it the Settings roster's "Add another account" would strand the user here: macOS has
+            // no system back gesture, so the Auth shell would have no exit at all.
+            SignInView(component: auth.signIn, onCancel: auth.onCancel)
         }
     }
 }

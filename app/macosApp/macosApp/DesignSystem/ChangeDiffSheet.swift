@@ -1,9 +1,10 @@
 import Deferno
 import SwiftUI
 
-/// The **change-detail sheet** (#260) opened from the Task **Trail** — the macOS twin of the iOS
-/// `ChangeDiffSheet` and of the Compose `ChangeDiffSheet` (core/designsystem). A calm old→new field diff of
-/// one recorded change: [title] heads it, [subtitle] carries the meta line (time), [note] — when set — is
+/// The **change-detail sheet** (#260), shared by the Task **Trail** and the **Activity** Destination — the
+/// macOS twin of the iOS `ChangeDiffSheet` and of the Compose `ChangeDiffSheet` (core/designsystem). A calm
+/// old→new field diff of one recorded change: [title] heads it, [subtitle] carries the meta line
+/// (source · time), [note] — when set — is
 /// comment prose shown above the diff, and [onOpenItem] — when set — adds an "Open item" action
 /// ([openItemLabel] overrides its text); omitted when the viewer is already inside the item (the Trail).
 /// When there's neither a note nor any rows a quiet fallback keeps a click from being a dead end.

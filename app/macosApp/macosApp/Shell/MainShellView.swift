@@ -1,20 +1,20 @@
 import Deferno
 import SwiftUI
 
-/// The Main shell — the SwiftUI twin of Android's `MainShell` (ADR-0013/0015). It renders the shared
-/// `MainShellComponent`'s Destination graph as an **adaptive nav suite** driven purely by the
-/// horizontal size class (never a device check, ADR-0008):
-///   • compact (iPhone): a bottom bar of the three Primary Destinations + a **More** overflow onto the
-///     Secondary ones, over a single active-Destination body;
-///   • regular (iPad): a `NavigationSplitView` whose sidebar lists all five Destinations.
-/// Above the body sit the shell chrome (account switcher when >1 account, global Search ⌕) and the New
-/// FAB; the shell-level overlay (Search / New) presents as a sheet. The active Destination, its
-/// retained per-Destination state, and the overlay all live in the shared component — this View holds
-/// only the local "More" sheet flag.
+/// The Main shell — the SwiftUI twin of Android's `MainShell` (ADR-0013/0015). macOS has no compact size
+/// class, so there is exactly ONE layout: a `NavigationSplitView` whose sidebar lists every Destination the
+/// shared registry publishes, with the active Destination filling the detail column under the window's own
+/// title bar. (#368 G21b deleted the phone-shaped chrome this file had inherited from `iosApp` — a bottom
+/// bar of Primary Destinations, a "More" overflow onto the Secondary ones, and a New FAB — all of it
+/// gated on `horizontalSizeClass != .compact`, i.e. unreachable on macOS and misleading in a diff.)
+/// The title bar carries the shell chrome: the sidebar toggle, the drilled ← back and the account switcher
+/// (when >1 Account) lead; Search plus the shell-computed `ChromeSpec.actions` trail. The shell-level
+/// overlay (Search / New / Feedback) presents as a sheet. The active Destination, its retained
+/// per-Destination state, and the overlay all live in the shared component — this View holds only the
+/// local sidebar-visibility flag.
 struct MainShellView: View {
     let component: MainShellComponent
     let onBrainDump: () -> Void
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.defernoColors) private var colors
     @StateObject private var destinations: StateFlowObserver<MainShellComponentDestinationChild>
     /// The dynamic nav registry (ADR-0040): the conditionally-present Assistant row appears once the Org is
@@ -25,7 +25,6 @@ struct MainShellView: View {
     @StateObject private var chrome: StateFlowObserver<ChromeSpec>
     /// The Active Account's session-expired flag (#297) — drives the read-surface "Session expired" banner.
     @StateObject private var sessionExpired: StateFlowObserver<KotlinBoolean>
-    @State private var showMore = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     init(component: MainShellComponent, onBrainDump: @escaping () -> Void) {
@@ -55,29 +54,23 @@ struct MainShellView: View {
         return title.isEmpty ? activeName : title
     }
 
+    /// Whether the current spec still carries the capture pair (Brain dump + New). It is dropped while the
+    /// Tasks tree is in move mode — see the carve-out in `windowToolbar`.
+    private var specHasCapture: Bool {
+        (0..<Int(ShellBridgeKt.chromeActionCount(spec: chrome.value))).contains {
+            ShellBridgeKt.chromeActionKind(spec: chrome.value, index: Int32($0)) == "New"
+        }
+    }
+
     var body: some View {
-        Group {
-            if sizeClass != .compact {
-                regularLayout
-            } else {
-                compactLayout
-            }
-        }
-        .background(colors.background.ignoresSafeArea())
-        .sheet(isPresented: overlayPresented) { overlayContent }
+        splitLayout
+            .background(colors.background.ignoresSafeArea())
+            .sheet(isPresented: overlayPresented) { overlayContent }
     }
 
-    // MARK: Layouts
+    // MARK: Layout
 
-    private var compactLayout: some View {
-        VStack(spacing: 0) {
-            topBar
-            bodyWithFab
-            bottomBar
-        }
-    }
-
-    private var regularLayout: some View {
+    private var splitLayout: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
         } detail: {
@@ -92,10 +85,13 @@ struct MainShellView: View {
         }
     }
 
-    /// The window's native title-bar actions (macOS): the account switcher sits leading next to the
-    /// sidebar toggle; Search · Brain dump · New task trail to the top-right (New rightmost). This is
-    /// the desktop counterpart of the Android shell chrome's trailing glyph row — Brain dump opens the
-    /// on-device Extractor (the same sheet as the ⌘⇧E menu), New mirrors the FAB's pre-dating behaviour.
+    /// The window's native title-bar actions (macOS): the sidebar toggle, the drilled ← back and the account
+    /// switcher sit leading; Search then the shell-computed `ChromeSpec.actions` trail to the top-right.
+    /// This is the desktop counterpart of the Android shell chrome's trailing glyph row.
+    ///
+    /// Every button carries BOTH a `.help` tooltip and an explicit `.accessibilityLabel` (#368 G23): an
+    /// icon-only title-bar button genuinely needs the tooltip, but `.help` alone lands as a VoiceOver
+    /// *hint*, which left these buttons unnamed.
     @ToolbarContentBuilder
     private var windowToolbar: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
@@ -105,6 +101,7 @@ struct MainShellView: View {
                 Image(systemName: "sidebar.leading")
             }
             .help(L.string("shell_toggle_sidebar"))
+            .accessibilityLabel(L.string("shell_toggle_sidebar"))
         }
         // Drilled into a tier-3 detail (Plan task / Settings category): a ← back that pops via the shell's
         // onBack, mirroring the iOS/Android chrome's leading affordance.
@@ -119,33 +116,75 @@ struct MainShellView: View {
             ToolbarItem(placement: .navigation) { accountSwitcher }
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            // Search is NOT a ChromeActionKind (the shared catalog is Refresh / BrainDump / New), so it
+            // stays the shell's own button, leading the group exactly as it always has.
             Button { ShellBridgeKt.openSearchOverlay(component: component) } label: {
                 Image(systemName: "magnifyingglass")
             }
             .help(L.string("common_search"))
-            // Create actions belong to a Destination root, not a drilled detail (matches ChromeSpec.actions).
-            if !drilled {
-                Button(action: onBrainDump) {
-                    Image(systemName: "brain.head.profile")
+            .accessibilityLabel(L.string("common_search"))
+
+            // The shell-computed actions (#368 G21) — the twin of iOS's `ChromeToolbar`: kind → glyph +
+            // handler, in spec order. This replaced a hardcoded pair behind a hand-rolled `if !drilled`,
+            // which meant any *new* ChromeActionKind would silently never appear on macOS, and which lost
+            // Plan's Refresh action outright. `drilled` needs no hand-check now: a drilled chrome carries
+            // no actions at all (`DefaultMainShellComponent.drilledChrome`).
+            ForEach(0..<Int(ShellBridgeKt.chromeActionCount(spec: chrome.value)), id: \.self) { i in
+                let index = Int32(i)
+                let kind = ShellBridgeKt.chromeActionKind(spec: chrome.value, index: index)
+                if let glyph = Self.actionGlyph(kind) {
+                    Button {
+                        // Brain dump is the ONE kind macOS does not route through the shared handler:
+                        // ChromeActionKind.BrainDump opens `OverlayRoute.BrainDump`, and macOS has neither a
+                        // BrainDumpView nor an `overlayBrainDump` bridge accessor (Tranche 5 of #368) — so
+                        // invoking it would occupy the shared overlay slot with nothing on screen and no way
+                        // to reach `dismissOverlay()`. macOS's Brain dump is instead the on-device
+                        // `DraftExtractorView` sheet that `onBrainDump` presents (the same one as ⌘⇧E).
+                        if kind == "BrainDump" { onBrainDump() }
+                        else { ShellBridgeKt.chromeInvoke(spec: chrome.value, index: index) }
+                    } label: {
+                        Image(systemName: glyph)
+                    }
+                    .help(Self.actionLabel(kind))
+                    .accessibilityLabel(Self.actionLabel(kind))
                 }
-                .help(L.string("braindump_title"))
-                Button(action: onNewTapped) {
-                    Image(systemName: "plus")
-                }
-                .help(L.string("shell_drawer_new_task"))
+            }
+
+            // DELIBERATE macOS carve-out — do not "fix" this by editing the shared spec. The shell drops the
+            // capture pair while the Tasks tree is in move mode (`rootChrome(…, capture = it.moveMode ==
+            // null)`) because on a PHONE the FAB pair sits bottom-centre, directly on top of the modal move
+            // bar. A title-bar button covers nothing, so macOS re-adds the pair whenever a Destination root's
+            // spec omitted it. The suppression is computed in commonMain, so Swift cannot simply "ignore"
+            // it — the actions never arrive, and this union is the only way to render them. `onNewTapped`
+            // reproduces the spec's New handler, Calendar pre-dating (#74) included.
+            if !drilled && !specHasCapture {
+                Button(action: onBrainDump) { Image(systemName: "brain.head.profile") }
+                    .help(L.string("braindump_title"))
+                    .accessibilityLabel(L.string("braindump_title"))
+                Button(action: onNewTapped) { Image(systemName: "plus") }
+                    .help(L.string("shell_drawer_new_task"))
+                    .accessibilityLabel(L.string("shell_drawer_new_task"))
             }
         }
     }
 
-    private var bodyWithFab: some View {
-        ZStack(alignment: .bottomTrailing) {
-            destinationBody
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // No create affordance when drilled into a detail (matches ChromeSpec.actions / the toolbar).
-            if !drilled {
-                newFab
-                    .padding(Layout.gutter)
-            }
+    /// The SF Symbol for a `ChromeActionKind` (mirrors `ShellChrome`'s glyph switch). Brain dump keeps the
+    /// macOS `brain.head.profile` — the on-device Extractor — NOT iOS's `waveform`, which stands for a
+    /// recorder macOS does not have. `nil` means "no macOS surface", so the button is simply not drawn.
+    private static func actionGlyph(_ kind: String) -> String? {
+        switch kind {
+        case "Refresh": return "arrow.clockwise"
+        case "New": return "plus"
+        case "BrainDump": return "brain.head.profile"
+        default: return nil
+        }
+    }
+
+    private static func actionLabel(_ kind: String) -> String {
+        switch kind {
+        case "Refresh": return L.string("common_refresh")
+        case "BrainDump": return L.string("braindump_title")
+        default: return L.string("shell_drawer_new_task")
         }
     }
 
@@ -155,18 +194,27 @@ struct MainShellView: View {
         let child = active
         return Group {
             if let plan = ShellBridgeKt.destPlan(child: child) {
-                PlanHostView(plan: plan)
+                // The dashboard's "See everything ›" link routes to the whole forest, which `PlanComponent`
+                // has no intent for — the Tasks Destination *is* the forest, so only the shell can honour it
+                // (#368 G16). iOS leaves the link inert for exactly this reason; macOS hands it down.
+                PlanHostView(plan: plan) { component.selectDestination(destination: Destination.tasks) }
             } else if let calendar = ShellBridgeKt.destCalendar(child: child) {
                 CalendarView(component: calendar)
             } else if let tasks = ShellBridgeKt.destTasks(child: child) {
                 TasksScreen(root: ShellBridgeKt.tasksRoot(component: tasks))
             } else if let assistant = ShellBridgeKt.destAssistant(child: child) {
                 AssistantView(component: assistant)
+            } else if let activity = ShellBridgeKt.destActivity(child: child) {
+                // The cross-surface action ledger (#260) — real since the shell started building a live
+                // ActivityComponent; before #368 this Destination dead-ended on the Coming soon body below
+                // even though a populated feed was sitting behind it.
+                ActivityView(component: activity)
             } else if let profile = ShellBridgeKt.destProfile(child: child) {
                 ProfileView(component: profile)
             } else if let settings = ShellBridgeKt.destSettings(child: child) {
                 SettingsView(component: settings)
             } else {
+                // Inbox is the last Destination without a macOS surface (brain-dump capture, Tranche 5).
                 EmptyStateView(title: L.format("shell_coming_soon_title", activeName), message: L.string("shell_coming_soon_body_brief"))
             }
         }
@@ -180,37 +228,6 @@ struct MainShellView: View {
     }
 
     // MARK: Shell chrome
-
-    private var topBar: some View {
-        HStack(spacing: 8) {
-            if drilled {
-                Button { _ = component.onBack() } label: {
-                    Image(systemName: "chevron.backward").font(.title3).foregroundStyle(colors.onSurface)
-                }
-                .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
-                .accessibilityLabel(L.string("common_back"))
-            } else if accounts.accounts.count > 1 {
-                accountSwitcher
-            }
-            // The foreground surface title (Cand 1) — the compact twin of the regular layout's window title.
-            Text(barTitle)
-                .font(.headline)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .foregroundStyle(colors.onSurface)
-            Spacer()
-            Button { ShellBridgeKt.openSearchOverlay(component: component) } label: {
-                Image(systemName: "magnifyingglass")
-                    .font(.title3)
-                    .foregroundStyle(colors.onSurface)
-            }
-            .frame(minWidth: Layout.minTouchTarget, minHeight: Layout.minTouchTarget)
-            .accessibilityLabel(L.string("common_search"))
-        }
-        .padding(.horizontal, 12)
-        .frame(minHeight: 48)
-        .background(colors.surface)
-    }
 
     private var accountSwitcher: some View {
         Menu {
@@ -228,20 +245,9 @@ struct MainShellView: View {
         .accessibilityLabel(L.string("shell_switch_account_cd"))
     }
 
-    private var newFab: some View {
-        Button { onNewTapped() } label: {
-            Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(colors.onPrimary)
-                .frame(width: 56, height: 56)
-                .background(colors.primary, in: Circle())
-                .shadow(radius: 4, y: 2)
-        }
-        .accessibilityLabel(L.string("shell_new"))
-    }
-
+    /// The toolbar's New handler — also the carve-out's stand-in for the spec's own New action.
     private func onNewTapped() {
-        // On Calendar the FAB pre-dates New to the selected day (#74); elsewhere it opens an undated form.
+        // On Calendar New pre-dates to the selected day (#74); elsewhere it opens an undated form.
         if let calendar = ShellBridgeKt.destCalendar(child: active) {
             calendar.onNewForSelectedDay()
         } else {
@@ -249,58 +255,7 @@ struct MainShellView: View {
         }
     }
 
-    // MARK: Bottom bar (compact) — 3 Primary + More overflow
-
-    private var bottomBar: some View {
-        HStack(spacing: 0) {
-            ForEach(primaryDestinations) { dest in
-                barItem(dest)
-            }
-            moreItem
-        }
-        .frame(height: 52)
-        .background(colors.surface)
-        .overlay(Rectangle().frame(height: 0.5).foregroundStyle(colors.outlineVariant), alignment: .top)
-    }
-
-    @ViewBuilder
-    private func barItem(_ dest: Destination) -> some View {
-        let name = ShellBridgeKt.destinationName(destination: dest)
-        let selected = name == activeRawName
-        Button { component.selectDestination(destination: dest) } label: {
-            navItemLabel(name: L.destinationLabel(name), system: icon(name), selected: selected)
-        }
-        .accessibilityLabel(L.destinationLabel(name))
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    private var moreItem: some View {
-        let selected = !ShellBridgeKt.destinationIsPrimary(destination: ShellBridgeKt.destinationOf(child: active))
-        return Button { showMore = true } label: {
-            navItemLabel(name: L.string("shell_more"), system: "ellipsis", selected: selected)
-        }
-        .accessibilityLabel(L.string("shell_more"))
-        .confirmationDialog(L.string("shell_more"), isPresented: $showMore, titleVisibility: .visible) {
-            ForEach(secondaryDestinations) { dest in
-                Button(L.destinationLabel(ShellBridgeKt.destinationName(destination: dest))) {
-                    component.selectDestination(destination: dest)
-                }
-            }
-        }
-    }
-
-    private func navItemLabel(name: String, system: String, selected: Bool) -> some View {
-        VStack(spacing: 3) {
-            Image(systemName: system).font(.system(size: 20))
-            Text(name).font(.caption2)
-        }
-        .foregroundStyle(selected ? colors.primary : colors.inkMuted)
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: Layout.minTouchTarget)
-        .contentShape(Rectangle())
-    }
-
-    // MARK: Sidebar (regular)
+    // MARK: Sidebar
 
     private var sidebar: some View {
         // Always-labelled rows. The min column width fits a full label so they never truncate; collapse
@@ -313,7 +268,10 @@ struct MainShellView: View {
                     Label(L.destinationLabel(name), systemImage: icon(name))
                         .foregroundStyle(selected ? colors.primary : colors.onSurface)
                 }
-                .help(L.destinationLabel(name))
+                // Which row is current was conveyed by colour alone (#368 G23). The trait says it out loud.
+                // There is deliberately no `.help` here: it would only repeat the row's own visible label,
+                // and macOS reads `.help` as the VoiceOver hint — so the name was announced twice.
+                .accessibilityAddTraits(selected ? [.isSelected] : [])
                 .listRowBackground(selected ? colors.primaryContainer : Color.clear)
             }
         }
@@ -359,19 +317,19 @@ struct MainShellView: View {
     // MARK: Destination registry helpers
 
     private var allDestinations: [Destination] { navDestinations.destinations }
-    private var primaryDestinations: [Destination] {
-        navDestinations.destinations.filter { ShellBridgeKt.destinationIsPrimary(destination: $0) }
-    }
-    private var secondaryDestinations: [Destination] {
-        navDestinations.destinations.filter { !ShellBridgeKt.destinationIsPrimary(destination: $0) }
-    }
 
+    /// The sidebar glyph per Destination. Deliberately a little bolder than `DefernoIcon`'s set (`house.fill`
+    /// vs `.home`'s `house`) — a sidebar row wants weight. Inbox and Activity were falling through to the
+    /// `circle` backstop, drawing two anonymous dots (#368); they take exactly the symbols
+    /// `DefernoIcon.inbox` / `.activity` declare, so the two sources agree.
     private func icon(_ name: String) -> String {
         switch name {
         case "Plan": return "house.fill"
         case "Calendar": return "calendar"
         case "Tasks": return "list.bullet"
         case "Assistant": return "sparkles"
+        case "Inbox": return "tray"
+        case "Activity": return "bell"
         case "Profile": return "person.fill"
         case "Settings": return "gearshape.fill"
         default: return "circle"

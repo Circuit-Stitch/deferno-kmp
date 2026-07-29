@@ -1,15 +1,23 @@
 package com.circuitstitch.deferno.macos.bridge
 
 import com.circuitstitch.deferno.feature.calendar.CalendarState
+import com.circuitstitch.deferno.feature.profile.ProfileComponent
 import com.circuitstitch.deferno.feature.profile.ProfileState
+import com.circuitstitch.deferno.feature.settings.InferenceEngineSettings
 import com.circuitstitch.deferno.feature.settings.SettingsCategory
 import com.circuitstitch.deferno.feature.settings.SettingsComponent
 import com.circuitstitch.deferno.feature.settings.SpeechEngineSettings
+import com.circuitstitch.deferno.feature.settings.StorageProviderSettings
 import com.circuitstitch.deferno.feature.assistant.AssistantComponent
 import com.circuitstitch.deferno.feature.assistant.AssistantError
 import com.circuitstitch.deferno.feature.assistant.AssistantState
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.SearchState
+import com.circuitstitch.deferno.core.agent.InferenceEngineAvailability
+import com.circuitstitch.deferno.core.agent.InferenceEngineId
+import com.circuitstitch.deferno.core.agent.InferenceEngineOrigin
+import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
+import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.ChatMessage
@@ -21,6 +29,8 @@ import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.macos.TasksRoot
+import com.circuitstitch.deferno.shell.ActivityAttribution
+import com.circuitstitch.deferno.shell.ActivityFeedRow
 import com.circuitstitch.deferno.shell.AuthShellComponent
 import com.circuitstitch.deferno.shell.ChromeActionKind
 import com.circuitstitch.deferno.shell.ChromeSpec
@@ -35,6 +45,7 @@ import com.circuitstitch.deferno.shell.FeedbackState
 import com.circuitstitch.deferno.shell.FeedbackStatus
 import com.circuitstitch.deferno.shell.MainShellComponent
 import com.circuitstitch.deferno.shell.NavSlot
+import com.circuitstitch.deferno.shell.NewComponent
 import com.circuitstitch.deferno.shell.NewState
 import com.circuitstitch.deferno.shell.NewStatus
 import com.circuitstitch.deferno.shell.OverlayRoute
@@ -43,11 +54,17 @@ import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.reinterpret
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 import platform.Foundation.NSData
 import kotlin.time.Instant
 
@@ -91,6 +108,66 @@ fun chromeActionKind(spec: ChromeSpec, index: Int): String = when (spec.actions[
 
 /** Run the trailing action at [index] (a shell/component handler — e.g. New opens the create overlay). */
 fun chromeInvoke(spec: ChromeSpec, index: Int) = spec.actions[index].onInvoke()
+
+// ---------------------------------------------------------------------------------------------------
+// Settings → Storage + Data & Privacy (#211/#313/#314, ADR-0041). Kept IDENTICAL to
+// app/iosApp .../ios/bridge/ShellBridge.kt — only the picker on the Swift side differs (macOS uses
+// NSSavePanel/NSOpenPanel where iOS uses the share sheet + document picker).
+// ---------------------------------------------------------------------------------------------------
+
+/** The current "Brain dump notifications" opt-in (#271), as a snapshot Bool for the Settings toggle. */
+fun brainDumpNotificationsEnabled(component: SettingsComponent): Boolean = component.brainDumpNotificationsEnabled.value
+
+/** Persist the "Brain dump notifications" opt-in (#271). The View requests OS auth on enable (the consent). */
+fun setBrainDumpNotificationsEnabled(component: SettingsComponent, enabled: Boolean) =
+    component.onBrainDumpNotificationsChanged(enabled)
+
+/** The active storage provider's display name for the Settings > Storage read-out (#211). */
+fun storageActiveProviderName(state: StorageProviderSettings): String = when (state.selected) {
+    StorageProviderId.OnDevice -> "On-device"
+    StorageProviderId.DefernoBackend -> "Deferno-hosted"
+    StorageProviderId.Dropbox -> "Dropbox"
+    StorageProviderId.GoogleDrive -> "Google Drive"
+    else -> state.selected.value
+}
+
+/** The current "keep brain-dump recordings" choice (#211), as a snapshot Bool for the Settings toggle. */
+fun keepBrainDumpRecordingsEnabled(component: SettingsComponent): Boolean = component.keepBrainDumpRecordings.value
+
+/** Persist the "keep brain-dump recordings" choice (#211) — device-local, never synced. */
+fun setKeepBrainDumpRecordings(component: SettingsComponent, enabled: Boolean) =
+    component.onKeepBrainDumpRecordingsChanged(enabled)
+
+/**
+ * Build the on-device Backup zip (#313, ADR-0041) and hand it to Swift as `NSData` for `NSSavePanel`.
+ * The local-store read is quick, so it runs in a one-shot [Dispatchers.Main] coroutine; [onData] then gets
+ * the zip bytes. Mirrors `onDeviceAttachmentData` (Bridge.kt) — `SettingsComponent.buildBackupZip` suspends.
+ */
+fun exportBackup(component: SettingsComponent, onData: (NSData?) -> Unit) {
+    CoroutineScope(Dispatchers.Main).launch {
+        onData(component.buildBackupZip().toNSData())
+    }
+}
+
+/**
+ * Restore items from an on-device Backup zip (#314, ADR-0041) the macOS open panel resolved: copy the
+ * picked file's [data] across (`NSData`→`ByteArray`, the same idiom as `addTaskAttachment`) and import it
+ * on the offline outbox. The outcome is reported to Swift as a stable `(kind, count)` pair — Swift switches
+ * on the [String] kind rather than a flattened Kotlin/Native class name — so it can show the right message
+ * ("restored N", "update Deferno", "too old", "couldn't read this file"). The reverse of [exportBackup].
+ */
+@OptIn(ExperimentalForeignApi::class)
+fun importBackup(component: SettingsComponent, data: NSData, onResult: (kind: String, count: Int) -> Unit) {
+    val bytes = data.bytes?.reinterpret<ByteVar>()?.readBytes(data.length.toInt()) ?: ByteArray(0)
+    CoroutineScope(Dispatchers.Main).launch {
+        when (val result = component.importBackup(bytes)) {
+            is ImportResult.Restored -> onResult("restored", result.count)
+            ImportResult.ForceUpgrade -> onResult("force_upgrade", 0)
+            ImportResult.Unsupported -> onResult("unsupported", 0)
+            ImportResult.Malformed -> onResult("malformed", 0)
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Sealed discriminators — Swift reads these instead of casting Kotlin/Native flattened class names
@@ -254,6 +331,10 @@ fun profileUser(state: ProfileState): User? = (state as? ProfileState.SignedIn)?
 fun profileIsLoading(state: ProfileState): Boolean = state is ProfileState.Loading
 fun profileIsReauthRequired(state: ProfileState): Boolean = state is ProfileState.ReauthRequired
 fun profileIsUnavailable(state: ProfileState): Boolean = state is ProfileState.Unavailable
+// The Active Account's time zone, moved into Profile (#72). A snapshot read of the offline-first
+// `timeZone` flow (a String? can't cross as a class-bound SKIE observer); the Profile body re-renders
+// on each ProfileState change, by which point the local settings cache has populated it.
+fun profileTimeZone(component: ProfileComponent): String? = component.timeZone.value
 
 fun newStatusIsSubmitting(state: NewState): Boolean = state.status is NewStatus.Submitting
 fun newStatusIsOffline(state: NewState): Boolean = state.status is NewStatus.Offline
@@ -304,6 +385,13 @@ fun accountKey(account: Account): String = account.id.value
 /** Switch the Active Account without Swift constructing an `AccountId` (its `init` throws on blank). */
 fun switchToAccount(component: MainShellComponent, account: Account) = component.switchAccount(account.id)
 
+// The Settings → Account switcher (#368/G7). `accounts`/`activeAccountId` are read as snapshots: switching or
+// adding an account re-keys the whole Main shell (destroying this Settings View), so live updates aren't
+// needed. `switchSettingsAccount` reads the Account's header-erased value-class id (like switchToAccount).
+fun settingsAccounts(component: SettingsComponent): List<Account> = component.accounts.value
+fun settingsActiveAccountKey(component: SettingsComponent): String = component.activeAccountId.value
+fun switchSettingsAccount(component: SettingsComponent, account: Account) = component.onSwitchAccount(account.id)
+
 /** Stable String identity of a speech-engine option (SpeechEngineId value class is header-erased). */
 fun speechOptionKey(option: SpeechEngineOption): String = option.id.value
 
@@ -313,6 +401,42 @@ fun speechSelectedKey(settings: SpeechEngineSettings): String = settings.selecte
 /** Select a speech engine without Swift naming the `SpeechEngineId` value class. */
 fun selectSpeechEngine(component: SettingsComponent, option: SpeechEngineOption) =
     component.onSpeechEngineSelected(option.id)
+
+// Agent / inference-engine settings (#150) — index-based accessors so no core:agent type crosses into
+// Swift (core:agent isn't in the framework's `export` list, unlike core:speech). Mirrors Android's
+// AgentDetail: an "Off" row first, then each registered engine, a cloud engine shown disabled until the
+// Account is entitled (RequiresPremium). Kept IDENTICAL to app/iosApp — but note the macOS OPTION SET is
+// smaller: `Koog` publishes no macosArm64 klib, so `MacosAgentBindings` seeds the on-device Foundation
+// Models entry only, with no cloud engine (#368 G3, ADR-0029 Phase 3).
+fun inferenceOffSelected(state: InferenceEngineSettings): Boolean = state.selected == InferenceEngineId.Off
+fun inferenceSelectOff(component: SettingsComponent) = component.onInferenceEngineSelected(InferenceEngineId.Off)
+fun inferenceOptionCount(state: InferenceEngineSettings): Int = state.options.size
+fun inferenceOptionSelected(state: InferenceEngineSettings, index: Int): Boolean =
+    state.selected == state.options[index].id
+fun inferenceOptionLocked(state: InferenceEngineSettings, index: Int): Boolean =
+    state.options[index].availability is InferenceEngineAvailability.RequiresPremium
+fun inferenceSelectOption(component: SettingsComponent, state: InferenceEngineSettings, index: Int) =
+    component.onInferenceEngineSelected(state.options[index].id)
+fun inferenceOptionLabel(state: InferenceEngineSettings, index: Int): String =
+    when (val id = state.options[index].id) {
+        InferenceEngineId.DefernoCloud -> "Deferno cloud AI"
+        // Humanise an unlabelled id rather than showing the raw slug — this is where macOS DIVERGES from
+        // iOS on purpose. iOS's `else` returns `id.value` verbatim, which is harmless there because its
+        // only unlabelled options never surface. macOS's ONE registered engine is
+        // `on-device-foundation-models`, so the verbatim arm would make the Agent chooser's single real
+        // row read "on-device-foundation-models". This is Android's fallback (SettingsScreen.kt).
+        else -> id.value.split('-').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+    }
+fun inferenceOptionNote(state: InferenceEngineSettings, index: Int): String {
+    val option = state.options[index]
+    return when (option.availability) {
+        is InferenceEngineAvailability.RequiresPremium -> "Premium — not available for your account yet"
+        is InferenceEngineAvailability.Available -> when (option.origin) {
+            InferenceEngineOrigin.OnDevice -> "Runs on this device"
+            InferenceEngineOrigin.DefernoCloud -> "Sends your text off-device to Deferno's hosted AI"
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Calendar — LocalDate is an opaque Kotlin type; Swift gets grid days from here & passes them back
@@ -390,6 +514,76 @@ fun openSearchOverlay(component: MainShellComponent) = component.openOverlay(Ove
 
 /** Open the New create overlay, undated (the shell FAB on a non-Calendar Destination, #71). */
 fun openNewOverlay(component: MainShellComponent) = component.openOverlay(OverlayRoute.New(null))
+
+// ---------------------------------------------------------------------------------------------------
+// Activity Destination (#260) — the Secondary Destination the macOS sidebar now reaches (#368 G9). The
+// ledger was already live on macOS (`RootComponent.kt` wires `observeActivity = session::observeActivity`);
+// only these accessors and the SwiftUI feed were missing. Kept IDENTICAL to
+// app/iosApp .../ios/bridge/ShellBridge.kt. (The sibling Inbox Destination stays out of reach until the
+// macOS brain-dump capture host lands — Tranche 5 of #368 — since its feed is empty by construction.)
+// ---------------------------------------------------------------------------------------------------
+
+fun destActivity(child: MainShellComponent.DestinationChild) =
+    (child as? MainShellComponent.DestinationChild.Activity)?.component
+
+// The typed feed summary, cracked open for Swift to localize (#327). [activitySummaryVerb] is the coarse
+// verb as a stable enum-name token ("Created" / "UpdatedTask" / …); [activitySummaryKindToken] is the
+// lowercase item-kind it acted on ("task" / "chore" / "habit" / "event") for the kind-qualified verbs,
+// else null. The View maps these to the shared string catalog.
+fun activitySummaryVerb(row: ActivityFeedRow): String = row.summaryInfo.verb.name
+fun activitySummaryKindToken(row: ActivityFeedRow): String? = row.summaryInfo.kindToken
+
+/**
+ * The "who" chip's attribution as a stable token — `ActivityAttribution.token`, unwrapped for Swift
+ * (#364).
+ *
+ * Already **decided**: `ActivityAttribution` settles whether the server's actor or the acting surface
+ * names a row, so this hands Swift the answer rather than the inputs. A surface flattens to its own name
+ * ("Mobile" / "Website" / "Mcp" / "Api" / "System" / "Unknown"), so the Apple switch is the same flat map
+ * over the same tokens it always was — plus "Assistant" and "Integration", which cannot collide with a
+ * source name. The alternative — exporting actor kind and source separately — meant writing the
+ * precedence rule a second time in Swift, where it would drift from the Compose one unnoticed.
+ */
+fun activityAttributionToken(row: ActivityFeedRow): String = row.attribution.token
+
+/** The integration that drove an `"Integration"` row (e.g. "github"), where the server named one. */
+fun activityAttributionProvider(row: ActivityFeedRow): String? =
+    (row.attribution as? ActivityAttribution.Integration)?.provider
+
+/** A render-ready "when" label for an Activity row (Instant → local "yyyy-MM-dd HH:mm"). */
+fun activityWhenLabel(row: ActivityFeedRow): String {
+    val dt = row.displayAt.toLocalDateTime(TimeZone.currentSystemDefault())
+    val hh = dt.hour.toString().padStart(2, '0')
+    val mm = dt.minute.toString().padStart(2, '0')
+    return "${dt.date} $hh:$mm"
+}
+
+/**
+ * The old→new diff rows for a tapped Activity row's [ChangeDiffSheet] — the typed twin of Compose
+ * `row.changes.toDiffRows()`. Reuses the Trail's [diffFieldToken]/[diffSide] mapping (Bridge.kt, same
+ * module) so both surfaces render field diffs identically; Unknown fields dropped, order preserved, values
+ * RAW (Swift formats per `TrailDiffSide`/`fieldToken` via `L.diffValueText`).
+ */
+fun activityRowDiffRows(row: ActivityFeedRow): List<TrailDiffRow> =
+    row.changes.mapNotNull { change ->
+        val token = diffFieldToken(change.field) ?: return@mapNotNull null
+        TrailDiffRow(fieldToken = token, before = diffSide(change.before), after = diffSide(change.after))
+    }
+
+/** Whether an Activity row resolves to a Task — the only kind the sheet deep-links as "Open Task #N"
+ *  (a resolved Habit/Chore/Event would route wrong, so those keep the generic "Open item"). */
+fun activityRowIsTask(row: ActivityFeedRow): Boolean = row.itemKind == ItemKind.Task
+
+// ---------------------------------------------------------------------------------------------------
+// New form — deadline time-of-day (#348). LocalTime isn't built in Swift, so these seams own it. Without
+// them every item created on a Mac silently posted `deadlineTimeOfDay = null` (#368 G12).
+// ---------------------------------------------------------------------------------------------------
+
+fun newDeadlineTimeHour(state: NewState): Int = state.deadlineTime?.hour ?: -1
+fun newDeadlineTimeMinute(state: NewState): Int = state.deadlineTime?.minute ?: -1
+fun setNewDeadlineTime(component: NewComponent, hour: Int, minute: Int) =
+    component.setDeadlineTime(LocalTime(hour, minute))
+fun clearNewDeadlineTime(component: NewComponent) = component.setDeadlineTime(null)
 
 /** The active Main shell, or null when the Auth shell is foreground. */
 private fun RootComponent.activeMain(): MainShellComponent? =

@@ -29,95 +29,46 @@ struct SessionExpiredBanner: View {
     }
 }
 
-/// A small, readable badge for a Task's working state. The label is plain text so it reads correctly
-/// under VoiceOver; colour is reinforcement, never the sole signal (WCAG).
-struct WorkingStateBadge: View {
-    let state: WorkingState
-
-    var body: some View {
-        Text(state.label)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(state.badgeForeground)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .background(state.badgeBackground, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .accessibilityElement()
-            .accessibilityLabel(L.format("common_status_a11y", state.label))
-    }
-}
-
-/// A small mono dependency badge on a tree row (#290) — the macOS twin of the iOS `TreeChip` (which
-/// macOS lacks). `.neutral` is the quiet "Blocked" pill (muted ink); `.accent` is the amber "Blocker"
-/// badge. `semanticLabel` is spoken in place of the uppercased glyphs.
+/// A small mono dependency badge on a tree row (#290) — the macOS twin of the iOS `TreeChip`.
+/// `.neutral` is the quiet "Blocked" pill (muted ink); `.accent` is the amber "Blocker" badge; `.warn`
+/// is the error-toned chip the Task-detail subtask list uses for a blocked child (#368 G17c/G24 — the
+/// tone macOS was missing, which is why that chip rendered as an indistinguishable grey pill).
+/// `semanticLabel` is spoken in place of the uppercased glyphs.
 struct DependencyBadge: View {
-    enum Tone { case neutral, accent }
+    enum Tone { case neutral, accent, warn }
 
     let text: String
     var tone: Tone = .neutral
     let semanticLabel: String
     @Environment(\.defernoColors) private var colors
 
+    // Switches, not ternaries: the pair these replaced read `tone == .accent ? A : B`, which would have
+    // compiled cleanly against a new third case and silently rendered it as `.neutral`.
+    private var foreground: Color {
+        switch tone {
+        case .neutral: return colors.inkMuted
+        case .accent: return colors.amberDeep
+        case .warn: return colors.error
+        }
+    }
+
+    private var background: Color {
+        switch tone {
+        case .neutral: return colors.surfaceVariant
+        case .accent: return colors.primaryContainer
+        case .warn: return colors.errorContainer
+        }
+    }
+
     var body: some View {
         Text(text.uppercased())
             .font(.defernoMono(10, weight: .semibold))
             .tracking(0.6)
-            .foregroundStyle(tone == .accent ? colors.amberDeep : colors.inkMuted)
+            .foregroundStyle(foreground)
             .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(
-                tone == .accent ? colors.primaryContainer : colors.surfaceVariant,
-                in: RoundedRectangle(cornerRadius: 5, style: .continuous)
-            )
+            .background(background, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
             .accessibilityElement()
             .accessibilityLabel(semanticLabel)
-    }
-}
-
-/// A tappable Task row: title, optional human `ref` in a monospaced font, a pinned marker, and the
-/// working-state badge. Flat (the list supplies the divider), one large touch target, spoken as
-/// "<title>, <status>". Shared by the Task list, the tree, and (without the pin) the Plan.
-struct TaskRow: View {
-    let task: Task
-    var showsPin: Bool = true
-    let onTap: () -> Void
-    @Environment(\.defernoColors) private var colors
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        if showsPin && task.pinned {
-                            Text("★").foregroundStyle(.orange)
-                        }
-                        Text(task.title)
-                            .font(.headline)
-                            // Blocked mutes (but doesn't strike) like the tree row (#290/#292); a blocked
-                            // item manually added to the plan is retained, just flagged.
-                            .foregroundStyle(task.blocked ? colors.inkMuted : colors.onSurface)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                        if task.blocked {
-                            DependencyBadge(text: L.string("common_blocked"), tone: .neutral, semanticLabel: L.string("common_blocked"))
-                        }
-                    }
-                    if let ref = task.ref {
-                        Text(ref)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 12)
-                WorkingStateBadge(state: task.workingState)
-            }
-            .frame(minHeight: Layout.rowMinHeight)
-            .padding(.horizontal, Layout.gutter)
-            .padding(.vertical, Layout.rowVerticalPadding)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(task.blocked ? "\(task.title), blocked, \(task.workingState.label)" : "\(task.title), \(task.workingState.label)")
-        .accessibilityHint(task.pinned && showsPin ? L.string("common_pinned") : "")
     }
 }
 
@@ -272,6 +223,7 @@ struct PaneHeader<Trailing: View>: View {
     /// entry pane), left off elsewhere so it brands the home without repeating on every pane.
     let showsBrand: Bool
     let trailing: () -> Trailing
+    @Environment(\.defernoColors) private var colors
 
     init(title: String, onBack: (() -> Void)? = nil, showsBrand: Bool = false, @ViewBuilder trailing: @escaping () -> Trailing) {
         self.title = title
@@ -298,7 +250,7 @@ struct PaneHeader<Trailing: View>: View {
         }
         .padding(.horizontal, 8)
         .frame(minHeight: 56)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(colors.surface)
     }
 }
 
@@ -329,13 +281,14 @@ struct Brandmark: View {
 struct EmptyStateView: View {
     let title: String
     let message: String
+    @Environment(\.defernoColors) private var colors
 
     var body: some View {
         VStack(spacing: 8) {
             Text(title).font(.title3.weight(.semibold))
             Text(message)
                 .font(.body)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(colors.onSurfaceVariant)
                 .multilineTextAlignment(.center)
         }
         .padding(32)
@@ -347,15 +300,16 @@ struct EmptyStateView: View {
 /// (design-principles.md). Plain text, announced to VoiceOver.
 struct LoadingStrip: View {
     let label: String
+    @Environment(\.defernoColors) private var colors
 
     var body: some View {
         Text(label)
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(colors.onSurfaceVariant)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-            .background(Color(nsColor: .underPageBackgroundColor))
+            .background(colors.surfaceVariant)
             .accessibilityElement()
             .accessibilityLabel(label)
     }

@@ -220,11 +220,11 @@ private struct SearchHitRow: View {
                     if let ref = hit.ref {
                         Text(ref)
                             .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(colors.inkMuted)
                     }
                     // Attachment rollup (#311) — visible so the "biggest attachments" sort is legible.
                     if let summary = attachmentSummary(count: hit.attachmentCount, totalSize: hit.attachmentTotalSize) {
-                        Text(summary).font(.caption).foregroundStyle(.secondary)
+                        Text(summary).font(.caption).foregroundStyle(colors.inkMuted)
                     }
                 }
                 Spacer(minLength: 12)
@@ -233,7 +233,7 @@ private struct SearchHitRow: View {
                 if hit.blocked {
                     DependencyBadge(text: L.string("common_blocked"), tone: .neutral, semanticLabel: L.string("common_blocked"))
                 }
-                Text("›").font(.title3).foregroundStyle(.secondary)
+                DefernoIcon.chevronRight.image(size: 16).foregroundStyle(colors.inkMuted)
             }
             .frame(minHeight: Layout.rowMinHeight)
             .padding(.horizontal, Layout.gutter)

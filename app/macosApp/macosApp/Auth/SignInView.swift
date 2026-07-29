@@ -10,6 +10,9 @@ import SwiftUI
 /// the Active Account and `RootView` swaps this surface for Main.
 struct SignInView: View {
     let component: SignInComponent
+    /// Non-nil only when the Auth shell was re-entered to *add* an account while signed in (#368): renders a
+    /// Cancel-back to the Main shell. Nil on a first sign-in / after sign-out (nothing to return to).
+    let onCancel: (() -> Void)?
     @StateObject private var state: StateFlowObserver<SignInState>
     @Environment(\.defernoColors) private var colors
     @State private var revealed = false
@@ -22,8 +25,10 @@ struct SignInView: View {
     private let showDeveloperOptions = false
     #endif
 
-    init(component: SignInComponent) {
+    // `onCancel` defaults to nil so the first-sign-in call sites stay unchanged.
+    init(component: SignInComponent, onCancel: (() -> Void)? = nil) {
         self.component = component
+        self.onCancel = onCancel
         _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
@@ -36,7 +41,7 @@ struct SignInView: View {
                 Text(L.string("common_app_name"))
                     .font(.largeTitle.weight(.semibold))
                     .foregroundStyle(colors.onSurface)
-                Text(L.string("auth_subtitle_sign_in"))
+                Text(onCancel == nil ? L.string("auth_subtitle_sign_in") : L.string("auth_add_another_account"))
                     .font(.subheadline)
                     .foregroundStyle(colors.inkMuted)
                     .multilineTextAlignment(.center)
@@ -73,6 +78,16 @@ struct SignInView: View {
             }
             .frame(maxWidth: 420)
             .padding(24)
+        }
+        // Add-account re-entry (#368): a Cancel-back to the Main shell. Absent on first sign-in (nowhere to
+        // go). On macOS this is the *only* way out — there is no system back gesture behind it.
+        .overlay(alignment: .topLeading) {
+            if let onCancel {
+                Button(L.string("common_cancel")) { onCancel() }
+                    .foregroundStyle(colors.primary)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+            }
         }
     }
 
