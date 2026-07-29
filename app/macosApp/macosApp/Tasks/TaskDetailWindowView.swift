@@ -37,7 +37,10 @@ struct TaskDetailWindowView: View {
             if let active = model.active {
                 // The root entry has nothing to pop to (the OS chrome closes the window), so hide its
                 // Back; a drilled entry keeps the header Back, which pops via the detail's Closed output.
-                TaskDetailView(component: active, hidesBackControl: !model.canGoBack)
+                // `hostsOverlays: false` — this scene has no shell overlay slot, and the window's stack
+                // drops `Output.BreakdownRequested` (TaskDetailStackComponent), so the "Break this down"
+                // item is suppressed here rather than shipped dead (#368 G10).
+                TaskDetailView(component: active, hidesBackControl: !model.canGoBack, hostsOverlays: false)
                     .id(BridgeKt.detailKey(component: active))
             } else {
                 // No active session at open (signed out) or an unusable id — nothing to show; close.

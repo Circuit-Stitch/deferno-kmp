@@ -176,8 +176,8 @@ internal fun ByteArray.toNSData(): NSData =
  * row was already deleted. `TaskDetailState.onDeviceAttachments` and
  * `TaskDetailComponent.onDeleteOnDeviceAttachment` are plain enough that Swift reads/calls them directly.
  *
- * macOS captures no brain dumps yet (that host is Tranche 5 of #368), so this reads empty today — it is here
- * because the SAME seam serves the synced-attachment path the Task-detail sheet does exercise.
+ * This read was empty on macOS until #368 Tranche 5 landed the capture host; it was carried anyway because
+ * the SAME seam serves the synced-attachment path the Task-detail sheet always exercised. Both are live now.
  */
 fun onDeviceAttachmentData(component: TaskDetailComponent, attachmentId: String, onData: (NSData?) -> Unit) {
     CoroutineScope(Dispatchers.Main).launch {

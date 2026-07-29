@@ -89,10 +89,12 @@ interface MacosDataBindings {
 
     /**
      * "Keep brain-dump recordings" [[App setting]] (#211/#267) — `NSUserDefaults`-backed, sharing the
-     * device-local `deferno_storage` bag with the salvage counter and the notification opt-in. macOS does not
-     * capture brain dumps yet (#368 Tranche 5), but Settings → Storage now *shows* this toggle (#368 G5), and
-     * a toggle whose value dies with the process is worse than no toggle. `DefernoRoot` threads the same
-     * binding into `DefaultRootComponent`, so the Settings surface and the (future) pipeline agree.
+     * device-local `deferno_storage` bag with the salvage counter and the notification opt-in. It landed with
+     * the Settings → Storage toggle (#368 G5), a tranche *before* macOS could capture anything — a toggle
+     * whose value dies with the process is worse than no toggle. The capture pipeline arrived in #368
+     * Tranche 5 and reads this same binding as `BrainDumpPipeline.keepRecordings`
+     * (`app/macosApp/src/macosMain/.../BrainDumpRecording.kt`); `DefernoRoot` threads it into
+     * `DefaultRootComponent` too, so the Settings surface and the pipeline are one source of truth.
      */
     @Provides
     @SingleIn(AppScope::class)
@@ -101,8 +103,9 @@ interface MacosDataBindings {
 
     /**
      * The Salvage-draft `Brain dump #n` counter (#265/#267, [[App setting]]) — `NSUserDefaults`-backed so the
-     * numbering survives relaunch, keeping the three `deferno_storage` bindings symmetric with iOS. Nothing on
-     * macOS writes a salvage draft until the capture host lands (#368 Tranche 5).
+     * numbering survives relaunch, keeping the three `deferno_storage` bindings symmetric with iOS. Live on
+     * macOS since #368 Tranche 5 — `processBrainDumpTake` passes it as the pipeline's `salvageCounter`, so a
+     * take that yields no transcript is numbered from the same sequence across relaunches.
      */
     @Provides
     @SingleIn(AppScope::class)
@@ -111,8 +114,9 @@ interface MacosDataBindings {
 
     /**
      * The "Brain dump notifications" opt-in (#266/#271, [[App setting]], **default off**) — `NSUserDefaults`-backed
-     * now that macOS surfaces the toggle in Settings → Storage (#368 G5). See [keepBrainDumpRecordingsPreference]
-     * on why persistence lands before the capture pipeline does.
+     * now that macOS surfaces the toggle in Settings → Storage (#368 G5). Since #368 Tranche 5 it also gates
+     * the real thing: the pipeline's `BrainDumpNotifier` posts the completion banner only when this reads
+     * enabled, so the toggle and the notifier can never disagree.
      */
     @Provides
     @SingleIn(AppScope::class)

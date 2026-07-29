@@ -1,5 +1,6 @@
 import AppKit
 import Deferno
+import SidecarKit
 import SwiftUI
 import UniformTypeIdentifiers
 import UserNotifications
@@ -218,8 +219,19 @@ struct SettingsView: View {
 
     /// Persist the Brain dump notifications opt-in (#271). Enabling requests OS authorization (the consent);
     /// a denial reverts the toggle so it reflects reality (notifications won't fire) — handled gracefully.
+    ///
+    /// The bundle guard is not defensive padding. On macOS `UNUserNotificationCenter.current()` resolves the
+    /// process's LaunchServices proxy from the enclosing `.app`, and a non-bundled host has none — it raises
+    /// an **uncatchable** NSException, not a Swift error. `SidecarPermissions.requestNotifications` guards the
+    /// identical call for exactly this reason, as does the Kotlin notifier the Brain dump pipeline posts
+    /// through (#368 Tranche 5); this was the one place in the app that touched the hazard bare.
     private func setBrainDumpNotifications(_ on: Bool) {
         if on {
+            guard SidecarPermissions.notificationCenterAvailable else {
+                brainDumpNotifications = false
+                ShellBridgeKt.setBrainDumpNotificationsEnabled(component: component, enabled: false)
+                return
+            }
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
                 DispatchQueue.main.async {
                     brainDumpNotifications = granted
@@ -285,9 +297,10 @@ struct SettingsView: View {
                     .foregroundStyle(colors.inkMuted)
             }
             .font(.subheadline)
-            // The per-recording rows are empty on macOS today — nothing here captures a brain dump yet
-            // (#368 Tranche 5). The seam itself is live (RootComponent wires `onDeviceStorageUsage`), so
-            // the rollup honestly reads "None" rather than the section being faked or hidden.
+            // These per-recording rows were empty through #368 Tranche 4 — the seam was live
+            // (`RootComponent` wires `onDeviceStorageUsage`) but nothing on macOS captured a brain dump, so
+            // the rollup honestly read "None" rather than the section being faked or hidden. **Tranche 5
+            // gave the Mac a recorder**, so retained takes now populate this list for real.
             ForEach(usage.recordings, id: \.id) { rec in
                 recordingRow(taskId: rec.taskId, createdAtEpochMs: rec.createdAtEpochMs, sizeBytes: rec.sizeBytes)
             }

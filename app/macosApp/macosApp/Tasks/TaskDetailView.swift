@@ -14,10 +14,10 @@ import UniformTypeIdentifiers
 /// is shared with the inline pane and the detached window (#196).
 ///
 /// **ATTACHMENTS are live here since #368 G11.** The *synced* half — add (`.fileImporter` → the upload
-/// seam) / view / caption / delete — is the real gap this closed. The *on-device* half (brain-dump
-/// recordings + their player) is ported alongside it but stays empty on macOS: `onDeviceAttachments` is
-/// wired for every platform, and nothing on macOS records a brain dump yet (Tranche 5 of #368). It is
-/// carried anyway so the manage sheet is one shared shape rather than a macOS fork to reconcile later.
+/// seam) / view / caption / delete — is the real gap that closed. The *on-device* half (brain-dump
+/// recordings + their player) was ported alongside it but sat empty on macOS, since nothing here recorded a
+/// brain dump. **#368 Tranche 5 gave the Mac a recorder**, so retained recordings now genuinely appear —
+/// the manage sheet was deliberately carried as one shared shape rather than a macOS fork, and that bet paid.
 struct TaskDetailView: View {
     let component: TaskDetailComponent
     /// Hide the header's Back control. Set at a detached window's root entry (#196, depth 1) — it has
@@ -28,6 +28,12 @@ struct TaskDetailView: View {
     /// adaptive shell bar already shows the ← back; default true keeps the bar for the inline Tasks pane
     /// and the detached detail window. (The connected-parent node is the heading in every case.)
     var showsHeader: Bool = true
+    /// Whether this detail is hosted somewhere that can actually present a shell overlay. False only in the
+    /// detached `task-detail` window (#196): its `TaskDetailStackComponent` drops
+    /// `Output.BreakdownRequested` on the floor, and the window hosts no overlay slot of its own — so
+    /// "Break this down" there would be a menu item that does nothing. Gate it rather than ship a dead
+    /// route; the item is live in the main shell, which is where the Breakdown overlay lives (#368 G10).
+    var hostsOverlays: Bool = true
     @StateObject private var state: StateFlowObserver<TaskDetailState>
     @State private var newLabel = ""
     @State private var newSubtask = ""
@@ -46,7 +52,7 @@ struct TaskDetailView: View {
     @State private var importing = false
     @State private var showingAttachmentsSheet = false
     /// Plays an on-device brain-dump recording (#272) from the bytes the bridge hands back — no network,
-    /// no signed URL. Held here so it isn't deallocated mid-clip. Inert on macOS until brain dump ships.
+    /// no signed URL. Held here so it isn't deallocated mid-clip. Live on macOS since #368 Tranche 5.
     @StateObject private var audioPlayer = OnDeviceAudioPlayer()
     /// The transient confirmation toast (the macOS twin of the iOS `ConfirmationToast` / Android's Toast):
     /// [toastMessage] is the last message and bumping [toastToken] re-arms + re-shows it. See `showToast(_:)`.
@@ -57,10 +63,16 @@ struct TaskDetailView: View {
 
     enum DetailTab { case info, trail }
 
-    init(component: TaskDetailComponent, hidesBackControl: Bool = false, showsHeader: Bool = true) {
+    init(
+        component: TaskDetailComponent,
+        hidesBackControl: Bool = false,
+        showsHeader: Bool = true,
+        hostsOverlays: Bool = true
+    ) {
         self.component = component
         self.hidesBackControl = hidesBackControl
         self.showsHeader = showsHeader
+        self.hostsOverlays = hostsOverlays
         _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
@@ -310,20 +322,24 @@ struct TaskDetailView: View {
     // MARK: - Overflow (Add subtask · Delete)
 
     /// The self-contained detail overflow (ADR-0044) — replaces the old always-visible chips' "Set aside"
-    /// (Dropped now reaches only via the status picker). Add subtask bumps the reveal token; Delete confirms.
+    /// (Dropped now reaches only via the status picker). Break this down opens the on-device impediment
+    /// flow; Add subtask bumps the reveal token; Delete confirms.
     ///
-    /// **"Break this down" is deliberately absent** (it is present on iOS). The intent itself is sound —
-    /// `onBreakdownClicked()` really does push `OverlayRoute.Breakdown` on the shared shell — but macOS has
-    /// no Breakdown surface yet, and `MainShellView.overlayPresented` derives only from Search / New /
-    /// Feedback. So the route would silently occupy the shell's single overlay slot while presenting
-    /// nothing, and the next `onBack()` would spend itself dismissing that invisible overlay instead of the
-    /// user's actual back intent. On the Tasks path the chrome is non-drilled (there is no ← at all), so the
-    /// stale slot is unrecoverable through the UI: an enabled item here is a silent dead end, strictly worse
-    /// than a missing one. Restore it together with the Breakdown SwiftUI port (the iOS twin is ~635 LOC
-    /// across the four files in `app/iosApp/iosApp/Breakdown/`) **and** the matching `overlayBreakdown`
-    /// branch in `MainShellView` — both tracked in **#368** (the macOS parity issue).
+    /// **"Break this down" was hidden here through #368 Tranche 4** and is restored now. The intent was
+    /// always sound — `onBreakdownClicked()` really does push `OverlayRoute.Breakdown` on the shared shell —
+    /// but macOS had no Breakdown surface, and `MainShellView.overlayPresented` derived only from Search /
+    /// New / Feedback, so the route silently occupied the shell's single overlay slot while presenting
+    /// nothing, and the next `onBack()` spent itself dismissing that invisible overlay. On the Tasks path
+    /// the chrome is non-drilled (there is no ← at all), so the stale slot was unrecoverable through the UI.
+    /// Tranche 5 landed both halves — `Breakdown/BreakdownView.swift` and the `overlayBreakdown` branch in
+    /// `MainShellView` — so the item is a live route again. Do not re-add one without the other.
     private var overflowMenu: some View {
         Menu {
+            if hostsOverlays {
+                Button { component.onBreakdownClicked() } label: {
+                    Label(L.string("tasks_menu_break_this_down"), systemImage: "square.split.2x2")
+                }
+            }
             Button { component.onAddSubtaskRequested() } label: {
                 Label(L.string("tasks_menu_add_subtask"), systemImage: "plus")
             }

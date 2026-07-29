@@ -9,12 +9,15 @@ import SwiftUI
 /// gated on `horizontalSizeClass != .compact`, i.e. unreachable on macOS and misleading in a diff.)
 /// The title bar carries the shell chrome: the sidebar toggle, the drilled ← back and the account switcher
 /// (when >1 Account) lead; Search plus the shell-computed `ChromeSpec.actions` trail. The shell-level
-/// overlay (Search / New / Feedback) presents as a sheet. The active Destination, its retained
-/// per-Destination state, and the overlay all live in the shared component — this View holds only the
-/// local sidebar-visibility flag.
+/// overlay (Search / New / Feedback / Brain dump / Breakdown) presents as a sheet. The active Destination,
+/// its retained per-Destination state, and the overlay all live in the shared component — this View holds
+/// only the local sidebar-visibility flag.
 struct MainShellView: View {
     let component: MainShellComponent
-    let onBrainDump: () -> Void
+    /// The single mic owner (#368 Tranche 5b): the Kotlin `recordBrainDump` seam drives it, and the Brain
+    /// dump overlay observes its `levels` for the spectrum. Held by `DefernoApp` for the app's lifetime and
+    /// threaded down, exactly as iOS does — one `AVAudioEngine`, no second tap.
+    @ObservedObject var recorder: MacBrainDumpRecorder
     @Environment(\.defernoColors) private var colors
     @StateObject private var destinations: StateFlowObserver<MainShellComponentDestinationChild>
     /// The dynamic nav registry (ADR-0040): the conditionally-present Assistant row appears once the Org is
@@ -25,17 +28,21 @@ struct MainShellView: View {
     @StateObject private var chrome: StateFlowObserver<ChromeSpec>
     /// The Active Account's session-expired flag (#297) — drives the read-surface "Session expired" banner.
     @StateObject private var sessionExpired: StateFlowObserver<KotlinBoolean>
+    /// The live count of Ready brain-dump drafts — the Inbox sidebar-row badge (#368 G1). Shell-level, so it
+    /// shows before the Inbox Destination is ever visited.
+    @StateObject private var inboxBadge: StateFlowObserver<KotlinInt>
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
-    init(component: MainShellComponent, onBrainDump: @escaping () -> Void) {
+    init(component: MainShellComponent, recorder: MacBrainDumpRecorder) {
         self.component = component
-        self.onBrainDump = onBrainDump
+        self.recorder = recorder
         _destinations = StateObject(wrappedValue: StateFlowObserver(component.activeDestination))
         _navDestinations = StateObject(wrappedValue: DestinationsObserver(component.destinations))
         _overlay = StateObject(wrappedValue: OptionalStateFlowObserver(component.activeOverlay))
         _accounts = StateObject(wrappedValue: AccountsObserver(accounts: component.accounts, active: component.activeAccount))
         _chrome = StateObject(wrappedValue: StateFlowObserver(component.chrome))
         _sessionExpired = StateObject(wrappedValue: StateFlowObserver(component.sessionExpired))
+        _inboxBadge = StateObject(wrappedValue: StateFlowObserver(component.inboxReadyCount))
     }
 
     private var active: MainShellComponentDestinationChild { destinations.value }
@@ -134,14 +141,14 @@ struct MainShellView: View {
                 let kind = ShellBridgeKt.chromeActionKind(spec: chrome.value, index: index)
                 if let glyph = Self.actionGlyph(kind) {
                     Button {
-                        // Brain dump is the ONE kind macOS does not route through the shared handler:
-                        // ChromeActionKind.BrainDump opens `OverlayRoute.BrainDump`, and macOS has neither a
-                        // BrainDumpView nor an `overlayBrainDump` bridge accessor (Tranche 5 of #368) — so
-                        // invoking it would occupy the shared overlay slot with nothing on screen and no way
-                        // to reach `dismissOverlay()`. macOS's Brain dump is instead the on-device
-                        // `DraftExtractorView` sheet that `onBrainDump` presents (the same one as ⌘⇧E).
-                        if kind == "BrainDump" { onBrainDump() }
-                        else { ShellBridgeKt.chromeInvoke(spec: chrome.value, index: index) }
+                        // EVERY kind now routes through the shared handler. Brain dump used to be carved out
+                        // here (#368 Tranche 4): `ChromeActionKind.BrainDump` opens `OverlayRoute.BrainDump`,
+                        // and macOS had neither a `BrainDumpView` nor an `overlayBrainDump` accessor, so
+                        // invoking it would have occupied the shared overlay slot with nothing on screen and
+                        // no way to reach `dismissOverlay()`. Tranche 5 landed both, so the diversion to the
+                        // dev `DraftExtractorView` is gone — that sheet is now reachable only from its own
+                        // ⌘⇧E menu item, which is what it always should have been.
+                        ShellBridgeKt.chromeInvoke(spec: chrome.value, index: index)
                     } label: {
                         Image(systemName: glyph)
                     }
@@ -158,9 +165,11 @@ struct MainShellView: View {
             // it — the actions never arrive, and this union is the only way to render them. `onNewTapped`
             // reproduces the spec's New handler, Calendar pre-dating (#74) included.
             if !drilled && !specHasCapture {
-                Button(action: onBrainDump) { Image(systemName: "brain.head.profile") }
-                    .help(L.string("braindump_title"))
-                    .accessibilityLabel(L.string("braindump_title"))
+                Button { ShellBridgeKt.openBrainDumpOverlay(component: component) } label: {
+                    Image(systemName: "waveform")
+                }
+                .help(L.string("braindump_title"))
+                .accessibilityLabel(L.string("braindump_title"))
                 Button(action: onNewTapped) { Image(systemName: "plus") }
                     .help(L.string("shell_drawer_new_task"))
                     .accessibilityLabel(L.string("shell_drawer_new_task"))
@@ -168,14 +177,16 @@ struct MainShellView: View {
         }
     }
 
-    /// The SF Symbol for a `ChromeActionKind` (mirrors `ShellChrome`'s glyph switch). Brain dump keeps the
-    /// macOS `brain.head.profile` — the on-device Extractor — NOT iOS's `waveform`, which stands for a
-    /// recorder macOS does not have. `nil` means "no macOS surface", so the button is simply not drawn.
+    /// The SF Symbol for a `ChromeActionKind` (mirrors `ShellChrome`'s glyph switch). Brain dump is
+    /// `waveform` — the same glyph iOS uses, now that macOS has the same recorder behind it (#368 Tranche 5).
+    /// It used to be `brain.head.profile` because the action opened the on-device Extractor dev sheet
+    /// instead; that sheet kept its own ⌘⇧E menu item and no longer borrows this button. `nil` means "no
+    /// macOS surface", so the button is simply not drawn.
     private static func actionGlyph(_ kind: String) -> String? {
         switch kind {
         case "Refresh": return "arrow.clockwise"
         case "New": return "plus"
-        case "BrainDump": return "brain.head.profile"
+        case "BrainDump": return "waveform"
         default: return nil
         }
     }
@@ -209,12 +220,19 @@ struct MainShellView: View {
                 // ActivityComponent; before #368 this Destination dead-ended on the Coming soon body below
                 // even though a populated feed was sitting behind it.
                 ActivityView(component: activity)
+            } else if let inbox = ShellBridgeKt.destInbox(child: child) {
+                // The brain-dump triage queue (#368 G1). It stayed a "Coming soon" placeholder through
+                // Tranche 4 on purpose: the feed is local-only (`BrainDumpDraftRepository` has no remote
+                // source), so before macOS could capture, an honest placeholder beat a permanently empty
+                // screen. Tranche 5 gave the Mac a recorder, so the queue can now actually fill.
+                InboxView(component: inbox)
             } else if let profile = ShellBridgeKt.destProfile(child: child) {
                 ProfileView(component: profile)
             } else if let settings = ShellBridgeKt.destSettings(child: child) {
                 SettingsView(component: settings)
             } else {
-                // Inbox is the last Destination without a macOS surface (brain-dump capture, Tranche 5).
+                // Every Destination the shared registry publishes now has a macOS surface. This arm is the
+                // backstop for a Destination added to `commonMain` before its macOS View lands — keep it.
                 EmptyStateView(title: L.format("shell_coming_soon_title", activeName), message: L.string("shell_coming_soon_body_brief"))
             }
         }
@@ -268,6 +286,11 @@ struct MainShellView: View {
                     Label(L.destinationLabel(name), systemImage: icon(name))
                         .foregroundStyle(selected ? colors.primary : colors.onSurface)
                 }
+                // The Inbox row carries the Ready-draft count (#368 G1) — the twin of iOS's drawer badge.
+                // `.badge(nil as String?)` on every other row is a no-op, so one modifier serves the list.
+                // A zero count still shows a word ("Empty") rather than a bare 0: an inbox at zero is the
+                // calm resting state, not a quantity worth printing.
+                .badge(inboxRowBadge(name))
                 // Which row is current was conveyed by colour alone (#368 G23). The trait says it out loud.
                 // There is deliberately no `.help` here: it would only repeat the row's own visible label,
                 // and macOS reads `.help` as the VoiceOver hint — so the name was announced twice.
@@ -280,6 +303,14 @@ struct MainShellView: View {
         // Drop the auto sidebar toggle (generated for the sidebar column) — it jumped to the toolbar's
         // trailing `»` overflow when collapsed. windowToolbar supplies our own, pinned leading instead.
         .toolbar(removing: .sidebarToggle)
+    }
+
+    /// The sidebar badge text for a Destination row: the Ready-draft count on Inbox, `nil` everywhere else.
+    /// Mirrors iOS's drawer badge exactly, including the "Empty" word at zero.
+    private func inboxRowBadge(_ name: String) -> String? {
+        guard name == "Inbox" else { return nil }
+        let count = inboxBadge.value.intValue
+        return count > 0 ? "\(count)" : L.string("shell_inbox_badge_empty")
     }
 
     // MARK: Overlay (Search / New) as a sheet
@@ -296,9 +327,23 @@ struct MainShellView: View {
         overlay.value.flatMap { ShellBridgeKt.overlayFeedback(child: $0) }
     }
 
+    private var overlayBrainDumpComponent: BrainDumpComponent? {
+        overlay.value.flatMap { ShellBridgeKt.overlayBrainDump(child: $0) }
+    }
+
+    private var overlayBreakdownComponent: BreakdownComponent? {
+        overlay.value.flatMap { ShellBridgeKt.overlayBreakdown(child: $0) }
+    }
+
+    /// Every real `OverlayChild` must be represented here. An arm missing from this union is not a blank
+    /// sheet — it is a shell that *thinks* an overlay is up: the slot stays occupied and the next `onBack()`
+    /// spends itself dismissing something invisible. That is precisely what happened to Breakdown before
+    /// #368 Tranche 5, and why its menu item had to be hidden in the meantime.
     private var overlayPresented: Binding<Bool> {
         Binding(
-            get: { overlaySearchComponent != nil || overlayNewComponent != nil || overlayFeedbackComponent != nil },
+            get: { overlaySearchComponent != nil || overlayNewComponent != nil
+                || overlayFeedbackComponent != nil || overlayBrainDumpComponent != nil
+                || overlayBreakdownComponent != nil },
             set: { presented in if !presented { component.dismissOverlay() } }
         )
     }
@@ -311,6 +356,14 @@ struct MainShellView: View {
             NewItemView(component: new)
         } else if let feedback = overlayFeedbackComponent {
             FeedbackView(component: feedback)
+        } else if let brainDump = overlayBrainDumpComponent {
+            // The title-bar voice action opens the Brain dump recorder (ADR-0027, #368 Tranche 5b). The
+            // recorder itself is app-lifetime (DefernoApp) — the Kotlin seam drives it and this View only
+            // observes its levels, so closing the sheet never orphans a running AVAudioEngine.
+            BrainDumpView(component: brainDump, recorder: recorder)
+        } else if let breakdown = overlayBreakdownComponent {
+            // Item detail's "Break this down" opens the on-device impediment flow (#368 G10 / Deferno#525).
+            BreakdownView(component: breakdown)
         }
     }
 

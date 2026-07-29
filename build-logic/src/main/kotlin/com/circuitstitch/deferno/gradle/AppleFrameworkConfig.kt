@@ -49,8 +49,9 @@ object AppleFrameworkConfig {
         "com.circuitstitch.deferno.core.network.dto.CreateEventPayload",
         // The Task command carrying a new description body — Kotlin-side domain input.
         "com.circuitstitch.deferno.core.domain.command.SetTaskDescription",
-        // The Brain dump extractor's existing-item anchor. iOS-only in practice (it arrives via
-        // :feature:braindumps, which macOS doesn't export), harmless on the macOS link.
+        // The Brain dump extractor's existing-item anchor. Load-bearing on BOTH Apple links: it arrives via
+        // :feature:braindumps, which macOS also exports (app/macosApp/build.gradle.kts) — this comment used
+        // to claim otherwise. Do not drop the entry on the strength of "iOS-only".
         "com.circuitstitch.deferno.core.agent.ItemAnchor",
         // Ktor's `HttpStatusCode.description`.
         "io.ktor.http.HttpStatusCode",
