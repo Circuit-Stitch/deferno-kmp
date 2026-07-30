@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- The OAuth redirect scheme (ADR-0026, #137) is deliberately SHARED across all three build
+	     configurations (Debug/ProdDebug/Release, ADR-0047): the redirect URI is registered server-side per
+	     app, so a per-variant scheme would break sign-in on two of the three. The cost is that with
+	     coexisting installs LaunchServices picks ONE of them arbitrarily to hand a redirect to — acceptable
+	     because dev-PAT seeding (ADR-0012, the DevAccounts/DevStagingToken keys below) is how the two
+	     debuggable variants sign in; only Release relies on the browser leg. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -16,9 +22,25 @@
 	<key>LSMultipleInstancesProhibited</key>
 	<true/>
 	<!-- Dev-only: substituted from the DEV_STAGING_TOKEN build setting (Local.xcconfig ← Secrets.xcconfig,
-	     emptied for Release in project.yml). DefernoRoot.seedDevAccounts() seeds a "Dev (staging)" account
-	     from it on a Debug build; blank in any committed/Release build so no PAT ships. Mirrors app/iosApp. -->
+	     emptied for ProdDebug + Release in project.yml). DefernoRoot.seedDevAccounts() seeds a "Dev (staging)"
+	     account from it on the Staging-backed Debug build; blank in any committed/Release build so no PAT
+	     ships — and blank in ProdDebug so a Production-env install can never seed a *staging* PAT
+	     (ADR-0047). Mirrors app/iosApp. -->
 	<key>DevStagingToken</key>
 	<string>$(DEV_STAGING_TOKEN)</string>
+	<!-- Dev-only, the twin of Android's `deferno.prod.accounts` (ADR-0047 names it as the follow-up this
+	     closes): a ';'-separated `id:label:token` list fed to DevAccounts.from, which is how the
+	     Production-backed ProdDebug variant seeds its disposable prod **Test** Account without typing.
+	     seedDevAccounts() has always READ this key; nothing populated it until now, so ProdDebug would
+	     otherwise land with no seeding at all — useless for its stated purpose (prod repro/driving).
+	     Empty by default (project.yml/Local.xcconfig) ⇒ seeds nothing ⇒ no behaviour change for anyone
+	     who never creates Secrets.xcconfig. Pinned to "" in Debug + Release. -->
+	<key>DevAccounts</key>
+	<string>$(DEV_ACCOUNTS)</string>
+	<!-- The backend environment, injected per Xcode build configuration via the DEFERNO_ENV build setting
+	     (ADR-0047). DefernoApp reads this and maps it to DefernoEnvironment, decoupling the env from the
+	     debug/release build type (macOS used to derive it from `Platform.isDebugBinary`). -->
+	<key>DefernoEnv</key>
+	<string>$(DEFERNO_ENV)</string>
 </dict>
 </plist>

@@ -15,6 +15,19 @@
 # (re-run `pod install` after every `xcodegen generate`, since regeneration drops the pod integration).
 platform :osx, '14.0'
 
+# Custom build configuration (ADR-0047, #368 G22): `ProdDebug` is a THIRD Xcode configuration — a
+# Production-backed, debuggable, distinctly-bundled dogfood install that coexists with Release
+# (Production) and Debug (Staging). CocoaPods only knows Debug/Release by default and maps any unknown
+# configuration to :release; tell it ProdDebug builds like Debug so SQLCipher compiles with the same
+# (debug) settings and lands in the ProdDebug build dir the app links against. Re-run `pod install` after
+# changing this (Debug/Release auto-map, so only the non-standard config is listed).
+#
+# This matters MORE here than on iOS. There, Local.xcconfig hard-`#include`s the *debug* Pods xcconfig, so
+# the generated `.proddebug.xcconfig` is never referenced. On macOS, Local.xcconfig is the PROJECT-level
+# base config (project.yml `configFiles`) and CocoaPods owns each TARGET's base config — so the generated
+# `Pods-macosApp.proddebug.xcconfig` is genuinely what the app target builds against.
+project 'macosApp', 'ProdDebug' => :debug
+
 target 'macosApp' do
   # :inhibit_warnings — sqlite3.c (the SQLite amalgamation SQLCipher vendors) emits ~117
   # -Wshorten-64-to-32 warnings under Xcode's default warning set. They're intentional, safe

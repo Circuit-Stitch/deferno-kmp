@@ -207,6 +207,45 @@ jobs:
             SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             test | "${FMT[@]}"
 
+      # The ProdDebug environment variant (ADR-0047, #368 G22) — BUILD ONLY, no test. Rationale: #368 §1
+      # item 3 blames a missing macOS CI gate for a regression that shipped and sat live for months; a build
+      # configuration that nothing ever builds is exactly that vacuum again, one config down. This variant
+      # differs from Debug in ways that can genuinely fail to build on their own — a distinct
+      # PRODUCT_BUNDLE_IDENTIFIER, the `KOTLIN_FRAMEWORK_BUILD_TYPE = debug` pin the Kotlin plugin cannot
+      # infer from a non-Debug/Release configuration name, and a CocoaPods `.proddebug.xcconfig` that only
+      # exists because the Podfile maps ProdDebug => :debug. Any of those silently missing is a broken
+      # variant nobody discovers until they try to dogfood prod.
+      #
+      # Not `test`: the suite is environment-agnostic (the same sources, the same host) and running it twice
+      # would double the slowest step of this job to re-prove nothing. The Debug step above is the test gate.
+      # Same `-derivedDataPath build/dd`, so the framework + pod objects the Debug step produced are reused
+      # (this is a different CONFIGURATION inside the same derived data, not a cold rebuild).
+      #
+      # `-scheme macosApp-ProdDebug` is deliberate over `-scheme macosApp -configuration ProdDebug`: it
+      # also gates the SCHEME itself, so a project.yml change that drops or mis-declares it fails here
+      # rather than the next time someone opens Xcode. `-configuration` is still spelled out so the config
+      # never rides on xcodebuild's implicit scheme-action resolution.
+      #
+      # The ⚠️ CI-only signing note on the step above applies verbatim to these same three flags.
+      - name: Build ProdDebug variant (ADR-0047, build only)
+        working-directory: app/macosApp
+        # Same `set -o pipefail` reasoning as above — without it a failed build reports green.
+        run: |
+          set -o pipefail
+          if command -v xcbeautify >/dev/null 2>&1; then FMT=(xcbeautify --renderer github-actions); else FMT=(cat); fi
+          xcodebuild \
+            -workspace macosApp.xcworkspace \
+            -scheme macosApp-ProdDebug \
+            -configuration ProdDebug \
+            -destination "platform=macOS,arch=arm64" \
+            -derivedDataPath build/dd \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            build | "${FMT[@]}"
+
       - name: Upload xcodebuild logs on failure
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7

@@ -23,6 +23,11 @@ struct DefernoApp: App {
     init() {
         let recorder = MacBrainDumpRecorder()
         _recorder = StateObject(wrappedValue: recorder)
+        // The backend environment is INJECTED per Xcode build configuration (ADR-0047, #368 G22): the
+        // per-config `DEFERNO_ENV` build setting (project.yml) surfaces through Info.plist as `DefernoEnv`;
+        // the Kotlin mapper turns that string into the `DefernoEnvironment` enum, decoupling the env from
+        // `Platform.isDebugBinary` — so ProdDebug is a debuggable build that talks to Production.
+        let envName = Bundle.main.object(forInfoDictionaryKey: "DefernoEnv") as? String
         // Phase 2 (ADR-0029): the in-process dictation engine (SidecarKit `SpeechTranscriber`, on-device).
         // Phase 3 (ADR-0029): the in-process inference engine (Foundation Models, on-device). Both run under
         // this app's own identity (no Helper); the inference engine drives `host.draftTasks` (the Extractor)
@@ -38,6 +43,7 @@ struct DefernoApp: App {
             // drives with the Active-Account PAT. The entitled-gated Assistant Destination stays absent until
             // the Org is entitled, so this is inert for a non-entitled account.
             transport: MacAssistantTransport(),
+            environment: DefernoRootKt.defernoEnvironment(name: envName)
         )
         _host = State(initialValue: host)
         // Brain dump completion notification (#271): a tap routes to the Inbox through the shared shell.

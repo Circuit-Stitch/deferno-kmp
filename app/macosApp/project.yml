@@ -12,13 +12,36 @@ options:
     macOS: "14.0"
   createIntermediateGroups: true
 
+# The three environment build variants (ADR-0047, #368 G22) — the macOS twins of iosApp's configurations
+# and of Android's flavor×buildType matrix. XcodeGen defaults to just Debug/Release when this key is
+# absent, so the custom third configuration has to be declared here, mapped to the BASE type it builds
+# like (that base type is what drives optimisation level, ENABLE_TESTABILITY, `DEBUG=1`, …):
+#
+#   Debug      → Staging    · com.circuitstitch.deferno.macos.staging.debug · "Deferno Dev"
+#   ProdDebug  → Production · com.circuitstitch.deferno.macos.debug         · "Deferno β"
+#   Release    → Production · com.circuitstitch.deferno.macos               · "Deferno"
+#
+# ONE-TIME MIGRATION COST: Debug's bundle id moves off the old base `…deferno.macos`, so the next Debug
+# build is a NEW app to the OS — it orphans the current local install's login-Keychain items (service
+# com.circuitstitch.deferno.bearer) and its per-Account `deferno-<id>.db`. That is the ADR's *intent*
+# (OS-level isolation between the three worlds, ADR-0047), and it is painless: dev-PAT seeding re-seeds
+# the Account on the next launch. Release keeps the old id precisely so a prod install upgrades in place.
+#
+# (Not to be confused with `settings.configs:` below, which holds per-configuration *settings*.)
+configs:
+  Debug: debug
+  ProdDebug: debug
+  Release: release
+
 # Machine-local signing, applied as the PROJECT-level base config (the slot CocoaPods leaves alone — it
 # owns each target's base config, the Pods xcconfig). Carrying the identity here means Xcode-GUI builds
 # pick up the same stable signature as `build.sh`, so the login-Keychain ACL on the bearer token survives
 # rebuilds and stops re-prompting (see Local.xcconfig). The file is gitignored; build.sh seeds an ad-hoc
 # default ("-") when it's absent, so a fresh clone / CI still generates + builds with no Dev account.
+# Every configuration gets it — a config with no entry would build unsigned-by-default and re-prompt.
 configFiles:
   Debug: Local.xcconfig
+  ProdDebug: Local.xcconfig
   Release: Local.xcconfig
 
 # Give Local.xcconfig a parented file reference in the navigator. Without this, XcodeGen leaves the
@@ -34,7 +57,9 @@ settings:
     # Mixed Swift/Obj-C: the bridging header exposes DFNExceptionCatcher (wraps AVFoundation NSExceptions
     # that Kotlin/Native can't catch). Path is relative to SRCROOT (app/macosApp).
     SWIFT_OBJC_BRIDGING_HEADER: macosApp/macosApp-Bridging-Header.h
-    PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macos
+    # PRODUCT_BUNDLE_IDENTIFIER is deliberately NOT here — it is per-configuration (ADR-0047), see
+    # `settings.configs` below. The app-target-shaped values that stay in `base` are the ones every
+    # configuration shares.
     # The app name "Deferno" (the built product is Deferno.app, executable Deferno). This is the source
     # of CFBundleName, which the menu bar + Finder read (#189) — a partial-Info.plist CFBundleName gets
     # overwritten by GENERATE_INFOPLIST_FILE's synthesized $(PRODUCT_NAME), so it must be set here. The
@@ -56,8 +81,9 @@ settings:
     INFOPLIST_KEY_NSHumanReadableCopyright: ""
     # The Dock/Finder app icon: the flame brandmark, generated from the iOS 1024 source into
     # macosApp/Assets.xcassets/AppIcon.appiconset (#189). Without this the app shows the generic icon.
-    # (The app NAME lives in the partial Info.plist — CFBundleName/CFBundleDisplayName — alongside the
-    # URL scheme + single-instance keys, since CFBundleName has no INFOPLIST_KEY_* equivalent.)
+    # (CFBundleName comes from PRODUCT_NAME above — it has no INFOPLIST_KEY_* equivalent. The *display*
+    # name IS per-configuration, so INFOPLIST_KEY_CFBundleDisplayName lives in `settings.configs` below —
+    # ADR-0047's "never confuse the three installs" rule.)
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     # Dictation TCC usage strings (ADR-0029 Phase 2): the in-process SpeechTranscriber prompts under THIS
     # app's identity, so the strings live here (not in the launchd Helper's embedded plist, ADR-0024). The
@@ -83,6 +109,14 @@ settings:
     # app/iosApp does — and the stock pod still ships the deprecated `sqlite3_*` the cinterop wraps).
     FRAMEWORK_SEARCH_PATHS:
       - "$(inherited)"
+      # The CONFIG-QUALIFIED path is what the Gradle task actually stages into — it writes
+      # build/xcode-frameworks/<CONFIGURATION>/<SDK_NAME>/Deferno.framework (e.g. .../ProdDebug/macosx26.5/)
+      # and separately copies the framework into $BUILT_PRODUCTS_DIR, which is what the link has really
+      # been resolving against. With only the bare directory below, a third configuration would have no
+      # deterministic search path of its own; iosApp points at exactly this qualified form
+      # (project.pbxproj FRAMEWORK_SEARCH_PATHS). Listed FIRST so the right slice wins, with the bare
+      # directory kept behind it — removing it is a separate change from adding a configuration.
+      - "$(SRCROOT)/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
       - "$(SRCROOT)/build/xcode-frameworks"
     OTHER_LDFLAGS:
       - "$(inherited)"
@@ -97,13 +131,53 @@ settings:
       # and gate on `SystemLanguageModel.availability` at runtime (MacInference.swift).
       - "-weak_framework"
       - "FoundationModels"
+  # Per-CONFIGURATION settings — the three coexisting environment variants (ADR-0047, #368 G22). Each
+  # value here is written to the PROJECT-level configuration, so it reaches the app target; the test
+  # target overrides what it must in its own `settings.base` (target settings outrank project ones).
+  #
+  # A build setting in this block outranks the project base config (Local.xcconfig ← Secrets.xcconfig),
+  # which is what makes the `""` seeding pins below genuinely un-overridable by a local secret file.
+  #
+  # ALL THREE configs must spell out PRODUCT_BUNDLE_IDENTIFIER, not just the two that differ from the old
+  # base value: `options.bundleIdPrefix` auto-generates a TARGET-level id for any target XcodeGen thinks
+  # has none, and a target-level value would outrank everything here — silently collapsing all three
+  # variants back onto one `com.circuitstitch.deferno.macosApp` id, which still *builds*. XcodeGen's check
+  # reads the project's combined per-config settings (that is why the pre-ADR-0047 `settings.base` value
+  # already suppressed it), so a value in every config keeps it suppressed.
   configs:
-    # Never seed the dev staging PAT into a Release (Production) build — empty DEV_STAGING_TOKEN regardless of
-    # any local Secrets.xcconfig, so DefernoRoot.seedDevAccounts() seeds nothing in Release (mirrors iosApp).
-    # A build setting here outranks the project base config (Local.xcconfig ← Secrets); Debug has no override
-    # and falls through to the real token. (#282, ADR-0012)
-    Release:
+    Debug:
+      # Staging, the dev/validation target — no longer the daily driver (ADR-0047). Seeds via the
+      # existing DEV_STAGING_TOKEN path (Local.xcconfig ← Secrets.xcconfig), so no override here; the
+      # ACCOUNTS list is pinned empty so a prod Test PAT can never leak into the Staging install.
+      DEFERNO_ENV: Staging
+      PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macos.staging.debug
+      INFOPLIST_KEY_CFBundleDisplayName: "Deferno Dev"
+      DEV_ACCOUNTS: ""
+    ProdDebug:
+      # Production + debuggable + distinctly bundled: the prod-repro / Claude-driving install (ADR-0047).
+      DEFERNO_ENV: Production
+      PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macos.debug
+      INFOPLIST_KEY_CFBundleDisplayName: "Deferno β"
+      # The ADR-0047 pin: a Production-env install must NEVER seed a *staging* PAT, and the shared
+      # Local.xcconfig ← Secrets.xcconfig chain feeds both debuggable configs. Pinning it empty here (like
+      # Release) is what keeps the two apart. DEV_ACCOUNTS is deliberately NOT pinned — this is the one
+      # config that inherits it, so a gitignored Secrets.xcconfig can seed the disposable prod Test Account.
       DEV_STAGING_TOKEN: ""
+      # LOAD-BEARING: the Kotlin Gradle plugin infers the framework build type from the CONFIGURATION
+      # name, and only literally "Debug"/"Release" are recognised — an unknown name would link the wrong
+      # build type (or none). Pin it, exactly as iosApp's ProdDebug config does (project.pbxproj:775).
+      KOTLIN_FRAMEWORK_BUILD_TYPE: debug
+    Release:
+      # Never seed a dev PAT into a Release (Production) build — both seeding inputs empty regardless of any
+      # local Secrets.xcconfig, so DefernoRoot.seedDevAccounts() seeds nothing here (mirrors iosApp).
+      # (#282, ADR-0012/0047)
+      DEFERNO_ENV: Production
+      # Unchanged from the pre-ADR-0047 base value, so an existing local prod install upgrades in place
+      # rather than becoming a fourth app.
+      PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macos
+      INFOPLIST_KEY_CFBundleDisplayName: Deferno
+      DEV_STAGING_TOKEN: ""
+      DEV_ACCOUNTS: ""
 
 # The macOS Sidecar Helper's Swift package, linked as a LOCAL SwiftPM dependency (ADR-0029 Phase 2) so
 # the app reuses SpeechTranscriber / SidecarPermissions in-process. Path is relative to this spec.
@@ -157,6 +231,11 @@ targets:
         # along so the bundle is macosAppTests.xctest rather than a second "Deferno" product.
         PRODUCT_NAME: "$(TARGET_NAME)"
         PRODUCT_MODULE_NAME: "$(TARGET_NAME)"
+        # Config-INDEPENDENT on purpose: the test bundle is not an install, so it needs no per-variant
+        # identity, and its host is resolved by path (TEST_HOST below), not by bundle id. This TARGET-level
+        # value outranks the per-configuration PRODUCT_BUNDLE_IDENTIFIERs in `settings.configs` above,
+        # which are written at PROJECT level — so the three environment variants (ADR-0047) do not leak
+        # into the test bundle's id.
         PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macosAppTests
         # …and because PRODUCT_NAME is Deferno, XcodeGen's inferred TEST_HOST is WRONG: it derives the
         # host path from the TARGET name (…/macosApp.app/Contents/MacOS/macosApp), but the built product
@@ -206,3 +285,27 @@ schemes:
       config: Debug
     archive:
       config: Release
+
+  # The ProdDebug twin (ADR-0047, #368 G22) — the macOS counterpart of
+  # app/iosApp/…/xcschemes/iosApp-ProdDebug.xcscheme. EVERY action pins ProdDebug, profile and archive
+  # included: this scheme exists to build/run the Production-backed debuggable install, and a profile or
+  # archive action that silently fell back to Release would produce the *other* app (different bundle id,
+  # different seeding) under this scheme's name — the one confusion the whole variant scheme is meant to
+  # prevent. Selecting it in Xcode, or `xcodebuild -scheme macosApp-ProdDebug`, is how you drive prod.
+  macosApp-ProdDebug:
+    build:
+      targets:
+        macosApp: all
+        macosAppTests: [test]
+    run:
+      config: ProdDebug
+    test:
+      config: ProdDebug
+      targets:
+        - macosAppTests
+    profile:
+      config: ProdDebug
+    analyze:
+      config: ProdDebug
+    archive:
+      config: ProdDebug
