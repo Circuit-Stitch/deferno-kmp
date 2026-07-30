@@ -1,5 +1,9 @@
 # One shell-computed `ChromeSpec` top bar
 
+**Status.** Amended by ADR-0044
+
+**Date.** 2026-06-15
+
 **Context.** ADR-0003 splits each surface into **shared, Compose-free component state** + a **thin,
 per-platform [[View]]**, and ADR-0013/0017 put a shared shell above the [[Destination]] graph. But the
 **top bar was drawn twice**: each screen rendered its own header (`PaneHeader`, `DetailHeader`, bespoke
@@ -35,7 +39,7 @@ there (`chrome.title = ""`). Overlays (Search/New/Feedback/Brain dump) stay **mo
 chrome** with their own headers — they are not driven by `ChromeSpec`. The iOS SwiftUI render of the new
 chrome model is tracked for the Mac (#216).
 
-**Rejected.**
+**Considered & rejected.**
 
 - **Keep per-screen headers** — the status quo this ADR removes; it gave two stacked bars and per-page
   action drift, and forced every platform's screens to re-decide chrome that is really shell state.

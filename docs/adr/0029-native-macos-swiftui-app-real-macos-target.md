@@ -1,5 +1,9 @@
 # Native macOS app: a real Kotlin/Native `macosArm64` target, SwiftUI Views, in-process capabilities
 
+**Status.** Amended by ADR-0033
+
+**Date.** 2026-06-13
+
 **Context.** ADR-0003 fixed the desktop View to **Compose Desktop on the JVM** ("Only the *View* is
 native (Jetpack Compose on Android, SwiftUI on iOS, **Compose Desktop on desktop**)"), and ADR-0024
 reached macOS-native capabilities through an **out-of-process** launchd Swift Helper precisely

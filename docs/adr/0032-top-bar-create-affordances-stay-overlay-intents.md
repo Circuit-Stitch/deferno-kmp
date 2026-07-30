@@ -1,5 +1,9 @@
 # Top-bar create affordances stay overlay/navigation intents, not Command-registry commands
 
+**Status.** Amended by ADR-0044
+
+**Date.** 2026-06-15
+
 **Context.** ADR-0007 introduced a **Command registry** — `core/domain/.../command/` (`Command`,
 `CommandKind`, `CommandExecutor`, `CommandBindings`, `WorkingStateCommands`), DI-wired in the
 `AccountComponent` across Android/JVM/iOS. `CommandKind` is explicitly a "**stable binding token**" that
@@ -37,7 +41,7 @@ real, and routing New/Brain dump through a `CommandKind` (likely an `OpenCreate`
 registry stays bound to the **mutations** it already serves (Task lifecycle, plan membership, settings,
 occurrence, and `CreateItem` on form submit), and the chrome stays bound to **navigation**.
 
-**Rejected.**
+**Considered & rejected.**
 
 - **Wire `ChromeAction` through `CommandKind` now** — premature. A binding token with one consumer is
   indirection without fan-out; it adds a hop and a new navigation-flavoured kind to maintain before any

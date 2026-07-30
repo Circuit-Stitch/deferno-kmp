@@ -4,7 +4,7 @@ The native Deferno client — Android first, with iOS and desktop to follow over
 Kotlin Multiplatform core. This glossary defines only the language specific to the *client*.
 The core Deferno domain language (Item, Task, Habit, Chore, Event, Occurrence, Org, Plan,
 Workspace, Canonical ref, Alias, Subtask/Child, …) is owned by the **Deferno backend's
-`CONTEXT.md`** (the canonical source, in the `Kyle-Falconer/Deferno` repo) and is not
+`CONTEXT.md`** (the canonical source, in the `Circuit-Stitch/Deferno` repo) and is not
 duplicated here — this file only adds client-specific terms and disambiguations.
 
 ## Language

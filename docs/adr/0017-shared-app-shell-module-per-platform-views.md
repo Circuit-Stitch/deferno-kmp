@@ -1,5 +1,9 @@
 # The app shell is a shared KMP module; its Views stay per-platform
 
+**Status.** Accepted
+
+**Date.** 2026-06-08
+
 **Context.** ADR-0013 defines a two-state [[Shell]] (Auth ↔ Main) above a [[Destination]] graph, and
 ADR-0003 splits each surface into **shared, Compose-free component state** + a **thin, per-platform
 native [[View]]**. When the desktop shell first landed (#59) the DI graph didn't exist yet, so the
@@ -40,7 +44,7 @@ is **file-backed SQLite with no SQLCipher** yet (the JVM bindings rely on OS dis
 SQLCipher-on-JVM is a tracked follow-up). The `NavSlot` Primary/Secondary distinction is a no-op on
 desktop (the rail/drawer lists every Destination directly; "More" is compact-only).
 
-**Rejected.**
+**Considered & rejected.**
 
 - **Re-duplicate the updated shell into `app/desktopApp`** — fastest now, but reinstates the exact
   copy-drift this ADR exists to kill; the throwaway-until-DI condition that justified it in #59 is gone.

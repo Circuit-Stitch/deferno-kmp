@@ -1,7 +1,11 @@
 # v1 sign-in: validate a pasted PAT against `/auth/me`, then store it
 
+**Status.** Amended by ADR-0026
+
+**Date.** 2026-06-08
+
 **Context.** #15's no-paste, system-browser OAuth + PKCE flow is gated on the backend
-code→bearer exchange ([Kyle-Falconer/Deferno#299](https://github.com/Kyle-Falconer/Deferno#299)),
+code→bearer exchange ([Circuit-Stitch/Deferno#299](https://github.com/Circuit-Stitch/Deferno/issues/299)),
 which is still **open** — so the flow the issue's acceptance criteria describe cannot run
 end-to-end against a real server. ADR-0012 already established that the durable credential is a
 per-device **PAT** and that a **manual-paste** path converges with the future browser-mint path on

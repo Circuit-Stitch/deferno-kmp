@@ -1,5 +1,9 @@
 # Module structure: NIA-style hybrid, co-located Android Views, convention plugins
 
+**Status.** Amended by ADR-0028
+
+**Date.** 2026-06-05
+
 **Context.** The shared-presentation KMP core (ADR-0003) with native UI per platform needs a module
 layout that delivers strong modularity and DRY builds at corporation scale.
 

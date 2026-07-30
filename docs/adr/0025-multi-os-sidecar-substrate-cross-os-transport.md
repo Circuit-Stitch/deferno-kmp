@@ -1,5 +1,9 @@
 # Multi-OS native-sidecar substrate + cross-OS transport
 
+**Status.** Accepted
+
+**Date.** 2026-06-09
+
 **Context.** ADR-0024 reaches native **macOS** capabilities through a Developer-ID-signed **Swift
 sidecar helper** over a peer-authenticated **Unix-domain socket carrying JSON**, with the JVM client
 deliberately **launchd-agnostic** (it connects to a well-known socket *path*; launchd binds the far end

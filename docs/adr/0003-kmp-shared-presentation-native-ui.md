@@ -1,5 +1,9 @@
 # KMP shared core through presentation; native UI per platform
 
+**Status.** Amended by ADR-0029
+
+**Date.** 2026-06-05
+
 **Context.** Native clients on Android, iOS, and desktop, authored by one team. Goals: write-and-
 test logic once, strong modularity, and behavioral consistency across platforms.
 

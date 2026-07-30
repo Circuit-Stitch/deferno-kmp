@@ -1,5 +1,9 @@
 # The client never calls third-party service APIs directly — the Deferno backend mediates every external integration
 
+**Status.** Accepted
+
+**Date.** 2026-06-24
+
 **Context.** A third-party integration on the Deferno backend (a GitHub issue sync) once exhausted that
 provider's Search API rate budget by fanning a per-repo loop into many account-wide search calls. The
 fix was entirely server-side, and the KMP client was never implicated — it holds no third-party
@@ -34,7 +38,7 @@ mutations of a remote service (ADR-0034).
   inference, ADR-0037). The line: **anything that reads or writes a user's data in a third-party service
   goes through the backend; static-asset fetch, browser hand-off, and on-device compute do not.**
 
-**Considered and rejected.** *Client-side third-party SDKs/clients (a GitHub client in `core/network`)*
+**Considered & rejected.** *Client-side third-party SDKs/clients (a GitHub client in `core/network`)*
 — duplicates auth, token storage, and rate-budget logic on every device, leaks the OSS-incompatible
 secret problem, and reproduces the motivating fan-out with no central place to fix it.
 *Per-integration relays mirroring the inference relay* — over-built; the backend already owns the

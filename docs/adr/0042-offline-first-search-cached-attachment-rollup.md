@@ -1,7 +1,9 @@
 # Offline-first global Search over the cache + a cached attachment rollup
 
-**Status:** accepted (#311). Amends ADR-0007's "Search is online-only" note; aligns Search with ADR-0001
-(offline-first); builds on ADR-0034 (the `/items` snapshot + per-kind stores).
+**Status.** Accepted (#311). Amends ADR-0007's "Search is online-only" note; aligns Search with ADR-0001
+(offline-first); builds on ADR-0049 (the `/items` snapshot + per-kind stores).
+
+**Date.** 2026-06-29
 
 **Context.** Global Search (#73) was the **one online-only read** left in the client: `SearchComponent`
 → `OfflineTaskRepository.search` → `GET /tasks/search`, a one-shot pull whose results were never cached.

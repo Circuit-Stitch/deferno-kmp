@@ -5,6 +5,8 @@ realigns the client with ADR-0043 + CONTEXT.md, which described the two per-item
 interleaved feed** all along. Android + Compose Desktop land this pass (the shared body); the iOS/macOS
 SwiftUI `TaskDetailView` is ported as a **follow-up** (same split ADR-0044 used).
 
+**Date.** 2026-07-10
+
 **Context.** ADR-0044 rebuilt the [[Task]] detail as three tabs — `Info · Comments · History` —
 justified as matching "CONTEXT.md's per-item comments vs item-history vs global Activity split." But that
 glossary section disambiguates three **stores** (the [[Comment thread]], [[Item history]], and the global
@@ -63,7 +65,7 @@ split drops to a single `Trail`; ~the ADR-0044 Roborazzi goldens re-record; the 
 TDD'd in `commonTest`. No wire, DTO, or DI-graph (KSP) change — the component is hand-constructed.
 **Follow-up:** the iOS + macOS SwiftUI `HistoryRow` + both Kotlin bridges consume the shared typed data.
 
-**Rejected.**
+**Considered & rejected.**
 
 - **Keep three tabs, only enrich History.** Preserves the comments/history split CONTEXT.md never wanted —
   a person reads one chronology across two taps. Enrichment and the merge are independent wins; do both.

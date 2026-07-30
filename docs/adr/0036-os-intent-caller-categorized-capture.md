@@ -1,5 +1,9 @@
 # OS-intent integration: caller-categorized capture over the Command registry, behavioral kind-derivation, propose-only untouched
 
+**Status.** Accepted
+
+**Date.** 2026-06-17
+
 **Context.** ADR-0007 named the shared **[[Command registry]]** the single binding surface for "OS
 intents (Android App Actions, iOS App Intents / Siri)," and CONTEXT.md added the **[[OS intent]]** term,
 but nothing was built. The goal now: let a person reach Deferno through the **platform's own assistant**
@@ -17,7 +21,7 @@ volatile field names.
 The pivotal realization: **smart triage into the four kinds is inference**, and Deferno is the wrong
 place to do it. The [[Extractor]] / on-device floor emit **Tasks only** (`DraftTask` carries no `kind`);
 a good four-kind classifier needs an LLM tier, and the only one in the catalog is the **Deferno cloud
-relay** — premium, entitlement hardcoded `false`, relay not yet deployed (Kyle-Falconer/Deferno#345).
+relay** — premium, entitlement hardcoded `false`, relay not yet deployed (Circuit-Stitch/Deferno#345).
 But the *callers* — Gemini, Siri + Apple Intelligence, MCP agents — **are themselves LLMs that already
 categorize**: the MCP server already offloads it (an agent picks `create_chore` vs `create_task`). So
 push the inference to the caller and Deferno needs none.
@@ -66,7 +70,7 @@ push the inference to the caller and Deferno needs none.
   Deferno first"), never a silent drop. **Android-first**; iOS via App Intents on the same seam;
   **Alexa / Bixby out** (a separate cloud skill + OAuth account-linking — cost unjustified now).
 
-**Considered and rejected.**
+**Considered & rejected.**
 
 - ***Deferno's own [[Extractor]] triages the utterance*** (the obvious first design, and where this
   grilling started): the Extractor / floor emit Tasks only, a real four-kind classifier needs an LLM

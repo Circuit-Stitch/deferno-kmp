@@ -1,5 +1,9 @@
 # API DTO modelling: faithful flat wire, condensed domain
 
+**Status.** Accepted
+
+**Date.** 2026-06-06
+
 **Context.** The Deferno API (live envelope `version: 0.1`) shapes its payloads in ways that fight a
 naive Kotlin model. List elements are a generic `ItemEnvelope<T>` whose `T` is `#[serde(flatten)]`-ed
 into the envelope (so `id`/`title` sit beside `ref`/`org_slug`/`sequence`/`type`), but

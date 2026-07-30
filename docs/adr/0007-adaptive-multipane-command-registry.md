@@ -1,5 +1,9 @@
 # Adaptive multi-pane UI + shared command registry (Android, iPad, desktop)
 
+**Status.** Amended by ADR-0049
+
+**Date.** 2026-06-05
+
 **Context.** Strong large-screen support is a first-class goal — Android tablets/Chromebooks, iPad,
 and desktop — over the shared-presentation core (ADR-0003). A stretched phone UI is an explicit
 non-goal.
@@ -53,7 +57,7 @@ a View renders the panes of *one* Destination, while the Main shell (ADR-0013) h
 Destinations and the per-Destination tier-3 stacks. Views stay thin renderers of shared slots/stacks;
 and all input modalities plus agents/intents converge on one shared command surface.
 
-**Rejected.**
+**Considered & rejected.**
 
 - A phone-first navigation stack stretched onto large screens.
 - A single global back stack across Destinations (would lose per-Destination state on every lateral

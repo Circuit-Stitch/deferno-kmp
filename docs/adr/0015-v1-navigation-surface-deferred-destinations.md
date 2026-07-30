@@ -1,5 +1,9 @@
 # v1 navigation surface: buildable Destinations now, backend-blocked surfaces deferred
 
+**Status.** Amended by ADR-0040
+
+**Date.** 2026-06-07
+
 **Context.** ADR-0007 fixes the three navigation tiers and ADR-0013 the two-state [[Shell]] + the
 multiple-back-stack Destination graph. Neither pins the **concrete v1 Destination set**. Android
 wireframes (2026-06-07) propose a richer surface than the backend supports, so this ADR records the
@@ -36,7 +40,7 @@ therefore UI ahead of backend.
   - **Workspaces · [[Group]]s · Permissions · the inline workspace-selector** — blocked on the
     backend Groups subsystem ("Spec 2": Workspace, org-listing, and permissions/membership APIs).
   - **All mood capture** (daily arrival check-in *and* per-task) — the daily check-in has no endpoint
-    (filed **Kyle-Falconer/Deferno#308**); deferred to a holistic mood pass (data-model fields
+    (filed **Circuit-Stitch/Deferno#308**); deferred to a holistic mood pass (data-model fields
     retained).
   - **Agenda · [[Dashboard]]** — no current need; Calendar subsumes the Agenda role.
 - The Destination graph is built so each deferred surface drops in later as a peer Destination or
@@ -49,7 +53,7 @@ documented per-surface, and reversible-forward (add the Destination when its API
 the largest net-new surface but reuses the Habit/Chore/Event types the create kind-picker already
 requires, so its marginal cost is the month/day UI + occurrence queries, not new modelling.
 
-**Rejected.**
+**Considered & rejected.**
 
 - **Shipping Workspaces/Groups/Permissions as coming-soon Destinations**, or forward-building a
   client-only scope model over the single known Org — the former dead-ends whole Destinations; the

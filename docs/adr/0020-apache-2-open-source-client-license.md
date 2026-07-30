@@ -1,5 +1,9 @@
 # Open-source client under Apache-2.0 — the moat is the service, not the client
 
+**Status.** Accepted
+
+**Date.** 2026-06-08
+
 **Context.** We are open-sourcing the Deferno **client** while the **backend stays proprietary and
 author-operated**. A license audit of the full dependency graph confirmed **nothing forces our hand**:
 every shipped dependency is **Apache-2.0, MIT, or BSD-3-Clause** (Compose Multiplatform, Decompose,

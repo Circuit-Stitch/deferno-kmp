@@ -1,5 +1,9 @@
 # On-device speech-to-text: a portable whisper baseline with opportunistic native fast paths
 
+**Status.** Accepted
+
+**Date.** 2026-06-08
+
 **Context.** The client is gaining speech-to-text. Its first and only v1 use is **[[Dictation]]** —
 the mic affordance on the New create surface fills the title/notes fields (ADR-0015/0016), streaming
 on-device speech into an editable **[[Transcript]]**. Two non-goals are explicit: **voice commands**
@@ -83,7 +87,7 @@ offline** — create is online-only (ADR-0016); dictation only fills text, the c
 connectivity. The Settings Destination now **mixes synced [[User setting]]s with one device-local
 [[App setting]]**.
 
-**Rejected.**
+**Considered & rejected.**
 
 - **An audio/PCM-level seam** — breaks the vertically-integrated native engines; leaky the moment a
   fast path is added.

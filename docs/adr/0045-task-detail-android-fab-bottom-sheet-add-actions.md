@@ -6,6 +6,8 @@ keep their own affordances. Records **why the native `FloatingActionButtonMenu` 
 rejected** in favour of a stock FAB + bottom sheet, so the decision isn't silently re-litigated when
 someone spots the expressive component in the docs.
 
+**Date.** 2026-07-10
+
 **Context.** The ADR-0044 task detail exposes three "add" actions — **Add subtask**, **Add comment**,
 **Add to today's plan** — through omni-present inline affordances: an inline *Add to today's plan*
 button in the Info tab and *Add subtask* on the shell's contextual kebab. The design intent (and the

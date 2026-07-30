@@ -1,10 +1,14 @@
 # Native auth: OAuth is the bootstrap, a personal access token is the credential
 
+**Status.** Accepted
+
+**Date.** 2026-06-06
+
 **Context.** The Deferno API exposes two security schemes — an opaque Bearer **personal access token
 (PAT)** (`POST /auth/tokens`, described in the spec as *"the path native mobile clients use"*) and a
 web `session_cookie`. There are **no `oauth2`/`openIdConnect` schemes**: OAuth/PKCE against Zitadel
 lives entirely on the web/auth server, outside this API. So the in-app system-browser OAuth flow
-(#15, gated on backend [Kyle-Falconer/Deferno#299](https://github.com/Kyle-Falconer/Deferno/issues/299))
+(#15, gated on backend [Circuit-Stitch/Deferno#299](https://github.com/Circuit-Stitch/Deferno/issues/299))
 yields a Zitadel session — **not** an API credential.
 
 **Decision.** The client's **durable credential is a per-device PAT**, never OAuth tokens. The

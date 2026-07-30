@@ -3,10 +3,12 @@
 **Status.** Accepted (#185). Supersedes ADR-0016's "create is online-only" decision; **convert stays
 online-only** (ADR-0016 still governs it).
 
+**Date.** 2026-06-15
+
 **Context.** ADR-0016 made v1 create online-only for one reason: the v0.1 API assigned the Item id
 server-side with no idempotency key, so a queued+replayed create could **duplicate** (ADR-0001
 reconciles on `id`). It explicitly named the forward path — client-supplied / idempotent ids — and
-filed it. That backend work is now done (**Kyle-Falconer/Deferno#402**, closed): `POST /{kind}` accepts
+filed it. That backend work is now done (**Circuit-Stitch/Deferno#402**, closed): `POST /{kind}` accepts
 a client-supplied `id` and dedupes a create on it. The asymmetry ADR-0016 accepted ("edit offline, but
 create only online") can now be removed.
 

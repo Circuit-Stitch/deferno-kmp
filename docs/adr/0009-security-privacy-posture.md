@@ -1,5 +1,9 @@
 # Security & privacy posture
 
+**Status.** Accepted
+
+**Date.** 2026-06-05
+
 **Context.** Privacy and security are a top priority. This records the v1 posture and the deliberate
 deferrals. Already decided elsewhere: per-Account **encrypted DB** (SQLCipher), **secure token vault**
 (Keystore/Keychain, ADR-0002), **browser-only credentials** (ADR-0003 / #299), hard Account isolation.

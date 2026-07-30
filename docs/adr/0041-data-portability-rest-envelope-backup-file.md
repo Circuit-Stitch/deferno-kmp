@@ -1,8 +1,10 @@
 # Data portability: a REST-envelope Backup file, offline on-device export + server Full extract, id-preserving restore
 
-**Status:** accepted (makes the deferred export/import real, starting on iOS; builds on ADR-0005 envelope
+**Status.** Accepted (makes the deferred export/import real, starting on iOS; builds on ADR-0005 envelope
 versioning, ADR-0034 client-supplied-id offline create, ADR-0001 outbox, ADR-0038 server-mediated
 external work).
+
+**Date.** 2026-06-28
 
 **Context.** "Export or import your data" has been a stub: a Settings button that deep-links to the
 **web app** (`SettingsView.swift`, `SettingsComponent.onOpenDataExportImport`) because "there is no client
@@ -34,7 +36,7 @@ everything.
   - **[[Full extract]] (deferred — backend-gated):** a **server-side job** the client merely requests,
     which assembles the **complete** Backup file (incl. backend-hosted attachment bytes), stores it in
     object storage, and **emails a time-limited download link** (~30 days). Server-mediated (ADR-0038).
-    Surfaced now as "coming soon"; needs a new backend endpoint (a `Kyle-Falconer/Deferno` issue).
+    Surfaced now as "coming soon"; needs a new backend endpoint (a `Circuit-Stitch/Deferno` issue).
 - **[[Import]] is an id-preserving restore/merge (built now).** Parse the zip; for each item, optimistic
   local upsert + enqueue a **create with its original id** through the existing offline outbox. Idempotent:
   re-importing is a no-op (backend dedupes on id); a collision with an existing-but-different item is

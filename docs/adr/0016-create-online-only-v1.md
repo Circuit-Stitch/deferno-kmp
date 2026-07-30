@@ -1,7 +1,11 @@
 # v1 create is online-only; edits stay offline-first
 
+**Status.** Amended by ADR-0034 — see the banner below.
+
+**Date.** 2026-06-07
+
 > **Status: the create decision is SUPERSEDED by [ADR-0034](0034-offline-first-create-client-supplied-uuids.md)** (#185).
-> The backend now accepts client-supplied Item UUIDs (Kyle-Falconer/Deferno#402), so the forward path
+> The backend now accepts client-supplied Item UUIDs (Circuit-Stitch/Deferno#402), so the forward path
 > below is realized: create is offline-first like every edit. **Convert remains online-only** under this
 > ADR. The rest of this record is kept for history.
 
@@ -23,8 +27,8 @@ gentle "reconnect to save" rather than enqueuing a create the server cannot yet 
 remain fully offline-first and unchanged from ADR-0001.** Create stays *off* the outbox until the
 server can make it idempotent.
 
-**Forward path.** Filed **Kyle-Falconer/Deferno#307** for a **client-supplied / idempotent item id**
-(sibling of ADR-0001's delta-sync forward path, Kyle-Falconer/Deferno#297). With an idempotent create,
+**Forward path.** Filed **Circuit-Stitch/Deferno#307** for a **client-supplied / idempotent item id**
+(sibling of ADR-0001's delta-sync forward path, Circuit-Stitch/Deferno#297). With an idempotent create,
 the client can generate a local UUID, insert optimistically, and enqueue the create like any other
 mutation — promoting create to a normal offline-first outbox operation. Adopt when available.
 
@@ -34,7 +38,7 @@ command flagged **online-only**, so the agent and OS-intent layers surface the c
 requirement rather than silently failing. The asymmetry is revisited the moment the backend gains
 idempotency.
 
-**Rejected.**
+**Considered & rejected.**
 
 - **Best-effort offline create now** (client UUID + optimistic insert + local→server id
   reconciliation) — the server has no idempotency, so retry-after-partial-success duplicates items;
