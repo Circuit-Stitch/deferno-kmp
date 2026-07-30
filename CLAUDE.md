@@ -14,30 +14,33 @@ first to land.
 - **Application ID:** `com.circuitstitch.deferno`
 - **JDK:** project toolchain 21, Gradle daemon JVM 17 — two independent toolchains. You don't need either installed: the Gradle Daemon JVM toolchain (`gradle/gradle-daemon-jvm.properties`, Temurin 17) runs Gradle itself, and the project Kotlin/Java toolchain (`ProjectConfig.JVM_TOOLCHAIN` = 21, applied via the convention plugins) compiles the code and forks the JVM tests — both auto-provisioned via the Foojay resolver. Launch Gradle with any JDK that can run Gradle 9.5.1 (17–25), e.g. Android Studio's bundled JDK.
 - **Kotlin:** compiled by AGP's built-in Kotlin support (AGP 9+) — there is no `org.jetbrains.kotlin.android` plugin; only the Compose compiler plugin is applied explicitly.
-- **DI:** kotlin-inject + kotlin-inject-anvil — compile-time, KMP, via KSP (ADR-0003). The scope layering (process/app → Account → scene, ADR-0008) lives in `core/di`; the `deferno.di` convention wires the runtimes + per-target KSP processors into a shared module. KSP2 is version-decoupled from the Kotlin compiler, so `ksp = 2.3.10` pairs with Kotlin 2.4.0 (no `<kotlin>-<ksp>` suffix).
+- **DI:** kotlin-inject + kotlin-inject-anvil — compile-time, KMP, via KSP (ADR-0003). The scope layering (process/app → Account → scene, **ADR-0014** — which supersedes ADR-0008 G2's flat "data layer in AppScope"; binding a per-Account repository/store/DB in `AppScope` breaches ADR-0002 hard isolation) lives in `core/di`; the `deferno.di` convention wires the runtimes + per-target KSP processors into a shared module. KSP2 is version-decoupled from the Kotlin compiler, so `ksp = 2.3.10` pairs with Kotlin 2.4.0 (no `<kotlin>-<ksp>` suffix).
 - **Coverage:** Kover (ADR-0006) on every shared module via the `deferno.coverage` convention. The hard ~85–90% gate runs over the *merged* shared-core report (`deferno.coverage.aggregation`, applied at the root): CI runs `:koverVerify` on every PR. It's deliberately not wired into `check` — measure logic, not boilerplate, so generated DI/serialization code and never-instantiated DI scope markers are excluded (see `CoverageConfig`).
 
 ## Layout
 
-Multi-module KMP per ADR-0004 (`core/*` foundations → `feature/*` slices → per-platform `app/*`):
+Multi-module KMP per ADR-0004 (`core/*` foundations → `feature/*` slices → per-platform `app/*`),
+refined by ADR-0017 so `app/` holds both the platform applications and the shared shell library they
+render. **`settings.gradle.kts` is the live module list** — ADR-0004 names an inventory (8 `core/*`,
+3 `feature/*`) that is its v1 snapshot, not the current set; the tree below shows only the modules
+that need explaining:
 
 ```
 build-logic/                          ← composable convention plugins — composite build
-core/                                 ← shared KMP foundations
-  model · common · network · database · secure · data · domain · designsystem
-  di/                                 ← compile-time DI scope graph (process/app → Account → scene, ADR-0008)
+core/                                 ← shared KMP foundations, layered model/common → network/database/secure → data → domain (+ designsystem, the Compose UI library)
+  di/                                 ← compile-time DI scope graph (process/app → Account → scene, ADR-0014)
   sidecar/                            ← OS-agnostic JVM Sidecar client + JSON IPC contract to native Helpers (JVM-only · deferno.jvm.library · ADR-0024/0025)
   agent/                              ← propose-only Agent inference substrate: InferenceEngine seam + Koog Anthropic-format engine (ADR-0027 · #147)
 feature/                              ← shared KMP feature slices (Decompose component + ViewModel + state; commonMain + iOS)
-  auth · tasks · plan
-  tasks/ui · plan/ui                  ← per-slice Compose Views (deferno.compose.library: Android + JVM, NO iOS — #27)
+  <slice>/ui                          ← per-slice Compose Views (deferno.compose.library: Android + JVM, NO iOS — #27)
                                           androidMain = Android-native screens · commonMain = reusable atoms
 app/
+  shell/                              ← the shared Compose-free app shell: RootComponent (Auth↔Main) + Destination graph + AccountSession, consumed by every entry point (ADR-0017)
   androidApp/                         ← Android application (Jetpack Compose host)
     src/main/kotlin/com/circuitstitch/deferno/
       DefernoApplication.kt           ← entry point: builds the AppComponent DI graph, loads the roster, seeds dev-PAT accounts (#68)
       MainActivity.kt                 ← single Compose-host activity (RootComponent over the AppComponent; DefernoTheme)
-      shell/                          ← navigation shell: RootComponent (Auth↔Main) + Main Destination graph + AccountSession (#55/#68)
+      shell/                          ← the Android shell *Views* only (RootShell/MainShell + per-Destination screens); the components live in `app/shell` (ADR-0017)
     src/test/kotlin/…/{ui,demo,shell}/ ← Compose UI + Roborazzi screenshot tests + shell tests; demo/ holds the in-memory repository test fakes
     src/main/res/                     ← resources (strings, themes, adaptive launcher icons: flame foreground + monochrome)
   desktopApp/                         ← Compose Desktop (JVM) app — the cross-platform desktop target (ADR-0003/0017). On the real JVM DI graph (AppComponent + per-Account sessions, like Android) over the shared `app/shell` shell, with a desktop View for every Destination at Tier-A feature parity with Android (PR #288): most screens render the same commonMain Views the Android shell uses (Plan/Task-detail/Activity/Inbox/Search/New/Feedback). Deferred (platform-blocked): Brain dump dictation (needs a JVM speech/inference engine) + the Assistant chat (needs a JVM SSE transport). Browser-OAuth sign-in (ADR-0026) isn't wired against staging yet — a dev `run` exposes the paste-PAT fallback
@@ -74,7 +77,7 @@ The convention plugins (`build-logic/src/main/kotlin/`, ADR-0004) are small and 
 - `deferno.jvm.library` — a pure-Kotlin/JVM library (kotlin-jvm + JVM toolchain + `deferno.coverage`), the no-Android/no-KMP sibling of `deferno.kmp.library` (the standalone pure-Kotlin module `deferno.kmp` anticipates). Applied by a module that is JVM-only *by design*: currently `core/sidecar`, the JVM half of the native-sidecar substrate (ADR-0024/0025) whose peers are native Helper processes (not Kotlin), so KMP targets would be permanent dead weight. Still gated by the merged coverage report (it's a `core/*` module).
 - `deferno.di` — kotlin-inject + anvil DI wiring (KSP plugin + DI runtimes + per-target processors); composed onto `deferno.kmp.library` by modules that host or contribute DI bindings: `core/di` (the merge site — `AppComponent`/`AccountComponent`/`SceneComponent`) plus the modules with distributed `@ContributesTo` bindings (`core/secure · network · data · database · domain`, ADR-0014).
 - `deferno.compose` — applies the two Compose Gradle plugins (Compose Multiplatform runtime + `compose {}`/Resources DSL, and the Kotlin Compose *compiler* plugin). Composed onto a module that holds Composable code; deps stay in each module's build file (commonMain for a shared UI library, `androidMain` for a feature slice's Android Views — ADR-0004).
-- `deferno.compose.library` — a Compose UI *library* on the Compose platforms only: **Android + JVM/desktop, no iOS** (the iOS View is SwiftUI with its own design system, ADR-0003/0004; Compose Multiplatform 1.11 also dropped the deprecated `iosX64` variant). Sibling of `deferno.kmp.library` minus iOS, plus `deferno.compose`. Applied by `core/designsystem` and each per-slice UI submodule (`feature/tasks/ui`, `feature/plan/ui` — the Compose Views can't share a module with the slice's iOS target, ADR-0004 #27).
+- `deferno.compose.library` — a Compose UI *library* on the Compose platforms only: **Android + JVM/desktop, no iOS** (the iOS View is SwiftUI with its own design system, ADR-0003/0004; Compose Multiplatform 1.11 also dropped the deprecated `iosX64` variant). Sibling of `deferno.kmp.library` minus iOS, plus `deferno.compose`. Applied by `core/designsystem`, `app/shell/ui`, and each per-slice UI submodule (`feature/<slice>/ui` — the Compose Views can't share a module with the slice's iOS target, ADR-0004 #27).
 - `deferno.contract-fixtures` — embeds the captured `contracts/fixtures/*.json` into a module's `commonTest` as a generated `ContractFixtures` object (Gradle task `generateContractFixtures`) so the golden-envelope harness loads them on every KMP target with no runtime file IO (#19); applies no external plugin, composed onto modules that host the harness (currently `core/network`).
 - `deferno.android.application` — `app/androidApp` (SDK levels + toolchain from `ProjectConfig`).
 - `deferno.jvm.application` — `app/desktopApp` (Kotlin/JVM + toolchain). It deliberately omits Gradle's built-in `application` plugin: the app is Compose Desktop (ADR-0003) and `compose.desktop.application {}` supplies `run`/`mainClass`/packaging — applying both would duplicate them.
