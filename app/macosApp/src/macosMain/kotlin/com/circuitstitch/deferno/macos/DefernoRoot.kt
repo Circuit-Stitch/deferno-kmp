@@ -88,12 +88,12 @@ class DefernoRoot(
     // `Platform.isDebugBinary` — which now only picks the startup log level, the one thing that genuinely
     // does track build type. The real Swift entry point reads the `DefernoEnv` Info.plist value (fed by
     // the per-config `DEFERNO_ENV` build setting, project.yml) and resolves it via [defernoEnvironment] /
-    // [DefernoEnvironment.fromName], which fails safe to Production for an unknown/absent value. This
-    // Staging default is ONLY the fallback for a unit host that constructs DefernoRoot without an env
-    // (matching the prior debug-binary behaviour); the three shipping configurations — Debug (Staging),
-    // ProdDebug and Release (both Production) — always pass one explicitly. Ports the iOS shape the ADR
-    // deferred for macOS (ADR-0047 "Desktop/macOS are positioned but deferred", #368 G22).
-    private val environment: DefernoEnvironment = DefernoEnvironment.Staging,
+    // [DefernoEnvironment.fromName]. REQUIRED, deliberately: every other seam above has a `null` default
+    // that means "this host has no such capability", but there is no such thing as an app with no backend,
+    // and a default here would be a SECOND fail-safe competing with fromName's (which resolves an unknown
+    // or absent name to Production). One concept, one fail-safe, stated in one place. Ports the iOS shape
+    // the ADR deferred for macOS (ADR-0047 "Desktop/macOS are positioned but deferred", #368 G22).
+    private val environment: DefernoEnvironment,
 ) {
 
     init {
