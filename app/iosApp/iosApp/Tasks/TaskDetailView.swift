@@ -649,7 +649,7 @@ struct TaskDetailView: View {
 
     /// The subtask outline (#231): a done/total count + progress bar, a "Hide done" filter, the connected
     /// tree-rail rows, and an "add subtask" field. The rows are pre-flattened by the component with the same
-    /// fold mechanism as the Tasks tree (ADR-0034), so a fold here re-flattens the Tasks tree too.
+    /// fold mechanism as the Tasks tree (ADR-0049), so a fold here re-flattens the Tasks tree too.
     @ViewBuilder
     private func subtasksSection(_ value: TaskDetailState) -> some View {
         VStack(alignment: .leading, spacing: 6) {

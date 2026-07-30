@@ -40,7 +40,7 @@ import java.nio.file.Files
 /**
  * The Tasks screen, desktop edition — the desktop counterpart of the adaptive Android `TasksScreen` (#29).
  * Both render the component's panes as **1 or 2 panes by window size class** (ADR-0007 tier-2): Android via
- * M3 `ListDetailPaneScaffold`, desktop via `BoxWithConstraints` here. Since ADR-0034 the primary pane is the
+ * M3 `ListDetailPaneScaffold`, desktop via `BoxWithConstraints` here. Since ADR-0049 the primary pane is the
  * nested **Item tree** ([TasksComponent.tree]) — the flat list + one-level drill pane are subsumed — and the
  * secondary pane is the lone Task [TasksComponent.detail].
  *
@@ -103,7 +103,7 @@ private fun SecondaryPane(detail: TaskDetailComponent?) {
 /**
  * The Item-tree pane — a thin renderer of [ItemTreeComponent], reusing the shared [ItemTreeContent].
  *
- * Move undo (ADR-0034 decision 8, #230): the persistent "Undo move" long-press/keyboard menu entry
+ * Move undo (ADR-0049 decision 8, #230): the persistent "Undo move" long-press/keyboard menu entry
  * ([canUndo]/[onUndoMove]) plus a **top-anchored** "Moved · Undo" snackbar on every structural move —
  * the same two non-shake undo paths the Android [TaskListScreen] surfaces (shake-to-undo is omitted:
  * no accelerometer on desktop). Both revert through [ItemTreeComponent.undoLastMove].
@@ -166,7 +166,7 @@ private fun TreePane(
             onSetBlockedBy = component::onSetBlockedBy,
             onDismissBlockedByError = component::onDismissBlockedByError,
         )
-        // Top-anchored, out of the way (ADR-0034 decision 8: the Material default is bottom, so align top).
+        // Top-anchored, out of the way (ADR-0049 decision 8: the Material default is bottom, so align top).
         SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.TopCenter))
     }
 }

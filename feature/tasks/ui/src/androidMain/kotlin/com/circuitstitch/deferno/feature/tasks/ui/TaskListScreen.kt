@@ -43,11 +43,11 @@ import org.jetbrains.compose.resources.stringResource
 import kotlin.math.sqrt
 
 /**
- * The Tasks primary pane (ADR-0034, #227): the nested, collapsible **Item tree** across all kinds. A thin
+ * The Tasks primary pane (ADR-0049, #227): the nested, collapsible **Item tree** across all kinds. A thin
  * renderer of [ItemTreeComponent] — it observes [ItemTreeComponent.state] and forwards toggle/open/refresh
  * to it, holding no logic (the row-state logic lives in `buildItemTree`, the rendering in [ItemTreeContent]).
  *
- * Undo (ADR-0034 decision 8, #230): a **top-anchored** "Moved · Undo" snackbar on a structural move
+ * Undo (ADR-0049 decision 8, #230): a **top-anchored** "Moved · Undo" snackbar on a structural move
  * (reparent / indent / outdent — not a plain reorder), a persistent "Undo move" menu entry, and
  * shake-to-undo (a confirm prompt, the accidental-fire safety). All three revert through the same single
  * [ItemTreeComponent.undoLastMove] path.
@@ -132,7 +132,7 @@ fun TaskListScreen(
             onSetBlockedBy = component::onSetBlockedBy,
             onDismissBlockedByError = component::onDismissBlockedByError,
         )
-        // Top-anchored, out of thumb reach (ADR-0034 decision 8): the Material default is bottom, so align top.
+        // Top-anchored, out of thumb reach (ADR-0049 decision 8): the Material default is bottom, so align top.
         SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.TopCenter))
     }
 

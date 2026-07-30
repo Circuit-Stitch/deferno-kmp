@@ -13,7 +13,7 @@ import com.circuitstitch.deferno.core.model.TaskId
 
 /**
  * The offline-first cold sync that migrates the client from the legacy task-only `GET /tasks` to the
- * `GET /items` snapshot (ADR-0034, #226). It is the **Item-store** generalization of the old
+ * `GET /items` snapshot (ADR-0049, #226). It is the **Item-store** generalization of the old
  * `OfflineTaskRepository.refresh` reconcile: one snapshot pull, reconciled into the four per-kind
  * local stores (Task / Habit / Chore / Event) so the tree persists every kind offline, not just Tasks.
  *

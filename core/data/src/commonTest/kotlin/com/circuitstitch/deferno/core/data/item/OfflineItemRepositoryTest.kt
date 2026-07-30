@@ -28,7 +28,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The unified cross-kind read of [OfflineItemRepository] (ADR-0034, #226) — the read half of the Item
+ * The unified cross-kind read of [OfflineItemRepository] (ADR-0049, #226) — the read half of the Item
  * store the Tasks [Item tree] (#227) renders as one forest. Proves [observeItems] merges all four
  * per-kind caches into one list, projects each kind's common fields (incl. the de-emphasis [isTerminal]
  * signal and the Task-only subtree counts), re-emits when any kind changes, and that [refresh] delegates

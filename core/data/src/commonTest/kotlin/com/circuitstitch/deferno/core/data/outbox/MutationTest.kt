@@ -187,7 +187,7 @@ class MutationTest {
 
     @Test
     fun moveToRootEmitsExplicitNullParent() {
-        // null parent = "detach to root" (ADR-0034), an explicit wire null distinct from omit (ADR-0011).
+        // null parent = "detach to root" (ADR-0049), an explicit wire null distinct from omit (ADR-0011).
         assertEquals("""{"new_parent_id":null,"position":0}""", Move(id = "x", newParentId = null, position = 0).toRequest().body)
     }
 

@@ -2,7 +2,7 @@ package com.circuitstitch.deferno.core.model
 
 /**
  * The common projection across the four [ItemKind]s (CONTEXT.md → "Item") — the cross-kind read model
- * the Tasks [Item tree] (ADR-0034, #226/#227) renders as one forest. [Task]/[Habit]/[Chore]/[Event]
+ * the Tasks [Item tree] (ADR-0049, #226/#227) renders as one forest. [Task]/[Habit]/[Chore]/[Event]
  * are four unrelated domain types with **no supertype**; this is the small shared shape a tree row
  * needs, built from each kind's cached row by the `Item` mappers in `core:data`. Per-kind detail still
  * loads the concrete model on open — this carries only structure plus the fields a collapsed or

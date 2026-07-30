@@ -5,7 +5,7 @@ package com.circuitstitch.deferno.core.agent
  * this Account's inference. This is the **per-Account** half of the gate (the device-local engine
  * selection, [InferenceEnginePreference], is the per-device half). Read through this interface so it is
  * **fake-able in tests** (#150 AC) — the
- * real source is the backend's entitlement exposure (Kyle-Falconer/Deferno#345), not yet landed, so the
+ * real source is the backend's entitlement exposure (Circuit-Stitch/Deferno#345), not yet landed, so the
  * app binds a [FakeRelayEntitlement] until it does.
  *
  * `suspend` so the real source can hit the network; a constant fake answers synchronously.

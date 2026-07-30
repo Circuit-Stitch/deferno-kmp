@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
 /**
- * The unified, cross-kind **read** of the Item store (ADR-0034, #226) — the read half that completes
+ * The unified, cross-kind **read** of the Item store (ADR-0049, #226) — the read half that completes
  * the Task→Item generalization. The four kinds persist in four per-kind stores, each independently
  * observable; this merges them into one [Item] list so the Tasks [Item tree] (#227) can render the
  * whole catalog as a single `parent_id` forest. The sync/write side stays in [ItemSync].

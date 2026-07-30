@@ -31,7 +31,7 @@ private fun TestScope.tasksComponent(
 )
 
 /**
- * The Tasks root after ADR-0034: the Item [tree] is the primary pane; a row's trailing `›` opens the
+ * The Tasks root after ADR-0049: the Item [tree] is the primary pane; a row's trailing `›` opens the
  * co-resident [detail] slot (intent-driven, never a push/pop stack), and the detail's subtask drill
  * re-keys that same slot. The old flat-list + one-level drill pane are gone.
  */
@@ -76,7 +76,7 @@ class TasksComponentTest {
 
         component.tree.onOpenDetail("h", ItemKind.Habit)
 
-        assertNull(component.detail.value.child, "no detail surface for a Habit yet (ADR-0034 fast-follow)")
+        assertNull(component.detail.value.child, "no detail surface for a Habit yet (ADR-0049 fast-follow)")
     }
 
     @Test

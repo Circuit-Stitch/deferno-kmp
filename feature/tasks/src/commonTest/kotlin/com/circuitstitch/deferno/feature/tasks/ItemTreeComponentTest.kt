@@ -26,7 +26,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The Item-tree pane component (ADR-0034, #227): it flattens the cross-kind Item forest into the
+ * The Item-tree pane component (ADR-0049, #227): it flattens the cross-kind Item forest into the
  * observable [ItemTreeState], persists fold toggles to the device-local store (re-flattening live), opens
  * detail only for Task rows, and delegates refresh. Run against the fakes on the ADR-0006 JVM-fast path.
  */
@@ -186,7 +186,7 @@ class ItemTreeComponentTest {
         assertEquals(1, items.refreshCount)
     }
 
-    // --- modal move mode (ADR-0034 decision 6, #228) ---
+    // --- modal move mode (ADR-0049 decision 6, #228) ---
 
     @Test
     fun enteringMoveModeLiftsTheItemAndGreysTheIllegalDirections() = runTest {
@@ -254,7 +254,7 @@ class ItemTreeComponentTest {
         advanceUntilIdle() // no exception, nothing to assert beyond "did not throw"
     }
 
-    // --- undo: lastUndoable + snackbar + shake (ADR-0034 decision 8, #230) ---
+    // --- undo: lastUndoable + snackbar + shake (ADR-0049 decision 8, #230) ---
 
     @Test
     fun aStructuralMoveRecordsAnUndoableAndUndoRevertsViaTheSameEditor() = runTest {
@@ -336,7 +336,7 @@ class ItemTreeComponentTest {
         assertTrue(c.state.value.lastMove != null, "the snackbar + menu undo paths remain when shake is off")
     }
 
-    // --- kind-aware command menu (ADR-0034 decision 7, #231) ---
+    // --- kind-aware command menu (ADR-0049 decision 7, #231) ---
 
     @Test
     fun menuStatesAreSurfacedOnTheStateForTheView() = runTest {

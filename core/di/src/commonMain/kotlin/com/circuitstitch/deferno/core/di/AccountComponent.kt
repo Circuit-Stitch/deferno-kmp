@@ -80,7 +80,7 @@ abstract class AccountComponent(
     abstract val commentWriter: CommentWriter
 
     /**
-     * The cross-kind Item read (ADR-0034, #226/#227): the Tasks Item tree observes the windowed `/items`
+     * The cross-kind Item read (ADR-0049, #226/#227): the Tasks Item tree observes the windowed `/items`
      * set across all four kinds through this. The device-local [foldStore] is an AppScope binding resolved
      * through this child — the per-device expand/collapse overrides the tree (and the detail outline) share.
      */

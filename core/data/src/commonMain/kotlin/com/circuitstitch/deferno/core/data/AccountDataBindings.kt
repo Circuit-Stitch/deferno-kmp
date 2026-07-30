@@ -292,7 +292,7 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun occurrenceLocalStore(db: DefernoDatabase): OccurrenceLocalStore = SqlDelightOccurrenceLocalStore(db)
 
-    // The offline-first `GET /items` cold sync (ADR-0034, #226): one snapshot pull reconciled into all
+    // The offline-first `GET /items` cold sync (ADR-0049, #226): one snapshot pull reconciled into all
     // four per-kind stores, honoring the server-windowed done-visibility window. The snapshot source is
     // AppScope (the shared client follows the Active Account, ADR-0014); the stores + pending-create
     // table are this scope. `TaskRepository.refresh` triggers it (the trigger seam stays unchanged).
@@ -318,7 +318,7 @@ interface AccountDataBindings {
         eventStore: EventLocalStore,
     ): TaskRepository = OfflineTaskRepository(localStore, remoteSource, itemSync, habitStore, choreStore, eventStore)
 
-    // The unified cross-kind read of the Item store (ADR-0034, #226): merges the four per-kind caches
+    // The unified cross-kind read of the Item store (ADR-0049, #226): merges the four per-kind caches
     // into one Item list so the Tasks Item tree (#227) renders the whole catalog as one parent_id
     // forest. `refresh` shares the same `ItemSync` the Task path triggers — one cold sync, all kinds.
     @Provides
@@ -466,7 +466,7 @@ interface AccountDataBindings {
         outbox: OutboxStore,
     ): DefinitionWriter = OutboxDefinitionWriter(habitStore, choreStore, eventStore, outbox)
 
-    // The cross-kind Item move write seam (ADR-0034 decision 5, #228): optimistic reorder across the four
+    // The cross-kind Item move write seam (ADR-0049 decision 5, #228): optimistic reorder across the four
     // per-kind stores + outbox enqueue of `POST items/{id}/move`. Offline-first like the Task writer.
     @Provides
     @SingleIn(AccountScope::class)

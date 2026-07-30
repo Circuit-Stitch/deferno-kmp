@@ -63,7 +63,7 @@ import kotlin.time.Instant
  * | [PlanReorder] | `POST tasks/plan/reorder` | `{"task_ids":[…],"date":"…","tz":"…"}` |
  *
  * **Create now rides the outbox too (#185).** With the backend accepting client-supplied ids
- * (Kyle-Falconer/Deferno#402), an offline create mints the Item UUID up front and enqueues a
+ * (Circuit-Stitch/Deferno#402), an offline create mints the Item UUID up front and enqueues a
  * [CreateMutation] (`POST /{kind}` with that id) — the id is the idempotency key, so a replay can't
  * duplicate. A create *inserts* rather than transforms an existing row, so [CreateMutation] carries no
  * `applyTo` (the writer does the optimistic insert directly) and is routed specially on replay (it
@@ -283,10 +283,10 @@ data class PlanReorder(val taskIds: List<TaskId>, override val date: LocalDate, 
     }
 }
 
-// --- Item intents (cross-kind tree move, ADR-0034 #228) ---
+// --- Item intents (cross-kind tree move, ADR-0049 #228) ---
 
 /**
- * Reparent + reorder one Item (`POST items/{id}/move`, ADR-0034 decision 5, #228). Unlike a
+ * Reparent + reorder one Item (`POST items/{id}/move`, ADR-0049 decision 5, #228). Unlike a
  * [TaskMutation] this is a **cross-kind** intent — the moved Item and its target siblings may be
  * different kinds — so it carries no single-[Task] `applyTo`; the optimistic reorder spans the four
  * per-kind stores and lives in [com.circuitstitch.deferno.core.data.item.OutboxItemWriter].

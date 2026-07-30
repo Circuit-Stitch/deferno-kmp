@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
  *   that is *not* offline-first: it mutates an existing item's kind with no client-id idempotency story,
  *   so when offline the create writer refuses with a gentle "reconnect to save" — enqueuing nothing.
  *   (Create itself became offline-first once the backend honored client-supplied ids — #185 /
- *   Kyle-Falconer/Deferno#402 — and no longer gates on this seam.)
+ *   Circuit-Stitch/Deferno#402 — and no longer gates on this seam.)
  * - The **outbox driver** (#158) observes [online]: the offline→online edge triggers an immediate
  *   flush of the queued offline writes (instead of waiting out the periodic tick), and a flush pass
  *   is skipped while known-offline so a long offline stretch can't walk a queued write into the

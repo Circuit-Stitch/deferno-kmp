@@ -72,7 +72,7 @@ struct DependencyBadge: View {
     }
 }
 
-/// One node of the Tasks **Item tree** (#227, ADR-0034), restyled to the "See the trees" connected-tree
+/// One node of the Tasks **Item tree** (#227, ADR-0049), restyled to the "See the trees" connected-tree
 /// filigree (#237, the macOS twin of the iOS `ItemRowView`). A leading curvy **rail** + kind **node**
 /// (the leaf kind-dot or a parent fold-disc with a rotating chevron) drives the fold; a body tap also
 /// toggles a parent's fold (a leaf body is inert). The trailing › opens detail (Task kind only — the other

@@ -3,7 +3,7 @@ package com.circuitstitch.deferno.core.data.item
 import com.circuitstitch.deferno.core.data.RemoteSnapshot
 
 /**
- * The network port the `/items` cold snapshot is pulled through (ADR-0034, #226) — the item-wide
+ * The network port the `/items` cold snapshot is pulled through (ADR-0049, #226) — the item-wide
  * successor to the legacy task-only `TaskRemoteSource.fetchAll`. It speaks the *domain* (the wire
  * polymorphic `ItemView` is condensed at the network edge by the #18 mappers), so [ItemSync] never
  * touches a DTO.

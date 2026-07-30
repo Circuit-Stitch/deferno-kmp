@@ -32,7 +32,7 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * The Tasks feature host — the **adaptive tier-2 Pane layout** for the Tasks Destination (#29, ADR-0007).
- * Since ADR-0034 the primary pane is the nested **Item tree** ([TasksComponent.tree]) — the old flat list +
+ * Since ADR-0049 the primary pane is the nested **Item tree** ([TasksComponent.tree]) — the old flat list +
  * one-level drill pane are subsumed — and the secondary pane is the lone Task [TasksComponent.detail]. It
  * renders them as **one or two panes by window size class** via M3 `ListDetailPaneScaffold`: the tree on
  * compact width, a side-by-side tree + detail on regular/expanded width.

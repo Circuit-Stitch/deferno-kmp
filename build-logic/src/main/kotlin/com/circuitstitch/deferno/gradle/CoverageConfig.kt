@@ -120,12 +120,12 @@ object CoverageConfig {
         // headless gate. Their interfaces + InMemory impls ARE measured (commonTest).
         "com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpSalvageCounter*",
         "com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpNotificationPreference*",
-        // The device-local Item-tree fold-override store adapter (ADR-0034, #227): multiplatform-settings-backed,
+        // The device-local Item-tree fold-override store adapter (ADR-0049, #227): multiplatform-settings-backed,
         // exercised through the platform store on a real device/desktop, not the headless gate (same rationale as
         // SettingsKeepBrainDumpRecordingsPreference). The ItemFoldStore interface and InMemoryItemFoldStore ARE
         // measured (commonMain/commonTest).
         "com.circuitstitch.deferno.core.data.item.SettingsItemFoldStore*",
-        // The device-local "shake to undo" [[App setting]] adapter (ADR-0034 decision 8, #230): multiplatform-
+        // The device-local "shake to undo" [[App setting]] adapter (ADR-0049 decision 8, #230): multiplatform-
         // settings-backed, exercised through the platform store on a real device, not the headless gate (same
         // rationale as SettingsItemFoldStore). The ShakeToUndoPreference interface + InMemoryShakeToUndoPreference
         // ARE measured (commonMain/commonTest).

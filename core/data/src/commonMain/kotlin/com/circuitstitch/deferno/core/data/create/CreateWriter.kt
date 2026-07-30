@@ -12,7 +12,7 @@ import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
  *
  * **Create is offline-first.** Each `create*` mints a client-side Item UUID, inserts the optimistic
  * local row, records a pending create, and enqueues a `POST /{kind}` carrying that id on the outbox —
- * the backend dedupes the create on the client id (Kyle-Falconer/Deferno#402). So a create always
+ * the backend dedupes the create on the client id (Circuit-Stitch/Deferno#402). So a create always
  * succeeds locally and returns [CreateResult.Created] with the client id; replay/confirm/heal happen on
  * the outbox. See [OfflineCreateWriter].
  *

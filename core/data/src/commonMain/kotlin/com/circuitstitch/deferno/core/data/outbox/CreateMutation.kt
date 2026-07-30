@@ -20,7 +20,7 @@ import kotlinx.serialization.json.put
  *
  * **Client-supplied id is the idempotency key.** The rendered body is the create payload PLUS an
  * explicit `"id"` — the client-generated Item UUID. The backend creates the Item under that id and
- * dedupes a replay on it (Kyle-Falconer/Deferno#402), so replaying the same create after an interrupted
+ * dedupes a replay on it (Circuit-Stitch/Deferno#402), so replaying the same create after an interrupted
  * request never duplicates. The body is built once from the payload's own serializer (so its
  * `@SerialName`s + `explicitNulls=false` omit-vs-null rules apply, ADR-0011) with `id` merged in.
  *

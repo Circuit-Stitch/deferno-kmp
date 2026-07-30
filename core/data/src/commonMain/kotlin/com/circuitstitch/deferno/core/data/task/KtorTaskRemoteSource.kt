@@ -17,7 +17,7 @@ import io.ktor.http.appendPathSegments
  *
  * - [fetch]    -> `GET /tasks/{id}` -> `TaskDetailDto` -> [HydrationState.Full][Task].
  *
- * The cold list snapshot moved to `GET /items` (ADR-0034, #226 —
+ * The cold list snapshot moved to `GET /items` (ADR-0049, #226 —
  * [com.circuitstitch.deferno.core.data.item.KtorItemSnapshotSource]); it is no longer fetched here. Global
  * search went **offline** in #311 (a local read over the cache, ADR-0042), so `/tasks/search` is gone too.
  *

@@ -168,7 +168,7 @@ abstract class AppComponent(
     abstract val brainDumpNotificationPreference: BrainDumpNotificationPreference
 
     /**
-     * The device-local **"shake to undo"** choice the Tasks tree + Settings render (ADR-0034 decision 8,
+     * The device-local **"shake to undo"** choice the Tasks tree + Settings render (ADR-0049 decision 8,
      * #230): whether a phone shake raises the "Undo [operation]?" confirm that reverts the last Move. An
      * AppScope [[App setting]] — device-local, never synced. Defaults to on; shake is never the only undo
      * path (the snackbar + menu remain). Surfaced here to compile-validate the binding on every target.
@@ -176,7 +176,7 @@ abstract class AppComponent(
     abstract val shakeToUndoPreference: ShakeToUndoPreference
 
     /**
-     * The device-local **Item-tree fold-override store** (ADR-0034, #227): the per-device expand/collapse
+     * The device-local **Item-tree fold-override store** (ADR-0049, #227): the per-device expand/collapse
      * overrides the Tasks Item tree and the detail subtask outline share, keyed by item id. An AppScope
      * [[App setting]] — device-local, never synced, never per-Account. Re-exposed here so the child
      * AccountScope can consume it (its [AccountComponent.foldStore] resolves through this parent accessor)
@@ -260,7 +260,7 @@ abstract class AppComponent(
     // closes over the host Context / databases dir / key provider inside AppScope). They are plumbing,
     // not part of the app-facing surface — the app uses AccountComponent.taskRepository et al.
     abstract val taskRemoteSource: TaskRemoteSource
-    // The item-wide cold-snapshot source (`GET /items`, ADR-0034 #226): the AccountScope ItemSync pulls
+    // The item-wide cold-snapshot source (`GET /items`, ADR-0049 #226): the AccountScope ItemSync pulls
     // the windowed snapshot through it, reconciling every kind into its store on refresh.
     abstract val itemSnapshotSource: ItemSnapshotSource
     // The bare presigned-upload client (no base URL, no bearer — an Authorization header would break S3

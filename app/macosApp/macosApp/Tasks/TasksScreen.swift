@@ -1,7 +1,7 @@
 import Deferno
 import SwiftUI
 
-/// The Tasks Destination host (ADR-0034). The Destination is the nested, collapsible **Item tree**
+/// The Tasks Destination host (ADR-0049). The Destination is the nested, collapsible **Item tree**
 /// (#227) as the primary pane, with its co-resident **detail** slot alongside (ADR-0007). The old flat
 /// list + one-level drill pane are subsumed — a node's children are seen inline by expanding the tree.
 ///

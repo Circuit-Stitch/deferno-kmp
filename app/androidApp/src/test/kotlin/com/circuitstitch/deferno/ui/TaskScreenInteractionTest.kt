@@ -63,7 +63,7 @@ class TaskScreenInteractionTest {
         val component = FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(SampleTasks.items)))
         setContent { TaskListScreen(component) }
 
-        // The trailing `›` is the only open-detail affordance (ADR-0034 decision 7).
+        // The trailing `›` is the only open-detail affordance (ADR-0049 decision 7).
         composeRule.onNodeWithContentDescription("Open Water the plants").performClick()
 
         assertEquals(listOf("2" to ItemKind.Task), component.opened)

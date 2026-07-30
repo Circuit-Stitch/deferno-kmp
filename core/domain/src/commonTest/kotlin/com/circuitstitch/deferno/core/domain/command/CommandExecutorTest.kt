@@ -288,7 +288,7 @@ class CommandExecutorTest {
 
     @Test
     fun moveItemRoutesToTheItemWriterWithItsDestinationAndIndex() = runTest {
-        // ADR-0034 #228: the cross-kind move is offline-first (optimistic apply + enqueue), so it is
+        // ADR-0049 #228: the cross-kind move is offline-first (optimistic apply + enqueue), so it is
         // Accepted, routes to the ItemWriter alone, and forwards the raw id / new parent / insertion index.
         val tw = FakeTaskWriter()
         val iw = FakeItemWriter()

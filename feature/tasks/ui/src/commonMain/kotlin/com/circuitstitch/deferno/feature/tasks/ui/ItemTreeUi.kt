@@ -155,7 +155,7 @@ import com.circuitstitch.deferno.feature.tasks.TaskMenuState
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
-// The Tasks Item-tree renderer (ADR-0034, #227/#228) restyled to the "See the trees" direction (#231):
+// The Tasks Item-tree renderer (ADR-0049, #227/#228) restyled to the "See the trees" direction (#231):
 // the cross-kind forest ("Everything") flattened to depth-indented rows in one LazyColumn, shared by the
 // Android (TaskListScreen) and desktop (TasksDesktopScreen) primary pane. Stateless and platform-neutral;
 // the component (DefaultItemTreeComponent) holds all logic — these only render the [ItemRow]s, forward
@@ -179,7 +179,7 @@ private val TreeRowStartInset = 12.dp
  * The Tasks Item tree ("Everything"): a calm header band (title + count + a read-only search bar + a
  * local segmented filter) over a `LazyColumn` of [rows], capped by an "Add a tree" affordance. Each parent
  * row toggles its fold on a chevron/body tap; a childless leaf's body is inert; the trailing `›` opens
- * detail (ADR-0034 decision 7). A **long-press** lifts the row into [moveMode] (decision 6, #228): the
+ * detail (ADR-0049 decision 7). A **long-press** lifts the row into [moveMode] (decision 6, #228): the
  * lifted row is highlighted, the rest calmed, and a bottom bar offers **↑ ↓ ‹ ›** (illegal directions
  * greyed) + Done — mirrored on the keyboard (Alt+↑/↓ reorder, Tab / Shift-Tab indent / outdent, Esc =
  * Done). Empty/refreshing states mirror the calm copy of the other Tasks panes.
@@ -224,11 +224,11 @@ internal fun ItemTreeContent(
     onIndent: () -> Unit = {},
     onOutdent: () -> Unit = {},
     onExitMoveMode: () -> Unit = {},
-    // Undo (ADR-0034 decision 8, #230): a persistent "Undo move" entry in the long-press menu, the non-shake,
+    // Undo (ADR-0049 decision 8, #230): a persistent "Undo move" entry in the long-press menu, the non-shake,
     // non-transient path. [canUndo] gates it; defaulted off so read-only callers (desktop/tests) omit it.
     canUndo: Boolean = false,
     onUndoMove: () -> Unit = {},
-    // The kind-aware command menu (ADR-0034 decision 7, #231). [menuStates] carries each Task row's
+    // The kind-aware command menu (ADR-0049 decision 7, #231). [menuStates] carries each Task row's
     // working-state/pinned/in-plan (keyed by item id) so the menu labels Pin↔Unpin / Add↔Remove and swaps
     // the status block; only Task rows have an entry, but the View reads kind from the row (not from this
     // map's presence), so a non-Task row gets the cross-kind subset (Add subtask · Move) on kind alone.
@@ -565,7 +565,7 @@ private fun ItemTreeRow(
     val dim = if (inMoveMode && !isLifted) 0.38f else 1f
 
     // Outside move mode: body tap toggles a parent's fold (leaf body inert), long-press opens the Move menu.
-    // In move mode the body is inert so a scroll/tap can never masquerade as a move (ADR-0034 decision 6).
+    // In move mode the body is inert so a scroll/tap can never masquerade as a move (ADR-0049 decision 6).
     val bodyModifier =
         if (inMoveMode) {
             Modifier
@@ -671,7 +671,7 @@ private fun ItemTreeRow(
                 item.source?.let { source ->
                     SourceIndicator(source, modifier = Modifier.padding(horizontal = 4.dp))
                 }
-                // The lone open-detail affordance: a fixed target, immune to title length (ADR-0034 dec. 7).
+                // The lone open-detail affordance: a fixed target, immune to title length (ADR-0049 dec. 7).
                 // Inert in move mode (the list is calm). An icon-only control, so it carries its own
                 // contentDescription for TalkBack; the glyph's own semantics are cleared so it isn't read twice.
                 val openItemCd = stringResource(Res.string.common_open_named_cd, item.title)
@@ -691,7 +691,7 @@ private fun ItemTreeRow(
                 }
             }
 
-            // The kind-aware long-press command menu (ADR-0034 decision 7, #231) — mirrors the web submenu
+            // The kind-aware long-press command menu (ADR-0049 decision 7, #231) — mirrors the web submenu
             // plus the native Move action. Kind is read straight off the row ([item.kind]), never inferred
             // from whether the per-row Task state has joined: a Task whose [menuState] hasn't loaded yet (the
             // tree rows come from the Item repo, [menuState] from the Task+plan repos — independent Flows) is
@@ -793,7 +793,7 @@ private fun ItemTreeRow(
                     )
                 }
                 if (!isTask) {
-                    // Kind-aware status block for a non-Task definition (ADR-0034 decision 7, #299): the
+                    // Kind-aware status block for a non-Task definition (ADR-0049 decision 7, #299): the
                     // recurring "light switch" — Archive an active Habit/Chore/Event, or Activate an archived
                     // one. A non-Task row carries no working state, so [item.isTerminal] IS its archived bit
                     // (ItemRepository maps DefinitionState.Archived → terminal); the verb needs no joined state.
@@ -1019,7 +1019,7 @@ internal fun SourceIndicator(source: ItemSource, modifier: Modifier = Modifier) 
 internal expect fun sourceMarkPainter(source: ItemSource): Painter
 
 /**
- * The contextual move-mode control (ADR-0034 decision 6, #228): **↑ ↓** reorder among siblings and
+ * The contextual move-mode control (ADR-0049 decision 6, #228): **↑ ↓** reorder among siblings and
  * **‹ ›** outdent / indent, each acting live per press, plus **Done** to exit. An illegal direction is
  * greyed (the client-side "illegal targets prevented" guard, driven by [MoveMode]'s flags).
  */

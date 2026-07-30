@@ -91,7 +91,7 @@ class CommandExecutor(
             is SetTracking -> settingsWriter.setTracking(command.enabled)
             is SetDragAndDrop -> settingsWriter.setDragAndDrop(command.enabled)
             is SetDoneVisibility -> settingsWriter.setDoneVisibility(command.globalSeconds, command.dashboardSeconds)
-            // Cross-kind tree move (ADR-0034 #228): optimistic reorder + outbox enqueue, offline-first.
+            // Cross-kind tree move (ADR-0049 #228): optimistic reorder + outbox enqueue, offline-first.
             is MoveItem -> itemWriter.move(command.id, command.newParentId, command.position)
             // Recurring-definition "light switch" (#299): optimistic per-kind apply + outbox enqueue,
             // offline-first. Carries itemKind so the writer routes to the right per-kind store/endpoint.

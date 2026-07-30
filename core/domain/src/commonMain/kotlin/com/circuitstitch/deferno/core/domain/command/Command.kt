@@ -36,15 +36,15 @@ import kotlin.time.Instant
  * catalog + per-state applicability live on [CommandKind].
  *
  * **Create is offline-first ([CreateItem], #185); convert is still online-only ([ConvertItem]).** The
- * backend now dedupes a create on the client-supplied id (Kyle-Falconer/Deferno#402), so [CreateItem]
+ * backend now dedupes a create on the client-supplied id (Circuit-Stitch/Deferno#402), so [CreateItem]
  * rides the outbox like every edit — optimistic local insert + enqueue, [CommandResult.Accepted]
  * carrying the client id — realizing ADR-0016's forward path. [ConvertItem] mutates an existing item's
  * kind with no client-id idempotency story, so it keeps the ADR-0016 gate: its [CommandKind.onlineOnly]
  * flag is the signal the agent / OS-intent layer reads, and the executor returns [CommandResult.Offline]
  * (not a false [CommandResult.Accepted]) when offline.
  *
- * **Reparent / move has landed ([MoveItem], ADR-0034 #228).** ADR-0007 paired "drag-to-reorder /
- * reparent" as a v1 input goal; the reorder half was bound ([ReorderPlan]), and ADR-0034 supplied the
+ * **Reparent / move has landed ([MoveItem], ADR-0049 #228).** ADR-0007 paired "drag-to-reorder /
+ * reparent" as a v1 input goal; the reorder half was bound ([ReorderPlan]), and ADR-0049 supplied the
  * cross-kind move write seam ([com.circuitstitch.deferno.core.data.item.ItemWriter] →
  * `POST items/{id}/move`) the "no write seam yet" note here once deferred. So [MoveItem] now joins the
  * catalog — one command behind the modal move mode's ↑↓ reorder + ‹› indent/outdent and the keyboard,
@@ -215,7 +215,7 @@ data class ReorderPlan(val taskIds: List<TaskId>, override val date: LocalDate, 
 // --- Create (OFFLINE-FIRST, #185) + convert (ONLINE-ONLY, ADR-0016) ---
 //
 // Create now rides the outbox like every edit: the backend dedupes it on the client-supplied id
-// (Kyle-Falconer/Deferno#402), so the writer mints a UUID, inserts optimistically, and enqueues — the
+// (Circuit-Stitch/Deferno#402), so the writer mints a UUID, inserts optimistically, and enqueues — the
 // executor reports Accepted (queued) carrying that id. Convert still requires connectivity (it mutates
 // an existing item's kind with no client-id idempotency story), so it keeps the [CommandKind.onlineOnly]
 // flag the executor maps to [CommandResult.Offline] when refused. The payload is the kind-specific
@@ -257,11 +257,11 @@ data class ConvertItem(
     override val kind: CommandKind get() = CommandKind.ConvertItem
 }
 
-// --- Move (OFFLINE-FIRST, cross-kind tree reorder/reparent, ADR-0034 #228) ---
+// --- Move (OFFLINE-FIRST, cross-kind tree reorder/reparent, ADR-0049 #228) ---
 
 /**
  * Move the Item [id] under [newParentId] (`null` = detach to root) to insertion index [position] among
- * the destination parent's children (`POST items/{id}/move`, ADR-0034 decision 5). The **single**
+ * the destination parent's children (`POST items/{id}/move`, ADR-0049 decision 5). The **single**
  * capability behind all three modal-move skins — ↑↓ reorder among siblings and ‹› indent/outdent — and
  * the keyboard; each input modality computes [newParentId] + [position] and issues this same command
  * ("Move is one capability, three input skins"). Cross-kind, so it addresses the **raw Item id string**

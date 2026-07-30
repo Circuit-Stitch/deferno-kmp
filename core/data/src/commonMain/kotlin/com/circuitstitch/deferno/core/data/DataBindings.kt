@@ -181,7 +181,7 @@ interface DataBindings {
     @SingleIn(AppScope::class)
     fun taskRemoteSource(client: HttpClient): TaskRemoteSource = KtorTaskRemoteSource(client)
 
-    // The item-wide cold-snapshot source (`GET /items`, ADR-0034 #226) — the successor to the legacy
+    // The item-wide cold-snapshot source (`GET /items`, ADR-0049 #226) — the successor to the legacy
     // task-only `TaskRemoteSource.fetchAll`. AppScope, like the other Ktor sources.
     @Provides
     @SingleIn(AppScope::class)

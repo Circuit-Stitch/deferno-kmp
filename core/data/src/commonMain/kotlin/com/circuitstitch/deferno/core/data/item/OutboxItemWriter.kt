@@ -17,7 +17,7 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 /**
- * The offline-first [ItemWriter] (ADR-0001, ADR-0034 #228) — the cross-kind sibling of
+ * The offline-first [ItemWriter] (ADR-0001, ADR-0049 #228) — the cross-kind sibling of
  * [com.circuitstitch.deferno.core.data.task.OutboxTaskWriter]. A move spans all four kinds, so it holds
  * the four per-kind stores (like [com.circuitstitch.deferno.core.data.create.OfflineCreateWriter]) plus
  * the outbox.
@@ -80,7 +80,7 @@ internal data class MoveAssignment(val id: String, val kind: ItemKind, val seque
 
 /**
  * Pure optimistic plan for moving [movedId] under [newParentId] (`null` = root) to insertion index
- * [position]: the new `sequence` for each affected row in the **destination** sibling group (ADR-0034 #228).
+ * [position]: the new `sequence` for each affected row in the **destination** sibling group (ADR-0049 #228).
  *
  * Mirrors the tree's own sibling grouping (`buildItemTree`) — an absent parent collapses to root, so an
  * orphan is treated as a root sibling — meaning the optimistic order matches what the flatten will render.

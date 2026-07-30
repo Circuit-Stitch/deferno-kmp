@@ -16,7 +16,7 @@ import com.circuitstitch.deferno.core.model.TaskId
 /**
  * Repairs every local reference to an offline-created Item's **client** id when the server assigns it a
  * **different** canonical id (#185). Client-supplied ids are the normal path (the backend honors them —
- * Kyle-Falconer/Deferno#402), so this fires only on the rare divergence, but it must leave the cache
+ * Circuit-Stitch/Deferno#402), so this fires only on the rare divergence, but it must leave the cache
  * fully consistent when it does. Driven by the outbox replay listener the instant a create replays
  * (before the processor advances to any queued edit against the same id).
  *

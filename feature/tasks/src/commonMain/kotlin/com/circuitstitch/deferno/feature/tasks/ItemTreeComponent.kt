@@ -26,14 +26,14 @@ import kotlin.coroutines.CoroutineContext
 
 /**
  * Observable state for the Tasks Item-tree pane. The View renders the flattened [rows] and holds no logic.
- * [moveMode] is non-null while an item is lifted in modal move mode (ADR-0034 decision 6, #228) — the View
+ * [moveMode] is non-null while an item is lifted in modal move mode (ADR-0049 decision 6, #228) — the View
  * highlights the lifted row, calms the rest, and greys out the illegal directions.
  */
 data class ItemTreeState(
     val rows: List<ItemRow> = emptyList(),
     val isRefreshing: Boolean = false,
     val moveMode: MoveMode? = null,
-    // The last undoable Move, or null when nothing is undoable (ADR-0034 decision 8, #230). Drives the
+    // The last undoable Move, or null when nothing is undoable (ADR-0049 decision 8, #230). Drives the
     // top "Moved · Undo" snackbar (only when [MoveUndo.structural]) and gates the menu's Undo entry.
     val lastMove: MoveUndo? = null,
     // The readiness axis (#290): false (the resting default — ready-only) prunes `blocked` items and their
@@ -86,7 +86,7 @@ enum class BlockedByEditError {
 }
 
 /**
- * The View's projection of the [LastUndoable] register (ADR-0034 decision 8, #230). [structural] gates the
+ * The View's projection of the [LastUndoable] register (ADR-0049 decision 8, #230). [structural] gates the
  * top **"Moved · Undo"** snackbar — shown on reparent / indent / outdent, **not** a plain same-level reorder;
  * [operation] feeds the shake confirm ("Undo [operation]?"); [id] is a monotonic token that re-keys the
  * single-shot snackbar effect across successive moves (two indents in a row still each raise the snackbar).
@@ -99,7 +99,7 @@ data class MoveUndo(
 )
 
 /**
- * What a device shake should do (ADR-0034 decision 8, #230): raise the [Confirm] prompt for [operation]
+ * What a device shake should do (ADR-0049 decision 8, #230): raise the [Confirm] prompt for [operation]
  * ("Undo [operation]?"), or do [Nothing] — the toggle is off, or nothing is undoable (the latter having
  * already emitted its tracking event). The View renders the confirm and, on accept, calls [ItemTreeComponent.undoLastMove].
  */
@@ -110,7 +110,7 @@ sealed interface ShakeOutcome {
 }
 
 /**
- * The lifted item + which of the four relative moves are legal right now (ADR-0034 #228). The booleans
+ * The lifted item + which of the four relative moves are legal right now (ADR-0049 #228). The booleans
  * mirror [MoveOptions]'s non-null arms — the client-side "illegal targets greyed out" guard the View renders
  * onto the **↑ ↓ ‹ ›** controls (and the keyboard ignores a disabled direction).
  */
@@ -123,12 +123,12 @@ data class MoveMode(
 )
 
 /**
- * The Tasks Destination as the nested, collapsible **Item tree** (ADR-0034, #227) — the cross-kind forest
+ * The Tasks Destination as the nested, collapsible **Item tree** (ADR-0049, #227) — the cross-kind forest
  * the old flat list + one-level drill pane are subsumed into. It observes the windowed `/items` set across
  * all four kinds ([ItemRepository.observeItems]) and the device-local fold overrides ([ItemFoldStore]),
  * and exposes the flattened, depth-indented [ItemRow]s a single `LazyColumn` renders.
  *
- * **Per-row interaction (ADR-0034 decision 7).** The leading chevron *and* a body tap toggle a parent's
+ * **Per-row interaction (ADR-0049 decision 7).** The leading chevron *and* a body tap toggle a parent's
  * fold ([onToggleExpand]); a childless leaf's body is inert. The trailing `›` opens detail ([onOpenDetail]).
  * Navigation is intent-driven: [onOpenDetail] emits an [Output.ItemSelected]; the parent owns the slots.
  */
@@ -139,12 +139,12 @@ interface ItemTreeComponent {
      * Toggle a parent row's expand/collapse — the leading chevron or a body tap. [currentlyExpanded] is
      * the row's present fold (the View has it on the [ItemRow]); this persists the flipped value as an
      * explicit override (device-local, shared with the detail subtask outline). The View calls this only
-     * for a parent row — a childless leaf's body is inert (ADR-0034 decision 7).
+     * for a parent row — a childless leaf's body is inert (ADR-0049 decision 7).
      */
     fun onToggleExpand(id: String, currentlyExpanded: Boolean)
 
     /**
-     * Open a row's detail — the trailing `›`. Only **Task** rows have a detail surface today (ADR-0034);
+     * Open a row's detail — the trailing `›`. Only **Task** rows have a detail surface today (ADR-0049);
      * a tap on another [kind] is a no-op until per-kind detail lands (a deferred fast-follow).
      */
     fun onOpenDetail(id: String, kind: ItemKind)
@@ -159,7 +159,7 @@ interface ItemTreeComponent {
      */
     fun onSetShowBlocked(show: Boolean)
 
-    // --- Modal move mode (ADR-0034 decision 6, #228): a single lifted item moved live, one press at a time ---
+    // --- Modal move mode (ADR-0049 decision 6, #228): a single lifted item moved live, one press at a time ---
 
     /** Enter move mode with [id] lifted — the long-press "Move" entry (or a keyboard shortcut). */
     fun onEnterMoveMode(id: String)
@@ -179,7 +179,7 @@ interface ItemTreeComponent {
     /** Outdent the lifted item — hop out to its parent's level (‹ / Shift-Tab). A no-op when illegal. */
     fun onOutdent()
 
-    // --- Undo (ADR-0034 decision 8, #230): single-level Move undo, three interchangeable triggers ---
+    // --- Undo (ADR-0049 decision 8, #230): single-level Move undo, three interchangeable triggers ---
 
     /**
      * Revert the last Move (single-level), via the **same command path** ([MoveEditor]). The top snackbar's
@@ -197,7 +197,7 @@ interface ItemTreeComponent {
      */
     fun onShake(): ShakeOutcome
 
-    // --- Kind-aware command menu (ADR-0034 decision 7, #231): the long-press row menu's write intents.
+    // --- Kind-aware command menu (ADR-0049 decision 7, #231): the long-press row menu's write intents.
     // Each carries the row's current value (the "args from the row" rule — the component's StateFlow is
     // WhileSubscribed). The status/Pin/plan/Delete writes are Task-only (the native command layer is
     // Task-centric); the View only surfaces them for a Task row (one with a [ItemTreeState.menuStates] entry). ---
@@ -268,7 +268,7 @@ class DefaultItemTreeComponent(
     // The device-local shake-to-undo App setting (#230), sourced from AppScope. Defaulted to an in-memory
     // (on) preference so existing tests build without supplying it (like the [moveEditor] no-op).
     private val shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
-    // The tracking-event sink (#230): stubbed to the kmp-logger until the telemetry seam lands (ADR-0034).
+    // The tracking-event sink (#230): stubbed to the kmp-logger until the telemetry seam lands (ADR-0049).
     // A seam (not a direct log call) so a shake-with-nothing-to-undo is assertable in commonTest.
     private val trackEvent: (String) -> Unit = ::logTrackingEvent,
     // The kind-aware command menu's per-row Task state (#231): the Task working-state/pinned/in-plan join
@@ -302,7 +302,7 @@ class DefaultItemTreeComponent(
     // The readiness axis (#290): false = ready-only (blocked items pruned). Ephemeral view preference.
     private val showBlocked = MutableStateFlow(false)
 
-    // The single-level last-undoable register (ADR-0034 decision 8, #230): each move records its inverse here.
+    // The single-level last-undoable register (ADR-0049 decision 8, #230): each move records its inverse here.
     private val lastUndoable = LastUndoable()
 
     // The open "Blocked by…" picker + the last write failure (#291), surfaced on the state.
@@ -346,7 +346,7 @@ class DefaultItemTreeComponent(
         }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ItemTreeState())
 
     // Persisting through the shared store re-flattens this tree AND the detail subtask outline live —
-    // both combine the one [ItemFoldStore.overrides] flow (ADR-0034 decision 4).
+    // both combine the one [ItemFoldStore.overrides] flow (ADR-0049 decision 4).
     override fun onToggleExpand(id: String, currentlyExpanded: Boolean) {
         foldStore.setOverride(id, !currentlyExpanded)
     }
@@ -392,7 +392,7 @@ class DefaultItemTreeComponent(
      * dispatches through [moveEditor]. A no-op when not in move mode or when that direction is illegal —
      * the item stays lifted so the user can keep moving it ("live per press").
      *
-     * Before dispatching, records the inverse in [lastUndoable] (ADR-0034 decision 8, #230): the item's
+     * Before dispatching, records the inverse in [lastUndoable] (ADR-0049 decision 8, #230): the item's
      * pre-move slot ([currentSlot]) is the exact `(newParentId, position)` an undo moves it back to, through
      * the **same** [moveEditor]. [structural] (a parent change — indent / outdent / reparent) drives the
      * snackbar; a same-level reorder records too (shake-undoable) but shows no snackbar. [operation] labels
@@ -422,7 +422,7 @@ class DefaultItemTreeComponent(
         return ShakeOutcome.Confirm(entry.operation)
     }
 
-    // --- Kind-aware command menu writes (ADR-0034 decision 7, #231). Each is a thin dispatch to its
+    // --- Kind-aware command menu writes (ADR-0049 decision 7, #231). Each is a thin dispatch to its
     // Task-only seam; the View gates which entries it shows by kind + the row's [TaskMenuState]. ---
 
     override fun onAddSubtask(parentId: String, title: String) {
@@ -506,7 +506,7 @@ class DefaultItemTreeComponent(
 // Keep the upstream alive briefly across config changes / brief detachment, then stop to save work.
 internal const val STOP_TIMEOUT_MS = 5_000L
 
-// The default tracking-event sink (#230): a kmp-logger stub until the telemetry seam lands (ADR-0034). A
+// The default tracking-event sink (#230): a kmp-logger stub until the telemetry seam lands (ADR-0049). A
 // top-level fn so it's a valid constructor default (a member `logger` isn't in scope for default args).
 private fun logTrackingEvent(event: String) {
     Logger("ItemTreeUndo").i { "tracking_event: $event" }

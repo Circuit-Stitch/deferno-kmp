@@ -128,7 +128,7 @@ interface AndroidDataBindings {
         )
 
     /**
-     * The device-local "shake to undo" choice (ADR-0034 decision 8, #230, [[App setting]]) — whether a
+     * The device-local "shake to undo" choice (ADR-0049 decision 8, #230, [[App setting]]) — whether a
      * phone shake on the Tasks tree raises the "Undo [operation]?" confirm. SharedPreferences-backed,
      * sharing the device-local app-settings bag with the other App settings (a distinct, namespaced key).
      */
@@ -140,7 +140,7 @@ interface AndroidDataBindings {
         )
 
     /**
-     * The device-local Item-tree fold-override store (ADR-0034, #227, [[App setting]]) — explicit
+     * The device-local Item-tree fold-override store (ADR-0049, #227, [[App setting]]) — explicit
      * expand/collapse choices keyed by item id, shared by the Tasks tree + the detail subtask outline.
      * SharedPreferences-backed, sharing the device-local app-settings bag (a distinct, namespaced key).
      */

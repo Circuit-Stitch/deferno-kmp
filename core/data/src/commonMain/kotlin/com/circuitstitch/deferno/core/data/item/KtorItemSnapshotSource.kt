@@ -14,7 +14,7 @@ import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.http.appendPathSegments
 
 /**
- * The production [ItemSnapshotSource] over the shared Deferno [HttpClient] (ADR-0034, #226). It pulls
+ * The production [ItemSnapshotSource] over the shared Deferno [HttpClient] (ADR-0049, #226). It pulls
  * the polymorphic `GET /items` cold snapshot and condenses each `oneOf{task,habit,chore,event}`
  * element to its domain kind at the boundary via the #18 `ItemView` mappers, partitioning the
  * heterogeneous array into the four kind lists of an [ItemSnapshot] — so [ItemSync] never touches a DTO.

@@ -8,7 +8,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The single-level last-undoable register (ADR-0034 decision 8, #230): records the inverse of the most
+ * The single-level last-undoable register (ADR-0049 decision 8, #230): records the inverse of the most
  * recent undoable command, replays it once, and is shaped to grow into a general last-action undo.
  */
 class LastUndoableTest {

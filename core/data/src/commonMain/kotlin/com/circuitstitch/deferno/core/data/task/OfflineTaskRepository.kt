@@ -24,7 +24,7 @@ import kotlin.time.Instant
  * The offline-first [TaskRepository] (ADR-0001, #22): the local store is the single source of truth,
  * reads are its `Flow`s, and the network only ever *writes through* the store via [refresh]/[hydrate].
  *
- * **Cold sync ([refresh]) — delegated to [ItemSync].** As of ADR-0034 (#226) the cold snapshot migrated
+ * **Cold sync ([refresh]) — delegated to [ItemSync].** As of ADR-0049 (#226) the cold snapshot migrated
  * from the legacy task-only `GET /tasks` to the item-wide `GET /items`, so a refresh now reconciles
  * *every* kind (Task/Habit/Chore/Event) into its store — honoring the server-windowed done-visibility
  * window — not just Tasks. That cross-kind reconcile lives in [ItemSync]; this repository just triggers
@@ -61,7 +61,7 @@ class OfflineTaskRepository(
     override suspend fun hydrate(id: TaskId) {
         val detail = remoteSource.fetch(id) ?: return
         // The `/tasks/{id}` detail does not carry the server-computed subtree counts (those are an
-        // `/items`-snapshot computation, ADR-0034) — so preserve the cached counts the snapshot set,
+        // `/items`-snapshot computation, ADR-0049) — so preserve the cached counts the snapshot set,
         // rather than blanking a collapsed tree node's progress badge on detail-open (#226/#227).
         val existing = localStore.get(id)
         localStore.upsert(

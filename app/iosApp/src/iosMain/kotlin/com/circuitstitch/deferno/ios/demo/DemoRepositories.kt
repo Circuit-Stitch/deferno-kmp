@@ -41,7 +41,7 @@ internal class DemoTaskRepository(initial: List<Task>) : TaskRepository, ItemRep
 
     override fun observeTasks(): Flow<List<Task>> = tasks
 
-    // The cross-kind Item read the Tasks tree renders (ADR-0034, #227). The demo holds only Tasks, so
+    // The cross-kind Item read the Tasks tree renders (ADR-0049, #227). The demo holds only Tasks, so
     // this projects the live task flow to Items (mirrors OfflineItemRepository); refresh() is shared.
     override fun observeItems(): Flow<List<Item>> = tasks.map { list -> list.map(Task::toItem) }
 

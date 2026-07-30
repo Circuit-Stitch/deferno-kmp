@@ -51,7 +51,7 @@ enum class CommandCategory {
     /** The Active Account's User-setting writes ([CommandKind.SetTheme] …) — the backed Settings categories (#173). */
     Settings,
 
-    /** Cross-kind tree move — reparent + reorder ([CommandKind.MoveItem], ADR-0034 #228). */
+    /** Cross-kind tree move — reparent + reorder ([CommandKind.MoveItem], ADR-0049 #228). */
     Move,
 
     /** Recurring-definition state — the Habit/Chore/Event "light switch" ([CommandKind.SetDefinitionState], #299). */
@@ -109,7 +109,7 @@ enum class CommandKind(
     OpenTask(CommandId("task.open"), CommandCategory.Status),
 
     // Create is OFFLINE-FIRST (#185, ADR-0001 forward path from ADR-0016): the backend now dedupes a
-    // create on the client-supplied id (Kyle-Falconer/Deferno#402), so it rides the outbox like every
+    // create on the client-supplied id (Circuit-Stitch/Deferno#402), so it rides the outbox like every
     // edit — optimistic local insert + enqueue — and is NOT onlineOnly. Convert stays ONLINE-ONLY: it
     // mutates an existing item's kind with no client-id idempotency story, so its [onlineOnly] flag is
     // still the signal the agent / OS-intent layer reads to surface the connectivity requirement.
@@ -136,7 +136,7 @@ enum class CommandKind(
     SetDragAndDrop(CommandId("settings.set-drag-and-drop"), CommandCategory.Settings),
     SetDoneVisibility(CommandId("settings.set-done-visibility"), CommandCategory.Settings),
 
-    // The cross-kind tree move (ADR-0034 #228): reparent + reorder one Item via the modal move mode /
+    // The cross-kind tree move (ADR-0049 #228): reparent + reorder one Item via the modal move mode /
     // keyboard, routed through the registry to the `ItemWriter` seam. Its own category (not Organize):
     // it is not a per-Task command (it addresses a raw cross-kind id) and routes to a distinct writer,
     // so it stays out of [taskKinds]. Appended at the end (CommandIds are a public contract — never
@@ -218,7 +218,7 @@ enum class CommandKind(
         /** The User-setting catalog the Settings Destination's backed categories drive (#173). */
         val settingsKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Settings }
 
-        /** The cross-kind tree-move catalog the modal move mode / keyboard drives (ADR-0034 #228). */
+        /** The cross-kind tree-move catalog the modal move mode / keyboard drives (ADR-0049 #228). */
         val moveKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Move }
 
         /** The recurring-definition state catalog the Item-tree command menu drives (#299). */

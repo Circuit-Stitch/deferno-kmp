@@ -117,13 +117,13 @@ interface IosDataBindings {
     fun brainDumpNotificationPreference(): BrainDumpNotificationPreference =
         SettingsBrainDumpNotificationPreference(NSUserDefaultsSettings.Factory().create("deferno_storage"))
 
-    /** "Shake to undo" [[App setting]] (ADR-0034 decision 8, #230). iOS has no accelerometer path yet — in-memory placeholder. */
+    /** "Shake to undo" [[App setting]] (ADR-0049 decision 8, #230). iOS has no accelerometer path yet — in-memory placeholder. */
     @Provides
     @SingleIn(AppScope::class)
     fun shakeToUndoPreference(): ShakeToUndoPreference = InMemoryShakeToUndoPreference()
 
     /**
-     * Item-tree fold-override store (ADR-0034, #227, [[App setting]]). In-memory placeholder — the native
+     * Item-tree fold-override store (ADR-0049, #227, [[App setting]]). In-memory placeholder — the native
      * iOS SwiftUI tree (and its NSUserDefaults-backed fold store) is a deferred fast-follow; this keeps the
      * graph complete and the iOS klib compiling.
      */

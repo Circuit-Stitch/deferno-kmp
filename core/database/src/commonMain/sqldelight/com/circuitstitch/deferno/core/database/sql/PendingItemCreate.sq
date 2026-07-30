@@ -2,7 +2,7 @@
 --
 -- An Item create now rides the offline-first outbox: the client generates the Item's UUID, inserts
 -- the row locally, and enqueues a `POST /{kind}` carrying that id (the backend honors client-supplied
--- ids — Kyle-Falconer/Deferno#402). This sparse side table tracks the create's replay lifecycle WITHOUT
+-- ids — Circuit-Stitch/Deferno#402). This sparse side table tracks the create's replay lifecycle WITHOUT
 -- polluting the domain Item models (Task/Habit/Chore/Event) with a transient pending flag.
 --
 -- `item_id` is the client-generated Item id (the same id the local row uses from the start) and the

@@ -4,7 +4,7 @@ import com.circuitstitch.deferno.core.model.WorkingState
 
 /**
  * The per-row state the kind-aware long-press command menu needs but the cross-kind [Item] projection the
- * tree renders doesn't carry (ADR-0034 decision 7, #231): a Task's [workingState] (to swap the status
+ * tree renders doesn't carry (ADR-0049 decision 7, #231): a Task's [workingState] (to swap the status
  * block + hide the verb it's already in), whether it is [pinned] (Pin ↔ Unpin), and whether it is in
  * today's plan ([inPlan]) (Add ↔ Remove). Present only for **Task** rows — the native write layer is
  * Task-centric (`MoveItem` is the lone cross-kind write), so a non-Task row has no menu state and the menu

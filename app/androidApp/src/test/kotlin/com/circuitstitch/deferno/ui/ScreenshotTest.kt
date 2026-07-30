@@ -80,7 +80,7 @@ class ScreenshotTest {
         isHydrating = false,
         // An immediate parent so the golden exercises the connected-parent branch + short ref (ADR-0044).
         parent = ParentSummary(TaskId("p"), "Spring 2026 initiatives", ref = "acme-7"),
-        // The subtree flattened with the shared fold mechanism (ADR-0034): "1a" parents "1ai", both shallow
+        // The subtree flattened with the shared fold mechanism (ADR-0049): "1a" parents "1ai", both shallow
         // so they auto-expand; "1a" shows a fold chevron.
         subtaskRows = listOf(
             SubtaskRow(
@@ -127,7 +127,7 @@ class ScreenshotTest {
     )
 
     // The Item tree (#227): a few nested expanded rows, a collapsed parent with a done/total badge, and a
-    // terminal (dimmed) row — the row states ADR-0034 decision 7 calls out. Rows are rendered verbatim
+    // terminal (dimmed) row — the row states ADR-0049 decision 7 calls out. Rows are rendered verbatim
     // (the View doesn't re-flatten), so they're built explicitly to pin each state.
     private val treeStatesRows = listOf(
         itemRow("p1", "Plan the spring launch", hasChildren = true, isExpanded = true),

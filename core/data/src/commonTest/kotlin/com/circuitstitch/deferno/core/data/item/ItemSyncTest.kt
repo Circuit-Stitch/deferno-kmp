@@ -26,7 +26,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The cross-kind reconcile of [ItemSync] (ADR-0034, #226) — the heart of the `/tasks` -> `/items`
+ * The cross-kind reconcile of [ItemSync] (ADR-0049, #226) — the heart of the `/tasks` -> `/items`
  * migration, run against the in-memory fakes on the ADR-0006 JVM-fast path. Proves the cold `/items`
  * snapshot is reconciled into all four per-kind stores (upsert + per-kind orphan-purge), that the
  * server-windowed snapshot honours the done-visibility window with no client-side window math, that

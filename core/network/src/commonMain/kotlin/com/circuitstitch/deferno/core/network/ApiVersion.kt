@@ -31,7 +31,7 @@ data class ApiVersion(val major: Int, val minor: Int) : Comparable<ApiVersion> {
  * The envelope versions this client can safely read (ADR-0005, amended 2026-06-06). The window
  * is `[MIN..MAX]`; the live backend serves `0.1`, so today `MIN == MAX == 0.1`. This is the
  * **single bumpable constant** — widen [MAX] to `0.2` once backend
- * [#300](https://github.com/Kyle-Falconer/Deferno/issues/300) lands and declares `0.2` honestly.
+ * [#300](https://github.com/Circuit-Stitch/Deferno/issues/300) lands and declares `0.2` honestly.
  *
  * Out-of-window policy: a version **above** [MAX] is an unknown breaking major the client
  * can't parse safely (a future force-upgrade gate); **below** [MIN] is degrade/refuse. Both

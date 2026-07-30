@@ -44,7 +44,7 @@ import kotlin.time.Instant
  * 3. records the create in the [PendingCreateStore] (state = pending), and
  * 4. enqueues a `POST /{kind}` carrying that id ([CreateMutation]) on the existing outbox.
  *
- * The backend dedupes the create on the client id (Kyle-Falconer/Deferno#402), so a replay after an
+ * The backend dedupes the create on the client id (Circuit-Stitch/Deferno#402), so a replay after an
  * interrupted request never duplicates. On successful replay the outbox processor's
  * [com.circuitstitch.deferno.core.data.outbox.CreateReplayListener] confirms the pending-create row (and
  * heals if the server diverged); a terminal rejection undoes the optimism. So a create always returns

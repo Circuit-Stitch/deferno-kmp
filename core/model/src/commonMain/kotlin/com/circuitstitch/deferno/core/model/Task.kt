@@ -55,7 +55,7 @@ data class Task(
     // third-party); that's silenced in one place, by FQN prefix, in build-logic's AppleFrameworkConfig.
     @property:ObjCName("itemDescription") val description: String? = null,
     val nextTaskId: TaskId? = null,
-    // Server-computed subtree progress carried by the `/items` snapshot (ADR-0034): done / total
+    // Server-computed subtree progress carried by the `/items` snapshot (ADR-0049): done / total
     // descendants, for a collapsed tree node's progress badge. `null` when the source omits them
     // (e.g. a `/tasks/{id}` detail). Not re-derived client-side — the server windows the snapshot.
     val descendantDone: Long? = null,
