@@ -685,6 +685,25 @@ fun openNewOnActiveShell(root: RootComponent) {
     }
 }
 
+/**
+ * Open the Brain dump capture overlay on the active shell — the **menu-bar status item / global hotkey**
+ * seam (#368 G26). Like [openNewOnActiveShell] it fires from outside the SwiftUI View tree (an AppKit
+ * `NSStatusItem` menu, or a hotkey the macOS Helper forwards over the IPC contract, ADR-0024), so it has
+ * no [MainShellComponent] to hand [openBrainDumpOverlay] — it reaches the foreground shell through the
+ * root instead.
+ *
+ * Signed out (the Auth shell is foreground) this is a **no-op**, exactly like its two neighbours — and
+ * deliberately NOT like [RootComponent.openInbox], which defers via a `pendingInbox` flag and replays the
+ * deep-link once a Main shell exists (RootComponent.kt). Deferring is right for "show me the Inbox": the
+ * destination is still there after the detour. It is wrong for a capture overlay — the person pressed the
+ * hotkey to say a thought *now*, and a recorder that pops open minutes later, after an unrelated sign-in,
+ * is a surprise rather than a convenience (and would capture a thought they've long since dropped).
+ */
+fun openBrainDumpOnActiveShell(root: RootComponent) {
+    val main = root.activeMain() ?: return
+    main.openOverlay(OverlayRoute.BrainDump)
+}
+
 /** Refresh whichever Destination is foreground — the View → Refresh / ⌘R menu command. No-op elsewhere. */
 fun refreshActiveDestination(root: RootComponent) {
     val main = root.activeMain() ?: return

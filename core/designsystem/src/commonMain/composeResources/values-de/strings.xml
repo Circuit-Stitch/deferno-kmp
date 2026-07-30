@@ -980,4 +980,6 @@ Vielen Dank.</string>
     <string name="activity_value_unpinned">Nicht angeheftet</string>
     <!-- Leerer Verlauf (noch keine Kommentare und kein Verlauf). -->
     <string name="tasks_detail_trail_empty">Noch keine Aktivität</string>
+    <!-- Menüzeile des macOS-Menüleistensymbols: holt das einzige Fenster der App nach vorn (#368 G26) -->
+    <string name="shell_menu_open_main_window">Hauptfenster öffnen</string>
 </resources>

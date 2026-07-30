@@ -217,7 +217,6 @@ android shell_drawer_capture_cd
 android shell_menu_file
 android shell_menu_help
 android shell_menu_new
-android shell_menu_quit
 android shell_menu_search
 android shell_menu_selected_mark
 android shell_overlay_placeholder_body

@@ -978,4 +978,6 @@ Agradeço.</string>
     <string name="activity_value_pinned">Fixado</string>
     <string name="activity_value_unpinned">Não fixado</string>
     <string name="tasks_detail_trail_empty">Nenhuma atividade ainda</string>
+    <!-- Linha do menu do ícone da barra de menus do macOS: traz a janela única do app para a frente (#368 G26) -->
+    <string name="shell_menu_open_main_window">Abrir janela principal</string>
 </resources>
