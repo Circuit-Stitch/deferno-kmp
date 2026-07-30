@@ -17,9 +17,10 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
  * runtime engine into it once at startup ([com.circuitstitch.deferno.macos.DefernoRoot]). Until
  * installed (a unit host) — or on a Mac without Apple Intelligence (the adapter answers
  * [InferenceResult.Failure.NotConfigured]) — this forwards to [NotConfiguredInferenceEngine]: a typed
- * failure a caller salvages from, never a silent nothing. Nothing on macOS reads the routed seam yet —
- * the twin of iOS's Brain-dump pipeline is still missing (#368), and today's Extractor panel is a dev
- * surface holding the engine directly — so this is the graph wired ahead of its first product caller.
+ * failure a caller salvages from, never a silent nothing. The routed seam's live product reader is the
+ * Brain-dump pipeline (`app/macosApp/src/macosMain/.../BrainDumpRecording.kt`, #368 Tranche 5), which builds
+ * its `Extractor` off `appComponent.inferenceEngine`; the `DraftExtractorView` dev panel stays a *direct*
+ * probe of the injected engine, deliberately unaffected by the inference-engine App setting (#150).
  *
  * ponytail: a process-global delegate — there is exactly one macOS app per process, set once before any
  * inference runs; a per-instance holder would only matter for multiple graphs in one process.

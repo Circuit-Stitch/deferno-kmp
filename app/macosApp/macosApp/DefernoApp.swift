@@ -1,5 +1,6 @@
 import Deferno
 import SwiftUI
+import UserNotifications
 
 /// macOS app entry (ADR-0029, Phase 1b). Owns the shared component tree for the app's lifetime and
 /// hands its `RootComponent` to SwiftUI. That tree is the **real** shared shell over the DI graph
@@ -10,18 +11,41 @@ import SwiftUI
 /// SKIE supports Kotlin 2.4.0.
 @main
 struct DefernoApp: App {
-    // Phase 2 (ADR-0029): the in-process dictation engine (SidecarKit `SpeechTranscriber`, on-device).
-    // Phase 3 (ADR-0029): the in-process inference engine (Foundation Models, on-device). Both run under
-    // this app's own identity (no Helper); the inference engine drives `host.draftTasks` (the Extractor).
-    @State private var host = DefernoRoot(
-        dictation: MacDictation(),
-        inference: MacInference(),
-        // The server-mediated Assistant SSE turn-stream (#282, ADR-0040): a raw URLSession reader Kotlin
-        // drives with the Active-Account PAT. The entitled-gated Assistant Destination stays absent until
-        // the Org is entitled, so this is inert for a non-entitled account.
-        transport: MacAssistantTransport(),
-    )
+    // The Brain dump mic recorder (#368 Tranche 5b) is shared: the Kotlin host drives it (record → the
+    // on-device pipeline), and the Brain dump overlay observes its `levels` for the spectrum — one engine,
+    // no second mic tap. Created before `host` because `host` takes it.
+    @StateObject private var recorder: MacBrainDumpRecorder
+    @State private var host: DefernoRoot
+    // Retained because `UNUserNotificationCenter.delegate` is weak (#271).
+    @State private var notificationDelegate: BrainDumpNotificationDelegate
     @State private var showExtractor = false
+
+    init() {
+        let recorder = MacBrainDumpRecorder()
+        _recorder = StateObject(wrappedValue: recorder)
+        // Phase 2 (ADR-0029): the in-process dictation engine (SidecarKit `SpeechTranscriber`, on-device).
+        // Phase 3 (ADR-0029): the in-process inference engine (Foundation Models, on-device). Both run under
+        // this app's own identity (no Helper); the inference engine drives `host.draftTasks` (the Extractor)
+        // AND — since #368 Tranche 5 — the Brain dump Extractor that turns a transcript into real drafts.
+        let host = DefernoRoot(
+            recorder: recorder,
+            dictation: MacDictation(),
+            inference: MacInference(),
+            // The on-device whole-file transcriber the Brain dump pipeline runs over the finalized WAV
+            // (macOS 26 `SpeechAnalyzer`; older Macs report unavailable and the take salvages).
+            fileTranscriber: MacFileTranscriber(),
+            // The server-mediated Assistant SSE turn-stream (#282, ADR-0040): a raw URLSession reader Kotlin
+            // drives with the Active-Account PAT. The entitled-gated Assistant Destination stays absent until
+            // the Org is entitled, so this is inert for a non-entitled account.
+            transport: MacAssistantTransport(),
+        )
+        _host = State(initialValue: host)
+        // Brain dump completion notification (#271): a tap routes to the Inbox through the shared shell.
+        let delegate = BrainDumpNotificationDelegate()
+        delegate.onOpenInbox = { host.forwardOpenInbox() }
+        _notificationDelegate = State(initialValue: delegate)
+        UNUserNotificationCenter.current().delegate = delegate
+    }
 
     var body: some Scene {
         // A single `Window` (not a `WindowGroup`): Deferno is a one-window app, and the OAuth redirect
@@ -29,7 +53,7 @@ struct DefernoApp: App {
         // shell so the in-flight sign-in's inbox receives it (#189). The explicit title also names the
         // window "Deferno" regardless of the bundle name.
         Window(L.string("common_app_name"), id: "main") {
-            RootView(root: host.root, onBrainDump: { showExtractor = true })
+            RootView(root: host.root, recorder: recorder)
                 // No global minWidth (#194): the window's floor is *dynamic* — it tracks the panes
                 // currently open (sidebar + list + detail each carry their own `minWidth`, summed by
                 // `.windowResizability(.contentMinSize)` below). Collapse the sidebar / deselect the
@@ -83,11 +107,43 @@ struct DefernoApp: App {
                     .keyboardShortcut("r", modifiers: .command)
             }
             // The Phase-3 demo trigger lives in a menu (⌘⇧E), not the shared shell — it's a macOS-app
-            // dev surface for exercising the on-device Extractor, not a shipped product flow yet.
+            // dev surface for exercising the on-device Extractor, not a shipped product flow yet. Until
+            // #368 Tranche 5 the title bar's Brain dump action *also* opened it, because macOS had no
+            // recorder to open instead; now that it does, this menu item is the sheet's only entry point.
             CommandMenu(L.string("draft_extract_menu_section")) {
                 Button(L.string("draft_extract_menu_item")) { showExtractor = true }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
             }
         }
+    }
+}
+
+/// Routes a tapped Brain dump completion notification (#271) to the Inbox — the macOS twin of iOS's
+/// delegate. `UNUserNotificationCenter.delegate` is weak, so `DefernoApp` retains this; `onOpenInbox` is
+/// wired to the host's `forwardOpenInbox()`, which switches the shell to the Inbox now (or defers if the
+/// Auth shell is up).
+final class BrainDumpNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    var onOpenInbox: () -> Void = {}
+
+    /// Show the banner + play the sound even when the app is frontmost, so a take that finishes while you
+    /// are looking at another Destination still announces itself.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+
+    /// Tap → open the Inbox (only for the brain-dump category the Kotlin notifier sets).
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if response.notification.request.content.categoryIdentifier == BrainDumpRecordingKt.BRAIN_DUMP_NOTIFICATION_CATEGORY {
+            onOpenInbox()
+        }
+        completionHandler()
     }
 }

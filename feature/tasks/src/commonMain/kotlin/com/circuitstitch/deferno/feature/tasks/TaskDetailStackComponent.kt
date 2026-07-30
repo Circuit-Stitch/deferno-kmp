@@ -146,7 +146,10 @@ class DefaultTaskDetailStackComponent(
             // No add-to-plan affordance inside the window — ignored.
             // ponytail: forward AddToPlanRequested through an output seam if the window ever exposes it.
             is TaskDetailComponent.Output.AddToPlanRequested -> Unit
-            // Breakdown (Deferno#525) is an iOS surface; the macOS detached window doesn't host overlays.
+            // Breakdown (Deferno#525) is a *shell overlay* on every Apple surface (#368 G10 landed the
+            // macOS half). This detached window is not the shell — it hosts no overlay slot — so the output
+            // is genuinely unroutable here. The macOS `TaskDetailView` therefore hides the menu item in
+            // this scene (`hostsOverlays: false`) rather than leaving a live intent that lands nowhere.
             is TaskDetailComponent.Output.BreakdownRequested -> Unit
         }
     }
