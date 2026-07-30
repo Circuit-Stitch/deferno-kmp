@@ -49,22 +49,11 @@ OPEN=no
 CONFIGURATION=Debug
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --open)
-      if [ "$ACTION" = test ]; then
-        echo "--open and --test are mutually exclusive" >&2
-        exit 2
-      fi
-      OPEN=yes
-      ;;
-    --test)
-      if [ "$OPEN" = yes ]; then
-        echo "--open and --test are mutually exclusive" >&2
-        exit 2
-      fi
-      ACTION=test
-      ;;
+    --open) OPEN=yes ;;
+    --test) ACTION=test ;;
     # Both spellings, because both are muscle memory. The arm shifts past the flag so the loop's own
     # trailing `shift` consumes the VALUE; `${1:-}` (set -u is on) catches a trailing bare `--config`.
+    # A repeated --config takes the last one, the usual CLI reading of "you changed your mind".
     --config)
       shift
       CONFIGURATION="${1:-}"
@@ -78,6 +67,14 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+
+# Both checks below validate the PARSED STATE once, rather than each flag as it arrives. Mutual exclusion
+# is a property of the resulting pair, not of whichever flag happened to come second, so it reads (and is
+# spelled) once here instead of twice inside the loop.
+if [ "$OPEN" = yes ] && [ "$ACTION" = test ]; then
+  echo "--open and --test are mutually exclusive" >&2
+  exit 2
+fi
 
 # Validate against the three configurations project.yml declares. Worth an explicit check: xcodebuild
 # accepts an unknown -configuration and fails deep inside the build with a far less obvious message, and
@@ -102,7 +99,7 @@ esac
 # override, update that step too or CI builds with a different config than every dev machine.
 if [ ! -f Local.xcconfig ]; then
   echo "==> seeding ad-hoc Local.xcconfig (no Dev account; edit it to sign with a stable identity)"
-  printf '// Auto-seeded ad-hoc signing. Edit to a stable identity so the Keychain ACL survives rebuilds:\n//   security find-identity -v -p codesigning   # lists yours\n// e.g. CODE_SIGN_IDENTITY = Apple Development: You (XXXXXXXXXX)\nCODE_SIGN_STYLE = Manual\nCODE_SIGN_IDENTITY = -\nPROVISIONING_PROFILE_SPECIFIER =\n// Dev-only staging PAT (#282): empty default; create a git-ignored Secrets.xcconfig with DEV_STAGING_TOKEN = <PAT> to skip sign-in.\n// Only the Debug (Staging) variant reads it — ProdDebug + Release pin it empty (ADR-0047).\nDEV_STAGING_TOKEN =\n// Dev-only prod Test account for the ProdDebug variant (ADR-0047): empty default; put\n// DEV_ACCOUNTS = <id:label:token;…> in that same Secrets.xcconfig. Debug + Release pin it empty.\nDEV_ACCOUNTS =\n#include? "Secrets.xcconfig"\n' > Local.xcconfig
+  printf '// Auto-seeded ad-hoc signing. Edit to a stable identity so the Keychain ACL survives rebuilds:\n//   security find-identity -v -p codesigning   # lists yours\n// e.g. CODE_SIGN_IDENTITY = Apple Development: You (XXXXXXXXXX)\nCODE_SIGN_STYLE = Manual\nCODE_SIGN_IDENTITY = -\nPROVISIONING_PROFILE_SPECIFIER =\n// Dev-only staging PAT (#282): empty default; create a git-ignored Secrets.xcconfig with DEV_STAGING_TOKEN = <PAT> to skip sign-in.\n// Only the Debug (Staging) variant maps it into the app; no other configuration mentions it (ADR-0047).\nDEV_STAGING_TOKEN =\n// Dev-only prod Test account for the ProdDebug variant (ADR-0047): empty default; put\n// DEV_ACCOUNTS = <id:label:token;…> in that same Secrets.xcconfig. Only ProdDebug maps it in.\nDEV_ACCOUNTS =\n#include? "Secrets.xcconfig"\n' > Local.xcconfig
 fi
 
 echo "==> xcodegen generate"

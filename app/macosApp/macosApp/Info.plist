@@ -21,22 +21,26 @@
 	</array>
 	<key>LSMultipleInstancesProhibited</key>
 	<true/>
-	<!-- Dev-only: substituted from the DEV_STAGING_TOKEN build setting (Local.xcconfig ← Secrets.xcconfig,
-	     emptied for ProdDebug + Release in project.yml). DefernoRoot.seedDevAccounts() seeds a "Dev (staging)"
-	     account from it on the Staging-backed Debug build; blank in any committed/Release build so no PAT
-	     ships — and blank in ProdDebug so a Production-env install can never seed a *staging* PAT
-	     (ADR-0047). Mirrors app/iosApp. -->
+	<!-- Dev-only seeding (ADR-0012/0047), read by DefernoRoot.seedDevAccounts(). Both keys substitute a
+	     DEFERNO_SEED_* **slot**, and nothing defines either slot by default — an undefined build setting
+	     expands to empty, so the default for every configuration, present and future, is "seeds nothing".
+	     A configuration opts in by mapping the slot to the secret that feeds it (project.yml
+	     `settings.configs`, from the gitignored Local.xcconfig ← Secrets.xcconfig chain):
+
+	       Debug      DEFERNO_SEED_STAGING_TOKEN = $(DEV_STAGING_TOKEN)   → a "Dev (staging)" Account
+	       ProdDebug  DEFERNO_SEED_ACCOUNTS      = $(DEV_ACCOUNTS)        → the disposable prod Test Account
+	       Release    (neither)                                           → nothing
+
+	     ADR-0047's core safety property — a Production-env install can never seed a *staging* PAT — is
+	     therefore what ProdDebug does NOT say, not a "" pin someone has to remember. DevAccounts is the
+	     twin of Android's `deferno.prod.accounts` (a ';'-separated `id:label:token` list fed to
+	     DevAccounts.from); seedDevAccounts() has always read the key, and ProdDebug is the first
+	     configuration to populate it. Secrets.xcconfig's own key names are unchanged, so the file is
+	     still byte-identical to the one app/iosApp reads. -->
 	<key>DevStagingToken</key>
-	<string>$(DEV_STAGING_TOKEN)</string>
-	<!-- Dev-only, the twin of Android's `deferno.prod.accounts` (ADR-0047 names it as the follow-up this
-	     closes): a ';'-separated `id:label:token` list fed to DevAccounts.from, which is how the
-	     Production-backed ProdDebug variant seeds its disposable prod **Test** Account without typing.
-	     seedDevAccounts() has always READ this key; nothing populated it until now, so ProdDebug would
-	     otherwise land with no seeding at all — useless for its stated purpose (prod repro/driving).
-	     Empty by default (project.yml/Local.xcconfig) ⇒ seeds nothing ⇒ no behaviour change for anyone
-	     who never creates Secrets.xcconfig. Pinned to "" in Debug + Release. -->
+	<string>$(DEFERNO_SEED_STAGING_TOKEN)</string>
 	<key>DevAccounts</key>
-	<string>$(DEV_ACCOUNTS)</string>
+	<string>$(DEFERNO_SEED_ACCOUNTS)</string>
 	<!-- The backend environment, injected per Xcode build configuration via the DEFERNO_ENV build setting
 	     (ADR-0047). DefernoApp reads this and maps it to DefernoEnvironment, decoupling the env from the
 	     debug/release build type (macOS used to derive it from `Platform.isDebugBinary`). -->

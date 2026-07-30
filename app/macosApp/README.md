@@ -71,23 +71,29 @@ the framework build type from the configuration NAME and only recognises literal
 without the pin a third configuration links the wrong build type. The Podfile maps it too
 (`project 'macosApp', 'ProdDebug' => :debug`) so CocoaPods doesn't treat the unknown name as a release.
 
-**Dev-PAT seeding** (ADR-0012) is per-variant, and the two never cross. Put either key in a gitignored
-`Secrets.xcconfig` next to `Local.xcconfig` (which `#include?`s it):
+**Dev-PAT seeding** (ADR-0012) is **opt-in per configuration**, and the two secrets never cross. Put
+either key in a gitignored `Secrets.xcconfig` next to `Local.xcconfig` (which `#include?`s it):
 
-- `DEV_STAGING_TOKEN = <staging PAT>` — read by **Debug** only; seeds a "Dev (staging)" Account. Pinned
-  empty in `ProdDebug` and `Release`, so a Production-env install can never seed a *staging* PAT.
-- `DEV_ACCOUNTS = <id:label:token;…>` — read by **ProdDebug** only (the twin of Android's
-  `deferno.prod.accounts`); seeds the disposable Production **Test** Account. Pinned empty in `Debug` and
-  `Release`. Format is parsed by the shared `DevAccounts.from`.
+- `DEV_STAGING_TOKEN = <staging PAT>` — reaches **Debug** only; seeds a "Dev (staging)" Account.
+- `DEV_ACCOUNTS = <id:label:token;…>` — reaches **ProdDebug** only (the twin of Android's
+  `deferno.prod.accounts`); seeds the disposable Production **Test** Account. Format is parsed by the
+  shared `DevAccounts.from`.
 
-Both default to empty (`build.sh` seeds them blank into a fresh `Local.xcconfig`), so a clone with no
+`Info.plist` doesn't read those two settings directly. It reads two *seed slots* —
+`DEFERNO_SEED_STAGING_TOKEN` and `DEFERNO_SEED_ACCOUNTS` — that nothing defines by default, and each
+configuration opts in by mapping the one it wants (`project.yml` `settings.configs`). Since an undefined
+build setting expands to empty, the default for every configuration is **seeds nothing**, and ADR-0047's
+core safety property — a Production-env install can never seed a *staging* PAT — is what `ProdDebug` and
+`Release` **don't say** rather than an empty pin someone has to remember to add. A clone with no
 `Secrets.xcconfig` seeds nothing and opens on the Auth shell. The OAuth redirect scheme is deliberately
 **shared** across all three (the redirect URI is registered server-side per ADR-0026) — with coexisting
 installs LaunchServices picks one arbitrarily for a redirect, which is fine because the debuggable
 variants sign in via the pasted/seeded PAT path.
 
 A pre-build phase runs `./gradlew :app:macosApp:embedAndSignAppleFrameworkForXcode`, which stages the
-Kotlin framework into `build/xcode-frameworks` (where `FRAMEWORK_SEARCH_PATHS` points). To iterate on the
+Kotlin framework into `build/xcode-frameworks/<CONFIGURATION>/<SDK_NAME>` (where `FRAMEWORK_SEARCH_PATHS`
+points — that config-qualified path and nothing else, so a mis-declared configuration fails to link
+rather than quietly resolving a stale slice). To iterate on the
 Kotlin side alone: `./gradlew :app:macosApp:linkDebugFrameworkMacosArm64`.
 
 ## Phase 2 — in-process dictation (ADR-0029)

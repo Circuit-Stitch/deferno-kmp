@@ -109,15 +109,14 @@ settings:
     # app/iosApp does — and the stock pod still ships the deprecated `sqlite3_*` the cinterop wraps).
     FRAMEWORK_SEARCH_PATHS:
       - "$(inherited)"
-      # The CONFIG-QUALIFIED path is what the Gradle task actually stages into — it writes
-      # build/xcode-frameworks/<CONFIGURATION>/<SDK_NAME>/Deferno.framework (e.g. .../ProdDebug/macosx26.5/)
-      # and separately copies the framework into $BUILT_PRODUCTS_DIR, which is what the link has really
-      # been resolving against. With only the bare directory below, a third configuration would have no
-      # deterministic search path of its own; iosApp points at exactly this qualified form
-      # (project.pbxproj FRAMEWORK_SEARCH_PATHS). Listed FIRST so the right slice wins, with the bare
-      # directory kept behind it — removing it is a separate change from adding a configuration.
+      # The CONFIG-QUALIFIED path, and ONLY that one — it is where the Gradle task actually stages:
+      # build/xcode-frameworks/<CONFIGURATION>/<SDK_NAME>/Deferno.framework. Nothing is ever written to
+      # the bare `build/xcode-frameworks` directory this used to also list, so that entry could never
+      # resolve a framework; the link has really been finding the copy the task drops in
+      # $BUILT_PRODUCTS_DIR. A search path that can only ever match a stale artifact is worse than no
+      # search path — a mis-declared configuration should fail to link, not link something else.
+      # iosApp lists exactly this one form (project.pbxproj FRAMEWORK_SEARCH_PATHS, 6×).
       - "$(SRCROOT)/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
-      - "$(SRCROOT)/build/xcode-frameworks"
     OTHER_LDFLAGS:
       - "$(inherited)"
       - "-framework"
@@ -135,8 +134,14 @@ settings:
   # value here is written to the PROJECT-level configuration, so it reaches the app target; the test
   # target overrides what it must in its own `settings.base` (target settings outrank project ones).
   #
-  # A build setting in this block outranks the project base config (Local.xcconfig ← Secrets.xcconfig),
-  # which is what makes the `""` seeding pins below genuinely un-overridable by a local secret file.
+  # DEV-PAT SEEDING IS OPT-IN, NOT OPT-OUT (ADR-0012/0047). The Info.plist reads two *seed slots* —
+  # DEFERNO_SEED_STAGING_TOKEN and DEFERNO_SEED_ACCOUNTS — that NOTHING defines by default, and an
+  # undefined build setting expands to empty, so a configuration seeds nothing unless it says otherwise.
+  # Each config below opts in by mapping the slot it wants to the secret that feeds it (the secret names
+  # DEV_STAGING_TOKEN / DEV_ACCOUNTS are unchanged, so Secrets.xcconfig stays identical to iosApp's).
+  # The earlier shape pinned the *other* variant's secret to "" in each config — three pins defending
+  # ADR-0047's core safety property ("a Production install can never seed a staging PAT") by memory, and
+  # a fourth configuration added later would have inherited both secrets by simply not mentioning them.
   #
   # ALL THREE configs must spell out PRODUCT_BUNDLE_IDENTIFIER, not just the two that differ from the old
   # base value: `options.bundleIdPrefix` auto-generates a TARGET-level id for any target XcodeGen thinks
@@ -146,38 +151,35 @@ settings:
   # already suppressed it), so a value in every config keeps it suppressed.
   configs:
     Debug:
-      # Staging, the dev/validation target — no longer the daily driver (ADR-0047). Seeds via the
-      # existing DEV_STAGING_TOKEN path (Local.xcconfig ← Secrets.xcconfig), so no override here; the
-      # ACCOUNTS list is pinned empty so a prod Test PAT can never leak into the Staging install.
+      # Staging, the dev/validation target — no longer the daily driver (ADR-0047).
       DEFERNO_ENV: Staging
       PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macos.staging.debug
       INFOPLIST_KEY_CFBundleDisplayName: "Deferno Dev"
-      DEV_ACCOUNTS: ""
+      # …and the ONLY config that seeds a staging PAT. The prod-accounts slot goes unmentioned, so it
+      # expands to empty and a prod Test PAT cannot reach the Staging install.
+      DEFERNO_SEED_STAGING_TOKEN: "$(DEV_STAGING_TOKEN)"
     ProdDebug:
       # Production + debuggable + distinctly bundled: the prod-repro / Claude-driving install (ADR-0047).
       DEFERNO_ENV: Production
       PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macos.debug
       INFOPLIST_KEY_CFBundleDisplayName: "Deferno β"
-      # The ADR-0047 pin: a Production-env install must NEVER seed a *staging* PAT, and the shared
-      # Local.xcconfig ← Secrets.xcconfig chain feeds both debuggable configs. Pinning it empty here (like
-      # Release) is what keeps the two apart. DEV_ACCOUNTS is deliberately NOT pinned — this is the one
-      # config that inherits it, so a gitignored Secrets.xcconfig can seed the disposable prod Test Account.
-      DEV_STAGING_TOKEN: ""
+      # The one config that seeds the disposable prod **Test** Account from a gitignored Secrets.xcconfig.
+      # The staging-token slot goes unmentioned — that omission IS ADR-0047's core safety property: a
+      # Production-env install can never seed a *staging* PAT, even though the shared
+      # Local.xcconfig ← Secrets.xcconfig chain feeds both debuggable configs.
+      DEFERNO_SEED_ACCOUNTS: "$(DEV_ACCOUNTS)"
       # LOAD-BEARING: the Kotlin Gradle plugin infers the framework build type from the CONFIGURATION
       # name, and only literally "Debug"/"Release" are recognised — an unknown name would link the wrong
       # build type (or none). Pin it, exactly as iosApp's ProdDebug config does (project.pbxproj:775).
       KOTLIN_FRAMEWORK_BUILD_TYPE: debug
     Release:
-      # Never seed a dev PAT into a Release (Production) build — both seeding inputs empty regardless of any
-      # local Secrets.xcconfig, so DefernoRoot.seedDevAccounts() seeds nothing here (mirrors iosApp).
-      # (#282, ADR-0012/0047)
       DEFERNO_ENV: Production
       # Unchanged from the pre-ADR-0047 base value, so an existing local prod install upgrades in place
       # rather than becoming a fourth app.
       PRODUCT_BUNDLE_IDENTIFIER: com.circuitstitch.deferno.macos
       INFOPLIST_KEY_CFBundleDisplayName: Deferno
-      DEV_STAGING_TOKEN: ""
-      DEV_ACCOUNTS: ""
+      # Neither seed slot is mentioned, so a Release build seeds nothing regardless of any local
+      # Secrets.xcconfig — by saying nothing rather than by remembering to say "" (#282, ADR-0012/0047).
 
 # The macOS Sidecar Helper's Swift package, linked as a LOCAL SwiftPM dependency (ADR-0029 Phase 2) so
 # the app reuses SpeechTranscriber / SidecarPermissions in-process. Path is relative to this spec.

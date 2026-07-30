@@ -118,7 +118,7 @@ Android Studio: **Open** this directory and let it sync.
 - Keep secrets (keystores, `google-services.json`, API keys) out of git — see `.gitignore`. The gitignored `local.properties` dev-PAT seeding keys are per-flavor (ADR-0012/0047):
   - `deferno.dev.accounts` / `deferno.staging.apiToken` → seed the `stagingDebug` variant (Staging Test accounts).
   - `deferno.prod.accounts` (NEW) → seeds the `prodDebug` variant with the disposable Production Test account (`id:label:token`, `;`-separated). Release variants seed nothing.
-  - Apple's twin is the gitignored `app/{ios,macos}App/Secrets.xcconfig` (`#include?`d by `Local.xcconfig`): `DEV_STAGING_TOKEN` seeds the Staging `Debug` config. On macOS, `DEV_ACCOUNTS` (same `id:label:token` format) additionally seeds the Production `ProdDebug` config — each pinned empty in the other config, so the two never cross; iOS's prod-seed key is still the ADR-0047 follow-up.
+  - Apple's twin is the gitignored `app/{ios,macos}App/Secrets.xcconfig` (`#include?`d by `Local.xcconfig`): `DEV_STAGING_TOKEN` seeds the Staging `Debug` config. On macOS, `DEV_ACCOUNTS` (same `id:label:token` format) additionally seeds the Production `ProdDebug` config — each is mapped into *only* its own config via a `DEFERNO_SEED_*` slot the others simply don't define, so seeding is opt-in and the two never cross; iOS's prod-seed key is still the ADR-0047 follow-up.
 
 ## Agent skills
 
