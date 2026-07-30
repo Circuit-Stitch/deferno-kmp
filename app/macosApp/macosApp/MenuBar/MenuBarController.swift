@@ -7,7 +7,7 @@ import SidecarKit
 /// This protocol is the seam that keeps AppKit out of the tested path. `MenuBarController` below owns the
 /// menu's **policy** (which rows exist, in what order, with what titles and key equivalents, and which
 /// command each fires) and knows nothing about the shared shell, about windows, or about quitting;
-/// `AppMenuBarCommands` (DefernoApp.swift) owns the **routing** and is the only place the two meet.
+/// `AppMenuBarCommands` (next door) owns the **routing** and is the only place the two meet.
 /// The split is what makes `MenuBarControllerTests` possible at all: `StatusItemController` and
 /// `HotkeyCenter` touch process-global OS state (`NSStatusBar.system`, `RegisterEventHotKey`) and cannot
 /// be faked from outside SidecarKit — `HotkeyRegistration.init` is `fileprivate` and there is no protocol
@@ -23,8 +23,15 @@ protocol MenuBarCommands: AnyObject {
 }
 
 /// One row of the status item's dropdown: what it says, its **menu** key equivalent, and the command it
-/// fires. Plain data plus a closure, so the whole menu can be built and asserted with no `NSStatusItem`
-/// anywhere near the test process (#368 G26).
+/// fires (#368 G26).
+///
+/// Yes, this is field-for-field SidecarKit's `StatusItemMenuItem`, and `install()` maps one to the other.
+/// That duplication is deliberate and load-bearing: **`macosAppTests` must not link SidecarKit.** The test
+/// bundle resolves symbols through `BUNDLE_LOADER` against the app host and links neither the Kotlin
+/// framework nor the packages (project.yml pins `OTHER_LDFLAGS: ""` for exactly this reason) — adding a
+/// SidecarKit dependency to name `StatusItemMenuItem` in a `#expect` would load a SECOND copy of a static
+/// library whose `HotkeyCenter.shared` is process-global state. So the tested surface is stated in a type
+/// the test target can already see, and the SidecarKit type is reached only on the way out to AppKit.
 ///
 /// `keyEquivalent` is AppKit's menu shortcut — "" for none, otherwise a lowercase character rendered with
 /// AppKit's implicit ⌘ mask, live only while the menu is open. A *system-wide* shortcut is
@@ -53,8 +60,8 @@ final class MenuBarController {
     /// verified free against every shortcut this app binds: ⌘N (File → New), ⌘R (View → Refresh) and ⌘⇧E
     /// (the Extractor demo) in DefernoApp.swift, the View-local ⌘F in Tasks/ItemTreeView.swift, and ⌘↩ in
     /// TaskDetailView / DraftExtractorView. Private because `HotkeyModifier` is a SidecarKit type and this
-    /// class deliberately keeps SidecarKit out of its own surface — the test bundle resolves symbols
-    /// through BUNDLE_LOADER against the app host and does not link SidecarKit itself.
+    /// class deliberately keeps SidecarKit out of its own surface — same reason `rows()` returns
+    /// [MenuBarRow] rather than SidecarKit's own row type; see there.
     private static let hotkeyKey = "d"
     private static let hotkeyModifiers: Set<HotkeyModifier> = [.command, .shift]
 
@@ -79,8 +86,12 @@ final class MenuBarController {
     /// Whether each half is actually live. Not decoration: `isHotkeyRegistered == false` after an
     /// `install()` is the app's record that the OS refused ⌘⇧D, which is the difference between degrading
     /// gracefully and silently pretending the binding exists.
-    private(set) var isStatusItemVisible = false
-    private(set) var isHotkeyRegistered = false
+    ///
+    /// Derived, not stored: "is it live" IS "do we hold the handle", so reading it off the handle makes
+    /// the two impossible to disagree. A stored mirror would need an assignment in every path that
+    /// touches either resource, and a missed one is a controller that lies about the menu bar.
+    var isStatusItemVisible: Bool { statusItem != nil }
+    var isHotkeyRegistered: Bool { hotkey != nil }
 
     init(commands: MenuBarCommands) {
         self.commands = commands
@@ -132,19 +143,11 @@ final class MenuBarController {
     /// session by construction, so the guard here would be unreachable code pretending to be caution.
     func install() {
         if statusItem == nil {
-            // `onClick` is the click-through behaviour SidecarKit falls back to when no menu is attached.
-            // Attaching one below suppresses it, so in this app it should never fire — but it is not
-            // optional in the initialiser and a no-op would be a lie, so it gets the honest meaning a bare
-            // click on the flame would have.
-            let item = StatusItemController(onClick: { [commands] in commands.showMainWindow() })
-            // Rows before visibility: `setMenu` is order-independent by design, and setting it first means
-            // the item is never briefly on screen as a click-through button with different behaviour.
-            item.setMenu(rows().map { row in
+            let item = StatusItemController(behavior: .menu(rows().map { row in
                 StatusItemMenuItem(title: row.title, keyEquivalent: row.keyEquivalent, action: row.invoke)
-            })
+            }))
             item.setVisible(true)
             statusItem = item
-            isStatusItemVisible = true
         }
 
         if hotkey == nil {
@@ -155,7 +158,6 @@ final class MenuBarController {
             )
             if let registration {
                 hotkey = registration
-                isHotkeyRegistered = true
             } else {
                 // The OS hands a global combo to exactly one owner, so `nil` means somebody else already
                 // holds ⌘⇧D (another app, or a System Settings shortcut). That is a legitimate machine
@@ -175,10 +177,8 @@ final class MenuBarController {
     func uninstall() {
         statusItem?.setVisible(false)
         statusItem = nil
-        isStatusItemVisible = false
 
         hotkey?.unregister()
         hotkey = nil
-        isHotkeyRegistered = false
     }
 }

@@ -34,31 +34,44 @@ public struct StatusItemMenuItem {
     }
 }
 
-/// One connection's menu-bar **status item** (#125, ADR-0024): an `NSStatusItem` (flame icon) whose
-/// clicks invoke `onClick` — the connection routes them as `statusItemClicked` pushes. All AppKit work
-/// happens on the main thread, which `deferno-sidecar` keeps running (`NSApplication.run` in real
-/// mode). The owning provider removes the item (`setVisible(false)`) when its connection closes, so
-/// the item is visible only while the app holds a connection — "appears while the app runs".
-///
-/// The native macOS app links this same type in-process (ADR-0029 §2, no socket) and wants a *menu*
-/// rather than a bare click, so `setMenu(_:)` is layered on additively (#368 G26): the launchd
-/// Helper never calls it and its click-through path through this class is unchanged.
+/// What a status item does when it is clicked (#368 G26) — the two shapes it can take, chosen once at
+/// construction. Stating them as one exhaustive value is what keeps the type honest: a click closure
+/// *plus* an optional menu would be two settings with an implicit precedence (AppKit suppresses the
+/// button's action whenever a menu is attached), so every caller of the menu form would have to supply a
+/// click closure it knows can never fire.
+public enum StatusItemBehavior {
+
+    /// A bare button: a click invokes this directly. The launchd Helper's mode — `RealCapabilityProvider`
+    /// routes each click back to the connected app as a `statusItemClicked` push (#125, ADR-0024).
+    case click(() -> Void)
+
+    /// A dropdown: a click opens the menu and each row invokes its own action. The native macOS app's
+    /// mode (linked in-process, ADR-0029 §2 — no socket, no wire protocol). Rows are rendered in order.
+    /// Pass the rows you have: `.menu([])` is an item that opens an empty box, which is the honest
+    /// rendering of "no rows" and not something any caller wants.
+    case menu([StatusItemMenuItem])
+}
+
+/// One connection's menu-bar **status item** (#125, ADR-0024): an `NSStatusItem` showing the Deferno
+/// flame, behaving as its [StatusItemBehavior] says. All AppKit work happens on the main thread, which
+/// `deferno-sidecar` keeps running (`NSApplication.run` in real mode). The owning provider removes the
+/// item (`setVisible(false)`) when its connection closes, so the item is visible only while the app holds
+/// a connection — "appears while the app runs".
 public final class StatusItemController: NSObject {
 
-    private let onClick: () -> Void
+    /// Immutable, which is what makes `setVisible` the only lifecycle question this type has. The
+    /// `NSStatusItem` is destroyed and rebuilt across a hide/show cycle, so the behaviour has to outlive
+    /// it — holding it as a `let` means it does, with no separate "remember the rows" bookkeeping and no
+    /// order-dependence between configuring and showing.
+    private let behavior: StatusItemBehavior
 
-    /// Both of these are **main-thread-confined** — every read/write below happens inside `runOnMain`,
-    /// which is why neither needs a lock even though the Helper drives this class from a connection's
-    /// read thread (see `RealCapabilityProvider` "status item + hotkeys").
+    /// **Main-thread-confined** — every read/write happens inside `runOnMain`, which is why it needs no
+    /// lock even though the Helper drives this class from a connection's read thread (see
+    /// `RealCapabilityProvider` "status item + hotkeys").
     private var statusItem: NSStatusItem?
 
-    /// The rows last handed to `setMenu(_:)`, retained here rather than only on the `NSMenu`: the menu
-    /// belongs to the `NSStatusItem`, and `setVisible(false)` destroys that item — without this a
-    /// hide/show cycle would silently come back menu-less. `nil` = the click-through behaviour.
-    private var menuItems: [StatusItemMenuItem]?
-
-    public init(onClick: @escaping () -> Void) {
-        self.onClick = onClick
+    public init(behavior: StatusItemBehavior) {
+        self.behavior = behavior
     }
 
     public func setVisible(_ visible: Bool) {
@@ -74,13 +87,16 @@ public final class StatusItemController: NSObject {
                     } else {
                         button.title = "🔥"
                     }
-                    button.target = self
-                    button.action = #selector(self.clicked)
+                    // Only in `.click` mode: AppKit sends the button's action only while `item.menu` is
+                    // nil, so wiring target/action in `.menu` mode would be a pair that can never fire.
+                    if case .click = self.behavior {
+                        button.target = self
+                        button.action = #selector(self.clicked)
+                    }
                 }
-                // Re-attach a menu set before this show (or before an earlier hide) onto the brand-new
-                // item (#368 G26). Deliberately conditional: with no menu set this method touches
-                // nothing it didn't touch before, so the Helper's path is byte-for-byte what it was.
-                if let menu = self.buildMenu() { item.menu = menu }
+                if case .menu(let rows) = self.behavior {
+                    item.menu = self.buildMenu(rows)
+                }
                 self.statusItem = item
             } else {
                 guard let item = self.statusItem else { return }
@@ -90,35 +106,17 @@ public final class StatusItemController: NSObject {
         }
     }
 
-    /// Replace the status item's dropdown menu (#368 G26). Order-independent: call it before or after
-    /// `setVisible(true)`, and the rows survive a `setVisible(false)` → `setVisible(true)` cycle.
-    ///
-    /// `nil` (the default — the launchd Helper never calls this) restores the click-through behaviour
-    /// `RealCapabilityProvider.setStatusItem` relies on: while `NSStatusItem.menu` is nil AppKit sends
-    /// the button's action, so a click fires `onClick` directly with no menu. Attaching a menu
-    /// suppresses that action instead of replacing the wiring, which is what makes the swap reversible.
-    ///
-    /// An empty array is treated as `nil`: an `NSMenu` with no rows pops an empty box open and eats the
-    /// click, which is never what a caller means — and it would strand the item with no way to act.
-    public func setMenu(_ items: [StatusItemMenuItem]?) {
-        runOnMain {
-            self.menuItems = (items?.isEmpty == false) ? items : nil
-            // Assigning nil here is the *restore* path, so unlike `setVisible` this one is unconditional.
-            self.statusItem?.menu = self.buildMenu()
-        }
-    }
-
     @objc private func clicked() {
-        onClick()
+        guard case .click(let action) = behavior else { return }
+        action()
     }
 
     // MARK: menu internals (#368 G26)
 
-    /// Build a fresh `NSMenu` from `menuItems`, or nil for click-through. Main thread only (all callers
-    /// are inside `runOnMain`). Always fresh: an `NSMenu` is owned by the status item it is attached to,
-    /// and rebuilding keeps each row and its boxed closure in lockstep with the current rows.
-    private func buildMenu() -> NSMenu? {
-        guard let rows = menuItems, !rows.isEmpty else { return nil }
+    /// Build a fresh `NSMenu` for [rows]. Main thread only (the caller is inside `runOnMain`). Fresh on
+    /// every show: an `NSMenu` is owned by the status item it is attached to, and that item is recreated
+    /// by each `setVisible(true)`.
+    private func buildMenu(_ rows: [StatusItemMenuItem]) -> NSMenu {
         // A status-item menu never displays its own title, so there is no user-facing string to localize.
         let menu = NSMenu(title: "")
         // Without this, `NSMenu` auto-enabling asks each row's target to validate it and greys out
