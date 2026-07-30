@@ -977,6 +977,4 @@
     <string name="activity_value_pinned">पिन किया गया</string>
     <string name="activity_value_unpinned">पिन नहीं किया गया</string>
     <string name="tasks_detail_trail_empty">अभी तक कोई गतिविधि नहीं</string>
-    <!-- macOS मेन्यू-बार आइकन के मेन्यू की पंक्ति: ऐप की एकमात्र विंडो को सामने लाती है (#368 G26) -->
-    <string name="shell_menu_open_main_window">मुख्य विंडो खोलें</string>
 </resources>

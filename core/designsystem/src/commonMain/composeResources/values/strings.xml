@@ -1217,12 +1217,4 @@ Thank you.</string>
     <string name="activity_value_unpinned">Not pinned</string>
     <!-- Empty Trail (no comments and no history yet). -->
     <string name="tasks_detail_trail_empty">No activity yet</string>
-    <!-- macOS menu-bar status item (#368 G26, ADR-0029). Only the "raise the window" row needs a new
-         string: the status item's own label/tooltip reuses common_app_name (already the macOS menu-bar
-         name), the capture row reuses braindump_title ('use everywhere'), and the quit row reuses
-         shell_menu_quit. Apple-only in practice — the Compose Desktop app has one shell window and no
-         status item — but it still lands in both catalogs (an override is for a deliberate one-platform
-         string, not for a gap). Says "main window", not "Deferno", to keep the brand single-sourced in
-         common_app_name; Deferno is a one-window app (app/macosApp DefernoApp.swift), so it's unambiguous. -->
-    <string name="shell_menu_open_main_window">Open main window</string>
 </resources>

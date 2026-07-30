@@ -273,3 +273,13 @@ android update_view_releases
 # Destination inside its one shell window — so this command has no Compose counterpart to keep in lockstep.
 # Delete this line if a Compose surface ever grows the affordance (a stale entry fails the test).
 apple tasks_menu_open_in_new_window
+
+# The macOS menu-bar status item's "raise the window" row (#368 G26, ADR-0029) — the same shape as the
+# line above. A menu-bar extra is a macOS-only affordance: Android has no menu bar, and the Compose
+# Desktop app renders every Destination inside its one shell window with no status item to hang a
+# dropdown off, so there is no Compose row that would ever read this string. The status item's other two
+# rows need no line here because they reuse strings both platforms already share (braindump_title and
+# shell_menu_quit, the latter also the Compose desktop File-menu row).
+# Says "main window" rather than "Deferno" to keep the brand single-sourced in common_app_name.
+# Delete this line if a Compose surface ever grows the affordance (a stale entry fails the test).
+apple shell_menu_open_main_window

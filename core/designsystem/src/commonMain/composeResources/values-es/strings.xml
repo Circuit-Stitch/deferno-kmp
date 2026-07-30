@@ -957,6 +957,4 @@ Gracias.</string>
     <string name="activity_value_pinned">Fijado</string>
     <string name="activity_value_unpinned">No fijado</string>
     <string name="tasks_detail_trail_empty">Aún no hay actividad</string>
-    <!-- Fila del menú del icono de la barra de menús de macOS: trae al frente la ventana única de la app (#368 G26) -->
-    <string name="shell_menu_open_main_window">Abrir ventana principal</string>
 </resources>
