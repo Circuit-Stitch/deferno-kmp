@@ -90,7 +90,7 @@ class TasksPaneScreenshotTest {
     @Config(qualifiers = "w400dp-h800dp")
     fun compact_moveMode_light() = capture("tasks_compact_move_mode_light") {
         // The lifted child "1a" is highlighted, the rest calmed, and the ↑↓‹› + Done bar shows with the
-        // illegal directions (up / indent — it is the first child) greyed (ADR-0034 decision 6, #228).
+        // illegal directions (up / indent — it is the first child) greyed (ADR-0049 decision 6, #228).
         TasksScreen(tasksComponent().also { it.enterMoveMode() })
     }
 

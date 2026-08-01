@@ -82,7 +82,7 @@ internal class DemoTaskRepository(initial: List<Task>) : TaskRepository {
 
 /**
  * In-memory [ItemRepository] **test fake** for the shell tests: the cross-kind Item read the Tasks tree
- * renders (ADR-0034). [refresh] is a no-op (the sample data is the source of truth); reads are a local
+ * renders (ADR-0049). [refresh] is a no-op (the sample data is the source of truth); reads are a local
  * Flow. Mirror the Tasks the [DemoTaskRepository] holds via [toDemoItems] so a tree row's id opens a
  * detail that resolves in the Task store.
  */

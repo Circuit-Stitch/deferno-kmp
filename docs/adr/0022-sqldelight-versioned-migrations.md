@@ -1,5 +1,9 @@
 # SQLDelight schema migrations: versioned, immutable, append-only
 
+**Status.** Accepted
+
+**Date.** 2026-06-08
+
 **Context.** SQLDelight was wired with `verifyMigrations = true` and a `schemaOutputDirectory`
 (`databases/`) from the start (#21, ADR-0001 cites "explicit indexes/migrations" as a reason it was
 chosen), but no `.sqm` migration files were ever written. Instead every schema change (#23, #71, #72,

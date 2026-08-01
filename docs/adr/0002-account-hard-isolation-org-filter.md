@@ -1,5 +1,9 @@
 # Account is the hard isolation boundary; Org is an in-account filter
 
+**Status.** Accepted
+
+**Date.** 2026-06-05
+
 **Context.** A person holds several **fully separate** Deferno identities (e.g. work, personal,
 HOA) with different credentials, bearer tokens, and [[Org]] memberships, and switches between them
 ("fast user switching"). Privacy and security are a top priority.

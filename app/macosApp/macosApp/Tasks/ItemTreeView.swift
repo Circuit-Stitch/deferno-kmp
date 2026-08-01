@@ -2,11 +2,11 @@ import Deferno
 import SwiftUI
 
 /// The Tasks Destination as one nested, collapsible **Item tree** across all four kinds (#227,
-/// ADR-0034) — the cross-kind forest the old flat list + one-level drill pane were subsumed into. A
+/// ADR-0049) — the cross-kind forest the old flat list + one-level drill pane were subsumed into. A
 /// thin renderer of `ItemTreeComponent`: it observes the flattened `ItemTreeState.rows` and forwards
 /// each row's toggle/open/refresh to the component, holding no logic of its own (ADR-0007).
 ///
-/// Restyled to the "See the trees" filigree (#231) + the **modal move mode** and **undo** of ADR-0034
+/// Restyled to the "See the trees" filigree (#231) + the **modal move mode** and **undo** of ADR-0049
 /// decisions 6/8 (#228/#230), the macOS twin of the iOS `ItemTreeView` (#237). On macOS the move-mode
 /// **entry** is a right-click **context menu → Move** — the native desktop idiom — rather than the iOS
 /// touch long-press; the ↑ ↓ ‹ › move controls + Done and the top undo snackbar mirror iOS exactly. A
@@ -112,7 +112,7 @@ struct ItemTreeView: View {
                 // reads are local + reactive so the tree fills without it. `.refreshable` is kept for parity.
                 .refreshable { component.onRefresh() }
 
-                // The contextual move-mode control (ADR-0034 decision 6, #228).
+                // The contextual move-mode control (ADR-0049 decision 6, #228).
                 if let move = value.moveMode {
                     MoveModeBar(
                         move: move,
@@ -125,7 +125,7 @@ struct ItemTreeView: View {
                 }
             }
 
-            // Top-anchored undo snackbar (ADR-0034 decision 8, #230): offered after a move, reverting
+            // Top-anchored undo snackbar (ADR-0049 decision 8, #230): offered after a move, reverting
             // through the single `undoLastMove` path. Auto-dismisses; hidden in move mode.
             if let undo = value.lastMove, !inMoveMode {
                 UndoSnackbar(
@@ -287,7 +287,7 @@ struct ItemTreeView: View {
 /// `DropdownMenu` (`ItemTreeUi.kt`). A dedicated view so it can own the two menu-spawned dialogs' `@State`
 /// (the Add-subtask prompt + the Delete confirmation), which a `@ViewBuilder` func on the parent can't.
 ///
-/// The menu is **kind-aware** (ADR-0034 decision 7): a Task row gets Open · Open in New Window · Add
+/// The menu is **kind-aware** (ADR-0049 decision 7): a Task row gets Open · Open in New Window · Add
 /// subtask · Move · Undo move · Pin/Unpin · Add/Remove from plan · the working-state block (Start working /
 /// Mark done / Set aside) · Delete; a recurring (non-Task) row gets the cross-kind subset Add subtask ·
 /// Move · Undo move plus the **definition-state block** Activate / Send to review / Archive (#299). `Pin`,
@@ -509,7 +509,7 @@ private struct ItemRowContainer: View {
 
 // MARK: - Move-mode bar
 
-/// The contextual move-mode control (ADR-0034 decision 6, #228): **↑ ↓** reorder among siblings and
+/// The contextual move-mode control (ADR-0049 decision 6, #228): **↑ ↓** reorder among siblings and
 /// **‹ ›** outdent / indent, each acting live per press, plus **Done** to exit. An illegal direction is
 /// greyed (the client-side guard, driven by `MoveMode`'s flags).
 private struct MoveModeBar: View {
@@ -568,7 +568,7 @@ private struct MoveControl: View {
 
 // MARK: - Undo snackbar
 
-/// A calm top-anchored snackbar offered after a move (ADR-0034 decision 8, #230): "Moved" + an **Undo**
+/// A calm top-anchored snackbar offered after a move (ADR-0049 decision 8, #230): "Moved" + an **Undo**
 /// action that reverts through `undoLastMove`. Auto-dismisses after a few seconds; re-arms whenever a new
 /// move is recorded (keyed on `moveKey`).
 private struct UndoSnackbar: View {

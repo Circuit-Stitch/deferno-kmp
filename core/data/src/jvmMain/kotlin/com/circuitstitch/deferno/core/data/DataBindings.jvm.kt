@@ -129,7 +129,7 @@ interface JvmDataBindings {
         )
 
     /**
-     * The device-local "shake to undo" choice (ADR-0034 decision 8, #230, [[App setting]]),
+     * The device-local "shake to undo" choice (ADR-0049 decision 8, #230, [[App setting]]),
      * `java.util.prefs`-backed. Desktop has no accelerometer path yet, so the toggle is inert here; the
      * binding keeps the graph complete.
      */
@@ -141,7 +141,7 @@ interface JvmDataBindings {
         )
 
     /**
-     * The device-local Item-tree fold-override store (ADR-0034, #227, [[App setting]]) — explicit
+     * The device-local Item-tree fold-override store (ADR-0049, #227, [[App setting]]) — explicit
      * expand/collapse choices keyed by item id, shared by the Tasks tree + the detail subtask outline.
      * `java.util.prefs`-backed like the storage-provider choice; persists across desktop restarts.
      */

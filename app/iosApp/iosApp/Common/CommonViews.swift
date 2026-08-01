@@ -29,7 +29,7 @@ struct SessionExpiredBanner: View {
     }
 }
 
-/// One node of the Tasks **Item tree** (#227, #231, ADR-0034) — the "See the trees" connected-tree row
+/// One node of the Tasks **Item tree** (#227, #231, ADR-0049) — the "See the trees" connected-tree row
 /// (iOS twin of feature/tasks/ui `ItemTreeRow`/`TreeAtoms.kt`). A curvy [TreeRail] hangs each child off
 /// its parent in a calm tint of the row's kind accent and lands its elbow in the kind node; the [TreeNode]
 /// is the kind dot (leaf) or an accent fold-disc with a rotating chevron (parent) — tapping it toggles a

@@ -1,0 +1,99 @@
+# ADR hygiene exemptions — the escape hatch for AdrCorpusParityTest.
+#
+# The gate over docs/adr/*.md enforces the house rules in docs/adr/TEMPLATE.md. Most of those rules
+# postdate the corpus, so every pre-existing breach is grandfathered by name here. This ledger is
+# SHRINK-ONLY, on the app/shared-l10n/l10n-parity-overrides.txt model: a NEW violation fails the
+# gate, a listed one passes, and a line whose violation has been fixed fails as STALE so it must be
+# deleted. A grandfathered list that cannot shrink is just a list nobody reads.
+#
+# Format: "<kind> <payload>", one per line. Blank lines and #-comments are ignored.
+#   status-missing      <adr-file>              no **Status.** line yet.
+#   status-spelling     <adr-file>              uses **Status:** instead of the house **Status.**
+#   section-missing     <adr-file> <marker>     a required bold pseudo-header section is absent.
+#   heading-shape       <adr-file>              uses ## headings for house sections, not pseudo-headers.
+#   backpointer         <src>-><target>         a supersedes/amends claim with no reciprocal mention.
+#   wikilink-inherited  <Term>                  [[Term]] owned by the BACKEND glossary, by design.
+#   wikilink-undefined  <Term>                  [[Term]] nothing defines — grandfathered, must shrink.
+#
+# NOTHING here is a licence to write a new ADR this way. Adding a line is an admission, not a style
+# choice, and the only edit this file should ever receive is a deletion.
+
+# --- no Status line yet (38 records) ---------------------------------------------------------------
+# The pre-dating half of the corpus. Every one of these reads as current law with nothing saying so,
+# which is exactly the failure the gate exists to stop repeating. Backfilling a record's Status line
+# is the ONLY edit policy A0 allows here (addressing is mutable, the argument is not) — do it and
+# delete the line.
+
+# --- **Status:** where the house form is **Status.** (5 records) ------------------------------------
+# The period form wins 7 to 5 in the corpus and TEMPLATE.md fixes it. Changing a colon to a period is
+# not a rewrite of the argument, so these are cheap to reconcile.
+
+# --- required section absent ------------------------------------------------------------------------
+# **Considered & rejected.** is REQUIRED by the gate with these 8 records exempted, rather than made
+# optional: an optional section is one that quietly stops being written. These 8 genuinely recorded no
+# alternatives (0034 and 0045 argue their alternative inline; 0039 uses ## headings, below). Writing
+# the section later is new prose, not an edit to the argument, so it is allowed — delete the line then.
+section-missing 0002-account-hard-isolation-org-filter.md **Considered & rejected.**
+section-missing 0022-sqldelight-versioned-migrations.md **Considered & rejected.**
+section-missing 0028-per-platform-view-bodies-duplicated.md **Considered & rejected.**
+section-missing 0029-native-macos-swiftui-app-real-macos-target.md **Considered & rejected.**
+section-missing 0033-macos-detached-task-detail-windows.md **Considered & rejected.**
+section-missing 0034-offline-first-create-client-supplied-uuids.md **Considered & rejected.**
+section-missing 0039-coverage-badge-one-merged-codecov-display-only.md **Considered & rejected.**
+section-missing 0045-task-detail-android-fab-bottom-sheet-add-actions.md **Considered & rejected.**
+# **Consequences.** is absent from 4 records (46 of 50 carry it).
+section-missing 0001-offline-first-local-source-of-truth-outbox.md **Consequences.**
+section-missing 0009-security-privacy-posture.md **Consequences.**
+section-missing 0022-sqldelight-versioned-migrations.md **Consequences.**
+section-missing 0039-coverage-badge-one-merged-codecov-display-only.md **Consequences.**
+
+# --- ## headings instead of bold pseudo-headers (1 record) ------------------------------------------
+# ADR-0039 is the lone record using "## Considered options" / "## Consequences". The pseudo-header
+# shape is what makes the corpus greppable and 49 of 50 records use it. Not fixed here because
+# reshaping a record's headings is a bigger diff than this change is scoped for.
+heading-shape 0039-coverage-badge-one-merged-codecov-display-only.md
+
+# --- supersession claims with no reciprocal back-pointer (10 edges) ---------------------------------
+# Each is a forward claim whose target still reads as current law. The fix is the same-commit
+# back-pointer TEMPLATE.md section 5 requires — annotate the target, do not rewrite it (policy A0);
+# the two proven marker forms are 0016 line 3 (blockquote banner) and 0008 line 16 (inline marker).
+backpointer 0028->0017
+backpointer 0030->0007
+# ADR-0042's own Status line claims it amends "ADR-0007's 'Search is online-only' note". ADR-0007
+# contains no such note — grep for "search" and "online" over it returns nothing across both of its
+# commits. The nearest real text is 0015 line 25, where only New is called online-only, citing
+# ADR-0016. This edge is exempted rather than back-pointed BECAUSE the claim is misattributed:
+# marking 0007 would import a decision it never made. Repoint or drop the claim, then delete this line.
+backpointer 0042->0007
+
+# --- wikilinks the BACKEND glossary owns (8 terms) --------------------------------------------------
+# CONTEXT.md's own preamble: the core Deferno domain language "(Item, Task, Habit, Chore, Event,
+# Occurrence, Org, Plan, Workspace, Canonical ref, Alias, Subtask/Child, ...) is owned by the Deferno
+# backend's CONTEXT.md (the canonical source ...) and is not duplicated here". These links therefore
+# resolve against that file, not this repo's. They are not a backlog — expect them to stay.
+wikilink-inherited Item
+wikilink-inherited Task
+wikilink-inherited Habit
+wikilink-inherited Chore
+wikilink-inherited Event
+wikilink-inherited Occurrence
+wikilink-inherited Plan
+wikilink-inherited Subtask/Child
+# Personal org is an Org variety, inherited on the same footing.
+wikilink-inherited Personal org
+
+# --- wikilinks nothing defines (8 terms) ------------------------------------------------------------
+# These ARE a backlog. Two kinds of defect, both grandfathered:
+#  (a) real client concepts CONTEXT.md never defined — Proposal, Mutation, Main shell, Settings,
+#      ExternalProvenance, desktop-app-runtime-config. Define the term in CONTEXT.md and delete the
+#      line (TEMPLATE.md section 7 requires that in the same commit).
+#  (b) code identifiers wearing wikilink brackets they should never have had — FloatingActionButton
+#      and ItemSync are types, not domain terms. Drop the brackets and delete the line.
+wikilink-undefined Proposal
+wikilink-undefined Mutation
+wikilink-undefined Main shell
+wikilink-undefined Settings
+wikilink-undefined ExternalProvenance
+wikilink-undefined desktop-app-runtime-config
+wikilink-undefined FloatingActionButton
+wikilink-undefined ItemSync

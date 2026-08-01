@@ -9,7 +9,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The cross-kind forest flatten of [buildItemTree] (ADR-0034, #227): roots + orphan promotion, sibling
+ * The cross-kind forest flatten of [buildItemTree] (ADR-0049, #227): roots + orphan promotion, sibling
  * ordering, the depth-2 default fold, and explicit overrides. Pure logic on the ADR-0006 JVM-fast path.
  */
 class ItemTreeTest {
@@ -59,7 +59,7 @@ class ItemTreeTest {
 
     @Test
     fun spansAllFourKindsInOneForest() {
-        // A Habit parents a Task (cross-kind nesting, ADR-0034 decision 1).
+        // A Habit parents a Task (cross-kind nesting, ADR-0049 decision 1).
         val rows = buildItemTree(
             listOf(
                 item("h", kind = ItemKind.Habit),
@@ -215,7 +215,7 @@ class ItemTreeTest {
     private fun chain(vararg ids: String): List<Item> =
         ids.mapIndexed { i, id -> item(id, parentId = ids.getOrNull(i - 1)) }
 
-    // --- moveOptions: the modal-move target computation (ADR-0034 #228) ---
+    // --- moveOptions: the modal-move target computation (ADR-0049 #228) ---
 
     /** root → a, b, c (in sequence order); for the relative-move geometry. */
     private fun family() = listOf(

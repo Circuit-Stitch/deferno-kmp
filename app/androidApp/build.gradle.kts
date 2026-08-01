@@ -137,6 +137,26 @@ android {
     }
 }
 
+// The docs-hygiene gates on the unit-test path — `AdrCorpusParityTest` (docs/adr house rules) and
+// `L10nCatalogParityTest` (catalog parity) — read files Gradle cannot infer from the compile classpath.
+// Declare them as unit-test inputs so editing an ADR, CONTEXT.md, or either shrink-only ledger
+// re-runs the tests; without this the task stays UP-TO-DATE and the gate quietly stops enforcing
+// anything locally. (CI always runs it on a fresh checkout. `.swift` sources are NOT inputs — the
+// ADR-citation sweep reads them, but adding the whole Apple tree here would out-cost the coverage.)
+tasks.withType<Test>().configureEach {
+    inputs.files(
+        rootProject.layout.projectDirectory.dir("docs/adr").asFileTree.matching {
+            include("*.md", "*.txt")
+        },
+        rootProject.layout.projectDirectory.file("CONTEXT.md"),
+        rootProject.layout.projectDirectory.file("CLAUDE.md"),
+        rootProject.layout.projectDirectory.file("app/shared-l10n/Localizable.xcstrings"),
+        rootProject.layout.projectDirectory.file("app/shared-l10n/l10n-parity-overrides.txt"),
+    )
+        .withPropertyName("docsHygieneInputs")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 // Baseline Profile: scaffolding is KEPT but the profile is switched OFF. The `:baselineprofile`
 // generator + plugin wiring stay so this can be turned on later as physical-device automation — a fast
 // x86 emulator can't demonstrate the AOT win (measured: release cold start ~840 ms with or without

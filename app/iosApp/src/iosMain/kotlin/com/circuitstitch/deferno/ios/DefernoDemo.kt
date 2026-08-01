@@ -51,7 +51,7 @@ class DefernoDemo {
         DefaultTasksComponent(
             componentContext = root.childContext(key = "tasks"),
             // DemoTaskRepository also implements ItemRepository (the tree's cross-kind read); the fold
-            // store is in-memory on iOS (device-local, not persisted in the demo — ADR-0034).
+            // store is in-memory on iOS (device-local, not persisted in the demo — ADR-0049).
             itemRepository = taskRepository,
             foldStore = InMemoryItemFoldStore(),
             taskRepository = taskRepository,

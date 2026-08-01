@@ -31,7 +31,7 @@ import kotlin.test.assertTrue
  * (ADR-0006) — no real network. Proves the cold read hits `GET /items`, decodes the polymorphic
  * envelope through the #18 `ItemView` mappers, partitions it into the four kind lists (keying off the
  * injected `type` discriminator and ignoring the redundant `kind`), maps the Task-only
- * `descendant_done`/`descendant_total` (ADR-0034), and honours the offline-first contract (a failure
+ * `descendant_done`/`descendant_total` (ADR-0049), and honours the offline-first contract (a failure
  * yields [RemoteSnapshot.Unavailable]; a genuine empty list is [RemoteSnapshot.Available] empty).
  */
 class KtorItemSnapshotSourceTest {

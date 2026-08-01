@@ -1,5 +1,9 @@
 # Client-side agent: Koog in the shared core, hosted inference behind a thin Deferno relay, propose-only v1
 
+**Status.** Amended by ADR-0037
+
+**Date.** 2026-06-10
+
 **Context.** Two LLM-backed features are planned: the **Brain dump** extractor (CONTEXT.md, Stage 2 —
 a spoken [[Transcript]] becomes several draft Tasks) and a **plan curator** (a proposed delta over the
 server-seeded daily plan). Three standing constraints shape the design: privacy is structural — speech
@@ -96,7 +100,7 @@ binary; and the backend owns the domain language and already auto-seeds the dail
 > iOS on-device inference is therefore **no longer "deferred with its app"** — it ships now via Apple
 > Foundation Models; the iOS engine + runtime specifics are **ADR-0037**.
 
-**Considered and rejected.** *BYO user API key* (not in v1 — remains additive later as another
+**Considered & rejected.** *BYO user API key* (not in v1 — remains additive later as another
 engine-catalog entry). *Backend agent endpoints* (duplicates agent
 logic in two languages the moment a local tier exists). *Server-fetched prompts* (a versioned
 cross-repo prompt contract isn't warranted yet). *Write-tool agent in v1* (guardrail design without a
@@ -107,7 +111,7 @@ existing Items in the person's graph; local read-only lookup preserves the propo
 translation layer drops provider-native structured output — the capability extraction depends on
 most).
 
-**Consequences.** The backend repo (`Kyle-Falconer/Deferno`) gains service-side prerequisites: the
+**Consequences.** The backend repo (`Circuit-Stitch/Deferno`) gains service-side prerequisites: the
 relay endpoint and entitlement exposure. The accept paths need **no new
 write plumbing** — `CreateItem` and the three plan Commands already exist and route through the
 executor; the new client work is `core/agent` itself plus the two review surfaces. `core/agent` sits

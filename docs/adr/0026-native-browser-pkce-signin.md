@@ -1,8 +1,12 @@
 # Native sign-in: system-browser OAuth Authorization Code + PKCE, minting a per-device PAT
 
+**Status.** Amended by ADR-0033
+
+**Date.** 2026-06-10
+
 **Context.** ADR-0012 established that the durable credential is a per-device **PAT** and that
 OAuth is only the *bootstrap*; ADR-0023 shipped a **pasted-PAT** path as the v1 sign-in surface
-because the backend browser→app token handoff (Kyle-Falconer/Deferno **#299**) was unfinished. #299
+because the backend browser→app token handoff (Circuit-Stitch/Deferno **#299**) was unfinished. #299
 has now landed (the pinned `contracts/openapi-0.1.json` was refreshed against it), so the proper
 flow is unblocked. The backend ADR `2026-06-09-native-client-browser-pkce-token-handoff` (Accepted)
 makes Deferno a minimal OAuth 2.0 authorization server for first-party native clients. This ADR is

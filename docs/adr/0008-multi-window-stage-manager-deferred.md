@@ -1,5 +1,9 @@
 # Multi-window / Stage Manager: deferred past v1, but not precluded
 
+**Status.** Deferred
+
+**Date.** 2026-06-05
+
 **Context.** iPad **Stage Manager** (and Android multi-instance / desktop multi-window) is wanted but
 out of v1 scope. The risk is that single-window assumptions baked into v1 turn it into a rewrite
 later. This ADR records the deferral *and* the guardrails that keep it a localized addition.
@@ -29,5 +33,5 @@ free**, so they aren't iPad-specific tax. The v1 cost is low — DI scoping disc
 device-type checks, and using `WindowGroup`. Stage Manager *hardening* (arbitrary-resize edge cases,
 external display) is a later milestone, not a re-architecture.
 
-**Rejected.** Single-Activity/single-Scene + a global "current account" (cheaper in v1, a rewrite
+**Considered & rejected.** Single-Activity/single-Scene + a global "current account" (cheaper in v1, a rewrite
 later).

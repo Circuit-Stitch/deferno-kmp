@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * The device-local **fold state** for the Item tree (ADR-0034 decision 4, #227): the explicit
+ * The device-local **fold state** for the Item tree (ADR-0049 decision 4, #227): the explicit
  * expand/collapse **overrides** a user has set, keyed by item id, against the depth-based default
  * (auto-collapse anything deeper than depth 2). An **[[App setting]]** — stored device-locally, **never
  * synced** (fold memory is a per-device view convenience; the backend `UserSettings` is untouched).
@@ -34,7 +34,7 @@ interface ItemFoldStore {
 
 /**
  * A non-persistent [ItemFoldStore] for tests, previews, and the Apple targets whose native tree is a
- * deferred fast-follow (ADR-0034). **Measured** (commonTest) — round-trips overrides in memory.
+ * deferred fast-follow (ADR-0049). **Measured** (commonTest) — round-trips overrides in memory.
  */
 class InMemoryItemFoldStore(initial: Map<String, Boolean> = emptyMap()) : ItemFoldStore {
     private val _overrides = MutableStateFlow(initial)

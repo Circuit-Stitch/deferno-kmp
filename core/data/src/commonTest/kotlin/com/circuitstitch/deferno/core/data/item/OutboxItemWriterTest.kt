@@ -22,7 +22,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The cross-kind Item move write path (ADR-0034 #228): [planMove] renumbers the destination sibling
+ * The cross-kind Item move write path (ADR-0049 #228): [planMove] renumbers the destination sibling
  * group purely, and [OutboxItemWriter] applies that across the four per-kind stores + enqueues the
  * `POST items/{id}/move`. Run against the in-memory fakes (ADR-0006 JVM-fast path).
  */

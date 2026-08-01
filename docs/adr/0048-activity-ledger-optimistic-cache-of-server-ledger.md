@@ -6,6 +6,8 @@ snapshot-reconcile seam". Implements the KMP-client half of the backend's
 `Circuit-Stitch/Deferno` ADR `docs/adr/2026-07-06-activity-ledger.md` — whose stated consequence is that
 "the KMP client is demoted from source-of-truth to an optimistic cache".
 
+**Date.** 2026-07-25
+
 **Context.** The client's Activity ledger (#260) was, as built, a best-effort **local mirror of the
 outbox**: one SQLDelight row per `enqueue`, captured at a decorator choke-point, `runCatching{}`-swallowed
 on failure, **never uploaded**, always tagged `Mobile`, keyed by a device-local `AUTOINCREMENT seq` that
@@ -82,7 +84,7 @@ Three facts constrain the answer:
   returns all leave the cursor and cached rows untouched. A diagnostics surface must never be the reason a
   sync pass reports failure.
 
-**Considered and rejected.**
+**Considered & rejected.**
 
 - **A separate table for server rows, merged at read time.** Rejected: it makes every read a join and
   pushes dedup into the render path, where it must be re-derived on each surface (feed, Trail, both

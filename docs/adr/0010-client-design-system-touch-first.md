@@ -1,5 +1,9 @@
 # Client design system: mobile/touch-first, independent of the webui pattern library
 
+**Status.** Accepted
+
+**Date.** 2026-06-05
+
 **Context.** The Deferno webui has a "pattern library" (its single source of visual truth), but it's
 still **highly fluctuating** and is web-/pointer-centric. The native clients need a touch- and
 mobile-optimized experience, not a port of web tokens.
@@ -15,5 +19,5 @@ semantics — see `docs/design-principles.md`) are independent of the token sour
 no coupling to fluctuating web tokens. If the web design later stabilizes, a *shared* cross-platform
 token source can be revisited then.
 
-**Rejected.** Inheriting the webui pattern-library tokens as the client source of truth (fluctuating;
+**Considered & rejected.** Inheriting the webui pattern-library tokens as the client source of truth (fluctuating;
 web/pointer-centric).

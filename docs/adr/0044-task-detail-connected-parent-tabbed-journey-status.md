@@ -1,5 +1,9 @@
 # Task detail: connected-parent header, tabbed sections, read-only journey status
 
+**Status.** Amended by ADR-0046
+
+**Date.** 2026-07-09
+
 **Context.** The [[Task]] detail is one shared body ([[View]]-neutral `TaskDetailContent`, rendered by
 the Android/desktop Compose screens and the iOS/macOS SwiftUI `TaskDetailView`). It had grown **three
 stacked heading layers**: the shell [[Chrome]] (a search pill on the Tasks [[Destination]], a drilled
@@ -48,7 +52,7 @@ re-record, and coverage is **added** for the drilled Tasks chrome + the journey-
 currently gaps). `ChromeSpec` growing a contextual overflow is a small amendment to ADR-0031/0032's
 otherwise-fixed action catalog.
 
-**Rejected.**
+**Considered & rejected.**
 
 - **Keep the `PaneHeader`, relabel it to the task title** — still stacks a third bar under the drilled
   shell bar and the body block, and does nothing for the search pill or the single-heading goal.

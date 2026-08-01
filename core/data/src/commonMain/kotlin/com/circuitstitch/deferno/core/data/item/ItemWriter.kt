@@ -1,7 +1,7 @@
 package com.circuitstitch.deferno.core.data.item
 
 /**
- * The cross-kind Item **write** seam the Tasks tree drives for the modal Move (ADR-0034 decision 5,
+ * The cross-kind Item **write** seam the Tasks tree drives for the modal Move (ADR-0049 decision 5,
  * #228) — the reparent/reorder half `core/domain/.../command/Command.kt` deferred until a write seam
  * existed. The read half is [ItemRepository]; this is its write sibling, deliberately the **one** verb
  * the tree needs (relative ↑↓ reorder + ‹› indent/outdent all reduce to a `move`), kept separate from

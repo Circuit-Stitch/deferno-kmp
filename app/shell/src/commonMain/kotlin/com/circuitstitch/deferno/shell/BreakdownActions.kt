@@ -28,7 +28,7 @@ interface BreakdownActions {
     /**
      * Capture a child Task titled [title] under [parentId] — the "too big → smaller parts" and
      * "spin off a prerequisite" moves. A child Task *is* the subtask: create-with-`parent_id` reparents
-     * atomically, so no separate move_item is needed (ADR-0034). Returns the new item's client id
+     * atomically, so no separate move_item is needed (ADR-0049). Returns the new item's client id
      * (offline-first — always queued), or `null` if [title] is blank (nothing is captured).
      */
     suspend fun captureSubtask(parentId: String, title: String): String?

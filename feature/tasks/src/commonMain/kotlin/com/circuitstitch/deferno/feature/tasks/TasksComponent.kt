@@ -36,7 +36,7 @@ import kotlin.time.Instant
 enum class TaskPane { Tree, Detail }
 
 /**
- * The Tasks feature root (ADR-0034). The Tasks Destination is the nested, collapsible **Item tree**
+ * The Tasks feature root (ADR-0049). The Tasks Destination is the nested, collapsible **Item tree**
  * ([tree]) spanning all four kinds; selecting a row's trailing `›` opens its [detail] alongside (a
  * co-resident slot, ADR-0007). The old flat list + one-level drill pane are **subsumed** — a node's
  * children are now seen inline by expanding the tree, so there is no separate tree slot anymore.
@@ -70,7 +70,7 @@ interface TasksComponent {
 
 class DefaultTasksComponent(
     componentContext: ComponentContext,
-    // The cross-kind Item read + device-local fold store the tree pane renders (ADR-0034, #226/#227).
+    // The cross-kind Item read + device-local fold store the tree pane renders (ADR-0049, #226/#227).
     private val itemRepository: ItemRepository,
     private val foldStore: ItemFoldStore,
     // The Task read seam the detail slot observes/hydrates (still Task-centric; detail is Task-only).

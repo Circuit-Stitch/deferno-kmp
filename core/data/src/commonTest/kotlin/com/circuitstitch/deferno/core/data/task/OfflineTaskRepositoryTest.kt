@@ -29,7 +29,7 @@ import kotlin.test.assertTrue
 /**
  * The [OfflineTaskRepository] read surface (ADR-0001, #22): the observe `Flow`s, on-demand [hydrate],
  * and the **offline** [search] (#311, ADR-0042 — a local cross-kind read, no network) — plus that
- * [refresh] delegates the cold sync to [ItemSync] (ADR-0034, #226). The cross-kind reconcile *algorithm*
+ * [refresh] delegates the cold sync to [ItemSync] (ADR-0049, #226). The cross-kind reconcile *algorithm*
  * itself is proved separately by `ItemSyncTest`.
  */
 class OfflineTaskRepositoryTest {

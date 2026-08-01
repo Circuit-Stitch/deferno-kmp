@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
- * In-memory [ItemRepository] **test fake** for the shell + Compose-View tests (#227, ADR-0034). Reads are
+ * In-memory [ItemRepository] **test fake** for the shell + Compose-View tests (#227, ADR-0049). Reads are
  * a [MutableStateFlow]; [refresh] is a no-op (the sample data is the local source of truth). The real app
  * uses the DI-provided OfflineItemRepository (#226, ADR-0014); this stays a test fixture.
  */

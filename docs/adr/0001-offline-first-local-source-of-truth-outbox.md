@@ -1,5 +1,9 @@
 # Offline-first: local source of truth + outbox, last-writer-wins
 
+**Status.** Accepted
+
+**Date.** 2026-06-05
+
 **Context.** At envelope `version: 0.1` the Deferno API exposes *no* sync or concurrency
 primitives: list endpoints return full snapshots of summaries with no `?since=`/cursor/ETag,
 and entities carry `date_created`/`finished_at`/`deleted_at` (soft-delete tombstones are
@@ -21,7 +25,7 @@ in-memory JDBC driver, explicit indexes/migrations, and KMP-mature across iOS/de
 **Considered & rejected.** A full bidirectional sync engine (unsupported by the API); a
 read-through cache (forfeits offline writes).
 
-**Forward path.** Filed [Kyle-Falconer/Deferno#297](https://github.com/Kyle-Falconer/Deferno/issues/297)
+**Forward path.** Filed [Circuit-Stitch/Deferno#297](https://github.com/Circuit-Stitch/Deferno/issues/297)
 to add server-authoritative `updated_at` + `?since=` delta pull, with a companion `ETag`/`If-Match`
 (or per-entity `rev`) to upgrade blind LWW → **conflict-aware** LWW and O(all) reconcile →
 O(changes). The client ships against full-snapshot in the interim and adopts deltas when available.

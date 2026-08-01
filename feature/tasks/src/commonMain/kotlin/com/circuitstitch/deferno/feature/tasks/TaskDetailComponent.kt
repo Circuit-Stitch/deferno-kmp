@@ -44,7 +44,7 @@ import kotlin.time.Instant
  * Destination's [ItemRow], but carrying the full [task] (the outline needs `workingState` for its
  * checkbox). [hasChildren]/[isExpanded] drive the fold chevron; a collapsed parent's children are not
  * emitted. Built by the shared [foldFlatten] over the device-local [com.circuitstitch.deferno.core.data.item.ItemFoldStore]
- * — folding a node here re-flattens the Tasks tree too, and vice versa (ADR-0034 decision 4).
+ * — folding a node here re-flattens the Tasks tree too, and vice versa (ADR-0049 decision 4).
  */
 data class SubtaskRow(
     val task: Task,
@@ -247,7 +247,7 @@ interface TaskDetailComponent {
 
     /**
      * Toggle a subtask row's expand/collapse — the leading chevron. Persists through the shared device-local
-     * fold store, so the choice also re-flattens the Tasks Destination tree and survives restart (ADR-0034
+     * fold store, so the choice also re-flattens the Tasks Destination tree and survives restart (ADR-0049
      * decision 4). [currentlyExpanded] is the row's present fold (the View has it on the [SubtaskRow]).
      */
     fun onToggleSubtaskExpand(id: String, currentlyExpanded: Boolean)
@@ -317,7 +317,7 @@ class DefaultTaskDetailComponent(
     // observed from the cache as Flows and refreshed best-effort on open. Empty NONE defaults.
     private val commentRepository: CommentRepository = CommentRepository.NONE,
     private val historyRepository: ItemHistoryRepository = ItemHistoryRepository.NONE,
-    // The cross-kind Item read (ADR-0034) — the local cache the Trail resolves history peer titles from
+    // The cross-kind Item read (ADR-0049) — the local cache the Trail resolves history peer titles from
     // (Split child, Moved destination, …), any-kind since the tree spans kinds (ADR-0046). Observed as a
     // Flow and folded into the ACTIVITY feed at merge time; render never fetches. Null (the default) leaves
     // every peer unresolved — the View then shows "another item" — so tests/offline callers build without it.
@@ -354,7 +354,7 @@ class DefaultTaskDetailComponent(
     // LocalAttachmentRepository. Defaulted to the empty NONE so the many tests and the platforms without
     // on-device capture build without it (the detail then shows no on-device rows).
     private val onDeviceAttachments: OnDeviceAttachments = OnDeviceAttachments.NONE,
-    // The device-local fold store the subtask outline shares with the Tasks Destination tree (ADR-0034
+    // The device-local fold store the subtask outline shares with the Tasks Destination tree (ADR-0049
     // decision 4). Production threads the Account-scoped instance (so a fold here re-flattens the tree
     // and vice versa); tests/callers that don't exercise fold get a fresh in-memory store by default.
     private val foldStore: ItemFoldStore = InMemoryItemFoldStore(),

@@ -1,5 +1,9 @@
 # Testing strategy & coverage policy
 
+**Status.** Accepted
+
+**Date.** 2026-06-05
+
 **Context.** "Full test coverage for everything" is a headline goal. The KMP shared-presentation core
 (ADR-0003) means the bulk of logic — domain, data, sync, **and presentation** — is testable once, on
 the fast JVM path.

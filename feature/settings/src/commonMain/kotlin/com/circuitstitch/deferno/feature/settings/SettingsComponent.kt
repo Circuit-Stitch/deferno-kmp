@@ -277,7 +277,7 @@ interface SettingsComponent {
     val brainDumpNotificationsEnabled: StateFlow<Boolean>
 
     /**
-     * The device-local **"shake to undo"** choice ([SettingsCategory.TaskBehavior], ADR-0034 decision 8,
+     * The device-local **"shake to undo"** choice ([SettingsCategory.TaskBehavior], ADR-0049 decision 8,
      * #230) — whether a phone shake on the Tasks tree raises the "Undo [operation]?" confirm that reverts the
      * last Move. An **[[App setting]]**, sourced from the AppScope preference, **not** the synced [settings];
      * it never syncs and never changes on an Account switch. Defaults to on; shake is never the only undo

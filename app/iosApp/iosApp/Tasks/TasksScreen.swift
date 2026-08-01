@@ -2,7 +2,7 @@ import Deferno
 import SwiftUI
 
 /// The Tasks Destination host — the **adaptive tier-2 Pane layout** (ADR-0007). It renders the shared
-/// component's always-present **Item tree** (#227, ADR-0034) plus its co-resident **detail** slot as
+/// component's always-present **Item tree** (#227, ADR-0049) plus its co-resident **detail** slot as
 /// **one or two panes by horizontal size class**: a side-by-side tree + detail on regular width (iPad,
 /// and Plus/Max iPhones in landscape), a single foreground pane on compact width (most iPhones).
 ///

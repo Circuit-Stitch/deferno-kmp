@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * The Swift-facing handle for the Tasks Destination. Exposes the always-present Item [tree] component
- * (the primary pane since #227/ADR-0034) and the co-resident detail slot, flattened to its nullable open
+ * (the primary pane since #227/ADR-0049) and the co-resident detail slot, flattened to its nullable open
  * [TaskDetailComponent] as a SKIE-bridged [activeDetail] `StateFlow` (the component's `Value.asStateFlow`
  * mirror), so SwiftUI never touches the Decompose `Value`/`ChildSlot` generics.
  */

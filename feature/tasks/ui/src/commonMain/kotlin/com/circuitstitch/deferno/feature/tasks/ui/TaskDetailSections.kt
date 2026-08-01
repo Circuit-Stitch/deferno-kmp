@@ -827,7 +827,7 @@ private fun AddLabelField(onAdd: (String) -> Unit) {
 /**
  * The subtask outline (web parity): a done/total count + progress bar, the depth-indented checkboxes,
  * and an "add subtask" field that creates a direct child. The [rows] are the subtree flattened with the
- * **same fold mechanism as the Tasks Destination tree** (ADR-0034 decision 4) — a parent's chevron
+ * **same fold mechanism as the Tasks Destination tree** (ADR-0049 decision 4) — a parent's chevron
  * toggles its fold through the shared device-local store, so a node folded here stays folded on the tree
  * and across restart. Toggling a checkbox flips that node between Done and Open through the working-state
  * write seam (offline-first); adding creates online.

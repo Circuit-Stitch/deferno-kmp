@@ -1,5 +1,9 @@
 # Tasks Destination renders the Item decomposition tree; modal button-based Move over `/items`
 
+**Status.** Accepted
+
+**Date.** 2026-06-15
+
 **Context.** The Tasks [[Destination]] today is a flat `LazyColumn` ordered by `sequence`, with parents
 and children intermixed at one indent level — the "flattened to a single layer" the user sees. A
 *separate* one-level drill pane (`TaskTreeComponent`/`TaskTreeScreen`, the ADR-0007 tier-2 "co-resident,
@@ -91,7 +95,7 @@ in move mode · multi-select · general last-action undo · an analytics/telemet
 (Split/Fold/Merge/Convert) in the menu · the iOS/macOS SwiftUI tree · multi-window / resize-without-state
 (#31's other half, ADR-0008).
 
-**Rejected.**
+**Considered & rejected.**
 
 - **A full nested tree on the Plan** — overwhelm; the Plan is the calm home (principle #1). Plan stays flat
   and keeps `ReorderPlan`.

@@ -1,5 +1,9 @@
 # Native macOS capabilities via a launchd-activated Swift sidecar
 
+**Status.** Amended by ADR-0029
+
+**Date.** 2026-06-09
+
 **Context.** The desktop client is **Compose Desktop on the JVM** (ADR-0003) — there is no
 Kotlin/Native `macos*` target — and the toolchain is pinned to **JDK 17** (`ProjectConfig`), so
 Java's FFM / Project Panama (`java.lang.foreign`, stable only on 22+) is not available. We want to

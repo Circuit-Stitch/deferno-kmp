@@ -1,5 +1,9 @@
 # DI scope placement: the per-Account data layer is AccountScope, not AppScope
 
+**Status.** Accepted
+
+**Date.** 2026-06-07
+
 **Context.** ADR-0008 **G2** lists "the data layer (repositories, SQLDelight, sync engine,
 `AccountManager`, secure vault)" as process-global singletons in **AppScope**, shared across scenes,
 with only presentation scene-scoped. But ADR-0002 mandates hard Account isolation through a

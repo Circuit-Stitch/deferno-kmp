@@ -79,7 +79,7 @@ interface AccountSession {
     val taskRepository: TaskRepository
 
     /**
-     * The cross-kind Item read the Tasks Item tree renders (ADR-0034, #226/#227) + the device-local
+     * The cross-kind Item read the Tasks Item tree renders (ADR-0049, #226/#227) + the device-local
      * [foldStore] of expand/collapse overrides the tree and the detail subtask outline share.
      */
     val itemRepository: ItemRepository
@@ -205,7 +205,7 @@ interface AccountSession {
     val deleteTask: suspend (TaskId) -> Unit
 
     /**
-     * The Tasks Item-tree move seam the modal move mode drives (ADR-0034 #228): maps a relative move to a
+     * The Tasks Item-tree move seam the modal move mode drives (ADR-0049 #228): maps a relative move to a
      * `MoveItem` Command and dispatches it through the command executor (optimistic cross-kind reorder +
      * outbox enqueue), so the feature layer never touches the registry directly (mirrors [workingStateEditor]).
      */
@@ -489,7 +489,7 @@ internal fun commandSetPinned(executor: CommandExecutor): suspend (TaskId, Boole
     { id, pinned -> executor.execute(SetTaskPinned(id, pinned)) }
 
 /**
- * The Tasks Item-tree move seam backed by a [CommandExecutor] (ADR-0034 #228): dispatches a [MoveItem]
+ * The Tasks Item-tree move seam backed by a [CommandExecutor] (ADR-0049 #228): dispatches a [MoveItem]
  * with the destination parent + insertion index the modal move mode computed (optimistic cross-kind
  * reorder + outbox enqueue). No `current` row — a move has no stale-transition gate. Shared by production
  * and tests so the mapping isn't duplicated.

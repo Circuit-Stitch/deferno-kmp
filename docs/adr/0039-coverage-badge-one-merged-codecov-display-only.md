@@ -1,6 +1,8 @@
 # Coverage is surfaced as one merged-core badge via Codecov; Codecov is display-only, never a gate
 
-**Status:** accepted
+**Status.** Accepted
+
+**Date.** 2026-06-24
 
 **Context.** The shared-core line-coverage number is already computed and *gated* in CI — the
 `deferno.coverage.aggregation` convention (ADR-0006) enforces a ~85–90% bound over the **merged**

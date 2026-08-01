@@ -1,0 +1,138 @@
+# ADR prose baselines — the ratchet for AdrCorpusParityTest.
+#
+# Four of the mechanical rules in docs/adr/TEMPLATE.md section 6 breach in bulk across a corpus written
+# before they existed, so they cannot be a hard gate on day one. Each is a per-file NON-INCREASING
+# RATCHET instead: this file records how many violations a record is allowed to carry, the gate FAILS
+# when a record grows past its number, and it PRINTS (never fails) when a record improves, together
+# with the exact replacement line. Improving prose must never break CI.
+#
+# The only direction a number may ever move is DOWN. Raising one to accommodate new prose defeats the
+# whole mechanism; a record with no line here is allowed ZERO, which is what makes a new ADR clean.
+#
+# Format: "<rule> <adr-file> <count>", one per line. Blank lines and #-comments are ignored.
+#   long-sentences        sentences over 60 words.
+#   contractions          "can't", "isn't", "it's" — write them out.
+#   semicolon-paragraphs  paragraphs carrying more than one semicolon.
+#   long-lines            lines over 110 characters.
+#
+# Why 60 words and not 20 or 25: at 20 words 760 of the corpus's 1,773 sentences breach and at 25 words
+# 554 do. Those thresholds describe a rewrite of every record, not a hygiene rule, and were rejected.
+# 60 isolates the genuinely unreadable sentences (the worst is 117 words) and leaves ordinary technical
+# prose alone.
+#
+# Why the semicolon rule is a ratchet and not a gate: 485 semicolons live in 50 of 50 records. A
+# green-on-day-one semicolon rule does not exist for this corpus.
+
+# --- sentences over 60 words (28 in 17 records; the worst is 117 words, ADR-0043) ---
+long-sentences 0017-shared-app-shell-module-per-platform-views.md 1
+long-sentences 0021-desktop-release-and-self-update-conveyor-github-releases.md 1
+long-sentences 0022-sqldelight-versioned-migrations.md 1
+long-sentences 0025-multi-os-sidecar-substrate-cross-os-transport.md 1
+long-sentences 0026-native-browser-pkce-signin.md 3
+long-sentences 0027-client-koog-agent-hosted-relay-propose-only.md 2
+long-sentences 0029-native-macos-swiftui-app-real-macos-target.md 4
+long-sentences 0035-android-edge-to-edge-component-owned-insets.md 2
+long-sentences 0037-ios-on-device-brain-dump-apple-speech-foundation-models.md 1
+long-sentences 0038-server-mediates-all-external-api-calls.md 1
+long-sentences 0039-coverage-badge-one-merged-codecov-display-only.md 1
+long-sentences 0041-data-portability-rest-envelope-backup-file.md 1
+long-sentences 0042-offline-first-search-cached-attachment-rollup.md 1
+long-sentences 0043-offline-first-comments-cached-item-history.md 5
+long-sentences 0044-task-detail-connected-parent-tabbed-journey-status.md 1
+long-sentences 0046-task-detail-trail-merged-enriched-history.md 1
+long-sentences 0047-environment-build-variants-coexisting-dogfood-installs.md 1
+
+# --- contractions (77 in 33 records; a bare apostrophe sweep would have hit 296 sites,
+#     over 200 of them legitimate possessives) ---
+contractions 0004-module-structure-nia-hybrid.md 3
+contractions 0005-api-version-handling.md 3
+contractions 0008-multi-window-stage-manager-deferred.md 1
+contractions 0009-security-privacy-posture.md 2
+contractions 0010-client-design-system-touch-first.md 2
+contractions 0011-api-dto-modelling-condense-at-edge.md 1
+contractions 0013-navigation-shell-destinations.md 1
+contractions 0017-shared-app-shell-module-per-platform-views.md 1
+contractions 0018-on-device-stt-portable-whisper-baseline-native-fast-paths.md 4
+contractions 0019-whisper-model-distribution-platform-asset-delivery.md 4
+contractions 0020-apache-2-open-source-client-license.md 2
+contractions 0021-desktop-release-and-self-update-conveyor-github-releases.md 3
+contractions 0022-sqldelight-versioned-migrations.md 3
+contractions 0023-v1-signin-validate-and-store-pasted-pat.md 1
+contractions 0024-macos-native-capabilities-launchd-swift-sidecar.md 2
+contractions 0025-multi-os-sidecar-substrate-cross-os-transport.md 4
+contractions 0026-native-browser-pkce-signin.md 3
+contractions 0027-client-koog-agent-hosted-relay-propose-only.md 2
+contractions 0029-native-macos-swiftui-app-real-macos-target.md 5
+contractions 0033-macos-detached-task-detail-windows.md 3
+contractions 0034-offline-first-create-client-supplied-uuids.md 1
+contractions 0035-android-edge-to-edge-component-owned-insets.md 1
+contractions 0038-server-mediates-all-external-api-calls.md 1
+contractions 0039-coverage-badge-one-merged-codecov-display-only.md 1
+contractions 0040-ios-assistant-server-mediated-conversational-client.md 1
+contractions 0041-data-portability-rest-envelope-backup-file.md 2
+contractions 0042-offline-first-search-cached-attachment-rollup.md 6
+contractions 0043-offline-first-comments-cached-item-history.md 6
+contractions 0044-task-detail-connected-parent-tabbed-journey-status.md 2
+contractions 0045-task-detail-android-fab-bottom-sheet-add-actions.md 2
+contractions 0046-task-detail-trail-merged-enriched-history.md 1
+contractions 0047-environment-build-variants-coexisting-dogfood-installs.md 2
+contractions 0049-tasks-item-tree-modal-move.md 1
+
+# --- paragraphs with more than one semicolon (113; 485 semicolons live in 50 of 50 records) ---
+semicolon-paragraphs 0001-offline-first-local-source-of-truth-outbox.md 1
+semicolon-paragraphs 0002-account-hard-isolation-org-filter.md 2
+semicolon-paragraphs 0005-api-version-handling.md 2
+semicolon-paragraphs 0006-testing-strategy.md 1
+semicolon-paragraphs 0007-adaptive-multipane-command-registry.md 2
+semicolon-paragraphs 0008-multi-window-stage-manager-deferred.md 1
+semicolon-paragraphs 0009-security-privacy-posture.md 2
+semicolon-paragraphs 0010-client-design-system-touch-first.md 1
+semicolon-paragraphs 0011-api-dto-modelling-condense-at-edge.md 2
+semicolon-paragraphs 0013-navigation-shell-destinations.md 3
+semicolon-paragraphs 0014-di-scope-placement-data-layer.md 1
+semicolon-paragraphs 0015-v1-navigation-surface-deferred-destinations.md 5
+semicolon-paragraphs 0016-create-online-only-v1.md 1
+semicolon-paragraphs 0017-shared-app-shell-module-per-platform-views.md 1
+semicolon-paragraphs 0018-on-device-stt-portable-whisper-baseline-native-fast-paths.md 3
+semicolon-paragraphs 0020-apache-2-open-source-client-license.md 3
+semicolon-paragraphs 0021-desktop-release-and-self-update-conveyor-github-releases.md 4
+semicolon-paragraphs 0022-sqldelight-versioned-migrations.md 1
+semicolon-paragraphs 0023-v1-signin-validate-and-store-pasted-pat.md 1
+semicolon-paragraphs 0024-macos-native-capabilities-launchd-swift-sidecar.md 3
+semicolon-paragraphs 0025-multi-os-sidecar-substrate-cross-os-transport.md 3
+semicolon-paragraphs 0026-native-browser-pkce-signin.md 4
+semicolon-paragraphs 0027-client-koog-agent-hosted-relay-propose-only.md 4
+semicolon-paragraphs 0029-native-macos-swiftui-app-real-macos-target.md 2
+semicolon-paragraphs 0030-plan-task-detail-tier-3-drill-down-not-overlay.md 1
+semicolon-paragraphs 0031-one-shell-computed-chromespec-top-bar.md 2
+semicolon-paragraphs 0032-top-bar-create-affordances-stay-overlay-intents.md 1
+semicolon-paragraphs 0033-macos-detached-task-detail-windows.md 1
+semicolon-paragraphs 0034-offline-first-create-client-supplied-uuids.md 1
+semicolon-paragraphs 0035-android-edge-to-edge-component-owned-insets.md 1
+semicolon-paragraphs 0036-os-intent-caller-categorized-capture.md 6
+semicolon-paragraphs 0037-ios-on-device-brain-dump-apple-speech-foundation-models.md 2
+semicolon-paragraphs 0038-server-mediates-all-external-api-calls.md 3
+semicolon-paragraphs 0039-coverage-badge-one-merged-codecov-display-only.md 2
+semicolon-paragraphs 0040-ios-assistant-server-mediated-conversational-client.md 4
+semicolon-paragraphs 0041-data-portability-rest-envelope-backup-file.md 4
+semicolon-paragraphs 0042-offline-first-search-cached-attachment-rollup.md 3
+semicolon-paragraphs 0043-offline-first-comments-cached-item-history.md 6
+semicolon-paragraphs 0044-task-detail-connected-parent-tabbed-journey-status.md 3
+semicolon-paragraphs 0045-task-detail-android-fab-bottom-sheet-add-actions.md 2
+semicolon-paragraphs 0046-task-detail-trail-merged-enriched-history.md 5
+semicolon-paragraphs 0047-environment-build-variants-coexisting-dogfood-installs.md 5
+semicolon-paragraphs 0048-activity-ledger-optimistic-cache-of-server-ledger.md 2
+semicolon-paragraphs 0049-tasks-item-tree-modal-move.md 6
+
+# --- lines over 110 characters (30 in 11 records; the worst is 965, ADR-0037) ---
+long-lines 0010-client-design-system-touch-first.md 1
+long-lines 0016-create-online-only-v1.md 1
+long-lines 0034-offline-first-create-client-supplied-uuids.md 1
+long-lines 0036-os-intent-caller-categorized-capture.md 1
+long-lines 0037-ios-on-device-brain-dump-apple-speech-foundation-models.md 11
+long-lines 0038-server-mediates-all-external-api-calls.md 1
+long-lines 0040-ios-assistant-server-mediated-conversational-client.md 2
+long-lines 0041-data-portability-rest-envelope-backup-file.md 3
+long-lines 0043-offline-first-comments-cached-item-history.md 4
+long-lines 0047-environment-build-variants-coexisting-dogfood-installs.md 1
+long-lines 0050-task-dependency-edges-server-derived-blocked-flags.md 4

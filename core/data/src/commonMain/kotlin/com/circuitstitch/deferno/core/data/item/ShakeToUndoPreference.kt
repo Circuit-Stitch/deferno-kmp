@@ -3,7 +3,7 @@ package com.circuitstitch.deferno.core.data.item
 import com.russhwolf.settings.Settings
 
 /**
- * The device-local **"shake to undo"** choice (ADR-0034 decision 8, #230): whether a phone shake on the
+ * The device-local **"shake to undo"** choice (ADR-0049 decision 8, #230): whether a phone shake on the
  * Tasks tree raises the "Undo [operation]?" confirm that reverts the last Move. An **[[App setting]]** —
  * stored device-locally, **never synced** (a motion gesture is a per-device input convenience; shake is
  * never the only undo path — the snackbar and the menu remain regardless). Defaults to **on**; the confirm

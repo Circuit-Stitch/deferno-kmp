@@ -1,5 +1,9 @@
 # Client-side API version handling
 
+**Status.** Accepted
+
+**Date.** 2026-06-05
+
 **Context.** Every Deferno response is wrapped in `Envelope<T>` = `{ version, data }`. The API will
 evolve over time and the same backend serves clients that update independently (corp scale). We need
 the client to tolerate that evolution rather than break on it.
@@ -8,7 +12,7 @@ the client to tolerate that evolution rather than break on it.
 - **Contract semantics (a):** the envelope `version` is a **breaking-contract counter** — additive,
   backward-compatible changes do *not* bump it; only breaking changes do. (Backend adopts this +
   declares `0.2` honestly + adds a version-declaration header — see
-  [Kyle-Falconer/Deferno#300](https://github.com/Kyle-Falconer/Deferno/issues/300).)
+  [Circuit-Stitch/Deferno#300](https://github.com/Circuit-Stitch/Deferno/issues/300).)
 - **Tolerant reader:** kotlinx.serialization with `ignoreUnknownKeys`, `coerceInputValues`, and
   explicit defaults, so additive changes never break parsing.
 - **Versioned-adapter layer** in `core:network`: a decoder reads `envelope.version`, checks it against
@@ -18,7 +22,7 @@ the client to tolerate that evolution rather than break on it.
 - **Floor = 0.1 (amended 2026-06-06):** the supported window opens at `0.1` — the version the live
   backend actually serves (staging confirmed: `GET /auth/me` → `{"version":"0.1", …}`). `min = max =
   0.1` today; widen to include `0.2` once
-  [Kyle-Falconer/Deferno#300](https://github.com/Kyle-Falconer/Deferno/issues/300) lands and
+  [Circuit-Stitch/Deferno#300](https://github.com/Circuit-Stitch/Deferno/issues/300) lands and
   declares `0.2` honestly. The floor is a single bumpable constant.
   _Superseded reasoning:_ this ADR originally set the floor at `0.2` ("no client ever shipped on
   0.1"). That held for *clients*, but the *server* serves `0.1` in dev/staging today and #300 has

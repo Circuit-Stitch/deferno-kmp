@@ -1,5 +1,9 @@
 # Plan task detail is a tier-3 drill-down, not a shell overlay
 
+**Status.** Accepted
+
+**Date.** 2026-06-15
+
 **Context.** ADR-0007 defines three navigation tiers (tier-1 lateral [[Destination]] switch ·
 tier-2 co-resident [[Pane]]s · tier-3 in-Destination drill-down), and ADR-0015 gave the [[Main shell]]
 a single **overlay slot** above the chrome for genuinely-modal surfaces (Search, New, Feedback, Brain
@@ -32,7 +36,7 @@ Plan child accessors); the SwiftUI render of it is a follow-up tracked for the M
 list/detail Destination that is **not** multi-pane follows the same pattern (a per-Destination tier-3
 stack), rather than reaching for the overlay slot.
 
-**Rejected.**
+**Considered & rejected.**
 
 - **Keep task detail in the overlay slot** — the surface that this ADR exists to move; it makes the
   drawer unreachable and turns subtask drilling into modal re-keying, neither of which a drill-down

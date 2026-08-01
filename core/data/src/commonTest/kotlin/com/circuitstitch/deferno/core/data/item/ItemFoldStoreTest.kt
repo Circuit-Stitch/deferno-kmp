@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * The device-local fold overrides of [InMemoryItemFoldStore] (ADR-0034, #227) — the measured contract
+ * The device-local fold overrides of [InMemoryItemFoldStore] (ADR-0049, #227) — the measured contract
  * the production `Settings`-backed store mirrors. Round-trips overrides and exposes the whole map as the
  * live [ItemFoldStore.overrides] flow every tree surface observes.
  */

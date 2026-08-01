@@ -127,7 +127,7 @@ import kotlin.coroutines.CoroutineContext
 
 class DefaultMainShellComponent(
     componentContext: ComponentContext,
-    // The cross-kind Item read + device-local fold store the Tasks Item tree renders (ADR-0034, #226/#227).
+    // The cross-kind Item read + device-local fold store the Tasks Item tree renders (ADR-0049, #226/#227).
     private val itemRepository: ItemRepository,
     private val foldStore: ItemFoldStore,
     private val taskRepository: TaskRepository,
@@ -497,7 +497,7 @@ class DefaultMainShellComponent(
                                     delete = deleteTask,
                                     onDeviceAttachments = onDeviceAttachments,
                                     // The Account-scoped fold store: a subtask folded in the Plan-tap
-                                    // detail matches the Tasks tree and survives restart (ADR-0034 dec. 4).
+                                    // detail matches the Tasks tree and survives restart (ADR-0049 dec. 4).
                                     foldStore = foldStore,
                                     coroutineContext = coroutineContext,
                                 ),
@@ -1070,7 +1070,7 @@ private fun destinationsFor(assistantEntitled: Boolean): List<Destination> =
     }
 
 /**
- * Dismiss the Tasks Destination's open detail (ADR-0034). The Item [TasksComponent.tree] is the
+ * Dismiss the Tasks Destination's open detail (ADR-0049). The Item [TasksComponent.tree] is the
  * always-present primary pane, so the only dismissible co-resident pane is the detail: back closes it and
  * reveals the tree beneath; at the bare tree, back is not consumed (the shell's outer back takes over).
  */

@@ -1,6 +1,8 @@
 # iOS Assistant: a thin client over the backend's server-mediated conversational AI, distinct from the propose-only Agent
 
-**Status:** accepted (amends ADR-0015's frozen Destination set; a scoped, deliberate exception to ADR-0001/0034 offline-first; sibling to ADR-0027, which owns the **Agent** — a different capability).
+**Status.** Accepted (amends ADR-0015's frozen Destination set; a scoped, deliberate exception to ADR-0001/0034 offline-first; sibling to ADR-0027, which owns the **Agent** — a different capability).
+
+**Date.** 2026-06-25
 
 **Context.** The backend shipped an **Assistant**: a per-[[Org]] **server-mediated conversational AI**
 (`/orgs/{org_id}/assistant…`) — availability (`entitled && enabled`), an SSE-streamed turn,
@@ -53,7 +55,7 @@ Assistant for iOS" therefore means a **net-new feature**, not an extension of `c
   client-side discard. After apply, the client **re-syncs the affected items** through the normal sync
   path. This **bypasses the [[Command]]/outbox write seam** — here the server is the writer.
 
-**Considered and rejected.** *Extending `core/agent`* — its one-shot, on-device, propose-only inference
+**Considered & rejected.** *Extending `core/agent`* — its one-shot, on-device, propose-only inference
 seam is the opposite trust/transport model; forcing the Assistant through it would distort both.
 *A shell overlay (the Brain dump precedent)* — a resumable, scrollable chat is a sustained *place*, not
 an ephemeral invocation. *Outbox-queued turns* — a turn replayed hours later against stale context is

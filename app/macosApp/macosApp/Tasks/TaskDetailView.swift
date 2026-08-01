@@ -914,7 +914,7 @@ private struct StatusPickerSheet: View {
 /// One row of the subtask outline, drawn with the same connected-tree **filigree** as the Tasks tree
 /// (#368 G24d): the curvy `TreeRail` + the kind node (a fold disc for a parent, a kind dot for a leaf), then
 /// the round `CheckDot`, a drill-in title, an optional Blocked chip, and the trailing chevron. The outline is
-/// pre-flattened by the component with the same fold mechanism as the Tasks tree (ADR-0034), so a fold toggle
+/// pre-flattened by the component with the same fold mechanism as the Tasks tree (ADR-0049), so a fold toggle
 /// here persists to the shared device-local store — it re-flattens the Tasks tree too and survives restart.
 ///
 /// This replaced a flat `depth * 18` indent with a bare chevron. Nesting was inferable only by eyeballing

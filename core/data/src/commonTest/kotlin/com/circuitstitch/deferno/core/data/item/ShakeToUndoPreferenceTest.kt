@@ -5,7 +5,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The device-local shake-to-undo App setting (ADR-0034 decision 8, #230): the in-memory contract — defaults
+ * The device-local shake-to-undo App setting (ADR-0049 decision 8, #230): the in-memory contract — defaults
  * to on and round-trips a set value. The Settings-backed adapter is exercised through the platform store, not
  * the headless gate (excluded in CoverageConfig), like the other App-setting preferences.
  */

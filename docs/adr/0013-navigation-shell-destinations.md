@@ -1,5 +1,9 @@
 # Navigation shell: Auth vs Main, and a Destination graph with multiple back stacks
 
+**Status.** Accepted
+
+**Date.** 2026-06-06
+
 **Context.** ADR-0007 (as revised) defines the three navigation tiers *inside* the running app, but
 not what sits above them. Two things were missing and had to be made explicit after an agent assumed
 the app has only two views:
@@ -39,7 +43,7 @@ shells is active; inside the Main shell, one of N Destinations is foreground; in
 multiple-back-stack rule means lateral Destination switching and arbitrary window resize never drop
 state. The seam for multi-Account-per-window (ADR-0008 G3) lives at the shell boundary.
 
-**Rejected.**
+**Considered & rejected.**
 
 - **Login as a Destination inside the nav suite.** Would imply an Org scope and Active Account that
   don't exist pre-Account, and would let the nav suite render before authentication.

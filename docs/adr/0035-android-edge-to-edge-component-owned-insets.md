@@ -1,5 +1,9 @@
 # Android draws edge-to-edge; each component owns its window insets
 
+**Status.** Accepted
+
+**Date.** 2026-06-16
+
 **Context.** The Android app draws **edge-to-edge** — `MainActivity` calls `enableEdgeToEdge` and makes
 the system bars transparent, so app content extends under the status bar and the navigation bar. This is
 not a stylistic choice we can revisit: on **Android 15+ (API 35+) a target-SDK 35+ app is edge-to-edge by
@@ -9,7 +13,7 @@ today's behaviour match that future, so inset bugs surface in development rather
 
 The shell's top bar already honours this (`ShellChrome` pads `WindowInsets.statusBars`, ADR-0031). But the
 rule had never been written down, so two surfaces got it wrong: the modal-move **`MoveModeBar`** (a *pinned*
-bottom bar with the **Done** affordance, ADR-0034 decision 6) drew **behind** the system navigation bar —
+bottom bar with the **Done** affordance, ADR-0049 decision 6) drew **behind** the system navigation bar —
 on a 3-button-nav device it was wholly off-screen, so a user who entered move mode could not leave it — and
 the Tasks tree's `LazyColumn` clipped its last row under the nav bar (no way to scroll it clear). Compose
 screenshot tests render no system bars, so neither was caught by the gate.
@@ -46,7 +50,7 @@ manual per-component `windowInsetsPadding` already established for the top bar (
 do **not** introduce a `Scaffold` per pane just for insets. Because the JVM-fast screenshot gate (ADR-0006)
 renders no system bars, inset correctness is **verified on device / manually**, not by the gate.
 
-**Rejected.**
+**Considered & rejected.**
 
 - **A global root-level inset pad** (e.g. `safeDrawingPadding()` on the shell body) — the simplest fix, but
   the exact anti-pattern Google warns against: it makes every list stop at the bars instead of scrolling

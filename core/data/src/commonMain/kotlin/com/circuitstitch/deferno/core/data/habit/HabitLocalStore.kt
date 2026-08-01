@@ -31,7 +31,7 @@ interface HabitLocalStore {
 
     /**
      * Runs [block] atomically against this store, so the `/items` reconcile (a batch of upserts +
-     * deletes) commits together and re-emits the observe `Flow` once at commit (ADR-0034, #226).
+     * deletes) commits together and re-emits the observe `Flow` once at commit (ADR-0049, #226).
      */
     suspend fun transaction(block: suspend (HabitLocalStore) -> Unit)
 }

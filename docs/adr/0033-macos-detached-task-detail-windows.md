@@ -1,5 +1,9 @@
 # Detached, navigable per-task detail windows on macOS
 
+**Status.** Accepted
+
+**Date.** 2026-06-15
+
 **Context.** The native macOS app (ADR-0029) renders the shared Compose-free shell (ADR-0017) in a
 **single** `Window` — a deliberate posture from ADR-0026/#189, where the OAuth redirect re-entering via
 the custom scheme *must* land on the live shell so the in-flight sign-in's inbox receives it, and a

@@ -8,7 +8,7 @@ import kotlin.coroutines.startCoroutine
 /**
  * Runs a local-store reconcile [block] as one atomic SQLDelight transaction, passing [store] (the
  * caller's own local store) as the block's receiver. Shared by every `*LocalStore.transaction`
- * (Task/Habit/Chore/Event) so the `/items` reconcile (ADR-0034, #226) commits each kind's batch of
+ * (Task/Habit/Chore/Event) so the `/items` reconcile (ADR-0049, #226) commits each kind's batch of
  * upserts + deletes together and fires that kind's query listeners exactly once, at commit.
  *
  * SQLDelight's `transaction { }` body is **non-suspending**, so the `suspend` [block] cannot simply be

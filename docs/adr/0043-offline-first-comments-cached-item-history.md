@@ -3,10 +3,12 @@
 **Status.** Accepted (#197a). Amends the **deliberately online-only** Task-detail extras
 (`TaskDetailRepository`) to align them with ADR-0001; closes the "comments, server history (`actions[]`),
 and attachment metadata are never cached locally" gap ADR-0041 named. Follows ADR-0042's *pattern* (cache
-online-only data locally, observe from the cache) and reuses ADR-0034's outbox-create machinery — but not
+online-only data locally, observe from the cache) and reuses ADR-0049's outbox-create machinery — but not
 0042's "free via the existing snapshot" mechanism (see *History is a list, not a scalar*). **Task-only**
 (matching ADR-0042's rollup scope). Sits beside — and does **not** touch — the global local `ActivityLedger`
 (#260); see *History sits beside the Activity ledger*.
+
+**Date.** 2026-07-06
 
 **Context.** The Task detail's **ACTIVITY** section (the web "Activity thread") is the **last online-only
 surface** in the client. `TaskDetailRepository` is explicitly, deliberately not offline-first: `comments()`

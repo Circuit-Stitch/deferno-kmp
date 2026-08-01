@@ -1,5 +1,9 @@
 # Whisper model distribution: platform asset delivery, not bundled-in-binary, not self-hosted
 
+**Status.** Accepted
+
+**Date.** 2026-06-08
+
 **Context.** The on-device Whisper baseline (ADR-0018) needs **model weights present on the device**
 before recognition can run — the `SpeechToText` engine can't report Available without them. The v1
 weights, **small.en quantized (q5), roughly 182 MB**, are far too large for a base APK: bundling them

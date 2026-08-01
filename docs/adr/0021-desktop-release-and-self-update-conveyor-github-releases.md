@@ -1,5 +1,9 @@
 # Desktop release + self-update: Conveyor over jpackage-DIY, off public GitHub Releases
 
+**Status.** Accepted
+
+**Date.** 2026-06-08
+
 **Context.** We want a **desktop release pipeline and an in-app self-update** mechanism — the latter
 checking the project's GitHub Releases and updating on user request — even though the app is far from
 finished; the goal is the framework. Three facts shape the choice. (1) **Open-sourcing the client under

@@ -1,5 +1,9 @@
 # Per-platform feature View bodies are intentionally duplicated, not collapsed into commonMain
 
+**Status.** Accepted
+
+**Date.** 2026-06-12
+
 **Context.** ADR-0004's #27 amendment gives each feature slice a `:ui` submodule
 (`deferno.compose.library`, Android + JVM, no iOS) whose `androidMain` holds the Android-native Compose
 screen and whose `commonMain` holds stateless, platform-neutral atoms — with the wording "reuse them …

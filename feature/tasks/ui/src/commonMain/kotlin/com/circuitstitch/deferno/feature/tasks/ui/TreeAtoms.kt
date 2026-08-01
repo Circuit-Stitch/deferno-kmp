@@ -53,7 +53,7 @@ import org.jetbrains.compose.resources.stringResource
 // Only the kind→colour/label mapping + the tree rail/node are feature-local (they know the Item tree), so
 // they stay here.
 
-/** The four equal Item kinds (ADR-0034) each carry a calm colour; reinforcement, never the sole signal. */
+/** The four equal Item kinds (ADR-0049) each carry a calm colour; reinforcement, never the sole signal. */
 @Composable
 internal fun kindColor(kind: ItemKind): Color = when (kind) {
     ItemKind.Task -> MaterialTheme.colorScheme.primary

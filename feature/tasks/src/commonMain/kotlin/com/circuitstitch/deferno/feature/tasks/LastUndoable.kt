@@ -15,7 +15,7 @@ enum class MoveOperation(val token: String) {
 }
 
 /**
- * One recorded inverse action (ADR-0034 decision 8, #230): the [operation] (typed, for the
+ * One recorded inverse action (ADR-0049 decision 8, #230): the [operation] (typed, for the
  * shake confirm — "Undo [operation]?"), whether it was a [structural] move (reparent / indent / outdent →
  * the "Moved · Undo" snackbar; a plain same-level reorder → no snackbar, but still shake-undoable), and the
  * [action] that reverts it. [id] is a monotonic token so a fresh record re-fires the (single-shot) snackbar
@@ -29,7 +29,7 @@ data class Undoable(
 )
 
 /**
- * A **single-level** "last undoable action" register (ADR-0034 decision 8, #230): holds the inverse of the
+ * A **single-level** "last undoable action" register (ADR-0049 decision 8, #230): holds the inverse of the
  * most recent undoable command so one undo path — the snackbar action, the long-press menu, or a shake —
  * can replay it. Move-only in v1 (the hook is **shaped to grow** into a general last-action undo, a deferred
  * fast-follow). Single-level: [record] replaces any prior entry; [undo]/[clear] empty it.

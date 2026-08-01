@@ -19,7 +19,7 @@ import io.ktor.http.contentType
 
 /**
  * The production [StampedItemConverter] over the shared Deferno [HttpClient]: `POST /items/{id}/convert`
- * (ADR-0016, the one write still online-only now that ADR-0034 has moved create onto the outbox). It uses
+ * (ADR-0016, the one write still online-only now that ADR-0049 has moved create onto the outbox). It uses
  * `requestApi<T>` — the response *is* interesting (the item's new kind seeds the local cache), unlike the
  * outbox sender's fire-and-forget replay — and returns an [ApiResult] so the writer can tell a
  * server-confirmed convert from the transport failure that surfaces as the gentle "reconnect to save". The

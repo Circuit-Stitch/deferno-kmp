@@ -2,6 +2,8 @@
 
 **Status.** Accepted. Phone-first (Android + iOS); desktop/macOS positioned but deferred.
 
+**Date.** 2026-07-15
+
 **Context.** The server environment is **welded to build type**: `debug → Staging`, `release →
 Production`, decided at process start from `BuildConfig.DEBUG` (Android `DefernoApplication.kt`) and
 `Platform.isDebugBinary` (iOS/macOS `DefernoRoot.kt`), then threaded into AppScope via
