@@ -788,6 +788,7 @@ Thank you.</string>
     <string name="shell_menu_file">File</string>
     <string name="shell_menu_help">Help</string>
     <string name="shell_menu_new">New…</string>
+    <!-- Quit row: the Compose desktop File menu AND the macOS menu-bar status item's dropdown (#368 G26) -->
     <string name="shell_menu_quit">Quit</string>
     <string name="shell_menu_search">Search…</string>
     <!-- Checkmark glyph marking the selected desktop menu row — likely translatable=false; consider an icon with a localized description later -->

@@ -109,8 +109,10 @@ jobs:
       # project.yml wires the GITIGNORED Local.xcconfig as the project-level base config, and XcodeGen
       # refuses to generate when a referenced config file is missing. build.sh seeds an ad-hoc one for a
       # fresh clone; CI needs the same file to exist before `xcodegen generate`. An EMPTY file is right
-      # here: every value build.sh would seed is either overridden on the xcodebuild command line below
-      # (the ad-hoc signing triple) or deliberately absent on CI (DEV_STAGING_TOKEN — no PAT on a runner).
+      # here: every value build.sh would seed is either overridden on ci-xcodebuild.sh's command line (the
+      # ad-hoc signing triple) or deliberately absent on CI (DEV_STAGING_TOKEN / DEV_ACCOUNTS — no PAT on a
+      # runner). Seeding is opt-in per configuration and an undefined build setting expands to empty, so a
+      # CI build populates neither DEFERNO_SEED_* slot and seeds nothing (ADR-0047).
       - name: Seed an empty Local.xcconfig (build.sh does this for a fresh clone)
         run: touch app/macosApp/Local.xcconfig
 
@@ -159,53 +161,44 @@ jobs:
         working-directory: app/macosApp
         run: pod install
 
-      # The single command that exercises the whole stack: xcodebuild runs the project's pre-build phase
-      # first (./gradlew :app:macosApp:embedAndSignAppleFrameworkForXcode → the static Deferno.framework
-      # for this SDK/arch), then compiles the SwiftUI sources, links them against the framework + the
-      # SQLCipher pod, and runs the macosAppTests suite in the app host — the real signal that the
-      # framework, the SKIE bridge, SQLCipher and the tests all resolve and pass. The Pods **workspace**
-      # (not the bare .xcodeproj) is required once a pod is integrated, and the scheme's Test action is
-      # declared explicitly in project.yml so the suite is genuinely part of `-scheme macosApp test`.
+      # Both gated configurations run the SAME recipe — app/macosApp/ci-xcodebuild.sh, which owns the
+      # xcodebuild invocation, the ⚠️ CI-only ad-hoc signing triple, the SWIFT_TREAT_WARNINGS_AS_ERRORS
+      # ratchet and the `set -o pipefail` that keeps a failed build from reporting green (ios.yml's bug
+      # until PR #367). It lives in a file rather than inline because those flags carry a standing sync
+      # obligation with build.sh's Local.xcconfig seeding, and an obligation with two addresses is one
+      # that drifts. Read that script before changing anything about how CI builds this app.
       #
-      # **Ad-hoc** signing (`CODE_SIGN_IDENTITY="-"`, no team, no profile), matching ios.yml: the test
-      # host is the REAL app, whose DefernoRoot builds the live DI graph at launch (ADR-0029 Phase 1b) —
-      # including the Keychain-backed vault — so it must be signed, but must not need a certificate.
-      #
-      # ⚠️ THESE THREE SIGNING FLAGS ARE CI-ONLY. NEVER run this command on a dev Mac.
-      # An ad-hoc signature changes on EVERY rebuild, so it does not match the login-Keychain ACL on the
-      # bearer-token item (service com.circuitstitch.deferno.bearer) — the app then re-prompts
-      # `"Deferno" wants to use your keychain` on every single launch and "Always Allow" never sticks.
-      # That is the exact failure app/macosApp/Local.xcconfig exists to prevent, and passing these flags
-      # locally overrides it (a command-line setting outranks the project base config). It has already
-      # happened once by copying this recipe onto a dev machine.
-      # Locally use `./build.sh` / `./build.sh --test`, which pass NO signing flags and therefore inherit
-      # the stable identity from Local.xcconfig. To repair a Mac that got ad-hoc signed:
-      #   codesign --force --sign "Apple Development: <you> (TEAMID)" <path>/Deferno.app
-      #
-      # SWIFT_TREAT_WARNINGS_AS_ERRORS is the ratchet ios.yml already carries: passed on the command line
-      # rather than set in project.yml, so a local Xcode build still only warns, and a future image
-      # bumping Xcode under us breaks CI loudly instead of silently reaccumulating warnings.
+      # The step below exercises the whole stack: xcodebuild runs the project's pre-build phase first
+      # (./gradlew :app:macosApp:embedAndSignAppleFrameworkForXcode → the static Deferno.framework for this
+      # SDK/arch), then compiles the SwiftUI sources, links them against the framework + the SQLCipher pod,
+      # and runs the macosAppTests suite in the app host — the real signal that the framework, the SKIE
+      # bridge, SQLCipher and the tests all resolve and pass. The scheme's Test action is declared
+      # explicitly in project.yml so the suite is genuinely part of `-scheme macosApp test`.
       - name: Build & test (framework + app, macOS)
         working-directory: app/macosApp
-        # `set -o pipefail` is the whole gate. GitHub's default `run:` shell is `bash -e {0}` — with NO
-        # pipefail — so piping xcodebuild into a formatter hands the step xcbeautify's exit status and a
-        # failed build reports green. That is exactly what ios.yml did until PR #367. xcbeautify is
-        # preinstalled; fall back to cat if a future image drops it.
-        run: |
-          set -o pipefail
-          if command -v xcbeautify >/dev/null 2>&1; then FMT=(xcbeautify --renderer github-actions); else FMT=(cat); fi
-          xcodebuild \
-            -workspace macosApp.xcworkspace \
-            -scheme macosApp \
-            -configuration Debug \
-            -destination "platform=macOS,arch=arm64" \
-            -derivedDataPath build/dd \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
-            test | "${FMT[@]}"
+        run: ./ci-xcodebuild.sh macosApp Debug test
+
+      # The ProdDebug environment variant (ADR-0047, #368 G22) — BUILD ONLY, no test. Rationale: #368 §1
+      # item 3 blames a missing macOS CI gate for a regression that shipped and sat live for months; a build
+      # configuration that nothing ever builds is exactly that vacuum again, one config down. This variant
+      # differs from Debug in ways that can genuinely fail to build on their own — a distinct
+      # PRODUCT_BUNDLE_IDENTIFIER, the `KOTLIN_FRAMEWORK_BUILD_TYPE = debug` pin the Kotlin plugin cannot
+      # infer from a non-Debug/Release configuration name, and a CocoaPods `.proddebug.xcconfig` that only
+      # exists because the Podfile maps ProdDebug => :debug. Any of those silently missing is a broken
+      # variant nobody discovers until they try to dogfood prod.
+      #
+      # Not `test`: the suite is environment-agnostic (the same sources, the same host) and running it twice
+      # would double the slowest step of this job to re-prove nothing. The Debug step above is the test gate.
+      # The shared script pins `-derivedDataPath build/dd`, so the framework + pod objects the Debug step
+      # produced are reused (a different CONFIGURATION inside the same derived data, not a cold rebuild).
+      #
+      # `macosApp-ProdDebug` is deliberate over reusing the `macosApp` scheme: it also gates the SCHEME
+      # itself, so a project.yml change that drops or mis-declares it fails here rather than the next time
+      # someone opens Xcode. (The script spells out `-configuration` too, so the config never rides on
+      # xcodebuild's implicit scheme-action resolution.)
+      - name: Build ProdDebug variant (ADR-0047, build only)
+        working-directory: app/macosApp
+        run: ./ci-xcodebuild.sh macosApp-ProdDebug ProdDebug build
 
       - name: Upload xcodebuild logs on failure
         if: ${{ failure() }}

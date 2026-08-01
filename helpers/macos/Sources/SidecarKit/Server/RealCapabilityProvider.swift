@@ -172,7 +172,9 @@ public final class RealCapabilityProvider: CapabilityProvider {
             return
         }
         if statusItemController == nil {
-            statusItemController = StatusItemController(onClick: onClick)
+            // `.click`: the wire protocol has no menu concept — a click is pushed back to the connected
+            // app as `statusItemClicked` and the app decides what it means (#125, ADR-0024).
+            statusItemController = StatusItemController(behavior: .click(onClick))
         }
         statusItemController?.setVisible(visible)
         completion(nil)

@@ -12,7 +12,18 @@
 #   ./build.sh --test    # …run the macosAppTests suite instead of a plain build (QUIT a running Deferno
 #                        #  first — the app hosts the tests and refuses a second instance)
 #
-# One flag at a time; --open and --test are mutually exclusive.
+# --open and --test are mutually exclusive; either COMBINES with --config.
+#
+#   ./build.sh --config <Debug|ProdDebug|Release>    # which environment variant to build (ADR-0047)
+#
+# The three coexisting variants (project.yml `configs`, ADR-0047 / #368 G22) — separate installs, separate
+# Keychain items, separate per-Account DBs:
+#
+#   Debug (default)  Staging     com.circuitstitch.deferno.macos.staging.debug   "Deferno Dev"
+#   ProdDebug        Production  com.circuitstitch.deferno.macos.debug           "Deferno β"
+#   Release          Production  com.circuitstitch.deferno.macos                 "Deferno"
+#
+#   ./build.sh --config ProdDebug --open    # build + launch the prod-repro install
 #
 # Requires xcodegen + cocoapods (`brew install xcodegen cocoapods`).
 set -eu
@@ -23,25 +34,54 @@ WORKSPACE=macosApp.xcworkspace
 SCHEME=macosApp
 DESTINATION='platform=macOS,arch=arm64'
 
-# Parse the flag ONCE, up front — a typo must fail BEFORE the minutes of xcodegen + pod install below.
+# Parse EVERY flag ONCE, up front — a typo must fail BEFORE the minutes of xcodegen + pod install below.
 # `--test` swaps the plain build for the scheme's Test action: it builds the app AND the macosAppTests
 # bundle, then runs the suite inside the app host. Same action .github/workflows/macos.yml gates on, so a
 # green `./build.sh --test` locally is the same signal CI reports.
 #
-# The `case` (with its catch-all arm) replaces two independent `[ "${1:-}" = … ]` tests that failed
-# silently in BOTH directions: `--test --open` dropped the second flag, and a typo (`./build.sh --tets`)
-# matched neither and quietly did a plain build. --open/--test stay mutually exclusive, now explicitly.
-if [ "$#" -gt 1 ]; then
-  echo "too many arguments: pass at most one flag (--open and --test are mutually exclusive)" >&2
-  exit 2
-fi
+# The catch-all arm is what keeps the old failure modes closed: before it, two independent
+# `[ "${1:-}" = … ]` tests failed silently in BOTH directions — `--test --open` dropped the second flag,
+# and a typo (`./build.sh --tets`) matched neither and quietly did a plain build. The loop replaces the
+# earlier one-flag-only `case` now that --config must COMBINE with --open/--test; --open and --test stay
+# mutually exclusive, and an unknown flag or an unknown configuration name still exits 2 up here.
 ACTION=build
 OPEN=no
-case "${1:-}" in
-  '') ;;
-  --open) OPEN=yes ;;
-  --test) ACTION=test ;;
-  *) echo "unknown flag: $1 (expected --open or --test)" >&2; exit 2 ;;
+CONFIGURATION=Debug
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --open) OPEN=yes ;;
+    --test) ACTION=test ;;
+    # Both spellings, because both are muscle memory. The arm shifts past the flag so the loop's own
+    # trailing `shift` consumes the VALUE; `${1:-}` (set -u is on) catches a trailing bare `--config`.
+    # A repeated --config takes the last one, the usual CLI reading of "you changed your mind".
+    --config)
+      shift
+      CONFIGURATION="${1:-}"
+      if [ -z "$CONFIGURATION" ]; then
+        echo "--config needs a value: Debug, ProdDebug or Release" >&2
+        exit 2
+      fi
+      ;;
+    --config=*) CONFIGURATION="${1#--config=}" ;;
+    *) echo "unknown flag: $1 (expected --open, --test or --config <Debug|ProdDebug|Release>)" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+# Both checks below validate the PARSED STATE once, rather than each flag as it arrives. Mutual exclusion
+# is a property of the resulting pair, not of whichever flag happened to come second, so it reads (and is
+# spelled) once here instead of twice inside the loop.
+if [ "$OPEN" = yes ] && [ "$ACTION" = test ]; then
+  echo "--open and --test are mutually exclusive" >&2
+  exit 2
+fi
+
+# Validate against the three configurations project.yml declares. Worth an explicit check: xcodebuild
+# accepts an unknown -configuration and fails deep inside the build with a far less obvious message, and
+# by then xcodegen + pod install have already run.
+case "$CONFIGURATION" in
+  Debug|ProdDebug|Release) ;;
+  *) echo "unknown configuration: $CONFIGURATION (expected Debug, ProdDebug or Release)" >&2; exit 2 ;;
 esac
 
 # Machine-local signing (gitignored Local.xcconfig) is wired as the PROJECT-level base config in
@@ -54,11 +94,12 @@ esac
 # SECOND SEEDING SITE: .github/workflows/macos.yml seeds its own (empty) Local.xcconfig before
 # `xcodegen generate` — CI never runs this script. The two are equivalent today only because every value
 # below is either overridden on CI's xcodebuild command line (the ad-hoc signing triple) or deliberately
-# absent there (DEV_STAGING_TOKEN — no PAT on a runner). If a NEW setting is added here that CI does not
+# absent there (DEV_STAGING_TOKEN / DEV_ACCOUNTS — no PAT on a runner; an undefined build setting expands
+# to empty in the Info.plist, so nothing is seeded). If a NEW setting is added here that CI does not
 # override, update that step too or CI builds with a different config than every dev machine.
 if [ ! -f Local.xcconfig ]; then
   echo "==> seeding ad-hoc Local.xcconfig (no Dev account; edit it to sign with a stable identity)"
-  printf '// Auto-seeded ad-hoc signing. Edit to a stable identity so the Keychain ACL survives rebuilds:\n//   security find-identity -v -p codesigning   # lists yours\n// e.g. CODE_SIGN_IDENTITY = Apple Development: You (XXXXXXXXXX)\nCODE_SIGN_STYLE = Manual\nCODE_SIGN_IDENTITY = -\nPROVISIONING_PROFILE_SPECIFIER =\n// Dev-only staging PAT (#282): empty default; create a git-ignored Secrets.xcconfig with DEV_STAGING_TOKEN = <PAT> to skip sign-in.\nDEV_STAGING_TOKEN =\n#include? "Secrets.xcconfig"\n' > Local.xcconfig
+  printf '// Auto-seeded ad-hoc signing. Edit to a stable identity so the Keychain ACL survives rebuilds:\n//   security find-identity -v -p codesigning   # lists yours\n// e.g. CODE_SIGN_IDENTITY = Apple Development: You (XXXXXXXXXX)\nCODE_SIGN_STYLE = Manual\nCODE_SIGN_IDENTITY = -\nPROVISIONING_PROFILE_SPECIFIER =\n// Dev-only staging PAT (#282): empty default; create a git-ignored Secrets.xcconfig with DEV_STAGING_TOKEN = <PAT> to skip sign-in.\n// Only the Debug (Staging) variant maps it into the app; no other configuration mentions it (ADR-0047).\nDEV_STAGING_TOKEN =\n// Dev-only prod Test account for the ProdDebug variant (ADR-0047): empty default; put\n// DEV_ACCOUNTS = <id:label:token;…> in that same Secrets.xcconfig. Only ProdDebug maps it in.\nDEV_ACCOUNTS =\n#include? "Secrets.xcconfig"\n' > Local.xcconfig
 fi
 
 echo "==> xcodegen generate"
@@ -80,13 +121,16 @@ if [ "$ACTION" = test ] && pgrep -x Deferno >/dev/null 2>&1; then
   echo "    reads as \"Could not launch macosAppTests\" — a launch problem, not a build/signing one." >&2
 fi
 
-echo "==> xcodebuild ($SCHEME, Debug, $ACTION)"
+echo "==> xcodebuild ($SCHEME, $CONFIGURATION, $ACTION)"
 xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" \
-  -configuration Debug -destination "$DESTINATION" "$ACTION"
+  -configuration "$CONFIGURATION" -destination "$DESTINATION" "$ACTION"
 
 if [ "$OPEN" = yes ]; then
   echo "==> open"
-  APP=$(xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -showBuildSettings \
+  # -configuration must be repeated here: BUILT_PRODUCTS_DIR is per-configuration, so without it this
+  # would resolve the scheme's default (Debug) path and `--config ProdDebug --open` would launch the
+  # PREVIOUSLY built staging app — silently, and looking exactly like the build had done nothing.
+  APP=$(xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration "$CONFIGURATION" -showBuildSettings \
     | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{d=$2} / FULL_PRODUCT_NAME /{n=$2} END{print d"/"n}')
   open "$APP"
 fi

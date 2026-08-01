@@ -102,7 +102,8 @@ iOS-only framework and stays a hand-written build file.
 ./gradlew :app:androidApp:connectedAndroidTest  # instrumented tests (needs a device/emulator)
 ./gradlew :app:androidApp:lint             # Android Lint
 ./gradlew :app:desktopApp:run              # run the desktop (JVM) Compose app
-(cd app/macosApp && ./build.sh --open)     # build + run the native macOS SwiftUI app (macOS only; XcodeGen+CocoaPods+xcodebuild)
+(cd app/macosApp && ./build.sh --open)     # build + run the native macOS SwiftUI app (Debug = Staging; macOS only; XcodeGen+CocoaPods+xcodebuild)
+(cd app/macosApp && ./build.sh --config ProdDebug --open)  # macOS Production + debuggable (…deferno.macos.debug) — Claude/prod repro
 ./gradlew :app:macosApp:linkDebugFrameworkMacosArm64  # just relink the Kotlin/Native framework for app/macosApp
 ```
 
@@ -120,6 +121,7 @@ Android Studio: **Open** this directory and let it sync.
 - Keep secrets (keystores, `google-services.json`, API keys) out of git — see `.gitignore`. The gitignored `local.properties` dev-PAT seeding keys are per-flavor (ADR-0012/0047):
   - `deferno.dev.accounts` / `deferno.staging.apiToken` → seed the `stagingDebug` variant (Staging Test accounts).
   - `deferno.prod.accounts` (NEW) → seeds the `prodDebug` variant with the disposable Production Test account (`id:label:token`, `;`-separated). Release variants seed nothing.
+  - Apple's twin is the gitignored `app/{ios,macos}App/Secrets.xcconfig` (`#include?`d by `Local.xcconfig`): `DEV_STAGING_TOKEN` seeds the Staging `Debug` config. On macOS, `DEV_ACCOUNTS` (same `id:label:token` format) additionally seeds the Production `ProdDebug` config — each is mapped into *only* its own config via a `DEFERNO_SEED_*` slot the others simply don't define, so seeding is opt-in and the two never cross; iOS's prod-seed key is still the ADR-0047 follow-up.
 
 ## Agent skills
 

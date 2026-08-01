@@ -28,8 +28,10 @@ macOS target (ADR-0029).
 
 ```sh
 cd app/macosApp
-./build.sh           # xcodegen generate + pod install + xcodebuild
-./build.sh --open    # …then launch the built .app
+./build.sh                          # xcodegen generate + pod install + xcodebuild (Debug = Staging)
+./build.sh --open                   # …then launch the built .app
+./build.sh --test                   # …run the macosAppTests suite instead (quit a running Deferno first)
+./build.sh --config ProdDebug --open  # build + launch the Production-backed debuggable install
 ```
 
 XcodeGen generates the `.xcodeproj`; CocoaPods (SQLCipher) layers a `.xcworkspace` on top, so it's a
@@ -44,8 +46,54 @@ xcodebuild -workspace macosApp.xcworkspace -scheme macosApp \
   -configuration Debug -destination 'platform=macOS,arch=arm64' build
 ```
 
+## Build configurations — the three environment variants (ADR-0047)
+
+The backend environment is **injected per Xcode build configuration**, not derived from the build type:
+each configuration sets `DEFERNO_ENV`, which `macosApp/Info.plist` surfaces as `DefernoEnv`, which
+`DefernoApp.swift` maps through `DefernoRootKt.defernoEnvironment(name:)` →
+`DefernoEnvironment.fromName` (`core/network`) — the same seam Android and iOS resolve their injected env
+through. An unknown or absent value fails safe to **Production**.
+
+| Configuration | Backend | Bundle id | Display name | Scheme |
+|---|---|---|---|---|
+| `Debug` *(default)* | Staging | `com.circuitstitch.deferno.macos.staging.debug` | Deferno Dev | `macosApp` |
+| `ProdDebug` | Production | `com.circuitstitch.deferno.macos.debug` | Deferno β | `macosApp-ProdDebug` |
+| `Release` | Production | `com.circuitstitch.deferno.macos` | Deferno | `macosApp` |
+
+Distinct bundle ids mean the three **coexist as separate installs**, each with its own login-Keychain
+items and its own per-Account database — the OS-level isolation ADR-0047 is built on. `Debug` is dev /
+validation work on staging; `ProdDebug` is the prod-repro & Claude-driving install; `Release` is the
+dogfood daily driver. Pick one with `./build.sh --config <Debug|ProdDebug|Release>`, which combines with
+`--open` or `--test`.
+
+`ProdDebug` pins `KOTLIN_FRAMEWORK_BUILD_TYPE = debug` in `project.yml`: the Kotlin Gradle plugin infers
+the framework build type from the configuration NAME and only recognises literally `Debug`/`Release`, so
+without the pin a third configuration links the wrong build type. The Podfile maps it too
+(`project 'macosApp', 'ProdDebug' => :debug`) so CocoaPods doesn't treat the unknown name as a release.
+
+**Dev-PAT seeding** (ADR-0012) is **opt-in per configuration**, and the two secrets never cross. Put
+either key in a gitignored `Secrets.xcconfig` next to `Local.xcconfig` (which `#include?`s it):
+
+- `DEV_STAGING_TOKEN = <staging PAT>` — reaches **Debug** only; seeds a "Dev (staging)" Account.
+- `DEV_ACCOUNTS = <id:label:token;…>` — reaches **ProdDebug** only (the twin of Android's
+  `deferno.prod.accounts`); seeds the disposable Production **Test** Account. Format is parsed by the
+  shared `DevAccounts.from`.
+
+`Info.plist` doesn't read those two settings directly. It reads two *seed slots* —
+`DEFERNO_SEED_STAGING_TOKEN` and `DEFERNO_SEED_ACCOUNTS` — that nothing defines by default, and each
+configuration opts in by mapping the one it wants (`project.yml` `settings.configs`). Since an undefined
+build setting expands to empty, the default for every configuration is **seeds nothing**, and ADR-0047's
+core safety property — a Production-env install can never seed a *staging* PAT — is what `ProdDebug` and
+`Release` **don't say** rather than an empty pin someone has to remember to add. A clone with no
+`Secrets.xcconfig` seeds nothing and opens on the Auth shell. The OAuth redirect scheme is deliberately
+**shared** across all three (the redirect URI is registered server-side per ADR-0026) — with coexisting
+installs LaunchServices picks one arbitrarily for a redirect, which is fine because the debuggable
+variants sign in via the pasted/seeded PAT path.
+
 A pre-build phase runs `./gradlew :app:macosApp:embedAndSignAppleFrameworkForXcode`, which stages the
-Kotlin framework into `build/xcode-frameworks` (where `FRAMEWORK_SEARCH_PATHS` points). To iterate on the
+Kotlin framework into `build/xcode-frameworks/<CONFIGURATION>/<SDK_NAME>` (where `FRAMEWORK_SEARCH_PATHS`
+points — that config-qualified path and nothing else, so a mis-declared configuration fails to link
+rather than quietly resolving a stale slice). To iterate on the
 Kotlin side alone: `./gradlew :app:macosApp:linkDebugFrameworkMacosArm64`.
 
 ## Phase 2 — in-process dictation (ADR-0029)
@@ -93,8 +141,9 @@ the same engine once the engine-choice App setting lands (#150 / Phase 1b).
 `DefernoApp.swift` hosts `DefernoRoot` over the real DI graph. **Try it:** launch → the **Auth shell** →
 **Use a token instead** → paste a staging PAT (ADR-0023) → the Active Account flips → the **Main shell**
 renders over the real data layer → **Profile** loads the `/auth/me` staging identity. Optional dev-PAT
-seeding: add `DevAccounts` + `DevStagingToken` string keys to `macosApp/Info.plist` locally (kept out of
-git) to open on real staging data without typing.
+seeding skips the typing: the committed `macosApp/Info.plist` carries `DevAccounts` + `DevStagingToken`
+as build-setting substitutions, fed per configuration from the gitignored `Local.xcconfig` ←
+`Secrets.xcconfig` chain — see [Build configurations](#build-configurations--the-three-environment-variants-adr-0047).
 
 - **SQLCipher via CocoaPods** — the SAME pod `app/iosApp` uses (Zetetic's stock `SQLCipher ~> 4.6`), so
   macOS and iOS link an identical, proven build. It exports the standard `sqlite3_*` symbols the shared
