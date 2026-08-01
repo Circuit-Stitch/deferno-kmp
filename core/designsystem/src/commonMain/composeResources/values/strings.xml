@@ -248,6 +248,10 @@
     <string name="common_account">Account</string>
     <!-- Verb button (submit a subtask/label). Single word — confirm imperative verb in translation -->
     <string name="common_add">Add</string>
+    <!-- cd for a row's Add affordance; %1$s is the field name (e.g. 'Event start') -->
+    <string name="common_add_named_cd">Add %1$s</string>
+    <!-- Event window switch: whole days rather than a clock window. All-day is the ABSENCE of a time-of-day on the wire, never a flag -->
+    <string name="common_all_day">All day</string>
     <!-- Brand wordmark — mark translatable=false; single-sourced (drawer, sign-in headline, window titles, macOS menu-bar name) -->
     <string name="common_app_name">Deferno</string>
     <!-- Merges feedback button+cd and both desktop AWT FileDialog titles -->
@@ -261,9 +265,13 @@
     <string name="common_cannot_be_undone">This can't be undone.</string>
     <!-- Verb button; merges tasks clear-due-date and calendar clear-occurrence-status -->
     <string name="common_clear">Clear</string>
+    <!-- cd for a row's Clear affordance; %1$s is the field name (e.g. 'Event start') -->
+    <string name="common_clear_named_cd">Clear %1$s</string>
     <!-- Merges Close button/onClickLabel in ShellChrome, SearchDesktopScreen, BrainDump/Breakdown headers, About dialog -->
     <string name="common_close">Close</string>
     <string name="common_collapse_named_cd">Collapse %1$s</string>
+    <!-- Date-picker row label on the create form (the ISO hint lives on the Compose text field's own new_date_label) -->
+    <string name="common_date">Date</string>
     <!-- Verb button/menu item (destructive) -->
     <string name="common_delete">Delete</string>
     <!-- Merges shell overlay Dismiss (Android+desktop) and Inbox card Dismiss -->
@@ -273,10 +281,14 @@
     <!-- Merges tasks detail 'Due ${toDisplayDate()}', plan whyLine 'Due ${formatDeadlineDate(...)}', inbox 'Due $due'; arg = pre-formatted date (needs locale-aware date formatting, see refactors) -->
     <string name="common_due">Due %1$s</string>
     <string name="common_edit">Edit</string>
+    <!-- Event window close — the picker-row twin of common_starts -->
+    <string name="common_ends">Ends</string>
     <!-- UnsupportedVersion verdict (feedback repo); share with OfflineCreateWriter version error after its refactor -->
     <string name="common_error_app_out_of_date">This app is out of date — please update.</string>
     <!-- Merges ItemTreeUi, TreeAtoms toggle, detail subtask toggle -->
     <string name="common_expand_named_cd">Expand %1$s</string>
+    <!-- Search date-range OPEN edge — picker-row label; the Compose text field keeps search_date_from_label's format hint -->
+    <string name="common_from">From</string>
     <string name="common_kind_chore">Chore</string>
     <string name="common_kind_event">Event</string>
     <string name="common_kind_habit">Habit</string>
@@ -331,6 +343,8 @@
     <string name="common_source_google_calendar">Google Calendar</string>
     <!-- Verb button; merges plan StartPill/fallback and calendar occurrence Start chip -->
     <string name="common_start">Start</string>
+    <!-- Event window open — picker-row label; the Compose text field keeps new_event_start_label's format hint -->
+    <string name="common_starts">Starts</string>
     <string name="common_state_collapsed">Collapsed</string>
     <!-- TalkBack stateDescription of CheckDot when checked — state adjective, not the button -->
     <string name="common_state_done">Done</string>
@@ -350,6 +364,8 @@
     <string name="common_status_scheduled">Scheduled</string>
     <!-- Gentle rendering of WorkingState.Dropped on calendar -->
     <string name="common_status_skipped">Skipped</string>
+    <!-- Search date-range CLOSE edge — the picker-row twin of common_from -->
+    <string name="common_to">To</string>
     <!-- Snackbar action + dialog confirm; merges tasks + inbox occurrences -->
     <string name="common_undo">Undo</string>
     <!-- Was @${user.username} in auth + profile; extract so locales control layout; translatable likely false -->
@@ -430,6 +446,8 @@
     <string name="new_error_could_not_save">Could not save.</string>
     <!-- Via NewStatus.Failed error-code refactor -->
     <string name="new_error_could_not_save_retry">Could not save. Try again.</string>
+    <!-- Inline validation on the Event window: the server rejects end_time < complete_by -->
+    <string name="new_event_end_before_start">Ends before it starts</string>
     <string name="new_event_end_cd">Event end</string>
     <string name="new_event_end_label">Ends (optional)</string>
     <string name="new_event_start_cd">Event start</string>
@@ -454,6 +472,8 @@
     <!-- Busy arm of Create button; merges NewFormAtoms + NewScreen occurrences -->
     <string name="new_submit_saving">Saving…</string>
     <string name="new_time_label">Time (optional, e.g. 14:30)</string>
+    <!-- Why the deadline-time Add is disabled: the clock only ships alongside a date -->
+    <string name="new_time_needs_date">Pick a date first</string>
     <!-- Field label + cd; also the TITLE section header (uppercase via style). Test-pinned locator string -->
     <string name="new_title_label">Title</string>
 

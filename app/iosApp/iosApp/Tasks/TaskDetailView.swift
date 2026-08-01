@@ -389,16 +389,17 @@ struct TaskDetailView: View {
 
     /// The properties table (ADR-0044): a tinted small-caps label column ruled off from the content, rows
     /// divided by hairlines, wrapped in a rounded border. Only the rows this item actually carries appear —
-    /// WHEN drops with no deadline, OWNER only for a shared/multi-group account, SOURCE only when imported.
+    /// OWNER only for a shared/multi-group account, SOURCE only when imported. WHEN is always present: it
+    /// carries its own no-deadline branch, so an undated Task can still be given one from here.
     private func propertiesTable(_ task: Task, state value: TaskDetailState) -> some View {
         var rows: [AnyView] = []
 
-        // WHEN — only when a deadline is set.
-        if BridgeKt.taskDeadlineEpochSeconds(task: task) >= 0 {
-            rows.append(AnyView(
-                PropertyTableRow(label: L.string("tasks_detail_property_when")) { dueCell(task) }
-            ))
-        }
+        // WHEN — always. It used to drop out entirely for an undated Task, which left no way to give one
+        // a first deadline from detail (macOS has always offered a "Set" affordance here); the row now
+        // carries that same no-deadline branch.
+        rows.append(AnyView(
+            PropertyTableRow(label: L.string("tasks_detail_property_when")) { dueCell(task) }
+        ))
         // STATUS — always; the whole row is the status **Action Sheet** trigger. A `Menu` (not
         // `.confirmationDialog`): iOS 26 renders a confirmationDialog as a *beaked popover*, whereas a Menu is
         // the source-anchored grouped action sheet this app wants (the Mail "Delete Draft / Save Draft" look) —
@@ -469,44 +470,70 @@ struct TaskDetailView: View {
     }
 
     /// The WHEN cell (#348): a summary chip ("Jul 17, 2026 · 9:00 AM", or date-only when all-day) that opens a
-    /// popover holding the graphical **date + time** `DatePicker` (the iOS 26 UI-kit look — calendar + Time row
-    /// in one surface), plus the relative-day suffix and a Clear button. The picker splits its selection into the
-    /// two deadline axes (date → `onSetDeadline`, clock → `onSetDeadlineTime`). (Only rendered when a deadline is set.)
+    /// popover holding the graphical `DatePicker` (the iOS 26 UI-kit look — calendar + Time row in one surface),
+    /// plus the relative-day suffix and a Clear button. The picker splits its selection into the two deadline
+    /// axes (date → `onSetDeadline`, clock → `onSetDeadlineTime`).
+    ///
+    /// **A deadline is either all-day or timed, and the cell shows which** — the same three-state shape macOS
+    /// settled on. Timed → a combined `[.date, .hourAndMinute]` picker plus "Clear deadline time". All-day →
+    /// a date-only picker plus "Add deadline time". Undated → a muted "—" plus "Set". Rendering the Time row
+    /// unconditionally (as this did) fabricated a 9:00 AM that an all-day Task does not have, and one stray
+    /// scroll of that phantom row silently converted the Task to timed.
     @ViewBuilder
     private func dueCell(_ task: Task) -> some View {
-        let relToken = BridgeKt.taskDueRelativeToken(task: task)
-        let hasTime = BridgeKt.taskDeadlineHasTime(task: task)
         let seedEpoch = BridgeKt.taskDeadlinePickerEpochSeconds(task: task)
-        HStack(spacing: 8) {
-            Button { showingDuePicker = true } label: {
-                Text(dueChipLabel(epoch: seedEpoch, hasTime: hasTime))
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(colors.primary)
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(colors.surfaceVariant, in: Capsule())
-                    .contentShape(Capsule())
+        if seedEpoch >= 0 {
+            let relToken = BridgeKt.taskDueRelativeToken(task: task)
+            let hasTime = BridgeKt.taskDeadlineHasTime(task: task)
+            HStack(spacing: 8) {
+                Button { showingDuePicker = true } label: {
+                    Text(DefernoDateFormat.summary(epochSeconds: seedEpoch, includesTime: hasTime))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(colors.primary)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(colors.surfaceVariant, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L.string("tasks_detail_set_due_date"))
+                .popover(isPresented: $showingDuePicker) { deadlinePopover(task) }
+                if let relToken {
+                    Text(L.relativeDay(relToken, Int(BridgeKt.taskDueRelativeCount(task: task))))
+                        .font(.caption)
+                        .foregroundStyle(colors.inkMuted)
+                }
+                Spacer(minLength: 0)
+                Button(L.string("common_clear")) { BridgeKt.clearTaskDeadline(component: component) }
+                    .font(.subheadline)
+                    .accessibilityLabel(L.string("tasks_detail_clear_due_date_a11y"))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L.string("tasks_detail_set_due_date"))
-            .popover(isPresented: $showingDuePicker) { deadlinePopover(task) }
-            if let relToken {
-                Text(L.relativeDay(relToken, Int(BridgeKt.taskDueRelativeCount(task: task))))
-                    .font(.caption)
-                    .foregroundStyle(colors.inkMuted)
-            }
-            Spacer(minLength: 0)
-            Button(L.string("common_clear")) { BridgeKt.clearTaskDeadline(component: component) }
+        } else {
+            HStack(spacing: 8) {
+                Text("—").foregroundStyle(colors.inkMuted)
+                Spacer(minLength: 0)
+                // The **date** axis only, deliberately: a first deadline should be all-day (the popover then
+                // offers "Add deadline time"). `applyDeadlinePicker` would compare now's wall clock against
+                // the 9:00 seed, find them different, and silently make the Task timed at whatever minute
+                // the button was pressed.
+                Button(L.string("common_set")) {
+                    BridgeKt.setTaskDeadline(component: component, epochSeconds: Date().timeIntervalSince1970)
+                }
                 .font(.subheadline)
-                .accessibilityLabel(L.string("tasks_detail_clear_due_date_a11y"))
+                .accessibilityLabel(L.string("tasks_detail_set_due_date"))
+            }
         }
     }
 
-    /// The WHEN popover content: the graphical `[.date, .hourAndMinute]` `DatePicker` (calendar + Time row —
-    /// the Figma iOS 26 combined field), then a "Clear time" affordance that drops the clock back to all-day.
-    /// On iPhone `.presentationCompactAdaptation(.popover)` keeps it a floating bubble (not a full sheet), so it
-    /// reads like the reference. Each change routes through `applyDeadlinePicker`, which fires only the moved axis.
+    /// The WHEN popover content: the graphical `DatePicker`, then the clock affordance for whichever state the
+    /// deadline is in — "Clear time" (timed → all-day) or "Add time" (all-day → timed, seeded at the shared
+    /// 9:00 default). `displayedComponents` tracks `taskDeadlineHasTime` so the Time row only appears for a
+    /// deadline that genuinely has a clock. On iPhone `.presentationCompactAdaptation(.popover)` keeps it a
+    /// floating bubble (not a full sheet). Each change routes through `applyDeadlinePicker`, which fires only
+    /// the moved axis — and with a date-only picker for an all-day Task, the clock axis can never move by
+    /// accident.
     @ViewBuilder
     private func deadlinePopover(_ task: Task) -> some View {
+        let hasTime = BridgeKt.taskDeadlineHasTime(task: task)
         VStack(alignment: .leading, spacing: 8) {
             DatePicker(
                 "",
@@ -514,15 +541,19 @@ struct TaskDetailView: View {
                     get: { Date(timeIntervalSince1970: BridgeKt.taskDeadlinePickerEpochSeconds(task: task)) },
                     set: { BridgeKt.applyDeadlinePicker(component: component, epochSeconds: $0.timeIntervalSince1970) }
                 ),
-                displayedComponents: [.date, .hourAndMinute]
+                displayedComponents: hasTime ? [.date, .hourAndMinute] : [.date]
             )
             .datePickerStyle(.graphical)
             .labelsHidden()
-            .accessibilityLabel(L.string("new_deadline_time_cd"))
+            .accessibilityLabel(hasTime ? L.string("new_deadline_time_cd") : L.string("tasks_detail_property_when"))
             .frame(minWidth: 300)
-            if BridgeKt.taskDeadlineHasTime(task: task) {
-                Divider().overlay { colors.outlineVariant }
+            Divider().overlay { colors.outlineVariant }
+            if hasTime {
                 Button(L.string("new_deadline_time_clear_a11y")) { BridgeKt.clearTaskDeadlineTime(component: component) }
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, minHeight: Layout.minTouchTarget, alignment: .leading)
+            } else {
+                Button(L.string("new_deadline_time_add_a11y")) { BridgeKt.addTaskDeadlineTime(component: component) }
                     .font(.subheadline)
                     .frame(maxWidth: .infinity, minHeight: Layout.minTouchTarget, alignment: .leading)
             }
@@ -530,30 +561,6 @@ struct TaskDetailView: View {
         .padding(16)
         .modifier(CompactPopoverAdaptation())
     }
-
-    /// The WHEN summary chip label: the deadline day always (locale medium — "Jul 17, 2026"), with the clock
-    /// appended (locale short — "· 9:00 AM") only when the deadline carries a real time (else it is all-day).
-    private func dueChipLabel(epoch: Double, hasTime: Bool) -> String {
-        let date = Date(timeIntervalSince1970: epoch)
-        let day = Self.chipDateFormatter.string(from: date)
-        return hasTime ? "\(day) · \(Self.chipTimeFormatter.string(from: date))" : day
-    }
-
-    private static let chipDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = .current
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter
-    }()
-
-    private static let chipTimeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = .current
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter
-    }()
 
     /// The LABELS cell: the labels as removable chips + an inline "add label" field. Any add/remove forwards
     /// the whole normalized list (the component replaces the Task's labels wholesale).
@@ -876,19 +883,6 @@ struct TaskDetailView: View {
             let mime = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType?.preferredMIMEType
                 ?? "application/octet-stream"
             BridgeKt.addTaskAttachment(component: component, filename: url.lastPathComponent, contentType: mime, data: data)
-        }
-    }
-}
-
-/// Keeps the WHEN date+time picker a floating **popover** on iPhone (`presentationCompactAdaptation(.popover)`,
-/// iOS 16.4+) instead of adapting to a sheet — a no-op below 16.4 (deployment target is 16.0), where `.popover`
-/// falls back to its default compact presentation. Guarded so it compiles against the lower target.
-private struct CompactPopoverAdaptation: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 16.4, *) {
-            content.presentationCompactAdaptation(.popover)
-        } else {
-            content
         }
     }
 }

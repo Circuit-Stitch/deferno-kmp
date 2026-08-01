@@ -5,14 +5,12 @@ import SwiftUI
 /// The global Search overlay (#73, #311) — a thin renderer of `SearchComponent`. Offline + one-shot: the
 /// query (≥2 chars, or the "has attachment" filter) plus optional status / tag / date-range / attachment /
 /// sort filters drive a local read; tapping a result opens it in the Tasks Destination (the shell routes +
-/// dismisses). No native date picker — ISO `YYYY-MM-DD` text fields, identical across platforms by design.
+/// dismisses). The date range is two independent native pickers, each edge separately optional.
 struct SearchView: View {
     let component: SearchComponent
     @StateObject private var state: StateFlowObserver<SearchState>
     @Environment(\.defernoColors) private var colors
     @State private var newTag = ""
-    @State private var fromText = ""
-    @State private var toText = ""
 
     init(component: SearchComponent) {
         self.component = component
@@ -39,7 +37,7 @@ struct SearchView: View {
                     queryField
                     statusFilter(value)
                     tagsFilter(value)
-                    dateRangeFilter
+                    dateRangeFilter(value)
                     attachmentFilter(value)
                     sortFilter(value)
                     Divider().background(colors.outlineVariant)
@@ -95,11 +93,35 @@ struct SearchView: View {
         }
     }
 
-    private var dateRangeFilter: some View {
+    /// The date-range filter: two independently-optional edges, each a native picker.
+    ///
+    /// Both edges are nullable — an open-ended range is the normal case — so each row stays on "—" + Add
+    /// until asked for, and Clear reopens it. The two `setSearch*Date` seams each move **one** edge, reading
+    /// the other live off the component: the ISO text fields these replaced shared one `.onChange` that
+    /// re-parsed *both* strings on every keystroke, so a half-typed "to" silently wiped an applied "from".
+    private func dateRangeFilter(_ value: SearchState) -> some View {
         filterSection(L.string("search_filter_date_range")) {
-            HStack(spacing: 8) {
-                dateField(L.string("search_date_from_label"), text: $fromText)
-                dateField(L.string("search_date_to_label"), text: $toText)
+            VStack(spacing: 4) {
+                OptionalDatePickerRow(
+                    label: L.string("common_from"),
+                    accessibilityLabel: L.string("common_from"),
+                    epochSeconds: ShellBridgeKt.searchFromEpochSeconds(state: value),
+                    onPick: { ShellBridgeKt.setSearchFromDate(component: component, epochSeconds: $0) },
+                    onAdd: {
+                        ShellBridgeKt.setSearchFromDate(component: component, epochSeconds: Date().timeIntervalSince1970)
+                    },
+                    onClear: { ShellBridgeKt.setSearchFromDate(component: component, epochSeconds: -1) }
+                )
+                OptionalDatePickerRow(
+                    label: L.string("common_to"),
+                    accessibilityLabel: L.string("common_to"),
+                    epochSeconds: ShellBridgeKt.searchToEpochSeconds(state: value),
+                    onPick: { ShellBridgeKt.setSearchToDate(component: component, epochSeconds: $0) },
+                    onAdd: {
+                        ShellBridgeKt.setSearchToDate(component: component, epochSeconds: Date().timeIntervalSince1970)
+                    },
+                    onClear: { ShellBridgeKt.setSearchToDate(component: component, epochSeconds: -1) }
+                )
             }
         }
     }
@@ -110,16 +132,6 @@ struct SearchView: View {
         filterSection(L.string("tasks_detail_section_attachments")) {
             chip(L.string("search_filter_has_attachment"), selected: value.hasAttachment) { component.onHasAttachmentToggled() }
         }
-    }
-
-    private func dateField(_ placeholder: String, text: Binding<String>) -> some View {
-        TextField(placeholder, text: text)
-            .textFieldStyle(.roundedBorder)
-            .autocorrectionDisabled(true)
-            .onChange(of: text.wrappedValue) {
-                component.onDateRangeChanged(from: ShellBridgeKt.parseLocalDate(text: fromText),
-                                             to: ShellBridgeKt.parseLocalDate(text: toText))
-            }
     }
 
     private func sortFilter(_ value: SearchState) -> some View {

@@ -379,3 +379,79 @@ struct Breadcrumb: View {
 //     → `DependencyBadge` (Common/CommonViews.swift), the same mono badge with a REQUIRED `semanticLabel`
 //       so the uppercased glyphs are never what VoiceOver reads. It covers all three tones — `.neutral`,
 //       `.accent` and (since #368 G17c) `.warn`, the error-toned Task-detail subtask "Blocked" chip.
+
+// MARK: - Date / time pickers (#348 follow-up)
+
+/// A **nullable** date (or date+time) row — the macOS idiom for every field that used to ask for a
+/// hand-typed ISO string. Inline `DatePicker` in the desktop `.field` style (an editable field + stepper),
+/// deliberately NOT iOS's chip-opens-a-graphical-calendar: that construction exists to fight iPhone
+/// popover-to-sheet adaptation, and a calendar grid is the wrong idiom next to a keyboard — the same call
+/// the Task-detail WHEN row already made. `.labelsHidden()` is required: an empty `""` title still reserves
+/// leading label width on macOS and mis-aligns the row.
+///
+/// **Optionality is the point.** Deferno's date fields are overwhelmingly nullable — an undated Task, an
+/// open-ended Event, an open edge of a search range — and a picker that always displays *something* cannot
+/// say "no date". So an unset value renders as a muted "—" plus an Add affordance rather than a field
+/// showing a day nobody chose, and `onClear` (when the field is genuinely clearable) puts it back. Pass
+/// `onAdd: nil` for a required field and `onClear: nil` for one that cannot be emptied.
+///
+/// The value crosses as **epoch seconds** with `-1` for unset, matching the Kotlin bridge seams — see the
+/// picker section of `ShellBridge.kt`, which owns the device-zone calendar arithmetic for both platforms.
+struct OptionalDatePickerRow: View {
+    let label: String
+    let accessibilityLabel: String
+    let epochSeconds: Double
+    /// `[.date]` for a day-only field; `[.date, .hourAndMinute]` when the value carries a clock.
+    var components: DatePickerComponents = [.date]
+    let onPick: (Double) -> Void
+    var onAdd: (() -> Void)?
+    var onClear: (() -> Void)?
+
+    @Environment(\.defernoColors) private var colors
+
+    private var isSet: Bool { epochSeconds >= 0 }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(colors.onSurfaceVariant)
+            Spacer(minLength: 8)
+            if isSet {
+                DatePicker(
+                    "",
+                    selection: Binding(
+                        get: { Date(timeIntervalSince1970: epochSeconds) },
+                        set: { onPick($0.timeIntervalSince1970) }
+                    ),
+                    // What makes the bridge's `-1` "unset" sentinel genuinely out of band. Both sides
+                    // test *negative means unset*, and `.field` is typeable, so without a floor someone
+                    // could enter a pre-1970 day that round-trips to "—". No deadline, event window or
+                    // search edge in this app is legitimately that old. The floor is epoch +1 day, not
+                    // epoch 0: a bound of 0 renders as "12/31/1969" everywhere west of UTC (it is
+                    // 1970-01-01 *UTC*), which reads like the very bug the bound exists to prevent.
+                    in: Date(timeIntervalSince1970: 86_400)...,
+                    displayedComponents: components
+                )
+                .datePickerStyle(.field)
+                .labelsHidden()
+                .accessibilityLabel(accessibilityLabel)
+                if let onClear {
+                    // The spoken name is the purpose-built noun ("Event start"), not the visible
+                    // verb-conjugated column title ("Starts") — "Clear Starts" reads as broken English.
+                    Button(L.string("common_clear"), action: onClear)
+                        .font(.footnote)
+                        .accessibilityLabel(L.format("common_clear_named_cd", accessibilityLabel))
+                }
+            } else {
+                Text("—").foregroundStyle(colors.inkMuted)
+                if let onAdd {
+                    Button(L.string("common_add"), action: onAdd)
+                        .font(.subheadline)
+                        .accessibilityLabel(L.format("common_add_named_cd", accessibilityLabel))
+                }
+            }
+        }
+        .frame(minHeight: Layout.minTouchTarget)
+    }
+}

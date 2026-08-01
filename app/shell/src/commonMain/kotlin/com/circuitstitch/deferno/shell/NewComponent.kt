@@ -57,6 +57,16 @@ interface NewComponent {
     fun setEnd(end: Instant?)
 
     /**
+     * Mark the Event **all-day** (#348). All-day is the *absence of a clock*, never a wire boolean:
+     * `all_day` is derived read-only server-side (true iff both time-of-day fields are null) and ignored
+     * on input ([com.circuitstitch.deferno.core.model.Event]), so this flag only decides whether
+     * [toPayload] derives `start_time_of_day`/`end_time_of_day` from [setStart]/[setEnd] at all. The
+     * instants themselves survive the toggle, so flipping it back restores the clock the person picked.
+     * Ignored by the non-Event kinds, whose all-day is the absence of a [setDeadlineTime].
+     */
+    fun setAllDay(allDay: Boolean)
+
+    /**
      * Set the item's **date** (#74) — the day a Task/Habit/Chore anchors to, mapped to `complete_by`.
      * It is also the Event's fallback start when no explicit [setStart] is given. `null` clears it. This
      * is the field the Calendar FAB pre-dates to the selected day.
@@ -141,6 +151,13 @@ data class NewState(
     // one; a location is a documented backend follow-up, not invented on the wire.)
     val start: Instant? = null,
     val end: Instant? = null,
+    // Whether the Event spans whole days rather than a clock window (#348). Not a wire field — the server
+    // derives `all_day` from the absence of both time-of-day fields — so this only gates whether
+    // [toPayload] reads a clock off [start]/[end]. Read [eventIsAllDay], not this: an Event with no
+    // [start] instant has no clock to send and is all-day whatever this flag says. `false` here means
+    // "not *explicitly* marked all-day", which is why a fresh Event form still reads as all-day until it
+    // is given a start.
+    val allDay: Boolean = false,
     // The item's date (#74): the Task/Habit/Chore `complete_by` anchor, and the Event's fallback start.
     // The Calendar FAB pre-dates this to the selected day; the New form surfaces it for the non-Event kinds.
     val date: LocalDate? = null,
@@ -157,15 +174,36 @@ data class NewState(
     val dictationField: DictationField? = null,
 ) {
     /**
+     * Whether the Event this form would create is **all-day** — the reading a View should render, and the
+     * exact rule [toPayload] applies. Two ways to get there, and both must show as all-day or the form
+     * states something the wire contradicts: an explicit [allDay] choice, or **no [start] instant at all**
+     * (a form pre-dated by the Calendar FAB has only a [date], and a bare day carries no clock to send).
+     * Always `false` off the Event kind, whose all-day is the absence of a [deadlineTime].
+     */
+    val eventIsAllDay: Boolean
+        get() = selectedKind == ItemKind.Event && (allDay || start == null)
+
+    /**
+     * Whether the Event's window closes before it opens — the one range the server rejects outright
+     * (`end_time` must be `>= complete_by`). A `null` end is a *valid* open-ended Event, so this is
+     * `false` unless both edges are present and inverted. Meaningless for the non-Event kinds.
+     */
+    val eventEndBeforeStart: Boolean
+        get() = selectedKind == ItemKind.Event && start != null && end != null && end < start
+
+    /**
      * Create is enabled only with a non-blank title (the one universally-required field) — and, for an
      * **Event**, a fixed start: either an explicit [start] or a pre-dated [date] fallback (a bare Event
-     * create with no start POSTs `complete_by:""`, which the server rejects — FIX 1, AC #2). The
-     * recurring kinds default their cadence (recurrence picker is a documented v1 follow-up).
+     * create with no start POSTs `complete_by:""`, which the server rejects — FIX 1, AC #2), whose
+     * window must also not close before it opens ([eventEndBeforeStart] — blocked here rather than
+     * POSTed for a guaranteed rejection). The recurring kinds default their cadence (recurrence picker
+     * is a documented v1 follow-up).
      */
     val canSubmit: Boolean
         get() = title.isNotBlank() &&
             status != NewStatus.Submitting &&
-            (selectedKind != ItemKind.Event || start != null || date != null)
+            (selectedKind != ItemKind.Event || start != null || date != null) &&
+            !eventEndBeforeStart
 }
 
 /** Where the New surface is in its create lifecycle. */
@@ -237,6 +275,7 @@ class DefaultNewComponent(
     override fun setNotes(notes: String) = _state.update { it.copy(notes = notes, status = NewStatus.Editing) }
     override fun setStart(start: Instant?) = _state.update { it.copy(start = start, status = NewStatus.Editing) }
     override fun setEnd(end: Instant?) = _state.update { it.copy(end = end, status = NewStatus.Editing) }
+    override fun setAllDay(allDay: Boolean) = _state.update { it.copy(allDay = allDay, status = NewStatus.Editing) }
     override fun setDate(date: LocalDate?) = _state.update { it.copy(date = date, status = NewStatus.Editing) }
     override fun setDeadlineTime(time: LocalTime?) = _state.update { it.copy(deadlineTime = time, status = NewStatus.Editing) }
 
@@ -391,10 +430,13 @@ internal fun NewState.toPayload(tz: String = "UTC"): CreateItem.Payload {
                 completeBy = (start ?: dateInstant ?: Instant.DISTANT_FUTURE).toString(),
                 endTime = end?.toString(),
                 // The clock the server needs to keep the event timed, not all-day (#348): the local
-                // time of the chosen start/end in the account zone. Absent (a date-only/fallback start)
-                // ⇒ no time-of-day ⇒ the server derives an all-day event.
-                startTimeOfDay = start?.toLocalDateTime(zone)?.time?.toString(),
-                endTimeOfDay = end?.toLocalDateTime(zone)?.time?.toString(),
+                // time of the chosen start/end in the account zone. Absent ⇒ no time-of-day ⇒ the
+                // server derives an all-day event. Two ways to be absent, and both are honoured: an
+                // explicit [allDay] choice, or a date-only/fallback start that never carried a clock.
+                // `all_day` itself is never sent — it is derived read-only server-side and rejected
+                // as input (pinned by CreatePayloadSerializationTest).
+                startTimeOfDay = if (allDay) null else start?.toLocalDateTime(zone)?.time?.toString(),
+                endTimeOfDay = if (allDay) null else end?.toLocalDateTime(zone)?.time?.toString(),
                 description = notesOrNull,
             ),
         )

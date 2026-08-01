@@ -68,10 +68,6 @@ fun detailKey(component: TaskDetailComponent): String = component.taskId.value
 /** Open a subtask's own detail (the row chevron) — Swift holds the erased [Task.id], so Kotlin reads it. */
 fun openSubtask(component: TaskDetailComponent, subtask: Task) = component.onSubtaskClicked(subtask.id)
 
-/** The current deadline as Unix epoch seconds for a SwiftUI `DatePicker`, or -1.0 when the Task has none. */
-fun taskDeadlineEpochSeconds(task: Task): Double =
-    task.completeBy?.let { it.toEpochMilliseconds() / 1000.0 } ?: -1.0
-
 /** Set the deadline DUE date from a `DatePicker` selection (epoch seconds → the device-zone calendar day). */
 fun setTaskDeadline(component: TaskDetailComponent, epochSeconds: Double) {
     val day = Instant.fromEpochMilliseconds((epochSeconds * 1000).toLong())
@@ -92,7 +88,7 @@ fun clearTaskDeadline(component: TaskDetailComponent) = component.onSetDeadline(
  * matching the create form's "Add time" default. [applyDeadlinePicker] compares against this same value so an
  * all-day Task stays all-day on a pure date change (only an explicit clock move converts it to timed).
  */
-private val PICKER_DEFAULT_TIME: LocalTime = LocalTime(9, 0)
+internal val PICKER_DEFAULT_TIME: LocalTime = LocalTime(9, 0)
 
 /** Whether the deadline carries a real clock time (#348); `false` = all-day (show date only, offer "add"/"clear time"). */
 fun taskDeadlineHasTime(task: Task): Boolean = task.deadlineTimeOfDay != null
@@ -100,8 +96,9 @@ fun taskDeadlineHasTime(task: Task): Boolean = task.deadlineTimeOfDay != null
 /**
  * The seed instant (epoch seconds) for the combined `[.date, .hourAndMinute]` `DatePicker`: the deadline DUE
  * date combined with the real [Task.deadlineTimeOfDay] (or [PICKER_DEFAULT_TIME] when all-day), at the device
- * zone. `-1.0` when the Task has no deadline. NOT [taskDeadlineEpochSeconds] — that returns raw `completeBy`,
- * whose clock is the end-of-day sentinel (23:59:59) for an all-day Task, which must NOT seed the time row.
+ * zone. `-1.0` when the Task has no deadline. Deliberately NOT raw `completeBy`, whose clock is the end-of-day
+ * sentinel (23:59:59) for an all-day Task and must never seed a time row — that is why the raw accessor this
+ * replaced no longer exists.
  */
 fun taskDeadlinePickerEpochSeconds(task: Task): Double {
     val by = task.completeBy ?: return -1.0

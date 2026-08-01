@@ -501,14 +501,17 @@ struct TaskDetailView: View {
     /// field would silently convert the task.
     ///
     /// Both branches seed from `taskDeadlinePickerEpochSeconds` and write through `applyDeadlinePicker` —
-    /// **not** `taskDeadlineEpochSeconds`/`setTaskDeadline`. The raw seam returns `completeBy`, whose clock
-    /// is the 23:59:59 end-of-day sentinel for an all-day task; feeding that to a picker would read every
-    /// all-day deadline as "11:59 PM". `applyDeadlinePicker` also dispatches only the axis that actually
-    /// moved, so nudging the day never rewrites the clock (and it reads the current values live off the
-    /// component, so a fast sequence of edits stays correct).
+    /// never from raw `completeBy`, whose clock is the 23:59:59 end-of-day sentinel for an all-day task;
+    /// feeding that to a picker would read every all-day deadline as "11:59 PM". `applyDeadlinePicker`
+    /// also dispatches only the axis that actually moved, so nudging the day never rewrites the clock (and
+    /// it reads the current values live off the component, so a fast sequence of edits stays correct).
     ///
-    /// The no-deadline branch is a **macOS-only** affordance: iOS drops the WHEN row entirely when there is
-    /// no deadline, which leaves no way to set a first one from detail. Don't collapse it into the iOS shape.
+    /// The no-deadline branch seeds through the raw `setTaskDeadline` — the **date** axis only, deliberately.
+    /// A first deadline should be all-day (the three-state row then offers "Add deadline time"), and routing
+    /// it through `applyDeadlinePicker` instead would compare now's wall clock against the 9:00 seed, find
+    /// them different, and silently make the Task *timed* at whatever minute the button was pressed. iOS grew
+    /// the same branch: it used to drop the WHEN row entirely when undated, leaving no way to give a Task a
+    /// first deadline from detail.
     @ViewBuilder
     private func dueRow(_ task: Task) -> some View {
         let hasDue = BridgeKt.taskDeadlinePickerEpochSeconds(task: task) >= 0

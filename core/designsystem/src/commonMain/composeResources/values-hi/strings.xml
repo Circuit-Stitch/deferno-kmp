@@ -205,6 +205,10 @@
     <!-- ── common ─────────────────────────────────────────────── -->
     <string name="common_account">खाता</string>
     <string name="common_add">जोड़ें</string>
+    <!-- cd for a row's Add affordance; %1$s is the field name (e.g. 'Event start') -->
+    <string name="common_add_named_cd">%1$s जोड़ें</string>
+    <!-- Event window switch: whole days rather than a clock window. All-day is the ABSENCE of a time-of-day on the wire, never a flag -->
+    <string name="common_all_day">पूरे दिन</string>
     <!-- ब्रांड — अनुवाद नहीं -->
     <string name="common_app_name">Deferno</string>
     <string name="common_attach_files">फ़ाइलें अटैच करें</string>
@@ -213,16 +217,24 @@
     <string name="common_cancel">रद्द करें</string>
     <string name="common_cannot_be_undone">इसे पूर्ववत नहीं किया जा सकता।</string>
     <string name="common_clear">साफ़ करें</string>
+    <!-- cd for a row's Clear affordance; %1$s is the field name (e.g. 'Event start') -->
+    <string name="common_clear_named_cd">%1$s साफ़ करें</string>
     <string name="common_close">बंद करें</string>
     <string name="common_collapse_named_cd">%1$s को समेटें</string>
+    <!-- Date-picker row label on the create form (the ISO hint lives on the Compose text field's own new_date_label) -->
+    <string name="common_date">तारीख</string>
     <string name="common_delete">हटाएँ</string>
     <string name="common_dismiss">ख़ारिज करें</string>
     <!-- बटन 'हो गया' — Done स्थिति-लेबल (common_status_done) से अलग -->
     <string name="common_done">हो गया</string>
     <string name="common_due">%1$s तक</string>
     <string name="common_edit">संपादित करें</string>
+    <!-- Event window close — the picker-row twin of common_starts -->
+    <string name="common_ends">समाप्त</string>
     <string name="common_error_app_out_of_date">यह ऐप पुराना हो गया है — कृपया अपडेट करें।</string>
     <string name="common_expand_named_cd">%1$s को फैलाएँ</string>
+    <!-- Search date-range OPEN edge — picker-row label; the Compose text field keeps search_date_from_label's format hint -->
+    <string name="common_from">से</string>
     <string name="common_kind_chore">काम</string>
     <string name="common_kind_event">इवेंट</string>
     <string name="common_kind_habit">आदत</string>
@@ -256,6 +268,8 @@
     <!-- ब्रांड — अनुवाद नहीं -->
     <string name="common_source_google_calendar">Google Calendar</string>
     <string name="common_start">शुरू करें</string>
+    <!-- Event window open — picker-row label; the Compose text field keeps new_event_start_label's format hint -->
+    <string name="common_starts">शुरू</string>
     <string name="common_state_collapsed">समेटा गया</string>
     <string name="common_state_done">पूर्ण</string>
     <string name="common_state_expanded">फैलाया गया</string>
@@ -268,6 +282,8 @@
     <!-- जानबूझकर तटस्थ — कभी 'देर हुई/चूक गए' नहीं -->
     <string name="common_status_scheduled">निर्धारित</string>
     <string name="common_status_skipped">छोड़ा गया</string>
+    <!-- Search date-range CLOSE edge — the picker-row twin of common_from -->
+    <string name="common_to">तक</string>
     <string name="common_undo">पूर्ववत करें</string>
     <string name="common_username_handle">@%1$s</string>
     <string name="common_when">कब</string>
@@ -327,6 +343,8 @@
     <string name="new_dictation_status_cd">बोलकर लिखने की स्थिति</string>
     <string name="new_error_could_not_save">सेव नहीं हो सका।</string>
     <string name="new_error_could_not_save_retry">सेव नहीं हो सका। फिर से कोशिश करें।</string>
+    <!-- Inline validation on the Event window: the server rejects end_time < complete_by -->
+    <string name="new_event_end_before_start">शुरू होने से पहले समाप्त होता है</string>
     <string name="new_event_end_cd">इवेंट का समापन</string>
     <string name="new_event_end_label">समाप्त होता है (वैकल्पिक)</string>
     <string name="new_event_start_cd">इवेंट की शुरुआत</string>
@@ -344,6 +362,8 @@
     <string name="new_submit_create">बनाएँ</string>
     <string name="new_submit_saving">सेव हो रहा है…</string>
     <string name="new_time_label">समय (वैकल्पिक, जैसे 14:30)</string>
+    <!-- Why the deadline-time Add is disabled: the clock only ships alongside a date -->
+    <string name="new_time_needs_date">पहले एक तारीख चुनें</string>
     <string name="new_title_label">शीर्षक</string>
 
     <!-- ── plan ─────────────────────────────────────────────── -->
