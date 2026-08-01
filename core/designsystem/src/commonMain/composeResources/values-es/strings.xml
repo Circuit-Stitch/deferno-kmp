@@ -196,9 +196,7 @@
     <!-- ── common ─────────────────────────────────────────────── -->
     <string name="common_account">Cuenta</string>
     <string name="common_add">Agregar</string>
-    <!-- cd for a row's Add affordance; %1$s is the field name (e.g. 'Event start') -->
     <string name="common_add_named_cd">Agregar %1$s</string>
-    <!-- Event window switch: whole days rather than a clock window. All-day is the ABSENCE of a time-of-day on the wire, never a flag -->
     <string name="common_all_day">Todo el día</string>
     <!-- Marca — no se traduce -->
     <string name="common_app_name">Deferno</string>
@@ -208,11 +206,9 @@
     <string name="common_cancel">Cancelar</string>
     <string name="common_cannot_be_undone">Esto no se puede deshacer.</string>
     <string name="common_clear">Quitar</string>
-    <!-- cd for a row's Clear affordance; %1$s is the field name (e.g. 'Event start') -->
     <string name="common_clear_named_cd">Quitar %1$s</string>
     <string name="common_close">Cerrar</string>
     <string name="common_collapse_named_cd">Contraer %1$s</string>
-    <!-- Date-picker row label on the create form (the ISO hint lives on the Compose text field's own new_date_label) -->
     <string name="common_date">Fecha</string>
     <string name="common_delete">Eliminar</string>
     <string name="common_dismiss">Descartar</string>
@@ -220,11 +216,9 @@
     <string name="common_done">Listo</string>
     <string name="common_due">Vence %1$s</string>
     <string name="common_edit">Editar</string>
-    <!-- Event window close — the picker-row twin of common_starts -->
     <string name="common_ends">Termina</string>
     <string name="common_error_app_out_of_date">Esta app está desactualizada — actualízala, por favor.</string>
     <string name="common_expand_named_cd">Expandir %1$s</string>
-    <!-- Search date-range OPEN edge — picker-row label; the Compose text field keeps search_date_from_label's format hint -->
     <string name="common_from">Desde</string>
     <string name="common_kind_chore">Quehacer</string>
     <string name="common_kind_event">Evento</string>
@@ -259,7 +253,6 @@
     <!-- Marca — no se traduce -->
     <string name="common_source_google_calendar">Google Calendar</string>
     <string name="common_start">Empezar</string>
-    <!-- Event window open — picker-row label; the Compose text field keeps new_event_start_label's format hint -->
     <string name="common_starts">Empieza</string>
     <string name="common_state_collapsed">Contraído</string>
     <string name="common_state_done">Hecho</string>
@@ -274,7 +267,6 @@
     <!-- Deliberadamente neutral — nunca «atrasada/vencida» -->
     <string name="common_status_scheduled">Programada</string>
     <string name="common_status_skipped">Omitida</string>
-    <!-- Search date-range CLOSE edge — the picker-row twin of common_from -->
     <string name="common_to">Hasta</string>
     <string name="common_undo">Deshacer</string>
     <string name="common_username_handle">@%1$s</string>
@@ -334,7 +326,6 @@
     <string name="new_dictation_status_cd">Estado del dictado</string>
     <string name="new_error_could_not_save">No se pudo guardar.</string>
     <string name="new_error_could_not_save_retry">No se pudo guardar. Inténtalo de nuevo.</string>
-    <!-- Inline validation on the Event window: the server rejects end_time < complete_by -->
     <string name="new_event_end_before_start">Termina antes de empezar</string>
     <string name="new_event_end_cd">Fin del evento</string>
     <string name="new_event_end_label">Termina (opcional)</string>
@@ -353,7 +344,6 @@
     <string name="new_submit_create">Crear</string>
     <string name="new_submit_saving">Guardando…</string>
     <string name="new_time_label">Hora (opcional, p. ej. 14:30)</string>
-    <!-- Why the deadline-time Add is disabled: the clock only ships alongside a date -->
     <string name="new_time_needs_date">Elige primero una fecha</string>
     <string name="new_title_label">Título</string>
 
