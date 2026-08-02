@@ -68,5 +68,6 @@ mechanical half of this on the `check` path.
 | [0048](0048-activity-ledger-optimistic-cache-of-server-ledger.md) | The Activity ledger is an optimistic cache of the server's, merged by a client-minted `entry_id` | Accepted | 2026-07-25 |
 | [0049](0049-tasks-item-tree-modal-move.md) | Tasks Destination renders the Item decomposition tree; modal button-based Move over `/items` | Accepted | 2026-06-15 |
 | [0050](0050-task-dependency-edges-server-derived-blocked-flags.md) | Task dependency edges are client-writable; the Blocked and blocker flags are server-derived | Accepted | 2026-06-26 |
+| [0051](0051-client-when-decomposition-day-plus-optional-clock.md) | WHEN decomposes to day + optional clock; all-day is derived, and the offline-first client normalizes locally | Accepted | 2026-08-02 |
 
 _50 records. Next free number: **0051**._

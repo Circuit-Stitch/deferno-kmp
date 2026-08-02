@@ -366,3 +366,152 @@ struct Breadcrumb: View {
         }
     }
 }
+
+// MARK: - Date / time pickers (#348 follow-up)
+
+/// Locale-aware readings of an epoch-seconds instant, cached so a `body` re-evaluation never allocates a
+/// `DateFormatter`. Shared by every date affordance (`OptionalDatePickerRow`, the Task-detail WHEN chip)
+/// so one place decides what a date looks like in this app.
+enum DefernoDateFormat {
+    /// "Jul 17, 2026" (locale medium), with "· 9:00 AM" appended only when the value carries a real clock.
+    /// Never synthesise a clock for an all-day value — the whole point of the two axes is that an all-day
+    /// item genuinely has no time, and printing one states something the data does not say.
+    static func summary(epochSeconds: Double, includesTime: Bool) -> String {
+        let date = Date(timeIntervalSince1970: epochSeconds)
+        let day = dayFormatter.string(from: date)
+        return includesTime ? "\(day) · \(timeFormatter.string(from: date))" : day
+    }
+
+    static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
+    static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    /// The range every picker is bounded to. This is what makes the bridge's `-1` "unset" sentinel
+    /// genuinely out of band — both sides test *negative means unset*, so without a floor a picked
+    /// pre-1970 day would round-trip to "—" and silently clear the field. No deadline, event window or
+    /// search edge in this app is legitimately that old.
+    ///
+    /// The floor is epoch **+1 day**, not epoch 0: a bound of 0 renders as "12/31/1969" everywhere west
+    /// of UTC (it is 1970-01-01 *UTC*), which reads like the very bug the bound exists to prevent. One
+    /// day of slack keeps the floor positive — and displaying as 1970 — in every zone.
+    static let pickable: PartialRangeFrom<Date> = Date(timeIntervalSince1970: 86_400)...
+}
+
+/// A **nullable** date (or date+time) row — the iOS idiom for every field that used to ask for a
+/// hand-typed ISO string. A summary chip opens the graphical `DatePicker` in a popover (calendar +
+/// optional Time row, the iOS 26 UI-kit look the Task-detail WHEN cell established);
+/// `CompactPopoverAdaptation` keeps it a floating bubble on iPhone instead of adapting to a sheet.
+///
+/// **Optionality is the point.** Deferno's date fields are overwhelmingly nullable — an undated Task, an
+/// open-ended Event, an open edge of a search range — and a picker that always displays *something* cannot
+/// say "no date". So an unset value renders as a muted "—" plus an Add affordance rather than a chip
+/// showing a day nobody chose, and `onClear` (when the field is genuinely clearable) puts it back. Pass
+/// `onAdd: nil` for a required field and `onClear: nil` for one that cannot be emptied.
+///
+/// The value crosses as **epoch seconds** with `-1` for unset, matching the Kotlin bridge seams — see the
+/// picker section of `ShellBridge.kt`, which owns the device-zone calendar arithmetic for both platforms.
+struct OptionalDatePickerRow: View {
+    let label: String
+    let accessibilityLabel: String
+    let epochSeconds: Double
+    /// `[.date]` for a day-only field; `[.date, .hourAndMinute]` when the value carries a clock.
+    var components: DatePickerComponents = [.date]
+    let onPick: (Double) -> Void
+    var onAdd: (() -> Void)?
+    var onClear: (() -> Void)?
+
+    @Environment(\.defernoColors) private var colors
+    @State private var showingPicker = false
+
+    private var isSet: Bool { epochSeconds >= 0 }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(colors.onSurfaceVariant)
+            Spacer(minLength: 8)
+            if isSet {
+                chip
+                if let onClear {
+                    // The spoken name is the purpose-built noun ("Event start"), not the visible
+                    // verb-conjugated column title ("Starts") — "Clear Starts" reads as broken English.
+                    Button(L.string("common_clear"), action: onClear)
+                        .font(.footnote)
+                        .accessibilityLabel(L.format("common_clear_named_cd", accessibilityLabel))
+                }
+            } else {
+                Text("—").foregroundStyle(colors.inkMuted)
+                if let onAdd {
+                    Button(L.string("common_add"), action: onAdd)
+                        .font(.subheadline)
+                        .accessibilityLabel(L.format("common_add_named_cd", accessibilityLabel))
+                }
+            }
+        }
+        .frame(minHeight: Layout.minTouchTarget)
+    }
+
+    private var chip: some View {
+        let reading = DefernoDateFormat.summary(
+            epochSeconds: epochSeconds,
+            includesTime: components.contains(.hourAndMinute)
+        )
+        return Button { showingPicker = true } label: {
+            Text(reading)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(colors.primary)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(colors.surfaceVariant, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        // Label = what the control edits, VALUE = what it currently holds. Setting only the label would
+        // replace the button's derived text and leave the chosen date unspoken anywhere in the row.
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(reading)
+        .popover(isPresented: $showingPicker) {
+            DatePicker(
+                "",
+                selection: Binding(
+                    get: { Date(timeIntervalSince1970: epochSeconds) },
+                    set: { onPick($0.timeIntervalSince1970) }
+                ),
+                in: DefernoDateFormat.pickable,
+                displayedComponents: components
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .accessibilityLabel(accessibilityLabel)
+            .frame(minWidth: 300)
+            .padding(16)
+            .modifier(CompactPopoverAdaptation())
+        }
+    }
+}
+
+/// Keeps a date picker a floating **popover** on iPhone (`presentationCompactAdaptation(.popover)`,
+/// iOS 16.4+) instead of adapting to a sheet — a no-op below 16.4 (deployment target is 16.0), where
+/// `.popover` falls back to its default compact presentation. Guarded so it compiles against the lower
+/// target. Shared by `OptionalDatePickerRow` and the Task-detail WHEN cell.
+struct CompactPopoverAdaptation: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content.presentationCompactAdaptation(.popover)
+        } else {
+            content
+        }
+    }
+}

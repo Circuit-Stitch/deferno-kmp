@@ -36,8 +36,12 @@ import com.circuitstitch.deferno.core.designsystem.resources.new_dictation_error
 import com.circuitstitch.deferno.core.designsystem.resources.new_dictation_status_cd
 import com.circuitstitch.deferno.core.designsystem.resources.new_event_end_cd
 import com.circuitstitch.deferno.core.designsystem.resources.new_event_end_label
+import com.circuitstitch.deferno.core.designsystem.resources.new_event_end_time_cd
+import com.circuitstitch.deferno.core.designsystem.resources.new_event_end_time_label
 import com.circuitstitch.deferno.core.designsystem.resources.new_event_start_cd
 import com.circuitstitch.deferno.core.designsystem.resources.new_event_start_label
+import com.circuitstitch.deferno.core.designsystem.resources.new_event_start_time_cd
+import com.circuitstitch.deferno.core.designsystem.resources.new_event_start_time_label
 import com.circuitstitch.deferno.core.designsystem.resources.new_kind_picker_cd
 import com.circuitstitch.deferno.core.designsystem.resources.new_mic_dictate_cd
 import com.circuitstitch.deferno.core.designsystem.resources.new_mic_stop_dictation_cd
@@ -248,106 +252,15 @@ private fun DictationNote(text: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * The Date row (#74) — the Task/Habit/Chore `complete_by` anchor the Calendar FAB pre-dates. An ISO
- * `yyyy-mm-dd` text input: a parseable value pushes a real [LocalDate] up via [onValueChange], an
- * unparseable one clears it (so a half-typed value never POSTs an invalid date). Pre-filled from
- * [value]; a native date picker is a follow-up.
+ * An ISO `yyyy-mm-dd` day input — the shared body behind every date row on the New form. A parseable
+ * value pushes a real [LocalDate] up via [onValueChange]; an unparseable one clears it, so a half-typed
+ * value never reaches the wire. Pre-filled from [value]; native date pickers are a follow-up here (the
+ * Apple forms already use them).
  */
 @Composable
-fun NewDateField(
+private fun DateField(
     value: LocalDate?,
     onValueChange: (LocalDate?) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var text by remember(value) { mutableStateOf(value?.toString() ?: "") }
-    val dateCd = stringResource(Res.string.new_date_cd)
-    OutlinedTextField(
-        value = text,
-        onValueChange = {
-            text = it
-            onValueChange(runCatching { LocalDate.parse(it.trim()) }.getOrNull())
-        },
-        label = { Text(stringResource(Res.string.new_date_label)) },
-        singleLine = true,
-        isError = text.isNotBlank() && runCatching { LocalDate.parse(text.trim()) }.getOrNull() == null,
-        modifier = modifier.fillMaxWidth().semantics { contentDescription = dateCd },
-    )
-}
-
-/**
- * The Task/Habit/Chore **deadline time-of-day** row (#348): an `HH:MM` text input that maps to a
- * [LocalTime] via the same parse-or-clear contract as [NewDateField] — a parseable value pushes a
- * real [LocalTime] up, an unparseable/blank one clears it (an all-day deadline). Shown beneath the
- * Date for the non-Event kinds; an Event's clock lives in its start/end instants instead. A native
- * time picker is a follow-up (consistent with the ISO date/instant text entry).
- */
-@Composable
-fun NewDeadlineTimeField(
-    value: LocalTime?,
-    onValueChange: (LocalTime?) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var text by remember(value) { mutableStateOf(value?.toString() ?: "") }
-    val deadlineTimeCd = stringResource(Res.string.new_deadline_time_cd)
-    OutlinedTextField(
-        value = text,
-        onValueChange = {
-            text = it
-            onValueChange(runCatching { LocalTime.parse(it.trim()) }.getOrNull())
-        },
-        label = { Text(stringResource(Res.string.new_time_label)) },
-        singleLine = true,
-        isError = text.isNotBlank() && runCatching { LocalTime.parse(text.trim()) }.getOrNull() == null,
-        modifier = modifier.fillMaxWidth().semantics { contentDescription = deadlineTimeCd },
-    )
-}
-
-/**
- * The Event's required fixed start (CONTEXT.md → Event; AC #2): an ISO-8601 instant row — see
- * [InstantField] for the parse-or-clear contract.
- */
-@Composable
-fun NewEventStartField(
-    value: Instant?,
-    onValueChange: (Instant?) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    InstantField(
-        value = value,
-        onValueChange = onValueChange,
-        label = stringResource(Res.string.new_event_start_label),
-        semanticsLabel = stringResource(Res.string.new_event_start_cd),
-        modifier = modifier,
-    )
-}
-
-/** The Event's optional end: the [NewEventStartField] counterpart for the window's close. */
-@Composable
-fun NewEventEndField(
-    value: Instant?,
-    onValueChange: (Instant?) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    InstantField(
-        value = value,
-        onValueChange = onValueChange,
-        label = stringResource(Res.string.new_event_end_label),
-        semanticsLabel = stringResource(Res.string.new_event_end_cd),
-        modifier = modifier,
-    )
-}
-
-/**
- * An ISO-8601 instant text input (the Event start/end, FIX 1/AC #2). The user types an RFC3339
- * instant; a parseable value is pushed up via [onValueChange] as a real [Instant], an unparseable
- * one clears it (so a half-typed value never POSTs an invalid `complete_by`). v1 entry shape — a
- * native date-time picker is a follow-up; the component stays Compose-free and unit-tested on
- * [Instant]s directly.
- */
-@Composable
-private fun InstantField(
-    value: Instant?,
-    onValueChange: (Instant?) -> Unit,
     label: String,
     semanticsLabel: String,
     modifier: Modifier = Modifier,
@@ -357,14 +270,131 @@ private fun InstantField(
         value = text,
         onValueChange = {
             text = it
-            onValueChange(runCatching { Instant.parse(it.trim()) }.getOrNull())
+            onValueChange(runCatching { LocalDate.parse(it.trim()) }.getOrNull())
         },
         label = { Text(label) },
         singleLine = true,
-        isError = text.isNotBlank() && runCatching { Instant.parse(text.trim()) }.getOrNull() == null,
+        isError = text.isNotBlank() && runCatching { LocalDate.parse(text.trim()) }.getOrNull() == null,
         modifier = modifier.fillMaxWidth().semantics { contentDescription = semanticsLabel },
     )
 }
+
+/**
+ * An `HH:MM` clock input — [DateField]'s counterpart, and the shared body behind every time row. Blank
+ * or unparseable clears the clock, which **is** how that axis becomes all-day (ADR-0051): there is no
+ * flag, only the presence or absence of a time.
+ */
+@Composable
+private fun TimeField(
+    value: LocalTime?,
+    onValueChange: (LocalTime?) -> Unit,
+    label: String,
+    semanticsLabel: String,
+    modifier: Modifier = Modifier,
+) {
+    var text by remember(value) { mutableStateOf(value?.toString() ?: "") }
+    OutlinedTextField(
+        value = text,
+        onValueChange = {
+            text = it
+            onValueChange(runCatching { LocalTime.parse(it.trim()) }.getOrNull())
+        },
+        label = { Text(label) },
+        singleLine = true,
+        isError = text.isNotBlank() && runCatching { LocalTime.parse(text.trim()) }.getOrNull() == null,
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = semanticsLabel },
+    )
+}
+
+/** The Date row (#74) — the Task/Habit/Chore `complete_by` anchor the Calendar FAB pre-dates. */
+@Composable
+fun NewDateField(
+    value: LocalDate?,
+    onValueChange: (LocalDate?) -> Unit,
+    modifier: Modifier = Modifier,
+) = DateField(
+    value = value,
+    onValueChange = onValueChange,
+    label = stringResource(Res.string.new_date_label),
+    semanticsLabel = stringResource(Res.string.new_date_cd),
+    modifier = modifier,
+)
+
+/**
+ * The Task/Habit/Chore **deadline time-of-day** row (#348) within the [NewDateField] day, sent as
+ * `deadline_time_of_day`. Cleared = an all-day deadline.
+ */
+@Composable
+fun NewDeadlineTimeField(
+    value: LocalTime?,
+    onValueChange: (LocalTime?) -> Unit,
+    modifier: Modifier = Modifier,
+) = TimeField(
+    value = value,
+    onValueChange = onValueChange,
+    label = stringResource(Res.string.new_time_label),
+    semanticsLabel = stringResource(Res.string.new_deadline_time_cd),
+    modifier = modifier,
+)
+
+/**
+ * The Event's **start day** — the same `complete_by` field the other kinds anchor to, labelled for the
+ * Event's own semantics (it is a start, not a deadline: ADR-0051). Required for an Event create.
+ */
+@Composable
+fun NewEventStartDateField(
+    value: LocalDate?,
+    onValueChange: (LocalDate?) -> Unit,
+    modifier: Modifier = Modifier,
+) = DateField(
+    value = value,
+    onValueChange = onValueChange,
+    label = stringResource(Res.string.new_event_start_label),
+    semanticsLabel = stringResource(Res.string.new_event_start_cd),
+    modifier = modifier,
+)
+
+/** The Event's **start clock** within its start day → `start_time_of_day`; cleared = an all-day start. */
+@Composable
+fun NewEventStartTimeField(
+    value: LocalTime?,
+    onValueChange: (LocalTime?) -> Unit,
+    modifier: Modifier = Modifier,
+) = TimeField(
+    value = value,
+    onValueChange = onValueChange,
+    label = stringResource(Res.string.new_event_start_time_label),
+    semanticsLabel = stringResource(Res.string.new_event_start_time_cd),
+    modifier = modifier,
+)
+
+/** The Event's optional **end day** → `end_time`; cleared = an open-ended Event, which the wire accepts. */
+@Composable
+fun NewEventEndDateField(
+    value: LocalDate?,
+    onValueChange: (LocalDate?) -> Unit,
+    modifier: Modifier = Modifier,
+) = DateField(
+    value = value,
+    onValueChange = onValueChange,
+    label = stringResource(Res.string.new_event_end_label),
+    semanticsLabel = stringResource(Res.string.new_event_end_cd),
+    modifier = modifier,
+)
+
+/** The Event's **end clock** within its end day → `end_time_of_day`; cleared = an all-day end. */
+@Composable
+fun NewEventEndTimeField(
+    value: LocalTime?,
+    onValueChange: (LocalTime?) -> Unit,
+    modifier: Modifier = Modifier,
+) = TimeField(
+    value = value,
+    onValueChange = onValueChange,
+    label = stringResource(Res.string.new_event_end_time_label),
+    semanticsLabel = stringResource(Res.string.new_event_end_time_cd),
+    modifier = modifier,
+)
 
 /**
  * The gentle online-only create feedback (ADR-0016): the centred "reconnect to save" on

@@ -20,10 +20,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.atStartOfDayIn
-import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.atTime
+import kotlinx.datetime.toInstant
 import kotlin.time.Instant
 
 /**
@@ -48,27 +49,38 @@ interface NewComponent {
     fun setNotes(notes: String)
 
     /**
-     * Set the Event's **fixed start** (`complete_by`) — the one field an Event create genuinely
-     * requires (AC #2, FIX 1). `null` clears it. Ignored by the non-Event kinds.
-     */
-    fun setStart(start: Instant?)
-
-    /** Set the Event's optional **end** (`end_time`); `null` clears it (omitted from the POST). */
-    fun setEnd(end: Instant?)
-
-    /**
-     * Set the item's **date** (#74) — the day a Task/Habit/Chore anchors to, mapped to `complete_by`.
-     * It is also the Event's fallback start when no explicit [setStart] is given. `null` clears it. This
-     * is the field the Calendar FAB pre-dates to the selected day.
+     * Set the item's **date** (#74) — the day the item anchors to, mapped to `complete_by` on every
+     * kind: the Task/Habit/Chore deadline day, and the **Event's start day**. `null` clears it, **and
+     * with it whatever clock hung off that day** ([setDeadlineTime]/[setStartTime]) — [toPayload] drops
+     * a clock whose day is gone, so keeping one would leave the form showing a time that never ships.
+     * This is the field the Calendar FAB pre-dates to the selected day.
      */
     fun setDate(date: LocalDate?)
 
     /**
      * Set the Task/Habit/Chore **deadline time-of-day** (#348) — the clock within the [setDate] day,
-     * sent as `deadline_time_of_day` ("HH:MM"); `null` clears it (all-day deadline). Ignored for an
-     * Event, whose clock lives in its [setStart]/[setEnd] instants instead.
+     * sent as `deadline_time_of_day` ("HH:MM"); `null` clears it (an all-day deadline). Ignored for an
+     * Event, whose start clock is [setStartTime].
      */
     fun setDeadlineTime(time: LocalTime?)
+
+    /**
+     * Set the Event's **start time-of-day** — the clock within the [setDate] day, sent as
+     * `start_time_of_day`; `null` clears it. Clearing **is** how an Event becomes all-day on its start
+     * axis: `all_day` is derived read-only server-side (true iff neither time-of-day is set) and rejected
+     * as input, so there is no flag to keep in sync — see [NewState.eventIsAllDay]. Ignored by the
+     * non-Event kinds.
+     */
+    fun setStartTime(time: LocalTime?)
+
+    /**
+     * Set the Event's optional **end day** (`end_time`); `null` clears it — back to an open-ended Event,
+     * which the wire accepts — **and clears [setEndTime]** with it, for [setDate]'s reason.
+     */
+    fun setEndDate(date: LocalDate?)
+
+    /** Set the Event's **end time-of-day** (`end_time_of_day`) within [setEndDate]; `null` = all-day. */
+    fun setEndTime(time: LocalTime?)
 
     /** Submit the per-kind form via the online-only create path. */
     fun submit()
@@ -134,19 +146,25 @@ data class NewState(
     val selectedKind: ItemKind = ItemKind.Task,
     val title: String = "",
     val notes: String = "",
-    // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2). The start is required for an
-    // Event create — the v0.1 `POST /events` wire requires a non-empty `complete_by` (ADR-0011); the
-    // end is optional. The other kinds ignore these. (No `location` field: it is absent from the v0.1
-    // contract — contracts/openapi-0.1.json carries no location anywhere — so the client cannot send
-    // one; a location is a documented backend follow-up, not invented on the wire.)
-    val start: Instant? = null,
-    val end: Instant? = null,
-    // The item's date (#74): the Task/Habit/Chore `complete_by` anchor, and the Event's fallback start.
-    // The Calendar FAB pre-dates this to the selected day; the New form surfaces it for the non-Event kinds.
+    // The WHEN axes, decomposed the way the server models them (ADR-0051, mirroring Deferno's ADR
+    // 2026-06-10): every kind carries a **calendar day** plus an **optional clock**, never a fused
+    // zone-bearing instant. `complete_by` is shared by all four kinds; only the clock's *name* differs,
+    // because the names carry kind semantics — a Task's "when it must be done" and an Event's "when it
+    // starts" are different facts that happen to share a shape.
+    //
+    // [date] is the `complete_by` day (#74): the Task/Habit/Chore deadline day AND the Event's start
+    // day. The Calendar FAB pre-dates it to the selected day.
     val date: LocalDate? = null,
-    // The Task/Habit/Chore deadline clock (#348) within [date], sent as `deadline_time_of_day`. Null =
-    // all-day. Ignored for an Event (its clock is in [start]/[end]).
+    // The Task/Habit/Chore clock within [date] → `deadline_time_of_day`. Null = all-day deadline.
     val deadlineTime: LocalTime? = null,
+    // The Event's start clock within [date] → `start_time_of_day`. Null = an all-day start axis.
+    val startTime: LocalTime? = null,
+    // The Event's optional second axis: the end day → `end_time`, and its clock → `end_time_of_day`.
+    // A null [endDate] is a valid open-ended Event. The other kinds ignore both. (No `location` field:
+    // it is absent from the v0.1 contract — contracts/openapi-0.1.json carries no location anywhere —
+    // so the client cannot send one; a location is a documented backend follow-up.)
+    val endDate: LocalDate? = null,
+    val endTime: LocalTime? = null,
     val status: NewStatus = NewStatus.Editing,
     // Dictation (#92, ADR-0018), orthogonal to the create [status]. [dictationAvailable] gates whether the
     // mic affordance is offered at all (the engine is available: model present + supported locale);
@@ -157,16 +175,66 @@ data class NewState(
     val dictationField: DictationField? = null,
 ) {
     /**
+     * Whether the Event this form would create is **all-day** — the server's own derived rule, verbatim
+     * (`derive_all_day`, backend `models/event.rs:262`): all-day iff **neither axis carries a clock**.
+     * There is no flag to read: `all_day` is derived read-only server-side and rejected as input, so the
+     * only representation of all-dayness is the absence of [startTime] and [endTime], and a reading that
+     * could disagree with what [toPayload] sends is unrepresentable. Always `false` off the Event kind,
+     * whose all-day is the absence of a [deadlineTime].
+     */
+    val eventIsAllDay: Boolean
+        get() = selectedKind == ItemKind.Event && startTime == null && endTime == null
+
+    /**
+     * Whether the Event's window closes before it opens — the one range the server rejects outright
+     * (`end_time` must be `>= complete_by`, backend `models/event.rs:300`). A `null` [endDate] is a
+     * *valid* open-ended Event, so this is `false` unless both edges are present and inverted.
+     *
+     * Each edge is compared **as the server will store it** ([atWhen] — the local day at its explicit
+     * clock, or the inclusive end-of-day sentinel). That mirror is what makes the guard correct in both
+     * directions, and it is load-bearing because create is offline-first (#185): there is no 400 to catch
+     * the mistake, so an Event this misses is optimistically inserted, enqueued, and fails silently at
+     * sync. A day-only comparison would accept an all-day start against a 09:00 end on the same day
+     * (23:59:59 vs 09:00 — rejected server-side), and reject a 09:00 start against an all-day end
+     * (09:00 vs 23:59:59 — accepted server-side).
+     *
+     * Compared as local date-times rather than instants: both edges resolve in the *same* account zone,
+     * and that mapping is monotonic, so this can never accept a window the server rejects. (In a DST gap
+     * two distinct local times can collapse onto one instant, where this is fractionally stricter than
+     * the server — it blocks a zero-length window the server would take.)
+     */
+    val eventEndBeforeStart: Boolean
+        get() = selectedKind == ItemKind.Event && date != null && endDate != null &&
+            endDate.atWhen(endTime) < date.atWhen(startTime)
+
+    /**
      * Create is enabled only with a non-blank title (the one universally-required field) — and, for an
-     * **Event**, a fixed start: either an explicit [start] or a pre-dated [date] fallback (a bare Event
-     * create with no start POSTs `complete_by:""`, which the server rejects — FIX 1, AC #2). The
-     * recurring kinds default their cadence (recurrence picker is a documented v1 follow-up).
+     * **Event**, a start [date]: the v0.1 `POST /events` wire requires a non-empty `complete_by`
+     * (ADR-0011), and a clock with no day to live on is not a start (AC #2). Its window must also not
+     * close before it opens ([eventEndBeforeStart] — blocked here rather than enqueued for a create that
+     * would fail at sync with nothing on screen to explain it). The recurring kinds default their cadence
+     * (recurrence picker is a documented v1 follow-up).
      */
     val canSubmit: Boolean
         get() = title.isNotBlank() &&
             status != NewStatus.Submitting &&
-            (selectedKind != ItemKind.Event || start != null || date != null)
+            (selectedKind != ItemKind.Event || date != null) &&
+            !eventEndBeforeStart
 }
+
+/**
+ * The server's inclusive end-of-day sentinel for a clockless WHEN axis (Deferno ADR 2026-05-25;
+ * `no_time_sentinel`, backend `time.rs`). 23:59:59 is never inside a DST spring-forward gap.
+ */
+private val NO_CLOCK_SENTINEL = LocalTime(23, 59, 59)
+
+/**
+ * A WHEN axis as the server will store it — a literal mirror of `compute_occurrence_complete_by`
+ * (backend `time.rs:81`): the local day at its explicit clock, or at the inclusive end-of-day sentinel
+ * when that axis carries none. THE single client-side reading of "what this day-and-clock actually
+ * means", shared by the [NewState.eventEndBeforeStart] guard and by [toPayload]'s wire instants.
+ */
+private fun LocalDate.atWhen(clock: LocalTime?): LocalDateTime = atTime(clock ?: NO_CLOCK_SENTINEL)
 
 /** Where the New surface is in its create lifecycle. */
 sealed interface NewStatus {
@@ -235,10 +303,28 @@ class DefaultNewComponent(
     override fun selectKind(kind: ItemKind) = _state.update { it.copy(selectedKind = kind, status = NewStatus.Editing) }
     override fun setTitle(title: String) = _state.update { it.copy(title = title, status = NewStatus.Editing) }
     override fun setNotes(notes: String) = _state.update { it.copy(notes = notes, status = NewStatus.Editing) }
-    override fun setStart(start: Instant?) = _state.update { it.copy(start = start, status = NewStatus.Editing) }
-    override fun setEnd(end: Instant?) = _state.update { it.copy(end = end, status = NewStatus.Editing) }
-    override fun setDate(date: LocalDate?) = _state.update { it.copy(date = date, status = NewStatus.Editing) }
+    // Clearing a day clears the clock that hung off it — the invariant lives here, in the one place every
+    // platform goes through, rather than in each View's bridge (which is how Android and desktop ended up
+    // without it while the two Apple bridges each enforced their own copy).
+    override fun setDate(date: LocalDate?) = _state.update {
+        if (date == null) {
+            it.copy(date = null, deadlineTime = null, startTime = null, status = NewStatus.Editing)
+        } else {
+            it.copy(date = date, status = NewStatus.Editing)
+        }
+    }
+
+    override fun setEndDate(date: LocalDate?) = _state.update {
+        if (date == null) {
+            it.copy(endDate = null, endTime = null, status = NewStatus.Editing)
+        } else {
+            it.copy(endDate = date, status = NewStatus.Editing)
+        }
+    }
+
     override fun setDeadlineTime(time: LocalTime?) = _state.update { it.copy(deadlineTime = time, status = NewStatus.Editing) }
+    override fun setStartTime(time: LocalTime?) = _state.update { it.copy(startTime = time, status = NewStatus.Editing) }
+    override fun setEndTime(time: LocalTime?) = _state.update { it.copy(endTime = time, status = NewStatus.Editing) }
 
     override fun submit() {
         val snapshot = _state.value
@@ -336,32 +422,40 @@ class DefaultNewComponent(
 }
 
 /**
- * Build the online-only create payload for the selected kind (ADR-0016). Notes map to `description`,
- * **omitted when blank** (`null`, not `""`) so the tolerant serializer drops the field rather than
- * POSTing an empty string the server rejects (FIX 1 — `explicitNulls=false` omits nulls, *not* empty
- * strings; ADR-0011/0005). The recurring kinds default to a daily recurrence in v1 (the recurrence
- * picker is a documented follow-up). An **Event** carries its chosen fixed [start] as the required
- * `complete_by` and its optional [end] as `end_time` — never an empty string (`canSubmit` gates the
- * start, so `start` is non-null here; the `?:` end-of-epoch ([Instant.DISTANT_FUTURE]) fallback is a
- * defensive last resort that a non-submittable Event never reaches). The Chore group/rotation is
- * deferred (ADR-0015).
+ * Build the offline-first create payload for the selected kind (ADR-0016, #185). Notes map to
+ * `description`, **omitted when blank** (`null`, not `""`) so the tolerant serializer drops the field
+ * rather than POSTing an empty string the server rejects (FIX 1 — `explicitNulls=false` omits nulls,
+ * *not* empty strings; ADR-0011/0005). The recurring kinds default to a daily recurrence in v1 (the
+ * recurrence picker is a documented follow-up). The Chore group/rotation is deferred (ADR-0015).
+ *
+ * **The instants here are already normalized** (ADR-0051). `normalize_when_instant` (backend
+ * `time.rs:137`) keeps only a submitted instant's *local date* and re-attaches the explicit
+ * `*_time_of_day` — or the inclusive end-of-day sentinel when that is null — so the server would rewrite
+ * a start-of-day instant to something else. That matters because create is offline-first: `OfflineCreateWriter`
+ * stores the payload's instant **verbatim** in the local row, so sending an un-normalized one would leave
+ * the row the person is looking at up to a day away from what lands server-side, silently correcting itself
+ * whenever the outbox happens to drain. Pre-normalizing makes the optimistic row byte-identical to the
+ * eventual truth, and is safe: the server's normalization is documented idempotent.
  */
 internal fun NewState.toPayload(tz: String = "UTC"): CreateItem.Payload {
     val notesOrNull = notes.ifBlank { null }
     val zone = runCatching { TimeZone.of(tz) }.getOrDefault(TimeZone.UTC)
-    // The pre-dated day becomes a start-of-day instant in the Active Account's zone (#74). Null stays
-    // null (omitted by the tolerant serializer), so an undated create is byte-identical to before.
-    val dateInstant = date?.atStartOfDayIn(zone)
-    // The deadline clock (#348) rides as `deadline_time_of_day`; the server combines it with the date
-    // of `complete_by` (in the account zone) and recomputes the instant. Gated on a date — a time with
-    // no day is meaningless. "HH:MM" via LocalTime.toString().
-    val deadlineWire = if (dateInstant != null) deadlineTime?.toString() else null
+    /** This axis as the wire instant the server will store: the day at its clock, in the account zone. */
+    fun LocalDate.wireInstant(clock: LocalTime?): Instant = atWhen(clock).toInstant(zone)
+    // The deadline/start clocks ride as their own `*_time_of_day` field ("HH:MM" via LocalTime.toString()).
+    // Gated on a day — a clock with no day is meaningless, and `setDate(null)` already clears them.
+    val startClock = startTime
+    val endClock = endTime
+    val deadlineInstant = date?.wireInstant(deadlineTime)
+    val deadlineWire = if (date != null) deadlineTime?.toString() else null
+    val startInstant = date?.wireInstant(startClock)
+    val endInstant = endDate?.wireInstant(endClock)
     return when (selectedKind) {
         ItemKind.Task -> CreateItem.Payload.Task(
             CreateTaskPayload(
                 title = title.trim(),
                 description = notesOrNull,
-                completeBy = dateInstant?.toString(),
+                completeBy = deadlineInstant?.toString(),
                 deadlineTimeOfDay = deadlineWire,
             ),
         )
@@ -370,7 +464,7 @@ internal fun NewState.toPayload(tz: String = "UTC"): CreateItem.Payload {
                 title = title.trim(),
                 recurrence = RecurrenceDto(type = "daily"),
                 description = notesOrNull,
-                completeBy = dateInstant?.toString(),
+                completeBy = deadlineInstant?.toString(),
                 deadlineTimeOfDay = deadlineWire,
             ),
         )
@@ -379,22 +473,22 @@ internal fun NewState.toPayload(tz: String = "UTC"): CreateItem.Payload {
                 title = title.trim(),
                 recurrence = RecurrenceDto(type = "daily"),
                 description = notesOrNull,
-                completeBy = dateInstant?.toString(),
+                completeBy = deadlineInstant?.toString(),
                 deadlineTimeOfDay = deadlineWire,
             ),
         )
         ItemKind.Event -> CreateItem.Payload.Event(
             CreateEventPayload(
                 title = title.trim(),
-                // The required, non-empty start: an explicit start, else the pre-dated day, else a
-                // defensive far-future fallback a non-submittable Event never reaches (`canSubmit`).
-                completeBy = (start ?: dateInstant ?: Instant.DISTANT_FUTURE).toString(),
-                endTime = end?.toString(),
-                // The clock the server needs to keep the event timed, not all-day (#348): the local
-                // time of the chosen start/end in the account zone. Absent (a date-only/fallback start)
-                // ⇒ no time-of-day ⇒ the server derives an all-day event.
-                startTimeOfDay = start?.toLocalDateTime(zone)?.time?.toString(),
-                endTimeOfDay = end?.toLocalDateTime(zone)?.time?.toString(),
+                // The required, non-empty start day. `canSubmit` gates on a non-null [date], so the
+                // far-future fallback is a defensive last resort a submittable Event never reaches.
+                completeBy = (startInstant ?: Instant.DISTANT_FUTURE).toString(),
+                endTime = endInstant?.toString(),
+                // The two clocks, each independently optional. Absent ⇒ that axis is all-day, and absent
+                // on BOTH is what makes the server derive `all_day` (never sent — it is derived read-only
+                // server-side and rejected as input; pinned by CreatePayloadSerializationTest).
+                startTimeOfDay = startClock?.toString(),
+                endTimeOfDay = endClock?.toString(),
                 description = notesOrNull,
             ),
         )

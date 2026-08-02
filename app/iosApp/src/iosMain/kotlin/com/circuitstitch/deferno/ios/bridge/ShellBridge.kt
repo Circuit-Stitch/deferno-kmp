@@ -58,10 +58,16 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.atTime
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.todayIn
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Clock
 import kotlin.time.Instant
 import com.circuitstitch.deferno.shell.ActivityAttribution
 import com.circuitstitch.deferno.shell.ActivityFeedRow
@@ -447,16 +453,133 @@ fun calendarItemIsHabit(item: CalendarItem): Boolean = item.kind == ItemKind.Hab
 fun calendarItemIsEvent(item: CalendarItem): Boolean = item.kind == ItemKind.Event
 
 // ---------------------------------------------------------------------------------------------------
-// LocalDate / Instant parse + format — the New + Search forms type ISO text; Kotlin owns the codecs
+// Date/time picker seams — the New form's date + deadline clock + Event window, and the Search range.
+// These replaced the ISO text codecs (`parseLocalDate`/`parseInstant`) the forms used to type against;
+// nothing in the app asks a person to hand-type an RFC-3339 instant any more.
+//
+// SwiftUI's `DatePicker` speaks `Date`, and a bridged `LocalDate`/`Instant` is opaque in Swift (it can
+// neither construct one nor read its parts), so every picker crosses as **epoch seconds** with [UNSET]
+// for "no value" — the idiom `taskDeadlinePickerEpochSeconds`/`newDeadlineTimeHour` already use, and
+// cheaper at the call site than a boxed `KotlinDouble?`.
+//
+// Kotlin owns the calendar arithmetic so the `Date` ⇄ `LocalDate` round-trip happens in ONE place, in
+// the device zone: doing it Swift-side is how a picked day silently lands on its neighbour. The setters
+// read the surviving state live off the component (not a Swift snapshot), the same rule
+// `applyDeadlinePicker` follows, so a fast sequence of edits within one open picker stays correct.
+//
+// Zone caveat: these resolve in the **device** zone, like every other date seam in the client, while
+// CONTRACT-NOTES asks for the *account* zone on the wire. That divergence is repo-wide and tracked
+// separately — a picker is the wrong place to fix it unilaterally.
 // ---------------------------------------------------------------------------------------------------
 
-/** Parse an ISO `yyyy-MM-dd` string, or `null` if blank/unparseable (the form clears the field then). */
-fun parseLocalDate(text: String): LocalDate? = runCatching { LocalDate.parse(text.trim()) }.getOrNull()
-fun formatLocalDate(date: LocalDate?): String = date?.toString() ?: ""
+/** The "no value" sentinel every epoch-seconds seam below reads and writes. */
+private const val UNSET = -1.0
 
-/** Parse an ISO-8601 / RFC-3339 instant string, or `null` if blank/unparseable. */
-fun parseInstant(text: String): Instant? = runCatching { Instant.parse(text.trim()) }.getOrNull()
-fun formatInstant(instant: Instant?): String = instant?.toString() ?: ""
+private val pickerZone: TimeZone get() = TimeZone.currentSystemDefault()
+
+private fun Instant.toEpochSeconds(): Double = toEpochMilliseconds() / 1000.0
+private fun Double.toPickedInstant(): Instant = Instant.fromEpochMilliseconds((this * 1000).toLong())
+private fun Double.toPickedDate(): LocalDate = toPickedInstant().toLocalDateTime(pickerZone).date
+private fun LocalDate.toEpochSeconds(): Double = atStartOfDayIn(pickerZone).toEpochSeconds()
+
+// --- New form: the item date (#74) — the Task/Habit/Chore `complete_by` anchor ----------------------
+
+/** The New form's date as epoch seconds (start of day, device zone), or [UNSET] when undated. */
+fun newDateEpochSeconds(state: NewState): Double = state.date?.toEpochSeconds() ?: UNSET
+
+/** Set the New form's date from a `DatePicker`; only the calendar day survives (the model is a date). */
+fun setNewDate(component: NewComponent, epochSeconds: Double) = component.setDate(epochSeconds.toPickedDate())
+
+// --- New form: the Event's two WHEN axes (#348, ADR-0051) -------------------------------------------
+//
+// An Event's WHEN is (start day, start clock?) + (end day, end clock?) — the same shape as the Task
+// deadline axis above, and the same shape the server stores. All-day is the ABSENCE of both clocks, so
+// there is no flag to keep in sync and no reading that can disagree with what gets sent.
+//
+// Each row is a combined SwiftUI `DatePicker` ([.date] when all-day, [.date, .hourAndMinute] when timed),
+// so a pick carries BOTH axes and only the one that actually moved is written back — [applyWhenPicker],
+// the twin of `applyDeadlinePicker` (Bridge.kt:119). That is what makes moving an all-day Event's day
+// leave it all-day: the clock axis is simply never touched.
+
+/**
+ * Seed a (day, clock?) axis for a combined picker: the day at its real clock, or at [PICKER_DEFAULT_TIME]
+ * when that axis is all-day. A combined picker has to open on *some* clock; opening on the default rather
+ * than midnight is why an untouched hour hand never silently ships 00:00. [UNSET] when there is no day.
+ */
+private fun whenPickerSeed(day: LocalDate?, clock: LocalTime?): Double =
+    day?.atTime(clock ?: PICKER_DEFAULT_TIME)?.toInstant(pickerZone)?.toEpochSeconds() ?: UNSET
+
+/**
+ * Apply a combined date+time picker to one axis, writing back **only the axis that moved** — comparing
+ * the picked clock against the seed ([PICKER_DEFAULT_TIME] when all-day) rather than against midnight.
+ * Reads the surviving state live off the component, so a fast sequence of edits in one open picker stays
+ * correct.
+ */
+private inline fun applyWhenPicker(
+    epochSeconds: Double,
+    day: LocalDate?,
+    clock: LocalTime?,
+    onDay: (LocalDate) -> Unit,
+    onClock: (LocalTime) -> Unit,
+) {
+    val picked = epochSeconds.toPickedInstant().toLocalDateTime(pickerZone)
+    if (picked.date != day) onDay(picked.date)
+    if (picked.time != (clock ?: PICKER_DEFAULT_TIME)) onClock(picked.time)
+}
+
+/** The Event start row's seed — the start day (`complete_by`) at its clock, or [UNSET] when undated. */
+fun newEventStartEpochSeconds(state: NewState): Double = whenPickerSeed(state.date, state.startTime)
+
+/** The Event end row's seed, or [UNSET]: an end is genuinely optional (an open-ended Event is valid). */
+fun newEventEndEpochSeconds(state: NewState): Double = whenPickerSeed(state.endDate, state.endTime)
+
+/** Apply the Starts picker to the (date, startTime) axis. */
+fun setNewEventStart(component: NewComponent, epochSeconds: Double) {
+    val state = component.state.value
+    applyWhenPicker(epochSeconds, state.date, state.startTime, component::setDate, component::setStartTime)
+}
+
+/** Apply the Ends picker to the (endDate, endTime) axis — [setNewEventStart]'s contract for the close. */
+fun setNewEventEnd(component: NewComponent, epochSeconds: Double) {
+    val state = component.state.value
+    applyWhenPicker(epochSeconds, state.endDate, state.endTime, component::setEndDate, component::setEndTime)
+}
+
+/**
+ * The Starts row's Add affordance: **today, all-day**. A day needs no clock — turning All-day off is how
+ * you get one ([setNewAllDay] seeds [PICKER_DEFAULT_TIME]) — which matches the webui's WHEN editor, the
+ * server's derived `all_day`, and the Task-detail "add a time" affordance. Kotlin reads today rather than
+ * taking it from Swift: the calendar arithmetic is already here, and `RelativeDay`/`LocalToday` set the
+ * precedent for a UI-seed clock read.
+ */
+fun addNewEventStart(component: NewComponent) = component.setDate(Clock.System.todayIn(pickerZone))
+
+/**
+ * Seed the optional Event end: the start day, so the default close is same-day, with a clock only when
+ * the Event is timed. Gated on a start day — which is exactly when the View offers the affordance.
+ */
+fun addNewEventEnd(component: NewComponent) {
+    val state = component.state.value
+    val day = state.date ?: return
+    component.setEndDate(day)
+    if (!state.eventIsAllDay) component.setEndTime(state.startTime ?: PICKER_DEFAULT_TIME)
+}
+
+/**
+ * Flip the all-day axis — which is only ever *adding or removing clocks*, because that is all all-day is.
+ * On: drop both. Off: restore the clock the person had, else [PICKER_DEFAULT_TIME], and only give the end
+ * a clock when there is an end day to hang it on.
+ */
+fun setNewAllDay(component: NewComponent, allDay: Boolean) {
+    val state = component.state.value
+    if (allDay) {
+        component.setStartTime(null)
+        component.setEndTime(null)
+    } else {
+        component.setStartTime(state.startTime ?: PICKER_DEFAULT_TIME)
+        if (state.endDate != null) component.setEndTime(state.endTime ?: PICKER_DEFAULT_TIME)
+    }
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Search — Set<WorkingState>/Set<String> are awkward in Swift; expose membership + a list
@@ -466,6 +589,25 @@ fun searchHasStatus(state: SearchState, status: com.circuitstitch.deferno.core.m
     status in state.statuses
 
 fun searchLabels(state: SearchState): List<String> = state.labels.toList()
+
+/** The date-range edges as epoch seconds (start of day, device zone), or [UNSET] when that edge is open. */
+fun searchFromEpochSeconds(state: SearchState): Double = state.fromDate?.toEpochSeconds() ?: UNSET
+fun searchToEpochSeconds(state: SearchState): Double = state.toDate?.toEpochSeconds() ?: UNSET
+
+/**
+ * Move **one** edge of the Search date range, keeping the other exactly as the component has it; pass
+ * [UNSET] to open that edge. `SearchComponent.onDateRangeChanged(from:to:)` replaces both at once, so
+ * the ISO text fields these replaced had to re-parse and re-send *both* on every keystroke — which
+ * meant a half-typed "to" silently wiped an applied "from". Reading the surviving edge live off the
+ * component is what makes the two pickers independent.
+ */
+fun setSearchFromDate(component: SearchComponent, epochSeconds: Double) =
+    component.onDateRangeChanged(epochSeconds.toPickedDateOrNull(), component.state.value.toDate)
+
+fun setSearchToDate(component: SearchComponent, epochSeconds: Double) =
+    component.onDateRangeChanged(component.state.value.fromDate, epochSeconds.toPickedDateOrNull())
+
+private fun Double.toPickedDateOrNull(): LocalDate? = if (this < 0) null else toPickedDate()
 
 // SearchSort lives in (non-exported) core:data, so Swift can't name its entries; these framework-module
 // helpers pull it into the header and let Swift pass the opaque sort tokens back without naming them.
@@ -620,6 +762,13 @@ fun newDeadlineTimeMinute(state: NewState): Int = state.deadlineTime?.minute ?: 
 fun setNewDeadlineTime(component: NewComponent, hour: Int, minute: Int) =
     component.setDeadlineTime(LocalTime(hour, minute))
 fun clearNewDeadlineTime(component: NewComponent) = component.setDeadlineTime(null)
+
+/**
+ * The "Add time" affordance's seed — [PICKER_DEFAULT_TIME], the same 9:00 the Task-detail picker uses
+ * when an all-day deadline first gains a clock, so the default lives in one place per app instead of
+ * being retyped in each SwiftUI View.
+ */
+fun addNewDeadlineTime(component: NewComponent) = component.setDeadlineTime(PICKER_DEFAULT_TIME)
 
 fun newDictationIsListening(state: NewState): Boolean = state.dictation is DictationStatus.Listening
 fun newDictationIsPermissionDenied(state: NewState): Boolean = state.dictation is DictationStatus.PermissionDenied

@@ -196,6 +196,8 @@
     <!-- ── common ─────────────────────────────────────────────── -->
     <string name="common_account">Cuenta</string>
     <string name="common_add">Agregar</string>
+    <string name="common_add_named_cd">Agregar %1$s</string>
+    <string name="common_all_day">Todo el día</string>
     <!-- Marca — no se traduce -->
     <string name="common_app_name">Deferno</string>
     <string name="common_attach_files">Adjuntar archivos</string>
@@ -204,16 +206,20 @@
     <string name="common_cancel">Cancelar</string>
     <string name="common_cannot_be_undone">Esto no se puede deshacer.</string>
     <string name="common_clear">Quitar</string>
+    <string name="common_clear_named_cd">Quitar %1$s</string>
     <string name="common_close">Cerrar</string>
     <string name="common_collapse_named_cd">Contraer %1$s</string>
+    <string name="common_date">Fecha</string>
     <string name="common_delete">Eliminar</string>
     <string name="common_dismiss">Descartar</string>
     <!-- Botón que cierra un flujo — distinto del estado Hecha -->
     <string name="common_done">Listo</string>
     <string name="common_due">Vence %1$s</string>
     <string name="common_edit">Editar</string>
+    <string name="common_ends">Termina</string>
     <string name="common_error_app_out_of_date">Esta app está desactualizada — actualízala, por favor.</string>
     <string name="common_expand_named_cd">Expandir %1$s</string>
+    <string name="common_from">Desde</string>
     <string name="common_kind_chore">Quehacer</string>
     <string name="common_kind_event">Evento</string>
     <string name="common_kind_habit">Hábito</string>
@@ -247,6 +253,7 @@
     <!-- Marca — no se traduce -->
     <string name="common_source_google_calendar">Google Calendar</string>
     <string name="common_start">Empezar</string>
+    <string name="common_starts">Empieza</string>
     <string name="common_state_collapsed">Contraído</string>
     <string name="common_state_done">Hecho</string>
     <string name="common_state_expanded">Expandido</string>
@@ -260,6 +267,7 @@
     <!-- Deliberadamente neutral — nunca «atrasada/vencida» -->
     <string name="common_status_scheduled">Programada</string>
     <string name="common_status_skipped">Omitida</string>
+    <string name="common_to">Hasta</string>
     <string name="common_undo">Deshacer</string>
     <string name="common_username_handle">@%1$s</string>
     <string name="common_when">Cuándo</string>
@@ -318,10 +326,15 @@
     <string name="new_dictation_status_cd">Estado del dictado</string>
     <string name="new_error_could_not_save">No se pudo guardar.</string>
     <string name="new_error_could_not_save_retry">No se pudo guardar. Inténtalo de nuevo.</string>
+    <string name="new_event_end_before_start">Termina antes de empezar</string>
     <string name="new_event_end_cd">Fin del evento</string>
-    <string name="new_event_end_label">Termina (opcional)</string>
+    <string name="new_event_end_label">Termina (opcional, p. ej. 2026-06-08)</string>
+    <string name="new_event_end_time_cd">Hora de fin del evento</string>
+    <string name="new_event_end_time_label">Hora de fin (opcional, p. ej. 10:00)</string>
     <string name="new_event_start_cd">Inicio del evento</string>
-    <string name="new_event_start_label">Empieza (p. ej. 2026-06-08T09:00:00Z)</string>
+    <string name="new_event_start_label">Empieza (p. ej. 2026-06-08)</string>
+    <string name="new_event_start_time_cd">Hora de inicio del evento</string>
+    <string name="new_event_start_time_label">Hora de inicio (opcional, p. ej. 09:00)</string>
     <!-- «Nuevo» es el nombre de esta pantalla -->
     <string name="new_kind_note">El tipo lo eliges tú aquí — Deferno nunca lo adivina en Nuevo.</string>
     <string name="new_kind_picker_cd">Selector de tipo</string>
@@ -335,6 +348,7 @@
     <string name="new_submit_create">Crear</string>
     <string name="new_submit_saving">Guardando…</string>
     <string name="new_time_label">Hora (opcional, p. ej. 14:30)</string>
+    <string name="new_time_needs_date">Elige primero una fecha</string>
     <string name="new_title_label">Título</string>
 
     <!-- ── plan ─────────────────────────────────────────────── -->

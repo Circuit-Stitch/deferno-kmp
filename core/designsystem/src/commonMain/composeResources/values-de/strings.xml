@@ -206,6 +206,8 @@
     <!-- ── common ─────────────────────────────────────────────── -->
     <string name="common_account">Konto</string>
     <string name="common_add">Hinzufügen</string>
+    <string name="common_add_named_cd">%1$s hinzufügen</string>
+    <string name="common_all_day">Ganztägig</string>
     <!-- Markenname — bleibt -->
     <string name="common_app_name">Deferno</string>
     <string name="common_attach_files">Dateien anhängen</string>
@@ -214,16 +216,20 @@
     <string name="common_cancel">Abbrechen</string>
     <string name="common_cannot_be_undone">Das lässt sich nicht rückgängig machen.</string>
     <string name="common_clear">Zurücksetzen</string>
+    <string name="common_clear_named_cd">%1$s zurücksetzen</string>
     <string name="common_close">Schließen</string>
     <string name="common_collapse_named_cd">%1$s einklappen</string>
+    <string name="common_date">Datum</string>
     <string name="common_delete">Löschen</string>
     <string name="common_dismiss">Verwerfen</string>
     <!-- Button, der einen Ablauf abschließt — anders als der Status „Erledigt“ -->
     <string name="common_done">Fertig</string>
     <string name="common_due">Fällig am %1$s</string>
     <string name="common_edit">Bearbeiten</string>
+    <string name="common_ends">Endet</string>
     <string name="common_error_app_out_of_date">Diese App ist veraltet — bitte aktualisiere sie.</string>
     <string name="common_expand_named_cd">%1$s ausklappen</string>
+    <string name="common_from">Von</string>
     <string name="common_kind_chore">Pflicht</string>
     <string name="common_kind_event">Ereignis</string>
     <string name="common_kind_habit">Gewohnheit</string>
@@ -258,6 +264,7 @@
     <!-- Marke — bleibt -->
     <string name="common_source_google_calendar">Google Calendar</string>
     <string name="common_start">Starten</string>
+    <string name="common_starts">Beginnt</string>
     <string name="common_state_collapsed">Eingeklappt</string>
     <string name="common_state_done">Erledigt</string>
     <string name="common_state_expanded">Ausgeklappt</string>
@@ -270,6 +277,7 @@
     <!-- Bewusst neutral (nie „überfällig/verpasst“) -->
     <string name="common_status_scheduled">Geplant</string>
     <string name="common_status_skipped">Übersprungen</string>
+    <string name="common_to">Bis</string>
     <string name="common_undo">Rückgängig</string>
     <string name="common_username_handle">@%1$s</string>
     <string name="common_when">Wann</string>
@@ -328,10 +336,15 @@
     <string name="new_dictation_status_cd">Diktierstatus</string>
     <string name="new_error_could_not_save">Konnte nicht gespeichert werden.</string>
     <string name="new_error_could_not_save_retry">Konnte nicht gespeichert werden. Versuch es noch einmal.</string>
+    <string name="new_event_end_before_start">Endet vor dem Beginn</string>
     <string name="new_event_end_cd">Ende des Ereignisses</string>
-    <string name="new_event_end_label">Endet (optional)</string>
+    <string name="new_event_end_label">Endet (optional, z. B. 2026-06-08)</string>
+    <string name="new_event_end_time_cd">Endzeit des Termins</string>
+    <string name="new_event_end_time_label">Endzeit (optional, z. B. 10:00)</string>
     <string name="new_event_start_cd">Beginn des Ereignisses</string>
-    <string name="new_event_start_label">Beginnt (z. B. 2026-06-08T09:00:00Z)</string>
+    <string name="new_event_start_label">Beginnt (z. B. 2026-06-08)</string>
+    <string name="new_event_start_time_cd">Startzeit des Termins</string>
+    <string name="new_event_start_time_label">Startzeit (optional, z. B. 09:00)</string>
     <!-- „Neu“ = Name dieses Screens (shell_new) -->
     <string name="new_kind_note">Die Art wählst du hier selbst — Deferno errät sie unter „Neu“ nie.</string>
     <string name="new_kind_picker_cd">Auswahl der Art</string>
@@ -345,6 +358,7 @@
     <string name="new_submit_create">Erstellen</string>
     <string name="new_submit_saving">Wird gespeichert…</string>
     <string name="new_time_label">Uhrzeit (optional, z. B. 14:30)</string>
+    <string name="new_time_needs_date">Wähle zuerst ein Datum</string>
     <string name="new_title_label">Titel</string>
 
     <!-- ── plan ─────────────────────────────────────────────── -->
