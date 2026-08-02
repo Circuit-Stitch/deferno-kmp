@@ -1,0 +1,35 @@
+-- Migration 17 -> 18: cache the soft target date + the urgency bucket on all four item kinds (#375).
+--
+-- The backend models TWO peer date concepts (Deferno ADR 2026-06-29 "priority-model"): the HARD
+-- `complete_by` ("when it must be done" — carry-forward, the calendar DUE line, the occurrence deadline)
+-- and the SOFT `target_date` ("when I want it done by"), which drives sorting/surfacing ONLY and never
+-- moves the calendar. Beside them sits `priority`, a deadline-independent Fire/Normal/Backlog bucket,
+-- peer to `pinned`. Both ride EVERY read — list rows included — so every cached row can apply the
+-- canonical ranked-view key (`prioritySortKey`) offline without re-fetching.
+--
+-- Both columns land on all four kinds, mirroring where `pinned`/`complete_by` already live; restricting
+-- them to taskEntity would be the special case (a Chore or Habit can be fire/backlog too).
+--
+-- `target_date` is an RFC-3339 instant TEXT, exactly like `complete_by`. `priority` is the DOMAIN enum
+-- NAME (`Fire`/`Normal`/`Backlog`), like `working_state`/`definition_state` — the wire tokens
+-- (`fire`/`normal`/`backlog`) stay in core:network (ADR-0011); the mapper decodes an unrecognised or
+-- NULL value to Priority.Normal, so this can never fail a read.
+--
+-- Plain ADD COLUMN appends nullable columns; existing rows get NULL and are repopulated on the next
+-- refresh. NULL is deliberately meaningful in both cases and needs no back-fill: for `target_date` it
+-- IS the domain value (no soft target), and for `priority` it decodes to the Priority.Normal default —
+-- which is exactly what a pre-migration row means. (Contrast 16->17's `occurred_at`, which had to be
+-- back-filled because NULL sorted it out of reach.)
+--
+-- Never edit a released migration or snapshot — ADR-0022 runbook.
+ALTER TABLE taskEntity ADD COLUMN target_date TEXT;
+ALTER TABLE taskEntity ADD COLUMN priority TEXT;
+
+ALTER TABLE habitEntity ADD COLUMN target_date TEXT;
+ALTER TABLE habitEntity ADD COLUMN priority TEXT;
+
+ALTER TABLE choreEntity ADD COLUMN target_date TEXT;
+ALTER TABLE choreEntity ADD COLUMN priority TEXT;
+
+ALTER TABLE eventEntity ADD COLUMN target_date TEXT;
+ALTER TABLE eventEntity ADD COLUMN priority TEXT;

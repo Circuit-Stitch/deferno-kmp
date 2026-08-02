@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -43,6 +44,9 @@ fun TaskEntity.toDomain(): Task = Task(
     children = child_ids.decodeNewlineList().map(::TaskId),
     completeBy = complete_by.toInstantOrNull(),
     deadlineTimeOfDay = deadline_time_of_day.toLocalTimeOrNull(),
+    // The soft target date + urgency bucket (#375): NULL (pre-migration) decodes to no-target / Normal.
+    targetDate = target_date.toInstantOrNull(),
+    priority = priority.toPriorityOrDefault(),
     productive = productive,
     desire = desire,
     pinned = pinned != 0L,
@@ -82,6 +86,8 @@ fun Task.toEntity(): TaskEntity = TaskEntity(
     child_ids = children.map { it.value }.encodeNewlineList(),
     complete_by = completeBy?.toString(),
     deadline_time_of_day = deadlineTimeOfDay?.toString(),
+    target_date = targetDate?.toString(),
+    priority = priority.name,
     productive = productive,
     desire = desire,
     pinned = if (pinned) 1L else 0L,
@@ -154,3 +160,12 @@ private fun String.toWorkingStateOrDefault(): WorkingState =
 /** Defensive decode: an unrecognised stored token degrades to [HydrationState.Summary]. */
 private fun String.toHydrationStateOrDefault(): HydrationState =
     HydrationState.entries.firstOrNull { it.name == this } ?: HydrationState.Summary
+
+/**
+ * Defensive decode of the stored [Priority] name (#375). A NULL column — what the 17->18 migration
+ * leaves on every existing row — degrades to [Priority.Default], which for this field is the *correct*
+ * reading rather than a mere fallback: a row written before the field existed genuinely is `Normal`
+ * (the server's own `#[serde(default)]`), so an un-refreshed cache needs no back-fill to read right.
+ */
+private fun String?.toPriorityOrDefault(): Priority =
+    Priority.entries.firstOrNull { it.name == this } ?: Priority.Default

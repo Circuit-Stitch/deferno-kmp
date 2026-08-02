@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.data.recurring
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OccurrenceState
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.RecurrenceFrequency
 import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
@@ -43,3 +44,13 @@ fun String.toRecurrenceFrequencyOrDefault(): RecurrenceFrequency =
 /** Defensive decode: an unrecognised stored token degrades to [HydrationState.Summary]. */
 fun String.toHydrationStateOrDefault(): HydrationState =
     HydrationState.entries.firstOrNull { it.name == this } ?: HydrationState.Summary
+
+/**
+ * Defensive decode of the stored [Priority] enum name (#375). Both an unrecognised token *and* a NULL
+ * column degrade to [Priority.Default] — and for this field NULL is not merely a safe fallback but the
+ * correct reading: the 17->18 migration adds the column without a back-fill, and a row the server sent
+ * before the field existed **is** `Normal` (the backend's own `#[serde(default)]`). So a pre-migration
+ * cache reads identically to an explicitly-normal one, and nothing needs repopulating first.
+ */
+fun String?.toPriorityOrDefault(): Priority =
+    Priority.entries.firstOrNull { it.name == this } ?: Priority.Default

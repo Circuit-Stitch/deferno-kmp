@@ -66,6 +66,51 @@ class RecurringItemTest {
         assertFalse(event.allDay)
     }
 
+    /**
+     * The soft target date + urgency bucket ride **all four kinds**, not just Task (#375) — the
+     * server carries them wherever `pinned`/`complete_by` already live, so restricting them to Task
+     * would be the special case. Series-level, like `complete_by`: there is no per-occurrence target.
+     */
+    @Test
+    fun everyRecurringDefinitionCarriesTargetDateAndPriority() {
+        val want = Instant.parse("2026-05-10T00:00:00Z")
+
+        val habit = Habit(
+            id = HabitId("h-1"),
+            orgSlug = "u-e4h2qk",
+            title = "stretch",
+            definitionState = DefinitionState.Active,
+            recurrence = Recurrence(RecurrenceFrequency.Daily),
+            dateCreated = created,
+        )
+        assertEquals(null, habit.targetDate)
+        assertEquals(Priority.Normal, habit.priority)
+        assertEquals(want, habit.copy(targetDate = want).targetDate)
+        assertEquals(Priority.Fire, habit.copy(priority = Priority.Fire).priority)
+
+        val chore = Chore(
+            id = ChoreId("c-1"),
+            orgSlug = "u-e4h2qk",
+            title = "trash",
+            definitionState = DefinitionState.Active,
+            dateCreated = created,
+        )
+        assertEquals(null, chore.targetDate)
+        assertEquals(Priority.Normal, chore.priority)
+        assertEquals(Priority.Backlog, chore.copy(priority = Priority.Backlog).priority)
+
+        val event = Event(
+            id = EventId("e-1"),
+            orgSlug = "u-e4h2qk",
+            title = "standup",
+            definitionState = DefinitionState.Active,
+            dateCreated = created,
+        )
+        assertEquals(null, event.targetDate)
+        assertEquals(Priority.Normal, event.priority)
+        assertEquals(want, event.copy(targetDate = want).targetDate)
+    }
+
     @Test
     fun occurrenceIsDistinctFromItsDefinitionAndUsesOccurrenceState() {
         val occurrence = Occurrence(

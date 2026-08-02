@@ -29,6 +29,11 @@ data class Habit(
     val completeBy: Instant? = null,
     // The deadline's clock time (#348); `null` = no time-of-day. Wire `deadline_time_of_day`.
     val deadlineTimeOfDay: LocalTime? = null,
+    // The soft target date + urgency bucket (#375), series-level like [completeBy] — see [Task.targetDate]
+    // for the full split. Sorting/surfacing only; independent of the hard deadline. Wire
+    // `target_date` / `priority`.
+    val targetDate: Instant? = null,
+    val priority: Priority = Priority.Default,
     val pinned: Boolean = false,
     val sequence: Long? = null,
     val ref: String? = null,

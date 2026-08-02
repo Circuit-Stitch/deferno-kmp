@@ -57,6 +57,8 @@ class SqlDelightChoreLocalStore(
             series_id = e.series_id,
             blocked = e.blocked,
             is_blocker = e.is_blocker,
+            target_date = e.target_date,
+            priority = e.priority,
         )
     }
 

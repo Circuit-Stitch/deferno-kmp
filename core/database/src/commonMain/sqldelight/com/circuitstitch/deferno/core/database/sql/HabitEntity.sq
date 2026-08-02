@@ -28,7 +28,13 @@ CREATE TABLE habitEntity (
     -- Appended for migration 9->10 (#290) — server-derived dependency flags (a recurring row inherits
     -- `blocked` from a blocked ancestor). Nullable so ADD COLUMN leaves pre-migration rows NULL.
     blocked    INTEGER,
-    is_blocker INTEGER
+    is_blocker INTEGER,
+    -- Appended for migration 17->18 (#375) — the soft target date + the urgency bucket, both riding
+    -- every read and carried on all four kinds (peers of complete_by/pinned). `priority` stores the
+    -- Priority enum NAME, like definition_state. Nullable so ADD COLUMN leaves pre-migration rows NULL
+    -- (decoded as "no target" / Priority.Normal until the next refresh repopulates).
+    target_date TEXT,
+    priority    TEXT
 );
 
 CREATE INDEX habitEntity_owner_org_id ON habitEntity(owner_org_id);
@@ -49,8 +55,8 @@ insertOrReplace:
 INSERT OR REPLACE INTO habitEntity(
     id, org_slug, owner_org_id, ref, sequence, title, definition_state, recurrence_type,
     recurrence_days, labels, parent_id, complete_by, deadline_time_of_day, pinned, date_created,
-    deleted_at, hydration_state, description, series_id, blocked, is_blocker
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    deleted_at, hydration_state, description, series_id, blocked, is_blocker, target_date, priority
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteById:
 DELETE FROM habitEntity WHERE id = ?;
