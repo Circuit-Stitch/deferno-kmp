@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.domain.command
 
 import com.circuitstitch.deferno.core.data.task.TaskWriter
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.datetime.LocalTime
@@ -25,6 +26,8 @@ class FakeTaskWriter : TaskWriter {
         data class ClearDescription(val id: TaskId) : Call
         data class SetLabels(val id: TaskId, val labels: List<String>) : Call
         data class SetPinned(val id: TaskId, val pinned: Boolean) : Call
+        data class SetTargetDate(val id: TaskId, val targetDate: Instant?) : Call
+        data class SetPriority(val id: TaskId, val priority: Priority) : Call
         data class Delete(val id: TaskId) : Call
     }
 
@@ -37,5 +40,9 @@ class FakeTaskWriter : TaskWriter {
     override suspend fun clearDescription(id: TaskId) { calls += Call.ClearDescription(id) }
     override suspend fun setLabels(id: TaskId, labels: List<String>) { calls += Call.SetLabels(id, labels) }
     override suspend fun setPinned(id: TaskId, pinned: Boolean) { calls += Call.SetPinned(id, pinned) }
+
+    override suspend fun setTargetDate(id: TaskId, targetDate: Instant?) { calls += Call.SetTargetDate(id, targetDate) }
+
+    override suspend fun setPriority(id: TaskId, priority: Priority) { calls += Call.SetPriority(id, priority) }
     override suspend fun delete(id: TaskId) { calls += Call.Delete(id) }
 }

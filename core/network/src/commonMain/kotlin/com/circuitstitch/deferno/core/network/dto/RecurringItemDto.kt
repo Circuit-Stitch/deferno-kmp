@@ -31,6 +31,11 @@ data class HabitDetailDto(
     @SerialName("parent_id") val parentId: String? = null,
     @SerialName("complete_by") val completeBy: String? = null,
     @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
+    // The soft target date + urgency bucket (#375) — both ride EVERY read, so a cached row can
+    // apply the canonical ranked-view key offline. `target_date` is a peer of `complete_by`,
+    // NOT a second deadline: it drives sorting/surfacing only and never moves the calendar.
+    @SerialName("target_date") val targetDate: String? = null,
+    val priority: PriorityWire = PriorityWire.Unknown,
     val pinned: Boolean = false,
     @SerialName("date_created") val dateCreated: String,
     @SerialName("deleted_at") val deletedAt: String? = null,
@@ -56,6 +61,11 @@ data class ChoreDetailDto(
     @SerialName("parent_id") val parentId: String? = null,
     @SerialName("complete_by") val completeBy: String? = null,
     @SerialName("deadline_time_of_day") val deadlineTimeOfDay: String? = null,
+    // The soft target date + urgency bucket (#375) — both ride EVERY read, so a cached row can
+    // apply the canonical ranked-view key offline. `target_date` is a peer of `complete_by`,
+    // NOT a second deadline: it drives sorting/surfacing only and never moves the calendar.
+    @SerialName("target_date") val targetDate: String? = null,
+    val priority: PriorityWire = PriorityWire.Unknown,
     val pinned: Boolean = false,
     @SerialName("date_created") val dateCreated: String,
     @SerialName("deleted_at") val deletedAt: String? = null,
@@ -81,6 +91,11 @@ data class EventDetailDto(
     val labels: List<String> = emptyList(),
     @SerialName("parent_id") val parentId: String? = null,
     @SerialName("complete_by") val completeBy: String? = null,
+    // The soft target date + urgency bucket (#375) — both ride EVERY read, so a cached row can
+    // apply the canonical ranked-view key offline. `target_date` is a peer of `complete_by`,
+    // NOT a second deadline: it drives sorting/surfacing only and never moves the calendar.
+    @SerialName("target_date") val targetDate: String? = null,
+    val priority: PriorityWire = PriorityWire.Unknown,
     val pinned: Boolean = false,
     @SerialName("date_created") val dateCreated: String,
     @SerialName("deleted_at") val deletedAt: String? = null,

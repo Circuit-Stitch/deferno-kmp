@@ -59,6 +59,30 @@ enum class DefStatusWire {
 }
 
 /**
+ * Wire `Priority` → domain `Priority` (#375): the non-dated urgency bucket carried on all four kinds,
+ * peer to `pinned`. Lowercase tokens, and — unlike the six status enums above — the wire enum is
+ * *ordered*: the server declares it `#[repr(u8)] Fire = 0 … Backlog = 2` and ranks by that ordinal.
+ *
+ * Note the field this decodes is `priority`, **not** the unrelated `priority_score` on the
+ * `/tasks/today` element ([TodayTaskDto]) — that is the legacy `score_task` output, which the server's
+ * priority ADR deliberately left unchanged. Two different concepts, similar names.
+ */
+@Serializable
+enum class PriorityWire {
+    @SerialName("fire")
+    Fire,
+
+    @SerialName("normal")
+    Normal,
+
+    @SerialName("backlog")
+    Backlog,
+
+    /** Fallback for an additive/unknown wire token (coerced here by [DefernoJson]). */
+    Unknown,
+}
+
+/**
  * Wire `OccurrenceStatus` → domain `OccurrenceState`. Underscored tokens; carries the server-derived
  * punctuality split (`done_on_time`/`done_late`). `dropped` (event terminal) maps to `Skipped`.
  */

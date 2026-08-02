@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.data.task.BlockedByResult
 import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -57,6 +58,9 @@ class CommandExecutorTest {
         ex.execute(ClearTaskDescription(id))
         ex.execute(SetTaskLabels(id, listOf("home")))
         ex.execute(SetTaskPinned(id, pinned = true))
+        ex.execute(SetTaskTargetDate(id, SAMPLE_TARGET_DATE))
+        ex.execute(SetTaskTargetDate(id, null))
+        ex.execute(SetTaskPriority(id, Priority.Backlog))
         ex.execute(DeleteTask(id))
 
         assertEquals(
@@ -76,6 +80,9 @@ class CommandExecutorTest {
                 FakeTaskWriter.Call.ClearDescription(id),
                 FakeTaskWriter.Call.SetLabels(id, listOf("home")),
                 FakeTaskWriter.Call.SetPinned(id, true),
+                FakeTaskWriter.Call.SetTargetDate(id, SAMPLE_TARGET_DATE),
+                FakeTaskWriter.Call.SetTargetDate(id, null),
+                FakeTaskWriter.Call.SetPriority(id, Priority.Backlog),
                 FakeTaskWriter.Call.Delete(id),
             ),
             tw.calls,

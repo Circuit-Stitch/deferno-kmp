@@ -8,6 +8,7 @@ import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
@@ -57,6 +58,8 @@ import kotlin.time.Instant
  * | [ClearDescription] | `PATCH tasks/{id}` | `{"description":null}` |
  * | [SetLabels] | `PATCH tasks/{id}` | `{"labels":[…]}` |
  * | [SetPinned] | `PATCH tasks/{id}` | `{"pinned":<bool>}` |
+ * | [SetTargetDate] | `PATCH tasks/{id}` | `{"target_date":"<rfc3339>"}` (a `null` clears the soft date) |
+ * | [SetPriority] | `PATCH tasks/{id}` | `{"priority":"<fire\|normal\|backlog>"}` (never `null`) |
  * | [DeleteTask] | `DELETE tasks/{id}` | *(no body; soft-delete)* |
  * | [PlanAdd] | `POST tasks/plan/add` | `{"task_id":"…","date":"…","tz":"…"}` |
  * | [PlanRemove] | `POST tasks/plan/remove` | `{"task_id":"…","date":"…","tz":"…"}` |
@@ -208,6 +211,37 @@ data class SetPinned(override val taskId: TaskId, val pinned: Boolean) : TaskMut
 }
 
 /**
+ * Set (or clear) a Task's **soft target date** (#375) — when the person *wants* it done by, a peer of
+ * the hard `complete_by` and deliberately independent of it. Emits `target_date` **alone**, so wanting
+ * something sooner can never move the real deadline.
+ *
+ * One intent with a nullable operand rather than a Set/Clear pair (the [SetDeadlineTime] shape, not the
+ * older [SetDeadline]/[ClearDeadline] split): it maps exactly onto the server's `Patch<DateTime<Utc>>`
+ * — a value sets, an explicit `null` clears, an omitted key leaves unchanged. Since an omitted key is a
+ * silent no-op server-side, the clear MUST emit an explicit `null` (ADR-0011).
+ */
+data class SetTargetDate(override val taskId: TaskId, val targetDate: Instant?) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(targetDate = targetDate)
+    override fun toRequest(): OutboxRequest = patchTask(taskId) {
+        if (targetDate == null) put("target_date", JsonNull) else put("target_date", targetDate.toString())
+    }
+}
+
+/**
+ * Set a Task's urgency bucket (#375) — `fire`/`normal`/`backlog` via [Priority.toWireToken].
+ *
+ * **Deliberately not nullable.** The server types this `Option<Priority>`, where omit means "leave
+ * unchanged" and there is *no* null form: `priority` is never absent on a row, it defaults to `Normal`.
+ * So "clearing" it is spelled `SetPriority(Normal)`, and an explicit `null` would be a 422 — Terminal —
+ * which the outbox would dead-letter rather than merely retry. This is the one nullable-looking field on
+ * the PATCH surface that must never emit [JsonNull].
+ */
+data class SetPriority(override val taskId: TaskId, val priority: Priority) : TaskMutation {
+    override fun applyTo(task: Task): Task = task.copy(priority = priority)
+    override fun toRequest(): OutboxRequest = patchTask(taskId) { put("priority", priority.toWireToken()) }
+}
+
+/**
  * Soft-delete a Task (`DELETE tasks/{id}`, no body — the server tombstones it). The optimistic effect
  * is a local tombstone at [deletedAt] (the writer passes its `now`), so the row drops out of the
  * active list immediately; the post-flush reconcile then converges on the server's tombstone (or its
@@ -253,6 +287,13 @@ internal fun TaskMutation.beforeValues(task: Task): JsonObject? = when (this) {
     }
     is SetLabels -> buildJsonObject { putJsonArray("labels") { task.labels.forEach { add(it) } } }
     is SetPinned -> buildJsonObject { put("pinned", task.pinned) }
+    is SetTargetDate -> buildJsonObject {
+        val want = task.targetDate
+        if (want == null) put("target_date", JsonNull) else put("target_date", want.toString())
+    }
+    // The old bucket is always a real value (never absent — it defaults to Normal), so unlike the
+    // nullable fields above this arm has no null branch to consider.
+    is SetPriority -> buildJsonObject { put("priority", task.priority.toWireToken()) }
     is DeleteTask -> null
 }
 
