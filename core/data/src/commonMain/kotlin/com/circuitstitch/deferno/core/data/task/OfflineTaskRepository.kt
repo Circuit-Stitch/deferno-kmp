@@ -9,6 +9,7 @@ import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -123,6 +124,9 @@ class OfflineTaskRepository(
         SearchSort.DeadlineAsc -> compareBy(nullsLast()) { it.completeBy }
         // Biggest attachments first; hits without attachments (size 0) sort last.
         SearchSort.AttachmentSizeDesc -> compareByDescending { it.attachmentTotalSize }
+        // The canonical ranked order (#375) — one shared key, never a bespoke comparator, so this
+        // surface can't drift from the server's `$orderby=priority_rank` or from any other ranked view.
+        SearchSort.PriorityRank -> compareBy { it.prioritySortKey() }
     }
 }
 
@@ -151,6 +155,9 @@ private fun Task.toSearchRow() = SearchRow(
         ref = ref,
         attachmentCount = attachmentCount,
         attachmentTotalSize = attachmentTotalSize,
+        priority = priority,
+        targetDate = targetDate,
+        dateCreated = dateCreated,
     ),
     description = description,
     labels = labels,
@@ -163,18 +170,21 @@ private fun Habit.toSearchRow() = recurringSearchRow(
     id = id.value, kind = ItemKind.Habit, title = title, description = description,
     labels = labels, state = definitionState, blocked = blocked,
     completeBy = completeBy, timeOfDay = deadlineTimeOfDay, ref = ref,
+    priority = priority, targetDate = targetDate, dateCreated = dateCreated,
 )
 
 private fun Chore.toSearchRow() = recurringSearchRow(
     id = id.value, kind = ItemKind.Chore, title = title, description = description,
     labels = labels, state = definitionState, blocked = blocked,
     completeBy = completeBy, timeOfDay = deadlineTimeOfDay, ref = ref,
+    priority = priority, targetDate = targetDate, dateCreated = dateCreated,
 )
 
 private fun Event.toSearchRow() = recurringSearchRow(
     id = id.value, kind = ItemKind.Event, title = title, description = description,
     labels = labels, state = definitionState, blocked = blocked,
     completeBy = completeBy, timeOfDay = startTimeOfDay, ref = ref,
+    priority = priority, targetDate = targetDate, dateCreated = dateCreated,
 )
 
 private fun recurringSearchRow(
@@ -188,6 +198,9 @@ private fun recurringSearchRow(
     completeBy: Instant?,
     timeOfDay: LocalTime?,
     ref: String?,
+    priority: Priority,
+    targetDate: Instant?,
+    dateCreated: Instant,
 ) = SearchRow(
     hit = SearchHit(
         id = id,
@@ -200,6 +213,9 @@ private fun recurringSearchRow(
         ref = ref,
         attachmentCount = 0,
         attachmentTotalSize = 0,
+        priority = priority,
+        targetDate = targetDate,
+        dateCreated = dateCreated,
     ),
     description = description,
     labels = labels,

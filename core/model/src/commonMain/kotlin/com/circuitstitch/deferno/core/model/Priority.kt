@@ -63,12 +63,15 @@ fun prioritySortKey(
     priority: Priority,
     targetDate: Instant?,
     completeBy: Instant?,
-    dateCreated: Instant,
+    // Nullable where the server's own signature is not: an item always has a creation time, but a
+    // *projection* of one (a search hit) may not carry it. An absent value sorts last like an absent
+    // date, and it only ever decides a tie in which everything else is already equal.
+    dateCreated: Instant?,
 ): PrioritySortKey = PrioritySortKey(
     bucketRank = priority.bucketRank,
     soonestRelevant = (targetDate ?: completeBy).toSortMillis(),
     deadline = completeBy.toSortMillis(),
-    created = dateCreated.toEpochMilliseconds(),
+    created = dateCreated.toSortMillis(),
 )
 
 /**
