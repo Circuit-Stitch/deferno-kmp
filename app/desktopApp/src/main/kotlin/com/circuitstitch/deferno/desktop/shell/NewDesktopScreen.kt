@@ -36,8 +36,10 @@ import com.circuitstitch.deferno.shell.NewComponent
 import com.circuitstitch.deferno.shell.ui.NewDateField
 import com.circuitstitch.deferno.shell.ui.NewDeadlineTimeField
 import com.circuitstitch.deferno.shell.ui.NewDictationMessage
-import com.circuitstitch.deferno.shell.ui.NewEventEndField
-import com.circuitstitch.deferno.shell.ui.NewEventStartField
+import com.circuitstitch.deferno.shell.ui.NewEventEndDateField
+import com.circuitstitch.deferno.shell.ui.NewEventEndTimeField
+import com.circuitstitch.deferno.shell.ui.NewEventStartDateField
+import com.circuitstitch.deferno.shell.ui.NewEventStartTimeField
 import com.circuitstitch.deferno.shell.ui.NewKindPicker
 import com.circuitstitch.deferno.shell.ui.NewNotesField
 import com.circuitstitch.deferno.shell.ui.NewStatusMessage
@@ -120,10 +122,13 @@ fun NewDesktopScreen(component: NewComponent, modifier: Modifier = Modifier) {
                 )
 
                 if (state.selectedKind == ItemKind.Event) {
-                    // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2): a required start +
-                    // optional end so a real Event create succeeds.
-                    NewEventStartField(value = state.start, onValueChange = component::setStart)
-                    NewEventEndField(value = state.end, onValueChange = component::setEnd)
+                    // An Event carries two axes (CONTEXT.md → Event; AC #2, ADR-0051): a required start
+                    // day + optional end day, each with an independently optional clock. Clearing both
+                    // clocks is what makes it all-day — the server derives `all_day`, there is no flag.
+                    NewEventStartDateField(value = state.date, onValueChange = component::setDate)
+                    NewEventStartTimeField(value = state.startTime, onValueChange = component::setStartTime)
+                    NewEventEndDateField(value = state.endDate, onValueChange = component::setEndDate)
+                    NewEventEndTimeField(value = state.endTime, onValueChange = component::setEndTime)
                 } else {
                     // The non-Event kinds (Task/Habit/Chore) carry an optional Date anchor (#74 → complete_by,
                     // what the Calendar reads) and a deadline time-of-day (#348). Both default to null (undated /

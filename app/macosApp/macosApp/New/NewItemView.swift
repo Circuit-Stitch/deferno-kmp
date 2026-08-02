@@ -119,7 +119,7 @@ struct NewItemView: View {
             epochSeconds: ShellBridgeKt.doNewDateEpochSeconds(state: value),
             onPick: { ShellBridgeKt.setNewDate(component: component, epochSeconds: $0) },
             onAdd: { ShellBridgeKt.setNewDate(component: component, epochSeconds: Date().timeIntervalSince1970) },
-            onClear: { ShellBridgeKt.clearNewDate(component: component) }
+            onClear: { component.setDate(date: nil) }
         )
     }
 
@@ -204,34 +204,26 @@ struct NewItemView: View {
         )
     }
 
-    /// The Event's fixed window (#348) — an **All-day** switch over a required start and an optional end, all
-    /// real pickers. This replaced two `TextField`s that asked the person to hand-type an RFC-3339 instant
-    /// ("2026-06-08T09:00:00Z"), silently clearing the field on anything unparseable — and which offered no way
-    /// at all to create the all-day Event the model has always supported.
+    /// The Event's two WHEN axes (#348, ADR-0051) — an **All-day** switch over a required start day and an
+    /// optional end day, all real pickers. This replaced two `TextField`s that asked the person to hand-type
+    /// an RFC-3339 instant ("2026-06-08T09:00:00Z"), silently clearing the field on anything unparseable —
+    /// and which offered no way at all to create the all-day Event the model has always supported.
     ///
-    /// **All-day is the absence of a clock, not a wire flag.** `all_day` is derived read-only server-side (true
-    /// iff both `*_time_of_day` fields are null) and rejected as input, so the switch only decides whether the
-    /// two pickers show a Time row and whether `toPayload` reads a clock off the instants. The instants survive
-    /// the toggle, so flipping it back restores the time the person picked rather than resetting it.
+    /// **All-day is the absence of a clock, not a flag.** `all_day` is derived read-only server-side (true iff
+    /// neither `*_time_of_day` is set) and rejected as input, so `value.eventIsAllDay` reads exactly the
+    /// absence the payload sends — there is no second reading that could drift from it, and no "pin" needed
+    /// to defend one. The switch simply adds or removes the two clocks; moving a day never touches them.
     ///
     /// The **end is genuinely optional** — an open-ended Event is valid on the wire — so it stays on "—" + Add
-    /// until asked for, and Clear returns it there. The **start is required** (`canSubmit` gates on it), so it
-    /// offers no Clear; when the Calendar FAB pre-dated the form, the bridge seeds it from that day.
+    /// until asked for, and Clear returns it there. The **start day is required** (`canSubmit` gates on it).
     @ViewBuilder
     private func eventFields(_ value: NewState) -> some View {
-        let allDay = ShellBridgeKt.doNewIsAllDay(state: value)
+        let allDay = value.eventIsAllDay
         let axes: DatePickerComponents = allDay ? [.date] : [.date, .hourAndMinute]
-        let hasStart = ShellBridgeKt.doNewEventStartEpochSeconds(state: value) >= 0
         VStack(alignment: .leading, spacing: 8) {
             Toggle(L.string("common_all_day"), isOn: Binding(
                 get: { allDay },
-                set: {
-                    ShellBridgeKt.setNewAllDay(
-                        component: component,
-                        allDay: $0,
-                        nowEpochSeconds: Date().timeIntervalSince1970
-                    )
-                }
+                set: { ShellBridgeKt.setNewAllDay(component: component, allDay: $0) }
             ))
             .font(.subheadline)
             .accessibilityLabel(L.string("common_all_day"))
@@ -242,12 +234,8 @@ struct NewItemView: View {
                 epochSeconds: ShellBridgeKt.doNewEventStartEpochSeconds(state: value),
                 components: axes,
                 onPick: { ShellBridgeKt.setNewEventStart(component: component, epochSeconds: $0) },
-                onAdd: {
-                    ShellBridgeKt.addNewEventStartFromRow(
-                        component: component,
-                        nowEpochSeconds: Date().timeIntervalSince1970
-                    )
-                }
+                // Seeds today, all-day — a day needs no clock, and turning All-day off is how you get one.
+                onAdd: { ShellBridgeKt.addNewEventStart(component: component) }
             )
 
             OptionalDatePickerRow(
@@ -256,15 +244,16 @@ struct NewItemView: View {
                 epochSeconds: ShellBridgeKt.doNewEventEndEpochSeconds(state: value),
                 components: axes,
                 onPick: { ShellBridgeKt.setNewEventEnd(component: component, epochSeconds: $0) },
-                // Withheld until there is a start to hang it off — an end with no start is not a window,
+                // Withheld until there is a start day to hang it off — an end with no start is not a window,
                 // and the seam would no-op. `nil` renders the row as a plain "—" with no live button.
-                onAdd: hasStart ? { ShellBridgeKt.addNewEventEnd(component: component) } : nil,
-                onClear: { ShellBridgeKt.clearNewEventEnd(component: component) }
+                onAdd: value.date != nil ? { ShellBridgeKt.addNewEventEnd(component: component) } : nil,
+                onClear: { component.setEndDate(date: nil) }
             )
 
             // The one window the server rejects outright (`end_time` must be >= `complete_by`). Said here,
-            // gently, rather than POSTed for a guaranteed failure — `canSubmit` already blocks the button.
-            if ShellBridgeKt.doNewEventEndBeforeStart(state: value) {
+            // gently, rather than enqueued: create is offline-first, so an invalid Event would not come back
+            // as a 400 — it would sit in the outbox and fail silently long after this screen closed.
+            if value.eventEndBeforeStart {
                 Text(L.string("new_event_end_before_start"))
                     .font(.footnote)
                     .foregroundStyle(colors.error)

@@ -10,9 +10,10 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.shell.DictationStatus
 import com.circuitstitch.deferno.shell.ui.NewDateField
 import com.circuitstitch.deferno.shell.ui.NewDictationMessage
-import com.circuitstitch.deferno.shell.ui.NewEventStartField
-import kotlin.time.Instant
+import com.circuitstitch.deferno.shell.ui.NewEventStartDateField
+import com.circuitstitch.deferno.shell.ui.NewEventStartTimeField
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -24,7 +25,7 @@ import org.robolectric.annotation.Config
  * Direct tests of the shared New-form atoms (#175, `:app:shell:ui` commonMain) on the existing
  * Robolectric/Compose harness — the pieces the [NewOverlayInteractionTest] flow does not reach:
  * the Dictation permission feedback (no Android test wires a speech engine) and the parse-or-clear
- * contract of the date/instant rows (so a half-typed value never POSTs an invalid `complete_by`).
+ * contract of the date/time rows (so a half-typed value never POSTs an invalid `complete_by`).
  * The full form binding is exercised through the Android chrome by [NewOverlayInteractionTest].
  */
 @RunWith(RobolectricTestRunner::class)
@@ -72,16 +73,35 @@ class NewFormAtomsTest {
     }
 
     @Test
-    fun eventStartField_pushesAParsedInstant_andClearsAnUnparseableOne() {
-        val pushed = mutableListOf<Instant?>()
+    fun eventStartDateField_pushesAParsedDate_andClearsAnUnparseableOne() {
+        // The Event's start day is a plain `yyyy-mm-dd` field like every other date row — the ISO
+        // *instant* field this replaced was the last place the app asked anyone to type an RFC-3339
+        // timestamp (ADR-0051).
+        val pushed = mutableListOf<LocalDate?>()
         composeRule.setContent {
-            DefernoTheme { NewEventStartField(value = null, onValueChange = { pushed += it }) }
+            DefernoTheme { NewEventStartDateField(value = null, onValueChange = { pushed += it }) }
         }
 
-        composeRule.onNodeWithContentDescription("Event start").performTextInput("2026-06-08T09:00:00Z")
-        assertEquals(Instant.parse("2026-06-08T09:00:00Z"), pushed.last())
+        composeRule.onNodeWithContentDescription("Event start").performTextInput("2026-06-08")
+        assertEquals(LocalDate(2026, 6, 8), pushed.last())
 
         composeRule.onNodeWithContentDescription("Event start").performTextInput("x")
+        assertEquals(null, pushed.last())
+    }
+
+    @Test
+    fun eventStartTimeField_clearingTheClockIsHowAnEventBecomesAllDay() {
+        // There is no all-day flag to assert against: the absence of a clock IS all-day, so a blank or
+        // unparseable time must push `null` rather than leaving a stale parse that would ship a clock.
+        val pushed = mutableListOf<LocalTime?>()
+        composeRule.setContent {
+            DefernoTheme { NewEventStartTimeField(value = null, onValueChange = { pushed += it }) }
+        }
+
+        composeRule.onNodeWithContentDescription("Event start time").performTextInput("09:00")
+        assertEquals(LocalTime(9, 0), pushed.last())
+
+        composeRule.onNodeWithContentDescription("Event start time").performTextInput("x")
         assertEquals(null, pushed.last())
     }
 }

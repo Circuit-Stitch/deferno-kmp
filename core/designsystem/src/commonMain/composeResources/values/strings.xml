@@ -449,9 +449,15 @@
     <!-- Inline validation on the Event window: the server rejects end_time < complete_by -->
     <string name="new_event_end_before_start">Ends before it starts</string>
     <string name="new_event_end_cd">Event end</string>
-    <string name="new_event_end_label">Ends (optional)</string>
+    <string name="new_event_end_label">Ends (optional, e.g. 2026-06-08)</string>
+    <string name="new_event_end_time_cd">Event end time</string>
+    <!-- Compose text-field format hint for the Event end clock; cleared = an all-day end -->
+    <string name="new_event_end_time_label">End time (optional, e.g. 10:00)</string>
     <string name="new_event_start_cd">Event start</string>
-    <string name="new_event_start_label">Starts (e.g. 2026-06-08T09:00:00Z)</string>
+    <string name="new_event_start_label">Starts (e.g. 2026-06-08)</string>
+    <string name="new_event_start_time_cd">Event start time</string>
+    <!-- Compose text-field format hint for the Event start clock; cleared = an all-day start (there is no all-day flag — ADR-0048) -->
+    <string name="new_event_start_time_label">Start time (optional, e.g. 09:00)</string>
     <!-- 'New' refers to this screen's name -->
     <string name="new_kind_note">You choose the kind here — Deferno never guesses it on New.</string>
     <string name="new_kind_picker_cd">Kind picker</string>

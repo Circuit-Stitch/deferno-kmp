@@ -84,6 +84,14 @@ android new_dictation_denied_short
 android new_dictation_error
 android new_dictation_open_system_settings
 android new_dictation_status_cd
+# The Event clock rows are Compose-only: they are ISO format hints + a11y labels for an
+# OutlinedTextField. The Apple forms edit the same two axes through a native combined
+# date+time DatePicker, which carries no separate clock control to label (same reason as
+# new_time_label below).
+android new_event_end_time_cd
+android new_event_end_time_label
+android new_event_start_time_cd
+android new_event_start_time_label
 android new_kind_note
 android new_kind_section
 android new_notes_section

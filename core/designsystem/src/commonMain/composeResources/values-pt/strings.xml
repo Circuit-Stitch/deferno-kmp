@@ -341,9 +341,13 @@
     <string name="new_error_could_not_save_retry">Não foi possível salvar. Tente de novo.</string>
     <string name="new_event_end_before_start">Termina antes de começar</string>
     <string name="new_event_end_cd">Fim do evento</string>
-    <string name="new_event_end_label">Termina (opcional)</string>
+    <string name="new_event_end_label">Termina (opcional, ex.: 2026-06-08)</string>
+    <string name="new_event_end_time_cd">Hora de término do evento</string>
+    <string name="new_event_end_time_label">Hora de término (opcional, ex.: 10:00)</string>
     <string name="new_event_start_cd">Início do evento</string>
-    <string name="new_event_start_label">Começa (ex.: 2026-06-08T09:00:00Z)</string>
+    <string name="new_event_start_label">Começa (ex.: 2026-06-08)</string>
+    <string name="new_event_start_time_cd">Hora de início do evento</string>
+    <string name="new_event_start_time_label">Hora de início (opcional, ex.: 09:00)</string>
     <!-- 'Novo' é o nome desta tela (shell_new) -->
     <string name="new_kind_note">Você escolhe o tipo aqui — o Deferno nunca adivinha na tela Novo.</string>
     <string name="new_kind_picker_cd">Seletor de tipo</string>

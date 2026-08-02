@@ -337,9 +337,13 @@
     <string name="new_error_could_not_save_retry">सेव नहीं हो सका। फिर से कोशिश करें।</string>
     <string name="new_event_end_before_start">शुरू होने से पहले समाप्त होता है</string>
     <string name="new_event_end_cd">इवेंट का समापन</string>
-    <string name="new_event_end_label">समाप्त होता है (वैकल्पिक)</string>
+    <string name="new_event_end_label">समाप्त होता है (वैकल्पिक, जैसे 2026-06-08)</string>
+    <string name="new_event_end_time_cd">इवेंट समाप्त होने का समय</string>
+    <string name="new_event_end_time_label">समाप्त होने का समय (वैकल्पिक, जैसे 10:00)</string>
     <string name="new_event_start_cd">इवेंट की शुरुआत</string>
-    <string name="new_event_start_label">शुरू होता है (जैसे 2026-06-08T09:00:00Z)</string>
+    <string name="new_event_start_label">शुरू होता है (जैसे 2026-06-08)</string>
+    <string name="new_event_start_time_cd">इवेंट शुरू होने का समय</string>
+    <string name="new_event_start_time_label">शुरू होने का समय (वैकल्पिक, जैसे 09:00)</string>
     <!-- ‘नया’ = इसी स्क्रीन का नाम (shell_new) -->
     <string name="new_kind_note">प्रकार यहाँ आप चुनते हैं — ‘नया’ पर Deferno कभी इसका अंदाज़ा नहीं लगाता।</string>
     <string name="new_kind_picker_cd">प्रकार चुनने का विकल्प</string>

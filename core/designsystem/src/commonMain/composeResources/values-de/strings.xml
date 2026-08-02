@@ -338,9 +338,13 @@
     <string name="new_error_could_not_save_retry">Konnte nicht gespeichert werden. Versuch es noch einmal.</string>
     <string name="new_event_end_before_start">Endet vor dem Beginn</string>
     <string name="new_event_end_cd">Ende des Ereignisses</string>
-    <string name="new_event_end_label">Endet (optional)</string>
+    <string name="new_event_end_label">Endet (optional, z. B. 2026-06-08)</string>
+    <string name="new_event_end_time_cd">Endzeit des Termins</string>
+    <string name="new_event_end_time_label">Endzeit (optional, z. B. 10:00)</string>
     <string name="new_event_start_cd">Beginn des Ereignisses</string>
-    <string name="new_event_start_label">Beginnt (z. B. 2026-06-08T09:00:00Z)</string>
+    <string name="new_event_start_label">Beginnt (z. B. 2026-06-08)</string>
+    <string name="new_event_start_time_cd">Startzeit des Termins</string>
+    <string name="new_event_start_time_label">Startzeit (optional, z. B. 09:00)</string>
     <!-- „Neu“ = Name dieses Screens (shell_new) -->
     <string name="new_kind_note">Die Art wählst du hier selbst — Deferno errät sie unter „Neu“ nie.</string>
     <string name="new_kind_picker_cd">Auswahl der Art</string>

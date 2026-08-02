@@ -9527,31 +9527,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ends (optional)"
+            "value": "Ends (optional, e.g. 2026-06-08)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Termina (opcional)"
+            "value": "Termina (opcional, p. ej. 2026-06-08)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Endet (optional)"
+            "value": "Endet (optional, z. B. 2026-06-08)"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "समाप्त होता है (वैकल्पिक)"
+            "value": "समाप्त होता है (वैकल्पिक, जैसे 2026-06-08)"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Termina (opcional)"
+            "value": "Termina (opcional, ex.: 2026-06-08)"
           }
         }
       }
@@ -9595,31 +9595,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Starts (e.g. 2026-06-08T09:00:00Z)"
+            "value": "Starts (e.g. 2026-06-08)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Empieza (p. ej. 2026-06-08T09:00:00Z)"
+            "value": "Empieza (p. ej. 2026-06-08)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Beginnt (z. B. 2026-06-08T09:00:00Z)"
+            "value": "Beginnt (z. B. 2026-06-08)"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "शुरू होता है (जैसे 2026-06-08T09:00:00Z)"
+            "value": "शुरू होता है (जैसे 2026-06-08)"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Começa (ex.: 2026-06-08T09:00:00Z)"
+            "value": "Começa (ex.: 2026-06-08)"
           }
         }
       }

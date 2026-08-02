@@ -328,9 +328,13 @@
     <string name="new_error_could_not_save_retry">No se pudo guardar. Inténtalo de nuevo.</string>
     <string name="new_event_end_before_start">Termina antes de empezar</string>
     <string name="new_event_end_cd">Fin del evento</string>
-    <string name="new_event_end_label">Termina (opcional)</string>
+    <string name="new_event_end_label">Termina (opcional, p. ej. 2026-06-08)</string>
+    <string name="new_event_end_time_cd">Hora de fin del evento</string>
+    <string name="new_event_end_time_label">Hora de fin (opcional, p. ej. 10:00)</string>
     <string name="new_event_start_cd">Inicio del evento</string>
-    <string name="new_event_start_label">Empieza (p. ej. 2026-06-08T09:00:00Z)</string>
+    <string name="new_event_start_label">Empieza (p. ej. 2026-06-08)</string>
+    <string name="new_event_start_time_cd">Hora de inicio del evento</string>
+    <string name="new_event_start_time_label">Hora de inicio (opcional, p. ej. 09:00)</string>
     <!-- «Nuevo» es el nombre de esta pantalla -->
     <string name="new_kind_note">El tipo lo eliges tú aquí — Deferno nunca lo adivina en Nuevo.</string>
     <string name="new_kind_picker_cd">Selector de tipo</string>

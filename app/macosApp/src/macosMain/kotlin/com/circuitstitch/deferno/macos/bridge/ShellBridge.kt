@@ -74,8 +74,10 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.todayIn
 import platform.Foundation.NSData
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Clock
 import kotlin.time.Instant
 
 /**
@@ -516,125 +518,96 @@ fun newDateEpochSeconds(state: NewState): Double = state.date?.toEpochSeconds() 
 /** Set the New form's date from a `DatePicker`; only the calendar day survives (the model is a date). */
 fun setNewDate(component: NewComponent, epochSeconds: Double) = component.setDate(epochSeconds.toPickedDate())
 
+// --- New form: the Event's two WHEN axes (#348, ADR-0051) -------------------------------------------
+//
+// An Event's WHEN is (start day, start clock?) + (end day, end clock?) — the same shape as the Task
+// deadline axis above, and the same shape the server stores. All-day is the ABSENCE of both clocks, so
+// there is no flag to keep in sync and no reading that can disagree with what gets sent.
+//
+// Each row is a combined SwiftUI `DatePicker` ([.date] when all-day, [.date, .hourAndMinute] when timed),
+// so a pick carries BOTH axes and only the one that actually moved is written back — [applyWhenPicker],
+// the twin of `applyDeadlinePicker` (Bridge.kt:119). That is what makes moving an all-day Event's day
+// leave it all-day: the clock axis is simply never touched.
+
 /**
- * Clear the New form's date — **and its deadline clock**. `NewState.toPayload` drops
- * `deadline_time_of_day` whenever there is no date ("a time with no day is meaningless"), so leaving
- * the clock set would leave the form displaying a time that silently never ships.
+ * Seed a (day, clock?) axis for a combined picker: the day at its real clock, or at [PICKER_DEFAULT_TIME]
+ * when that axis is all-day. A combined picker has to open on *some* clock; opening on the default rather
+ * than midnight is why an untouched hour hand never silently ships 00:00. [UNSET] when there is no day.
  */
-fun clearNewDate(component: NewComponent) {
-    component.setDate(null)
-    component.setDeadlineTime(null)
+private fun whenPickerSeed(day: LocalDate?, clock: LocalTime?): Double =
+    day?.atTime(clock ?: PICKER_DEFAULT_TIME)?.toInstant(pickerZone)?.toEpochSeconds() ?: UNSET
+
+/**
+ * Apply a combined date+time picker to one axis, writing back **only the axis that moved** — comparing
+ * the picked clock against the seed ([PICKER_DEFAULT_TIME] when all-day) rather than against midnight.
+ * Reads the surviving state live off the component, so a fast sequence of edits in one open picker stays
+ * correct.
+ */
+private inline fun applyWhenPicker(
+    epochSeconds: Double,
+    day: LocalDate?,
+    clock: LocalTime?,
+    onDay: (LocalDate) -> Unit,
+    onClock: (LocalTime) -> Unit,
+) {
+    val picked = epochSeconds.toPickedInstant().toLocalDateTime(pickerZone)
+    if (picked.date != day) onDay(picked.date)
+    if (picked.time != (clock ?: PICKER_DEFAULT_TIME)) onClock(picked.time)
 }
 
-// --- New form: the Event window (start / end / all-day, #348) ---------------------------------------
+/** The Event start row's seed — the start day (`complete_by`) at its clock, or [UNSET] when undated. */
+fun newEventStartEpochSeconds(state: NewState): Double = whenPickerSeed(state.date, state.startTime)
 
-/**
- * The Event start's seed: the explicit start once the person picks one, else the pre-dated day the
- * Calendar FAB opened New on (at start of day), else [UNSET]. The fallback mirrors `toPayload`, which
- * uses that same day as `complete_by` when no start was chosen — so the row shows what would be sent.
- */
-fun newEventStartEpochSeconds(state: NewState): Double =
-    state.start?.toEpochSeconds() ?: state.date?.toEpochSeconds() ?: UNSET
+/** The Event end row's seed, or [UNSET]: an end is genuinely optional (an open-ended Event is valid). */
+fun newEventEndEpochSeconds(state: NewState): Double = whenPickerSeed(state.endDate, state.endTime)
 
-/** The Event end's seed, or [UNSET]: an end is genuinely optional (an open-ended Event is valid). */
-fun newEventEndEpochSeconds(state: NewState): Double = state.end?.toEpochSeconds() ?: UNSET
-
-/**
- * Pin the **current** all-day reading into the raw flag before an edit that would change it.
- *
- * [NewState.eventIsAllDay] is `allDay || start == null`, so the instant a start materializes the reading
- * collapses to the raw flag. Without this, the first touch of the Starts row on an implicitly-all-day
- * form would flip the All-day switch off under the person's hand and start shipping a clock they never
- * chose — usually the seed's own midnight. Pinning first makes the switch move only when *it* is used.
- */
-private fun NewComponent.pinAllDay() {
-    if (state.value.eventIsAllDay) setAllDay(true)
-}
-
-/** Set the Event start from a picker. The instant is kept whole — a date-only SwiftUI picker already
- *  preserves the clock of the value it was seeded with — and the all-day reading is pinned first. */
+/** Apply the Starts picker to the (date, startTime) axis. */
 fun setNewEventStart(component: NewComponent, epochSeconds: Double) {
-    component.pinAllDay()
-    component.setStart(epochSeconds.toPickedInstant())
+    val state = component.state.value
+    applyWhenPicker(epochSeconds, state.date, state.startTime, component::setDate, component::setStartTime)
 }
 
-/** Set the Event end from a picker; the [setNewEventStart] contract, for the window's close. */
-fun setNewEventEnd(component: NewComponent, epochSeconds: Double) =
-    component.setEnd(epochSeconds.toPickedInstant())
+/** Apply the Ends picker to the (endDate, endTime) axis — [setNewEventStart]'s contract for the close. */
+fun setNewEventEnd(component: NewComponent, epochSeconds: Double) {
+    val state = component.state.value
+    applyWhenPicker(epochSeconds, state.endDate, state.endTime, component::setEndDate, component::setEndTime)
+}
 
 /**
- * Seed an Event start when there is none: the pre-dated day at [PICKER_DEFAULT_TIME] when the Calendar
- * FAB supplied one, else [nowEpochSeconds] rounded up to the next whole hour (an Event starting at
- * 14:37:22 is nobody's intent). Swift supplies "now" — Kotlin/Native has no business reading the clock
- * for a UI seed, and the rounding belongs beside the rest of the calendar arithmetic.
- *
- * Deliberately does NOT pin the all-day reading — [setNewAllDay] calls this on its way *off* all-day,
- * where re-asserting the flag would freeze the switch on. The Starts row's Add affordance goes through
- * [addNewEventStartFromRow] instead.
+ * The Starts row's Add affordance: **today, all-day**. A day needs no clock — turning All-day off is how
+ * you get one ([setNewAllDay] seeds [PICKER_DEFAULT_TIME]) — which matches the webui's WHEN editor, the
+ * server's derived `all_day`, and the Task-detail "add a time" affordance. Kotlin reads today rather than
+ * taking it from Swift: the calendar arithmetic is already here, and `RelativeDay`/`LocalToday` set the
+ * precedent for a UI-seed clock read.
  */
-fun addNewEventStart(component: NewComponent, nowEpochSeconds: Double) {
-    val day = component.state.value.date
-    component.setStart(
-        if (day != null) {
-            day.atTime(PICKER_DEFAULT_TIME).toInstant(pickerZone)
-        } else {
-            val now = nowEpochSeconds.toPickedInstant().toLocalDateTime(pickerZone)
-            now.date.atTime(LocalTime(now.hour, 0)).toInstant(pickerZone) + 1.hours
-        },
-    )
-}
-
-/** The Starts row's "Add" affordance: [addNewEventStart] with the all-day reading pinned, so seeding a
- *  start does not silently convert an all-day Event to a timed one. */
-fun addNewEventStartFromRow(component: NewComponent, nowEpochSeconds: Double) {
-    component.pinAllDay()
-    addNewEventStart(component, nowEpochSeconds)
-}
+fun addNewEventStart(component: NewComponent) = component.setDate(Clock.System.todayIn(pickerZone))
 
 /**
- * Seed the optional Event end: an hour after the start for a timed Event, the start's own day for an
- * all-day one (where the clock is discarded and a same-day close is the honest default).
- *
- * Reads the **effective** start — the same `start ?: date` fallback [newEventStartEpochSeconds] displays
- * — not the raw [NewState.start]. On a Calendar-pre-dated form the Starts row shows a populated day
- * while `start` is still null, so keying off the raw field made this a live button that did nothing.
- * Still a no-op when there is no start at all, which is exactly when the View withholds the affordance.
+ * Seed the optional Event end: the start day, so the default close is same-day, with a clock only when
+ * the Event is timed. Gated on a start day — which is exactly when the View offers the affordance.
  */
 fun addNewEventEnd(component: NewComponent) {
     val state = component.state.value
-    val start = state.start ?: state.date?.atStartOfDayIn(pickerZone) ?: return
-    component.setEnd(if (state.eventIsAllDay) start else start + 1.hours)
+    val day = state.date ?: return
+    component.setEndDate(day)
+    if (!state.eventIsAllDay) component.setEndTime(state.startTime ?: PICKER_DEFAULT_TIME)
 }
 
-/** Drop the Event's end — back to an open-ended Event, which the wire accepts (`end_time` omitted). */
-fun clearNewEventEnd(component: NewComponent) = component.setEnd(null)
-
 /**
- * Whether the Event this form would create is all-day — [NewState.eventIsAllDay], not the raw flag. A
- * form the Calendar FAB pre-dated has a day but no start *instant*, so it has no clock to send and is
- * all-day whatever the flag says; showing the switch off there would state a time the POST won't carry.
+ * Flip the all-day axis — which is only ever *adding or removing clocks*, because that is all all-day is.
+ * On: drop both. Off: restore the clock the person had, else [PICKER_DEFAULT_TIME], and only give the end
+ * a clock when there is an end day to hang it on.
  */
-fun newIsAllDay(state: NewState): Boolean = state.eventIsAllDay
-
-/**
- * Flip the all-day axis.
- *
- * Turning it **off** needs a real start instant — the clock rides on [NewState.start], and a pre-dated
- * form has only a bare day — so a missing start is materialized here ([addNewEventStart]'s seed).
- * Without that the switch would refuse to move: [NewState.eventIsAllDay] would keep reading `true`.
- *
- * Turning it **on** deliberately does *not* rewrite start/end. The flag only decides whether `toPayload`
- * derives the two `*_time_of_day` fields, so the clock the person picked survives a round trip through
- * all-day and comes back intact. (The server discards `complete_by`'s own clock, so leaving it there
- * costs nothing.)
- */
-fun setNewAllDay(component: NewComponent, allDay: Boolean, nowEpochSeconds: Double) {
-    component.setAllDay(allDay)
-    if (!allDay && component.state.value.start == null) addNewEventStart(component, nowEpochSeconds)
+fun setNewAllDay(component: NewComponent, allDay: Boolean) {
+    val state = component.state.value
+    if (allDay) {
+        component.setStartTime(null)
+        component.setEndTime(null)
+    } else {
+        component.setStartTime(state.startTime ?: PICKER_DEFAULT_TIME)
+        if (state.endDate != null) component.setEndTime(state.endTime ?: PICKER_DEFAULT_TIME)
+    }
 }
-
-/** Whether the Event's window closes before it opens — the one range the server rejects outright. */
-fun newEventEndBeforeStart(state: NewState): Boolean = state.eventEndBeforeStart
 
 // ---------------------------------------------------------------------------------------------------
 // Search — Set<WorkingState>/Set<String> are awkward in Swift; expose membership + a list

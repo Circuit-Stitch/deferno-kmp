@@ -70,8 +70,10 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.shell.ui.NewDateField
 import com.circuitstitch.deferno.shell.ui.NewDeadlineTimeField
 import com.circuitstitch.deferno.shell.ui.NewDictationMessage
-import com.circuitstitch.deferno.shell.ui.NewEventEndField
-import com.circuitstitch.deferno.shell.ui.NewEventStartField
+import com.circuitstitch.deferno.shell.ui.NewEventEndDateField
+import com.circuitstitch.deferno.shell.ui.NewEventEndTimeField
+import com.circuitstitch.deferno.shell.ui.NewEventStartDateField
+import com.circuitstitch.deferno.shell.ui.NewEventStartTimeField
 import com.circuitstitch.deferno.shell.ui.NewNotesField
 import com.circuitstitch.deferno.shell.ui.NewStatusMessage
 import com.circuitstitch.deferno.shell.ui.NewTitleField
@@ -235,18 +237,24 @@ fun NewScreen(component: NewComponent, modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    // A Date the item anchors to (#74) — the Calendar FAB pre-dates this; maps to
-                    // `complete_by`. Shown for the non-Event kinds (an Event uses its fixed start instead).
+                    // Every kind anchors to a day (#74 → `complete_by`) with an optional clock; only the
+                    // clock's *name* differs, because a deadline and a start are different facts
+                    // (ADR-0051). The Calendar FAB pre-dates the day.
                     if (state.selectedKind != ItemKind.Event) {
                         NewDateField(value = state.date, onValueChange = component::setDate)
                         Spacer(Modifier.height(12.dp))
                         NewDeadlineTimeField(value = state.deadlineTime, onValueChange = component::setDeadlineTime)
                     } else {
-                        // An Event has a fixed start/end window (CONTEXT.md → Event; AC #2): a required
-                        // start + optional end so a real Event create succeeds.
-                        NewEventStartField(value = state.start, onValueChange = component::setStart)
+                        // An Event carries a second axis (CONTEXT.md → Event; AC #2): a required start
+                        // day + optional end day, each with an independently optional clock. Clearing
+                        // both clocks is what makes it all-day — there is no flag.
+                        NewEventStartDateField(value = state.date, onValueChange = component::setDate)
                         Spacer(Modifier.height(12.dp))
-                        NewEventEndField(value = state.end, onValueChange = component::setEnd)
+                        NewEventStartTimeField(value = state.startTime, onValueChange = component::setStartTime)
+                        Spacer(Modifier.height(12.dp))
+                        NewEventEndDateField(value = state.endDate, onValueChange = component::setEndDate)
+                        Spacer(Modifier.height(12.dp))
+                        NewEventEndTimeField(value = state.endTime, onValueChange = component::setEndTime)
                     }
                 }
             }
