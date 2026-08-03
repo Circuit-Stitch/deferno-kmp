@@ -19,18 +19,23 @@ import kotlin.time.Instant
  * These target an **existing** firing, so — unlike create (ADR-0016) — they are offline-first.
  *
  * The act target is the local [CalendarItem] row id (what the agenda holds); the writer resolves the
- * firing's kind + series + date from the cached row, so only an **actionable** firing (a recurring row
- * whose kind resolved) is written — a one-off Task or an unresolved-kind row is a silent no-op (the UI
- * never offers occurrence actions there anyway).
+ * firing's kind + addressed item + date from the cached row, so only an **actionable** firing (a
+ * recurring row whose kind resolved) is written — a one-off Task or an unresolved-kind row is a silent
+ * no-op (the UI never offers occurrence actions there anyway).
+ *
+ * **The id sent to the endpoints is [CalendarItem.taskId], not [CalendarItem.seriesId] (#380).** The
+ * occurrence handlers load the addressed *item* (`load_owned_habit` → `load_item_for_user`) and then
+ * resolve the owning Segment themselves from that id + the date (ADR 2026-07-19); a series id loads
+ * nothing. `taskId` is non-null on every feed row, so this path carries no `!!`.
  */
 interface OccurrenceWriter {
     /** Mark the firing [itemId] with a coarse [action] (start / complete / skip) — `POST`/`PUT` per kind. */
     suspend fun mark(itemId: String, action: OccurrenceAction)
 
-    /** Clear the firing [itemId]'s status back to Scheduled — the forgiving undo (`DELETE …/{date}`). */
+    /** Clear the firing [itemId]'s status back to Scheduled — the forgiving undo (`POST …/{date}/clear`). */
     suspend fun clear(itemId: String)
 
-    /** Reschedule the firing [itemId] to [newDate] (`POST …/{date}/reschedule`; Events only in v1). */
+    /** Reschedule the firing [itemId] to [newDate] (`POST …/{date}/reschedule`; all three kinds). */
     suspend fun reschedule(itemId: String, newDate: LocalDate)
 }
 
@@ -54,17 +59,17 @@ class OutboxOccurrenceWriter(
         // firing — that is the Clear semantic, which must go through [clear] (DELETE), not a mark. The UI
         // already guards this; ignore it here too so a future UI change can't silently un-complete a habit.
         if (firing.kind == ItemKind.Habit && action != OccurrenceAction.Complete) return
-        submit(MarkOccurrence(itemId, firing.kind!!, firing.seriesId!!, firing.date, action))
+        submit(MarkOccurrence(itemId, firing.kind!!, firing.taskId, firing.date, action))
     }
 
     override suspend fun clear(itemId: String) {
         val firing = actionableFiring(itemId) ?: return
-        submit(ClearOccurrence(itemId, firing.kind!!, firing.seriesId!!, firing.date))
+        submit(ClearOccurrence(itemId, firing.kind!!, firing.taskId, firing.date))
     }
 
     override suspend fun reschedule(itemId: String, newDate: LocalDate) {
         val firing = actionableFiring(itemId) ?: return
-        submit(RescheduleOccurrence(itemId, firing.kind!!, firing.seriesId!!, firing.date, newDate))
+        submit(RescheduleOccurrence(itemId, firing.kind!!, firing.taskId, firing.date, newDate))
     }
 
     /** The cached firing for [itemId], only if it is an actionable occurrence (recurring + kind resolved). */
