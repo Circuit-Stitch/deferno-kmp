@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.core.model
 
+import kotlin.time.Instant
+
 /**
  * The common projection across the four [ItemKind]s (CONTEXT.md → "Item") — the cross-kind read model
  * the Tasks [Item tree] (ADR-0049, #226/#227) renders as one forest. [Task]/[Habit]/[Chore]/[Event]
@@ -35,6 +37,22 @@ package com.circuitstitch.deferno.core.model
  * populated for a Task (edges are Task-held; the `/items` snapshot now ships them per row), always
  * empty for the recurring kinds. The tree's "Blocked by…" picker and the destructive-unblock
  * confirmation's dependents scan read it; readiness itself still comes from the server flags.
+ *
+ * [recurrence]/[recurrenceCursorAt] are the recurring pair (#384) — the rule and its **cursor**. They
+ * are carried together, and neither is redundant: read as a pair they are the only way to tell a live
+ * series from a finished one. On a recurring definition `complete_by` is a *moving cursor* that
+ * advances as occurrences are resolved, **not** an upper bound (the backend's
+ * `2026-06-02-recurrence-anchor-and-bound` ADR) — the bound lives on the rule as [RecurrenceBound].
+ * So a cursor in the past is the normal reading for a missed Habit, and a rule whose cursor has been
+ * *cleared* means the series ran out. [RecurrenceCursor] is that reading; it is derived at render
+ * time, never stored here.
+ *
+ * **[recurrenceCursorAt] is deliberately not called `completeBy`**, though that is the wire/domain
+ * field it comes from. [Task], [Habit], [Chore] and [Event] each carry a `completeBy` meaning "the
+ * hard deadline", and on this cross-kind projection the same name would mean *cursor* for three kinds
+ * and *nothing at all* for the fourth — a Task's deadline is deliberately **not** projected here,
+ * because conflating the two would make every dated Task read as an exhausted-or-due series. A future
+ * row decoration that wants the deadline must project it as its own field; the name says so.
  */
 data class Item(
     val id: String,
@@ -54,6 +72,14 @@ data class Item(
     // populated for a Habit/Chore/Event so the Item-tree command menu can set it (Archive / Restore).
     // [isTerminal] is still kept (an Archived definition is de-emphasized) — this carries the full state.
     val definitionState: DefinitionState? = null,
+    // The recurrence rule (#384), so a row can say "every Tuesday" without loading the concrete kind.
+    // `null` for a Task, and for a recurring definition whose rule did not survive the wire.
+    val recurrence: Recurrence? = null,
+    // The recurrence CURSOR — where the series has walked to, NOT an upper bound (see the class KDoc).
+    // `null` alongside a [recurrence] means the series is exhausted; `null` for a Task means nothing at
+    // all (a Task's deadline is not a cursor, and is not projected here). Read the pair through
+    // [recurrenceCursor] — never this field raw.
+    val recurrenceCursorAt: Instant? = null,
 )
 
 /** An item's external provenance — the system it was synced/created from (drives the row's source mark). */

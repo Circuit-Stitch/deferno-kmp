@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
 import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
 import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
 import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
+import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
@@ -16,11 +17,17 @@ import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.Recurrence
+import com.circuitstitch.deferno.core.model.RecurrenceBound
+import com.circuitstitch.deferno.core.model.RecurrenceCursor
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.recurrenceCursor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,6 +40,10 @@ import kotlin.test.assertTrue
  * per-kind caches into one list, projects each kind's common fields (incl. the de-emphasis [isTerminal]
  * signal and the Task-only subtree counts), re-emits when any kind changes, and that [refresh] delegates
  * the cross-kind `/items` cold sync to [ItemSync]. Runs on the ADR-0006 JVM-fast path against the fakes.
+ *
+ * It also pins the recurring pair (#384): the rule + its moving cursor reach the row on all three
+ * recurring kinds and on **neither** for a Task, and an exhausted series survives as rule-without-cursor
+ * rather than being flattened into "no deadline".
  */
 class OfflineItemRepositoryTest {
 
@@ -47,6 +58,7 @@ class OfflineItemRepositoryTest {
         descendantTotal: Long? = null,
         blocked: Boolean = false,
         isBlocker: Boolean = false,
+        completeBy: Instant? = null,
     ) = Task(
         id = TaskId(id),
         orgSlug = "u-e4h2qk",
@@ -60,6 +72,7 @@ class OfflineItemRepositoryTest {
         descendantTotal = descendantTotal,
         blocked = blocked,
         isBlocker = isBlocker,
+        completeBy = completeBy,
     )
 
     private fun habit(
@@ -69,6 +82,8 @@ class OfflineItemRepositoryTest {
         sequence: Long? = null,
         blocked: Boolean = false,
         isBlocker: Boolean = false,
+        recurrence: Recurrence? = null,
+        completeBy: Instant? = null,
     ) = Habit(
         id = HabitId(id),
         orgSlug = "u-e4h2qk",
@@ -80,9 +95,16 @@ class OfflineItemRepositoryTest {
         hydration = HydrationState.Full,
         blocked = blocked,
         isBlocker = isBlocker,
+        recurrence = recurrence,
+        completeBy = completeBy,
     )
 
-    private fun chore(id: String, sequence: Long? = null) = Chore(
+    private fun chore(
+        id: String,
+        sequence: Long? = null,
+        recurrence: Recurrence? = null,
+        completeBy: Instant? = null,
+    ) = Chore(
         id = ChoreId(id),
         orgSlug = "u-e4h2qk",
         title = "chore-$id",
@@ -90,9 +112,16 @@ class OfflineItemRepositoryTest {
         sequence = sequence,
         dateCreated = created,
         hydration = HydrationState.Full,
+        recurrence = recurrence,
+        completeBy = completeBy,
     )
 
-    private fun event(id: String, sequence: Long? = null) = Event(
+    private fun event(
+        id: String,
+        sequence: Long? = null,
+        recurrence: Recurrence? = null,
+        completeBy: Instant? = null,
+    ) = Event(
         id = EventId(id),
         orgSlug = "u-e4h2qk",
         title = "event-$id",
@@ -100,6 +129,8 @@ class OfflineItemRepositoryTest {
         sequence = sequence,
         dateCreated = created,
         hydration = HydrationState.Full,
+        recurrence = recurrence,
+        completeBy = completeBy,
     )
 
     private class Fixture(
@@ -206,6 +237,70 @@ class OfflineItemRepositoryTest {
             assertEquals(DefinitionState.InReview, byId.getValue("h").definitionState)
             assertEquals(DefinitionState.Active, byId.getValue("c").definitionState)
             assertEquals(DefinitionState.Active, byId.getValue("e").definitionState)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun carriesTheRecurrenceRuleAndCursorOnRecurringRowsAndNeitherOnATask() = runTest {
+        // #384: the projection now carries the recurring PAIR — the rule and its moving cursor — on all
+        // three recurring kinds, so a row can read the series without loading the concrete kind. The Task
+        // arm carries NEITHER, and deliberately so: its `completeBy` is a plain deadline, not a cursor,
+        // and forwarding it would make every dated Task read as a due-or-exhausted series.
+        val weekly = Recurrence(Cadence.Weekly(listOf("Mon", "Wed")), RecurrenceBound.AfterCount(4))
+        val every3 = Recurrence(Cadence.EveryNDays(3))
+        val yearly = Recurrence(Cadence.Yearly(interval = 1, month = 6, day = 14))
+        val cursor = Instant.parse("2026-08-25T09:00:00Z")
+        val f = Fixture(
+            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t", completeBy = cursor))),
+            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", recurrence = weekly, completeBy = cursor))),
+            chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c", recurrence = every3, completeBy = cursor))),
+            events = FakeEventLocalStore(mapOf(EventId("e") to event("e", recurrence = yearly, completeBy = cursor))),
+        )
+
+        f.repository.observeItems().test {
+            val byId = awaitItem().associateBy { it.id }
+            assertEquals(weekly, byId.getValue("h").recurrence)
+            assertEquals(every3, byId.getValue("c").recurrence)
+            assertEquals(yearly, byId.getValue("e").recurrence)
+            listOf("h", "c", "e").forEach { assertEquals(cursor, byId.getValue(it).recurrenceCursorAt, "cursor on $it") }
+            assertNull(byId.getValue("t").recurrence, "a Task has no recurrence rule")
+            assertNull(byId.getValue("t").recurrenceCursorAt, "a Task's deadline is NOT a recurrence cursor")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun projectsAnExhaustedSeriesAsARuleWithNoCursor() = runTest {
+        // The server clears `complete_by` when the bound is reached (backend ADR
+        // `2026-06-02-recurrence-anchor-and-bound`), so an exhausted series arrives as rule-without-cursor.
+        // The projection must preserve that shape verbatim — collapsing either half would erase the
+        // distinction between "series ran out" and "not a series at all" that [recurrenceCursor] reads.
+        val f = Fixture(
+            habits = FakeHabitLocalStore(
+                mapOf(HabitId("h") to habit("h", recurrence = Recurrence(Cadence.Daily, RecurrenceBound.AfterCount(4)), completeBy = null)),
+            ),
+        )
+
+        f.repository.observeItems().test {
+            val item = awaitItem().single()
+            assertEquals(Recurrence(Cadence.Daily, RecurrenceBound.AfterCount(4)), item.recurrence)
+            assertNull(item.recurrenceCursorAt)
+            assertEquals(RecurrenceCursor.Exhausted, item.recurrenceCursor(TimeZone.UTC, LocalDate(2026, 6, 15)))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun projectsARecurringDefinitionWithNoRuleAsCarryingNeitherReading() = runTest {
+        // A definition whose rule did not survive the wire still projects: rule null, cursor whatever it
+        // was. The reading is NoCursor — the rule, not the cursor, is what says "this is a series".
+        val f = Fixture(habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", completeBy = Instant.parse("2026-06-16T09:00:00Z")))))
+
+        f.repository.observeItems().test {
+            val item = awaitItem().single()
+            assertNull(item.recurrence)
+            assertEquals(RecurrenceCursor.NoCursor, item.recurrenceCursor(TimeZone.UTC, LocalDate(2026, 6, 15)))
             cancelAndIgnoreRemainingEvents()
         }
     }
