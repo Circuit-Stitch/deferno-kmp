@@ -14,6 +14,7 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Priority
+import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -201,7 +202,15 @@ internal class FakeItemTreeComponent(initial: ItemTreeState = ItemTreeState()) :
     override fun onDismissBlockedByError() { blockedByErrorDismissals++ }
 }
 
-/** Builds an [ItemRow] for the tree screenshot fixtures (the View renders rows verbatim, no re-flatten). */
+/**
+ * Builds an [ItemRow] for the tree screenshot fixtures (the View renders rows verbatim, no re-flatten).
+ *
+ * [recurrence] + [recurrenceCursorAt] are the recurring pair (#384) that drives the row's cadence
+ * subtitle. Both are needed and neither is redundant: the rule is the discriminator, the cursor is the
+ * value — so a rule with a cursor reads "Next: …", a rule whose cursor was cleared reads "Series ended",
+ * and no rule at all (a Task) renders no subtitle whatsoever. Pin the cursor against [SCREENSHOT_TODAY]
+ * so the golden's relative phrasing ("Tomorrow") doesn't drift with the wall clock.
+ */
 internal fun itemRow(
     id: String,
     title: String,
@@ -214,11 +223,14 @@ internal fun itemRow(
     descendantTotal: Long? = null,
     blocked: Boolean = false,
     isBlocker: Boolean = false,
+    recurrence: Recurrence? = null,
+    recurrenceCursorAt: Instant? = null,
 ): ItemRow = ItemRow(
     item = Item(
         id = id, kind = kind, title = title, isTerminal = isTerminal,
         descendantDone = descendantDone, descendantTotal = descendantTotal,
         blocked = blocked, isBlocker = isBlocker,
+        recurrence = recurrence, recurrenceCursorAt = recurrenceCursorAt,
     ),
     depth = depth,
     hasChildren = hasChildren,

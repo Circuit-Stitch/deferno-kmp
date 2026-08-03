@@ -84,6 +84,17 @@ action (start / complete / skip); the finer read states — Scheduled, Missed, a
 split — are **server-derived**.
 _Avoid_: status, OccurrenceStatus, done_on_time/done_late.
 
+**Recurrence cursor** *(client; the live `complete_by` on a recurring definition — #384)*:
+Where a series has **walked to** — the next firing it has not yet resolved, advancing as occurrences
+are marked done. It is emphatically **not** an upper bound: the bound lives on the rule as
+`RecurrenceBound` (`UNTIL`/`COUNT`), per the backend's `2026-06-02-recurrence-anchor-and-bound`. So a
+cursor **in the past is normal** — a missed [[Habit]]'s cursor sits where it stopped advancing — and a
+*cleared* cursor on an item that still has a rule means the series ran out, not "no deadline set". The
+cross-kind [[Item]] projection names it `recurrenceCursorAt` rather than `completeBy`, because on a
+[[Task]] the identically-named domain field is a plain deadline and is deliberately not projected.
+An Archived definition keeps its cursor server-side but has no *next*.
+_Avoid_: deadline, due date, expiry (a cursor never bounds a series); the [[Activity ledger]]'s sync cursor.
+
 **Target date** *(client; wire `target_date`, ADR-0052)*:
 The **soft** "when I *want* this done by" date on an [[Item]] — a self-imposed, anti-procrastination
 target usually set earlier than the hard deadline `completeBy` ("when it **must** be done"). The two
@@ -92,7 +103,8 @@ rule is enforced. A target date drives **ranking and surfacing only** — it nev
 never carries forward, and never becomes an [[Occurrence]] deadline instant. Date-granular by intent:
 unlike the deadline (whose clock is `deadlineTimeOfDay`, ADR-0051) it has no time-of-day. Read on all
 four [[Item kind]]s; writable on [[Task]] only for now.
-_Avoid_: second deadline, soft deadline, due date (only `completeBy` is a deadline); target time.
+_Avoid_: second deadline, soft deadline, due date (on a [[Task]], only `completeBy` is a deadline — on a
+recurring definition it is the [[Recurrence cursor]] instead); target time.
 
 **Priority** *(client; a stored bucket, peer to `pinned` — ADR-0052)*:
 An [[Item]]'s explicit, **deadline-independent** urgency bucket — **Fire**, **Normal** (the default),

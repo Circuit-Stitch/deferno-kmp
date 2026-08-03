@@ -12,12 +12,15 @@ import com.circuitstitch.deferno.core.designsystem.format.LocalToday
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.Attachment
+import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
+import com.circuitstitch.deferno.core.model.Recurrence
+import com.circuitstitch.deferno.core.model.RecurrenceBound
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -30,6 +33,7 @@ import com.circuitstitch.deferno.feature.tasks.SubtaskRow
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import com.circuitstitch.deferno.feature.tasks.buildItemTree
 import kotlin.time.Instant
+import kotlinx.datetime.LocalDate
 import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TaskListScreen
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -40,10 +44,16 @@ import org.robolectric.RobolectricTestRunner
 
 /**
  * Roborazzi screenshot baseline (#27) for the feature Views across key states in the Deferno palette
- * (light + dark) — exercising the design system end-to-end on the JVM-fast path (ADR-0006). Record
- * with `./gradlew :app:androidApp:recordRoborazziDebug` (PNGs committed under src/test/screenshots);
- * CI guards regressions with `verifyRoborazziDebug`. With no Roborazzi mode set, `captureRoboImage`
- * is a no-op, so these run harmlessly as part of the normal unit-test task too.
+ * (light + dark) — exercising the design system end-to-end on the JVM-fast path (ADR-0006). Record with
+ * `./gradlew :app:androidApp:recordRoborazziStagingDebug` (PNGs committed under src/test/screenshots);
+ * compare with `verifyRoborazziStagingDebug`. Baselines are flavor-agnostic, so recording once serves
+ * every variant.
+ *
+ * **Neither task is on the `check` path or in CI** — `grep -i roborazzi .github/workflows/ci.yml` finds
+ * nothing, and the Roborazzi tasks are not wired into `check`. Nothing catches a drifted golden but a
+ * human running `verifyRoborazzi…` deliberately. With no Roborazzi mode set, `captureRoboImage` is a
+ * no-op, so these still run harmlessly as ordinary unit tests; that run proves the Views *compose*, not
+ * that they look right.
  */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -156,6 +166,60 @@ class ScreenshotTest {
         Item("c2", ItemKind.Task, "Wire up the new screens", parentId = "p1", sequence = 1, blocked = true),
         Item("p2", ItemKind.Task, "Water the plants", sequence = 1),
     )
+
+    // The recurring subtitle (#384): one row per shape the cadence line can take, so the golden pins the
+    // whole vocabulary in one image — a weekday list, the EveryNDays(1) → "Daily" renderer rule, an
+    // interval + a dated bound, a counted bound whose series has ENDED (cleared cursor), and a Custom
+    // rule that shows "Custom schedule" rather than its rrule. The last row is the control: a plain Task
+    // has no rule, so it must render exactly as it always has — if it gains a line, the gate is wrong.
+    // Every cursor is fixed relative to SCREENSHOT_TODAY (2026-06-15), which `capture` pins via LocalToday.
+    //
+    // The "Quarterly review" row is deliberately left long enough to CLAMP: MonoMeta is single-line, so a
+    // full phrase ellipsizes on a narrow row and the baseline should say so. Nothing is lost to a screen
+    // reader when it does — the subtitle's clearAndSetSemantics carries the whole line regardless.
+    // Every cursor instant sits at **12:00Z**, deliberately. `LocalToday` pins the day these read against,
+    // but `recurrenceSummary` resolves the instant in the *host* zone, which Roborazzi does not pin — so a
+    // fixture near a UTC midnight renders "Yesterday" on a contributor's machine in Honolulu and
+    // "Tomorrow" on one in Auckland, and the committed PNG only reproduces in the zone that recorded it.
+    // Mid-day keeps every row on the same calendar day from UTC-11 to UTC+11.
+    private val recurringRows = listOf(
+        itemRow(
+            "h1", "Water the plants", kind = ItemKind.Habit,
+            recurrence = Recurrence(Cadence.Weekly(listOf("Mon", "Fri"))),
+            recurrenceCursorAt = Instant.parse("2026-06-16T12:00:00Z"), // Tomorrow
+        ),
+        itemRow(
+            "c1", "Take out the trash", kind = ItemKind.Chore,
+            recurrence = Recurrence(Cadence.EveryNDays(1)), // renders "Daily", never "Every 1 day"
+            recurrenceCursorAt = Instant.parse("2026-06-15T12:00:00Z"), // Today
+        ),
+        itemRow(
+            "e1", "Quarterly review", kind = ItemKind.Event,
+            recurrence = Recurrence(Cadence.Monthly(3), RecurrenceBound.OnDate(LocalDate(2026, 12, 31))),
+            recurrenceCursorAt = Instant.parse("2026-06-20T12:00:00Z"), // In 5 days
+        ),
+        itemRow(
+            "h2", "Physio exercises", kind = ItemKind.Habit,
+            // A counted bound with the cursor CLEARED — the server's "the series ran out" encoding.
+            recurrence = Recurrence(Cadence.Daily, RecurrenceBound.AfterCount(10)),
+        ),
+        itemRow(
+            "c2", "Deep clean the flat", kind = ItemKind.Chore,
+            recurrence = Recurrence(Cadence.Custom("FREQ=MONTHLY;INTERVAL=3;BYDAY=1SA")),
+            recurrenceCursorAt = Instant.parse("2026-09-05T12:00:00Z"), // In 82 days
+        ),
+        itemRow("t1", "Plan the spring launch"),
+    )
+
+    @Test
+    fun itemTree_recurring_light() = capture("item_tree_recurring_light") {
+        TaskListScreen(FakeItemTreeComponent(ItemTreeState(rows = recurringRows)))
+    }
+
+    @Test
+    fun itemTree_recurring_dark() = capture("item_tree_recurring_dark", darkTheme = true) {
+        TaskListScreen(FakeItemTreeComponent(ItemTreeState(rows = recurringRows)))
+    }
 
     @Test
     fun itemTree_readyOnly_default() = capture("item_tree_ready_only_light") {

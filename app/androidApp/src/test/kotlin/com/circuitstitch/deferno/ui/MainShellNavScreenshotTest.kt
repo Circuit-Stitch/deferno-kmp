@@ -39,7 +39,9 @@ import org.robolectric.annotation.Config
  * bar, over the home content) in light + dark, and the **open** state (the content slid aside to reveal
  * the navigation menu underneath). It drives a real [DefaultMainShellComponent] over the in-memory demo
  * repositories on [Dispatchers.Unconfined] (the same harness the interaction test uses). Record with
- * `:app:androidApp:recordRoborazziDebug`.
+ * `:app:androidApp:recordRoborazziStagingDebug` (baselines are flavor-agnostic — record once), compare
+ * with `verifyRoborazziStagingDebug`. **Neither is on the `check` path or in CI**, so only a deliberate
+ * local run catches a drifted golden.
  */
 @RunWith(RobolectricTestRunner::class)
 class MainShellNavScreenshotTest {

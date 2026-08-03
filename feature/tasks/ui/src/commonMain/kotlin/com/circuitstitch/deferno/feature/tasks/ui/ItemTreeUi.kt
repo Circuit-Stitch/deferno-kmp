@@ -635,13 +635,27 @@ private fun ItemTreeRow(
                     hasChildren = row.hasChildren,
                     isExpanded = row.isExpanded,
                     title = item.title,
-                    kind = item.kind,
                     accent = kindColor(item.kind),
                     ringColor = rowColor,
                     inMoveMode = inMoveMode,
                     onToggle = { onToggleExpand(item.id, row.isExpanded) },
                 )
                 Column(modifier = Modifier.weight(1f).padding(vertical = 10.dp)) {
+                    // "Water the plants, habit" — the title is where kind is announced (#384, the parity
+                    // move onto Apple's placement from #393). Kind is otherwise carried only by the node's
+                    // colour, which TalkBack cannot see, and the node itself is the wrong carrier: a
+                    // parent's is a Button (its own merging node, so the row announced two and neither
+                    // named the kind) and a leaf's goes silent in move mode. Kind goes LAST, which is the
+                    // slot the recurrence subtitle below then extends.
+                    //
+                    // A `semantics` block, NOT `clearAndSetSemantics`: contentDescription already wins
+                    // over text for the announcement, and clearing would take the Text semantics with it —
+                    // which every `onNodeWithText` in the tree's tests (and any text-finding a11y service)
+                    // relies on. Note the label is hand-built from the plain title, so it drops the dimmed
+                    // `[GitHub#12]` ref prefix the AnnotatedString may carry. That is deliberate and not a
+                    // bug to "fix": SourceIndicator announces provenance on its own, and Apple speaks the
+                    // bare title too.
+                    val titleA11y = "${item.title}, ${kindA11yLabel(item.kind)}"
                     Text(
                         // A dimmed `[GitHub#N]` ref prefix for a synced/imported item, alongside the
                         // SourceIndicator mark; null provenance renders the bare title unchanged.
@@ -656,7 +670,26 @@ private fun ItemTreeRow(
                         textDecoration = if (item.isTerminal) TextDecoration.LineThrough else TextDecoration.None,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics { contentDescription = titleA11y },
                     )
+                    // The recurring row's cadence + next-due subtitle (#384) — "Weekly on Mon, Wed ·
+                    // Next: Tomorrow". Absent for a Task, which carries no rule, so a Task row renders
+                    // exactly as it did before. It rides HERE rather than as a trailing chip: that gutter
+                    // already carries BlockedChip, the Blocker TreeChip, SourceIndicator and the open
+                    // chevron, and is out of room. It cannot collide with the collapsed-parent progress
+                    // meta below either — `descendantTotal` is structurally null for the recurring kinds
+                    // (the `/items` snapshot computes the subtree counts on Tasks only, and
+                    // `ItemRepository.recurringItem(…)` never sets them).
+                    recurrenceSummary(item)?.let { summary ->
+                        Spacer(Modifier.size(2.dp))
+                        MonoMeta(
+                            text = summary.text,
+                            // The spoken line differs from the written one (the cadence gains its
+                            // "Repeats …" verb), so it replaces rather than augments — and it survives the
+                            // single-line ellipsis the visible MonoMeta takes on a narrow row.
+                            modifier = Modifier.clearAndSetSemantics { contentDescription = summary.a11yLabel },
+                        )
+                    }
                     // Collapsed parent with server-computed counts → a done/total meta + thin progress bar.
                     val total = item.descendantTotal
                     if (row.hasChildren && !row.isExpanded && total != null) {

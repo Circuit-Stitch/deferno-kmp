@@ -34,9 +34,10 @@ import org.robolectric.annotation.Config
  * [DefaultCalendarComponent] over an in-memory [DemoCalendarRepository] on [Dispatchers.Unconfined]
  * (state resolves synchronously), with a **fixed** `today` so the baseline never drifts with the clock.
  *
- * Record with `./gradlew :app:androidApp:recordRoborazziDebug`; CI guards regressions with
- * `verifyRoborazziDebug`. With no Roborazzi mode set, `captureRoboImage` is a no-op, so these also run
- * harmlessly as part of the normal unit-test task.
+ * Record with `./gradlew :app:androidApp:recordRoborazziStagingDebug` (baselines are flavor-agnostic —
+ * record once), compare with `verifyRoborazziStagingDebug`. **Neither is on the `check` path or in CI**,
+ * so only a deliberate local run catches a drifted golden. With no Roborazzi mode set, `captureRoboImage`
+ * is a no-op, so these also run harmlessly as part of the normal unit-test task.
  */
 @RunWith(RobolectricTestRunner::class)
 @OptIn(ExperimentalTestApi::class)

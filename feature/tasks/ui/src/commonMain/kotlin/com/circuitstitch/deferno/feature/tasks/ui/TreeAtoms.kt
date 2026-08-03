@@ -25,7 +25,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.sp
@@ -177,21 +176,26 @@ internal fun Modifier.treeRail(
  * font setting.
  *
  * a11y: a parent's node is a real **Button** — focusable for keyboard / switch access and labelled
- * "Expand/Collapse {title}" with an Expanded/Collapsed state for TalkBack. A **leaf** carries the row's
- * [kind] as its content description ("task" / "habit" / "chore" / "event", #386): the dot is the only
- * place kind is expressed on a tree row, so clearing its semantics outright — as this did — hid kind from
- * TalkBack entirely, the same four-platform gap #393 closed on Apple. It stays a *description*, not a
- * focus stop: the row's own `combinedClickable` merges its descendants, so the kind is read as part of
- * the one row announcement. In [inMoveMode] the list goes calm and the node is fully decorative again —
- * nothing there is interactive, so an extra unmerged announcement would be noise. The reserved node
- * column is always the branch diameter so leaf dots and parent discs share a centre and titles align.
+ * "Expand/Collapse {title}" with an Expanded/Collapsed state for TalkBack. Everything else here is
+ * **decorative**, and says so by clearing its semantics.
+ *
+ * The node deliberately does **not** name the row's kind (#384, reverting that half of #386). It carried
+ * the kind for one release and the placement was wrong in two ways. A leaf's dot is silent in move mode,
+ * so kind vanished exactly when you most need to know what you are dragging; and a *parent*'s node is a
+ * Button, which makes it its own merging semantics node — outside the row's `combinedClickable` merge —
+ * so a parent announced two nodes and neither said the kind, leaving a Habit parent and a Task parent
+ * indistinguishable. Kind now rides the **title Text** in [ItemTreeRow] instead ("Water the plants,
+ * habit"), which is inside the merge, present in every row state, and puts kind last — the position the
+ * recurrence subtitle then extends. Apple has done it that way since #393; this is the parity move.
+ *
+ * The reserved node column is always the branch diameter so leaf dots and parent discs share a centre and
+ * titles align.
  */
 @Composable
 internal fun TreeNode(
     hasChildren: Boolean,
     isExpanded: Boolean,
     title: String,
-    kind: ItemKind,
     accent: Color,
     ringColor: Color,
     inMoveMode: Boolean,
@@ -211,7 +215,6 @@ internal fun TreeNode(
     } else {
         stringResource(Res.string.common_state_collapsed)
     }
-    val kindDescription = kindA11yLabel(kind)
 
     Box(
         modifier = modifier
@@ -231,11 +234,10 @@ internal fun TreeNode(
                         )
                         .focusable()
                         .semantics { stateDescription = foldState }
-                } else if (inMoveMode) {
-                    Modifier.clearAndSetSemantics {}
                 } else {
-                    // A leaf outside move mode: the dot IS the kind, so name it (#386).
-                    Modifier.clearAndSetSemantics { contentDescription = kindDescription }
+                    // Purely decorative: a leaf's dot, or any node in move mode (nothing is interactive
+                    // then). Kind lives on the title Text — see the KDoc.
+                    Modifier.clearAndSetSemantics {}
                 },
             ),
         contentAlignment = Alignment.Center,

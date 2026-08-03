@@ -17,10 +17,13 @@ import java.nio.file.Files
  * `app/shared-l10n/Localizable.xcstrings`. Three real failure modes slip through it, all of which ship
  * a raw catalog key onto an Apple screen while `check` stays green:
  *
- *  1. **The symlink gets clobbered.** `SWIFT_EMIT_LOC_STRINGS = YES` (`app/iosApp/iosApp.xcodeproj/
- *     project.pbxproj`) makes Xcode rewrite `app/iosApp/iosApp/Localizable.xcstrings` *in place*,
- *     replacing the symlink with a ~560KB regular file. From then on the iOS app is built against a
- *     frozen private copy while every new key lands in the shared catalog nobody reads.
+ *  1. **The symlink gets clobbered.** `SWIFT_EMIT_LOC_STRINGS` was `YES` on all three iosApp *app*-target
+ *     configs (`app/iosApp/iosApp.xcodeproj/project.pbxproj`) until #384 pinned it to `NO`; while it was
+ *     on, every iosApp build rewrote `app/iosApp/iosApp/Localizable.xcstrings` *in place*, replacing the
+ *     symlink with a ~560KB regular file. From then on the iOS app was built against a frozen private
+ *     copy while every new key landed in the shared catalog nobody read. The root cause is fixed, so this
+ *     assertion is now a **ratchet**: it fails if the setting is flipped back, or if a newly added Xcode
+ *     target arrives carrying the default.
  *  2. **A half-added key.** An entry with four of the five locales, or an empty value, satisfies the
  *     key-set math; the missing locale silently falls back to the development language at runtime.
  *  3. **An untranslated stub.** Xcode writes `"state": "new"` / `"needs_review"` for a key it extracted
@@ -67,8 +70,9 @@ class AppleCatalogIntegrityTest {
             when {
                 !Files.exists(path, java.nio.file.LinkOption.NOFOLLOW_LINKS) -> "$relative is missing"
                 !Files.isSymbolicLink(path) ->
-                    "$relative is a regular file, not a symlink — Xcode (SWIFT_EMIT_LOC_STRINGS = YES) " +
-                        "clobbered it; restore with `git checkout -- $relative`"
+                    "$relative is a regular file, not a symlink — Xcode clobbered it. Check for a target " +
+                        "with SWIFT_EMIT_LOC_STRINGS = YES (all iosApp configs were pinned to NO in #384); " +
+                        "restore with `git checkout -- $relative`"
                 path.toRealPath() != shared -> "$relative resolves to ${path.toRealPath()}, not $shared"
                 else -> null
             }

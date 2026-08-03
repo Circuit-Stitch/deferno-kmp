@@ -34,9 +34,11 @@ struct SessionExpiredBanner: View {
 /// its parent in a calm tint of the row's kind accent and lands its elbow in the kind node; the [TreeNode]
 /// is the kind dot (leaf) or an accent fold-disc with a rotating chevron (parent) — tapping it toggles a
 /// parent's fold (a leaf node is decorative). A collapsed Task parent shows a `done of total` MonoMeta + a
-/// thin progress bar; the trailing › opens detail (Task kind only — the other kinds have no detail surface
-/// yet). A terminal (Done/Dropped/Archived) row is de-emphasized. Stateless: the handlers take their params
-/// from the row, never from observed state.
+/// thin progress bar; a **recurring** row shows a one-line cadence subtitle instead (#384 — "Weekly on
+/// Mon, Wed · Next: Tomorrow"), the two being mutually exclusive since only Tasks carry subtree counts and
+/// only the recurring kinds carry a rule. The trailing › opens detail (Task kind only — the other kinds
+/// have no detail surface yet). A terminal (Done/Dropped/Archived) row is de-emphasized. Stateless: the
+/// handlers take their params from the row, never from observed state.
 struct ItemRowView: View {
     let row: ItemRow
     let onToggleExpand: (String, Bool) -> Void
@@ -56,8 +58,30 @@ struct ItemRowView: View {
         return (Int(row.item.descendantDone?.intValue ?? 0), Int(total.intValue))
     }
 
+    /// The recurrence subtitle (#384) — "Weekly on Mon, Wed · until Jun 14, 2026 · Next: Tomorrow", plus the
+    /// VoiceOver reading of the same line — or nil for an item carrying no rule, which is every Task. The
+    /// reading is derived per render on purpose: "Next: Tomorrow" is a claim about *today*, and the Flow
+    /// behind the tree only re-emits when the database changes, never when the clock does.
+    ///
+    /// Evaluated ONCE per row render, in `body`, and threaded to both consumers. It is not a computed
+    /// property read twice: each call crosses the Kotlin bridge seven times and derives the cursor twice
+    /// over, and this is per-row, per-frame work in a scrolling tree.
+    private var recurrence: (text: String, spoken: String)? { L.recurrenceLine(row.item) }
+
+    /// The title's spoken label: "Water the plants, habit, Repeats Weekly on Mon, Wed · Next: Tomorrow".
+    /// The cadence is folded in here rather than left to its own `MonoMeta` element because that line is
+    /// muted mono filigree — it *looks* decorative, so a VoiceOver user swiping the row would skip the one
+    /// thing that says this item comes back. The `MonoMeta` hides itself to keep it from being said twice.
+    private func titleA11yLabel(_ recurrence: (text: String, spoken: String)?) -> String {
+        let base = "\(row.item.title), \(kindA11yLabel(row.item.kind))"
+        guard let spoken = recurrence?.spoken else { return base }
+        return "\(base), \(spoken)"
+    }
+
     var body: some View {
-        HStack(spacing: 0) {
+        // Bound once here, then used by both the title's label and the subtitle below — see [recurrence].
+        let recurrence = self.recurrence
+        return HStack(spacing: 0) {
             // Leading rail+node region: the curvy spine (underlay) with the kind node landed at its column.
             ZStack(alignment: .topLeading) {
                 TreeRail(
@@ -89,12 +113,21 @@ struct ItemRowView: View {
                     // "blocked, not finished" read (mirrors Compose `ItemTreeRow`, #290).
                     .foregroundStyle((row.item.isTerminal || row.item.blocked) ? colors.inkMuted : colors.onSurface)
                     // "Water the plants, habit" — the kind rides the title because it is otherwise
-                    // carried ONLY by the node's colour, which VoiceOver can't see (#393). It goes on
-                    // the title Text, not the row: the row has three independently focusable elements
-                    // (fold node, title, open ›) and no `.accessibilityElement(children:)`, so a
-                    // row-level label would swallow both controls. `blocked`/`Blocker` stay on their
-                    // own chips, which already label themselves.
-                    .accessibilityLabel("\(row.item.title), \(kindA11yLabel(row.item.kind))")
+                    // carried ONLY by the node's colour, which VoiceOver can't see (#393); the recurrence
+                    // reading rides it for the same reason (see [titleA11yLabel]). It goes on the title
+                    // Text, not the row: the row has three independently focusable elements (fold node,
+                    // title, open ›) and no `.accessibilityElement(children:)`, so a row-level label would
+                    // swallow both controls. `blocked`/`Blocker` stay on their own chips, which already
+                    // label themselves.
+                    .accessibilityLabel(titleA11yLabel(recurrence))
+                // The recurring subtitle (#384): how often this repeats, how long for, and when it is next
+                // due — one line, directly under the title. A Task never has a rule, so its row is unchanged.
+                if let recurrence {
+                    MonoMeta(recurrence.text)
+                        .padding(.top, 2)
+                        // Already spoken as part of the title's label, so it stays out of the swipe order.
+                        .accessibilityHidden(true)
+                }
                 if let progress {
                     MonoMeta(L.format("tasks_progress_fraction", progress.done, progress.total))
                         .padding(.top, 2)

@@ -27,7 +27,9 @@ import kotlin.time.Instant
 /**
  * Roborazzi screenshot baselines (ADR-0015 Inbox amendment) for the Inbox Destination: the triage queue
  * of Brain dump draft cards (one with a due line + notes, one with an offline note, one mid-accept), and
- * the calm empty state. Record with `./gradlew :app:androidApp:recordRoborazziDebug`; with no Roborazzi
+ * the calm empty state. Record with `./gradlew :app:androidApp:recordRoborazziStagingDebug` (baselines
+ * are flavor-agnostic — record once), compare with `verifyRoborazziStagingDebug`. **Neither is on the
+ * `check` path or in CI**, so only a deliberate local run catches a drifted golden. With no Roborazzi
  * mode set `captureRoboImage` is a no-op, so these also run as part of the normal unit-test task.
  */
 @RunWith(RobolectricTestRunner::class)

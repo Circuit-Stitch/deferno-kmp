@@ -664,6 +664,39 @@ Vielen Dank.</string>
     <string name="tasks_blocked_by_dialog_title">Was blockiert „%1$s“?</string>
     <string name="tasks_blocked_by_error_offline">Offline — Blocker können gerade nicht geändert werden.</string>
     <string name="tasks_blocked_by_error_rejected">Die Änderung wurde abgelehnt — sie würde einen Abhängigkeitszyklus erzeugen oder Organisationen überschreiten.</string>
+    <!-- Kadenz-Vokabular (#384) — die „Wie oft?“-Zeile unter dem Titel eines wiederkehrenden Elements -->
+    <string name="tasks_cadence_custom">Eigener Zeitplan</string>
+    <string name="tasks_cadence_daily">Täglich</string>
+    <!-- „one“ lässt die Zahl weg: „Alle 1 Tage“ wäre ungrammatisch, „Jeden Tag“ ist die richtige Form -->
+    <plurals name="tasks_cadence_every_n_days">
+        <item quantity="one">Jeden Tag</item>
+        <item quantity="other">Alle %1$d Tage</item>
+    </plurals>
+    <!-- „one“ lässt das Intervall weg, wie im Englischen -->
+    <plurals name="tasks_cadence_monthly">
+        <item quantity="one">Monatlich</item>
+        <item quantity="other">Alle %1$d Monate</item>
+    </plurals>
+    <!-- „Mal“ wird nicht gebeugt — beide Formen sind absichtlich identisch -->
+    <plurals name="tasks_cadence_times">
+        <item quantity="one">%1$d Mal</item>
+        <item quantity="other">%1$d Mal</item>
+    </plurals>
+    <!-- Bewusst vage: diese Version kann die Regel nicht lesen -->
+    <string name="tasks_cadence_unknown">Wiederholt sich</string>
+    <!-- Klein: steht in tasks_cadence_with_bound hinter der Kadenz -->
+    <string name="tasks_cadence_until">bis %1$s</string>
+    <!-- Das Leerzeichen am Ende gehört zum Wert -->
+    <string name="tasks_cadence_weekday_separator">, </string>
+    <string name="tasks_cadence_weekly">Wöchentlich</string>
+    <!-- „am“ + Dativ passt zu allen deutschen Wochentagen (alle maskulin): „am Mo, Mi“ -->
+    <string name="tasks_cadence_weekly_on">Wöchentlich am %1$s</string>
+    <!-- Das · beibehalten -->
+    <string name="tasks_cadence_with_bound">%1$s · %2$s</string>
+    <plurals name="tasks_cadence_yearly">
+        <item quantity="one">Jährlich</item>
+        <item quantity="other">Alle %1$d Jahre</item>
+    </plurals>
     <!-- Deutsche Anführungszeichen „…“ -->
     <string name="tasks_delete_item_confirm_title">„%1$s“ löschen?</string>
     <string name="tasks_detail_add_caption">Beschriftung hinzufügen</string>
@@ -794,6 +827,11 @@ Vielen Dank.</string>
     <string name="tasks_moved_snackbar">Verschoben</string>
     <string name="tasks_progress_done">%1$d von %2$d erledigt</string>
     <string name="tasks_progress_fraction">%1$d von %2$d</string>
+    <!-- Screenreader-Vorspann vor der Kadenz: „Wiederholt sich Wöchentlich am Mo, Mi“ -->
+    <string name="tasks_recurrence_a11y_prefix">Wiederholt sich %1$s</string>
+    <!-- „Als Nächstes: Morgen“ — idiomatischer als ein bloßes „Nächste:“ -->
+    <string name="tasks_recurrence_next_due">Als Nächstes: %1$s</string>
+    <string name="tasks_recurrence_series_ended">Serie beendet</string>
     <!-- Sanftes Beiseitelegen — VERB, nie „fallen lassen/aufgeben“ -->
     <string name="tasks_set_aside">Beiseitelegen</string>
     <string name="tasks_set_aside_confirm_title">„%1$s“ beiseitelegen?</string>

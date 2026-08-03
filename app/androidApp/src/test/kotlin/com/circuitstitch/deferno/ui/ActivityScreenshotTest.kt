@@ -39,6 +39,10 @@ import kotlin.time.Instant
  * bucketed under TODAY-aware day dividers, each row carrying its source chip, changed-field hint, and
  * time, plus the empty state. A fake [ActivityComponent] over fixed rows; "today" is pinned via
  * [LocalToday] so the divider doesn't drift with the wall clock.
+ *
+ * Record with `./gradlew :app:androidApp:recordRoborazziStagingDebug` (baselines are flavor-agnostic —
+ * record once), compare with `verifyRoborazziStagingDebug`. **Neither is on the `check` path or in CI**,
+ * so only a deliberate local run catches a drifted golden.
  */
 @RunWith(RobolectricTestRunner::class)
 @OptIn(ExperimentalTestApi::class)

@@ -10,9 +10,11 @@ import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.Task
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlin.time.Instant
 
 /**
  * The unified, cross-kind **read** of the Item store (ADR-0049, #226) — the read half that completes
@@ -92,9 +94,15 @@ private fun Task.toItem() = Item(
 // of a Done/Dropped Task. Recurring kinds carry no subtree counts (the /items snapshot computes them on
 // Tasks only), so the badge fields stay null. The blocked/isBlocker flags are server-derived per item
 // (a recurring row inherits `blocked` from a blocked ancestor), so they project through unchanged (#289).
-private fun Habit.toItem() = recurringItem(id.value, ItemKind.Habit, title, parentId?.value, sequence, definitionState, blocked, isBlocker)
-private fun Chore.toItem() = recurringItem(id.value, ItemKind.Chore, title, parentId?.value, sequence, definitionState, blocked, isBlocker)
-private fun Event.toItem() = recurringItem(id.value, ItemKind.Event, title, parentId?.value, sequence, definitionState, blocked, isBlocker)
+// All three recurring kinds also carry the recurrence PAIR (#384) — the rule and its cursor — because a
+// row cannot read the series without both: on a definition `completeBy` is the moving cursor (backend
+// ADR `2026-06-02-recurrence-anchor-and-bound`), so a cleared cursor means "exhausted" only when a rule
+// is there to say this is a series at all. It lands on the projection as `recurrenceCursorAt`, not
+// `completeBy`, precisely because the Task arm above deliberately projects NEITHER: a Task's `completeBy`
+// is a plain deadline, and forwarding it here would make every dated Task read as a series.
+private fun Habit.toItem() = recurringItem(id.value, ItemKind.Habit, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
+private fun Chore.toItem() = recurringItem(id.value, ItemKind.Chore, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
+private fun Event.toItem() = recurringItem(id.value, ItemKind.Event, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
 
 private fun recurringItem(
     id: String,
@@ -105,6 +113,8 @@ private fun recurringItem(
     state: DefinitionState,
     blocked: Boolean,
     isBlocker: Boolean,
+    recurrence: Recurrence?,
+    recurrenceCursorAt: Instant?,
 ) = Item(
     id = id,
     kind = kind,
@@ -117,4 +127,9 @@ private fun recurringItem(
     // Carry the full "light switch" through (#299) so the tree's command menu can set it — Archived stays
     // the de-emphasis signal ([isTerminal]) AND the value is here for Archive/Restore. Null for a Task above.
     definitionState = state,
+    // The rule + its cursor, verbatim (#384). Deliberately NOT condensed into a reading here: the
+    // reading is relative to *today*, and this Flow re-emits on a DB write, not on a clock tick — see
+    // [recurrenceCursor]. Carry the facts; let the View derive the phrase.
+    recurrence = recurrence,
+    recurrenceCursorAt = recurrenceCursorAt,
 )
