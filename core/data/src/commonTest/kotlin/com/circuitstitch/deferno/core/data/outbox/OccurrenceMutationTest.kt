@@ -180,6 +180,16 @@ class OccurrenceMutationTest {
     }
 
     @Test
+    fun aRescheduleKeysOnItsOriginDateNotItsDestination() {
+        // The fact the #396 barrier rule rests on. A reschedule is an absolute write over TWO days, and
+        // its target names the ORIGIN — so the destination day is a different key by construction, and a
+        // later mark on the new day can never be collapsed into the write that moved the firing there.
+        val move = RescheduleOccurrence("ce-1", ItemKind.Event, "evt-1-item", date, LocalDate(2026, 6, 10))
+        assertEquals(OccurrenceTargets.of(ItemKind.Event, "evt-1-item", date), move.target)
+        assertNotEquals(OccurrenceTargets.of(ItemKind.Event, "evt-1-item", move.newDate), move.target)
+    }
+
+    @Test
     fun theTargetRoundTripsThroughOccurrenceTargets() {
         val target = MarkOccurrence("ce-1", ItemKind.Chore, "cho-1-item", date, OccurrenceAction.Skip).target
         assertEquals(OccurrenceTarget(ItemKind.Chore, "cho-1-item", date), OccurrenceTargets.parse(target))
