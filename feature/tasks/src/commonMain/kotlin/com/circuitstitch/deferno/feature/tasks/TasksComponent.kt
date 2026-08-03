@@ -22,6 +22,7 @@ import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 import kotlinx.coroutines.Dispatchers
@@ -107,6 +108,9 @@ class DefaultTasksComponent(
     // The deadline clock-TIME seam (#348), threaded down into the detail slot for the combined date+time
     // picker (iOS). No-op default so existing tests/callers build without it.
     private val setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit = { _, _ -> },
+    // The soft target-date + priority write seams (#375), threaded beside the deadline pair.
+    private val setTargetDate: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    private val setPriority: suspend (TaskId, Priority) -> Unit = { _, _ -> },
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     // The detail's destructive Delete seam (kebab → confirm), threaded down into the detail slot. Defaults
     // to a no-op so existing tests/callers build without supplying it. The Item tree's command menu (#231)
@@ -183,6 +187,8 @@ class DefaultTasksComponent(
                 createSubtask = createSubtask,
                 setDeadline = setDeadline,
                 setDeadlineTime = setDeadlineTime,
+                setTargetDate = setTargetDate,
+                setPriority = setPriority,
                 setLabels = setLabels,
                 delete = deleteTask,
                 onDeviceAttachments = onDeviceAttachments,

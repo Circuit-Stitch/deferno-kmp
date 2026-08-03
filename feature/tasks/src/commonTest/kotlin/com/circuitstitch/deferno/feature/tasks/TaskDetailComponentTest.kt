@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -48,6 +49,8 @@ private fun TestScope.taskDetailComponent(
     createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
     setDeadline: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
     setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit = { _, _ -> },
+    setTargetDate: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    setPriority: suspend (TaskId, Priority) -> Unit = { _, _ -> },
     setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
     delete: suspend (TaskId) -> Unit = {},
     onDeviceAttachments: OnDeviceAttachments = OnDeviceAttachments.NONE,
@@ -67,6 +70,8 @@ private fun TestScope.taskDetailComponent(
     createSubtask = createSubtask,
     setDeadline = setDeadline,
     setDeadlineTime = setDeadlineTime,
+    setTargetDate = setTargetDate,
+    setPriority = setPriority,
     setLabels = setLabels,
     delete = delete,
     onDeviceAttachments = onDeviceAttachments,
@@ -540,6 +545,99 @@ class TaskDetailComponentTest {
 
         // A null date reaches the seam as a null completeBy — the explicit clear.
         assertEquals(listOf<Pair<TaskId, Instant?>>(TaskId("a") to null), recorded)
+    }
+
+    // --- the soft target date + urgency bucket (#375) ---
+
+    @Test
+    fun setTargetDateLandsOnTheInclusiveEndOfThePickedDay() = runTest {
+        // The soft target is date-granular (there is no target time-of-day), and — unlike complete_by —
+        // the server stores whatever instant we send VERBATIM: `normalize_when_instant` is applied only
+        // to the WHEN axes. So the client alone decides the clock, and "I want it done by the 20th" must
+        // become the INCLUSIVE END of the 20th. Start-of-day would silently mean "by the moment the 20th
+        // begins", ranking it a full day earlier than the person asked for.
+        val recorded = mutableListOf<Pair<TaskId, Instant?>>()
+        val component = taskDetailComponent(
+            TaskId("a"),
+            FakeTaskRepository(listOf(task("a"))),
+            setTargetDate = { id, instant -> recorded += id to instant },
+        )
+        advanceUntilIdle()
+
+        val picked = LocalDate(2026, 6, 20)
+        component.onSetTargetDate(picked)
+        advanceUntilIdle()
+
+        val expected = picked.atTime(LocalTime(23, 59, 59)).toInstant(TimeZone.currentSystemDefault())
+        assertEquals(listOf<Pair<TaskId, Instant?>>(TaskId("a") to expected), recorded)
+    }
+
+    @Test
+    fun setTargetDateIgnoresTheDeadlineClockAndLeavesTheDeadlineAlone() = runTest {
+        // A Task with its own deadline clock: the target date must NOT borrow it (they are independent
+        // axes), and setting a target must not touch completeBy at all.
+        val withClock = task("a").copy(
+            deadlineTimeOfDay = LocalTime(9, 30),
+            completeBy = Instant.parse("2026-07-01T09:30:00Z"),
+        )
+        val targets = mutableListOf<Pair<TaskId, Instant?>>()
+        val deadlines = mutableListOf<Pair<TaskId, Instant?>>()
+        val component = taskDetailComponent(
+            TaskId("a"),
+            FakeTaskRepository(listOf(withClock)),
+            setDeadline = { id, instant -> deadlines += id to instant },
+            setTargetDate = { id, instant -> targets += id to instant },
+        )
+
+        component.state.test {
+            var item = awaitItem()
+            while (item.task?.deadlineTimeOfDay != LocalTime(9, 30)) item = awaitItem()
+            component.onSetTargetDate(LocalDate(2026, 6, 20))
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val expected = LocalDate(2026, 6, 20).atTime(LocalTime(23, 59, 59))
+            .toInstant(TimeZone.currentSystemDefault())
+        assertEquals(listOf<Pair<TaskId, Instant?>>(TaskId("a") to expected), targets)
+        assertEquals(emptyList(), deadlines, "setting the soft target must never write the hard deadline")
+    }
+
+    @Test
+    fun setTargetDateWithNullClearsIt() = runTest {
+        val recorded = mutableListOf<Pair<TaskId, Instant?>>()
+        val component = taskDetailComponent(
+            TaskId("a"),
+            FakeTaskRepository(listOf(task("a"))),
+            setTargetDate = { id, instant -> recorded += id to instant },
+        )
+        advanceUntilIdle()
+
+        component.onSetTargetDate(null)
+        advanceUntilIdle()
+
+        assertEquals(listOf<Pair<TaskId, Instant?>>(TaskId("a") to null), recorded)
+    }
+
+    @Test
+    fun setPriorityForwardsTheBucketToTheSeam() = runTest {
+        val recorded = mutableListOf<Pair<TaskId, Priority>>()
+        val component = taskDetailComponent(
+            TaskId("a"),
+            FakeTaskRepository(listOf(task("a"))),
+            setPriority = { id, priority -> recorded += id to priority },
+        )
+        advanceUntilIdle()
+
+        component.onSetPriority(Priority.Fire)
+        // "Clearing" a priority is spelled Normal — the server has no null form for it.
+        component.onSetPriority(Priority.Normal)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(TaskId("a") to Priority.Fire, TaskId("a") to Priority.Normal),
+            recorded,
+        )
     }
 
     @Test

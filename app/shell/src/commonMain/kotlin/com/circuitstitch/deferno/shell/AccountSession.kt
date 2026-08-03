@@ -33,6 +33,8 @@ import com.circuitstitch.deferno.core.domain.command.SetDoneVisibility
 import com.circuitstitch.deferno.core.domain.command.SetDragAndDrop
 import com.circuitstitch.deferno.core.domain.command.SetTaskBlockedBy
 import com.circuitstitch.deferno.core.domain.command.SetTaskDeadline
+import com.circuitstitch.deferno.core.domain.command.SetTaskPriority
+import com.circuitstitch.deferno.core.domain.command.SetTaskTargetDate
 import com.circuitstitch.deferno.core.domain.command.SetTaskLabels
 import com.circuitstitch.deferno.core.domain.command.SetTaskPinned
 import com.circuitstitch.deferno.core.domain.command.SetTheme
@@ -47,6 +49,7 @@ import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -196,6 +199,19 @@ interface AccountSession {
      * date+time WHEN picker (iOS) can edit the time. Defaulted to a no-op so test fakes build without it.
      */
     val setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit get() = { _, _ -> }
+
+    /**
+     * The Task detail's **soft target date** write seam (#375): maps a `(TaskId, Instant?)` to the
+     * `SetTaskTargetDate` Command. A `null` clears the soft target. Distinct from [setDeadline] — this
+     * never touches `complete_by`. Defaulted to a no-op so test fakes build without it.
+     */
+    val setTargetDate: suspend (TaskId, Instant?) -> Unit get() = { _, _ -> }
+
+    /**
+     * The Task detail's **priority bucket** write seam (#375): maps a `(TaskId, Priority)` to the
+     * `SetTaskPriority` Command. Never null — "no priority" is [Priority.Normal]. Defaulted to a no-op.
+     */
+    val setPriority: suspend (TaskId, Priority) -> Unit get() = { _, _ -> }
 
     /**
      * The Task detail's **Delete** write seam (the kebab → confirm): maps a [TaskId] to the destructive
@@ -392,6 +408,12 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit =
         commandSetDeadlineTime(component.commandExecutor)
 
+    override val setTargetDate: suspend (TaskId, Instant?) -> Unit =
+        commandSetTargetDate(component.commandExecutor)
+
+    override val setPriority: suspend (TaskId, Priority) -> Unit =
+        commandSetPriority(component.commandExecutor)
+
     override val setLabels: suspend (TaskId, List<String>) -> Unit =
         commandSetLabels(component.commandExecutor)
 
@@ -469,6 +491,20 @@ internal fun commandSetDeadlineTime(executor: CommandExecutor): suspend (TaskId,
  * The LABELS write seam backed by a [CommandExecutor]: replaces the Task's label set via [SetTaskLabels]
  * (an empty list clears them — the field is always present). Shared by production and tests.
  */
+/**
+ * The soft TARGET-DATE write seam backed by a [CommandExecutor] (#375): one command with a nullable
+ * operand — a value sets the soft target, a `null` clears it — mirroring the server's `Patch<T>`.
+ */
+internal fun commandSetTargetDate(executor: CommandExecutor): suspend (TaskId, Instant?) -> Unit =
+    { id, targetDate -> executor.execute(SetTaskTargetDate(id, targetDate)) }
+
+/**
+ * The PRIORITY write seam backed by a [CommandExecutor] (#375). Never nullable: lowering an item is
+ * `Backlog`, and "no priority" is `Normal` — the server carries no null form.
+ */
+internal fun commandSetPriority(executor: CommandExecutor): suspend (TaskId, Priority) -> Unit =
+    { id, priority -> executor.execute(SetTaskPriority(id, priority)) }
+
 internal fun commandSetLabels(executor: CommandExecutor): suspend (TaskId, List<String>) -> Unit =
     { id, labels -> executor.execute(SetTaskLabels(id, labels)) }
 
