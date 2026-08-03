@@ -447,10 +447,13 @@ fun localDateInMonth(date: LocalDate, monthRef: LocalDate): Boolean =
 /** The cell dot count for [date] in the visible grid window (Map<LocalDate,Int> is awkward in Swift). */
 fun markerCount(state: CalendarState, date: LocalDate): Int = state.markers[date] ?: 0
 
-/** Occurrence-act gating for an agenda row (ADR — Habit is binary; only Events reschedule). */
+/**
+ * Occurrence-act gating for an agenda row: a Habit firing is binary (Done / Clear only), every other
+ * kind carries the full verb set. There is deliberately no `calendarItemIsEvent` twin — reschedule is
+ * offered for all three recurring kinds (#380), so the gate it fed no longer exists.
+ */
 fun calendarItemActionable(item: CalendarItem): Boolean = item.isActionableOccurrence
 fun calendarItemIsHabit(item: CalendarItem): Boolean = item.kind == ItemKind.Habit
-fun calendarItemIsEvent(item: CalendarItem): Boolean = item.kind == ItemKind.Event
 
 // ---------------------------------------------------------------------------------------------------
 // Date/time picker seams — the New form's date + deadline clock + Event window, and the Search range.

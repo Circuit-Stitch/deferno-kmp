@@ -25,9 +25,10 @@ import kotlin.time.Instant
 /**
  * The Calendar View render test (#74) — a Compose-Multiplatform UI test on the JVM-fast path (no
  * device). It drives the stateless [CalendarContent] with fixed inputs + intent spies, covering: the
- * month grid (label + day-tap selection), the day agenda's **kind-aware** action set (a habit has no
- * start/skip; reschedule is Events-only), the grid-tap reschedule, and — crucially — the absence of any
- * shaming vocabulary (design-principle #4). The component logic is unit-tested in feature:calendar.
+ * month grid (label + day-tap selection), the day agenda's **kind-aware** action set (a habit is binary
+ * — no start/skip; every recurring kind can be rescheduled since #380), the grid-tap reschedule, and —
+ * crucially — the absence of any shaming vocabulary (design-principle #4). The component logic is
+ * unit-tested in feature:calendar.
  */
 @OptIn(ExperimentalTestApi::class)
 class CalendarContentTest {
@@ -41,8 +42,11 @@ class CalendarContentTest {
         title: String = "Entry $id",
         status: WorkingState = WorkingState.Open,
         date: LocalDate = june,
+        source: CalendarSource = CalendarSource.Deferno,
     ) = CalendarItem(
         id = id,
+        // The item id and the series id are distinct values on a real firing (#380) — the act path
+        // addresses `taskId`, the kind index keys on `seriesId`.
         taskId = "task-$id",
         seriesId = seriesId,
         title = title,
@@ -52,7 +56,7 @@ class CalendarContentTest {
         allDay = false,
         status = status,
         kind = kind,
-        source = CalendarSource.Deferno,
+        source = source,
     )
 
     private fun ComposeUiTest.render(
@@ -94,27 +98,46 @@ class CalendarContentTest {
     }
 
     @Test
-    fun habitRowOffersDoneAndClearOnly() = runComposeUiTest {
+    fun habitRowOffersDoneClearAndReschedule_butNoStartOrSkip() = runComposeUiTest {
         render(agenda = listOf(item("h", ItemKind.Habit, title = "Stretch")))
 
         onNodeWithText("Done").assertIsDisplayed()
         onNodeWithText("Clear").assertIsDisplayed()
-        // A habit firing is binary — no start / skip, and no reschedule.
+        // #380: habit reschedule ships server-side (`reschedule_recurring_occurrence`), so it is offered.
+        onNodeWithText("Reschedule").assertIsDisplayed()
+        // A habit firing is still binary — no start / skip.
         onNodeWithText("Start").assertDoesNotExist()
         onNodeWithText("Skip").assertDoesNotExist()
-        onNodeWithText("Reschedule").assertDoesNotExist()
     }
 
     @Test
-    fun choreRowOffersStartDoneSkipClearButNotReschedule() = runComposeUiTest {
+    fun choreRowOffersStartDoneSkipClearAndReschedule() = runComposeUiTest {
         render(agenda = listOf(item("c", ItemKind.Chore, title = "Dishes")))
 
         onNodeWithText("Start").assertIsDisplayed()
         onNodeWithText("Done").assertIsDisplayed()
         onNodeWithText("Skip").assertIsDisplayed()
         onNodeWithText("Clear").assertIsDisplayed()
-        // Habit/chore reschedule is server-unimplemented → not offered (would snap back = shaming).
-        onNodeWithText("Reschedule").assertDoesNotExist()
+        // #380: chore reschedule shares the same server handler as habit and event.
+        onNodeWithText("Reschedule").assertIsDisplayed()
+    }
+
+    @Test
+    fun anExternalRowAndAnUnresolvedKindRowOfferNoActionsAtAll() = runComposeUiTest {
+        // Gentle degradation: a synced Google row and a firing whose kind we couldn't resolve both
+        // render read-only rather than offering a verb that would post to the wrong place (#380).
+        render(
+            agenda = listOf(
+                item("g", ItemKind.Event, title = "Synced meeting", source = CalendarSource.External),
+                item("u", kind = null, title = "Unknown series"),
+            ),
+        )
+
+        onNodeWithText("Synced meeting").assertIsDisplayed()
+        onNodeWithText("Unknown series").assertIsDisplayed()
+        for (verb in listOf("Start", "Done", "Skip", "Clear", "Reschedule")) {
+            onNodeWithText(verb).assertDoesNotExist()
+        }
     }
 
     @Test

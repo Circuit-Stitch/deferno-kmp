@@ -15,16 +15,30 @@ import kotlin.time.Instant
  * (#74). Reads are local Flows over fixed sample data — no network or database; `refreshWindow` /
  * `reconcile` are no-ops (the sample is the source of truth). The real app reads the DI-provided
  * OfflineCalendarRepository (ADR-0014); this stays a test fixture.
+ *
+ * **It resolves `kind` the way production does (#380), not by trusting the sample rows.** `kind` is not
+ * a persisted column: the real store drops it on write and re-derives it at read time from the
+ * `series_id -> kind` index, which `OfflineCalendarRepository.refreshWindow` seeds from the feed rows.
+ * So this fake seeds the same index from its sample rows and re-resolves on every read — a sample row
+ * with no series, or one whose kind the index can't supply, degrades to read-only exactly as it would
+ * in the app. Without this the baselines could render action chips production can never show.
  */
 internal class DemoCalendarRepository(
     private val markers: Map<LocalDate, Int> = emptyMap(),
     private val agenda: Map<LocalDate, List<CalendarItem>> = emptyMap(),
 ) : CalendarRepository {
+
+    /** The `series_id -> kind` index the feed rows assert — the seeding rule `refreshWindow` applies. */
+    private val seriesKinds: Map<String, ItemKind> =
+        agenda.values.flatten().mapNotNull { row ->
+            row.seriesId?.let { series -> row.kind?.let { kind -> series to kind } }
+        }.toMap()
+
     override fun observeMarkers(from: LocalDate, to: LocalDate): Flow<Map<LocalDate, Int>> =
         MutableStateFlow(markers.filterKeys { it >= from && it < to })
 
     override fun observeDay(date: LocalDate): Flow<List<CalendarItem>> =
-        MutableStateFlow(agenda[date] ?: emptyList())
+        MutableStateFlow((agenda[date] ?: emptyList()).map { it.copy(kind = seriesKinds[it.seriesId]) })
 
     override suspend fun refreshWindow(from: LocalDate, to: LocalDate, tz: String) {}
     override suspend fun reconcile() {}
@@ -33,7 +47,11 @@ internal class DemoCalendarRepository(
 /**
  * Sample Calendar content for the screenshot tests (#74): a small, calm month (design-principles.md) —
  * a few days with marker dots, and a selected day whose agenda shows a Habit / Chore / Event firing
- * plus a dated Task, so the kind-aware action set + the gentle status labels render in the baseline.
+ * plus a dated Task, so the kind-aware action set, the read-only degradation and the gentle status
+ * labels all render in the baseline.
+ *
+ * Every firing keeps its item id (`task-…`) distinct from its series id (`…-series`) — the distinction
+ * #380 turns on: the occurrence endpoints address the item, the kind index keys on the series.
  */
 internal object SampleCalendar {
     val day: LocalDate = LocalDate(2026, 6, 15)
@@ -60,9 +78,9 @@ internal object SampleCalendar {
 
     val agenda: Map<LocalDate, List<CalendarItem>> = mapOf(
         day to listOf(
-            item("h1", ItemKind.Habit, "hab-1", "Morning stretch"),
-            item("c1", ItemKind.Chore, "cho-1", "Water the plants", status = WorkingState.Done),
-            item("e1", ItemKind.Event, "evt-1", "Team standup"),
+            item("h1", ItemKind.Habit, "hab-1-series", "Morning stretch"),
+            item("c1", ItemKind.Chore, "cho-1-series", "Water the plants", status = WorkingState.Done),
+            item("e1", ItemKind.Event, "evt-1-series", "Team standup"),
             // A one-off dated Task (no series) — rendered, read-only (acted on in Tasks).
             item("t1", kind = null, seriesId = null, title = "Pay the rent"),
         ),
