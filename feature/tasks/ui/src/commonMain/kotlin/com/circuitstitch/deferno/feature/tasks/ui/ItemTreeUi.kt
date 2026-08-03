@@ -136,6 +136,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_empty_bo
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_empty_title
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_filtered_empty_body
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_filtered_empty_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_in_today_empty_body
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_refreshing
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_tree_show_blocked
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_unblock_confirm_releases
@@ -173,7 +174,28 @@ internal const val ItemTreeTag = "itemTree"
 private val TreeRowStartInset = 12.dp
 
 // The calm in-list filter segments ("In today" / "Active" / "All") are local view state, not a component
-// intent — resolved from string resources inside [EverythingSearchFilter]. "Active" hides terminals.
+// intent — resolved from string resources inside [EverythingSearchFilter].
+
+/**
+ * Which rows the local segmented filter leaves visible (#386). Three real arms — before this, segment 0
+ * ("In today") fell into `else` and was byte-identical to **All**, so the label was a lie in the loudest
+ * possible direction: it *widened*, and a user checking "is this on my plan today?" learned nothing.
+ *  - **0 · In today** — the kind-neutral [inTodayIds] set (today's plan ∪ today's firings, joined by the
+ *    shell). A View wired without it narrows to nothing rather than silently widening to everything.
+ *  - **1 · Active** — non-terminal rows.
+ *  - **else · All** — everything (terminal rows still show, de-emphasized).
+ *
+ * A flat filter over the already-flattened rows, exactly like the Active arm it joins: a surviving child
+ * whose parent was filtered out keeps its full-tree indent and rail. That imperfection predates this
+ * change (and both Apple twins share it); rooting each match in its ancestor chain is the *search* path's
+ * job, and doing it here would put rows the user did not narrow to back on screen under the label.
+ */
+internal fun visibleTreeRows(rows: List<ItemRow>, filterIndex: Int, inTodayIds: Set<String>): List<ItemRow> =
+    when (filterIndex) {
+        0 -> rows.filter { it.item.id in inTodayIds }
+        1 -> rows.filterNot { it.item.isTerminal }
+        else -> rows
+    }
 
 /**
  * The Tasks Item tree ("Everything"): a calm header band (title + count + a read-only search bar + a
@@ -185,9 +207,8 @@ private val TreeRowStartInset = 12.dp
  * Done). Empty/refreshing states mirror the calm copy of the other Tasks panes.
  *
  * [onSearch] opens the global Search overlay (no-op default; the integrator wires it). [onAdd] starts a new
- * tree (no-op default). The segmented filter is **local view state**: it filters the displayed rows only —
- * "Active" hides terminal items, "All" shows everything; "In today" shows all for now (plan membership
- * isn't on [com.circuitstitch.deferno.core.model.Item] yet).
+ * tree (no-op default). The segmented filter is **local view state** — which segment is selected never
+ * leaves this View; it filters the displayed rows only, per [visibleTreeRows].
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -234,6 +255,10 @@ internal fun ItemTreeContent(
     // map's presence), so a non-Task row gets the cross-kind subset (Add subtask · Move) on kind alone.
     // All defaulted inert so read-only callers / tests render without wiring the menu writes.
     menuStates: Map<String, TaskMenuState> = emptyMap(),
+    // The kind-neutral "in today" id set (#386) the first filter segment narrows on — today's plan
+    // (Tasks) unioned with today's firings (recurring kinds), joined by the shell. Empty default: an
+    // unwired caller's "In today" shows nothing, never everything (see [visibleTreeRows]).
+    inTodayIds: Set<String> = emptySet(),
     onAddSubtask: (parentId: String, title: String) -> Unit = { _, _ -> },
     onSetPinned: (id: String, pinned: Boolean) -> Unit = { _, _ -> },
     onSetInPlan: (id: String, inPlan: Boolean) -> Unit = { _, _ -> },
@@ -262,16 +287,12 @@ internal fun ItemTreeContent(
     }
     val moveFocus = if (moveMode != null) Modifier.focusRequester(focusRequester).focusable() else Modifier
 
-    // Local in-list filter (#231): "Active" hides terminal items; "All" shows everything. Defaults to "All"
-    // so the tree's existing behaviour is unchanged (terminal rows still show, de-emphasized) — the filter
-    // is an opt-in narrowing, calm and non-destructive. ponytail: "In today" shows all for now — plan
-    // membership isn't on the Item projection yet, so there's nothing to narrow on without a new field.
+    // Local in-list filter (#231/#386), see [visibleTreeRows]. Defaults to "All" so the tree's existing
+    // behaviour is unchanged (terminal rows still show, de-emphasized) — the filter is an opt-in
+    // narrowing, calm and non-destructive.
     var filterIndex by remember { mutableIntStateOf(2) } // default to "All" — preserve existing behaviour
-    val visibleRows = remember(rows, filterIndex) {
-        when (filterIndex) {
-            1 -> rows.filterNot { it.item.isTerminal } // Active
-            else -> rows // In today (for now) + All
-        }
+    val visibleRows = remember(rows, filterIndex, inTodayIds) {
+        visibleTreeRows(rows, filterIndex, inTodayIds)
     }
 
     Column(
@@ -354,10 +375,13 @@ internal fun ItemTreeContent(
                         } else {
                             stringResource(Res.string.tasks_tree_filtered_empty_title)
                         },
-                        body = if (rows.isEmpty()) {
-                            stringResource(Res.string.tasks_tree_empty_body)
-                        } else {
-                            stringResource(Res.string.tasks_tree_filtered_empty_body)
+                        // Now that "In today" really narrows (#386), the shared filtered body
+                        // ("Everything here is done…") would misdiagnose an empty one: nothing is done,
+                        // nothing is simply on today's plan. Segment 0 gets its own honest sentence.
+                        body = when {
+                            rows.isEmpty() -> stringResource(Res.string.tasks_tree_empty_body)
+                            filterIndex == 0 -> stringResource(Res.string.tasks_tree_in_today_empty_body)
+                            else -> stringResource(Res.string.tasks_tree_filtered_empty_body)
                         },
                     )
                 }
@@ -611,6 +635,7 @@ private fun ItemTreeRow(
                     hasChildren = row.hasChildren,
                     isExpanded = row.isExpanded,
                     title = item.title,
+                    kind = item.kind,
                     accent = kindColor(item.kind),
                     ringColor = rowColor,
                     inMoveMode = inMoveMode,

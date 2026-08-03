@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.sp
@@ -176,15 +177,21 @@ internal fun Modifier.treeRail(
  * font setting.
  *
  * a11y: a parent's node is a real **Button** — focusable for keyboard / switch access and labelled
- * "Expand/Collapse {title}" with an Expanded/Collapsed state for TalkBack. A leaf (or any node in
- * [inMoveMode], where the list goes calm) is decorative and carries no semantics. The reserved node column
- * is always the branch diameter so leaf dots and parent discs share a centre and titles stay aligned.
+ * "Expand/Collapse {title}" with an Expanded/Collapsed state for TalkBack. A **leaf** carries the row's
+ * [kind] as its content description ("task" / "habit" / "chore" / "event", #386): the dot is the only
+ * place kind is expressed on a tree row, so clearing its semantics outright — as this did — hid kind from
+ * TalkBack entirely, the same four-platform gap #393 closed on Apple. It stays a *description*, not a
+ * focus stop: the row's own `combinedClickable` merges its descendants, so the kind is read as part of
+ * the one row announcement. In [inMoveMode] the list goes calm and the node is fully decorative again —
+ * nothing there is interactive, so an extra unmerged announcement would be noise. The reserved node
+ * column is always the branch diameter so leaf dots and parent discs share a centre and titles align.
  */
 @Composable
 internal fun TreeNode(
     hasChildren: Boolean,
     isExpanded: Boolean,
     title: String,
+    kind: ItemKind,
     accent: Color,
     ringColor: Color,
     inMoveMode: Boolean,
@@ -204,6 +211,7 @@ internal fun TreeNode(
     } else {
         stringResource(Res.string.common_state_collapsed)
     }
+    val kindDescription = kindA11yLabel(kind)
 
     Box(
         modifier = modifier
@@ -223,8 +231,11 @@ internal fun TreeNode(
                         )
                         .focusable()
                         .semantics { stateDescription = foldState }
-                } else {
+                } else if (inMoveMode) {
                     Modifier.clearAndSetSemantics {}
+                } else {
+                    // A leaf outside move mode: the dot IS the kind, so name it (#386).
+                    Modifier.clearAndSetSemantics { contentDescription = kindDescription }
                 },
             ),
         contentAlignment = Alignment.Center,
