@@ -70,5 +70,6 @@ mechanical half of this on the `check` path.
 | [0050](0050-task-dependency-edges-server-derived-blocked-flags.md) | Task dependency edges are client-writable; the Blocked and blocker flags are server-derived | Accepted | 2026-06-26 |
 | [0051](0051-client-when-decomposition-day-plus-optional-clock.md) | WHEN decomposes to day + optional clock; all-day is derived, and the offline-first client normalizes locally | Accepted | 2026-08-02 |
 | [0052](0052-soft-target-date-and-stored-priority-bucket.md) | The soft Target date and the stored Priority bucket are read on all four kinds and written on Task | Accepted | 2026-08-02 |
+| [0053](0053-client-reproduces-occurrence-grid-offline.md) | The client reproduces the Occurrence grid offline, and the server ships the expansion inputs it needs | Accepted | 2026-08-03 |
 
-_52 records. Next free number: **0053**._
+_53 records. Next free number: **0054**._
