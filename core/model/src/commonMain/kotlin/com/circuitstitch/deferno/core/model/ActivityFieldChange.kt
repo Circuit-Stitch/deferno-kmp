@@ -25,6 +25,10 @@ enum class ActivityField {
     Labels,
     Status,
     Pinned,
+    // The two #375 peers: the SOFT target date (distinct from [Deadline], which is the hard
+    // `complete_by`) and the urgency bucket. Both ride the PATCH path, so the ledger captures them.
+    TargetDate,
+    Priority,
     Unknown,
     ;
 
@@ -37,6 +41,10 @@ enum class ActivityField {
             "labels" -> Labels
             "status" -> Status
             "pinned" -> Pinned
+            // NOT folded into Deadline: conflating the soft target with the hard deadline in the Trail
+            // would report "you changed the deadline" for an edit that never touched it.
+            "target_date" -> TargetDate
+            "priority" -> Priority
             else -> Unknown
         }
     }

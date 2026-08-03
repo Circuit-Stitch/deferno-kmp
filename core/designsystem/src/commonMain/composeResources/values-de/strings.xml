@@ -984,7 +984,9 @@ Vielen Dank.</string>
     <!-- Vermenschlichte Feldnamen für die Liste geänderter Felder des Aktualisiert-Ereignisses. -->
     <string name="activity_field_title">Titel</string>
     <string name="activity_field_deadline">Frist</string>
+    <string name="activity_field_target_date">Zieldatum</string>
     <string name="activity_field_pinned">Angeheftet</string>
+    <string name="activity_field_priority">Priorität</string>
     <string name="activity_field_status">Status</string>
     <string name="activity_diff_empty">Keine Feldänderungen erfasst.</string>
     <string name="activity_diff_open_item">Element öffnen</string>
@@ -994,4 +996,18 @@ Vielen Dank.</string>
     <string name="activity_value_unpinned">Nicht angeheftet</string>
     <!-- Leerer Verlauf (noch keine Kommentare und kein Verlauf). -->
     <string name="tasks_detail_trail_empty">Noch keine Aktivität</string>
+
+    <string name="tasks_detail_property_target_date">Zieldatum</string>
+    <string name="tasks_detail_no_target_date">Kein Zieldatum</string>
+    <string name="tasks_detail_set_target_date">Zieldatum festlegen</string>
+    <string name="tasks_detail_clear_target_date_a11y">Zieldatum entfernen</string>
+    <string name="tasks_detail_target_date_a11y">Zieldatum: %1$s. Zum Ändern tippen.</string>
+    <string name="tasks_detail_property_priority">Priorität</string>
+    <string name="tasks_detail_priority_picker_title">Priorität festlegen</string>
+    <string name="tasks_detail_priority_row_a11y">Priorität: %1$s. Zum Ändern tippen.</string>
+    <string name="common_priority_fire">Dringend</string>
+    <string name="common_priority_normal">Normal</string>
+    <string name="common_priority_backlog">Später</string>
+    <string name="search_sort_priority">Priorität</string>
+    <string name="plan_why_fire">Du hast gesagt, das hier ist dringend</string>
 </resources>

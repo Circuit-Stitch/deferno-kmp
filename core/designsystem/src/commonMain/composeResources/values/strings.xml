@@ -1233,7 +1233,11 @@ Thank you.</string>
     <!-- Humanized field names for the Updated event's changed-field list. -->
     <string name="activity_field_title">Title</string>
     <string name="activity_field_deadline">Deadline</string>
+    <!-- #375: the SOFT target day, listed beside the hard Deadline it is a peer of — never "deadline" itself. -->
+    <string name="activity_field_target_date">Target date</string>
     <string name="activity_field_pinned">Pinned</string>
+    <!-- #375: the urgency bucket, a peer of Pinned. Same word as tasks_detail_property_priority in every locale. -->
+    <string name="activity_field_priority">Priority</string>
     <string name="activity_field_status">Status</string>
     <string name="activity_diff_empty">No field changes were recorded.</string>
     <string name="activity_diff_open_item">Open item</string>
@@ -1243,4 +1247,32 @@ Thank you.</string>
     <string name="activity_value_unpinned">Not pinned</string>
     <!-- Empty Trail (no comments and no history yet). -->
     <string name="tasks_detail_trail_empty">No activity yet</string>
+
+    <!-- Target date + Priority (#375). TARGET DATE is the SOFT "when I want it done by" day — a peer of the
+         HARD deadline (tasks_detail_property_when / tasks_detail_property_due), never a second deadline: it
+         drives ranking and surfacing only and never moves the calendar. Do NOT translate it as "deadline". -->
+    <string name="tasks_detail_property_target_date">Target date</string>
+    <!-- Muted placeholder in the Target date row when none is set — sibling of tasks_detail_no_description. -->
+    <string name="tasks_detail_no_target_date">No target date</string>
+    <!-- onClickLabel/cd twins of tasks_detail_set_due_date + tasks_detail_clear_due_date_a11y. -->
+    <string name="tasks_detail_set_target_date">Set target date</string>
+    <string name="tasks_detail_clear_target_date_a11y">Clear target date</string>
+    <!-- Row cd; arg = the formatted target day. Twin of tasks_detail_due_date_a11y. -->
+    <string name="tasks_detail_target_date_a11y">Target date: %1$s. Tap to change.</string>
+    <!-- PRIORITY is the deadline-independent urgency bucket (peer of pinned). Row label + picker twins of
+         tasks_detail_property_status / tasks_detail_status_picker_title / tasks_detail_status_row_a11y. -->
+    <string name="tasks_detail_property_priority">Priority</string>
+    <string name="tasks_detail_priority_picker_title">Set priority</string>
+    <string name="tasks_detail_priority_row_a11y">Priority: %1$s. Tap to change.</string>
+    <!-- The three Priority buckets (core/model Priority) — shared vocabulary like common_status_*: the detail
+         row, the picker and every ranked chip read these. 'Fire' is the URGENCY metaphor for the top lane, not
+         literal fire — translate the meaning. 'Backlog' SINKS to the bottom but stays VISIBLE: never render it
+         as hidden, archived, dropped or deleted. 'Normal' is the default bucket. -->
+    <string name="common_priority_fire">Fire</string>
+    <string name="common_priority_normal">Normal</string>
+    <string name="common_priority_backlog">Backlog</string>
+    <!-- Search sort chip for the canonical ranked key (bucket, then the soonest of target date / deadline). -->
+    <string name="search_sort_priority">Priority</string>
+    <!-- whyLine() branch for a Fire-priority task — sibling of plan_why_pinned; keep the gentle first-person register. -->
+    <string name="plan_why_fire">You said this one's urgent</string>
 </resources>

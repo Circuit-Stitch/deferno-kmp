@@ -983,7 +983,9 @@ Agradeço.</string>
     <string name="activity_history_updated_fields">Editou: %1$s</string>
     <string name="activity_field_title">Título</string>
     <string name="activity_field_deadline">Prazo</string>
+    <string name="activity_field_target_date">Data alvo</string>
     <string name="activity_field_pinned">Fixado</string>
+    <string name="activity_field_priority">Prioridade</string>
     <string name="activity_field_status">Estado</string>
     <string name="activity_diff_empty">Nenhuma alteração de campo registrada.</string>
     <string name="activity_diff_open_item">Abrir item</string>
@@ -992,4 +994,18 @@ Agradeço.</string>
     <string name="activity_value_pinned">Fixado</string>
     <string name="activity_value_unpinned">Não fixado</string>
     <string name="tasks_detail_trail_empty">Nenhuma atividade ainda</string>
+
+    <string name="tasks_detail_property_target_date">Data alvo</string>
+    <string name="tasks_detail_no_target_date">Sem data alvo</string>
+    <string name="tasks_detail_set_target_date">Definir data alvo</string>
+    <string name="tasks_detail_clear_target_date_a11y">Limpar data alvo</string>
+    <string name="tasks_detail_target_date_a11y">Data alvo: %1$s. Toque para mudar.</string>
+    <string name="tasks_detail_property_priority">Prioridade</string>
+    <string name="tasks_detail_priority_picker_title">Definir prioridade</string>
+    <string name="tasks_detail_priority_row_a11y">Prioridade: %1$s. Toque para alterar.</string>
+    <string name="common_priority_fire">Urgente</string>
+    <string name="common_priority_normal">Normal</string>
+    <string name="common_priority_backlog">Mais tarde</string>
+    <string name="search_sort_priority">Prioridade</string>
+    <string name="plan_why_fire">Você disse que isso é urgente</string>
 </resources>
