@@ -61,6 +61,18 @@ class SqlDelightEventLocalStore(
             is_blocker = e.is_blocker,
             target_date = e.target_date,
             priority = e.priority,
+            recurrence_interval = e.recurrence_interval,
+            recurrence_anchor_type = e.recurrence_anchor_type,
+            recurrence_anchor_day = e.recurrence_anchor_day,
+            recurrence_anchor_nth = e.recurrence_anchor_nth,
+            recurrence_anchor_weekday = e.recurrence_anchor_weekday,
+            recurrence_month = e.recurrence_month,
+            recurrence_day = e.recurrence_day,
+            recurrence_rrule = e.recurrence_rrule,
+            recurrence_end_type = e.recurrence_end_type,
+            recurrence_end_date = e.recurrence_end_date,
+            recurrence_end_count = e.recurrence_end_count,
+            recurrence_raw_type = e.recurrence_raw_type,
         )
     }
 

@@ -14,10 +14,13 @@ import com.circuitstitch.deferno.core.model.EventId
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.MonthlyAnchor
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Recurrence
+import com.circuitstitch.deferno.core.model.RecurrenceBound
 import com.circuitstitch.deferno.core.model.RecurrenceFrequency
 import kotlinx.coroutines.Dispatchers
+import kotlinx.datetime.LocalDate
 import kotlinx.coroutines.test.runTest
 import kotlin.time.Instant
 import kotlin.test.Test
@@ -91,6 +94,99 @@ class RecurringLocalStoreTest {
 
         store.delete(ChoreId("c-1"))
         assertNull(store.get(ChoreId("c-1")))
+    }
+
+    /**
+     * **The #382 regression, against real SQLite.** The reported symptom was a chore: `every_n_days` had
+     * no domain representation, so it persisted as the literal enum name `"Unknown"` and the interval was
+     * discarded — an every-30-days and an every-29-days chore became the same cached row, and the
+     * original cadence was unrecoverable. The `end` bound had no column at all.
+     *
+     * This asserts the whole rule survives write → read **unchanged** (`assertEquals` on the domain
+     * object, so any dropped column fails it), through the genuine `DefernoDatabase` schema rather than
+     * a fake store.
+     */
+    @Test
+    fun anEveryNDaysRuleWithAnAfterCountBoundSurvivesRealSqliteUnchanged() = runTest {
+        val store = SqlDelightChoreLocalStore(db(), Dispatchers.Default)
+        val chore = Chore(
+            id = ChoreId("c-2"),
+            orgSlug = "u-e4h2qk",
+            title = "replace the filter",
+            definitionState = DefinitionState.Active,
+            recurrence = Recurrence(
+                frequency = RecurrenceFrequency.EveryNDays,
+                interval = 30,
+                bound = RecurrenceBound.AfterCount(10),
+            ),
+            cadenceMode = "rolling",
+            dateCreated = created,
+        )
+
+        store.upsert(chore)
+        val reread = store.get(ChoreId("c-2"))
+
+        assertEquals(chore, reread)
+        // Spelled out, because `assertEquals` on the whole row would still pass if BOTH sides were wrong
+        // in the same way — these are the two values the bug destroyed.
+        assertEquals(RecurrenceFrequency.EveryNDays, reread?.recurrence?.frequency)
+        assertEquals(30, reread?.recurrence?.interval)
+        assertEquals(RecurrenceBound.AfterCount(10), reread?.recurrence?.bound)
+
+        // …and the neighbouring interval is genuinely a DIFFERENT cached row, which it was not before.
+        val faster = chore.copy(
+            id = ChoreId("c-3"),
+            recurrence = chore.recurrence?.copy(interval = 29),
+        )
+        store.upsert(faster)
+        assertEquals(29, store.get(ChoreId("c-3"))?.recurrence?.interval)
+        assertEquals(30, store.get(ChoreId("c-2"))?.recurrence?.interval)
+    }
+
+    /**
+     * Every cadence shape and every bound, on all three recurring tables — the three `.sq` column sets
+     * and the three entity mappings are separate code, so one of them silently dropping a column is
+     * exactly the failure this catches.
+     */
+    @Test
+    fun everyCadenceAndBoundRoundTripsThroughRealSqliteOnAllThreeRecurringKinds() = runTest {
+        val rules = listOf(
+            Recurrence(RecurrenceFrequency.Daily),
+            Recurrence(RecurrenceFrequency.EveryNDays, interval = 3),
+            Recurrence(RecurrenceFrequency.Weekly, days = listOf("Mon", "Wed")),
+            Recurrence(
+                RecurrenceFrequency.Monthly,
+                interval = 1,
+                monthlyAnchor = MonthlyAnchor.DayOfMonth(15),
+            ),
+            Recurrence(
+                RecurrenceFrequency.Monthly,
+                interval = 2,
+                // nth = -1 is the "last Friday" sentinel; it must survive as a NEGATIVE integer.
+                monthlyAnchor = MonthlyAnchor.NthWeekday(nth = -1, weekday = "Fri"),
+                bound = RecurrenceBound.OnDate(LocalDate(2027, 1, 31)),
+            ),
+            Recurrence(RecurrenceFrequency.Yearly, interval = 1, month = 6, day = 14),
+            Recurrence(RecurrenceFrequency.Custom, rrule = "FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20270131T235959Z"),
+            // A cadence this client cannot model still round-trips under its preserved wire token,
+            // instead of becoming the literal string "Unknown" and being lost.
+            Recurrence(RecurrenceFrequency.Unknown, rawType = "fortnightly", interval = 2),
+        )
+        val database = db()
+        val habits = SqlDelightHabitLocalStore(database, Dispatchers.Default)
+        val chores = SqlDelightChoreLocalStore(database, Dispatchers.Default)
+        val events = SqlDelightEventLocalStore(database, Dispatchers.Default)
+
+        rules.forEachIndexed { i, rule ->
+            habits.upsert(habitOf("h-$i").copy(recurrence = rule))
+            assertEquals(rule, habits.get(HabitId("h-$i"))?.recurrence, "habit $rule")
+
+            chores.upsert(choreOf("c-$i").copy(recurrence = rule))
+            assertEquals(rule, chores.get(ChoreId("c-$i"))?.recurrence, "chore $rule")
+
+            events.upsert(eventOf("e-$i").copy(recurrence = rule))
+            assertEquals(rule, events.get(EventId("e-$i"))?.recurrence, "event $rule")
+        }
     }
 
     @Test

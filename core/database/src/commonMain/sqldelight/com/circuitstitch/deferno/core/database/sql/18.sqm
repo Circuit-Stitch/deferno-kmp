@@ -1,0 +1,79 @@
+-- Migration 18 -> 19: cache the WHOLE recurrence rule on the three recurring kinds (#382).
+--
+-- `recurrence_type` + `recurrence_days` could express only "a frequency and, if weekly, some weekdays".
+-- Every other cadence parameter and the entire `end` bound were dropped, so a cache round-trip did not
+-- merely fail to render a rule — it DESTROYED it. An every-30-days chore and an every-29-days chore were
+-- the same row; `every_n_days` and `custom` had no domain representation at all and persisted as the
+-- literal enum name "Unknown", from which the original cadence was unrecoverable.
+--
+-- Twelve flat nullable primitives per table, NOT one `recurrence_json` blob. The three tables state a
+-- no-adapters invariant (every column a SQL primitive, all row<->domain conversion in Kotlin); a blob
+-- would breach it, and would also make "find every item recurring monthly" impossible without a
+-- full-table Kotlin scan.
+--
+-- Which columns are meaningful is decided by `recurrence_type` — all are NULL for a cadence that does
+-- not use them, which is the same value a pre-migration row carries, so **no back-fill is needed**: a
+-- row written before this migration decodes to exactly the rule it already had (frequency + days, no
+-- parameters, the Never bound) and is repopulated on the next `/items` refresh. Contrast 16->17's
+-- `occurred_at`, which had to be back-filled because NULL sorted it out of reach.
+--
+-- Three column-group notes, each load-bearing:
+--   * `recurrence_interval` is the cycle multiplier for BOTH wire spellings — `every_n_days.n` and
+--     `monthly`/`yearly`'s `interval`. They are one domain concept (the multiplier; the frequency
+--     supplies the unit) and can never co-occur on the wire.
+--   * the `recurrence_anchor_*` trio (the monthly `on` anchor) is kept SEPARATE from the yearly
+--     `recurrence_month`/`recurrence_day` pair. Monthly and yearly are mutually exclusive, so one shared
+--     "day" column would fit — but then a monthly row would decode with BOTH an anchor and a stray
+--     day-of-month, and the write->read round-trip would no longer be an identity.
+--   * a NULL `recurrence_end_type` reads as the Never bound. That mirrors the wire exactly, where an
+--     absent `end` key IS never (the backend's `Serialize` skips it) — so NULL is the correct reading
+--     here, not merely a safe fallback.
+--
+-- `recurrence_raw_type` holds the wire token of a cadence this client version cannot model, so an
+-- additive future cadence survives the cache and the Backup file under its own name instead of being
+-- flattened to "Unknown" and made unrestorable.
+--
+-- The `*_type` columns store the DOMAIN sealed-subtype name (`DayOfMonth`/`NthWeekday`,
+-- `Never`/`OnDate`/`AfterCount`), like `definition_state` and `priority` — the wire tokens stay in
+-- core:network (ADR-0011). The decoders degrade an unrecognised token rather than throwing.
+--
+-- Plain forward ADD COLUMN, in the same order as the CREATE TABLE tail (ADD COLUMN appends, so the
+-- order is part of the schema). Never edit a released migration or snapshot — ADR-0022 runbook.
+ALTER TABLE habitEntity ADD COLUMN recurrence_interval INTEGER;
+ALTER TABLE habitEntity ADD COLUMN recurrence_anchor_type TEXT;
+ALTER TABLE habitEntity ADD COLUMN recurrence_anchor_day INTEGER;
+ALTER TABLE habitEntity ADD COLUMN recurrence_anchor_nth INTEGER;
+ALTER TABLE habitEntity ADD COLUMN recurrence_anchor_weekday TEXT;
+ALTER TABLE habitEntity ADD COLUMN recurrence_month INTEGER;
+ALTER TABLE habitEntity ADD COLUMN recurrence_day INTEGER;
+ALTER TABLE habitEntity ADD COLUMN recurrence_rrule TEXT;
+ALTER TABLE habitEntity ADD COLUMN recurrence_end_type TEXT;
+ALTER TABLE habitEntity ADD COLUMN recurrence_end_date TEXT;
+ALTER TABLE habitEntity ADD COLUMN recurrence_end_count INTEGER;
+ALTER TABLE habitEntity ADD COLUMN recurrence_raw_type TEXT;
+
+ALTER TABLE choreEntity ADD COLUMN recurrence_interval INTEGER;
+ALTER TABLE choreEntity ADD COLUMN recurrence_anchor_type TEXT;
+ALTER TABLE choreEntity ADD COLUMN recurrence_anchor_day INTEGER;
+ALTER TABLE choreEntity ADD COLUMN recurrence_anchor_nth INTEGER;
+ALTER TABLE choreEntity ADD COLUMN recurrence_anchor_weekday TEXT;
+ALTER TABLE choreEntity ADD COLUMN recurrence_month INTEGER;
+ALTER TABLE choreEntity ADD COLUMN recurrence_day INTEGER;
+ALTER TABLE choreEntity ADD COLUMN recurrence_rrule TEXT;
+ALTER TABLE choreEntity ADD COLUMN recurrence_end_type TEXT;
+ALTER TABLE choreEntity ADD COLUMN recurrence_end_date TEXT;
+ALTER TABLE choreEntity ADD COLUMN recurrence_end_count INTEGER;
+ALTER TABLE choreEntity ADD COLUMN recurrence_raw_type TEXT;
+
+ALTER TABLE eventEntity ADD COLUMN recurrence_interval INTEGER;
+ALTER TABLE eventEntity ADD COLUMN recurrence_anchor_type TEXT;
+ALTER TABLE eventEntity ADD COLUMN recurrence_anchor_day INTEGER;
+ALTER TABLE eventEntity ADD COLUMN recurrence_anchor_nth INTEGER;
+ALTER TABLE eventEntity ADD COLUMN recurrence_anchor_weekday TEXT;
+ALTER TABLE eventEntity ADD COLUMN recurrence_month INTEGER;
+ALTER TABLE eventEntity ADD COLUMN recurrence_day INTEGER;
+ALTER TABLE eventEntity ADD COLUMN recurrence_rrule TEXT;
+ALTER TABLE eventEntity ADD COLUMN recurrence_end_type TEXT;
+ALTER TABLE eventEntity ADD COLUMN recurrence_end_date TEXT;
+ALTER TABLE eventEntity ADD COLUMN recurrence_end_count INTEGER;
+ALTER TABLE eventEntity ADD COLUMN recurrence_raw_type TEXT;
