@@ -182,10 +182,17 @@ class ContractFixtureParseTest {
         assertTrue(habit.isBlocker)
         assertEquals(false, habit.blocked)
 
+        // The habit's rule carries NO `end` key — which is the only encoding of the "never" bound the
+        // server ever emits (its Serialize skips the key when never), not an omission by the capture.
+        assertNull(habit.recurrence?.end)
+
         val chore = assertIs<ItemView.Chore>(items[2])
         assertEquals("47338a14-a07f-4ddf-ad73-f5edc977dab0", chore.id)
         assertEquals("rolling", chore.cadenceMode)
         assertEquals(listOf("Tue"), chore.recurrence?.days)
+        // #382: the `end` bound was unmodelled, so `ignoreUnknownKeys` discarded it silently.
+        assertEquals("after_count", chore.recurrence?.end?.type)
+        assertEquals(10, chore.recurrence?.end?.n)
         // The chore/event elements omit the dependency fields → they default false (absent case).
         assertEquals(false, chore.blocked)
         assertEquals(false, chore.isBlocker)
@@ -194,6 +201,16 @@ class ContractFixtureParseTest {
         assertEquals("d4f26212-07ac-4ebc-b5d9-fe4649a69a3e", event.id)
         assertEquals(false, event.allDay)
         assertEquals("2026-04-18T17:30:00Z", event.endTime)
+        // #382: the whole flat monthly shape — the cycle, the NESTED `on` anchor (`nth = -1` is "last";
+        // it is an i8 on the wire, so a negative value is expected, not corrupt), and an `on_date`
+        // bound. Every one of these was dropped on the floor before the DTO was widened.
+        assertEquals("monthly", event.recurrence?.type)
+        assertEquals(2, event.recurrence?.interval)
+        assertEquals("nth_weekday", event.recurrence?.on?.type)
+        assertEquals(-1, event.recurrence?.on?.nth)
+        assertEquals("Fri", event.recurrence?.on?.weekday)
+        assertEquals("on_date", event.recurrence?.end?.type)
+        assertEquals("2027-01-31", event.recurrence?.end?.date)
         assertEquals(false, event.blocked)
         assertEquals(false, event.isBlocker)
     }

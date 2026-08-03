@@ -8,6 +8,19 @@ import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.RecurrenceDto
 
 /**
+ * The cadence a Habit/Chore restores under when the Backup file carries none (#382). `POST /habits` and
+ * `POST /chores` **require** a recurrence, so there has to be a fallback — but it must be a *named* one.
+ * The previous fallback was a bare `RecurrenceDto()`, which (with `explicitNulls = false`) serialized to
+ * a body with **no `type` key**, and the backend's internally-tagged `Cadence` rejects that outright: the
+ * restore failed rather than degrading. Paired with the export side, which now skips a rule it cannot
+ * name instead of emitting a tagless one, this closes the unrestorable-backup hole from both ends.
+ *
+ * `daily` is a deliberate placeholder, not a guess at the original: it is the simplest cadence that
+ * always validates, so the item comes back and can be corrected, instead of being lost.
+ */
+private val RESTORE_FALLBACK_CADENCE = RecurrenceDto(type = "daily")
+
+/**
  * The **inbound** wire→create-payload mapping for on-device import (#314, ADR-0041): turns a read-shape
  * [ItemView] from a Backup `manifest.json` into the matching `POST /{kind}` create payload the offline
  * outbox replays under the item's **original id** (ADR-0034). It's the import twin of the export-side
@@ -31,7 +44,7 @@ internal fun ItemView.Task.toCreatePayload(): CreateTaskPayload = CreateTaskPayl
 
 internal fun ItemView.Habit.toCreatePayload(): CreateHabitPayload = CreateHabitPayload(
     title = title,
-    recurrence = recurrence ?: RecurrenceDto(), // a habit needs a cadence; an absent one restores as "unknown"
+    recurrence = recurrence ?: RESTORE_FALLBACK_CADENCE,
     description = description,
     completeBy = completeBy,
     deadlineTimeOfDay = deadlineTimeOfDay,
@@ -40,7 +53,7 @@ internal fun ItemView.Habit.toCreatePayload(): CreateHabitPayload = CreateHabitP
 
 internal fun ItemView.Chore.toCreatePayload(): CreateChorePayload = CreateChorePayload(
     title = title,
-    recurrence = recurrence ?: RecurrenceDto(),
+    recurrence = recurrence ?: RESTORE_FALLBACK_CADENCE,
     cadenceMode = cadenceMode,
     description = description,
     completeBy = completeBy,

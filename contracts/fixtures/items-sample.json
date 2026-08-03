@@ -145,6 +145,10 @@
         "days": [
           "Tue"
         ],
+        "end": {
+          "n": 10,
+          "type": "after_count"
+        },
         "type": "weekly"
       },
       "ref": "u-e4h2qk-277",
@@ -178,10 +182,17 @@
       "pinned": false,
       "productive": null,
       "recurrence": {
-        "days": [
-          "Sat"
-        ],
-        "type": "weekly"
+        "end": {
+          "date": "2027-01-31",
+          "type": "on_date"
+        },
+        "interval": 2,
+        "on": {
+          "nth": -1,
+          "type": "nth_weekday",
+          "weekday": "Fri"
+        },
+        "type": "monthly"
       },
       "ref": "u-e4h2qk-176",
       "sequence": 176,

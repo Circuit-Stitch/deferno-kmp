@@ -5,14 +5,18 @@ import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.Habit
+import com.circuitstitch.deferno.core.model.MonthlyAnchor
 import com.circuitstitch.deferno.core.model.Recurrence
+import com.circuitstitch.deferno.core.model.RecurrenceBound
 import com.circuitstitch.deferno.core.model.RecurrenceFrequency
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.network.dto.DefStatusWire
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.LocalAttachmentDto
+import com.circuitstitch.deferno.core.network.dto.MonthlyAnchorDto
 import com.circuitstitch.deferno.core.network.dto.RecurrenceDto
+import com.circuitstitch.deferno.core.network.dto.RecurrenceEndDto
 import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
 
 /**
@@ -143,14 +147,61 @@ private fun DefinitionState.toWire(): DefStatusWire = when (this) {
     DefinitionState.Archived -> DefStatusWire.Archived
 }
 
-/** [Recurrence] → wire `recurrence` object; an [RecurrenceFrequency.Unknown] rule carries no `type`. */
-private fun Recurrence.toDto(): RecurrenceDto = RecurrenceDto(
-    type = when (frequency) {
+/**
+ * [Recurrence] → the flat wire `recurrence` object — the true inverse of `RecurringItemMapper`'s read
+ * side, emitting every cadence parameter and the `end` bound rather than just `type` + `days` (#382).
+ *
+ * **This also fixes an unreported second-order bug.** The old mapper emitted `type = null` for an
+ * [RecurrenceFrequency.Unknown] rule; with `explicitNulls = false` that serialized to a body with **no
+ * `type` key at all**, which `BackupImportMapper` fed straight into `CreateHabitPayload`, and the
+ * backend's internally-tagged `Cadence` rejects a body with no tag. So a backup taken of an
+ * `every_n_days` or `custom` item (both of which collapsed to `Unknown` on read) was not merely lossy —
+ * it was **unrestorable**. Now: all six cadences are modelled and name themselves, an Unknown rule
+ * re-emits the raw token it preserved, and the residual "cannot even name it" case returns `null` so
+ * the rule is **skipped** rather than exported as an invalid tagless body — the import side then
+ * substitutes a named placeholder. Skip on export, placeholder on import; both are covered by tests.
+ */
+private fun Recurrence.toDto(): RecurrenceDto? {
+    val token = when (frequency) {
         RecurrenceFrequency.Daily -> "daily"
+        RecurrenceFrequency.EveryNDays -> "every_n_days"
         RecurrenceFrequency.Weekly -> "weekly"
         RecurrenceFrequency.Monthly -> "monthly"
         RecurrenceFrequency.Yearly -> "yearly"
-        RecurrenceFrequency.Unknown -> null
-    },
-    days = days,
-)
+        RecurrenceFrequency.Custom -> "custom"
+        // The token this client could not model but did preserve on read (Recurrence.rawType).
+        RecurrenceFrequency.Unknown -> rawType
+    } ?: return null
+    return RecurrenceDto(
+        type = token,
+        days = days,
+        // The domain condenses the wire's two numeric keys into one cycle multiplier; the frequency
+        // decides which key it goes back out under. They can never co-occur on the wire.
+        n = interval.takeIf { frequency == RecurrenceFrequency.EveryNDays },
+        interval = interval.takeIf {
+            frequency == RecurrenceFrequency.Monthly || frequency == RecurrenceFrequency.Yearly
+        },
+        on = monthlyAnchor?.toDto(),
+        month = month,
+        day = day,
+        rrule = rrule,
+        end = bound.toDto(),
+    )
+}
+
+/** [MonthlyAnchor] → the nested wire `recurrence.on` object. */
+private fun MonthlyAnchor.toDto(): MonthlyAnchorDto = when (this) {
+    is MonthlyAnchor.DayOfMonth -> MonthlyAnchorDto(type = "day_of_month", day = day)
+    is MonthlyAnchor.NthWeekday -> MonthlyAnchorDto(type = "nth_weekday", nth = nth, weekday = weekday)
+}
+
+/**
+ * [RecurrenceBound] → the nested wire `recurrence.end` object. [RecurrenceBound.Never] emits **no `end`
+ * key**, mirroring the server's own `Serialize` (which skips the key when the bound is never) — absent
+ * is the canonical encoding, and an explicit `{"type":"never"}` is a shape the server never produces.
+ */
+private fun RecurrenceBound.toDto(): RecurrenceEndDto? = when (this) {
+    RecurrenceBound.Never -> null
+    is RecurrenceBound.OnDate -> RecurrenceEndDto(type = "on_date", date = date.toString())
+    is RecurrenceBound.AfterCount -> RecurrenceEndDto(type = "after_count", n = n)
+}

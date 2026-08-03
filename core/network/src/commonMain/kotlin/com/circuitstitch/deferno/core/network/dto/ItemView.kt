@@ -228,13 +228,82 @@ data class SubtaskTemplateDto(
 )
 
 /**
- * The recurrence rule carried by Habit/Chore/Event (CONTRACT-NOTES → "Items"). Modelled tolerantly:
- * a [type] (`daily`/`weekly`/…) plus the optional shape fields seen on the wire (e.g. `days` for
- * weekly). `ignoreUnknownKeys` lets additive recurrence fields pass; the recurring kinds do not yet
- * have domain entities, so this stays a faithful pass-through.
+ * The recurrence rule carried by Habit/Chore/Event (CONTRACT-NOTES → "Items"), and by the create /
+ * convert payloads on the way out.
+ *
+ * **The wire is FLAT.** The backend hand-writes `Serialize`/`Deserialize` for `Recurrence`
+ * (`backend/src/models/recurrence.rs`) because `#[serde(flatten)]` does not round-trip over an
+ * internally-tagged enum: the cadence's own fields are hoisted to the top level next to `type`, and
+ * only the optional bound is nested under `end`. All six cadences, verbatim:
+ *
+ * ```
+ * {"type":"daily"}
+ * {"type":"every_n_days","n":3}
+ * {"type":"weekly","days":["Mon","Wed"]}
+ * {"type":"monthly","interval":1,"on":{"type":"day_of_month","day":15}}
+ * {"type":"monthly","interval":2,"on":{"type":"nth_weekday","nth":-1,"weekday":"Fri"}}
+ * {"type":"yearly","interval":1,"month":6,"day":14}
+ * {"type":"custom","rrule":"FREQ=WEEKLY;BYDAY=MO,WE"}
+ * ```
+ *
+ * …plus an optional `"end": {…}`. **Do not model this from `contracts/openapi-0.1.json`** — utoipa
+ * derived that schema from the Rust struct's fields and never saw the hand-written impl, so it
+ * advertises a nested `cadence` object with a required `end`, a shape the server never emits. See
+ * CONTRACT-NOTES → "Recurrence".
+ *
+ * **Flat and all-defaulted, deliberately — never a kotlinx sealed hierarchy.**
+ * [com.circuitstitch.deferno.core.network.DefernoJson] registers no `SerializersModule` polymorphic
+ * default, so an unknown future discriminator would *throw* inside the very same `/items` decode and
+ * reintroduce the #381 cold-sync stall this file just fixed. A field that does not apply to the
+ * received cadence is simply absent → null, which is also what keeps every zero-arg/`type`-only
+ * construction site source-compatible.
  */
 @Serializable
 data class RecurrenceDto(
+    /** `daily` / `every_n_days` / `weekly` / `monthly` / `yearly` / `custom`. */
     val type: String? = null,
+    /** `weekly` — `"Mon"`..`"Sun"` (`chrono::Weekday`'s Display form). */
     val days: List<String> = emptyList(),
+    /** `every_n_days` — the day interval. */
+    val n: Int? = null,
+    /** `monthly` / `yearly` — the cycle (1 = every month/year, 2 = every other, …). */
+    val interval: Int? = null,
+    /** `monthly` — which day within the cycle. */
+    val on: MonthlyAnchorDto? = null,
+    /** `yearly` — the month, `1..12`. */
+    val month: Int? = null,
+    /** `yearly` — the day of that month, `1..31`. */
+    val day: Int? = null,
+    /** `custom` — the raw RFC-5545 rule; it owns its own bound, so `end` is meaningless beside it. */
+    val rrule: String? = null,
+    /** The optional upper bound. **Absent is the only encoding of "never" the server emits.** */
+    val end: RecurrenceEndDto? = null,
+)
+
+/**
+ * The nested `recurrence.on` anchor for a `monthly` cadence (`MonthlyAnchor`). Flat + tolerant for the
+ * same reason as [RecurrenceDto]: [type] is `day_of_month` (carrying [day]) or `nth_weekday` (carrying
+ * [nth] + [weekday]). [nth] is an `i8` on the wire — `1..5`, or **`-1` meaning "last"**.
+ */
+@Serializable
+data class MonthlyAnchorDto(
+    val type: String? = null,
+    val day: Int? = null,
+    val nth: Int? = null,
+    val weekday: String? = null,
+)
+
+/**
+ * The nested `recurrence.end` bound (`RecurrenceEnd`). [type] is `never` / `on_date` (carrying an
+ * ISO-8601 [date]) / `after_count` (carrying [n]).
+ *
+ * The server **never emits `{"type":"never"}`** — its `Serialize` skips the whole `end` key when the
+ * bound is never, so an absent `end` IS the never bound. Its `Deserialize` does accept the explicit
+ * form, so the reader tolerates it too.
+ */
+@Serializable
+data class RecurrenceEndDto(
+    val type: String? = null,
+    val date: String? = null,
+    val n: Int? = null,
 )
