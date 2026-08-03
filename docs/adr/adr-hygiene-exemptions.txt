@@ -66,7 +66,7 @@ backpointer 0030->0007
 # marking 0007 would import a decision it never made. Repoint or drop the claim, then delete this line.
 backpointer 0042->0007
 
-# --- wikilinks the BACKEND glossary owns (8 terms) --------------------------------------------------
+# --- wikilinks the BACKEND glossary owns (9 terms) --------------------------------------------------
 # CONTEXT.md's own preamble: the core Deferno domain language "(Item, Task, Habit, Chore, Event,
 # Occurrence, Org, Plan, Workspace, Canonical ref, Alias, Subtask/Child, ...) is owned by the Deferno
 # backend's CONTEXT.md (the canonical source ...) and is not duplicated here". These links therefore
@@ -77,10 +77,17 @@ wikilink-inherited Habit
 wikilink-inherited Chore
 wikilink-inherited Event
 wikilink-inherited Occurrence
-wikilink-inherited Plan
 wikilink-inherited Subtask/Child
 # Personal org is an Org variety, inherited on the same footing.
 wikilink-inherited Personal org
+# Recurrence (backend CONTEXT.md) is the RULE; Segment is one rule era of a Series chain. Both are
+# inherited on the same footing as the kinds above, and both became linkable here with ADR-0053, which
+# needs the rule/era distinction to state what the client expands and what it cannot reach.
+wikilink-inherited Recurrence
+wikilink-inherited Segment
+# Plan was listed here until ADR-0053. CONTEXT.md now carries a client DISAMBIGUATION of it (the Plan
+# is a synced curation, never derived — beside the derived Day's firings), so the term resolves in this
+# repo and the exemption would be stale. The backend still owns the base definition.
 
 # --- wikilinks nothing defines (8 terms) ------------------------------------------------------------
 # These ARE a backlog. Two kinds of defect, both grandfathered:

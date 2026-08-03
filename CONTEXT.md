@@ -77,12 +77,24 @@ shelved: Active or Archived. (The API also carries `in-review`; retained faithfu
 is unresolved.) This is the state of the *definition*, never of any single firing.
 _Avoid_: status, DefStatus, archived flag.
 
-**Occurrence state**:
+**Occurrence state** *(client; a reading, never a stored value)*:
 How one dated firing (an [[Occurrence]]) of a recurring definition went — Scheduled, In-progress,
-Done (with on-time / late punctuality), Skipped, Missed. The client only ever *writes* a coarse
-action (start / complete / skip); the finer read states — Scheduled, Missed, and the on-time/late
-split — are **server-derived**.
-_Avoid_: status, OccurrenceStatus, done_on_time/done_late.
+Done (with on-time / late punctuality), Skipped, Missed. It is **derived at render time**, never
+persisted: it is a function of `today`, and a value computed when the row was cached would still be
+claiming "Scheduled" a week after the day passed. Three unlike things are routinely lumped together
+under one word, and the client keeps them apart:
+- the **resolution** — In-progress / Done / Skipped. Server-*stored*, client-*written*, cached as fact.
+- the **punctuality** split (on-time vs late) — derived from the firing's `done_at` against the
+  deadline it carried *at write time*.
+- **Scheduled vs Missed** — neither stored nor server-owned: it is `date < today` over a firing with
+  no resolution on an Active definition. The backend says so itself (`DerivedChoreOccurrenceStatus`:
+  *"Virtual statuses derived at read time… Scheduled — future or today, no record; Missed — past, no
+  record, chore Active"*), which is exactly why the client can re-derive it with the server gone.
+The client *writes* a coarse action — start / complete / skip, plus [[Clear]], which is not one of
+them. An unresolved day with no [[Occurrence coverage]] is **unknown**, not Missed.
+_Avoid_: status, OccurrenceStatus, done_on_time/done_late; storing this in a column; "server-derived"
+unqualified (only the resolution and the punctuality inputs are — the Scheduled/Missed split is not);
+[[Definition state]] (the light switch on the parent, a different axis).
 
 **Recurrence cursor** *(client; the live `complete_by` on a recurring definition — #384)*:
 Where a series has **walked to** — the next firing it has not yet resolved, advancing as occurrences
@@ -93,7 +105,78 @@ cursor **in the past is normal** — a missed [[Habit]]'s cursor sits where it s
 cross-kind [[Item]] projection names it `recurrenceCursorAt` rather than `completeBy`, because on a
 [[Task]] the identically-named domain field is a plain deadline and is deliberately not projected.
 An Archived definition keeps its cursor server-side but has no *next*.
-_Avoid_: deadline, due date, expiry (a cursor never bounds a series); the [[Activity ledger]]'s sync cursor.
+_Avoid_: deadline, due date, expiry (a cursor never bounds a series); the [[Series anchor]] (the frozen
+start the cursor walks *away* from); the [[Activity ledger]]'s sync cursor.
+
+**Series anchor** *(client; the wire's `dtstart_local` + its frozen `tzid`)*:
+Where a recurring series **begins** — the one fixed point the [[Recurrence]] rule is expanded from,
+frozen at create time along with the time zone it was resolved in. It is the exact counterpart of the
+[[Recurrence cursor]] and the two are constantly confused: the anchor **never moves**, the cursor moves
+on every resolution. They start life as the same value — the server derives the anchor from the
+`complete_by` the client sends at create — and diverge from the first mark-done onward, which is why a
+live `complete_by` can never stand in for it.
+It is load-bearing for the client precisely because it is not optional decoration: **no rule can be
+expanded without it**. A cadence with a stride (every-N-days, every-other-month) has no determinable
+phase without an anchor, a `COUNT` bound has nothing to count from, and past expansion has no floor —
+it would invent firings predating the item. The *frozen* zone matters as much as the datetime: it is
+the zone the series was built in, not the account's current one and never the device's, so a person who
+moves country keeps the grid they scheduled.
+_Avoid_: start date, `complete_by`, [[Recurrence cursor]], due date; the device zone or the current
+account zone (the anchor's zone is frozen); "DTSTART" bare in user-facing copy.
+
+**Occurrence grid** *(client)*:
+The set of calendar days a recurring definition **fires on** — the [[Series anchor]] plus the rule
+expanded across a window, per [[Segment]] and bounded by that Segment's own end. It answers *which days*
+and nothing else; what happened on one of them is the separate [[Occurrence state]] reading over the
+grid unioned with the stored resolutions. Kept distinct because the two fail differently: a grid the
+client cannot expand (a `Custom` rule, a cadence this build does not model) is *absent*, whereas a
+resolution it has not synced is *unknown* — and neither is "nothing happened."
+_Avoid_: schedule, occurrences (an [[Occurrence]] is a firing with a state; a grid is only its dates),
+calendar (the [[Destination]]); treating an un-expandable grid as an empty one.
+
+**Occurrence coverage** *(client)*:
+The date ranges for which this device has actually **synced** a definition's stored resolutions — the
+bookkeeping that makes "no row for 3 March" answerable. Without it the absence of a resolution is
+ambiguous between *nothing was recorded* and *this device has never looked*, and the [[Occurrence
+state]] reading would report every unsynced past day as Missed. A day inside coverage with no
+resolution is genuinely unresolved; a day outside it is **unknown**, and says so.
+_Avoid_: cache (coverage records what was fetched, not what is retained), sync cursor (the [[Activity
+ledger]]'s single delta axis — a different thing), "empty means done-nothing".
+
+**Clear** *(inherited, backend; client-honored)*:
+Returning a resolved [[Occurrence]] to unresolved — the undo of a completion, meaning "not done after
+all," **never** "I have decided not to do this." Uniform across all four [[Item kind]]s. Distinct from
+*dropping* (and from a [[Chore]]'s *skip*), which is a positive decision not to do the thing and is
+itself a resolution: a cleared firing is actionable again, a dropped one is not. The client keeps them
+as separate verbs and always has — `ClearOccurrence` is its own [[Command]], and the occurrence writer
+refuses to express a clear as a mark — which is why the conflation the backend records (a "Drop"
+affordance that silently cleared) never existed here.
+_Avoid_: uncomplete, reopen (Task-specific and overloaded with review flows), reset (ambiguous — could
+mean the whole definition), undo (the shake-to-undo affordance is a different mechanism), skip/drop.
+
+**Day's firings** *(client; derived, always available)*:
+Every [[Occurrence]] falling on one calendar day, each carrying its [[Occurrence state]] — the
+[[Occurrence grid]] intersected with that day and unioned with the stored resolutions. It is
+**computed, never fetched**, so it is available for **any** day, past or future, with the server gone
+forever. This is the client's answer to "what am I meant to do today," and it is deliberately **not**
+the [[Plan]].
+_Avoid_: [[Plan]] (a curation, a different thing — see below), agenda (the Calendar [[Destination]]'s
+day view renders this but is not it), "today's tasks" (it spans the three recurring kinds, and a
+[[Task]] has no firings).
+
+**Plan** *(client disambiguation of an inherited term; a synced artifact, not a derivation)*:
+The day's **curated** ordered list. The client treats it as **server-authoritative and not
+reproducible**, which is a statement about the concept and not a client limitation: server-side the
+plan reads *yesterday's persisted list*, is gated by a seeded marker that reaches no client, is written
+into at create time using the server's wall-clock, and expires on a 30-day TTL — so re-reading an old
+date does not return that day's history, it re-seeds from *current* item state. A curation is a record
+of what a person chose, and choices cannot be recomputed from rules.
+So the Plan [[Destination]] renders **two** things: the Plan where it has been synced, and the
+[[Day's firings]] always. The distinction stays **visible** rather than merged — an unsynced day shows
+its firings and says the plan is unavailable, never a blank screen and never a derivation wearing the
+Plan's name.
+_Avoid_: deriving or re-seeding a plan client-side; treating an unsynced plan as an empty one;
+[[Day's firings]] (the derived half); [[Item tree]] (the whole catalog, never a day).
 
 **Target date** *(client; wire `target_date`, ADR-0052)*:
 The **soft** "when I *want* this done by" date on an [[Item]] — a self-imposed, anti-procrastination
