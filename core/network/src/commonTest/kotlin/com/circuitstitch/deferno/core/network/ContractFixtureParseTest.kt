@@ -167,6 +167,17 @@ class ContractFixtureParseTest {
         assertEquals(DefStatusWire.Active, habit.status)
         assertEquals("b7c21959-c5f6-4087-8ab2-7690c81e463a", habit.seriesId)
         assertEquals("daily", habit.recurrence?.type)
+        // #381: `subtask_template` is an array of OBJECTS (`{id,title,description}`), not of strings —
+        // the whole `/items` decode threw a SerializationException on the first populated template,
+        // stalling the cold sync for ALL FOUR kinds. The fixture now carries a populated one so the
+        // golden-envelope harness can actually see that class of error.
+        assertEquals(2, habit.subtaskTemplate.size)
+        assertEquals("0b1d9f18-4a3c-4a1e-9a0f-2ce0d7c81f55", habit.subtaskTemplate[0].id)
+        assertEquals("<title>", habit.subtaskTemplate[0].title)
+        assertEquals("<description>", habit.subtaskTemplate[0].description)
+        // The backend skips `description` when empty (`skip_serializing_if = "String::is_empty"`), so the
+        // key is ABSENT on the second entry and on every legacy row — it must default to "", not throw.
+        assertEquals("", habit.subtaskTemplate[1].description)
         // A recurring kind decodes isBlocker too (it gates the task above).
         assertTrue(habit.isBlocker)
         assertEquals(false, habit.blocked)

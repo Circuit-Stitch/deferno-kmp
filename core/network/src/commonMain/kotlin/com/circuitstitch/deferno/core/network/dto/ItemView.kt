@@ -106,7 +106,7 @@ sealed interface ItemView {
         val description: String? = null,
         val recurrence: RecurrenceDto? = null,
         @SerialName("series_id") val seriesId: String? = null,
-        @SerialName("subtask_template") val subtaskTemplate: List<String> = emptyList(),
+        @SerialName("subtask_template") val subtaskTemplate: List<SubtaskTemplateDto> = emptyList(),
         // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
         val blocked: Boolean = false,
         @SerialName("is_blocker") val isBlocker: Boolean = false,
@@ -138,7 +138,7 @@ sealed interface ItemView {
         val description: String? = null,
         val recurrence: RecurrenceDto? = null,
         @SerialName("series_id") val seriesId: String? = null,
-        @SerialName("subtask_template") val subtaskTemplate: List<String> = emptyList(),
+        @SerialName("subtask_template") val subtaskTemplate: List<SubtaskTemplateDto> = emptyList(),
         @SerialName("cadence_mode") val cadenceMode: String? = null,
         // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
         val blocked: Boolean = false,
@@ -170,7 +170,7 @@ sealed interface ItemView {
         val description: String? = null,
         val recurrence: RecurrenceDto? = null,
         @SerialName("series_id") val seriesId: String? = null,
-        @SerialName("subtask_template") val subtaskTemplate: List<String> = emptyList(),
+        @SerialName("subtask_template") val subtaskTemplate: List<SubtaskTemplateDto> = emptyList(),
         @SerialName("all_day") val allDay: Boolean = false,
         @SerialName("end_time") val endTime: String? = null,
         @SerialName("start_time_of_day") val startTimeOfDay: String? = null,
@@ -204,6 +204,27 @@ data class ExternalProvenanceDto(
     val id: String,
     val source: String,
     val url: String? = null,
+)
+
+/**
+ * One entry of a recurring definition's wire `subtask_template` array (`SubtaskTemplate`, backend
+ * `subtask_template.rs`) — the template a Habit/Chore/Event clones into fresh subtask Tasks each time an
+ * occurrence materializes. The wire element is an **object**, never a bare string (#381): modelling it as
+ * `List<String>` made the first populated template throw a `SerializationException` inside the `/items`
+ * decode, which `requestApi` maps to [com.circuitstitch.deferno.core.network.ApiError.Transport] →
+ * `RemoteSnapshot.Unavailable` → an early-returning `ItemSync.refresh()` — a silent cold-sync stall for
+ * **all four kinds, Tasks included**.
+ *
+ * [description] **must** default to `""`: the backend declares it
+ * `#[serde(default, skip_serializing_if = "String::is_empty")]`, so the key is absent both when the
+ * description is empty and on every legacy row. Read-only for now — nothing on the client writes
+ * templates yet — but faithful, so a round-trip through the Backup file (ADR-0041) preserves them.
+ */
+@Serializable
+data class SubtaskTemplateDto(
+    val id: String,
+    val title: String,
+    val description: String = "",
 )
 
 /**

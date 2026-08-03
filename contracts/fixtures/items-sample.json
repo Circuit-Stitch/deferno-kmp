@@ -104,7 +104,17 @@
       "sequence": 185,
       "series_id": "b7c21959-c5f6-4087-8ab2-7690c81e463a",
       "status": "active",
-      "subtask_template": [],
+      "subtask_template": [
+        {
+          "description": "<description>",
+          "id": "0b1d9f18-4a3c-4a1e-9a0f-2ce0d7c81f55",
+          "title": "<title>"
+        },
+        {
+          "id": "5f2c8ad0-7be1-4d92-8c34-6a9f0b3e2d17",
+          "title": "<title>"
+        }
+      ],
       "title": "<title>",
       "type": "habit"
     },

@@ -109,6 +109,12 @@ wrapped in the standard `version: 0.1` envelope unless noted.
 - Per-kind fields: **habit/chore/event** carry `recurrence` + `series_id` + `subtask_template`;
   **chore** adds `cadence_mode`; **event** adds `all_day` + `end_time`; **task** carries
   `next_task_id` + `finished_at` + `attachments` + `comment`. Shared base ≈ 24 fields.
+- **`subtask_template` is an array of OBJECTS**, not of strings (#381): each element is
+  `{ id: uuid, title: string, description?: string }` (`backend/src/subtask_template.rs`), max 50
+  entries, `title` ≤ 200 chars. `description` is `#[serde(default, skip_serializing_if =
+  "String::is_empty")]`, so **the key is absent whenever the description is empty** and on every legacy
+  row — the client field must default to `""`. Modelling the element as a `String` made the first
+  populated template throw inside the *whole* `/items` decode, stalling the cold sync for all four kinds.
 - List vs detail: list endpoints return **summaries** (no `kind`); single-item endpoints return full
   objects. The cache tracks a summary-vs-full hydration state (ADR-0001).
 - `/tasks/today` is a *different* payload: `{ task: TaskSummary, priority_score, urgency_reason }`
