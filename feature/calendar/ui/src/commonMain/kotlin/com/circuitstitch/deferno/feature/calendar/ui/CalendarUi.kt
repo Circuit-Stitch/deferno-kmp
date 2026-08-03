@@ -423,11 +423,10 @@ internal fun AgendaRow(
                     ActionChip(stringResource(Res.string.calendar_action_skip)) { onMark(item.id, OccurrenceAction.Skip) }
                 }
                 ActionChip(stringResource(Res.string.common_clear)) { onClear(item.id) }
-                // Reschedule is Events-only in v1 (habit/chore reschedule is server-unimplemented; moving a
-                // row that would snap back reads as shaming-by-failure, design-principle #4).
-                if (item.kind == ItemKind.Event) {
-                    ActionChip(stringResource(Res.string.calendar_action_reschedule)) { onStartReschedule(item) }
-                }
+                // Reschedule is offered for all three recurring kinds (#380): the backend ships
+                // habit/chore/event reschedule over one shared handler, so the old Events-only gate was
+                // a stale doc claim, not a contract. Nothing here can snap back.
+                ActionChip(stringResource(Res.string.calendar_action_reschedule)) { onStartReschedule(item) }
             }
         }
     }

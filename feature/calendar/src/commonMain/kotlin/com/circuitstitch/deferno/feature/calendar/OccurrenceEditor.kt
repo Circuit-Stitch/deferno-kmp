@@ -17,6 +17,6 @@ interface OccurrenceEditor {
     /** Clear the firing [itemId] back to Scheduled — the forgiving undo. */
     suspend fun clear(itemId: String)
 
-    /** Reschedule the firing [itemId] to [newDate] (Events only in v1). */
+    /** Reschedule the firing [itemId] to [newDate] — offered for all three recurring kinds (#380). */
     suspend fun reschedule(itemId: String, newDate: LocalDate)
 }
