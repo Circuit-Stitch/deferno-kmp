@@ -10,6 +10,7 @@ import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.Envelope
 import com.circuitstitch.deferno.core.network.dto.ChoreDetailDto
 import com.circuitstitch.deferno.core.network.dto.DefStatusWire
+import com.circuitstitch.deferno.core.network.dto.EventDetailDto
 import com.circuitstitch.deferno.core.network.dto.HabitDetailDto
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.MonthlyAnchorDto
@@ -119,6 +120,36 @@ class RecurringItemMapperTest {
         ).toDomain()
         assertEquals("fixed", chore.cadenceMode)
         assertEquals(RecurrenceFrequency.Monthly, chore.recurrence?.frequency)
+
+        // `EventDetailDto.toDomain()` had no test at all before this (only the ItemView.Event extractor
+        // did), so the create-response path for an Event — the one that carries the fixed window
+        // alongside the rule — was unexercised. It is also the third caller of the widened recurrence
+        // mapper, so it must agree with the other two.
+        val event = EventDetailDto(
+            id = "e-1",
+            orgSlug = "u-e4h2qk",
+            title = "standup",
+            status = DefStatusWire.Active,
+            dateCreated = "2026-05-02T15:00:34Z",
+            completeBy = "2026-04-18T16:00:00Z",
+            endTime = "2026-04-18T17:30:00Z",
+            allDay = false,
+            recurrence = RecurrenceDto(
+                type = "every_n_days",
+                n = 3,
+                end = RecurrenceEndDto(type = "after_count", n = 10),
+            ),
+            seriesId = "s-1",
+        ).toDomain()
+        assertEquals(HydrationState.Full, event.hydration)
+        assertEquals(Instant.parse("2026-04-18T16:00:00Z"), event.completeBy)
+        assertEquals(Instant.parse("2026-04-18T17:30:00Z"), event.endTime)
+        assertEquals(false, event.allDay)
+        assertEquals("s-1", event.seriesId)
+        assertEquals(
+            Recurrence(RecurrenceFrequency.EveryNDays, interval = 3, bound = RecurrenceBound.AfterCount(10)),
+            event.recurrence,
+        )
     }
 
     @Test
