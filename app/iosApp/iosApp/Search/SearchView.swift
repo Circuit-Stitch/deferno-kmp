@@ -202,6 +202,9 @@ struct SearchView: View {
         case "TitleAsc": return L.string("search_sort_title_asc")
         case "DeadlineAsc": return L.string("search_sort_soonest_due")
         case "AttachmentSizeDesc": return L.string("search_sort_biggest_attachments")
+        case "PriorityRank": return L.string("search_sort_priority")
+        // A `SearchSort` added in Kotlin lands here silently as its raw enum name — this switch is keyed on
+        // a String, so the compiler can't catch the omission. Any new sort needs an arm added by hand.
         default: return key
         }
     }

@@ -165,6 +165,18 @@ enum class CommandKind(
     // so NOT onlineOnly; a time set is valid in any state, so it falls to [enabledFor]'s `else -> true`.
     // Appended at the end (CommandIds are a public contract — never reorder/rename existing entries).
     SetTaskDeadlineTime(CommandId("task.set-deadline-time"), CommandCategory.Schedule),
+
+    // The soft target date + the urgency bucket (#375) — the two peers of `complete_by`/`pinned` the
+    // client was missing. [SetTaskTargetDate] is Schedule (it is a date axis, even though a *soft* one
+    // that never moves the calendar); [SetTaskPriority] is Organize, beside [SetTaskPinned], because it
+    // structures work rather than scheduling it. Both offline-first (optimistic apply + enqueue), so NOT
+    // onlineOnly, and both valid in any working state, so they fall to [enabledFor]'s `else -> true`.
+    // Task-only for now: the server carries both fields on all four kinds, but this client has no
+    // per-field PATCH seam for a recurring definition (only the DefinitionState light switch), so the
+    // recurring kinds READ them without yet being able to write them.
+    // Appended at the end (CommandIds are a public contract — never reorder/rename existing entries).
+    SetTaskTargetDate(CommandId("task.set-target-date"), CommandCategory.Schedule),
+    SetTaskPriority(CommandId("task.set-priority"), CommandCategory.Organize),
     ;
 
     /**

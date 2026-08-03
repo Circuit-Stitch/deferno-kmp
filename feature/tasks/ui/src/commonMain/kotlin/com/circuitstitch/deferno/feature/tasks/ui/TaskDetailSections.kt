@@ -106,6 +106,9 @@ import com.circuitstitch.deferno.core.designsystem.resources.common_expand_named
 import com.circuitstitch.deferno.core.designsystem.resources.common_labels
 import com.circuitstitch.deferno.core.designsystem.resources.common_loading
 import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd
+import com.circuitstitch.deferno.core.designsystem.resources.common_priority_backlog
+import com.circuitstitch.deferno.core.designsystem.resources.common_priority_fire
+import com.circuitstitch.deferno.core.designsystem.resources.common_priority_normal
 import com.circuitstitch.deferno.core.designsystem.resources.common_remove
 import com.circuitstitch.deferno.core.designsystem.resources.common_save
 import com.circuitstitch.deferno.core.designsystem.resources.common_set
@@ -136,22 +139,31 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_edit_c
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_edit_caption_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_encrypted_comment
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_no_attachments
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_no_target_date
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_play
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_play_attachment_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_post
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_posting
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_priority_picker_title
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_priority_row_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_owner
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_priority
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_source
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_status
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_target_date
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_property_when
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_remove_caption_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_remove_label_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_attachments
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_filter_hide_done
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_subtasks
+import com.circuitstitch.deferno.core.designsystem.resources.settings_security_device_date_pattern
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_clear_target_date_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_set_due_date
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_set_target_date
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_status_picker_title
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_status_row_a11y
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_target_date_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_tab_trail
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_trail_empty
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_due_days_ago
@@ -181,6 +193,7 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.JourneyLabel
 import com.circuitstitch.deferno.core.model.JourneySlot
 import com.circuitstitch.deferno.core.model.JourneyStyle
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.RelativeDay
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.UserId
@@ -190,6 +203,7 @@ import com.circuitstitch.deferno.core.model.relativeDay
 import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.SubtaskRow
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -227,17 +241,24 @@ internal fun SectionHeader(title: String, modifier: Modifier = Modifier, trailin
 /**
  * The Task detail's **properties table** (ADR-0044): a small-caps label column ruled off from the content,
  * rows divided by hairlines, wrapped in a rounded border — the calm "everything in one card" of the detail
- * mockup. WHEN (the deadline day + a relative-day suffix) and LABELS are inline-editable through the
- * [TaskDetailComponent] write seams ([onSetDeadline] / [onSetLabels], optimistic + offline-first); STATUS is
- * the read-only journey track whose whole row opens the status picker sheet. OWNER and SOURCE rows appear only
- * when the item carries them. Renders straight off the hydrated [task] fields — no new component state (#195).
+ * mockup. WHEN (the deadline day + a relative-day suffix), TARGET DATE and LABELS are inline-editable through
+ * the [TaskDetailComponent] write seams ([onSetDeadline] / [onSetTargetDate] / [onSetLabels], optimistic +
+ * offline-first); STATUS is the read-only journey track whose whole row opens the status picker sheet, and
+ * PRIORITY its bucket twin. OWNER and SOURCE rows appear only when the item carries them. Renders straight off
+ * the hydrated [task] fields — no new component state (#195).
+ *
+ * TARGET DATE (#375) is the **soft** "when I want it done by" day — a peer of the hard WHEN deadline and fully
+ * independent of it. It is date-granular (there is no target time-of-day), so its cell opens a plain date
+ * picker, never the deadline's date+time pair, and it is never labelled "due".
  */
 @Composable
 internal fun PropertiesSection(
     task: Task,
     onSetDeadline: (LocalDate?) -> Unit,
+    onSetTargetDate: (LocalDate?) -> Unit,
     onSetLabels: (List<String>) -> Unit,
     onStatusRowClick: () -> Unit,
+    onPriorityRowClick: () -> Unit,
     ownerGroupCount: Int,
     // ATTACHMENTS now rides as the table's last row (rather than its own section below) — the file list +
     // "Add file" affordance in the content cell, the label column supplying the "ATTACHMENTS" heading.
@@ -253,10 +274,12 @@ internal fun PropertiesSection(
 ) {
     val statusLabel = journeyLabelText(journeyStatus(task.workingState, task.blocked).label)
     val statusA11y = stringResource(Res.string.tasks_detail_status_row_a11y, statusLabel)
+    val priorityA11y = stringResource(Res.string.tasks_detail_priority_row_a11y, priorityLabel(task.priority))
 
-    // Only the rows this item actually carries (ADR-0044): WHEN drops when no deadline is set; STATUS + LABELS
-    // are always present; SOURCE only for an imported item. OWNER shows only for a shared / multi-group account
-    // ([ownerGroupCount] > 1) — a single-group user's only group is their own personal org, so the row is noise.
+    // Only the rows this item actually carries (ADR-0044): WHEN drops when no deadline is set; TARGET DATE,
+    // STATUS, PRIORITY + LABELS are always present; SOURCE only for an imported item. OWNER shows only for a
+    // shared / multi-group account ([ownerGroupCount] > 1) — a single-group user's only group is their own
+    // personal org, so the row is noise.
     val rows = buildList<@Composable () -> Unit> {
         if (task.completeBy != null) {
             add {
@@ -264,6 +287,14 @@ internal fun PropertiesSection(
                 PropertyTableRow(label = stringResource(Res.string.tasks_detail_property_when)) {
                     DueCell(completeBy = task.completeBy, onSetDeadline = onSetDeadline)
                 }
+            }
+        }
+        add {
+            // TARGET DATE (#375): the soft "when I want it done by" day, sitting beside the hard deadline it is
+            // a peer of. Unlike WHEN the row is ALWAYS present — an unset target has no other affordance, so
+            // the muted "No target date" empty state is what you tap to set one.
+            PropertyTableRow(label = stringResource(Res.string.tasks_detail_property_target_date)) {
+                TargetDateCell(targetDate = task.targetDate, onSetTargetDate = onSetTargetDate)
             }
         }
         add {
@@ -275,6 +306,22 @@ internal fun PropertiesSection(
                 rowSemantics = statusA11y,
             ) {
                 JourneyStatusIndicator(workingState = task.workingState, blocked = task.blocked)
+            }
+        }
+        add {
+            // PRIORITY (#375): the urgency bucket, a peer of pinned and orthogonal to it. Read-only text whose
+            // whole row opens the picker sheet — the STATUS row's twin, since it is the same small enum choice.
+            PropertyTableRow(
+                label = stringResource(Res.string.tasks_detail_property_priority),
+                onClick = onPriorityRowClick,
+                onClickLabel = stringResource(Res.string.tasks_detail_priority_picker_title),
+                rowSemantics = priorityA11y,
+            ) {
+                Text(
+                    text = priorityLabel(task.priority),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
             }
         }
         add {
@@ -623,6 +670,71 @@ internal fun StatusPickerSheet(
 }
 
 /**
+ * The priority picker sheet (#375): the [StatusPickerSheet]'s twin for the urgency bucket — a modal bottom
+ * sheet listing the three [Priority] buckets (via [priorityLabel]) with the [current] one marked; tapping a
+ * row forwards [onSelect] then [onDismiss].
+ *
+ * All three are always offered: [Priority.Normal] IS "no priority" (the bucket is never null), and
+ * [Priority.Backlog] only sinks an item in ranked views — it never hides, archives or drops it, so it is
+ * listed as a plain peer of the other two rather than dressed as a "remove".
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PriorityPickerSheet(
+    current: Priority,
+    onSelect: (Priority) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = stringResource(Res.string.tasks_detail_priority_picker_title),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(bottom = 8.dp).semantics { heading() },
+            )
+            Priority.entries.forEach { p ->
+                val selected = p == current
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = MinTouchTarget)
+                        .clickable { onSelect(p) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = priorityLabel(p),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (selected) {
+                        Icon(
+                            imageVector = DefernoIcons.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The plain label for each urgency bucket (#375) — the shared `common_priority_*` vocabulary. */
+@Composable
+internal fun priorityLabel(priority: Priority): String = stringResource(
+    when (priority) {
+        Priority.Fire -> Res.string.common_priority_fire
+        Priority.Normal -> Res.string.common_priority_normal
+        Priority.Backlog -> Res.string.common_priority_backlog
+    },
+)
+
+/**
  * The SOURCE cell content: the provider [SourceIndicator] mark + the origin label (the `owner/repo#N` tracker
  * ref, or the provider label for a non-tracker), opening the provider URL when present. The label underlines
  * only when it links somewhere. Read-only — provenance, not an editor.
@@ -708,6 +820,77 @@ private fun DueCell(completeBy: Instant?, onSetDeadline: (LocalDate?) -> Unit) {
                 TextButton(
                     onClick = {
                         pickerState.selectedDateMillis?.let { onSetDeadline(it.toPickedLocalDate()) }
+                        showPicker = false
+                    },
+                ) { Text(stringResource(Res.string.common_set)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text(stringResource(Res.string.common_cancel)) }
+            },
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+}
+
+/**
+ * The TARGET DATE cell (#375): the soft target day, or a muted "No target date". The deadline cell above
+ * minus its time axis — a target is **date-granular by intent**, so this opens a plain [DatePickerDialog]
+ * and never a date+time pair, and it carries no relative-day/"due" reading: it is a want, not a deadline.
+ * Confirming forwards the picked day (the component turns it into that day's inclusive end); the Clear
+ * affordance forwards `null` to drop the soft target, leaving any hard deadline untouched.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TargetDateCell(targetDate: Instant?, onSetTargetDate: (LocalDate?) -> Unit) {
+    var showPicker by remember { mutableStateOf(false) }
+    val empty = stringResource(Res.string.tasks_detail_no_target_date)
+    // Read the stored instant back in the DEVICE zone, localized — never `toDisplayDate()`, which slices
+    // the UTC date out of the RFC3339 string. That shortcut is survivable for the deadline (stored at
+    // start-of-day, so it only misreads east of UTC) but not here: the soft target is stored at the day's
+    // inclusive END (23:59:59 local), so west of UTC the UTC date is the NEXT day — picking the 20th would
+    // display the 21st. And CLAUDE.md requires dates to localize through LocalizedDateFormats anyway.
+    val datePattern = stringResource(Res.string.settings_security_device_date_pattern)
+    val display = targetDate?.let { formatInstant(it, datePattern) } ?: empty
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val targetDateA11y = stringResource(Res.string.tasks_detail_target_date_a11y, display)
+        Text(
+            text = display,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (targetDate == null) MaterialTheme.defernoColors.inkMuted else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClickLabel = stringResource(Res.string.tasks_detail_set_target_date)) { showPicker = true }
+                .semantics { contentDescription = targetDateA11y },
+        )
+        if (targetDate != null) {
+            val clearTargetDateA11y = stringResource(Res.string.tasks_detail_clear_target_date_a11y)
+            TextButton(
+                onClick = { onSetTargetDate(null) },
+                modifier = Modifier.semantics { contentDescription = clearTargetDateA11y },
+            ) { Text(stringResource(Res.string.common_clear)) }
+        }
+    }
+    if (showPicker) {
+        // Seed the picker with the stored target's DEVICE-zone day, re-expressed as the UTC midnight
+        // Material3 reads `initialSelectedDateMillis` as. Passing the raw instant would re-open the picker
+        // on the wrong day for the same end-of-day reason the display note above describes.
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = targetDate
+                ?.toLocalDateTime(TimeZone.currentSystemDefault())
+                ?.date
+                ?.atStartOfDayIn(TimeZone.UTC)
+                ?.toEpochMilliseconds(),
+        )
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pickerState.selectedDateMillis?.let { onSetTargetDate(it.toPickedLocalDate()) }
                         showPicker = false
                     },
                 ) { Text(stringResource(Res.string.common_set)) }

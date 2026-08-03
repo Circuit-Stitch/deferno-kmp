@@ -30,7 +30,21 @@ data class SearchHit(
     // the offline attachment-size sort has a value to order by. Task-only today (recurring hits carry 0).
     val attachmentCount: Int = 0,
     val attachmentTotalSize: Long = 0,
+    // The ranked-order axes (#375), carried so the canonical key can be applied to a result set without
+    // re-reading the source rows. [targetDate] is the SOFT want-date (it outranks [completeBy] within a
+    // bucket); [dateCreated] is the final tiebreak and is nullable only because a hit may be projected
+    // from a shape that has not supplied it — an absent one sorts last, like an absent date.
+    val priority: Priority = Priority.Default,
+    val targetDate: Instant? = null,
+    val dateCreated: Instant? = null,
 ) {
     /** Whether this hit has at least one backend-hosted attachment (#311). */
     val hasAttachment: Boolean get() = attachmentCount > 0
+
+    /**
+     * This hit's position in the canonical ranked order (#375) — the same key every other ranked
+     * surface, and the server, applies. Sort **ascending** for most-urgent-first.
+     */
+    fun prioritySortKey(): PrioritySortKey =
+        prioritySortKey(priority, targetDate, completeBy, dateCreated)
 }

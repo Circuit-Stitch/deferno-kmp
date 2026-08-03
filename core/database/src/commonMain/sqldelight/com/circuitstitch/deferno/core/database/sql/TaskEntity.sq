@@ -56,7 +56,14 @@ CREATE TABLE taskEntity (
     -- encoded as a newline-joined list of `item` or `item|occurrence` pairs (UUIDs/dates never contain
     -- either separator). Task-only: edges are held by Tasks (a blocker may be any kind). Nullable so
     -- ADD COLUMN leaves pre-migration rows NULL (decoded as empty until the next refresh repopulates).
-    blocked_by TEXT
+    blocked_by TEXT,
+    -- Appended for migration 17->18 (#375) — the soft target date + the urgency bucket, both riding
+    -- every read. `target_date` is the "want done by" instant (peer to complete_by, independent of it,
+    -- sorting-only); `priority` is the Priority enum NAME (Fire/Normal/Backlog), stored as the domain
+    -- constant like working_state rather than the wire token. Both nullable so ADD COLUMN leaves
+    -- pre-migration rows NULL — decoded as "no target" / Priority.Normal until the next refresh.
+    target_date TEXT,
+    priority    TEXT
 );
 
 -- Sync/query indexes (issue #21): Org filter (ADR-0002), working-state filtering, the parent_id
@@ -93,8 +100,8 @@ INSERT OR REPLACE INTO taskEntity(
     complete_by, deadline_time_of_day, productive, desire, pinned, date_created, finished_at,
     deleted_at, hydration_state, description, next_task_id, descendant_done, descendant_total,
     blocked, is_blocker, external_source, external_id, external_url, attachment_count, attachment_total_size,
-    blocked_by
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    blocked_by, target_date, priority
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteById:
 DELETE FROM taskEntity WHERE id = ?;

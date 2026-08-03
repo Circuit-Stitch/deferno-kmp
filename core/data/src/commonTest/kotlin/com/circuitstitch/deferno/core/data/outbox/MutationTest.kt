@@ -9,6 +9,7 @@ import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -138,6 +139,33 @@ class MutationTest {
     fun setPinnedEmitsBoolean() {
         assertEquals("""{"pinned":true}""", SetPinned(TaskId("a"), true).toRequest().body)
         assertEquals("""{"pinned":false}""", SetPinned(TaskId("a"), false).toRequest().body)
+    }
+
+    // --- the soft target date + urgency bucket (#375) ---
+
+    @Test
+    fun setTargetDateEmitsOnlyTheSoftDate() {
+        // A peer of complete_by on its own key — setting the soft target must never touch the hard
+        // deadline, or "I want this sooner" would silently move the real due date.
+        assertEquals(
+            """{"target_date":"2026-05-20T16:11:42Z"}""",
+            SetTargetDate(TaskId("a"), created).toRequest().body,
+        )
+    }
+
+    @Test
+    fun setTargetDateWithNullEmitsExplicitNullToClearIt() {
+        // null = "clear it" (ADR-0011), distinct from omit — the server reads target_date as a
+        // Patch<T>, where an omitted key means "leave unchanged" and would silently no-op the clear.
+        assertEquals("""{"target_date":null}""", SetTargetDate(TaskId("a"), null).toRequest().body)
+    }
+
+    @Test
+    fun setPriorityEmitsTheLowercaseWireToken() {
+        // The readable wire casing, not the domain PascalCase.
+        assertEquals("""{"priority":"fire"}""", SetPriority(TaskId("a"), Priority.Fire).toRequest().body)
+        assertEquals("""{"priority":"normal"}""", SetPriority(TaskId("a"), Priority.Normal).toRequest().body)
+        assertEquals("""{"priority":"backlog"}""", SetPriority(TaskId("a"), Priority.Backlog).toRequest().body)
     }
 
     @Test
@@ -279,6 +307,9 @@ class MutationTest {
             SetDeadlineTime(TaskId("a"), LocalTime(9, 0)),
             SetLabels(TaskId("a"), listOf("l")),
             SetPinned(TaskId("a"), true),
+            SetTargetDate(TaskId("a"), created),
+            SetTargetDate(TaskId("a"), null),
+            SetPriority(TaskId("a"), Priority.Backlog),
             DeleteTask(TaskId("a"), created),
         )
         for (intent in intents) {

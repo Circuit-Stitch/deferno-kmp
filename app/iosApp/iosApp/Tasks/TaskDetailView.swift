@@ -38,6 +38,9 @@ struct TaskDetailView: View {
     // The combined date+time WHEN picker (#348): the summary chip toggles a popover holding the graphical
     // [.date, .hourAndMinute] DatePicker (the iOS 26 UI-kit look — calendar + Time row in one surface).
     @State private var showingDuePicker = false
+    // The date-only TARGET-DATE picker (#375). Its own flag, never shared with `showingDuePicker`: the soft
+    // target and the hard deadline are independent fields that happen to sit in adjacent rows.
+    @State private var showingTargetPicker = false
     @State private var showingAttachmentsSheet = false
     // The FAB's add-actions sheet (ADR-0044 parity): the floating "+" opens a bottom sheet of the task's top
     // actions — Add subtask · Add comment · Add to today's plan · Change status — the native ModalBottomSheet
@@ -400,6 +403,18 @@ struct TaskDetailView: View {
         rows.append(AnyView(
             PropertyTableRow(label: L.string("tasks_detail_property_when")) { dueCell(task) }
         ))
+        // TARGET DATE — always, and always its OWN row directly under WHEN. The soft "when I want this
+        // done by" is a peer of the hard deadline, not a facet of it: any combination of the two is
+        // valid, neither constrains the other, and setting one never moves the other. It only feeds
+        // ranking/surfacing — it never puts the item on the calendar.
+        rows.append(AnyView(
+            PropertyTableRow(label: L.string("tasks_detail_property_target_date")) { targetDateCell(task) }
+        ))
+        // PRIORITY — always; like STATUS the whole cell is a `Menu` action sheet. Never absent: "no
+        // priority" IS Normal, so this row has no empty branch and no clear affordance.
+        rows.append(AnyView(
+            PropertyTableRow(label: L.string("tasks_detail_property_priority")) { priorityCell(task) }
+        ))
         // STATUS — always; the whole row is the status **Action Sheet** trigger. A `Menu` (not
         // `.confirmationDialog`): iOS 26 renders a confirmationDialog as a *beaked popover*, whereas a Menu is
         // the source-anchored grouped action sheet this app wants (the Mail "Delete Draft / Save Draft" look) —
@@ -560,6 +575,100 @@ struct TaskDetailView: View {
         }
         .padding(16)
         .modifier(CompactPopoverAdaptation())
+    }
+
+    /// The TARGET DATE cell (#375): the WHEN cell **minus the time axis**. A summary chip ("Jul 17, 2026")
+    /// opens a date-only graphical `DatePicker`, plus a Clear button; unset reads as an explicit "No target
+    /// date" with a Set affordance (the same no-value branch WHEN carries, so an untargeted Task can still be
+    /// given one from here).
+    ///
+    /// **There is no target time-of-day**, so there is deliberately no clock row, no "Add time" affordance
+    /// and no `applyTargetPicker` split-the-axes dance: one axis, one write. And no relative-day suffix — the
+    /// `tasks_detail_due_*` readings belong to the deadline; this is a want, not a due date.
+    @ViewBuilder
+    private func targetDateCell(_ task: Task) -> some View {
+        let seedEpoch = BridgeKt.taskTargetDatePickerEpochSeconds(task: task)
+        if seedEpoch >= 0 {
+            let reading = DefernoDateFormat.summary(epochSeconds: seedEpoch, includesTime: false)
+            HStack(spacing: 8) {
+                Button { showingTargetPicker = true } label: {
+                    Text(reading)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(colors.primary)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(colors.surfaceVariant, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L.format("tasks_detail_target_date_a11y", reading))
+                .popover(isPresented: $showingTargetPicker) { targetDatePopover(task) }
+                Spacer(minLength: 0)
+                Button(L.string("common_clear")) { BridgeKt.clearTaskTargetDate(component: component) }
+                    .font(.subheadline)
+                    .accessibilityLabel(L.string("tasks_detail_clear_target_date_a11y"))
+            }
+        } else {
+            HStack(spacing: 8) {
+                // The named "No target date" rather than WHEN's bare "—": the row is new vocabulary, and a
+                // dash next to a dash reads as one empty date field, not two independent ones.
+                Text(L.string("tasks_detail_no_target_date"))
+                    .font(.subheadline)
+                    .foregroundStyle(colors.inkMuted)
+                Spacer(minLength: 0)
+                Button(L.string("common_set")) {
+                    BridgeKt.setTaskTargetDate(component: component, epochSeconds: Date().timeIntervalSince1970)
+                }
+                .font(.subheadline)
+                .accessibilityLabel(L.string("tasks_detail_set_target_date"))
+            }
+        }
+    }
+
+    /// The TARGET DATE popover content: a `[.date]`-only graphical `DatePicker`, nothing else. Every change
+    /// forwards the picked DAY straight through — the bridge hands the component a `LocalDate` and the
+    /// component decides the instant, so no clock can leak into a field that has none.
+    private func targetDatePopover(_ task: Task) -> some View {
+        DatePicker(
+            "",
+            selection: Binding(
+                get: { Date(timeIntervalSince1970: BridgeKt.taskTargetDatePickerEpochSeconds(task: task)) },
+                set: { BridgeKt.setTaskTargetDate(component: component, epochSeconds: $0.timeIntervalSince1970) }
+            ),
+            in: DefernoDateFormat.pickable,
+            displayedComponents: [.date]
+        )
+        .datePickerStyle(.graphical)
+        .labelsHidden()
+        .accessibilityLabel(L.string("tasks_detail_property_target_date"))
+        .frame(minWidth: 300)
+        .padding(16)
+        .modifier(CompactPopoverAdaptation())
+    }
+
+    /// The PRIORITY cell (#375): the current bucket as the whole-cell trigger for a `Menu` action sheet —
+    /// the same source-anchored grouped sheet the STATUS row uses (a `confirmationDialog` would render as a
+    /// beaked popover). The `Section` supplies the "Set priority" header.
+    ///
+    /// Peer to `pinned` and orthogonal to it, and never null — the picker offers all three buckets with no
+    /// "none" option, because Normal *is* "no priority". Backlog only **sinks** an item in ranked views; it
+    /// stays visible, so it is worded and toned as a low lane, never as hiding or dropping.
+    private func priorityCell(_ task: Task) -> some View {
+        Menu {
+            Section(L.string("tasks_detail_priority_picker_title")) {
+                ForEach(Priority.ordered, id: \.self) { target in
+                    Button(target.label) { component.onSetPriority(priority: target) }
+                }
+            }
+        } label: {
+            // minHeight rides the indicator (not the Menu) so the Menu's hit area is the full-height cell —
+            // the same fix the STATUS row needed.
+            PriorityIndicator(priority: task.priority)
+                .frame(maxWidth: .infinity, minHeight: Layout.minTouchTarget, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // The indicator is a11y-hidden (its dot is colour reinforcement), so the Menu speaks the row.
+        .accessibilityLabel(L.format("tasks_detail_priority_row_a11y", task.priority.label))
     }
 
     /// The LABELS cell: the labels as removable chips + an inline "add label" field. Any add/remove forwards
@@ -1099,6 +1208,39 @@ private struct JourneyStatusIndicator: View {
     }
 }
 
+// MARK: - Priority bucket indicator (#375)
+
+/// The read-only PRIORITY reading: a small tone dot beside the bucket word. Colour is reinforcement only —
+/// the word is always spelled out — and the dot's palette says *urgency*, not *worth*: Fire burns in the
+/// brand amber, Normal is plain ink, and Backlog is merely muted (it sinks in ranked views but stays
+/// visible, so it must not read as struck-through, greyed-out or archived). The whole thing is a single
+/// a11y-hidden element; the row's `Menu` speaks the current bucket once.
+private struct PriorityIndicator: View {
+    let priority: Priority
+
+    @Environment(\.defernoColors) private var colors
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(tone)
+                .frame(width: 8, height: 8)
+            Text(priority.label)
+                .font(.body)
+                .foregroundStyle(colors.onSurface)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var tone: Color {
+        switch priority {
+        case .fire: return colors.amberDeep
+        case .normal: return colors.onSurfaceVariant
+        case .backlog: return colors.inkMuted
+        }
+    }
+}
+
 // MARK: - Markdown description
 
 /// The NOTES markdown (ADR-0044): a GitHub-imported body rendered as inline GFM (not raw `**`/backticks),
@@ -1315,9 +1457,9 @@ private struct DiffPresentation: Identifiable {
 // MARK: - Trail date/time formatting (Swift-side — the bridge is Kotlin/Native, no java.time)
 
 /// All human-facing Trail date/time formatting (ADR-0046): the bridge (Kotlin/Native) exposes only the ISO
-/// day key + epoch seconds, so the row time, the diff subtitle, and the DEADLINE diff value are formatted here
-/// with `DateFormatter` (native, locale-aware). Not file-private because `L.diffValueText` (Localization.swift)
-/// calls [deadline].
+/// day key + epoch seconds, so the row time, the diff subtitle, and the instant-valued diff rows are formatted
+/// here with `DateFormatter` (native, locale-aware). Not file-private because `L.diffValueText`
+/// (Localization.swift) calls [instantValue].
 enum TrailDateFormat {
     /// The row time (e.g. "4:17 PM") — the short, locale-aware time of an activity instant.
     static func time(_ epoch: Double) -> String {
@@ -1332,9 +1474,11 @@ enum TrailDateFormat {
         whenFormatter.string(from: Date(timeIntervalSince1970: epoch))
     }
 
-    /// A DEADLINE diff value: parse the raw RFC3339 instant and render it "MMM d · HH:mm"; on a parse failure
-    /// return the raw string (matches the Compose `getOrDefault(raw)`).
-    static func deadline(_ rfc3339: String) -> String {
+    /// An instant-valued diff value — DEADLINE or the soft TARGET_DATE (#375): parse the raw RFC3339 instant
+    /// and render it "MMM d · HH:mm"; on a parse failure return the raw string (matches the Compose
+    /// `getOrDefault(raw)`). Named for the *shape* of the value, not one field: the two are independent
+    /// fields that merely happen to be captured the same way.
+    static func instantValue(_ rfc3339: String) -> String {
         guard let date = parseInstant(rfc3339) else { return rfc3339 }
         return whenFormatter.string(from: date)
     }

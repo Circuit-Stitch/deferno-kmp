@@ -4,6 +4,11 @@ import androidx.compose.runtime.Composable
 import com.circuitstitch.deferno.core.designsystem.component.DiffRow
 import com.circuitstitch.deferno.core.designsystem.component.DiffValue
 import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.activity_field_target_date
+import com.circuitstitch.deferno.core.designsystem.resources.activity_field_priority
+import com.circuitstitch.deferno.core.designsystem.resources.common_priority_fire
+import com.circuitstitch.deferno.core.designsystem.resources.common_priority_normal
+import com.circuitstitch.deferno.core.designsystem.resources.common_priority_backlog
 import com.circuitstitch.deferno.core.designsystem.resources.activity_field_deadline
 import com.circuitstitch.deferno.core.designsystem.resources.activity_field_pinned
 import com.circuitstitch.deferno.core.designsystem.resources.activity_field_status
@@ -60,6 +65,10 @@ private fun activityFieldLabel(field: ActivityField, rawKey: String): String = w
     ActivityField.Labels -> stringResource(Res.string.common_labels)
     ActivityField.Status -> stringResource(Res.string.activity_field_status)
     ActivityField.Pinned -> stringResource(Res.string.activity_field_pinned)
+    // The soft target reads as its own field, never "deadline" — the Trail must not report a deadline
+    // change for an edit that never touched `complete_by` (#375).
+    ActivityField.TargetDate -> stringResource(Res.string.activity_field_target_date)
+    ActivityField.Priority -> stringResource(Res.string.activity_field_priority)
     ActivityField.Unknown -> rawKey
 }
 
@@ -77,10 +86,31 @@ private fun formatFieldValue(field: ActivityField, raw: String): String = when (
         val pattern = stringResource(Res.string.activity_when_pattern)
         runCatching { formatInstant(Instant.parse(raw), pattern) }.getOrDefault(raw)
     }
+    // The soft target is captured as an instant like the deadline, so it renders through the same
+    // date formatter — a bare RFC-3339 string in the Trail would be unreadable.
+    ActivityField.TargetDate -> {
+        val pattern = stringResource(Res.string.activity_when_pattern)
+        runCatching { formatInstant(Instant.parse(raw), pattern) }.getOrDefault(raw)
+    }
+    ActivityField.Priority -> activityPriorityLabel(raw)
     ActivityField.Status -> activityStatusLabel(raw)
     ActivityField.Pinned ->
         stringResource(if (raw == "true") Res.string.activity_value_pinned else Res.string.activity_value_unpinned)
     else -> raw
+}
+
+/**
+ * A localized label for a **priority wire token** (`fire`/`normal`/`backlog`, #375) — the shared bucket
+ * formatter the Activity + Trail diffs use, so a captured `priority` value reads as the same word the
+ * detail row shows rather than the raw wire token. An unrecognised token degrades to itself (the
+ * tolerant-reader posture the rest of the diff formatting already takes).
+ */
+@Composable
+fun activityPriorityLabel(wireToken: String): String = when (wireToken) {
+    "fire" -> stringResource(Res.string.common_priority_fire)
+    "normal" -> stringResource(Res.string.common_priority_normal)
+    "backlog" -> stringResource(Res.string.common_priority_backlog)
+    else -> wireToken
 }
 
 /**

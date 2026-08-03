@@ -44,7 +44,7 @@ mechanical half of this on the `check` path.
 | [0024](0024-macos-native-capabilities-launchd-swift-sidecar.md) | Native macOS capabilities via a launchd-activated Swift sidecar | Amended by ADR-0029 | 2026-06-09 |
 | [0025](0025-multi-os-sidecar-substrate-cross-os-transport.md) | Multi-OS native-sidecar substrate + cross-OS transport | Accepted | 2026-06-09 |
 | [0026](0026-native-browser-pkce-signin.md) | Native sign-in: system-browser OAuth Authorization Code + PKCE, minting a per-device PAT | Amended by ADR-0033 | 2026-06-10 |
-| [0027](0027-client-koog-agent-hosted-relay-propose-only.md) | Client-side agent: Koog in the shared core, hosted inference behind a thin Deferno relay, propose-only v1 | Amended by ADR-0037 | 2026-06-10 |
+| [0027](0027-client-koog-agent-hosted-relay-propose-only.md) | Client-side agent: Koog in the shared core, hosted inference behind a thin Deferno relay, propose-only v1 | Amended by ADR-0037, ADR-0052 | 2026-06-10 |
 | [0028](0028-per-platform-view-bodies-duplicated.md) | Per-platform feature View bodies are intentionally duplicated, not collapsed into commonMain | Accepted | 2026-06-12 |
 | [0029](0029-native-macos-swiftui-app-real-macos-target.md) | Native macOS app: a real Kotlin/Native `macosArm64` target, SwiftUI Views, in-process capabilities | Amended by ADR-0033 | 2026-06-13 |
 | [0030](0030-plan-task-detail-tier-3-drill-down-not-overlay.md) | Plan task detail is a tier-3 drill-down, not a shell overlay | Accepted | 2026-06-15 |
@@ -69,5 +69,6 @@ mechanical half of this on the `check` path.
 | [0049](0049-tasks-item-tree-modal-move.md) | Tasks Destination renders the Item decomposition tree; modal button-based Move over `/items` | Accepted | 2026-06-15 |
 | [0050](0050-task-dependency-edges-server-derived-blocked-flags.md) | Task dependency edges are client-writable; the Blocked and blocker flags are server-derived | Accepted | 2026-06-26 |
 | [0051](0051-client-when-decomposition-day-plus-optional-clock.md) | WHEN decomposes to day + optional clock; all-day is derived, and the offline-first client normalizes locally | Accepted | 2026-08-02 |
+| [0052](0052-soft-target-date-and-stored-priority-bucket.md) | The soft Target date and the stored Priority bucket are read on all four kinds and written on Task | Accepted | 2026-08-02 |
 
-_50 records. Next free number: **0051**._
+_52 records. Next free number: **0053**._

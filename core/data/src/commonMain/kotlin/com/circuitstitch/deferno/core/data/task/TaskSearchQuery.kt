@@ -57,4 +57,15 @@ enum class SearchSort {
 
     /** Largest total attachment size first (#311); items without attachments (size 0) sort last. */
     AttachmentSizeDesc,
+
+    /**
+     * The canonical ranked order (#375): urgency bucket, then the soonest of the soft target / hard
+     * deadline, then the deadline, then age — [com.circuitstitch.deferno.core.model.prioritySortKey],
+     * the same key the server ranks with.
+     *
+     * **Appended at the end deliberately.** The sort affordance cycles positionally over
+     * `SearchSort.entries`, so inserting a value anywhere earlier would silently re-map every existing
+     * chip transition (and the tests that pin them).
+     */
+    PriorityRank,
 }

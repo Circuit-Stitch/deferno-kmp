@@ -22,6 +22,7 @@ import com.circuitstitch.deferno.core.domain.command.CreateItem
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import com.circuitstitch.deferno.core.model.Account
 import com.circuitstitch.deferno.core.model.AccountId
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.core.agent.InferenceEngineCatalog
@@ -441,6 +442,8 @@ class DefaultRootComponent(
                         // routed through this Account's command executor (Set/ClearTaskDeadline, SetTaskLabels).
                         setDeadline = session.setDeadline,
                         setDeadlineTime = session.setDeadlineTime,
+                        setTargetDate = session.setTargetDate,
+                        setPriority = session.setPriority,
                         setLabels = session.setLabels,
                         // The detail's destructive Delete seam (kebab → confirm), routed through this
                         // Account's command executor (DeleteTask). The Item-tree command menu (#231) reuses it.

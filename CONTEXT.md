@@ -84,13 +84,30 @@ action (start / complete / skip); the finer read states — Scheduled, Missed, a
 split — are **server-derived**.
 _Avoid_: status, OccurrenceStatus, done_on_time/done_late.
 
-**Priority** *(client, derived — never stored)*:
-A reading **derived** from a [[Task]]'s existing attributes — `desire` (how much the person wants to
-do it), `productive` (how productive it feels), and `completeBy` (urgency) — wherever the client
-needs to rank or emphasize. There is **no priority field** in the domain and the client must not
-invent one (no P0–P3 enum, no priority labels): anything that extracts or ranks "by priority" writes
-or reads those three attributes.
-_Avoid_: priority as a stored field, priority labels ("p1"), importance (use the specific attribute).
+**Target date** *(client; wire `target_date`, ADR-0052)*:
+The **soft** "when I *want* this done by" date on an [[Item]] — a self-imposed, anti-procrastination
+target usually set earlier than the hard deadline `completeBy` ("when it **must** be done"). The two
+are **peers and independent**: any combination of the two is valid, and no `targetDate <= completeBy`
+rule is enforced. A target date drives **ranking and surfacing only** — it never moves the calendar,
+never carries forward, and never becomes an [[Occurrence]] deadline instant. Date-granular by intent:
+unlike the deadline (whose clock is `deadlineTimeOfDay`, ADR-0051) it has no time-of-day. Read on all
+four [[Item kind]]s; writable on [[Task]] only for now.
+_Avoid_: second deadline, soft deadline, due date (only `completeBy` is a deadline); target time.
+
+**Priority** *(client; a stored bucket, peer to `pinned` — ADR-0052)*:
+An [[Item]]'s explicit, **deadline-independent** urgency bucket — **Fire**, **Normal** (the default),
+or **Backlog** — set by the person rather than inferred, and carried on all four [[Item kind]]s.
+Lowering an item to Backlog sinks it in every ranked view but leaves it **visible**; that is the
+point of the bucket, and it is why it is the safe way to de-prioritize rather than declaring a
+[[Blocked / blocker]] edge that could hide the item behind a blocker that never finishes. Ranking
+composes the bucket with the dates through one shared key, `prioritySortKey` — bucket, then the
+soonest of [[Target date]] and `completeBy`, then the deadline, then creation — ported from the
+server so both sides rank identically. It is a term in **ranked** views only: it never reorders a
+**curated** order (the pinned list, the [[Plan]]'s arrangement, the [[Item tree]]'s root order), and
+it stays orthogonal to `pinned`. Read on all four kinds; writable on [[Task]] only for now.
+_Avoid_: importance, P0–P3 / "p1" labels (name the bucket, Fire/Normal/Backlog); deriving priority
+from `desire`/`productive`/`completeBy` — that rule (and ADR-0027's bullet carrying it) was reversed
+when the backend made priority a real field.
 
 **Blocked / blocker** *(client — server-derived, read-only)*:
 A real dependency edge exists (ADR-0034, #289/#291/#292): a [[Task]]'s ordered **`blockedBy`** list
@@ -418,7 +435,7 @@ _Avoid_: parser, brain-dump AI, voice commands (routing speech to Commands — a
 
 **Plan proposal** *(client)*:
 The [[Agent]]'s proposed **delta against the day's seeded plan** — backlog [[Task]]s worth adding
-(ranked by the derived [[Priority]]), removals when the day overflows, and an ordering — reviewed on
+(ranked by [[Priority]]), removals when the day overflows, and an ordering — reviewed on
 the Plan [[Destination]]. Accepted entries commit through the ordinary plan verbs; the proposal is
 **never auto-applied**, and the server-seeded plan remains the substrate it amends.
 _Avoid_: generated plan, AI plan (the Agent *curates* the seeded day; it does not author it).

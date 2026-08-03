@@ -982,7 +982,9 @@
     <string name="activity_history_updated_fields">संपादित किया: %1$s</string>
     <string name="activity_field_title">शीर्षक</string>
     <string name="activity_field_deadline">समय-सीमा</string>
+    <string name="activity_field_target_date">लक्ष्य तिथि</string>
     <string name="activity_field_pinned">पिन किया गया</string>
+    <string name="activity_field_priority">प्राथमिकता</string>
     <string name="activity_field_status">स्थिति</string>
     <string name="activity_diff_empty">कोई फ़ील्ड परिवर्तन रिकॉर्ड नहीं किया गया।</string>
     <string name="activity_diff_open_item">आइटम खोलें</string>
@@ -991,4 +993,18 @@
     <string name="activity_value_pinned">पिन किया गया</string>
     <string name="activity_value_unpinned">पिन नहीं किया गया</string>
     <string name="tasks_detail_trail_empty">अभी तक कोई गतिविधि नहीं</string>
+
+    <string name="tasks_detail_property_target_date">लक्ष्य तिथि</string>
+    <string name="tasks_detail_no_target_date">कोई लक्ष्य तिथि नहीं</string>
+    <string name="tasks_detail_set_target_date">लक्ष्य तिथि सेट करें</string>
+    <string name="tasks_detail_clear_target_date_a11y">लक्ष्य तिथि हटाएँ</string>
+    <string name="tasks_detail_target_date_a11y">लक्ष्य तिथि: %1$s। बदलने के लिए टैप करें।</string>
+    <string name="tasks_detail_property_priority">प्राथमिकता</string>
+    <string name="tasks_detail_priority_picker_title">प्राथमिकता सेट करें</string>
+    <string name="tasks_detail_priority_row_a11y">प्राथमिकता: %1$s। बदलने के लिए टैप करें।</string>
+    <string name="common_priority_fire">अत्यावश्यक</string>
+    <string name="common_priority_normal">सामान्य</string>
+    <string name="common_priority_backlog">बाद के लिए</string>
+    <string name="search_sort_priority">प्राथमिकता</string>
+    <string name="plan_why_fire">आपने कहा था कि यह अत्यावश्यक है</string>
 </resources>

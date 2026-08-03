@@ -37,6 +37,16 @@ data class Task(
     // The deadline's clock time (#348). `completeBy` carries the day; this carries "HH:MM" within it.
     // `null` = no time-of-day (all-day / end-of-day deadline). Wire `deadline_time_of_day`.
     val deadlineTimeOfDay: LocalTime? = null,
+    // The SOFT target date (#375): when the person *wants* this done by, set earlier than the hard
+    // [completeBy] to fight procrastination. A peer of the deadline, not a second one — and deliberately
+    // INDEPENDENT of it (the server enforces no `targetDate <= completeBy` invariant). It drives
+    // sorting/surfacing ONLY, via [prioritySortKey]: it never moves the calendar, never carries forward,
+    // and never becomes an occurrence deadline. Date-granular by intent — there is no target time-of-day.
+    // Wire `target_date`.
+    val targetDate: Instant? = null,
+    // The non-dated urgency bucket (#375), peer to [pinned] and orthogonal to it. Defaults to
+    // [Priority.Normal] so a legacy row is indistinguishable from an explicitly-normal one. Wire `priority`.
+    val priority: Priority = Priority.Default,
     val productive: Double? = null,
     val desire: Double? = null,
     val pinned: Boolean = false,

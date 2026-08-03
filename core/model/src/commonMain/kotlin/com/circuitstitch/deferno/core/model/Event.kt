@@ -34,6 +34,12 @@ data class Event(
     // `null` = all-day on that axis. The day comes from [completeBy]/[endTime].
     val startTimeOfDay: LocalTime? = null,
     val endTimeOfDay: LocalTime? = null,
+    // The soft target date + urgency bucket (#375) — see [Task.targetDate] for the full split. Distinct
+    // from this Event's own WHEN window ([completeBy]/[endTime]): the target is when the person *wants*
+    // it dealt with and drives sorting/surfacing only, so it never moves the Event on the calendar.
+    // Wire `target_date` / `priority`.
+    val targetDate: Instant? = null,
+    val priority: Priority = Priority.Default,
     val labels: List<String> = emptyList(),
     val parentId: TaskId? = null,
     val pinned: Boolean = false,

@@ -1,6 +1,6 @@
 # Client-side agent: Koog in the shared core, hosted inference behind a thin Deferno relay, propose-only v1
 
-**Status.** Amended by ADR-0037
+**Status.** Amended by ADR-0037, and by ADR-0052 for the derived-priority bullet
 
 **Date.** 2026-06-10
 
@@ -50,6 +50,11 @@ binary; and the backend owns the domain language and already auto-seeds the dail
   `ref` in agent-visible proposals and resolved back to UUIDs by the client before commit; draft Items
   may use opaque local ids in the same structural slots until acceptance. Stale or unresolved refs
   preserve the draft and enter a repair path instead of being silently dropped.
+  *(Reversed in part by ADR-0052: the backend accepted a stored `priority` bucket on 2026-06-29, so
+  "Priority" is a real field on all four kinds rather than a derived reading of
+  `desire`/`productive`/`completeBy`. The blocked-by half of this bullet was likewise overtaken, by
+  the dependency edges of ADR-0050. What the propose-only Agent extracts is unchanged by either
+  record.)*
 - **Surfaces:** Brain dump is a **mode on the New surface** (beside the dictation mic, ending in a
   draft-review list); the plan proposal is an affordance on the **Plan** Destination opening a
   review-the-delta sheet. The frozen v1 Destination set (ADR-0015) is unchanged.

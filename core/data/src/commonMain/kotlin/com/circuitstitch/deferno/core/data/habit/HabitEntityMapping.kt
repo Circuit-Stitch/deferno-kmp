@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.data.recurring.toDefinitionStateOrDefault
 import com.circuitstitch.deferno.core.data.recurring.toHydrationStateOrDefault
 import com.circuitstitch.deferno.core.data.recurring.toInstantOrNull
 import com.circuitstitch.deferno.core.data.recurring.toLocalTimeOrNull
+import com.circuitstitch.deferno.core.data.recurring.toPriorityOrDefault
 import com.circuitstitch.deferno.core.data.recurring.toRecurrenceFrequencyOrDefault
 import com.circuitstitch.deferno.core.database.sql.HabitEntity
 import com.circuitstitch.deferno.core.model.Habit
@@ -46,6 +47,9 @@ fun HabitEntity.toDomain(): Habit = Habit(
     // Server-derived dependency flags (#290): NULL (pre-migration / omitted) decodes to false.
     blocked = blocked == 1L,
     isBlocker = is_blocker == 1L,
+    // The soft target date + urgency bucket (#375): NULL (pre-migration) decodes to no-target / Normal.
+    targetDate = target_date.toInstantOrNull(),
+    priority = priority.toPriorityOrDefault(),
 )
 
 fun Habit.toEntity(): HabitEntity = HabitEntity(
@@ -70,4 +74,6 @@ fun Habit.toEntity(): HabitEntity = HabitEntity(
     series_id = seriesId,
     blocked = if (blocked) 1L else 0L,
     is_blocker = if (isBlocker) 1L else 0L,
+    target_date = targetDate?.toString(),
+    priority = priority.name,
 )

@@ -108,7 +108,8 @@ sync, long after the person has moved on. Two concrete defects followed:
   `docs/adr/2026-06-29-priority-model.md` — is
   still **entirely unmodelled on this client**, as is `priority`. Deliberately out of scope here: the
   server accepts `target_date` only on `Update*Payload`, and every create handler hardcodes
-  `target_date: None`, so a New-form row could not work without a backend change. Tracked separately.
+  `target_date: None`, so a New-form row could not work without a backend change. Tracked separately
+  (ADR-0052).
 - The residual duplicated bridge block is now ~90 lines of model-free codec, which makes relocating it
   to `app/shell/commonMain` (JVM-testable, already exported to both frameworks) a clean follow-up
   rather than a move of wrong-model logic.

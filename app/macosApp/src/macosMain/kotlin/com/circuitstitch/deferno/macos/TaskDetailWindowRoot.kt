@@ -4,12 +4,14 @@ import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.arkivanov.essenty.lifecycle.destroy
 import com.arkivanov.essenty.lifecycle.resume
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.feature.tasks.DefaultTaskDetailStackComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailStackComponent
 import com.circuitstitch.deferno.shell.RootComponent
 import kotlinx.coroutines.flow.StateFlow
+import kotlin.time.Instant
 
 /**
  * The Swift-facing handle for one **detached Task detail window** (#196, ADR-0033). It owns the window's
@@ -65,6 +67,8 @@ fun openTaskDetailWindow(root: RootComponent, idValue: String): TaskDetailWindow
         currentUserId = session.currentUserId,
         setDeadline = session.setDeadline,
         setDeadlineTime = session.setDeadlineTime,
+        setTargetDate = session.setTargetDate,
+        setPriority = session.setPriority,
         setLabels = session.setLabels,
     )
     lifecycle.resume()

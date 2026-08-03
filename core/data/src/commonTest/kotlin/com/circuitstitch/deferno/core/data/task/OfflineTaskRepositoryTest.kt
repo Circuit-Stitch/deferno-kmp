@@ -15,6 +15,7 @@ import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.test.runTest
@@ -309,6 +310,63 @@ class OfflineTaskRepositoryTest {
         )
         val hits = repo(local).search(TaskSearchQuery("task", sort = SearchSort.DeadlineAsc))
         assertEquals(listOf("soon", "later", "none"), hits.map { it.id })
+    }
+
+    // --- the canonical ranked order (#375) ---
+
+    @Test
+    fun searchHitsCarryThePrioritySortAxes() = runTest {
+        val want = Instant.parse("2026-06-02T23:59:59Z")
+        val local = FakeTaskLocalStore(
+            mapOf(
+                TaskId("t") to summary("t", title = "task t")
+                    .copy(priority = Priority.Fire, targetDate = want),
+            ),
+        )
+        val hit = repo(local).search(TaskSearchQuery("task")).single()
+        assertEquals(Priority.Fire, hit.priority)
+        assertEquals(want, hit.targetDate)
+    }
+
+    @Test
+    fun priorityRankSortAppliesTheCanonicalFourTermKey() = runTest {
+        // The bucket dominates the dates, and WITHIN a bucket the soft target beats the hard deadline —
+        // the server's `priority_sort_key`, verbatim. `targeted` has a far deadline but a near target, so
+        // it must out-rank `dueSoon` whose deadline alone is nearer than its (absent) target.
+        val local = FakeTaskLocalStore(
+            mapOf(
+                TaskId("backlog") to summary("backlog", title = "task backlog")
+                    .copy(priority = Priority.Backlog, completeBy = Instant.parse("2026-06-01T00:00:00Z")),
+                TaskId("undated") to summary("undated", title = "task undated"),
+                TaskId("dueSoon") to summary("dueSoon", title = "task dueSoon")
+                    .copy(completeBy = Instant.parse("2026-06-10T00:00:00Z")),
+                TaskId("targeted") to summary("targeted", title = "task targeted")
+                    .copy(
+                        targetDate = Instant.parse("2026-06-05T00:00:00Z"),
+                        completeBy = Instant.parse("2026-12-01T00:00:00Z"),
+                    ),
+                TaskId("fire") to summary("fire", title = "task fire")
+                    .copy(priority = Priority.Fire, completeBy = Instant.parse("2026-12-31T00:00:00Z")),
+            ),
+        )
+
+        val hits = repo(local).search(TaskSearchQuery("task", sort = SearchSort.PriorityRank))
+
+        assertEquals(listOf("fire", "targeted", "dueSoon", "undated", "backlog"), hits.map { it.id })
+    }
+
+    @Test
+    fun priorityRankSortKeepsABacklogItemVisible() = runTest {
+        // Backlog sinks; it must never be filtered out (that is the whole reason the bucket exists
+        // instead of a blocked-by edge, which would hide the item behind a never-finishing blocker).
+        val local = FakeTaskLocalStore(
+            mapOf(
+                TaskId("b") to summary("b", title = "task b").copy(priority = Priority.Backlog),
+                TaskId("n") to summary("n", title = "task n"),
+            ),
+        )
+        val hits = repo(local).search(TaskSearchQuery("task", sort = SearchSort.PriorityRank))
+        assertEquals(listOf("n", "b"), hits.map { it.id })
     }
 
     @Test

@@ -3,10 +3,12 @@ package com.circuitstitch.deferno.core.network.mapper
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.OccurrenceState
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.network.dto.DefStatusWire
 import com.circuitstitch.deferno.core.network.dto.DerivedChoreOccurrenceStatusWire
 import com.circuitstitch.deferno.core.network.dto.OccurrenceStatusWire
+import com.circuitstitch.deferno.core.network.dto.PriorityWire
 import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
 
 /**
@@ -69,6 +71,32 @@ fun DefinitionState.toWireToken(): String = when (this) {
     DefinitionState.Active -> "active"
     DefinitionState.InReview -> "in-review"
     DefinitionState.Archived -> "archived"
+}
+
+/**
+ * `Priority` → domain [Priority] (#375). [PriorityWire.Unknown] degrades to [Priority.Default] —
+ * which here is not merely a safe fallback but the server's own contract: `priority` is
+ * `#[serde(default)]`, so an absent field and an additive token both mean "the normal bucket". An
+ * item can therefore never rank as more or less urgent than it is because of a token we don't know.
+ */
+fun PriorityWire.toPriority(): Priority = when (this) {
+    PriorityWire.Fire -> Priority.Fire
+    PriorityWire.Normal -> Priority.Normal
+    PriorityWire.Backlog -> Priority.Backlog
+    PriorityWire.Unknown -> Priority.Default
+}
+
+/**
+ * [Priority] → its wire token — the **write** direction (ADR-0011 "the wire casing lives only in
+ * `core:network`", #375). The offline outbox's `SetPriority` intent (`core:data`) emits a minimal
+ * `{"priority": "<token>"}` PATCH body and must use the exact lowercase casing the read mapper
+ * round-trips on. Total and explicit so a new [Priority] value forces a token decision here rather
+ * than silently shipping a wrong bucket. Inverse of [PriorityWire.toPriority].
+ */
+fun Priority.toWireToken(): String = when (this) {
+    Priority.Fire -> "fire"
+    Priority.Normal -> "normal"
+    Priority.Backlog -> "backlog"
 }
 
 /**

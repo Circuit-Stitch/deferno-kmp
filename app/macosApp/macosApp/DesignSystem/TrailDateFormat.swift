@@ -6,7 +6,7 @@ import Foundation
 ///
 /// **Twin note.** iOS keeps this enum at the bottom of `Tasks/TaskDetailView.swift`; macOS hosts it in
 /// `DesignSystem/` instead, because `L.diffValueText` (DesignSystem/Localization.swift) calls
-/// ``deadline(_:)`` — leaving it in `Tasks/` would point the design system back at a feature folder. The
+/// ``instantValue(_:)`` — leaving it in `Tasks/` would point the design system back at a feature folder. The
 /// bodies stay a twin of `app/iosApp/iosApp/Tasks/TaskDetailView.swift`; keep them in sync.
 enum TrailDateFormat {
     /// The row time (e.g. "4:17 PM") — the short, locale-aware time of an activity instant. The formatter is
@@ -21,9 +21,11 @@ enum TrailDateFormat {
         whenFormatter.string(from: Date(timeIntervalSince1970: epoch))
     }
 
-    /// A DEADLINE diff value: parse the raw RFC3339 instant and render it "MMM d · HH:mm"; on a parse failure
-    /// return the raw string (matches the Compose `getOrDefault(raw)`).
-    static func deadline(_ rfc3339: String) -> String {
+    /// An instant-valued diff value (DEADLINE or the soft TARGET_DATE, #375): parse the raw RFC3339 instant
+    /// and render it "MMM d · HH:mm"; on a parse failure return the raw string (matches the Compose
+    /// `getOrDefault(raw)`). Named for the *value shape*, not for one field — the two remain distinct fields
+    /// in the Trail, they merely share this formatter.
+    static func instantValue(_ rfc3339: String) -> String {
         guard let date = parseInstant(rfc3339) else { return rfc3339 }
         return whenFormatter.string(from: date)
     }

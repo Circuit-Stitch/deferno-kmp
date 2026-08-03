@@ -35,5 +35,12 @@ kotlin {
         jvmMain.dependencies {
             implementation(project(":feature:plan"))
         }
+        // The dashboard's own render/logic tests on the JVM-fast path (no device) — the same harness
+        // feature/tasks/ui uses. They cover the shared body both platforms render: the ✦ suggestion
+        // precedence, the choice cards' "why" line, and that the day list keeps the curated order.
+        jvmTest.dependencies {
+            implementation(libs.compose.ui.test.junit4)
+            implementation(compose.desktop.currentOs)
+        }
     }
 }

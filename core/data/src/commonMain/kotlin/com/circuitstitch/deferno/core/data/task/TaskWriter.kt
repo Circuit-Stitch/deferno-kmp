@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.datetime.LocalTime
@@ -47,6 +48,19 @@ interface TaskWriter {
 
     /** Pin or unpin the Task (`PATCH tasks/{id} {"pinned":<bool>}`). */
     suspend fun setPinned(id: TaskId, pinned: Boolean)
+
+    /**
+     * Set (or clear) the Task's **soft target date** (#375, `PATCH tasks/{id} {"target_date":…}`) — when
+     * the person *wants* it done by. A `null` [targetDate] = **clear it**. Independent of the hard
+     * deadline: this never touches `complete_by`.
+     */
+    suspend fun setTargetDate(id: TaskId, targetDate: Instant?)
+
+    /**
+     * Set the Task's urgency bucket (#375, `PATCH tasks/{id} {"priority":"<token>"}`). Not nullable —
+     * "no priority" is [Priority.Normal], not an absent value (the server has no null form for it).
+     */
+    suspend fun setPriority(id: TaskId, priority: Priority)
 
     /** Soft-delete the Task (`DELETE tasks/{id}`); optimistically tombstones the local row. */
     suspend fun delete(id: TaskId)

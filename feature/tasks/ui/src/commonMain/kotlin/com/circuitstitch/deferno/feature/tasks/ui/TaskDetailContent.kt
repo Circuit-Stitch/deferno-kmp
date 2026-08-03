@@ -80,6 +80,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_progress_done
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_working_state_open
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_set_aside
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
@@ -110,6 +111,10 @@ internal fun TaskDetailContent(
     onAddToPlan: () -> Unit,
     onSetWorkingState: (WorkingState) -> Unit,
     onSetDeadline: (LocalDate?) -> Unit,
+    // The soft target date + the urgency bucket (#375). Default no-ops so a host that hasn't wired the two
+    // new write seams still builds — the real Android/desktop screens forward them to the component.
+    onSetTargetDate: (LocalDate?) -> Unit = {},
+    onSetPriority: (Priority) -> Unit = {},
     onSetLabels: (List<String>) -> Unit,
     onToggleSubtask: (Task) -> Unit,
     onToggleSubtaskExpand: (id: String, currentlyExpanded: Boolean) -> Unit = { _, _ -> },
@@ -167,6 +172,8 @@ internal fun TaskDetailContent(
                     onAddToPlan = onAddToPlan,
                     onSetWorkingState = onSetWorkingState,
                     onSetDeadline = onSetDeadline,
+                    onSetTargetDate = onSetTargetDate,
+                    onSetPriority = onSetPriority,
                     onSetLabels = onSetLabels,
                     onToggleSubtask = onToggleSubtask,
                     onToggleSubtaskExpand = onToggleSubtaskExpand,
@@ -203,6 +210,8 @@ private fun TaskBody(
     onAddToPlan: () -> Unit,
     onSetWorkingState: (WorkingState) -> Unit,
     onSetDeadline: (LocalDate?) -> Unit,
+    onSetTargetDate: (LocalDate?) -> Unit,
+    onSetPriority: (Priority) -> Unit,
     onSetLabels: (List<String>) -> Unit,
     onToggleSubtask: (Task) -> Unit,
     onToggleSubtaskExpand: (id: String, currentlyExpanded: Boolean) -> Unit,
@@ -235,6 +244,8 @@ private fun TaskBody(
     var confirmDelete by remember { mutableStateOf(false) }
     var tab by remember(task.id) { mutableStateOf(DetailTab.Info) }
     var showStatusPicker by remember { mutableStateOf(false) }
+    // The PRIORITY row's picker (#375) — the status picker's twin, opened only by tapping that row.
+    var showPriorityPicker by remember { mutableStateOf(false) }
     // A local reveal counter for the body kebab's "Add subtask" (the drilled overflow drives the same via
     // [TaskDetailState.revealAddSubtaskComposer]). Both switch to the Info tab and focus the add field.
     var localAddSubtaskReveal by remember(task.id) { mutableStateOf(0) }
@@ -352,8 +363,10 @@ private fun TaskBody(
                         PropertiesSection(
                             task = task,
                             onSetDeadline = onSetDeadline,
+                            onSetTargetDate = onSetTargetDate,
                             onSetLabels = onSetLabels,
                             onStatusRowClick = { showStatusPicker = true },
+                            onPriorityRowClick = { showPriorityPicker = true },
                             ownerGroupCount = state.ownerGroupCount,
                             attachments = state.attachments,
                             isUploadingAttachment = state.isUploadingAttachment,
@@ -432,6 +445,16 @@ private fun TaskBody(
             current = task.workingState,
             onSelect = { onSetWorkingState(it); showStatusPicker = false },
             onDismiss = { showStatusPicker = false },
+        )
+    }
+
+    // The PRIORITY row's twin (#375): the read-only bucket text is info-only, so the change goes through this
+    // picker sheet. Selecting a bucket forwards the one write + dismisses. Never null — Normal is "no priority".
+    if (showPriorityPicker) {
+        PriorityPickerSheet(
+            current = task.priority,
+            onSelect = { onSetPriority(it); showPriorityPicker = false },
+            onDismiss = { showPriorityPicker = false },
         )
     }
 }

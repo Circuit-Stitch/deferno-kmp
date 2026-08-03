@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -15,6 +16,9 @@ import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 internal val SAMPLE_DEADLINE: Instant = Instant.parse("2026-06-07T12:00:00Z")
+
+/** The soft target date the #375 samples use — deliberately EARLIER than [SAMPLE_DEADLINE]. */
+internal val SAMPLE_TARGET_DATE: Instant = Instant.parse("2026-06-01T23:59:59Z")
 internal val SAMPLE_DATE: LocalDate = LocalDate(2026, 6, 7)
 internal const val SAMPLE_TZ: String = "America/Los_Angeles"
 
@@ -55,6 +59,8 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.SetDefinitionState -> SetDefinitionState("h1", ItemKind.Habit, DefinitionState.Archived)
     CommandKind.SetTaskBlockedBy -> SetTaskBlockedBy(TaskId("t1"), listOf("b1", "b2"))
     CommandKind.SetTaskDeadlineTime -> SetTaskDeadlineTime(TaskId("t1"), LocalTime(9, 0))
+    CommandKind.SetTaskTargetDate -> SetTaskTargetDate(TaskId("t1"), SAMPLE_TARGET_DATE)
+    CommandKind.SetTaskPriority -> SetTaskPriority(TaskId("t1"), Priority.Fire)
 }
 
 /** Concise [Task] fixture for the enablement tests. */

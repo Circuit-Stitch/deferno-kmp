@@ -30,3 +30,20 @@ extension WorkingState {
         [.open, .inProgress, .inReview, .done, .dropped]
     }
 }
+
+extension Priority {
+    /// The bucket's plain word (#375). SKIE bridges the Kotlin enum to a real Swift enum, so this
+    /// `switch` is exhaustive — a fourth bucket would fail to compile here rather than fall through to a
+    /// raw enum name (the hazard the string-keyed `sortLabel` switches carry).
+    var label: String {
+        switch self {
+        case .fire: return L.string("common_priority_fire")
+        case .normal: return L.string("common_priority_normal")
+        case .backlog: return L.string("common_priority_backlog")
+        }
+    }
+
+    /// The three buckets, most-urgent first (the Kotlin declaration order *is* the rank) — drives the
+    /// detail pane's priority picker.
+    static var ordered: [Priority] { [.fire, .normal, .backlog] }
+}

@@ -72,6 +72,11 @@ class ScreenshotTest {
         children = listOf("1a", "1b"),
         description = "A calm, plain description of the work — hydrated on open (#22).",
         hydration = com.circuitstitch.deferno.core.model.HydrationState.Full,
+        // The #375 pair, populated so the flagship detail goldens actually show the two new property rows
+        // rather than their empty states: a SOFT target three days out (no hard deadline here — the two are
+        // independent, and any combination is valid) and the Fire urgency bucket.
+        targetDate = Instant.parse("2026-06-18T23:59:59Z"),
+        priority = com.circuitstitch.deferno.core.model.Priority.Fire,
     )
 
     /** A full detail state showing the web-parity sections: a recursive subtask tree, comments, attachments. */

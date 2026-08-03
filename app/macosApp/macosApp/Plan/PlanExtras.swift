@@ -12,7 +12,7 @@ import SwiftUI
 
 /// A calm "where do I start" helper. It shows **one** suggested task at a time; "This one" picks it
 /// (`onPick`), "Something else" cycles to the next idea without judgement. Derives its candidates from
-/// `tasks` (pinned + still-open first), so it never asks the user to scan the whole list.
+/// `tasks` (Fire + pinned + still-open first), so it never asks the user to scan the whole list.
 struct WhatNextView: View {
     let tasks: [Task]
     let onPick: (Task) -> Void
@@ -21,13 +21,26 @@ struct WhatNextView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
 
-    /// The ordered ideas: pinned first, then still-open, then the rest — de-duplicated by identity.
+    /// The ordered ideas: **Fire** first, then pinned, then still-open, then the rest — de-duplicated by
+    /// identity.
+    ///
+    /// Fire leads for the same reason it leads ``whyLine(_:)``: the top urgency bucket is an explicit
+    /// "start here" the person set, and this surface exists to answer exactly that. `Backlog` gets **no**
+    /// arm of its own and is deliberately not filtered out — the bottom bucket sinks, it never disappears
+    /// (#375), so a backlogged task simply arrives through the later passes like anything else and is still
+    /// offered once the earlier ideas are exhausted.
+    ///
+    /// This is a *suggestion* order, not a re-sort of the Plan: `PlanView` renders the curated list exactly
+    /// as the person arranged it.
     private var candidates: [Task] {
         var seen = Set<String>()
         var ordered: [Task] = []
         func add(_ list: [Task]) {
             for t in list where seen.insert(t.stableKey).inserted { ordered.append(t) }
         }
+        // Gate the Fire lane on OPEN work. A finished task keeps whatever bucket it had, so an
+        // unfiltered Fire lane promotes a Done item to the very first suggestion (#375 review).
+        add(tasks.filter { $0.priority == Priority.fire && !$0.workingState.isTerminal })
         add(tasks.filter { $0.pinned })
         add(tasks.filter { !$0.workingState.isTerminal })
         add(tasks)
@@ -40,11 +53,20 @@ struct WhatNextView: View {
         return list[index % list.count]
     }
 
-    /// The derived "why" line for the current idea (mirrors `PlanScreen.whyLine`).
+    /// The derived "why" line for the current idea (mirrors Compose `PlanDashboard.whyLine`).
+    ///
+    /// Fire is checked **before** pinned (#375): the urgency bucket is the more deliberate of the two signals,
+    /// so for an item that is both, "you said this one's urgent" is the truer answer than "you pinned it".
+    /// They stay orthogonal peers — neither implies the other, and this precedence only decides which one to
+    /// *say*.
     private func whyLine(_ task: Task) -> String {
+        // "Already done" outranks every reason-to-start: a finished task's answer to "why this one?"
+        // is that it is finished. Checking Fire first made plan_picker_already_done unreachable for any
+        // Fire-bucketed task (#375 review).
+        if task.workingState.isTerminal { return L.string("plan_picker_already_done") }
+        if task.priority == Priority.fire { return L.string("plan_why_fire") }
         if task.pinned { return L.string("plan_why_pinned") }
-        if !task.workingState.isTerminal { return L.string("plan_why_quick_win") }
-        return L.string("plan_picker_already_done")
+        return L.string("plan_why_quick_win")
     }
 
     var body: some View {

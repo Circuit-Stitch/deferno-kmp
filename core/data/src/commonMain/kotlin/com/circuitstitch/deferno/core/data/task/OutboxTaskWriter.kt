@@ -10,9 +10,12 @@ import com.circuitstitch.deferno.core.data.outbox.SetDeadline
 import com.circuitstitch.deferno.core.data.outbox.SetDeadlineTime
 import com.circuitstitch.deferno.core.data.outbox.SetDescription
 import com.circuitstitch.deferno.core.data.outbox.SetLabels
+import com.circuitstitch.deferno.core.data.outbox.SetPriority
+import com.circuitstitch.deferno.core.data.outbox.SetTargetDate
 import com.circuitstitch.deferno.core.data.outbox.SetPinned
 import com.circuitstitch.deferno.core.data.outbox.SetWorkingState
 import com.circuitstitch.deferno.core.data.outbox.TaskMutation
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.datetime.LocalTime
@@ -60,6 +63,10 @@ class OutboxTaskWriter(
     override suspend fun setLabels(id: TaskId, labels: List<String>) = submit(SetLabels(id, labels))
 
     override suspend fun setPinned(id: TaskId, pinned: Boolean) = submit(SetPinned(id, pinned))
+
+    override suspend fun setTargetDate(id: TaskId, targetDate: Instant?) = submit(SetTargetDate(id, targetDate))
+
+    override suspend fun setPriority(id: TaskId, priority: Priority) = submit(SetPriority(id, priority))
 
     override suspend fun delete(id: TaskId) = submit(DeleteTask(id, now()))
 

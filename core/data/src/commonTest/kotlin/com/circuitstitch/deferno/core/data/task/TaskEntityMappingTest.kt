@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -239,6 +240,7 @@ class TaskEntityMappingTest {
         externalSource: String? = null,
         externalId: String? = null,
         externalUrl: String? = null,
+        priority: String? = null,
     ) = TaskEntity(
         id = "t",
         org_slug = "u",
@@ -271,5 +273,48 @@ class TaskEntityMappingTest {
         attachment_count = null,
         attachment_total_size = null,
         blocked_by = null,
+        target_date = null,
+        priority = priority,
     )
+
+    // --- the soft target date + urgency bucket (#375) ---
+
+    @Test
+    fun targetDateAndPriorityRoundTrip() {
+        val task = Task(
+            id = TaskId("t-375"),
+            orgSlug = "u-e4h2qk",
+            title = "ranked",
+            workingState = WorkingState.Open,
+            completeBy = Instant.parse("2026-09-01T23:59:59Z"),
+            targetDate = Instant.parse("2026-08-10T23:59:59Z"),
+            priority = Priority.Fire,
+            dateCreated = created,
+        )
+
+        assertEquals(task, task.toEntity().toDomain())
+    }
+
+    /**
+     * A pre-migration row (17->18 left both columns NULL) must decode to the domain defaults, so an
+     * un-refreshed cache reads exactly like an explicitly-normal, un-targeted item — never a crash and
+     * never a fabricated target.
+     */
+    @Test
+    fun nullColumnsDecodeToNoTargetAndNormalPriority() {
+        val decoded = sampleEntity().toDomain()
+        assertNull(decoded.targetDate)
+        assertEquals(Priority.Normal, decoded.priority)
+    }
+
+    /**
+     * Defensive enum decode, matching `working_state`/`hydration_state`: a token a newer build wrote
+     * degrades to [Priority.Normal] rather than throwing in an older reader.
+     */
+    @Test
+    fun unrecognisedPriorityTokenDegradesToNormal() {
+        assertEquals(Priority.Normal, sampleEntity(priority = "Volcanic").toDomain().priority)
+        // …and the stored form is the domain constant name, not the lowercase wire token.
+        assertEquals(Priority.Backlog, sampleEntity(priority = "Backlog").toDomain().priority)
+    }
 }

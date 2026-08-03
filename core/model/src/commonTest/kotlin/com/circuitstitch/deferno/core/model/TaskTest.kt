@@ -36,4 +36,29 @@ class TaskTest {
         assertEquals(null, t.ownerOrgId)
         assertEquals(null, t.ref)
     }
+
+    /**
+     * The two peer date/urgency axes (#375). A row the server sends without them — every legacy row —
+     * must read as "no soft target" and the [Priority.Default] bucket, matching the backend's
+     * `#[serde(default)]`, so an un-migrated cache is indistinguishable from an explicitly-normal item.
+     */
+    @Test
+    fun targetDateAndPriorityDefaultToUnsetAndNormal() {
+        val t = task()
+        assertEquals(null, t.targetDate)
+        assertEquals(Priority.Normal, t.priority)
+    }
+
+    /**
+     * The soft target is **independent** of the hard deadline — the server enforces no
+     * `targetDate <= completeBy` invariant, so all four combinations are representable here too.
+     */
+    @Test
+    fun targetDateIsIndependentOfTheHardDeadline() {
+        val by = Instant.parse("2026-06-01T00:00:00Z")
+        val want = Instant.parse("2026-07-01T00:00:00Z") // deliberately AFTER the deadline
+        val t = task().copy(completeBy = by, targetDate = want)
+        assertEquals(by, t.completeBy)
+        assertEquals(want, t.targetDate)
+    }
 }

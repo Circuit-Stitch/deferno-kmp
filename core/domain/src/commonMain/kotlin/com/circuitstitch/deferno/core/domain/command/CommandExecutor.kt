@@ -71,6 +71,8 @@ class CommandExecutor(
             is ClearTaskDescription -> taskWriter.clearDescription(command.taskId)
             is SetTaskLabels -> taskWriter.setLabels(command.taskId, command.labels)
             is SetTaskPinned -> taskWriter.setPinned(command.taskId, command.pinned)
+            is SetTaskTargetDate -> taskWriter.setTargetDate(command.taskId, command.targetDate)
+            is SetTaskPriority -> taskWriter.setPriority(command.taskId, command.priority)
             is DeleteTask -> taskWriter.delete(command.taskId)
             is AddToPlan -> planWriter.add(command.taskId, command.date, command.tz)
             is RemoveFromPlan -> planWriter.remove(command.taskId, command.date, command.tz)

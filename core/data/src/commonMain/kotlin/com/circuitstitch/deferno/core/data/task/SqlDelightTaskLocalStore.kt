@@ -77,6 +77,8 @@ class SqlDelightTaskLocalStore(
             attachment_count = e.attachment_count,
             attachment_total_size = e.attachment_total_size,
             blocked_by = e.blocked_by,
+            target_date = e.target_date,
+            priority = e.priority,
         )
     }
 

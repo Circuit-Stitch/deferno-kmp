@@ -53,6 +53,8 @@ class CommandKindTest {
                 CommandKind.SetDefinitionState to "definition.set-state",
                 CommandKind.SetTaskBlockedBy to "task.set-blocked-by",
                 CommandKind.SetTaskDeadlineTime to "task.set-deadline-time",
+                CommandKind.SetTaskTargetDate to "task.set-target-date",
+                CommandKind.SetTaskPriority to "task.set-priority",
             ),
             CommandKind.entries.associateWith { it.id.value },
         )

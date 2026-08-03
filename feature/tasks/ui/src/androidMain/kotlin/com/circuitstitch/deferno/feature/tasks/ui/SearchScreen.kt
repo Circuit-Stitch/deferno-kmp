@@ -89,6 +89,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.search_section_stat
 import com.circuitstitch.deferno.core.designsystem.resources.search_sort_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.search_sort_best_match
 import com.circuitstitch.deferno.core.designsystem.resources.search_sort_biggest_attachments
+import com.circuitstitch.deferno.core.designsystem.resources.search_sort_priority
 import com.circuitstitch.deferno.core.designsystem.resources.search_sort_soonest_due
 import com.circuitstitch.deferno.core.designsystem.resources.search_sort_title_asc
 import com.circuitstitch.deferno.core.designsystem.resources.search_when_any_time
@@ -611,6 +612,7 @@ private fun sortLabel(sort: SearchSort): String = stringResource(
         SearchSort.TitleAsc -> Res.string.search_sort_title_asc
         SearchSort.DeadlineAsc -> Res.string.search_sort_soonest_due
         SearchSort.AttachmentSizeDesc -> Res.string.search_sort_biggest_attachments
+        SearchSort.PriorityRank -> Res.string.search_sort_priority
     },
 )
 

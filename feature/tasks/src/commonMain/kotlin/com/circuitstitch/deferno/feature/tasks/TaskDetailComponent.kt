@@ -17,6 +17,7 @@ import com.circuitstitch.deferno.core.model.Attachment
 import com.circuitstitch.deferno.core.model.Comment
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
@@ -212,6 +213,27 @@ interface TaskDetailComponent {
     fun onSetDeadlineTime(time: LocalTime?) {}
 
     /**
+     * Set or clear this Task's **soft target date** (#375) — when the person *wants* it done by, issued
+     * through the injected [setTargetDate] seam (optimistic apply + outbox enqueue, ADR-0001).
+     *
+     * The picked day becomes the **inclusive end** of that day at the device zone. Unlike the deadline,
+     * the server stores this instant verbatim (its `normalize_when_instant` covers only the WHEN axes),
+     * so the clock chosen here is final — and "by the 20th" must not be recorded as the moment the 20th
+     * begins. It deliberately does NOT borrow the Task's `deadlineTimeOfDay`: the two axes are
+     * independent, and there is no target time-of-day concept.
+     *
+     * A `null` [date] **clears** the soft target. Writing it never touches the hard deadline. Default
+     * no-op body so callers / fakes that don't drive the target row still build.
+     */
+    fun onSetTargetDate(date: LocalDate?) {}
+
+    /**
+     * Set this Task's urgency bucket (#375) through the injected [setPriority] seam. Not nullable —
+     * "no priority" is [Priority.Normal], a real value the server always carries. Default no-op body.
+     */
+    fun onSetPriority(priority: Priority) {}
+
+    /**
      * Replace this Task's LABELS with [labels] (an empty list clears them) — issued as a Command through
      * the injected [setLabels] seam (optimistic local apply + outbox enqueue, ADR-0001). The local DB Flow
      * then re-emits the new labels into [state].
@@ -343,6 +365,13 @@ class DefaultTaskDetailComponent(
     // `null` makes it all-day (#348). Wired from the shell's command executor (SetTaskDeadlineTime);
     // defaults to a no-op like the editors above (only the iOS combined date+time picker drives it today).
     private val setDeadlineTime: suspend (TaskId, LocalTime?) -> Unit = { _, _ -> },
+    // The soft TARGET-DATE write seam (taskId, targetDate) — a non-null Instant sets it, a `null` clears
+    // it (#375). Wired from the shell's command executor (SetTaskTargetDate); defaults to a no-op like the
+    // editors above so the read/navigation-only tests build without it.
+    private val setTargetDate: suspend (TaskId, Instant?) -> Unit = { _, _ -> },
+    // The PRIORITY write seam (taskId, priority) — always a real bucket, never null (#375). Wired from the
+    // shell's command executor (SetTaskPriority); defaults to a no-op for the same reason.
+    private val setPriority: suspend (TaskId, Priority) -> Unit = { _, _ -> },
     // The LABELS write seam (taskId, labels) — replaces the Task's label set (empty clears). Wired from
     // the shell's command executor (SetTaskLabels); defaults to a no-op for the same reason.
     private val setLabels: suspend (TaskId, List<String>) -> Unit = { _, _ -> },
@@ -535,6 +564,17 @@ class DefaultTaskDetailComponent(
         scope.launch { setDeadlineTime(taskId, time) }
     }
 
+    override fun onSetTargetDate(date: LocalDate?) {
+        // The inclusive end of the picked day, at the device zone. NOT the Task's deadline clock: the two
+        // axes are independent, and target_date has no time-of-day of its own. `null` clears it.
+        val targetDate: Instant? = date?.atTime(END_OF_DAY)?.toInstant(TimeZone.currentSystemDefault())
+        scope.launch { setTargetDate(taskId, targetDate) }
+    }
+
+    override fun onSetPriority(priority: Priority) {
+        scope.launch { setPriority(taskId, priority) }
+    }
+
     override fun onSetLabels(labels: List<String>) {
         scope.launch { setLabels(taskId, labels) }
     }
@@ -685,3 +725,14 @@ private val SUBTASK_ORDER: Comparator<Task> = compareBy { it.sequence }
  * exact bare-date behavior the create form (`NewState.toPayload`) produces.
  */
 private val DEFAULT_DEADLINE_TIME: LocalTime = LocalTime(0, 0)
+
+/**
+ * The clock a picked **soft target date** lands on (#375): the inclusive end of the day, mirroring the
+ * `23:59:59` sentinel the server's own `normalize_when_instant` attaches to a clock-less WHEN instant.
+ *
+ * Deliberately NOT [DEFAULT_DEADLINE_TIME]. That one is start-of-day because the server re-normalizes
+ * `complete_by` on arrival, so the clock the client sends there is discarded. `target_date` gets no such
+ * treatment — it is stored exactly as sent — so start-of-day would durably record "I want this by the
+ * moment the 20th begins", ranking it a day earlier than the person asked.
+ */
+private val END_OF_DAY: LocalTime = LocalTime(23, 59, 59)

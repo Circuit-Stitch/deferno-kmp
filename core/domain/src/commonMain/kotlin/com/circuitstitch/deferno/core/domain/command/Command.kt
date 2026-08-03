@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.domain.command
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -167,6 +168,37 @@ data class SetTaskLabels(override val taskId: TaskId, val labels: List<String>) 
  */
 data class SetTaskPinned(override val taskId: TaskId, val pinned: Boolean) : TaskCommand {
     override val kind: CommandKind get() = CommandKind.SetTaskPinned
+}
+
+/**
+ * Set (or clear) the Task's **soft target date** (#375) — when the person *wants* it done by, as
+ * opposed to [SetTaskDeadline]'s hard "when it must be done by". The two are peers and fully
+ * independent: this never touches `complete_by`, and no `targetDate <= completeBy` rule is enforced
+ * (all four combinations are valid). It drives sorting/surfacing only — never the calendar.
+ *
+ * One command with a nullable operand rather than a Set/Clear pair, following [SetTaskDeadlineTime]
+ * (#348) rather than the older [SetTaskDeadline]/[ClearTaskDeadline] split: it maps 1:1 onto the
+ * server's `Patch<DateTime<Utc>>` encoding, where a value sets, an explicit `null` clears, and an
+ * omitted key leaves it alone. A `null` [targetDate] therefore means **clear the soft target**.
+ */
+data class SetTaskTargetDate(override val taskId: TaskId, val targetDate: Instant?) : TaskCommand {
+    override val kind: CommandKind get() = CommandKind.SetTaskTargetDate
+}
+
+/**
+ * Set the Task's **urgency bucket** (#375) — the deadline-independent Fire/Normal/Backlog lane, peer to
+ * [SetTaskPinned] and orthogonal to it (pinning is a curated quick-access list; priority is a ranking
+ * term). A single set-command, not verb-per-bucket: unlike the status verbs these carry no distinct
+ * product semantics, so the binding layer picks the affordance from the current value.
+ *
+ * **Not nullable, by contract.** The server types this `Option<Priority>` with no null form — "no
+ * priority" is [Priority.Normal], a real value, so there is nothing to clear. Lowering an item to
+ * [Priority.Backlog] sinks it in every ranked view but leaves it **visible**; that is the point, and it
+ * is why this is the safe way to de-prioritize rather than declaring a dependency edge that would hide
+ * it behind a possibly-never-finishing blocker.
+ */
+data class SetTaskPriority(override val taskId: TaskId, val priority: Priority) : TaskCommand {
+    override val kind: CommandKind get() = CommandKind.SetTaskPriority
 }
 
 /**

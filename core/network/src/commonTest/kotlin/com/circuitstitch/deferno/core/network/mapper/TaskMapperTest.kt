@@ -5,11 +5,13 @@ import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.network.dto.AttachmentSizeDto
 import com.circuitstitch.deferno.core.network.dto.BlockedByRefDto
 import com.circuitstitch.deferno.core.network.dto.ExternalProvenanceDto
+import com.circuitstitch.deferno.core.network.dto.PriorityWire
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
 import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
@@ -261,5 +263,52 @@ class TaskMapperTest {
             subtaskTemplate = emptyList(),
         )
         assertNull(habitView.asTaskOrNull())
+    }
+
+    // --- the soft target date + urgency bucket (#375) ---
+
+    /**
+     * Both fields ride EVERY read, list rows included — that is what lets a client rank a cached list
+     * offline with the canonical key instead of re-fetching. So the SUMMARY must carry them too, not
+     * just the detail.
+     */
+    @Test
+    fun summaryCarriesTheSoftTargetDateAndPriority() {
+        val mapped = summary().copy(
+            targetDate = "2026-04-01T23:59:59Z",
+            priority = PriorityWire.Fire,
+        ).toDomain()
+
+        assertEquals(Instant.parse("2026-04-01T23:59:59Z"), mapped.targetDate)
+        assertEquals(Priority.Fire, mapped.priority)
+        // The hard deadline is untouched — they are peers, not one field.
+        assertEquals(Instant.parse("2026-04-10T07:45:00Z"), mapped.completeBy)
+    }
+
+    /**
+     * A payload from before the fields existed (every captured contract fixture) must decode to the
+     * server's own defaults rather than crashing or fabricating a target: `coerceInputValues` turns an
+     * absent/unknown token into the property default, which the mapper degrades to [Priority.Normal].
+     */
+    @Test
+    fun anAbsentOrUnknownPriorityDegradesToNormalWithNoTarget() {
+        val mapped = summary().toDomain()
+        assertNull(mapped.targetDate)
+        assertEquals(Priority.Normal, mapped.priority)
+
+        // An additive bucket a newer server introduces coerces to Unknown → Normal, never a crash.
+        assertEquals(Priority.Normal, summary().copy(priority = PriorityWire.Unknown).toDomain().priority)
+    }
+
+    @Test
+    fun theWireTokensAreLowercaseAndRoundTrip() {
+        assertEquals("fire", Priority.Fire.toWireToken())
+        assertEquals("normal", Priority.Normal.toWireToken())
+        assertEquals("backlog", Priority.Backlog.toWireToken())
+        // Every domain bucket round-trips through its wire token.
+        Priority.entries.forEach { p ->
+            val wire = PriorityWire.entries.first { it.name == p.name }
+            assertEquals(p, wire.toPriority())
+        }
     }
 }

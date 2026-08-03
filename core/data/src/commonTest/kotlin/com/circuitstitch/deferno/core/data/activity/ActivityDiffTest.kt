@@ -96,6 +96,24 @@ class ActivityDiffTest {
     }
 
     @Test
+    fun targetDateAndPriorityAreTypedFieldsNotUnknown() {
+        // #375: both now ride the PATCH path, so the ledger captures their keys. Without a typed field
+        // the Trail would render an unlabelled/raw row for "I made this urgent".
+        val target = entry(
+            """{"target_date":"2026-08-10T23:59:59Z"}""",
+            """{"target_date":null}""",
+        ).changes().single()
+        assertEquals(ActivityField.TargetDate, target.field)
+        assertEquals(ActivityFieldValue.Cleared, target.before)
+        assertEquals(ActivityFieldValue.Present("2026-08-10T23:59:59Z"), target.after)
+
+        val priority = entry("""{"priority":"fire"}""", """{"priority":"normal"}""").changes().single()
+        assertEquals(ActivityField.Priority, priority.field)
+        assertEquals(ActivityFieldValue.Present("normal"), priority.before)
+        assertEquals(ActivityFieldValue.Present("fire"), priority.after)
+    }
+
+    @Test
     fun pinnedAndStatusRenderRawTokens() {
         val pinned = entry("""{"pinned":true}""", """{"pinned":false}""").changes().single()
         assertEquals(ActivityField.Pinned, pinned.field)
