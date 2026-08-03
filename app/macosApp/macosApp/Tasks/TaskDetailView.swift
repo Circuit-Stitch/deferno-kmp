@@ -624,7 +624,7 @@ struct TaskDetailView: View {
                 // locale, "Target date" is not ("Fecha objetivo"), and a truncated property name is worse
                 // than a column that gives a little.
                 Text(L.string("tasks_detail_property_target_date"))
-                    .font(.subheadline).foregroundStyle(colors.inkMuted).frame(minWidth: 72, alignment: .leading)
+                    .font(.subheadline).foregroundStyle(colors.inkMuted).frame(width: 72, alignment: .leading)
                 // Spelled out rather than the table's bare "—": this row's absence is a real product state
                 // ("no soft target"), and the two date rows sit adjacent — an em dash on both would make the
                 // undated Task read as one missing value rather than two independent ones.
@@ -653,7 +653,7 @@ struct TaskDetailView: View {
         Button { showingPriorityPicker = true } label: {
             HStack {
                 Text(L.string("tasks_detail_property_priority"))
-                    .font(.subheadline).foregroundStyle(colors.inkMuted).frame(minWidth: 72, alignment: .leading)
+                    .font(.subheadline).foregroundStyle(colors.inkMuted).frame(width: 72, alignment: .leading)
                 Text(task.priority.label).font(.body).foregroundStyle(colors.onSurface)
                 Spacer()
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(colors.inkMuted)

@@ -206,4 +206,28 @@ class PlanSuggestionTest {
         onNodeWithText("You said this one matters").assertExists()
         onNodeWithText("A quick win, if you want momentum").assertExists()
     }
+
+    /**
+     * Regression (#375 review): the "What's next" screen renders only the first three plan entries, so the
+     * suggestion must be chosen from those three. Picking across the whole plan let a Fire task below the
+     * fold win, and `selected` — resolved against the rendered choices — then came back null: no card
+     * selected, no ✦ chip, dead primary button.
+     */
+    @Test
+    fun suggestionIsChosenFromTheRenderedChoicesNotTheWholePlan() {
+        val plan = listOf(
+            task("a", "first"),
+            task("b", "second"),
+            task("c", "third"),
+            task("far-fire", "below the fold", priority = Priority.Fire),
+        )
+        val choices = plan.take(3)
+
+        // Across the whole plan the Fire task wins — but it is not rendered...
+        assertEquals("far-fire", plan.suggested()?.id?.value)
+        // ...so the screen must pick inside what it draws, and always resolve to a rendered card.
+        val suggested = choices.suggested()
+        assertEquals("a", suggested?.id?.value)
+        assertTrue(choices.any { it.id == suggested?.id }, "the suggestion must be one of the rendered cards")
+    }
 }

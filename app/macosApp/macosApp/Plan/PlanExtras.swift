@@ -38,7 +38,9 @@ struct WhatNextView: View {
         func add(_ list: [Task]) {
             for t in list where seen.insert(t.stableKey).inserted { ordered.append(t) }
         }
-        add(tasks.filter { $0.priority == Priority.fire })
+        // Gate the Fire lane on OPEN work. A finished task keeps whatever bucket it had, so an
+        // unfiltered Fire lane promotes a Done item to the very first suggestion (#375 review).
+        add(tasks.filter { $0.priority == Priority.fire && !$0.workingState.isTerminal })
         add(tasks.filter { $0.pinned })
         add(tasks.filter { !$0.workingState.isTerminal })
         add(tasks)
@@ -58,10 +60,13 @@ struct WhatNextView: View {
     /// They stay orthogonal peers — neither implies the other, and this precedence only decides which one to
     /// *say*.
     private func whyLine(_ task: Task) -> String {
+        // "Already done" outranks every reason-to-start: a finished task's answer to "why this one?"
+        // is that it is finished. Checking Fire first made plan_picker_already_done unreachable for any
+        // Fire-bucketed task (#375 review).
+        if task.workingState.isTerminal { return L.string("plan_picker_already_done") }
         if task.priority == Priority.fire { return L.string("plan_why_fire") }
         if task.pinned { return L.string("plan_why_pinned") }
-        if !task.workingState.isTerminal { return L.string("plan_why_quick_win") }
-        return L.string("plan_picker_already_done")
+        return L.string("plan_why_quick_win")
     }
 
     var body: some View {

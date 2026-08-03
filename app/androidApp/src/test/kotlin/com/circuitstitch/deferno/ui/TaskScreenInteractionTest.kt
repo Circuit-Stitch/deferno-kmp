@@ -289,14 +289,26 @@ class TaskScreenInteractionTest {
 
     @Test
     fun taskDetail_targetDateRow_readsTheSetDay() {
-        // A set target renders its day in the row's a11y — beside, and distinct from, the WHEN deadline row.
-        val task = sampleTask("1", targetDate = Instant.parse("2026-06-20T23:59:59Z"))
-        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
-        setContent { TaskDetailScreen(component) }
+        // A set target renders its day, LOCALIZED and read in the DEVICE zone, in the row's a11y — beside,
+        // and distinct from, the WHEN deadline row.
+        //
+        // The zone is pinned because the soft target is stored at the inclusive END of its local day, so
+        // its UTC calendar date is the next day west of UTC. An unpinned test would assert nothing in a
+        // UTC runner while breaking in a real user's zone.
+        val previous = java.util.TimeZone.getDefault()
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Los_Angeles"))
+        try {
+            // 2026-06-20T23:59:59-07:00 — the instant onSetTargetDate(LocalDate(2026, 6, 20)) produces here.
+            val task = sampleTask("1", targetDate = Instant.parse("2026-06-21T06:59:59Z"))
+            val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+            setContent { TaskDetailScreen(component) }
 
-        composeRule.onNodeWithContentDescription("Target date: 2026-06-20. Tap to change.")
-            .performScrollTo()
-            .assertIsDisplayed()
+            composeRule.onNodeWithContentDescription("Target date: Jun 20, 2026. Tap to change.")
+                .performScrollTo()
+                .assertIsDisplayed()
+        } finally {
+            java.util.TimeZone.setDefault(previous)
+        }
     }
 
     @Test

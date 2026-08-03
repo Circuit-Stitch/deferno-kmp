@@ -138,6 +138,33 @@ class TaskDetailPropertiesTest {
         assertEquals(emptyList<LocalDate?>(), deadlines)
     }
 
+    /**
+     * The target date must read back in the DEVICE zone, not UTC. The soft target is stored at the
+     * inclusive END of its local day (23:59:59), so west of UTC the instant's UTC calendar date is the
+     * NEXT day — a UTC-sliced reading showed "Jun 21" the moment you picked the 20th.
+     *
+     * The default zone is pinned for the test rather than trusting the runner's: in UTC (which CI may
+     * well use) the bug is invisible, so an unpinned test would pass while asserting nothing.
+     */
+    @Test
+    fun targetDateRow_readsTheLocalDay_notTheUtcDay() = runComposeUiTest {
+        val previous = java.util.TimeZone.getDefault()
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Los_Angeles"))
+        try {
+            // 2026-06-20T23:59:59-07:00 == 2026-06-21T06:59:59Z. The person picked the 20th.
+            val stored = Instant.parse("2026-06-21T06:59:59Z")
+            setContent {
+                Themed { Detail(task = task(targetDate = stored)) }
+            }
+            // The row shows the 20th...
+            onNodeWithText("Jun 20, 2026", substring = true).performScrollTo().assertExists()
+            // ...and never the UTC rollover day.
+            onNodeWithText("Jun 21, 2026", substring = true).assertDoesNotExist()
+        } finally {
+            java.util.TimeZone.setDefault(previous)
+        }
+    }
+
     @Test
     fun priorityRow_opensThePickerAndForwardsTheChosenBucket() {
         val buckets = mutableListOf<Priority>()

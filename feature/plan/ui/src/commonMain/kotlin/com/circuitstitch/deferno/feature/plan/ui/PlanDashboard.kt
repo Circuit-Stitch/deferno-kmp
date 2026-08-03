@@ -442,7 +442,13 @@ internal fun WhatsNextContent(
 ) {
     val scheme = MaterialTheme.colorScheme
     val choices = remember(tasks) { tasks.take(3) }
-    val suggested = remember(tasks) { tasks.suggested() }
+    // Pick WITHIN the three rendered cards, not across the whole plan: `selected` is resolved against
+    // `choices`, so a suggestion from further down the list resolves to null and the screen opens with
+    // nothing selected, no ✦ chip and a dead primary button. (Latent for `pinned` already; widening the
+    // pick to Fire — a marker someone may well set on something below the fold — makes it reachable.)
+    // Picking inside the rendered set also keeps this a pick rather than a reorder: the three cards are
+    // still the plan's first three, in the order the person arranged them.
+    val suggested = remember(choices) { choices.suggested() }
     var selectedId by remember(tasks) { mutableStateOf(suggested?.id) }
     val selected = choices.firstOrNull { it.id == selectedId }
 

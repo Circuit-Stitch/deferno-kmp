@@ -157,6 +157,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_remove
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_attachments
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_filter_hide_done
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_section_subtasks
+import com.circuitstitch.deferno.core.designsystem.resources.settings_security_device_date_pattern
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_clear_target_date_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_set_due_date
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_set_target_date
@@ -202,6 +203,7 @@ import com.circuitstitch.deferno.core.model.relativeDay
 import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.SubtaskRow
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -843,7 +845,13 @@ private fun DueCell(completeBy: Instant?, onSetDeadline: (LocalDate?) -> Unit) {
 private fun TargetDateCell(targetDate: Instant?, onSetTargetDate: (LocalDate?) -> Unit) {
     var showPicker by remember { mutableStateOf(false) }
     val empty = stringResource(Res.string.tasks_detail_no_target_date)
-    val display = targetDate?.toDisplayDate() ?: empty
+    // Read the stored instant back in the DEVICE zone, localized — never `toDisplayDate()`, which slices
+    // the UTC date out of the RFC3339 string. That shortcut is survivable for the deadline (stored at
+    // start-of-day, so it only misreads east of UTC) but not here: the soft target is stored at the day's
+    // inclusive END (23:59:59 local), so west of UTC the UTC date is the NEXT day — picking the 20th would
+    // display the 21st. And CLAUDE.md requires dates to localize through LocalizedDateFormats anyway.
+    val datePattern = stringResource(Res.string.settings_security_device_date_pattern)
+    val display = targetDate?.let { formatInstant(it, datePattern) } ?: empty
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -867,7 +875,16 @@ private fun TargetDateCell(targetDate: Instant?, onSetTargetDate: (LocalDate?) -
         }
     }
     if (showPicker) {
-        val pickerState = rememberDatePickerState(initialSelectedDateMillis = targetDate?.toEpochMilliseconds())
+        // Seed the picker with the stored target's DEVICE-zone day, re-expressed as the UTC midnight
+        // Material3 reads `initialSelectedDateMillis` as. Passing the raw instant would re-open the picker
+        // on the wrong day for the same end-of-day reason the display note above describes.
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = targetDate
+                ?.toLocalDateTime(TimeZone.currentSystemDefault())
+                ?.date
+                ?.atStartOfDayIn(TimeZone.UTC)
+                ?.toEpochMilliseconds(),
+        )
         DatePickerDialog(
             onDismissRequest = { showPicker = false },
             confirmButton = {

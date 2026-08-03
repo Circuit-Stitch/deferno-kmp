@@ -59,10 +59,14 @@ struct PlanView: View {
         _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
-    /// The task we gently suggest starting with: the first pinned one, else the first non-terminal,
-    /// else simply the first (mirrors `PlanScreen.suggested()`).
+    /// The task we gently suggest starting with: the first open Fire one, else the first pinned one,
+    /// else the first non-terminal, else simply the first (mirrors Compose `suggested()`).
     private func suggested(_ tasks: [Task]) -> Task? {
-        tasks.first(where: { $0.pinned })
+        // Fire first, mirroring Compose `List<Task>.suggested()` — the person marking something
+        // urgent is a stronger "start here" signal than having parked it at the top. Open work only:
+        // a finished task is never what to start next. Still a PICK, never a re-sort of the plan.
+        tasks.first(where: { $0.priority == .fire && !$0.workingState.isTerminal })
+            ?? tasks.first(where: { $0.pinned })
             ?? tasks.first(where: { !$0.workingState.isTerminal })
             ?? tasks.first
     }
