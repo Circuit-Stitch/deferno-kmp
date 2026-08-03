@@ -707,7 +707,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.circuitstitch.deferno.staging.debug;
 				PRODUCT_MODULE_NAME = iosApp;
 				PRODUCT_NAME = Deferno;
-				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -748,7 +748,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.circuitstitch.deferno;
 				PRODUCT_MODULE_NAME = iosApp;
 				PRODUCT_NAME = Deferno;
-				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -790,7 +790,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.circuitstitch.deferno.debug;
 				PRODUCT_MODULE_NAME = iosApp;
 				PRODUCT_NAME = Deferno;
-				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
