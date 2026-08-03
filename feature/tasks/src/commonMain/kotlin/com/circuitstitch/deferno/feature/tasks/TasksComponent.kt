@@ -120,6 +120,10 @@ class DefaultTasksComponent(
     // its per-row Task state (Pin/plan/status labels) joined off the Task list + today's plan by the shell,
     // the pin toggle, and the add/remove-from-plan toggle. All default to inert so existing tests build.
     private val menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
+    // The kind-neutral "in today" id set (#386) the tree pane's first filter segment narrows on — today's
+    // plan (Tasks) unioned with today's firings (recurring kinds), joined by the shell. Defaulted empty so
+    // existing tests/callers build without it (like [menuStates]).
+    private val inTodayIds: Flow<Set<String>> = flowOf(emptySet()),
     // The dependency-edge seam (#291), threaded into the tree pane (online-only, returns the verdict).
     private val blockedByEditor: BlockedByEditor = BlockedByEditor.NONE,
     private val setPinned: suspend (TaskId, Boolean) -> Unit = { _, _ -> },
@@ -152,6 +156,7 @@ class DefaultTasksComponent(
             moveEditor = moveEditor,
             shakeToUndoPreference = shakeToUndoPreference,
             menuStates = menuStates,
+            inTodayIds = inTodayIds,
             workingStateEditor = workingStateEditor,
             definitionStateEditor = definitionStateEditor,
             blockedByEditor = blockedByEditor,

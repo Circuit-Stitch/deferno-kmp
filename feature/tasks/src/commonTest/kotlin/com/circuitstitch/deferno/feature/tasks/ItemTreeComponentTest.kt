@@ -14,6 +14,7 @@ import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -41,6 +42,7 @@ class ItemTreeComponentTest {
         shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
         trackEvent: (String) -> Unit = {},
         menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
+        inTodayIds: Flow<Set<String>> = flowOf(emptySet()),
         workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
         definitionStateEditor: DefinitionStateEditor = DefinitionStateEditor.NONE,
         blockedByEditor: BlockedByEditor = BlockedByEditor.NONE,
@@ -58,6 +60,7 @@ class ItemTreeComponentTest {
         shakeToUndoPreference = shakeToUndoPreference,
         trackEvent = trackEvent,
         menuStates = menuStates,
+        inTodayIds = inTodayIds,
         workingStateEditor = workingStateEditor,
         definitionStateEditor = definitionStateEditor,
         blockedByEditor = blockedByEditor,
@@ -346,6 +349,51 @@ class ItemTreeComponentTest {
         advanceUntilIdle()
 
         assertEquals(states, c.state.value.menuStates, "the per-row Task menu state reaches the View")
+    }
+
+    // --- the kind-neutral "in today" set (#386) ---
+
+    @Test
+    fun inTodayIdsAreSurfacedOnTheStateForTheView() = runTest {
+        val ids = setOf("root", "morning-run")
+        val c = component(rootAndChild(), inTodayIds = flowOf(ids))
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(ids, c.state.value.inTodayIds, "the joined in-today set reaches the View verbatim")
+    }
+
+    @Test
+    fun inTodayIdsDefaultToEmptySoAnUnwiredTreeNarrowsToNothingRatherThanEverything() = runTest {
+        val c = component(rootAndChild())
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(emptySet(), c.state.value.inTodayIds, "no join wired → an honestly empty set")
+    }
+
+    /**
+     * The two per-row joins ride ONE typed `combine` slot as a Pair (Kotlin's typed overload tops out at
+     * five flows and both tiers were already full). Assert they stay independent through that pairing: a
+     * later in-today emission must not strand [ItemTreeState.menuStates], nor vice versa.
+     */
+    @Test
+    fun inTodayIdsAndMenuStatesUpdateIndependentlyThroughTheSharedCombineSlot() = runTest {
+        val menus = MutableStateFlow(mapOf("root" to TaskMenuState(WorkingState.Open, pinned = false, inPlan = false)))
+        val today = MutableStateFlow(setOf("root"))
+        val c = component(rootAndChild(), menuStates = menus, inTodayIds = today)
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        today.value = setOf("root", "child")
+        advanceUntilIdle()
+        assertEquals(setOf("root", "child"), c.state.value.inTodayIds)
+        assertEquals(1, c.state.value.menuStates.size, "the menu join survives an in-today re-emission")
+
+        menus.value = emptyMap()
+        advanceUntilIdle()
+        assertEquals(emptyMap(), c.state.value.menuStates)
+        assertEquals(setOf("root", "child"), c.state.value.inTodayIds, "and the in-today set survives a menu one")
     }
 
     @Test
