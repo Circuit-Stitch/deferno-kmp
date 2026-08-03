@@ -6,8 +6,6 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.calendar.OccurrenceWriter
 import com.circuitstitch.deferno.core.data.calendar.OfflineCalendarRepository
 import com.circuitstitch.deferno.core.data.calendar.OutboxOccurrenceWriter
-import com.circuitstitch.deferno.core.data.calendar.LocalStoreSeriesKindSource
-import com.circuitstitch.deferno.core.data.calendar.SeriesKindSource
 import com.circuitstitch.deferno.core.data.calendar.SqlDelightCalendarLocalStore
 import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.assistant.SqlDelightConversationStore
@@ -339,29 +337,18 @@ interface AccountDataBindings {
         taskStore: TaskLocalStore,
     ): PlanRepository = OfflinePlanRepository(planStore, remoteSource, taskStore)
 
-    // The Calendar feed cache + series->kind index (#74): the local source of truth the month grid +
-    // day agenda observe; a window refresh full-replaces the span and a write applies optimistically here.
+    // The Calendar feed cache (#74): the local source of truth the month grid + day agenda observe; a
+    // window refresh full-replaces the span and a write applies optimistically here.
     @Provides
     @SingleIn(AccountScope::class)
     fun calendarLocalStore(db: DefernoDatabase): CalendarLocalStore = SqlDelightCalendarLocalStore(db)
-
-    // Snapshots the locally-known Habit/Chore/Event definitions into the series_id -> kind index (#74),
-    // so a kind-less feed firing resolves the recurring kind its occurrence write needs.
-    @Provides
-    @SingleIn(AccountScope::class)
-    fun seriesKindSource(
-        habits: HabitLocalStore,
-        chores: ChoreLocalStore,
-        events: EventLocalStore,
-    ): SeriesKindSource = LocalStoreSeriesKindSource(habits, chores, events)
 
     @Provides
     @SingleIn(AccountScope::class)
     fun calendarRepository(
         localStore: CalendarLocalStore,
         remoteSource: CalendarRemoteSource,
-        seriesKindSource: SeriesKindSource,
-    ): CalendarRepository = OfflineCalendarRepository(localStore, remoteSource, seriesKindSource)
+    ): CalendarRepository = OfflineCalendarRepository(localStore, remoteSource)
 
     // The Occurrence (firing) write seam (#74): optimistic CalendarItem apply + outbox enqueue. Offline-
     // first like the Task writer (these target an existing firing — not online-only like create).

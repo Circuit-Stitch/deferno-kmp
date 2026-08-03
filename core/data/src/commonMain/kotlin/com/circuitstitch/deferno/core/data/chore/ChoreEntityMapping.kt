@@ -14,7 +14,6 @@ import com.circuitstitch.deferno.core.database.sql.ChoreEntity
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.OrgId
-import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlin.time.Instant
 

@@ -20,10 +20,9 @@ import kotlin.time.Instant
  *
  * **Why [kind] is nullable.** It arrives on the feed row (required since #311) and condenses through the
  * DTO mapper, but tolerantly: an additive kind token we do not recognise degrades to `null` rather than
- * being guessed. It is also not a *persisted* column, so a row read back out of the cache has its kind
- * threaded in from the `series_id → kind` index instead — and a row cached before the feed carried a
- * kind, from a series this device has never seen, resolves to `null`. Either way an unresolved-kind row
- * renders **read-only** — gentle degradation, never a wrong write.
+ * being guessed. The local cache stores the value the feed asserted (#380) and decodes it back just as
+ * tolerantly, so `null` survives the round-trip. An unresolved-kind row renders **read-only** — gentle
+ * degradation, never a wrong write.
  */
 data class CalendarItem(
     /** The feed row id (`CalendarEvent.id`) — the local cache primary key. */
@@ -35,8 +34,8 @@ data class CalendarItem(
     val taskId: String,
     /**
      * The recurring series this firing belongs to; `null` for a one-off dated item or an external row.
-     * Its job is *identity*, not addressing: it says "this row is a firing" and keys the local
-     * `series_id → kind` index. It is never a path segment — see [taskId].
+     * Its job is *identity*, not addressing: it says "this row is a firing". It is never a path segment
+     * — see [taskId].
      */
     val seriesId: String?,
     val title: String,
@@ -50,7 +49,7 @@ data class CalendarItem(
     val allDay: Boolean,
     /** Progress, condensed from the feed's `TaskStatus` — never an [OccurrenceState] (see class note). */
     val status: WorkingState,
-    /** The recurring kind, resolved from the series→kind index; `null` for a one-off Task or an unknown series. */
+    /** The row's kind as the feed reported it; `null` when the token was one this build does not model. */
     val kind: ItemKind?,
     /** Where the row came from — a Deferno item or a synced external calendar. */
     val source: CalendarSource,

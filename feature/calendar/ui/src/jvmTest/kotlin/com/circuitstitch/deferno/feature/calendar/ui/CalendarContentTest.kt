@@ -46,7 +46,7 @@ class CalendarContentTest {
     ) = CalendarItem(
         id = id,
         // The item id and the series id are distinct values on a real firing (#380) — the act path
-        // addresses `taskId`, the kind index keys on `seriesId`.
+        // addresses `taskId`; `seriesId` only marks the row as a firing.
         taskId = "task-$id",
         seriesId = seriesId,
         title = title,

@@ -42,15 +42,12 @@ class OccurrenceOfflineToOnlineTest {
         end = Instant.parse("2026-06-08T09:15:00Z"),
         allDay = false,
         status = WorkingState.Open,
-        kind = null, // resolved from the series index, like the real store
+        kind = ItemKind.Chore,
         source = CalendarSource.Deferno,
     )
 
-    private suspend fun scene(): Scene {
-        val calendar = FakeCalendarStore().apply {
-            replaceSeriesKinds(mapOf("cho-1-series" to ItemKind.Chore))
-            seed(firing())
-        }
+    private fun scene(): Scene {
+        val calendar = FakeCalendarStore().apply { seed(firing()) }
         val outbox = FakeOutboxStore()
         return Scene(calendar, outbox, OutboxOccurrenceWriter(calendar, outbox) { t0 })
     }
@@ -189,19 +186,17 @@ class OccurrenceOfflineToOnlineTest {
 }
 
 /**
- * A minimal in-memory [CalendarLocalStore] for the end-to-end write path: `get` resolves the recurring
- * kind through the `series_id -> kind` index, exactly like the real store, so the writer's actionable
- * guard behaves. The observe reads are unused here.
+ * A minimal in-memory [CalendarLocalStore] for the end-to-end write path: a row reads back exactly as
+ * written — including its recurring kind, exactly like the real store — so the writer's actionable guard
+ * behaves. The observe reads are unused here.
  */
 private class FakeCalendarStore : CalendarLocalStore {
     private val rows = mutableMapOf<String, CalendarItem>()
-    private var index = mapOf<String, ItemKind>()
 
     fun seed(item: CalendarItem) { rows[item.id] = item }
 
-    override suspend fun get(id: String): CalendarItem? = rows[id]?.let { it.copy(kind = index[it.seriesId]) }
+    override suspend fun get(id: String): CalendarItem? = rows[id]
     override suspend fun upsert(item: CalendarItem) { rows[item.id] = item }
-    override suspend fun replaceSeriesKinds(index: Map<String, ItemKind>) { this.index = index }
 
     override fun observeInRange(from: LocalDate, to: LocalDate): Flow<List<CalendarItem>> = flowOf(emptyList())
     override fun observeByDate(date: LocalDate): Flow<List<CalendarItem>> = flowOf(emptyList())

@@ -1,65 +1,6 @@
 package com.circuitstitch.deferno.core.data.outbox
 
 /**
- * How one occurrence entry participates in the flush-time collapse (#396). It is derived from the
- * *route shape* rather than from the intent type, because the outbox deliberately persists the rendered
- * [OutboxRequest] and never the [OccurrenceMutation] that produced it (see [OutboxRequest]) — by the
- * time the coalescer runs, the sealed intent is long gone.
- */
-internal enum class CollapseRole {
-
-    /**
-     * An **absolute** per-firing set-state write, so a later one makes every earlier one on the same
-     * firing redundant. Three mark shapes plus the clear:
-     *
-     * - `POST habits/{id}/occurrences` — the habit binary mark (its date rides in the body, not the path)
-     * - `PUT chores/{id}/occurrences/{date}` — the chore set-status mark
-     * - `POST events/{id}/occurrences/{date}` — the event action mark
-     * - `POST {kind}/{id}/occurrences/{date}/clear` — the forgiving undo (#364)
-     *
-     * Collapsing a mark into a later clear is safe server-side: clear is `set_…_occurrence(id, date,
-     * None)`, which returns `204` whether or not a status was ever written, so clearing a firing whose
-     * mark never went out is not an error.
-     */
-    Absolute,
-
-    /**
-     * A **barrier**: `POST {kind}/{id}/occurrences/{date}/reschedule`, or any occurrence route this build
-     * does not recognise. A barrier is never dropped, never absorbs a predecessor, and ends the
-     * collapsible run for its key — the entries before it and the entries after it compact independently.
-     *
-     * A reschedule is a barrier on purpose, and it is the one cell of the table it is tempting to get
-     * wrong. The server force-writes **two** rows (the origin date to dropped with a `rescheduled_to`
-     * pointer, the destination date to scheduled), so a preceding mark on the origin date is arguably
-     * redundant. Collapsing it would nonetheless be wrong twice over: it would make the client queue's
-     * semantics depend on a backend implementation detail that the contract does not promise, and it
-     * would lose the server-side Activity entry for a mark the user really did perform.
-     */
-    Barrier,
-}
-
-/**
- * The route classification of [request], for an entry already known to carry an occurrence target.
- *
- * Matched from the tail of the path so it cannot be fooled by where `occurrences` happens to sit, and
- * **fails closed**: an occurrence route in a shape this build does not know is a [CollapseRole.Barrier],
- * never an [CollapseRole.Absolute] write that silently eats its neighbours (ADR-0005 tolerance, applied
- * to the conservative side).
- */
-internal fun collapseRoleOf(request: OutboxRequest): CollapseRole {
-    val path = request.path
-    return when {
-        path.lastOrNull() == RESCHEDULE_SEGMENT -> CollapseRole.Barrier
-        path.lastOrNull() == CLEAR_SEGMENT -> CollapseRole.Absolute
-        // `…/occurrences` — the habit mark, whose date is a body field rather than a path segment.
-        path.lastOrNull() == OCCURRENCES_SEGMENT -> CollapseRole.Absolute
-        // `…/occurrences/{date}` — the chore PUT and the event POST.
-        path.getOrNull(path.size - 2) == OCCURRENCES_SEGMENT -> CollapseRole.Absolute
-        else -> CollapseRole.Barrier
-    }
-}
-
-/**
  * The flush-time occurrence **coalescer** (#396): given an outbox snapshot in [OutboxEntry.seq] order,
  * the seqs a later write has made redundant, for [OutboxProcessor] to delete before it drains. Pure, so
  * the whole truth table below is pinned from `commonTest` on the ADR-0006 JVM-fast path.
@@ -78,7 +19,10 @@ internal fun collapseRoleOf(request: OutboxRequest): CollapseRole {
  * snapshot and its `sender.send` would be sent as the *old* bytes and then deleted, silently destroying
  * the merged write. Closing that properly needs a revision column and a conditional delete, which is a
  * schema migration (ADR-0022). Compacting at the top of [OutboxProcessor.flush], inside the mutex it
- * already holds, has no such race and needs no schema change at all.
+ * already holds, has no such race. The race is the whole of the argument, and it is orthogonal to where
+ * an entry's [CollapseRole] comes from: this pass does read one persisted column, the declared
+ * [OutboxRequest.collapseRole], but a fact each entry states about itself once at enqueue is not the
+ * revision-and-conditional-delete machinery an enqueue-time merge would need to be correct.
  *
  * The pass therefore only ever **deletes**. It never rewrites an entry, never re-seqs one, and never
  * moves anything earlier in the queue: the survivor of a collapsed run is always the *latest* entry,
@@ -94,8 +38,10 @@ internal fun collapseRoleOf(request: OutboxRequest): CollapseRole {
  *
  * Key `K` is the `(kind, definitionId, date)` triple [OccurrenceTargets.parse] decodes. A reschedule
  * keys on its **origin** date (it moves the firing to a different date, so the destination day is a
- * different key by construction). `P` is the earlier entry and `S` the later one, on the same key, with
- * no barrier between them:
+ * different key by construction). Which column of the table an entry falls in is its declared
+ * [OutboxRequest.collapseRole] — stated by the intent that built the request and read straight off the
+ * row, never re-derived here from the route. `P` is the earlier entry and `S` the later one, on the same
+ * key, with no barrier between them:
  *
  * | P \ S | Mark | Clear | Reschedule |
  * |---|---|---|---|
@@ -110,7 +56,11 @@ internal fun collapseRoleOf(request: OutboxRequest): CollapseRole {
  *   reschedule in seq order.
  * - **Not an occurrence target** — a task, plan, item, settings, create or comment entry is never
  *   dropped, and is not a barrier either. It cannot be, because deleting somebody else's row from
- *   around it does not move it.
+ *   around it does not move it. (Those intents declare no role, so they carry the [CollapseRole.Barrier]
+ *   default, but the pass never reaches it: [OccurrenceTargets.parse] skips them first.)
+ * - **Declared nothing** — an occurrence row queued by a build that predates the declaration, or by a
+ *   future intent that forgets to make one, decodes as a [CollapseRole.Barrier] and is simply never
+ *   compacted. Failing closed costs one redundant replay; failing open would drop a write.
  * - **Dead-lettered** — invisible. Never dropped (a dead-lettered write is preserved by design, and the
  *   reconcile clobber-guards still read it) and never a barrier (it can never reach the server, so it
  *   cannot separate two writes that can).
@@ -137,7 +87,7 @@ internal fun coalesceOccurrences(entries: List<OutboxEntry>): List<Long> {
         // them), but filtering here too makes the function correct for any snapshot it is handed.
         if (entry.failedAt != null) continue
         val key = OccurrenceTargets.parse(entry.target) ?: continue
-        when (collapseRoleOf(entry.request)) {
+        when (entry.request.collapseRole) {
             CollapseRole.Absolute -> open.put(key, entry.seq)?.let { superseded += it }
             CollapseRole.Barrier -> open.remove(key)
         }
@@ -146,7 +96,3 @@ internal fun coalesceOccurrences(entries: List<OutboxEntry>): List<Long> {
     // Ascending, so the caller deletes (and logs) in queue order regardless of key interleaving.
     return superseded.sorted()
 }
-
-private const val OCCURRENCES_SEGMENT = "occurrences"
-private const val CLEAR_SEGMENT = "clear"
-private const val RESCHEDULE_SEGMENT = "reschedule"

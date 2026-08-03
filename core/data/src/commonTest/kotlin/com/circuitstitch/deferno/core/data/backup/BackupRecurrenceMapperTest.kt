@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.backup
 
+import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
@@ -8,7 +9,6 @@ import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.MonthlyAnchor
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.RecurrenceBound
-import com.circuitstitch.deferno.core.model.RecurrenceFrequency
 import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.mapper.toDomain
@@ -29,7 +29,7 @@ import kotlin.time.Instant
  * It also pins the fix for an unreported second-order bug. The old export emitted `type = null` for a
  * cadence it could not name, and `explicitNulls = false` turned that into a body with **no `type` key**
  * — which the backend's internally-tagged `Cadence` rejects. Since `every_n_days` and `custom` both
- * collapsed to `Unknown` on read, a backup of such an item was not merely lossy, it was
+ * collapsed to an unnamed "unknown" on read, a backup of such an item was not merely lossy, it was
  * **unrestorable**. The chosen resolution is explicit and asserted here: **skip on export** (a rule with
  * no nameable token is omitted rather than exported tagless) and **named placeholder on import** (an
  * absent cadence restores as `daily`, because `POST /habits` requires one).
@@ -60,21 +60,13 @@ class BackupRecurrenceMapperTest {
         // Before the widening, four of these six came back wrong: every_n_days and custom collapsed to
         // Unknown outright, and monthly/yearly kept their name but lost every parameter.
         val rules = listOf(
-            Recurrence(RecurrenceFrequency.Daily),
-            Recurrence(RecurrenceFrequency.EveryNDays, interval = 30),
-            Recurrence(RecurrenceFrequency.Weekly, days = listOf("Mon", "Wed")),
-            Recurrence(
-                RecurrenceFrequency.Monthly,
-                interval = 2,
-                monthlyAnchor = MonthlyAnchor.NthWeekday(nth = -1, weekday = "Fri"),
-            ),
-            Recurrence(
-                RecurrenceFrequency.Monthly,
-                interval = 1,
-                monthlyAnchor = MonthlyAnchor.DayOfMonth(15),
-            ),
-            Recurrence(RecurrenceFrequency.Yearly, interval = 1, month = 6, day = 14),
-            Recurrence(RecurrenceFrequency.Custom, rrule = "FREQ=WEEKLY;BYDAY=MO,WE"),
+            Recurrence(Cadence.Daily),
+            Recurrence(Cadence.EveryNDays(30)),
+            Recurrence(Cadence.Weekly(listOf("Mon", "Wed"))),
+            Recurrence(Cadence.Monthly(interval = 2, on = MonthlyAnchor.NthWeekday(nth = -1, weekday = "Fri"))),
+            Recurrence(Cadence.Monthly(interval = 1, on = MonthlyAnchor.DayOfMonth(15))),
+            Recurrence(Cadence.Yearly(interval = 1, month = 6, day = 14)),
+            Recurrence(Cadence.Custom("FREQ=WEEKLY;BYDAY=MO,WE")),
         )
 
         for (rule in rules) assertEquals(rule, roundTrip(rule), "round-trip of $rule")
@@ -82,7 +74,7 @@ class BackupRecurrenceMapperTest {
 
     @Test
     fun allThreeEndBoundsSurviveTheRoundTripAndNeverEmitsNoEndKey() {
-        val base = Recurrence(RecurrenceFrequency.EveryNDays, interval = 3)
+        val base = Recurrence(Cadence.EveryNDays(3))
 
         assertEquals(base, roundTrip(base), "the default Never bound")
         val untilBound = base.copy(bound = RecurrenceBound.OnDate(LocalDate(2027, 1, 31)))
@@ -101,37 +93,38 @@ class BackupRecurrenceMapperTest {
     }
 
     @Test
-    fun theCycleMultiplierGoesBackOutUnderTheKeyItsCadenceUses() {
-        // The domain condenses `n` and `interval` into one field, so the export has to pick the right
-        // wire key back. Getting this wrong would produce a body the backend's Cadence rejects.
-        val everyN = habitWith(Recurrence(RecurrenceFrequency.EveryNDays, interval = 30)).toItemView()
+    fun eachCadenceGoesBackOutUnderItsOwnNumericWireKeyAndNoOther() {
+        // `n` (every_n_days) and `interval` (monthly/yearly) are separate wire keys that can never
+        // co-occur, so each cadence must emit exactly one of them. Emitting the wrong one — or both —
+        // would produce a body the backend's Cadence rejects.
+        val everyN = habitWith(Recurrence(Cadence.EveryNDays(30))).toItemView()
         assertEquals(30, everyN.recurrence?.n)
         assertNull(everyN.recurrence?.interval)
 
-        val monthly = habitWith(Recurrence(RecurrenceFrequency.Monthly, interval = 2)).toItemView()
+        val monthly = habitWith(Recurrence(Cadence.Monthly(interval = 2))).toItemView()
         assertEquals(2, monthly.recurrence?.interval)
         assertNull(monthly.recurrence?.n)
 
-        val yearly = habitWith(
-            Recurrence(RecurrenceFrequency.Yearly, interval = 3, month = 6, day = 14),
-        ).toItemView()
+        val yearly = habitWith(Recurrence(Cadence.Yearly(interval = 3, month = 6, day = 14))).toItemView()
         assertEquals(3, yearly.recurrence?.interval)
         assertNull(yearly.recurrence?.n)
+
+        // And a cadence that owns neither key emits neither.
+        val daily = habitWith(Recurrence(Cadence.Daily)).toItemView()
+        assertNull(daily.recurrence?.n)
+        assertNull(daily.recurrence?.interval)
     }
 
     @Test
-    fun anUnknownCadenceIsExportedUnderThePreservedRawTokenAndRoundTripsAsItself() {
-        // THE fix for the unrestorable backup. `Unknown` used to export `type = null`; now it re-emits
-        // the token the read mapper preserved, so the item restores under its original cadence even
-        // though this client version cannot model it.
-        val future = Recurrence(RecurrenceFrequency.Unknown, rawType = "fortnightly", interval = 2)
+    fun anUnmodelledCadenceIsExportedUnderThePreservedRawTokenAndRoundTripsAsItself() {
+        // THE fix for the unrestorable backup. The unmodelled arm used to export `type = null`; now it
+        // re-emits the token the read mapper preserved, so the item restores under its original cadence
+        // even though this client version cannot model it.
+        val future = Recurrence(Cadence.Unmodelled("fortnightly"))
 
         val exported = habitWith(future).toItemView()
         assertEquals("fortnightly", exported.recurrence?.type)
-
-        val back = roundTrip(future)
-        assertEquals(RecurrenceFrequency.Unknown, back?.frequency)
-        assertEquals("fortnightly", back?.rawType)
+        assertEquals(future, roundTrip(future))
     }
 
     @Test
@@ -139,10 +132,10 @@ class BackupRecurrenceMapperTest {
         // The regression for the exact defect: `{"days":[]}` with no `type` key. The backend's Cadence is
         // internally tagged, so a tagless body is a hard 4xx — the backup would not restore at all.
         val rules = listOf(
-            Recurrence(RecurrenceFrequency.Daily),
-            Recurrence(RecurrenceFrequency.EveryNDays, interval = 3),
-            Recurrence(RecurrenceFrequency.Custom, rrule = "FREQ=DAILY"),
-            Recurrence(RecurrenceFrequency.Unknown, rawType = "fortnightly"),
+            Recurrence(Cadence.Daily),
+            Recurrence(Cadence.EveryNDays(3)),
+            Recurrence(Cadence.Custom("FREQ=DAILY")),
+            Recurrence(Cadence.Unmodelled("fortnightly")),
         )
 
         for (rule in rules) {
@@ -154,11 +147,12 @@ class BackupRecurrenceMapperTest {
 
     @Test
     fun aCadenceWithNoNameableTokenIsSkippedRatherThanExportedTagless() {
-        // The residual case: Unknown that could not even preserve a token (a rule object with no `type`
-        // on the wire — a shape the server never emits). Skipping is the deliberate choice: omitting the
-        // key restores through the import placeholder below, whereas exporting `{}` would fail the
-        // restore outright. Chore takes the same path as Habit.
-        val nameless = Recurrence(RecurrenceFrequency.Unknown, rawType = null, days = listOf("Mon"))
+        // The residual case: an unmodelled cadence that could not even preserve a token (a rule object
+        // with no `type` on the wire — a shape the server never emits, which the read mapper turns into
+        // a BLANK token). Skipping is the deliberate choice: omitting the key restores through the
+        // import placeholder below, whereas exporting `{}` would fail the restore outright. Chore takes
+        // the same path as Habit.
+        val nameless = Recurrence(Cadence.Unmodelled(""))
 
         assertNull(habitWith(nameless).toItemView().recurrence)
         val chore = Chore(
@@ -203,8 +197,7 @@ class BackupRecurrenceMapperTest {
             orgSlug = "u-e4h2qk",
             title = "stretch",
             dateCreated = created.toString(),
-            recurrence = habitWith(Recurrence(RecurrenceFrequency.EveryNDays, interval = 3))
-                .toItemView().recurrence,
+            recurrence = habitWith(Recurrence(Cadence.EveryNDays(3))).toItemView().recurrence,
         ).toCreatePayload()
         assertEquals("every_n_days", kept.recurrence.type)
         assertEquals(3, kept.recurrence.n)

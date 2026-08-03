@@ -5,87 +5,81 @@ import kotlinx.datetime.LocalDate
 /**
  * The recurrence rule a recurring definition (a [Habit] / [Chore] / [Event]) fires on (CONTEXT.md →
  * "Definition" / "Recurrence"). The clean domain projection of the wire `recurrence` object (ADR-0011
- * condense-at-edge): a **cadence** ([frequency] plus the parameters that cadence carries) and an
- * optional upper [bound].
+ * condense-at-edge), and exactly two things: a [cadence] — *which* days it fires on, carrying whatever
+ * parameters that cadence needs — and an optional upper [bound] on how long it keeps going.
  *
- * The wire is FLAT — the backend hand-writes `Serialize`/`Deserialize` so the cadence's own fields are
- * hoisted to the top level and only `end` is nested (`backend/src/models/recurrence.rs`). Which
- * parameters are meaningful is decided entirely by [frequency]:
- *
- * | [frequency] | wire | carries |
- * |---|---|---|
- * | [RecurrenceFrequency.Daily] | `{"type":"daily"}` | — |
- * | [RecurrenceFrequency.EveryNDays] | `{"type":"every_n_days","n":3}` | [interval] |
- * | [RecurrenceFrequency.Weekly] | `{"type":"weekly","days":["Mon","Wed"]}` | [days] |
- * | [RecurrenceFrequency.Monthly] | `{"type":"monthly","interval":2,"on":{…}}` | [interval], [monthlyAnchor] |
- * | [RecurrenceFrequency.Yearly] | `{"type":"yearly","interval":1,"month":6,"day":14}` | [interval], [month], [day] |
- * | [RecurrenceFrequency.Custom] | `{"type":"custom","rrule":"FREQ=…"}` | [rrule] |
- *
- * [interval] deliberately condenses the wire's two numeric keys — `every_n_days.n` and
- * `monthly`/`yearly`'s `interval` — into ONE domain concept: *the cycle multiplier*, whose unit the
- * [frequency] supplies ("every 3 **days**", "every 2 **months**"). They can never co-occur on the wire,
- * so the mapping is exact in both directions for all six cadences.
- *
- * Every parameter is defaulted, so a bare `Recurrence(RecurrenceFrequency.Daily)` stays valid and the
- * tolerant posture holds: an additive/unknown wire `type` degrades to [RecurrenceFrequency.Unknown]
- * rather than crashing the reader (mirroring the `...Wire.Unknown` fallback the status enums use) while
- * [rawType] keeps the token itself, so an unrenderable cadence survives a cache/backup round-trip
- * instead of being destroyed by it (#382).
+ * The two are orthogonal: any cadence can carry any bound. That is why the bound is a peer of the
+ * cadence rather than a field repeated inside all seven variants (and why the wire nests only `end`).
  */
 data class Recurrence(
-    val frequency: RecurrenceFrequency,
-    /** Weekly only — `"Mon"`..`"Sun"` (the wire ships `chrono::Weekday`'s Display form). */
-    val days: List<String> = emptyList(),
-    /** The cycle multiplier: `every_n_days.n`, or `monthly`/`yearly`'s `interval`. `1` when absent. */
-    val interval: Int? = null,
-    /** Monthly only — which day *within* the cycle ("the 15th" vs "the last Friday"). */
-    val monthlyAnchor: MonthlyAnchor? = null,
-    /** Yearly only — the month, `1..12`. */
-    val month: Int? = null,
-    /** Yearly only — the day of that month, `1..31`. */
-    val day: Int? = null,
-    /** Custom only — the raw RFC-5545 RRULE, preserved verbatim so an imported rule is never lost. */
-    val rrule: String? = null,
+    val cadence: Cadence,
     /** The optional upper bound. An absent wire `end` **is** [RecurrenceBound.Never] — see there. */
     val bound: RecurrenceBound = RecurrenceBound.Never,
-    /**
-     * The raw wire `type` token, kept **only** when [frequency] is [RecurrenceFrequency.Unknown] — so a
-     * cadence this client version cannot model still round-trips through the cache and the Backup file
-     * under its own name instead of collapsing to the literal string `"Unknown"` (#382). Null for every
-     * modelled cadence, which keeps `Recurrence(Daily)` equal to a `Daily` rule read off the wire.
-     *
-     * Bounded, deliberately: the *token* survives, its unmodelled parameters do not. All six cadences
-     * the backend defines are modelled above, so this only fires on a future seventh — at which point
-     * the fix is to model it, not to widen this.
-     */
-    val rawType: String? = null,
 )
 
 /**
- * How often a [Recurrence] fires — the six `Cadence` variants the backend defines
- * (`backend/src/models/recurrence.rs`), condensed from the wire `recurrence.type`. An unmodelled token
- * degrades to [Unknown] so a definition with an additive cadence keeps parsing.
+ * How a [Recurrence] fires — the six `Cadence` variants the backend defines
+ * (`backend/src/models/recurrence.rs`), plus [Unmodelled] for a seventh a future backend adds.
  *
- * Adding entries is **cache-safe**: the cached column stores the enum NAME, and a row written by an
- * older build can only ever contain one of the older names.
+ * The wire is FLAT: the backend hand-writes `Serialize`/`Deserialize`, so each cadence's own fields are
+ * hoisted to the top level of the `recurrence` object and only `end` stays nested.
+ *
+ * | variant | wire |
+ * |---|---|
+ * | [Daily] | `{"type":"daily"}` |
+ * | [EveryNDays] | `{"type":"every_n_days","n":3}` |
+ * | [Weekly] | `{"type":"weekly","days":["Mon","Wed"]}` |
+ * | [Monthly] | `{"type":"monthly","interval":2,"on":{…}}` |
+ * | [Yearly] | `{"type":"yearly","interval":1,"month":6,"day":14}` |
+ * | [Custom] | `{"type":"custom","rrule":"FREQ=…"}` |
+ *
+ * **Sealed here while the DTO stays a flat bag — and the asymmetry is deliberate.**
+ * `RecurrenceDto` must remain flat and all-defaulted because kotlinx *throws* on an unknown polymorphic
+ * discriminator, and a throw inside the `/items` decode is precisely the #381 cold-sync stall. But this
+ * type is never deserialized — it is built by hand in exactly two places (the network mapper and the
+ * row codec) — so it can afford to make illegal states unrepresentable, and should. Its flat
+ * predecessor needed a six-row table in its own KDoc just to say which of eight nullable fields applied
+ * to which frequency; that table *was* the type it declined to write. The variants say it now.
+ *
+ * That also un-condenses the wire's two numeric keys. `every_n_days`'s `n` and `monthly`/`yearly`'s
+ * `interval` used to share one nullable `interval` field, because a flat bag carrying both would have
+ * been a second illegal state. Each variant names its own, so no reader has to know which key it meant.
  */
-enum class RecurrenceFrequency {
-    Daily,
+sealed interface Cadence {
 
-    /** `every_n_days` — fires every `Recurrence.interval` days. */
-    EveryNDays,
-    Weekly,
-    Monthly,
-    Yearly,
+    /** Every day. */
+    data object Daily : Cadence
 
-    /** A raw RFC-5545 rule the backend could not express as one of the above; see `Recurrence.rrule`. */
-    Custom,
+    /** Every [n] days — the wire's `every_n_days.n`. */
+    data class EveryNDays(val n: Int) : Cadence
+
+    /** The given weekdays, `"Mon"`..`"Sun"` (the wire ships `chrono::Weekday`'s Display form). */
+    data class Weekly(val days: List<String>) : Cadence
 
     /**
-     * Fallback for an additive/unknown wire `type` (kept distinct so the row stays usable). The token
-     * itself is preserved in `Recurrence.rawType`.
+     * Every [interval] months, optionally [on] a particular day within the cycle ("the 15th" vs "the
+     * last Friday"). [on] is nullable because a rule whose anchor could not be read is still a usable
+     * monthly rule — it just cannot say which day.
      */
-    Unknown,
+    data class Monthly(val interval: Int, val on: MonthlyAnchor? = null) : Cadence
+
+    /** Every [interval] years, on [month] (`1..12`) / [day] (`1..31`). */
+    data class Yearly(val interval: Int, val month: Int, val day: Int) : Cadence
+
+    /** A raw RFC-5545 rule the backend could not express as one of the above; [rrule] verbatim. */
+    data class Custom(val rrule: String) : Cadence
+
+    /**
+     * A cadence this build cannot model; the wire token survives verbatim (#382) so an unrenderable
+     * rule round-trips through the cache and the Backup file under its own name instead of collapsing
+     * to a literal `"Unknown"` and being destroyed by the trip.
+     *
+     * Bounded, deliberately: the *token* survives, its unmodelled parameters do not — there is nowhere
+     * to put them, and inventing a bag for them would re-import the shape this type just deleted. All
+     * six cadences the backend defines are modelled above, so this only fires on a future seventh, at
+     * which point the fix is to model it rather than to widen this.
+     */
+    data class Unmodelled(val rawType: String) : Cadence
 }
 
 /**
@@ -109,8 +103,8 @@ sealed interface RecurrenceBound {
 }
 
 /**
- * Which day a [RecurrenceFrequency.Monthly] rule lands on within its cycle — the domain projection of
- * the wire's nested `on` object (`MonthlyAnchor`).
+ * Which day a [Cadence.Monthly] rule lands on within its cycle — the domain projection of the wire's
+ * nested `on` object (`MonthlyAnchor`).
  */
 sealed interface MonthlyAnchor {
 

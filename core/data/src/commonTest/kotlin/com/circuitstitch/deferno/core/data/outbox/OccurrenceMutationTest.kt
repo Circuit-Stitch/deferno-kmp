@@ -50,6 +50,9 @@ class OccurrenceMutationTest {
         assertEquals(listOf("habits", "hab-3-item", "occurrences"), request.path)
         assertEquals("""{"done":true,"date":"2026-06-08"}""", request.body)
         assertTrue(request.acceptsActivityStamp)
+        // A mark is an absolute per-firing set-state write, and says so here rather than leaving the
+        // flush-time coalescer to infer it from the route (#396).
+        assertEquals(CollapseRole.Absolute, request.collapseRole)
 
         // A non-Complete action on a habit clears done (the UI only offers Complete, but the body is total).
         assertEquals(
@@ -65,6 +68,7 @@ class OccurrenceMutationTest {
         assertEquals(listOf("chores", "cho-1-item", "occurrences", "2026-06-08"), start.path)
         assertEquals("""{"status":"in_progress"}""", start.body)
         assertTrue(start.acceptsActivityStamp)
+        assertEquals(CollapseRole.Absolute, start.collapseRole)
 
         // A chore skip is the `skipped` token (not `dropped`).
         assertEquals(
@@ -80,6 +84,7 @@ class OccurrenceMutationTest {
         assertEquals(listOf("events", "evt-1-item", "occurrences", "2026-06-08"), complete.path)
         assertEquals("""{"action":"done"}""", complete.body)
         assertTrue(complete.acceptsActivityStamp)
+        assertEquals(CollapseRole.Absolute, complete.collapseRole)
 
         // An event skip diverges from a chore: the wire token is `dropped`.
         assertEquals(
@@ -103,10 +108,11 @@ class OccurrenceMutationTest {
         // rather than a bare `$ref`, so a contract scan that skips `oneOf` arms wrongly reads it as
         // body-less — the reason CONTRACT-NOTES pins the ingest surface at 36 routes, not 35.
         for (kind in listOf(ItemKind.Habit, ItemKind.Chore, ItemKind.Event)) {
-            assertTrue(
-                ClearOccurrence("ce-1", kind, "i-1", date).toRequest().acceptsActivityStamp,
-                "clear for $kind must declare the activity stamp",
-            )
+            val perKind = ClearOccurrence("ce-1", kind, "i-1", date).toRequest()
+            assertTrue(perKind.acceptsActivityStamp, "clear for $kind must declare the activity stamp")
+            // A clear is absolute like a mark: it sets the firing's whole state, and it returns 204
+            // whether or not a status was ever recorded — so absorbing an unsent mark cannot error (#396).
+            assertEquals(CollapseRole.Absolute, perKind.collapseRole, "clear for $kind")
         }
     }
 
@@ -118,10 +124,11 @@ class OccurrenceMutationTest {
         assertEquals("""{"new_date":"2026-06-10"}""", request.body)
 
         for (kind in listOf(ItemKind.Habit, ItemKind.Chore, ItemKind.Event)) {
-            assertTrue(
-                RescheduleOccurrence("ce-1", kind, "i-1", date, LocalDate(2026, 6, 10)).toRequest().acceptsActivityStamp,
-                "reschedule for $kind must declare the activity stamp",
-            )
+            val perKind = RescheduleOccurrence("ce-1", kind, "i-1", date, LocalDate(2026, 6, 10)).toRequest()
+            assertTrue(perKind.acceptsActivityStamp, "reschedule for $kind must declare the activity stamp")
+            // The barrier of the #396 truth table. Barrier is also the default, so this cannot tell a
+            // stated role from an omitted one — what it holds is the value the coalescer depends on.
+            assertEquals(CollapseRole.Barrier, perKind.collapseRole, "reschedule for $kind")
         }
     }
 

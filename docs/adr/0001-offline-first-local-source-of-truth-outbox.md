@@ -50,11 +50,17 @@ that safe, and they are the load-bearing part of this note:
   intents this rule does not touch.
 - **Only absolute per-firing intents collapse.** A reschedule is a hard barrier: it moves the firing to
   a different day, so it is an absolute write over two keys rather than one, and it splits its key's run
-  in two. Nothing collapses across it, even where the server would tolerate it.
+  in two. Nothing collapses across it, even where the server would tolerate it. Which role an entry
+  carries is **declared** by the intent that produced the request, and persisted on the outbox row.
+  It is never inferred from the URL shape at replay time: a whitelist written against path segments
+  drifts loose from the contract the first time a route moves. An absent or unrecognised value is a
+  barrier, so an entry queued by an older build replays uncompacted rather than wrongly collapsed.
 - **Compaction happens at flush, not at enqueue.** Enqueue does not participate in the replay pass's
   lock, so a merge on the way in could land between the pass's queue snapshot and its send, which would
   dispatch the stale bytes and then delete the merged row. Compacting inside the lock the pass already
-  holds has no such race and needs no schema change.
+  holds has no such race. That race is the whole of the argument, and it is independent of where the
+  role comes from: an enqueue-time merge would still need a revision column and a conditional delete to
+  be correct, and the flush-time pass needs neither.
 - **Dead-lettered entries are invisible.** One is never deleted by the pass (it is preserved
   deliberately, and the reconcile guards still read it) and never acts as a barrier, because an entry
   that can never reach the server cannot separate two writes that can.

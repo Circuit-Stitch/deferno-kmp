@@ -10,9 +10,10 @@ import com.circuitstitch.deferno.core.model.WorkingState
  * Task-centric (`MoveItem` is the lone cross-kind write), so a non-Task row has no menu state and the menu
  * offers only its cross-kind subset (Add subtask · Move). Non-Task status verbs are a follow-up (#299).
  *
- * Joined off the Task list + today's plan by the shell (where `today`/`tz`/the plan repository live) and
- * surfaced on [ItemTreeState.menuStates] keyed by item id; the View reads it to render the menu, and the
- * row-derived current values flow back as the menu intents' arguments (the "args from the row" rule).
+ * Joined off the Task list + today's plan by the shell (where `today`/`tz`/the plan repository live),
+ * carried to the tree inside [ItemRowDecorations], and surfaced on [ItemTreeState.menuStates] keyed by
+ * item id; the View reads it to render the menu, and the row-derived current values flow back as the menu
+ * intents' arguments (the "args from the row" rule).
  */
 data class TaskMenuState(
     val workingState: WorkingState,

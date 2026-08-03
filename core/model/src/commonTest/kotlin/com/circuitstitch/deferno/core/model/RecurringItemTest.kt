@@ -24,7 +24,7 @@ class RecurringItemTest {
             orgSlug = "u-e4h2qk",
             title = "stretch",
             definitionState = DefinitionState.Active,
-            recurrence = Recurrence(RecurrenceFrequency.Daily),
+            recurrence = Recurrence(Cadence.Daily),
             dateCreated = created,
         )
         assertEquals(HydrationState.Summary, habit.hydration)
@@ -40,12 +40,13 @@ class RecurringItemTest {
             orgSlug = "u-e4h2qk",
             title = "trash",
             definitionState = DefinitionState.Active,
-            recurrence = Recurrence(RecurrenceFrequency.Weekly, days = listOf("Tue")),
+            recurrence = Recurrence(Cadence.Weekly(listOf("Tue"))),
             cadenceMode = "rolling",
             dateCreated = created,
         )
+        // The chore's `cadenceMode` and its recurrence's [Cadence] are unrelated despite the names.
         assertEquals("rolling", chore.cadenceMode)
-        assertEquals(listOf("Tue"), chore.recurrence?.days)
+        assertEquals(Cadence.Weekly(listOf("Tue")), chore.recurrence?.cadence)
         // Deferred (ADR-0015): no group/rotation field exists on the model at all.
     }
 
@@ -80,7 +81,7 @@ class RecurringItemTest {
             orgSlug = "u-e4h2qk",
             title = "stretch",
             definitionState = DefinitionState.Active,
-            recurrence = Recurrence(RecurrenceFrequency.Daily),
+            recurrence = Recurrence(Cadence.Daily),
             dateCreated = created,
         )
         assertEquals(null, habit.targetDate)

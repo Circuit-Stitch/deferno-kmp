@@ -12,8 +12,8 @@ import kotlinx.datetime.LocalDate
  *
  * Offline-first (ADR-0001): a failed call is [RemoteSnapshot.Unavailable] so a failed refresh leaves the
  * cached window untouched, distinct from an [RemoteSnapshot.Available] *empty* window (which the reconcile
- * honours by blanking the span). The kind condensation (the feed carries no kind) is resolved separately
- * at the store boundary, so this returns the kind-less [CalendarItem]s as mapped from the wire.
+ * honours by blanking the span). Rows come back exactly as mapped from the wire — kind included — and the
+ * store persists them that way.
  */
 interface CalendarRemoteSource {
 

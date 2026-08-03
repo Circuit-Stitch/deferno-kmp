@@ -18,16 +18,15 @@ import kotlin.time.Instant
 
 /**
  * The offline-first orchestration of the calendar repository (ADR-0001, #74). It proves the refresh
- * contract: a successful pull reseeds the `series_id -> kind` index THEN full-replaces the window (so
- * the agenda re-emits with kinds resolved); a failed pull (`null`) writes nothing (the cached window is
- * never blanked); and [OfflineCalendarRepository.reconcile] replays the last window (the outbox flush
- * hook), a no-op before any window has loaded. The windowing/marker SQL itself is proved against real
- * SQLite in `CalendarLocalStoreTest`.
+ * contract: a successful pull full-replaces the window (so the agenda re-emits, kinds and all); a failed
+ * pull (`null`) writes nothing (the cached window is never blanked); and
+ * [OfflineCalendarRepository.reconcile] replays the last window (the outbox flush hook), a no-op before
+ * any window has loaded. The windowing/marker SQL itself is proved against real SQLite in
+ * `CalendarLocalStoreTest`.
  *
- * The index seed is the **union of the feed rows and the locally-known definitions** (#380). `kind` is
- * not a persisted column, so the feed's kind would be dropped by `replaceWindow` and re-derived from a
- * stale index on the way back out — seeding *from the rows* is what makes a never-cached (web-created)
- * definition resolve at all.
+ * The feed row's `kind` is persisted with the row (#380), so a firing the server just returned is
+ * actionable off the write alone — including a definition this device has never cached (created on the
+ * web), which the old `series_id -> kind` index could not resolve.
  */
 class OfflineCalendarRepositoryTest {
 
@@ -54,89 +53,48 @@ class OfflineCalendarRepositoryTest {
     )
 
     @Test
-    fun refreshSeedsTheKindIndexThenReplacesTheWindow_andAgendaResolvesKind() = runTest {
+    fun refreshReplacesTheWindow_andTheAgendaReEmitsWithTheFeedsKind() = runTest {
         val store = RecordingCalendarLocalStore()
         val remote = FakeCalendarRemoteSource(result = listOf(item()))
-        val repo = OfflineCalendarRepository(store, remote, { mapOf("evt-9-series" to ItemKind.Event) })
+        val repo = OfflineCalendarRepository(store, remote)
 
         repo.observeDay(day).test {
             assertEquals(emptyList(), awaitItem())
             repo.refreshWindow(from, to, "UTC")
-            // The agenda re-emits with the firing's kind resolved from the freshly-seeded index.
+            // The agenda re-emits, and the firing's kind is the one the feed row asserted.
             assertEquals(ItemKind.Habit, awaitItem().single().kind)
             cancelAndIgnoreRemainingEvents()
         }
-        // The union: the definition snapshot (a series with no row in this window) AND the feed row.
-        assertEquals(
-            listOf(mapOf("evt-9-series" to ItemKind.Event, "hab-3-series" to ItemKind.Habit)),
-            store.replacedIndexes,
-        )
         assertEquals(1, store.replacedWindows.size)
         assertEquals(Triple(from, to, listOf("ce-1")), store.replacedWindows.single().let { (f, t, items) -> Triple(f, t, items.map { it.id }) })
     }
 
     @Test
-    fun aFeedRowResolvesEvenWhenTheDefinitionWasNeverCached() = runTest {
-        // The web-created-definition case the old definitions-only seed could not fix: this device has
-        // no Habit/Chore/Event cached at all, yet the feed row carries its own kind (#311).
+    fun theFeedRowsKindReachesTheStoreUntouched() = runTest {
+        // The web-created-definition case the old `series_id -> kind` index could not fix: this device
+        // has no Habit/Chore/Event cached at all, yet the feed row carries its own kind (#311) and the
+        // refresh hands it to the store verbatim — nothing re-derives it, so nothing can lose it.
         val store = RecordingCalendarLocalStore()
         val remote = FakeCalendarRemoteSource(result = listOf(item()))
-        val repo = OfflineCalendarRepository(store, remote, { emptyMap() })
-
-        repo.observeDay(day).test {
-            assertEquals(emptyList(), awaitItem())
-            repo.refreshWindow(from, to, "UTC")
-            val row = awaitItem().single()
-            assertEquals(ItemKind.Habit, row.kind)
-            assertTrue(row.isActionableOccurrence)
-            cancelAndIgnoreRemainingEvents()
-        }
-        assertEquals(listOf(mapOf("hab-3-series" to ItemKind.Habit)), store.replacedIndexes)
-    }
-
-    @Test
-    fun theFeedWinsOverAStaleDefinitionSnapshot() = runTest {
-        // A definition cached under one kind, re-created on the web as another (or simply stale): the
-        // row the server just returned is the authority, so it must overwrite, not be overwritten.
-        val store = RecordingCalendarLocalStore()
-        val remote = FakeCalendarRemoteSource(result = listOf(item(kind = ItemKind.Chore)))
-        val repo = OfflineCalendarRepository(store, remote, { mapOf("hab-3-series" to ItemKind.Habit) })
+        val repo = OfflineCalendarRepository(store, remote)
 
         repo.refreshWindow(from, to, "UTC")
 
-        assertEquals(listOf(mapOf("hab-3-series" to ItemKind.Chore)), store.replacedIndexes)
-    }
-
-    @Test
-    fun rowsWithNoSeriesOrNoKindContributeNothingToTheIndex() = runTest {
-        // A one-off dated Task (no series) and a row whose kind token we don't recognise must not seed
-        // a wrong or phantom entry — the index would then route a write to the wrong endpoint.
-        val store = RecordingCalendarLocalStore()
-        val remote = FakeCalendarRemoteSource(
-            result = listOf(
-                item(id = "one-off", seriesId = null, kind = ItemKind.Task),
-                item(id = "unknown-kind", seriesId = "mystery-series", kind = null),
-                item(),
-            ),
-        )
-        val repo = OfflineCalendarRepository(store, remote, { emptyMap() })
-
-        repo.refreshWindow(from, to, "UTC")
-
-        assertEquals(listOf(mapOf("hab-3-series" to ItemKind.Habit)), store.replacedIndexes)
+        val written = store.replacedWindows.single().third.single()
+        assertEquals(ItemKind.Habit, written.kind)
+        assertTrue(written.isActionableOccurrence)
     }
 
     @Test
     fun aFailedPullLeavesTheCacheUntouched() = runTest {
         val store = RecordingCalendarLocalStore()
         val remote = FakeCalendarRemoteSource(result = null) // failure
-        val repo = OfflineCalendarRepository(store, remote, { mapOf("hab-3" to ItemKind.Habit) })
+        val repo = OfflineCalendarRepository(store, remote)
 
         repo.refreshWindow(from, to, "UTC")
 
-        // Nothing written: neither the window nor the index — the cached month is never blanked.
+        // Nothing written — the cached month is never blanked.
         assertEquals(0, store.replacedWindows.size)
-        assertEquals(0, store.replacedIndexes.size)
     }
 
     @Test
@@ -145,7 +103,7 @@ class OfflineCalendarRepositoryTest {
         // (Available, empty) must replace-with-empty — distinct from a failed pull, which writes nothing.
         val store = RecordingCalendarLocalStore()
         val remote = FakeCalendarRemoteSource(result = emptyList()) // reachable, empty window
-        val repo = OfflineCalendarRepository(store, remote, { emptyMap() })
+        val repo = OfflineCalendarRepository(store, remote)
 
         repo.refreshWindow(from, to, "UTC")
 
@@ -158,7 +116,7 @@ class OfflineCalendarRepositoryTest {
     fun reconcileReplaysTheLastWindow_andIsANoOpBeforeAnyRefresh() = runTest {
         val store = RecordingCalendarLocalStore()
         val remote = FakeCalendarRemoteSource(result = listOf(item()))
-        val repo = OfflineCalendarRepository(store, remote, { emptyMap() })
+        val repo = OfflineCalendarRepository(store, remote)
 
         // No-op before any window has been refreshed.
         repo.reconcile()
@@ -180,11 +138,9 @@ private class FakeCalendarRemoteSource(private val result: List<CalendarItem>?) 
     }
 }
 
-/** Records the orchestration writes and serves the day agenda live, resolving kind from the last index. */
+/** Records the orchestration writes and serves the day agenda live off the rows last written. */
 private class RecordingCalendarLocalStore : CalendarLocalStore {
     val replacedWindows = mutableListOf<Triple<LocalDate, LocalDate, List<CalendarItem>>>()
-    val replacedIndexes = mutableListOf<Map<String, ItemKind>>()
-    private var index: Map<String, ItemKind> = emptyMap()
     private val day = MutableStateFlow<List<CalendarItem>>(emptyList())
 
     override fun observeInRange(from: LocalDate, to: LocalDate): Flow<List<CalendarItem>> = flowOf(emptyList())
@@ -195,11 +151,6 @@ private class RecordingCalendarLocalStore : CalendarLocalStore {
 
     override suspend fun replaceWindow(from: LocalDate, to: LocalDate, items: List<CalendarItem>) {
         replacedWindows += Triple(from, to, items)
-        day.value = items.map { it.copy(kind = index[it.seriesId]) }
-    }
-
-    override suspend fun replaceSeriesKinds(index: Map<String, ItemKind>) {
-        replacedIndexes += index
-        this.index = index
+        day.value = items
     }
 }

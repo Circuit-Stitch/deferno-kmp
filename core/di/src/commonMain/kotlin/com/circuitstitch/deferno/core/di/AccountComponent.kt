@@ -124,7 +124,7 @@ abstract class AccountComponent(
     /**
      * The Calendar feed read repository (#74): the windowed month grid + day agenda source, observed
      * from the local cache. Exposing it anchors anvil's compile-time validation of the calendar chain
-     * (store + series-kind index → DB, repo → AppScope feed source) and gives the shell its accessor.
+     * (store → DB, repo → AppScope feed source) and gives the shell its accessor.
      */
     abstract val calendarRepository: CalendarRepository
 

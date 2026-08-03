@@ -25,9 +25,7 @@ import kotlin.time.Instant
  * - **Kind arrives on the wire** (#311/#380): [CalendarEventDto.kind] condenses through
  *   [toItemKindOrNull], so a firing is routable straight from the feed row. An unrecognised token
  *   degrades to `null` — the row renders read-only rather than routing a write to a guessed endpoint.
- *   The store still threads a kind in from the `series_id → kind` index for rows cached before the
- *   feed carried one; `kind` is not a persisted column, so the repository seeds that index *from these
- *   rows* on refresh (`OfflineCalendarRepository.refreshWindow`).
+ *   The cache stores this value with the row, so it survives to the next read unchanged.
  *
  * [source] condenses `"deferno"` → [CalendarSource.Deferno], `"google_calendar"` →
  * [CalendarSource.External], anything else → [CalendarSource.Unknown] (tolerant — an additive future

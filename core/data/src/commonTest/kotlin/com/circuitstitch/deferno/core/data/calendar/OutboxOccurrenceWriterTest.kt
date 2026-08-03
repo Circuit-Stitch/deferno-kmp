@@ -23,16 +23,21 @@ import kotlin.time.Instant
  * **no-op guard**: a one-off dated Task and an unresolved-kind firing are not actionable, so nothing is
  * applied or enqueued (the UI never offers occurrence actions there anyway).
  *
- * The fixture keeps `taskId` and `seriesId` **distinct** on purpose (#380): the kind still resolves via
- * the `series_id -> kind` index, but the *item* id is what goes in the endpoint's path slot. Conflating
- * the two is exactly the bug this file now pins against.
+ * The fixture keeps `taskId` and `seriesId` **distinct** on purpose (#380): `seriesId` is what makes the
+ * row a firing, but the *item* id is what goes in the endpoint's path slot. Conflating the two is
+ * exactly the bug this file now pins against.
  */
 class OutboxOccurrenceWriterTest {
 
     private val date = LocalDate(2026, 6, 8)
     private val now = Instant.parse("2026-06-08T10:00:00Z")
 
-    private fun firing(id: String = "ce-1", seriesId: String? = "hab-3-series", taskId: String = "hab-3-item") = CalendarItem(
+    private fun firing(
+        id: String = "ce-1",
+        seriesId: String? = "hab-3-series",
+        taskId: String = "hab-3-item",
+        kind: ItemKind? = ItemKind.Habit,
+    ) = CalendarItem(
         id = id,
         taskId = taskId,
         seriesId = seriesId,
@@ -42,16 +47,13 @@ class OutboxOccurrenceWriterTest {
         end = Instant.parse("2026-06-08T09:15:00Z"),
         allDay = false,
         status = WorkingState.Open,
-        kind = null,
+        kind = kind,
         source = CalendarSource.Deferno,
     )
 
     @Test
     fun markAppliesOptimisticallyAndEnqueuesTheKindScopedRequest() = runTest {
-        val store = InMemoryCalendarStore().apply {
-            replaceSeriesKinds(mapOf("hab-3-series" to ItemKind.Habit))
-            seed(firing())
-        }
+        val store = InMemoryCalendarStore().apply { seed(firing()) }
         val outbox = FakeOutboxStore()
         val writer = OutboxOccurrenceWriter(store, outbox) { now }
 
@@ -71,12 +73,11 @@ class OutboxOccurrenceWriterTest {
 
     @Test
     fun everyVerbAddressesTheItemIdNotTheSeriesId() = runTest {
-        // #380 across all three verbs and all three kinds: the kind still comes from the series index,
-        // but no request or target may ever carry the series id.
+        // #380 across all three verbs and all three kinds: the kind picks the endpoint family, but no
+        // request or target may ever carry the series id.
         for ((kind, path) in listOf(ItemKind.Chore to "chores", ItemKind.Event to "events")) {
             val store = InMemoryCalendarStore().apply {
-                replaceSeriesKinds(mapOf("s-$path" to kind))
-                seed(firing(seriesId = "s-$path", taskId = "i-$path"))
+                seed(firing(seriesId = "s-$path", taskId = "i-$path", kind = kind))
             }
             val outbox = FakeOutboxStore()
             val writer = OutboxOccurrenceWriter(store, outbox) { now }
@@ -96,8 +97,10 @@ class OutboxOccurrenceWriterTest {
     @Test
     fun rescheduleMovesTheRowAndClearResetsIt() = runTest {
         val store = InMemoryCalendarStore().apply {
-            replaceSeriesKinds(mapOf("evt-1-series" to ItemKind.Event))
-            seed(firing(seriesId = "evt-1-series", taskId = "evt-1-item").copy(status = WorkingState.Done))
+            seed(
+                firing(seriesId = "evt-1-series", taskId = "evt-1-item", kind = ItemKind.Event)
+                    .copy(status = WorkingState.Done),
+            )
         }
         val outbox = FakeOutboxStore()
         val writer = OutboxOccurrenceWriter(store, outbox) { now }
@@ -115,10 +118,7 @@ class OutboxOccurrenceWriterTest {
     fun aHabitFiringCanBeRescheduled() = runTest {
         // #380 defect 3: habit + chore reschedule ship server-side over the shared
         // `reschedule_recurring_occurrence`, so the writer must enqueue one rather than no-op.
-        val store = InMemoryCalendarStore().apply {
-            replaceSeriesKinds(mapOf("hab-3-series" to ItemKind.Habit))
-            seed(firing())
-        }
+        val store = InMemoryCalendarStore().apply { seed(firing()) }
         val outbox = FakeOutboxStore()
         val writer = OutboxOccurrenceWriter(store, outbox) { now }
 
@@ -133,10 +133,7 @@ class OutboxOccurrenceWriterTest {
 
     @Test
     fun aHabitMarkOnlyHonorsComplete_neverSilentlyUncompletes() = runTest {
-        val store = InMemoryCalendarStore().apply {
-            replaceSeriesKinds(mapOf("hab-3-series" to ItemKind.Habit))
-            seed(firing().copy(status = WorkingState.Done))
-        }
+        val store = InMemoryCalendarStore().apply { seed(firing().copy(status = WorkingState.Done)) }
         val outbox = FakeOutboxStore()
         val writer = OutboxOccurrenceWriter(store, outbox) { now }
 
@@ -155,9 +152,8 @@ class OutboxOccurrenceWriterTest {
     @Test
     fun aOneOffTaskAndAnUnresolvedKindFiringAreNoOps() = runTest {
         val store = InMemoryCalendarStore().apply {
-            replaceSeriesKinds(mapOf("hab-3-series" to ItemKind.Habit))
-            seed(firing(id = "one-off", seriesId = null)) // a dated Task — not an occurrence
-            seed(firing(id = "web-only", seriesId = "unindexed")) // recurring but kind unresolved
+            seed(firing(id = "one-off", seriesId = null, kind = ItemKind.Task)) // a dated Task
+            seed(firing(id = "web-only", kind = null)) // recurring, but its stored kind token is unknown
         }
         val outbox = FakeOutboxStore()
         val writer = OutboxOccurrenceWriter(store, outbox) { now }
@@ -192,16 +188,14 @@ class OutboxOccurrenceWriterTest {
     }
 }
 
-/** A minimal in-memory [CalendarLocalStore] for the writer test: get resolves kind from the index, like the real store. */
+/** A minimal in-memory [CalendarLocalStore] for the writer test: a row reads back exactly as written. */
 private class InMemoryCalendarStore : CalendarLocalStore {
     private val rows = mutableMapOf<String, CalendarItem>()
-    private var index = mapOf<String, ItemKind>()
 
     fun seed(item: CalendarItem) { rows[item.id] = item }
 
-    override suspend fun get(id: String): CalendarItem? = rows[id]?.let { it.copy(kind = index[it.seriesId]) }
+    override suspend fun get(id: String): CalendarItem? = rows[id]
     override suspend fun upsert(item: CalendarItem) { rows[item.id] = item }
-    override suspend fun replaceSeriesKinds(index: Map<String, ItemKind>) { this.index = index }
 
     override fun observeInRange(from: LocalDate, to: LocalDate): Flow<List<CalendarItem>> = flowOf(emptyList())
     override fun observeByDate(date: LocalDate): Flow<List<CalendarItem>> = flowOf(emptyList())

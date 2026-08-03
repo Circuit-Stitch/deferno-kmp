@@ -99,6 +99,7 @@ import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachments
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
+import com.circuitstitch.deferno.feature.tasks.ItemRowDecorations
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import com.circuitstitch.deferno.feature.tasks.TaskMenuState
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
@@ -309,24 +310,33 @@ class DefaultMainShellComponent(
         )
     }
 
-    // The Item-tree command menu's per-row Task state (#231): join each Task's working-state + pinned flag
-    // with whether it's in today's plan (keyed by id) so the menu can label Pin↔Unpin / Add↔Remove-from-plan
-    // and swap the kind-aware status block. Only Tasks appear (the status/Pin/plan writes are Task-only);
-    // a non-Task tree row simply has no entry. Cold + offline-first (both reads are local Flows, ADR-0001).
-    private val treeMenuStates: Flow<Map<String, TaskMenuState>> =
-        combine(taskRepository.observeTasks(), planRepository.observePlan(today, timeZone)) { tasks, plan ->
+    // The Item tree's per-row decorations (#231/#386), joined here because this is the only layer where
+    // `today`, the time zone, and the Task + plan + calendar reads all live. One `combine` over three
+    // sources, not two joins over four: today's plan is the shared arm, and subscribing to it twice (as
+    // the two separate joins did) meant two live plan queries for one screen.
+    //
+    // The two halves are deliberately NOT the same shape, and unifying them would be a bug:
+    //  - `menuStates` is Task-only by construction — the Pin/plan/status writes it labels are Task-only,
+    //    so a non-Task tree row simply has no entry and the menu falls back to its cross-kind subset.
+    //  - `inTodayIds` is deliberately kind-neutral and WIDER (semantics in [inTodayIds] below): narrowing
+    //    "In today" through the Task-only map is exactly the mistake that would make every
+    //    Habit/Chore/Event vanish — a confident "no" to "is my habit on my plan today?".
+    //
+    // Cold + offline-first (all three reads are local DB Flows, ADR-0001) — and all three emit their
+    // current cached value on subscription, so `combine` yields a first frame without waiting on the network.
+    private val treeDecorations: Flow<ItemRowDecorations> =
+        combine(
+            taskRepository.observeTasks(),
+            planRepository.observePlan(today, timeZone),
+            calendarRepository.observeDay(today),
+        ) { tasks, plan, day ->
             val planIds = plan.mapTo(HashSet(plan.size)) { it.id.value }
-            tasks.associate { it.id.value to TaskMenuState(it.workingState, it.pinned, it.id.value in planIds) }
-        }
-
-    // The Item tree's kind-neutral **"in today"** id set (#386) — semantics in [inTodayIds] below.
-    // Deliberately a *second*, wider join than [treeMenuStates] above rather than a reuse: that one is
-    // Task-only by construction (the Pin/plan/status writes are), and narrowing "In today" through it is
-    // exactly the mistake that would make every Habit/Chore/Event vanish — a confident "no" to "is my
-    // habit on my plan today?". Cold + offline-first (both reads are local DB Flows, ADR-0001).
-    private val treeInTodayIds: Flow<Set<String>> =
-        combine(planRepository.observePlan(today, timeZone), calendarRepository.observeDay(today)) { plan, day ->
-            inTodayIds(plan, day)
+            ItemRowDecorations(
+                menuStates = tasks.associate {
+                    it.id.value to TaskMenuState(it.workingState, it.pinned, it.id.value in planIds)
+                },
+                inTodayIds = inTodayIds(plan, day),
+            )
         }
 
     // The Inbox "accept" seam (ADR-0015 Inbox amendment): commit a draft as a real Task through the same
@@ -582,8 +592,7 @@ class DefaultMainShellComponent(
                         setLabels = setLabels,
                         deleteTask = deleteTask,
                         onDeviceAttachments = onDeviceAttachments,
-                        menuStates = treeMenuStates,
-                        inTodayIds = treeInTodayIds,
+                        decorations = treeDecorations,
                         setPinned = setPinned,
                         addToPlan = addToPlan,
                         removeFromPlan = removeFromPlan,

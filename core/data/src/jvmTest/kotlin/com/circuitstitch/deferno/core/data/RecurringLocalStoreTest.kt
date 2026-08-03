@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
 import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
 import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
+import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
@@ -18,7 +19,6 @@ import com.circuitstitch.deferno.core.model.MonthlyAnchor
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.RecurrenceBound
-import com.circuitstitch.deferno.core.model.RecurrenceFrequency
 import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.LocalDate
 import kotlinx.coroutines.test.runTest
@@ -33,6 +33,10 @@ import kotlin.test.assertNull
  * (the DefinitionState light switch, the flattened Recurrence, instants, the boolean<->INTEGER, the id
  * value classes) round-trips through a genuine `DefernoDatabase` over an in-memory `JdbcSqliteDriver`,
  * and that `upsert` re-emits the observe Flow.
+ *
+ * It is also the only real-SQLite guard on the whole-row `insertOrReplace(<Entity>)` bind: the `.sq`
+ * `VALUES ?` form takes the entity positionally, so a column declared out of order — or a mapping that
+ * fills the wrong one — shows up here as a round-trip that no longer returns what it stored.
  */
 class RecurringLocalStoreTest {
 
@@ -50,7 +54,7 @@ class RecurringLocalStoreTest {
             orgSlug = "u-e4h2qk",
             title = "stretch",
             definitionState = DefinitionState.Active,
-            recurrence = Recurrence(RecurrenceFrequency.Weekly, days = listOf("Mon", "Wed")),
+            recurrence = Recurrence(Cadence.Weekly(listOf("Mon", "Wed"))),
             labels = listOf("health"),
             completeBy = Instant.parse("2026-05-04T08:00:00Z"),
             pinned = true,
@@ -85,7 +89,7 @@ class RecurringLocalStoreTest {
             orgSlug = "u-e4h2qk",
             title = "trash",
             definitionState = DefinitionState.Archived,
-            recurrence = Recurrence(RecurrenceFrequency.Daily),
+            recurrence = Recurrence(Cadence.Daily),
             cadenceMode = "rolling",
             dateCreated = created,
         )
@@ -114,11 +118,7 @@ class RecurringLocalStoreTest {
             orgSlug = "u-e4h2qk",
             title = "replace the filter",
             definitionState = DefinitionState.Active,
-            recurrence = Recurrence(
-                frequency = RecurrenceFrequency.EveryNDays,
-                interval = 30,
-                bound = RecurrenceBound.AfterCount(10),
-            ),
+            recurrence = Recurrence(Cadence.EveryNDays(30), bound = RecurrenceBound.AfterCount(10)),
             cadenceMode = "rolling",
             dateCreated = created,
         )
@@ -129,18 +129,17 @@ class RecurringLocalStoreTest {
         assertEquals(chore, reread)
         // Spelled out, because `assertEquals` on the whole row would still pass if BOTH sides were wrong
         // in the same way — these are the two values the bug destroyed.
-        assertEquals(RecurrenceFrequency.EveryNDays, reread?.recurrence?.frequency)
-        assertEquals(30, reread?.recurrence?.interval)
+        assertEquals(Cadence.EveryNDays(30), reread?.recurrence?.cadence)
         assertEquals(RecurrenceBound.AfterCount(10), reread?.recurrence?.bound)
 
         // …and the neighbouring interval is genuinely a DIFFERENT cached row, which it was not before.
         val faster = chore.copy(
             id = ChoreId("c-3"),
-            recurrence = chore.recurrence?.copy(interval = 29),
+            recurrence = chore.recurrence?.copy(cadence = Cadence.EveryNDays(29)),
         )
         store.upsert(faster)
-        assertEquals(29, store.get(ChoreId("c-3"))?.recurrence?.interval)
-        assertEquals(30, store.get(ChoreId("c-2"))?.recurrence?.interval)
+        assertEquals(Cadence.EveryNDays(29), store.get(ChoreId("c-3"))?.recurrence?.cadence)
+        assertEquals(Cadence.EveryNDays(30), store.get(ChoreId("c-2"))?.recurrence?.cadence)
     }
 
     /**
@@ -151,26 +150,20 @@ class RecurringLocalStoreTest {
     @Test
     fun everyCadenceAndBoundRoundTripsThroughRealSqliteOnAllThreeRecurringKinds() = runTest {
         val rules = listOf(
-            Recurrence(RecurrenceFrequency.Daily),
-            Recurrence(RecurrenceFrequency.EveryNDays, interval = 3),
-            Recurrence(RecurrenceFrequency.Weekly, days = listOf("Mon", "Wed")),
+            Recurrence(Cadence.Daily),
+            Recurrence(Cadence.EveryNDays(3)),
+            Recurrence(Cadence.Weekly(listOf("Mon", "Wed"))),
+            Recurrence(Cadence.Monthly(interval = 1, on = MonthlyAnchor.DayOfMonth(15))),
             Recurrence(
-                RecurrenceFrequency.Monthly,
-                interval = 1,
-                monthlyAnchor = MonthlyAnchor.DayOfMonth(15),
-            ),
-            Recurrence(
-                RecurrenceFrequency.Monthly,
-                interval = 2,
                 // nth = -1 is the "last Friday" sentinel; it must survive as a NEGATIVE integer.
-                monthlyAnchor = MonthlyAnchor.NthWeekday(nth = -1, weekday = "Fri"),
+                Cadence.Monthly(interval = 2, on = MonthlyAnchor.NthWeekday(nth = -1, weekday = "Fri")),
                 bound = RecurrenceBound.OnDate(LocalDate(2027, 1, 31)),
             ),
-            Recurrence(RecurrenceFrequency.Yearly, interval = 1, month = 6, day = 14),
-            Recurrence(RecurrenceFrequency.Custom, rrule = "FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20270131T235959Z"),
+            Recurrence(Cadence.Yearly(interval = 1, month = 6, day = 14)),
+            Recurrence(Cadence.Custom("FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20270131T235959Z")),
             // A cadence this client cannot model still round-trips under its preserved wire token,
             // instead of becoming the literal string "Unknown" and being lost.
-            Recurrence(RecurrenceFrequency.Unknown, rawType = "fortnightly", interval = 2),
+            Recurrence(Cadence.Unmodelled("fortnightly")),
         )
         val database = db()
         val habits = SqlDelightHabitLocalStore(database, Dispatchers.Default)

@@ -1,4 +1,9 @@
--- Migration 18 -> 19: cache the WHOLE recurrence rule on the three recurring kinds (#382).
+-- Migration 18 -> 19, three changes that all move a value to where it belongs:
+--   1. cache the WHOLE recurrence rule on the three recurring kinds (#382);
+--   2. PERSIST the calendar row's `kind` and drop the `series_id -> kind` bridge table (#380);
+--   3. persist the outbox entry's DECLARED replay collapse role (#396).
+--
+-- ## 1. The whole recurrence rule (#382)
 --
 -- `recurrence_type` + `recurrence_days` could express only "a frequency and, if weekly, some weekdays".
 -- Every other cadence parameter and the entire `end` bound were dropped, so a cache round-trip did not
@@ -6,10 +11,12 @@
 -- the same row; `every_n_days` and `custom` had no domain representation at all and persisted as the
 -- literal enum name "Unknown", from which the original cadence was unrecoverable.
 --
--- Twelve flat nullable primitives per table, NOT one `recurrence_json` blob. The three tables state a
--- no-adapters invariant (every column a SQL primitive, all row<->domain conversion in Kotlin); a blob
--- would breach it, and would also make "find every item recurring monthly" impossible without a
--- full-table Kotlin scan.
+-- Twelve flat nullable primitives per table, NOT one `recurrence_json` blob. The honest argument is
+-- legibility and query-ability, not the no-adapters invariant: `recurrence_days` is already a
+-- `\n`-joined list in a TEXT column, so "serialized multi-value in a primitive" is plainly not
+-- forbidden here. What a blob would cost is a schema you cannot read in a `sqlite3` session and cannot
+-- filter on ("every item recurring monthly") without a full-table Kotlin scan, plus a second encoding
+-- to version independently of the migration chain. Flat columns keep the cache self-describing.
 --
 -- Which columns are meaningful is decided by `recurrence_type` — all are NULL for a cadence that does
 -- not use them, which is the same value a pre-migration row carries, so **no back-fill is needed**: a
@@ -77,3 +84,51 @@ ALTER TABLE eventEntity ADD COLUMN recurrence_end_type TEXT;
 ALTER TABLE eventEntity ADD COLUMN recurrence_end_date TEXT;
 ALTER TABLE eventEntity ADD COLUMN recurrence_end_count INTEGER;
 ALTER TABLE eventEntity ADD COLUMN recurrence_raw_type TEXT;
+
+-- ## 2. The calendar row's kind becomes a column, and the bridge index is deleted (#380)
+--
+-- `kind` has been a REQUIRED property of the `CalendarEvent` feed row since #311, but the cache had no
+-- column for it, so `replaceWindow` dropped it on write and the read side re-derived it from a
+-- `series_id -> kind` index seeded from whatever the client happened to know. That index was replaced
+-- wholesale on every window refresh, so a kind learned from June's feed rows was destroyed by a July
+-- refresh — the firing went read-only again. Persisting the value the feed already asserts removes the
+-- index, its seeding rule, its precedence rule and its lifetime, and makes a row's kind as durable as
+-- its title.
+--
+-- NULL means unresolved: the feed sent a kind token this build does not model, so the row renders
+-- read-only (gentle degradation, never a wrong write). ADD COLUMN appends, matching the CREATE TABLE
+-- tail in CalendarItemEntity.sq.
+ALTER TABLE calendarItemEntity ADD COLUMN kind TEXT;
+
+-- **No back-fill, and the reason is #380 itself.** The obvious move is to seed the new column from the
+-- index we are about to drop. It would be dead SQL. Every released build populated `seriesKindEntity`
+-- from `LocalStoreSeriesKindSource`, which keyed it by the definition's *item* id
+-- (`index[it.id.value]`), while `calendarItemEntity.series_id` holds the *series* id — two different
+-- uuids. That mismatch is precisely the bug this PR fixes: the index could never hit, which is why
+-- every firing rendered read-only. So there is no correctly-keyed kind in the table to recover, and a
+-- join written against either column would only ever match a database written by an unreleased build
+-- of this branch.
+--
+-- Leaving the column NULL therefore loses nothing: those rows resolve no kind today either, and the
+-- first window refresh writes the kind straight off the feed row. Contrast 16->17's `occurred_at`,
+-- which had to be back-filled because NULL sorted it out of reach permanently.
+--
+-- The bridge is now dead weight. Dropping it here is mandatory, not cosmetic: `seriesKindEntity` is
+-- created by 1.sqm and present in every snapshot from 2.db onward, and verifyMigrations replays the
+-- chain from each of them and diffs the result against the `.sq` catalog — a surviving table once
+-- `SeriesKindEntity.sq` is deleted is a mismatch and fails the build.
+DROP TABLE seriesKindEntity;
+
+-- ## 3. The outbox entry's declared collapse role (#396)
+--
+-- The flush-time coalescer needs to know whether a queued write is an absolute per-firing set-state
+-- (collapsible) or a barrier. That is a property of the INTENT, known at enqueue; it was being
+-- recovered at replay time by pattern-matching the stored URL path segments. `OutboxRequest` already
+-- establishes the opposite convention for `acceptsActivityStamp` ("declared here, by whoever picked the
+-- route, rather than re-derived downstream by matching path segments"), so this column lets the
+-- occurrence intents follow it.
+--
+-- Stores the `CollapseRole` enum NAME (`Absolute`/`Barrier`). No back-fill: NULL is the correct
+-- fail-closed reading (Barrier — never collapsed into, never absorbing a predecessor), so an entry
+-- queued before this migration replays exactly as it would have, simply uncompacted.
+ALTER TABLE outboxEntry ADD COLUMN collapse_role TEXT;

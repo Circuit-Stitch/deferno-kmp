@@ -523,6 +523,9 @@ sealed interface OccurrenceMutation : Mutation {
  * in the body (the UI offers a habit only Complete). A **chore** or **event** carries the kind-appropriate
  * wire token via [toWireToken]. Optimistically sets the cached row's [WorkingState] (Start -> In-progress,
  * Complete → Done, Skip → Dropped); replay-safe — re-applying yields the same state.
+ *
+ * All three shapes declare [CollapseRole.Absolute] (#396): a mark fully determines the firing's state, so
+ * a later write on the same firing makes this one redundant and the flush-time coalescer may drop it.
  */
 data class MarkOccurrence(
     override val itemId: String,
@@ -542,18 +545,21 @@ data class MarkOccurrence(
                 put("date", date.toString())
             }.toString(),
             acceptsActivityStamp = true,
+            collapseRole = CollapseRole.Absolute,
         )
         ItemKind.Chore -> OutboxRequest(
             OutboxMethod.Put,
             listOf("chores", definitionId, "occurrences", date.toString()),
             buildJsonObject { put("status", action.toWireToken(OccurrenceKind.Chore)) }.toString(),
             acceptsActivityStamp = true,
+            collapseRole = CollapseRole.Absolute,
         )
         ItemKind.Event -> OutboxRequest(
             OutboxMethod.Post,
             listOf("events", definitionId, "occurrences", date.toString()),
             buildJsonObject { put("action", action.toWireToken(OccurrenceKind.Event)) }.toString(),
             acceptsActivityStamp = true,
+            collapseRole = CollapseRole.Absolute,
         )
         ItemKind.Task -> error("MarkOccurrence is only valid for a recurring kind, not Task")
     }
@@ -569,6 +575,10 @@ data class MarkOccurrence(
  * CDN `DELETE`-body behavior, and it left no alias — the old route is simply gone. The body is
  * `ActivityBody`, whose every field is optional, so an empty `{}` is a valid clear; the `activity`
  * stamp is injected at the outbox choke-point ([ActivityStamp]) rather than built here.
+ *
+ * Declares [CollapseRole.Absolute] (#396) alongside the marks: a clear is `set_…_occurrence(id, date,
+ * None)`, an absolute write of the firing's whole state, and it returns `204` whether or not a status was
+ * ever recorded — so collapsing an unsent mark into a later clear cannot error.
  */
 data class ClearOccurrence(
     override val itemId: String,
@@ -588,6 +598,7 @@ data class ClearOccurrence(
         // not the 35 a scan that skips `oneOf` arms finds).
         "{}",
         acceptsActivityStamp = true,
+        collapseRole = CollapseRole.Absolute,
     )
 }
 
@@ -598,6 +609,12 @@ data class ClearOccurrence(
  * over one shared `reschedule_recurring_occurrence`, so the long-standing "Events only in v1" gate was
  * stale doc, not a contract. A habit/chore reschedule marks the origin date dropped with a
  * `rescheduled_to` pointer — a server-sanctioned move, not a failure that would snap the row back.
+ *
+ * Declares [CollapseRole.Barrier] (#396) **explicitly**, though that is also the default: the barrier is a
+ * deliberate statement about this route and belongs beside it, not something a reader has to infer from an
+ * omission. A reschedule is an absolute write over *two* days, and its target names only the origin, so
+ * collapsing anything into or across it would trade a promise in the contract for a backend detail — and
+ * would erase the server-side Activity entry for a mark the user really did perform.
  */
 data class RescheduleOccurrence(
     override val itemId: String,
@@ -613,6 +630,7 @@ data class RescheduleOccurrence(
         listOf(kind.recurringPath(), definitionId, "occurrences", date.toString(), "reschedule"),
         buildJsonObject { put("new_date", newDate.toString()) }.toString(),
         acceptsActivityStamp = true,
+        collapseRole = CollapseRole.Barrier,
     )
 }
 

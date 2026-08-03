@@ -14,9 +14,13 @@ import kotlin.time.Instant
  * `OccurrenceOfflineToOnlineTest` cover the applied half (the deletes, the counter and the end-to-end
  * "one server write" acceptance).
  *
- * Every fixture builds its request from the **real** [OccurrenceMutation] rather than a hand-written
- * path, because the classifier reads the route shape: if a mark, clear or reschedule route ever moves,
- * this file must fail rather than quietly reclassify the intent.
+ * Every truth-table fixture builds its request from the **real** [OccurrenceMutation], so what is pinned
+ * is the role each intent actually *declares*. The role used to be re-derived from the route shape, and
+ * this file existed partly to catch a moved route silently reclassifying an intent; that hazard is gone by
+ * construction now the declaration is made at enqueue and persisted, which is the point of the change.
+ * What is left worth pinning is that each intent declares the role the truth table assumes, and that
+ * anything declaring nothing fails closed — so where a test hand-builds a request instead, skipping the
+ * declaration is the point of that test.
  */
 class OutboxCoalescingTest {
 
@@ -151,7 +155,9 @@ class OutboxCoalescingTest {
     fun foreignTargetsAreNeitherDroppedNorBarriers() {
         // The outbox is mixed. A task edit, a plan reorder, a settings write, a create and a comment sit
         // between two marks of one firing: none may be dropped, and none may stop the two marks merging
-        // — deleting somebody else's row from around them cannot move them.
+        // — deleting somebody else's row from around them cannot move them. Each of these carries the
+        // Barrier default (none declares a role), so what keeps them out of the way is the target filter,
+        // not the role.
         val foreign = listOf(
             "task:t-1" to OutboxRequest(OutboxMethod.Patch, listOf("tasks", "t-1"), """{"title":"x"}"""),
             "plan:2026-06-08:UTC" to OutboxRequest(OutboxMethod.Post, listOf("plan", "2026-06-08")),
@@ -179,16 +185,18 @@ class OutboxCoalescingTest {
     }
 
     @Test
-    fun anUnknownOccurrenceVerbFailsClosedAsABarrier() {
-        // A future occurrence route this build does not know must not be collapsed into (it might not be
-        // an absolute write) nor collapsed across (it might not be commutative with its neighbours).
-        val unknown = row(
+    fun anOccurrenceEntryThatDeclaredNoRoleFailsClosedAsABarrier() {
+        // A row queued before the declaration existed (its `collapse_role` column is NULL), or one a
+        // future intent forgot to declare, must not be collapsed into (it might not be an absolute write)
+        // nor collapsed across (it might not be commutative with its neighbours). Hand-built precisely to
+        // skip `toRequest()`, which is the only thing that declares a role.
+        val undeclared = row(
             2,
             mark().target,
             OutboxRequest(OutboxMethod.Post, listOf("chores", "cho-1-item", "occurrences", "2026-06-08", "snooze")),
         )
-        assertEquals(CollapseRole.Barrier, collapseRoleOf(unknown.request))
-        assertTrue(coalesceOccurrences(listOf(row(1, mark()), unknown, row(3, mark()))).isEmpty())
+        assertEquals(CollapseRole.Barrier, undeclared.request.collapseRole)
+        assertTrue(coalesceOccurrences(listOf(row(1, mark()), undeclared, row(3, mark()))).isEmpty())
     }
 
     // --- dead letters -----------------------------------------------------------------------------
@@ -251,36 +259,46 @@ class OutboxCoalescingTest {
         assertTrue(6L !in drops)
     }
 
-    // --- the classifier ---------------------------------------------------------------------------
+    // --- the declaration --------------------------------------------------------------------------
 
     @Test
-    fun everyMarkAndClearRouteClassifiesAsAbsolute() {
-        // The habit mark ends at `occurrences`; the chore PUT and event POST end at `{date}`; clear ends
-        // at `clear`. Three different tail shapes, one role.
-        assertEquals(CollapseRole.Absolute, collapseRoleOf(mark(kind = ItemKind.Habit).toRequest()))
-        assertEquals(CollapseRole.Absolute, collapseRoleOf(mark(kind = ItemKind.Chore).toRequest()))
-        assertEquals(CollapseRole.Absolute, collapseRoleOf(mark(kind = ItemKind.Event).toRequest()))
+    fun everyMarkAndClearIntentDeclaresItselfAbsolute() {
+        // Three unrelated route tails — the habit mark ends at `occurrences`, the chore PUT and event POST
+        // end at `{date}`, the clear ends at `clear` — and one role, because the intent says so rather
+        // than the URL. Each of these is a cell of the truth table's collapsible block.
+        assertEquals(CollapseRole.Absolute, mark(kind = ItemKind.Habit).toRequest().collapseRole)
+        assertEquals(CollapseRole.Absolute, mark(kind = ItemKind.Chore).toRequest().collapseRole)
+        assertEquals(CollapseRole.Absolute, mark(kind = ItemKind.Event).toRequest().collapseRole)
         for (kind in listOf(ItemKind.Habit, ItemKind.Chore, ItemKind.Event)) {
-            assertEquals(CollapseRole.Absolute, collapseRoleOf(clear(kind).toRequest()), "clear for $kind")
+            assertEquals(CollapseRole.Absolute, clear(kind).toRequest().collapseRole, "clear for $kind")
         }
     }
 
     @Test
-    fun everyRescheduleRouteClassifiesAsABarrier() {
+    fun everyRescheduleIntentDeclaresItselfABarrier() {
+        // What this pins is the role the truth table's barrier row depends on, for all three kinds. What
+        // it deliberately cannot see: Barrier is *also* the default, so this passes whether the builder
+        // states the role or omits it. The explicit line in [RescheduleOccurrence] is a claim to the next
+        // reader that the barrier was chosen, not defaulted into — which no assertion on the value can
+        // hold in place.
         for (kind in listOf(ItemKind.Habit, ItemKind.Chore, ItemKind.Event)) {
-            assertEquals(CollapseRole.Barrier, collapseRoleOf(reschedule(kind).toRequest()), "reschedule for $kind")
+            assertEquals(CollapseRole.Barrier, reschedule(kind).toRequest().collapseRole, "reschedule for $kind")
         }
     }
 
     @Test
-    fun anUnrecognisableRouteClassifiesAsABarrier() {
-        // Total over any path at all, including the degenerate ones — the classifier is reached from a
-        // mixed queue and may never throw.
-        assertEquals(CollapseRole.Barrier, collapseRoleOf(OutboxRequest(OutboxMethod.Post, emptyList())))
-        assertEquals(CollapseRole.Barrier, collapseRoleOf(OutboxRequest(OutboxMethod.Post, listOf("chores"))))
+    fun anUndeclaredRequestIsABarrierWhateverItsPathLooksLike() {
+        // The default is fail-closed AND route-blind. The middle case is the one that matters: a request
+        // wearing the *exact* path of a habit mark is still a barrier, because nothing declared it
+        // absolute — which is precisely what a path-matching classifier could not have said.
+        assertEquals(CollapseRole.Barrier, OutboxRequest(OutboxMethod.Post, emptyList()).collapseRole)
         assertEquals(
             CollapseRole.Barrier,
-            collapseRoleOf(OutboxRequest(OutboxMethod.Patch, listOf("tasks", "t-1"))),
+            OutboxRequest(OutboxMethod.Post, mark(kind = ItemKind.Habit).toRequest().path).collapseRole,
+        )
+        assertEquals(
+            CollapseRole.Barrier,
+            OutboxRequest(OutboxMethod.Patch, listOf("tasks", "t-1")).collapseRole,
         )
     }
 }

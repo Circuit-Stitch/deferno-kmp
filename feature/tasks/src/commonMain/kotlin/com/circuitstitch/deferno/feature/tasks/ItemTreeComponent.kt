@@ -277,14 +277,11 @@ class DefaultItemTreeComponent(
     // The tracking-event sink (#230): stubbed to the kmp-logger until the telemetry seam lands (ADR-0049).
     // A seam (not a direct log call) so a shake-with-nothing-to-undo is assertable in commonTest.
     private val trackEvent: (String) -> Unit = ::logTrackingEvent,
-    // The kind-aware command menu's per-row Task state (#231): the Task working-state/pinned/in-plan join
-    // the shell builds off the Task list + today's plan, surfaced on [ItemTreeState.menuStates]. Defaulted
-    // empty so the read/move-only tests build without it (like [moveEditor]); a non-Task row has no entry.
-    private val menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
-    // The kind-neutral "in today" id set (#386), joined by the shell off today's plan + today's calendar
-    // window and surfaced verbatim on [ItemTreeState.inTodayIds] for the View's first filter segment.
-    // Defaulted empty so the read/move-only tests build without it (like [menuStates]).
-    private val inTodayIds: Flow<Set<String>> = flowOf(emptySet()),
+    // The per-row decorations the shell joins off today's plan + Task list + calendar window — the Task-only
+    // menu state (#231) and the kind-neutral "in today" set (#386), unpacked in the state join onto the two
+    // flat [ItemTreeState] fields the Views read. Defaulted to the empty [ItemRowDecorations] so the
+    // read/move-only tests build without it (like [moveEditor]).
+    private val decorations: Flow<ItemRowDecorations> = flowOf(ItemRowDecorations()),
     // The kind-aware menu's Task-only write seams (#231), threaded from the shell over CommandExecutor.
     // All default to no-ops so the existing read/move/navigation tests construct the component without them.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
@@ -319,13 +316,10 @@ class DefaultItemTreeComponent(
     private val blockedByPicker = MutableStateFlow<BlockedByPickerState?>(null)
     private val blockedByError = MutableStateFlow<BlockedByEditError?>(null)
 
-    // Kotlin's **typed** `combine` tops out at five flows, and both tiers of the state join below are
-    // already at that ceiling. A sixth source would silently bind the `vararg` overload instead and hand
+    // Kotlin's **typed** `combine` tops out at five flows, and both tiers of the state join below sit
+    // exactly at that ceiling. A sixth source would silently bind the `vararg` overload instead and hand
     // the lambda an `Array<Any?>` — the compiler stops checking and every read becomes an unchecked cast.
-    // So the two per-row joins ride one typed slot as a Pair (#386).
-    private val menuAndInToday: Flow<Pair<Map<String, TaskMenuState>, Set<String>>> =
-        combine(menuStates, inTodayIds) { menus, today -> menus to today }
-
+    // So a new per-row decoration folds into [ItemRowDecorations]; another slot here is not free.
     override val state: StateFlow<ItemTreeState> =
         combine(
             combine(itemRepository.observeItems(), foldStore.overrides, refreshing, liftedId, showBlocked) { items, ov, isRefreshing, lifted, showBlockedNow ->
@@ -350,14 +344,14 @@ class DefaultItemTreeComponent(
                 )
             },
             lastUndoable.current,
-            menuAndInToday,
+            decorations,
             blockedByPicker,
             blockedByError,
-        ) { core, undoable, (menus, today), picker, edgeError ->
+        ) { core, undoable, decor, picker, edgeError ->
             core.copy(
                 lastMove = undoable?.let { MoveUndo(it.id, it.structural, it.operation) },
-                menuStates = menus,
-                inTodayIds = today,
+                menuStates = decor.menuStates,
+                inTodayIds = decor.inTodayIds,
                 blockedByPicker = picker,
                 blockedByError = edgeError,
             )

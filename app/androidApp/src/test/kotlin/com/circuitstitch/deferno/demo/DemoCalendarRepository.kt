@@ -16,29 +16,20 @@ import kotlin.time.Instant
  * `reconcile` are no-ops (the sample is the source of truth). The real app reads the DI-provided
  * OfflineCalendarRepository (ADR-0014); this stays a test fixture.
  *
- * **It resolves `kind` the way production does (#380), not by trusting the sample rows.** `kind` is not
- * a persisted column: the real store drops it on write and re-derives it at read time from the
- * `series_id -> kind` index, which `OfflineCalendarRepository.refreshWindow` seeds from the feed rows.
- * So this fake seeds the same index from its sample rows and re-resolves on every read — a sample row
- * with no series, or one whose kind the index can't supply, degrades to read-only exactly as it would
- * in the app. Without this the baselines could render action chips production can never show.
+ * The sample rows are served verbatim, which is what production does too (#380): a row's `kind` is a
+ * stored column, so what the feed asserted is what the agenda reads back — a sample row with no series,
+ * or one carrying no kind, degrades to read-only exactly as it would in the app.
  */
 internal class DemoCalendarRepository(
     private val markers: Map<LocalDate, Int> = emptyMap(),
     private val agenda: Map<LocalDate, List<CalendarItem>> = emptyMap(),
 ) : CalendarRepository {
 
-    /** The `series_id -> kind` index the feed rows assert — the seeding rule `refreshWindow` applies. */
-    private val seriesKinds: Map<String, ItemKind> =
-        agenda.values.flatten().mapNotNull { row ->
-            row.seriesId?.let { series -> row.kind?.let { kind -> series to kind } }
-        }.toMap()
-
     override fun observeMarkers(from: LocalDate, to: LocalDate): Flow<Map<LocalDate, Int>> =
         MutableStateFlow(markers.filterKeys { it >= from && it < to })
 
     override fun observeDay(date: LocalDate): Flow<List<CalendarItem>> =
-        MutableStateFlow((agenda[date] ?: emptyList()).map { it.copy(kind = seriesKinds[it.seriesId]) })
+        MutableStateFlow(agenda[date] ?: emptyList())
 
     override suspend fun refreshWindow(from: LocalDate, to: LocalDate, tz: String) {}
     override suspend fun reconcile() {}
@@ -51,7 +42,8 @@ internal class DemoCalendarRepository(
  * labels all render in the baseline.
  *
  * Every firing keeps its item id (`task-…`) distinct from its series id (`…-series`) — the distinction
- * #380 turns on: the occurrence endpoints address the item, the kind index keys on the series.
+ * #380 turns on: the occurrence endpoints address the item, while the series id only says "this row is
+ * a firing".
  */
 internal object SampleCalendar {
     val day: LocalDate = LocalDate(2026, 6, 15)

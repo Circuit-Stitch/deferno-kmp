@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.data
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import app.cash.turbine.test
 import com.circuitstitch.deferno.core.data.calendar.SqlDelightCalendarLocalStore
+import com.circuitstitch.deferno.core.database.sql.CalendarItemEntity
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.CalendarSource
@@ -20,9 +21,10 @@ import kotlin.time.Instant
 /**
  * Real-SQLite integration for the Calendar feed cache (#74, ADR-0006 JVM-fast path) — the windowed
  * sibling of `OccurrenceLocalStoreTest`. It proves the SQL path over a genuine `DefernoDatabase`: the
- * row<->domain round-trip, the half-open `[from, to)` window query, the per-day markers, the
- * `series_id -> kind` resolution (an unindexed series stays `null` = read-only), the full-window
- * replace (a vanished row is cleared), and that the agenda re-emits on a window refresh (ADR-0001).
+ * row<->domain round-trip, the half-open `[from, to)` window query, the per-day markers, the `kind`
+ * column (it survives the write, and an unrecognised stored token degrades to `null` = read-only), the
+ * full-window replace (a vanished row is cleared), and that the agenda re-emits on a window refresh
+ * (ADR-0001).
  */
 class CalendarLocalStoreTest {
 
@@ -38,6 +40,7 @@ class CalendarLocalStoreTest {
         date: LocalDate = LocalDate(2026, 6, 8),
         status: WorkingState = WorkingState.Open,
         source: CalendarSource = CalendarSource.Deferno,
+        kind: ItemKind? = null,
     ) = CalendarItem(
         id = id,
         taskId = taskId,
@@ -48,22 +51,24 @@ class CalendarLocalStoreTest {
         end = Instant.parse("${date}T09:15:00Z"),
         allDay = false,
         status = status,
-        kind = null, // the store ignores kind on write; it is resolved from the index on read
+        kind = kind,
         source = source,
         labels = emptyList(),
     )
 
     @Test
-    fun windowRoundTrips_resolvesKindFromIndex_andAgendaReEmitsOnRefresh() = runTest {
+    fun windowRoundTrips_keepsTheRowsKind_andAgendaReEmitsOnRefresh() = runTest {
         val store = SqlDelightCalendarLocalStore(db(), Dispatchers.Default)
-        store.replaceSeriesKinds(mapOf("hab-3" to ItemKind.Habit))
 
         store.observeByDate(LocalDate(2026, 6, 8)).test {
             assertEquals(emptyList(), awaitItem())
-            store.replaceWindow(LocalDate(2026, 6, 8), LocalDate(2026, 6, 9), listOf(item()))
+            store.replaceWindow(
+                LocalDate(2026, 6, 8), LocalDate(2026, 6, 9),
+                listOf(item(kind = ItemKind.Habit)),
+            )
             val rows = awaitItem()
             assertEquals(listOf("ce-1"), rows.map { it.id })
-            // Kind resolves from the series index — the row is now an actionable occurrence.
+            // The kind written with the row comes back with it — the firing stays actionable.
             assertEquals(ItemKind.Habit, rows[0].kind)
             assertTrue(rows[0].isActionableOccurrence)
             cancelAndIgnoreRemainingEvents()
@@ -117,19 +122,47 @@ class CalendarLocalStoreTest {
     }
 
     @Test
-    fun unindexedSeriesResolvesToNullKind_andOneOffTaskIsReadOnly() = runTest {
+    fun aKindlessRowIsReadOnly_andAOneOffTaskIsADatedTask() = runTest {
         val store = SqlDelightCalendarLocalStore(db(), Dispatchers.Default)
-        store.upsert(item(id = "unknown-series", seriesId = "web-only-def"))
+        store.upsert(item(id = "no-kind", seriesId = "web-only-def", kind = null))
         store.upsert(item(id = "one-off", seriesId = null))
 
-        // A recurring row whose series isn't in the index resolves to a null kind — read-only.
-        val unknown = store.get("unknown-series")
-        assertNull(unknown?.kind)
-        assertEquals(false, unknown?.isActionableOccurrence)
+        // A recurring row the feed gave no usable kind for stays read-only.
+        val noKind = store.get("no-kind")
+        assertNull(noKind?.kind)
+        assertEquals(false, noKind?.isActionableOccurrence)
 
         // A one-off dated item (no series) is a dated Task, not an actionable occurrence.
         val oneOff = store.get("one-off")
         assertNull(oneOff?.seriesId)
         assertTrue(oneOff?.isDatedTask == true)
+    }
+
+    @Test
+    fun anUnrecognisedStoredKindTokenDecodesToNullRatherThanThrowing() = runTest {
+        // The `working_state` / `source` contract, applied to `kind`: a row written by a newer build (or
+        // a hand-edited database) must degrade to a read-only row, never blow up the whole agenda read.
+        val db = db()
+        val store = SqlDelightCalendarLocalStore(db, Dispatchers.Default)
+        db.calendarItemEntityQueries.insertOrReplace(
+            CalendarItemEntity(
+                id = "from-the-future",
+                task_id = "task-1",
+                series_id = "hab-3",
+                title = "Morning stretch",
+                item_date = "2026-06-08",
+                start_at = "2026-06-08T09:00:00Z",
+                end_at = "2026-06-08T09:15:00Z",
+                all_day = 0L,
+                working_state = "Open",
+                source = "Deferno",
+                labels = "",
+                kind = "Sasquatch",
+            ),
+        )
+
+        val row = store.get("from-the-future")
+        assertNull(row?.kind)
+        assertEquals(false, row?.isActionableOccurrence)
     }
 }

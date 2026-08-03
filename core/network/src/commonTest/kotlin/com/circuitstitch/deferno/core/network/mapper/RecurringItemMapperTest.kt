@@ -1,11 +1,11 @@
 package com.circuitstitch.deferno.core.network.mapper
 
+import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.MonthlyAnchor
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.RecurrenceBound
-import com.circuitstitch.deferno.core.model.RecurrenceFrequency
 import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.Envelope
 import com.circuitstitch.deferno.core.network.dto.ChoreDetailDto
@@ -30,7 +30,7 @@ import kotlin.test.assertNull
  * and the `asHabitOrNull`/`asChoreOrNull`/`asEventOrNull` extractors, asserting the condensed domain:
  * the [DefinitionState] light switch, the [com.circuitstitch.deferno.core.model.Recurrence] rule, and
  * each kind's specific fields. Plus the detail-DTO mappers (the create-response shape) and the
- * `Unknown` recurrence-frequency degrade — the issue's "round-trips covered by tests" criterion.
+ * [Cadence.Unmodelled] degrade — the issue's "round-trips covered by tests" criterion.
  */
 class RecurringItemMapperTest {
 
@@ -45,7 +45,7 @@ class RecurringItemMapperTest {
 
         assertEquals("77dd6a6e-b936-4f61-9807-c3a6b647f9f1", habit.id.value)
         assertEquals(DefinitionState.Active, habit.definitionState)
-        assertEquals(RecurrenceFrequency.Daily, habit.recurrence?.frequency)
+        assertEquals(Cadence.Daily, habit.recurrence?.cadence)
         assertEquals("b7c21959-c5f6-4087-8ab2-7690c81e463a", habit.seriesId)
         assertEquals(HydrationState.Full, habit.hydration)
         // #289: the recurring mapper forwards the server-derived isBlocker flag (the fixture habit gates a task).
@@ -61,8 +61,7 @@ class RecurringItemMapperTest {
 
         assertEquals("47338a14-a07f-4ddf-ad73-f5edc977dab0", chore.id.value)
         assertEquals("rolling", chore.cadenceMode)
-        assertEquals(RecurrenceFrequency.Weekly, chore.recurrence?.frequency)
-        assertEquals(listOf("Tue"), chore.recurrence?.days)
+        assertEquals(Cadence.Weekly(listOf("Tue")), chore.recurrence?.cadence)
         assertEquals(DefinitionState.Active, chore.definitionState)
         // #382 — this assertion used to be impossible: the `end` bound had no domain representation at
         // all, so a count-bounded chore was indistinguishable from an open-ended one.
@@ -81,9 +80,10 @@ class RecurringItemMapperTest {
         // the widening the domain could say only `Monthly`, and everything that makes the rule mean
         // anything — the cycle, the anchor, the bound — was discarded at this mapper.
         val rule = event.recurrence
-        assertEquals(RecurrenceFrequency.Monthly, rule?.frequency)
-        assertEquals(2, rule?.interval)
-        assertEquals(MonthlyAnchor.NthWeekday(nth = -1, weekday = "Fri"), rule?.monthlyAnchor)
+        assertEquals(
+            Cadence.Monthly(interval = 2, on = MonthlyAnchor.NthWeekday(nth = -1, weekday = "Fri")),
+            rule?.cadence,
+        )
         assertEquals(RecurrenceBound.OnDate(LocalDate(2027, 1, 31)), rule?.bound)
     }
 
@@ -107,7 +107,7 @@ class RecurringItemMapperTest {
             recurrence = RecurrenceDto(type = "daily"),
         ).toDomain()
         assertEquals(HydrationState.Full, habit.hydration)
-        assertEquals(RecurrenceFrequency.Daily, habit.recurrence?.frequency)
+        assertEquals(Cadence.Daily, habit.recurrence?.cadence)
 
         val chore = ChoreDetailDto(
             id = "c-1",
@@ -119,7 +119,8 @@ class RecurringItemMapperTest {
             recurrence = RecurrenceDto(type = "monthly"),
         ).toDomain()
         assertEquals("fixed", chore.cadenceMode)
-        assertEquals(RecurrenceFrequency.Monthly, chore.recurrence?.frequency)
+        // A bare `{"type":"monthly"}` — no cycle, no anchor — reads as "every month, day unspecified".
+        assertEquals(Cadence.Monthly(interval = 1, on = null), chore.recurrence?.cadence)
 
         // `EventDetailDto.toDomain()` had no test at all before this (only the ItemView.Event extractor
         // did), so the create-response path for an Event — the one that carries the fixed window
@@ -147,29 +148,26 @@ class RecurringItemMapperTest {
         assertEquals(false, event.allDay)
         assertEquals("s-1", event.seriesId)
         assertEquals(
-            Recurrence(RecurrenceFrequency.EveryNDays, interval = 3, bound = RecurrenceBound.AfterCount(10)),
+            Recurrence(Cadence.EveryNDays(3), bound = RecurrenceBound.AfterCount(10)),
             event.recurrence,
         )
     }
 
     @Test
-    fun unknownRecurrenceTypeDegradesButKeepsItsRawToken() {
+    fun anUnmodelledRecurrenceTypeDegradesButKeepsItsRawToken() {
         // The degrade itself is unchanged — an unmodelled token must never crash the reader. What is new
         // (#382) is that the token SURVIVES: it used to be replaced by the literal enum name "Unknown"
         // on the way into the cache, which made the original cadence unrecoverable and the item's
-        // backup unrestorable. `rawType` is populated ONLY on the Unknown arm.
-        val unknown = RecurrenceDto(type = "fortnightly").toDomain()
-        assertEquals(RecurrenceFrequency.Unknown, unknown?.frequency)
-        assertEquals("fortnightly", unknown?.rawType)
-
-        assertNull(RecurrenceDto(type = "yearly").toDomain()?.rawType)
+        // backup unrestorable.
+        assertEquals(
+            Recurrence(Cadence.Unmodelled("fortnightly")),
+            RecurrenceDto(type = "fortnightly").toDomain(),
+        )
         assertNull((null as RecurrenceDto?).toDomain())
 
-        // A rule object with no `type` at all is Unknown with nothing to preserve.
-        val typeless = RecurrenceDto().toDomain()
-        assertEquals(RecurrenceFrequency.Unknown, typeless?.frequency)
-        assertNull(typeless?.rawType)
-        assertEquals(RecurrenceBound.Never, typeless?.bound)
+        // A rule object with no `type` at all is unmodelled with nothing to preserve — a blank token,
+        // which the export side reads as "skip this rule" rather than emitting a tagless body.
+        assertEquals(Recurrence(Cadence.Unmodelled("")), RecurrenceDto().toDomain())
     }
 
     @Test
@@ -178,23 +176,19 @@ class RecurringItemMapperTest {
         // `every_n_days` and `custom` are the two that used to collapse to `Unknown` outright; `monthly`
         // and `yearly` kept their name but lost every parameter that gave the rule meaning.
         assertEquals(
-            Recurrence(RecurrenceFrequency.Daily),
+            Recurrence(Cadence.Daily),
             RecurrenceDto(type = "daily").toDomain(),
         )
         assertEquals(
-            Recurrence(RecurrenceFrequency.EveryNDays, interval = 3),
+            Recurrence(Cadence.EveryNDays(3)),
             RecurrenceDto(type = "every_n_days", n = 3).toDomain(),
         )
         assertEquals(
-            Recurrence(RecurrenceFrequency.Weekly, days = listOf("Mon", "Wed")),
+            Recurrence(Cadence.Weekly(listOf("Mon", "Wed"))),
             RecurrenceDto(type = "weekly", days = listOf("Mon", "Wed")).toDomain(),
         )
         assertEquals(
-            Recurrence(
-                RecurrenceFrequency.Monthly,
-                interval = 1,
-                monthlyAnchor = MonthlyAnchor.DayOfMonth(15),
-            ),
+            Recurrence(Cadence.Monthly(interval = 1, on = MonthlyAnchor.DayOfMonth(15))),
             RecurrenceDto(
                 type = "monthly",
                 interval = 1,
@@ -202,23 +196,33 @@ class RecurringItemMapperTest {
             ).toDomain(),
         )
         assertEquals(
-            Recurrence(RecurrenceFrequency.Yearly, interval = 1, month = 6, day = 14),
+            Recurrence(Cadence.Yearly(interval = 1, month = 6, day = 14)),
             RecurrenceDto(type = "yearly", interval = 1, month = 6, day = 14).toDomain(),
         )
         assertEquals(
-            Recurrence(RecurrenceFrequency.Custom, rrule = "FREQ=WEEKLY;BYDAY=MO,WE"),
+            Recurrence(Cadence.Custom("FREQ=WEEKLY;BYDAY=MO,WE")),
             RecurrenceDto(type = "custom", rrule = "FREQ=WEEKLY;BYDAY=MO,WE").toDomain(),
         )
     }
 
     @Test
-    fun theCycleMultiplierReadsWhicheverWireKeyTheCadenceUses() {
-        // `n` (every_n_days) and `interval` (monthly/yearly) are the same domain concept — the cycle
-        // multiplier — and can never co-occur, so one field reads both. Pinned so a future edit cannot
-        // quietly start preferring one and dropping the other.
-        assertEquals(30, RecurrenceDto(type = "every_n_days", n = 30).toDomain()?.interval)
-        assertEquals(2, RecurrenceDto(type = "monthly", interval = 2).toDomain()?.interval)
-        assertNull(RecurrenceDto(type = "daily").toDomain()?.interval)
+    fun eachCadenceReadsItsOwnNumericWireKeyAndDefaultsAnAbsentOneToOne() {
+        // `n` (every_n_days) and `interval` (monthly/yearly) are two different wire keys that can never
+        // co-occur; each cadence now names the one it owns, so nothing has to re-route them. Pinned so a
+        // future edit cannot quietly start reading the wrong key — or start throwing on a missing one:
+        // an absent multiplier is "every one of them", the wire's own default, not a parse failure.
+        assertEquals(Cadence.EveryNDays(30), RecurrenceDto(type = "every_n_days", n = 30).toDomain()?.cadence)
+        assertEquals(
+            Cadence.Monthly(interval = 2),
+            RecurrenceDto(type = "monthly", interval = 2).toDomain()?.cadence,
+        )
+        assertEquals(Cadence.EveryNDays(1), RecurrenceDto(type = "every_n_days").toDomain()?.cadence)
+        assertEquals(Cadence.Monthly(interval = 1), RecurrenceDto(type = "monthly").toDomain()?.cadence)
+        assertEquals(
+            Cadence.Yearly(interval = 1, month = 1, day = 1),
+            RecurrenceDto(type = "yearly").toDomain()?.cadence,
+        )
+        assertEquals(Cadence.Custom(""), RecurrenceDto(type = "custom").toDomain()?.cadence)
     }
 
     @Test
@@ -263,7 +267,7 @@ class RecurringItemMapperTest {
     @Test
     fun bothMonthlyAnchorsCondenseAndAHalfPopulatedOneDegradesToNull() {
         fun anchorOf(on: MonthlyAnchorDto?) =
-            RecurrenceDto(type = "monthly", on = on).toDomain()?.monthlyAnchor
+            (RecurrenceDto(type = "monthly", on = on).toDomain()?.cadence as? Cadence.Monthly)?.on
 
         assertEquals(MonthlyAnchor.DayOfMonth(15), anchorOf(MonthlyAnchorDto("day_of_month", day = 15)))
         // nth is an i8: -1 means "the LAST <weekday> of the month" (RFC 5545 BYDAY=-1FR).

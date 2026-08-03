@@ -9,9 +9,10 @@ import kotlinx.datetime.LocalDate
  * three [OccurrenceMutation] intents) and every read side (the Activity ledger's verb derivation, the
  * flush-time coalescer, #396) key on.
  *
- * `occurrence:<Kind>:<definitionId>:<yyyy-mm-dd>` — the *firing identity*, and the dedupe key the
- * outbox collapses repeated writes on: two marks of the same firing share a target, so the later one
- * replaces the earlier (last-write-wins) rather than queuing a second request.
+ * `occurrence:<Kind>:<definitionId>:<yyyy-mm-dd>` — the *firing identity*: one stable key per firing per
+ * day, which is what lets the flush-time coalescer recognise two writes as addressing the same thing.
+ * It is **not** an enqueue-time dedupe key — [OutboxStore.enqueue] appends unconditionally, which is
+ * precisely why the coalescer exists (see [coalesceOccurrences]).
  *
  * - `<Kind>` is the [ItemKind] **enum name** (`Habit`/`Chore`/`Event`), not the wire token — this is a
  *   local persistence key, never sent, so it follows the same "store the enum name" convention as the

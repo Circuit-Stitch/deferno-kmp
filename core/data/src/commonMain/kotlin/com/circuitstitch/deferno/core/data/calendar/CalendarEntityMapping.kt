@@ -13,13 +13,12 @@ import kotlin.time.Instant
 /**
  * The row<->domain conversion for the Calendar feed cache (ADR-0001, #74) — the windowed-feed sibling
  * of `OccurrenceEntityMapping.kt`. core:database keeps `calendarItemEntity` adapter-free, so the
- * rich-type translation (the [LocalDate]/[Instant], the [WorkingState]/[CalendarSource] enums, the
- * `\n`-joined labels) lives here. The recurring [kind] is **not** a stored column — it is resolved at
- * read time from the `series_id -> kind` index and threaded into [toDomain] (`null` = unresolved, so
- * the row renders read-only). Enum tokens decode **defensively** (an unrecognised token degrades rather
- * than throwing), matching the other caches' codecs.
+ * rich-type translation (the [LocalDate]/[Instant], the [WorkingState]/[CalendarSource]/[ItemKind]
+ * enums, the `\n`-joined labels) lives here. Every enum token decodes **defensively** (an unrecognised
+ * stored token degrades rather than throwing), matching the other caches' codecs — for `kind` that
+ * degradation is `null`, which renders the row read-only rather than routing a wrong write.
  */
-fun CalendarItemEntity.toDomain(kind: ItemKind?): CalendarItem = CalendarItem(
+fun CalendarItemEntity.toDomain(): CalendarItem = CalendarItem(
     id = id,
     taskId = task_id,
     seriesId = series_id,
@@ -29,7 +28,7 @@ fun CalendarItemEntity.toDomain(kind: ItemKind?): CalendarItem = CalendarItem(
     end = Instant.parse(end_at),
     allDay = all_day != 0L,
     status = working_state.toWorkingStateOrDefault(),
-    kind = kind,
+    kind = kind?.toItemKindOrNull(),
     source = source.toCalendarSourceOrDefault(),
     labels = labels.decodeNewlineList(),
 )
@@ -46,6 +45,7 @@ fun CalendarItem.toEntity(): CalendarItemEntity = CalendarItemEntity(
     working_state = status.name,
     source = source.name,
     labels = labels.encodeNewlineList(),
+    kind = kind?.name,
 )
 
 /** Defensive decode: an unrecognised stored token degrades to [WorkingState.Open] (never throws). */
@@ -56,6 +56,6 @@ internal fun String.toWorkingStateOrDefault(): WorkingState =
 internal fun String.toCalendarSourceOrDefault(): CalendarSource =
     CalendarSource.entries.firstOrNull { it.name == this } ?: CalendarSource.Unknown
 
-/** Resolve a stored series-kind token to a recurring [ItemKind], or `null` (unknown -> read-only row). */
+/** Defensive decode of the stored `kind` token; an unrecognised one is `null` -> the row is read-only. */
 internal fun String.toItemKindOrNull(): ItemKind? =
     ItemKind.entries.firstOrNull { it.name == this }

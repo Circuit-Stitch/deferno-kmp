@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.data.backup
 
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachment
+import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Event
@@ -8,7 +9,6 @@ import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.MonthlyAnchor
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.RecurrenceBound
-import com.circuitstitch.deferno.core.model.RecurrenceFrequency
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.network.dto.DefStatusWire
@@ -151,42 +151,45 @@ private fun DefinitionState.toWire(): DefStatusWire = when (this) {
  * [Recurrence] → the flat wire `recurrence` object — the true inverse of `RecurringItemMapper`'s read
  * side, emitting every cadence parameter and the `end` bound rather than just `type` + `days` (#382).
  *
- * **This also fixes an unreported second-order bug.** The old mapper emitted `type = null` for an
- * [RecurrenceFrequency.Unknown] rule; with `explicitNulls = false` that serialized to a body with **no
+ * **This also fixes an unreported second-order bug.** The old mapper emitted `type = null` for a rule
+ * whose cadence it could not name; with `explicitNulls = false` that serialized to a body with **no
  * `type` key at all**, which `BackupImportMapper` fed straight into `CreateHabitPayload`, and the
  * backend's internally-tagged `Cadence` rejects a body with no tag. So a backup taken of an
- * `every_n_days` or `custom` item (both of which collapsed to `Unknown` on read) was not merely lossy —
- * it was **unrestorable**. Now: all six cadences are modelled and name themselves, an Unknown rule
- * re-emits the raw token it preserved, and the residual "cannot even name it" case returns `null` so
- * the rule is **skipped** rather than exported as an invalid tagless body — the import side then
- * substitutes a named placeholder. Skip on export, placeholder on import; both are covered by tests.
+ * `every_n_days` or `custom` item (both of which collapsed to "unknown" on read) was not merely lossy —
+ * it was **unrestorable**. Now: all six cadences are modelled and each names itself here, a
+ * [Cadence.Unmodelled] rule re-emits the raw token it preserved, and the residual "cannot even name it"
+ * case (a blank token) returns `null` so the rule is **skipped** rather than exported as an invalid
+ * tagless body — the import side then substitutes a named placeholder. Skip on export, placeholder on
+ * import; both are covered by tests.
+ *
+ * Each arm emits only the keys its cadence owns, which is the whole of the domain→wire rule now that
+ * the two numeric keys (`every_n_days.n` vs `monthly`/`yearly`'s `interval`) belong to separate
+ * variants rather than to one shared multiplier this mapper had to re-route by re-asking which cadence
+ * it was looking at.
  */
 private fun Recurrence.toDto(): RecurrenceDto? {
-    val token = when (frequency) {
-        RecurrenceFrequency.Daily -> "daily"
-        RecurrenceFrequency.EveryNDays -> "every_n_days"
-        RecurrenceFrequency.Weekly -> "weekly"
-        RecurrenceFrequency.Monthly -> "monthly"
-        RecurrenceFrequency.Yearly -> "yearly"
-        RecurrenceFrequency.Custom -> "custom"
-        // The token this client could not model but did preserve on read (Recurrence.rawType).
-        RecurrenceFrequency.Unknown -> rawType
-    } ?: return null
-    return RecurrenceDto(
-        type = token,
-        days = days,
-        // The domain condenses the wire's two numeric keys into one cycle multiplier; the frequency
-        // decides which key it goes back out under. They can never co-occur on the wire.
-        n = interval.takeIf { frequency == RecurrenceFrequency.EveryNDays },
-        interval = interval.takeIf {
-            frequency == RecurrenceFrequency.Monthly || frequency == RecurrenceFrequency.Yearly
-        },
-        on = monthlyAnchor?.toDto(),
-        month = month,
-        day = day,
-        rrule = rrule,
-        end = bound.toDto(),
-    )
+    val cadenceDto = when (val cadence = this.cadence) {
+        Cadence.Daily -> RecurrenceDto(type = "daily")
+        is Cadence.EveryNDays -> RecurrenceDto(type = "every_n_days", n = cadence.n)
+        is Cadence.Weekly -> RecurrenceDto(type = "weekly", days = cadence.days)
+        is Cadence.Monthly -> RecurrenceDto(
+            type = "monthly",
+            interval = cadence.interval,
+            on = cadence.on?.toDto(),
+        )
+        is Cadence.Yearly -> RecurrenceDto(
+            type = "yearly",
+            interval = cadence.interval,
+            month = cadence.month,
+            day = cadence.day,
+        )
+        is Cadence.Custom -> RecurrenceDto(type = "custom", rrule = cadence.rrule)
+        // The token this client could not model but did preserve on read. Blank means it never had one
+        // to preserve — skip the whole rule rather than emit a body the restore would be rejected for.
+        is Cadence.Unmodelled ->
+            if (cadence.rawType.isBlank()) return null else RecurrenceDto(type = cadence.rawType)
+    }
+    return cadenceDto.copy(end = bound.toDto())
 }
 
 /** [MonthlyAnchor] → the nested wire `recurrence.on` object. */

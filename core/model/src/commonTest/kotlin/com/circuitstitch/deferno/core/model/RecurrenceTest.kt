@@ -5,67 +5,121 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
-import kotlin.test.assertNull
 
 /**
- * The domain contract for the widened [Recurrence] (#382). Before the widening the domain could express
- * only "a frequency and, if weekly, some days" — so `every_n_days` and `custom` had no representation at
- * all and collapsed to [RecurrenceFrequency.Unknown], while `monthly`/`yearly` kept their name but lost
- * every parameter that made the rule mean anything. Since the cached row is written *from* this type,
- * whatever the domain cannot say is destroyed by a cache round-trip, not merely unrendered.
+ * The domain contract for [Recurrence] (#382). The rule this type has to keep is that **whatever the
+ * domain cannot say is destroyed by a cache round-trip**, because the cached row is written *from*
+ * here: before the widening the domain could express only "a frequency and, if weekly, some days", so
+ * `every_n_days` and `custom` had no representation at all and `monthly`/`yearly` kept their name while
+ * losing every parameter that made the rule mean anything.
  *
- * These pin the three properties the rest of the fix leans on: every parameter is defaulted (so the
- * widening is source-compatible and old call sites still read as they did), the two bound/anchor sealed
- * hierarchies are total and value-comparable, and [Recurrence.rawType] is the escape hatch that lets an
- * unmodellable cadence survive.
+ * These pin what the sealed [Cadence] buys over the flat bag it replaced: every cadence carries exactly
+ * its own parameters (so two rules differing only in one are genuinely different values), the `when`
+ * over it is exhaustive with no `else` (so a seventh backend cadence is a compile error at every
+ * consumer rather than a silent fall-through), the bound is orthogonal and defaults to unbounded, and
+ * [Cadence.Unmodelled] cannot be built without the token it is preserving.
  */
 class RecurrenceTest {
 
     @Test
-    fun everyParameterIsDefaultedSoABareCadenceStaysConstructible() {
-        // Source-compatibility is load-bearing: a required parameter here would have broken every
-        // existing `Recurrence(frequency)` / `Recurrence(frequency, days)` construction in the tree.
-        val daily = Recurrence(RecurrenceFrequency.Daily)
+    fun theWhenOverACadenceIsExhaustiveAndEachVariantOwnsItsParameters() {
+        // The `when` below has NO `else`. That is the whole point of the sealed type: a seventh backend
+        // cadence stops the build at every consumer instead of quietly falling through to a default —
+        // which is exactly how `every_n_days` and `custom` used to disappear.
+        val described = listOf(
+            Cadence.Daily,
+            Cadence.EveryNDays(3),
+            Cadence.Weekly(listOf("Mon", "Wed")),
+            Cadence.Monthly(interval = 2, on = MonthlyAnchor.NthWeekday(nth = -1, weekday = "Fri")),
+            // A monthly rule whose anchor could not be read is still a usable monthly rule.
+            Cadence.Monthly(interval = 1),
+            Cadence.Yearly(interval = 1, month = 6, day = 14),
+            Cadence.Custom("FREQ=WEEKLY;BYDAY=MO"),
+            Cadence.Unmodelled("fortnightly"),
+        ).map { cadence ->
+            when (cadence) {
+                Cadence.Daily -> "daily"
+                is Cadence.EveryNDays -> "every ${cadence.n} days"
+                is Cadence.Weekly -> cadence.days.joinToString("/")
+                is Cadence.Monthly -> when (val on = cadence.on) {
+                    null -> "every ${cadence.interval} months"
+                    is MonthlyAnchor.DayOfMonth -> "every ${cadence.interval} months on day ${on.day}"
+                    is MonthlyAnchor.NthWeekday -> "every ${cadence.interval} months on ${on.nth} ${on.weekday}"
+                }
+                is Cadence.Yearly -> "every ${cadence.interval} years on ${cadence.month}/${cadence.day}"
+                is Cadence.Custom -> cadence.rrule
+                is Cadence.Unmodelled -> cadence.rawType
+            }
+        }
 
-        assertEquals(emptyList(), daily.days)
-        assertNull(daily.interval)
-        assertNull(daily.monthlyAnchor)
-        assertNull(daily.month)
-        assertNull(daily.day)
-        assertNull(daily.rrule)
-        assertNull(daily.rawType)
-        // The default bound is Never — an unbounded rule, which is what a rule with no `end` key means.
-        assertEquals(RecurrenceBound.Never, daily.bound)
-        assertEquals(Recurrence(RecurrenceFrequency.Weekly, listOf("Tue")), Recurrence(RecurrenceFrequency.Weekly, days = listOf("Tue")))
+        assertEquals(
+            listOf(
+                "daily",
+                "every 3 days",
+                "Mon/Wed",
+                "every 2 months on -1 Fri",
+                "every 1 months",
+                "every 1 years on 6/14",
+                "FREQ=WEEKLY;BYDAY=MO",
+                "fortnightly",
+            ),
+            described,
+        )
     }
 
     @Test
-    fun theCycleMultiplierIsOneConceptSharedByEveryCadenceThatHasOne() {
-        // "Every 3 days" and "every 2 months" are the same domain idea — a cycle multiplier whose UNIT
-        // the frequency supplies. The wire spells them with two different keys (`n` and `interval`) that
-        // can never co-occur, so condensing them here loses nothing and keeps the model honest.
-        assertEquals(3, Recurrence(RecurrenceFrequency.EveryNDays, interval = 3).interval)
-        assertEquals(2, Recurrence(RecurrenceFrequency.Monthly, interval = 2).interval)
-        assertEquals(2, Recurrence(RecurrenceFrequency.Yearly, interval = 2, month = 6, day = 14).interval)
-    }
-
-    @Test
-    fun allSixCadencesAreExpressibleAndDistinct() {
-        // The backend's `Cadence` is a closed six-variant enum; `Unknown` is a seventh, client-only arm
+    fun everyCadenceIsDistinctIncludingTwoDifferingOnlyInOneParameter() {
+        // The backend's `Cadence` is a closed six-variant enum; Unmodelled is a seventh, client-only arm
         // for a cadence a future backend adds. Two rules that differ only in a parameter must not be
         // equal — the every-30-days vs every-29-days indistinguishability was the reported symptom.
         val rules = listOf(
-            Recurrence(RecurrenceFrequency.Daily),
-            Recurrence(RecurrenceFrequency.EveryNDays, interval = 29),
-            Recurrence(RecurrenceFrequency.EveryNDays, interval = 30),
-            Recurrence(RecurrenceFrequency.Weekly, days = listOf("Tue")),
-            Recurrence(RecurrenceFrequency.Monthly, interval = 1, monthlyAnchor = MonthlyAnchor.DayOfMonth(15)),
-            Recurrence(RecurrenceFrequency.Yearly, interval = 1, month = 6, day = 14),
-            Recurrence(RecurrenceFrequency.Custom, rrule = "FREQ=WEEKLY;BYDAY=MO"),
+            Recurrence(Cadence.Daily),
+            Recurrence(Cadence.EveryNDays(29)),
+            Recurrence(Cadence.EveryNDays(30)),
+            Recurrence(Cadence.Weekly(listOf("Tue"))),
+            Recurrence(Cadence.Weekly(listOf("Wed"))),
+            Recurrence(Cadence.Monthly(interval = 1, on = MonthlyAnchor.DayOfMonth(15))),
+            Recurrence(Cadence.Monthly(interval = 1)),
+            Recurrence(Cadence.Yearly(interval = 1, month = 6, day = 14)),
+            Recurrence(Cadence.Custom("FREQ=WEEKLY;BYDAY=MO")),
+            Recurrence(Cadence.Unmodelled("fortnightly")),
         )
 
-        assertEquals(rules.size, rules.toSet().size, "every cadence is distinguishable from the others")
+        assertEquals(rules.size, rules.toSet().size, "every rule is distinguishable from the others")
         assertNotEquals(rules[1], rules[2], "every 29 days is not every 30 days")
+    }
+
+    @Test
+    fun aRuleIsUnboundedUnlessItSaysOtherwise() {
+        // An absent wire `end` IS the never bound, so Never has to be the DEFAULT rather than something
+        // every construction site must remember to pass.
+        assertEquals(RecurrenceBound.Never, Recurrence(Cadence.Daily).bound)
+        assertEquals(Recurrence(Cadence.Daily), Recurrence(Cadence.Daily, bound = RecurrenceBound.Never))
+        assertNotEquals(
+            Recurrence(Cadence.Daily),
+            Recurrence(Cadence.Daily, bound = RecurrenceBound.AfterCount(10)),
+        )
+
+        // Cadence and bound are orthogonal — the same bound rides any cadence — which is why the bound
+        // is a peer of the cadence here rather than a field repeated inside each variant.
+        assertEquals(
+            RecurrenceBound.AfterCount(10),
+            Recurrence(Cadence.Custom("FREQ=DAILY"), RecurrenceBound.AfterCount(10)).bound,
+        )
+    }
+
+    @Test
+    fun anUnmodelledCadenceCannotBeBuiltWithoutTheTokenItIsPreserving() {
+        // The load-bearing half of #382's own scope note: "preserve what we can't render, so nothing is
+        // destroyed by a round-trip". A rule this build cannot model still carries its own name, so the
+        // cache and the Backup file hand it back instead of a literal "Unknown".
+        val fortnightly = Recurrence(Cadence.Unmodelled("fortnightly"))
+
+        assertEquals("fortnightly", (fortnightly.cadence as Cadence.Unmodelled).rawType)
+        // Two unmodelled cadences are different rules, not one anonymous "we don't know" bucket.
+        assertNotEquals(fortnightly, Recurrence(Cadence.Unmodelled("bimonthly")))
+        // `rawType` is a required constructor parameter. Its flat predecessor let `rawType` default to
+        // null on ANY frequency, and that silent hole is what made a backup of such an item unrestorable.
     }
 
     @Test
@@ -74,11 +128,6 @@ class RecurrenceTest {
         assertEquals(RecurrenceBound.OnDate(LocalDate(2027, 1, 31)), RecurrenceBound.OnDate(LocalDate(2027, 1, 31)))
         assertEquals(RecurrenceBound.AfterCount(10), RecurrenceBound.AfterCount(10))
         assertNotEquals<RecurrenceBound>(RecurrenceBound.AfterCount(10), RecurrenceBound.AfterCount(11))
-        // Never is a singleton object, so an unbounded rule compares equal across instances for free.
-        assertEquals(
-            Recurrence(RecurrenceFrequency.Daily),
-            Recurrence(RecurrenceFrequency.Daily, bound = RecurrenceBound.Never),
-        )
 
         // Exhaustiveness: the `when` compiles with no `else`, which is what makes a future fourth bound
         // a compile error at every consumer rather than a silent fall-through.
@@ -114,19 +163,5 @@ class RecurrenceTest {
             }
         }
         assertEquals(listOf("day 15", "-1 Fri"), described)
-    }
-
-    @Test
-    fun rawTypePreservesAnUnmodellableCadenceInsteadOfDestroyingIt() {
-        // The load-bearing half of #382's own scope note: "preserve what we can't render, so nothing is
-        // destroyed by a round-trip". A rule this client version cannot model still carries its own name,
-        // so the cache and the Backup file can hand it back rather than emitting the literal "Unknown".
-        val future = Recurrence(RecurrenceFrequency.Unknown, rawType = "fortnightly")
-
-        assertEquals("fortnightly", future.rawType)
-        assertNotEquals(Recurrence(RecurrenceFrequency.Unknown), future)
-        // It is Unknown-only by construction: a modelled cadence never carries one, which keeps a
-        // hand-built `Recurrence(Daily)` equal to a `daily` rule read off the wire.
-        assertNull(Recurrence(RecurrenceFrequency.Daily).rawType)
     }
 }

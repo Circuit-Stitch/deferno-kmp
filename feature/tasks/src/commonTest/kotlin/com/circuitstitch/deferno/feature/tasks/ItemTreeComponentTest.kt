@@ -41,8 +41,7 @@ class ItemTreeComponentTest {
         moveEditor: MoveEditor = MoveEditor.NONE,
         shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
         trackEvent: (String) -> Unit = {},
-        menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
-        inTodayIds: Flow<Set<String>> = flowOf(emptySet()),
+        decorations: Flow<ItemRowDecorations> = flowOf(ItemRowDecorations()),
         workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
         definitionStateEditor: DefinitionStateEditor = DefinitionStateEditor.NONE,
         blockedByEditor: BlockedByEditor = BlockedByEditor.NONE,
@@ -59,8 +58,7 @@ class ItemTreeComponentTest {
         moveEditor = moveEditor,
         shakeToUndoPreference = shakeToUndoPreference,
         trackEvent = trackEvent,
-        menuStates = menuStates,
-        inTodayIds = inTodayIds,
+        decorations = decorations,
         workingStateEditor = workingStateEditor,
         definitionStateEditor = definitionStateEditor,
         blockedByEditor = blockedByEditor,
@@ -344,7 +342,7 @@ class ItemTreeComponentTest {
     @Test
     fun menuStatesAreSurfacedOnTheStateForTheView() = runTest {
         val states = mapOf("root" to TaskMenuState(WorkingState.InProgress, pinned = true, inPlan = false))
-        val c = component(rootAndChild(), menuStates = flowOf(states))
+        val c = component(rootAndChild(), decorations = flowOf(ItemRowDecorations(menuStates = states)))
         backgroundScope.launch { c.state.collect {} }
         advanceUntilIdle()
 
@@ -356,7 +354,7 @@ class ItemTreeComponentTest {
     @Test
     fun inTodayIdsAreSurfacedOnTheStateForTheView() = runTest {
         val ids = setOf("root", "morning-run")
-        val c = component(rootAndChild(), inTodayIds = flowOf(ids))
+        val c = component(rootAndChild(), decorations = flowOf(ItemRowDecorations(inTodayIds = ids)))
         backgroundScope.launch { c.state.collect {} }
         advanceUntilIdle()
 
@@ -373,27 +371,30 @@ class ItemTreeComponentTest {
     }
 
     /**
-     * The two per-row joins ride ONE typed `combine` slot as a Pair (Kotlin's typed overload tops out at
-     * five flows and both tiers were already full). Assert they stay independent through that pairing: a
-     * later in-today emission must not strand [ItemTreeState.menuStates], nor vice versa.
+     * The two decorations arrive as one [ItemRowDecorations] but stay **flat** on the state (two Compose
+     * Views and two SwiftUI apps read `menuStates` / `inTodayIds` directly). So the unpack is a real step
+     * that can drop a half silently — assert both land, and that a later emission refreshes both rather
+     * than stranding whichever one the previous frame happened to carry.
      */
     @Test
-    fun inTodayIdsAndMenuStatesUpdateIndependentlyThroughTheSharedCombineSlot() = runTest {
-        val menus = MutableStateFlow(mapOf("root" to TaskMenuState(WorkingState.Open, pinned = false, inPlan = false)))
-        val today = MutableStateFlow(setOf("root"))
-        val c = component(rootAndChild(), menuStates = menus, inTodayIds = today)
+    fun bothDecorationsReachTheStateAndALaterEmissionUpdatesBoth() = runTest {
+        val decorations = MutableStateFlow(
+            ItemRowDecorations(
+                menuStates = mapOf("root" to TaskMenuState(WorkingState.Open, pinned = false, inPlan = false)),
+                inTodayIds = setOf("root"),
+            ),
+        )
+        val c = component(rootAndChild(), decorations = decorations)
         backgroundScope.launch { c.state.collect {} }
         advanceUntilIdle()
 
-        today.value = setOf("root", "child")
-        advanceUntilIdle()
-        assertEquals(setOf("root", "child"), c.state.value.inTodayIds)
-        assertEquals(1, c.state.value.menuStates.size, "the menu join survives an in-today re-emission")
+        assertEquals(setOf("root"), c.state.value.inTodayIds, "the in-today half lands")
+        assertEquals(1, c.state.value.menuStates.size, "and so does the menu half")
 
-        menus.value = emptyMap()
+        decorations.value = ItemRowDecorations(menuStates = emptyMap(), inTodayIds = setOf("root", "child"))
         advanceUntilIdle()
-        assertEquals(emptyMap(), c.state.value.menuStates)
-        assertEquals(setOf("root", "child"), c.state.value.inTodayIds, "and the in-today set survives a menu one")
+        assertEquals(setOf("root", "child"), c.state.value.inTodayIds, "a later emission refreshes in-today")
+        assertEquals(emptyMap(), c.state.value.menuStates, "and the menu map, in the same frame")
     }
 
     @Test

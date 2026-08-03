@@ -14,7 +14,6 @@ import com.circuitstitch.deferno.core.database.sql.EventEntity
 import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.EventId
 import com.circuitstitch.deferno.core.model.OrgId
-import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlin.time.Instant
 
