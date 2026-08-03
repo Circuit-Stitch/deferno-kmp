@@ -226,6 +226,21 @@ private struct SearchHitRow: View {
     let onTap: () -> Void
     @Environment(\.defernoColors) private var colors
 
+    /// "TASK  ·  ACME-12" — the calm mono meta line Compose's `SearchResultRow` renders. Search mixes
+    /// all four kinds in one flat list with no tree to imply them, so the kind marker is spelled out
+    /// rather than left to the dot's colour (#393); the human `ref` follows when the hit carries one.
+    private var meta: String {
+        [kindDisplayLabel(hit.kind), hit.ref].compactMap { $0 }.joined(separator: "  ·  ")
+    }
+
+    /// The row `.ignore`s its children, so this one phrase is the whole row to VoiceOver: title, then
+    /// the kind as the spoken lowercase noun (never the all-caps `meta` text), then the blocked flag.
+    private var a11yLabel: String {
+        var parts = [hit.title, kindA11yLabel(hit.kind)]
+        if hit.blocked { parts.append(L.string("common_blocked")) }
+        return parts.joined(separator: ", ")
+    }
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
@@ -235,9 +250,7 @@ private struct SearchHitRow: View {
                         .font(.headline)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                    if let ref = hit.ref {
-                        MonoMeta(text: ref)
-                    }
+                    MonoMeta(text: meta)
                     // Attachment rollup (#311) — visible so the "biggest attachments" sort is legible.
                     if let summary = attachmentSummary(count: hit.attachmentCount, totalSize: hit.attachmentTotalSize) {
                         Text(summary).font(.caption).foregroundStyle(colors.inkMuted)
@@ -259,7 +272,7 @@ private struct SearchHitRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(hit.blocked ? "\(hit.title), blocked" : hit.title)
+        .accessibilityLabel(a11yLabel)
         .accessibilityHint(L.string("tasks_menu_open"))
     }
 }

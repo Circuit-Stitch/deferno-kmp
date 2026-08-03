@@ -1051,6 +1051,8 @@ Thank you.</string>
     <!-- Embedded “All” must match tasks_filter_all translation -->
     <string name="tasks_tree_filtered_empty_body">Everything here is done. Switch to “All” to see it again.</string>
     <string name="tasks_tree_filtered_empty_title">Nothing to show here</string>
+    <!-- 'In today' filter empty state; reuses tasks_tree_filtered_empty_title. Embedded “All” must match tasks_filter_all -->
+    <string name="tasks_tree_in_today_empty_body">Nothing here is on today's plan. Switch to “All” to see everything.</string>
     <string name="tasks_tree_refreshing">Refreshing…</string>
     <!-- FilterChip — 'blocked' items toggle -->
     <string name="tasks_tree_show_blocked">Show blocked</string>

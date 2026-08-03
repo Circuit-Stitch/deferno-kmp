@@ -130,6 +130,13 @@ struct ItemRowView: View {
                     // Terminal strikes + mutes; a `blocked` row mutes WITHOUT the strike — a distinct
                     // "blocked, not finished" read (mirrors Compose `ItemTreeRow`, #290).
                     .foregroundStyle((row.item.isTerminal || row.item.blocked) ? colors.inkMuted : colors.onSurface)
+                    // "Water the plants, habit" — the kind rides the title because it is otherwise
+                    // carried ONLY by the node's colour, which VoiceOver can't see (#393). It goes on
+                    // the title Text, not the row: the row has three independently focusable elements
+                    // (fold node, title, open ›) and no `.accessibilityElement(children:)`, so a
+                    // row-level label would swallow both controls. `blocked`/`Blocker` stay on their
+                    // own badges, which already label themselves.
+                    .accessibilityLabel("\(row.item.title), \(kindA11yLabel(row.item.kind))")
                 if let progress {
                     MonoMeta(L.format("tasks_progress_fraction", progress.done, progress.total))
                         .padding(.top, 2)

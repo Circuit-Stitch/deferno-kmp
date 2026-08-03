@@ -48,6 +48,33 @@ func kindColor(_ kind: ItemKind, _ colors: DefernoColors) -> Color {
     return colors.primary // Task (+ any future kind)
 }
 
+/// The **spoken** word for an Item's kind (Compose `TreeAtoms.kindA11yLabel`) — the lowercase noun
+/// "task"/"habit"/"chore"/"event". Colour is the only kind cue on a row, and colour is invisible to
+/// VoiceOver and unreliable for a colour-blind reader, so any row that shows a kind dot owes its
+/// accessibility label this word (#393). Kinds are matched through `itemKindsEqual`, the same bridge
+/// idiom `kindColor` uses — `==` on the bridged enum does not work here.
+///
+/// Deliberately NOT `kindDisplayLabel(...).lowercased()`: this is exactly the rule `SectionLabel`,
+/// `Eyebrow` and `DependencyBadge` are built around — an uppercased visual string must never be what
+/// VoiceOver reads. The catalog carries two separate families because the transform isn't mechanical
+/// (Devanagari has no case, so hi is the same word in both).
+func kindA11yLabel(_ kind: ItemKind) -> String {
+    if ShellBridgeKt.itemKindsEqual(a: kind, b: ItemKind.habit) { return L.string("tasks_kind_a11y_habit") }
+    if ShellBridgeKt.itemKindsEqual(a: kind, b: ItemKind.event) { return L.string("tasks_kind_a11y_event") }
+    if ShellBridgeKt.itemKindsEqual(a: kind, b: ItemKind.chore) { return L.string("tasks_kind_a11y_chore") }
+    return L.string("tasks_kind_a11y_task") // Task (+ any future kind)
+}
+
+/// The **visible** all-caps kind marker (Compose `TreeAtoms.kindLabel`) — "TASK", "HÁBITO". The
+/// resource holds the exact rendered text, so never `.uppercased()` it here. Pair every use with
+/// `kindA11yLabel` on whatever element VoiceOver reads.
+func kindDisplayLabel(_ kind: ItemKind) -> String {
+    if ShellBridgeKt.itemKindsEqual(a: kind, b: ItemKind.habit) { return L.string("tasks_kind_label_habit") }
+    if ShellBridgeKt.itemKindsEqual(a: kind, b: ItemKind.event) { return L.string("tasks_kind_label_event") }
+    if ShellBridgeKt.itemKindsEqual(a: kind, b: ItemKind.chore) { return L.string("tasks_kind_label_chore") }
+    return L.string("tasks_kind_label_task") // Task (+ any future kind)
+}
+
 // MARK: - Mono text atoms
 
 /// An eyebrow band label — "YOUR DAY", "BRANCHES" (Compose `SectionLabel`): mono, semibold, uppercased,
