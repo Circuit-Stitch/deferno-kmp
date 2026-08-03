@@ -53,14 +53,28 @@ class SeriesKindSourceTest {
     @Test
     fun aDefinitionWithNoSeriesIdIsAbsent_notKeyedByItsItemId() = runTest {
         // A phantom `item_id -> kind` entry can never be looked up (the consumer keys on series_id) but
-        // it CAN collide with a real series id, so it is dropped rather than smuggled in.
+        // it CAN collide with a real series id, so it is dropped rather than smuggled in. Proved for all
+        // three kinds — each has its own `seriesId?.let` and each would leak independently.
         val source = LocalStoreSeriesKindSource(
             habits = FakeHabitLocalStore(mapOf(HabitId("h-1") to habit("h-1", null), HabitId("h-2") to habit("h-2", "hs-2"))),
-            chores = FakeChoreLocalStore(),
-            events = FakeEventLocalStore(),
+            chores = FakeChoreLocalStore(
+                mapOf(
+                    ChoreId("c-1") to Chore(id = ChoreId("c-1"), orgSlug = "u-e4h2qk", title = "trash", definitionState = DefinitionState.Active, dateCreated = created),
+                    ChoreId("c-2") to Chore(id = ChoreId("c-2"), orgSlug = "u-e4h2qk", title = "bins", definitionState = DefinitionState.Active, dateCreated = created, seriesId = "cs-2"),
+                ),
+            ),
+            events = FakeEventLocalStore(
+                mapOf(
+                    EventId("e-1") to Event(id = EventId("e-1"), orgSlug = "u-e4h2qk", title = "standup", definitionState = DefinitionState.Active, dateCreated = created),
+                    EventId("e-2") to Event(id = EventId("e-2"), orgSlug = "u-e4h2qk", title = "retro", definitionState = DefinitionState.Active, dateCreated = created, seriesId = "es-2"),
+                ),
+            ),
         )
 
-        assertEquals(mapOf("hs-2" to ItemKind.Habit), source.currentSeriesKinds())
+        assertEquals(
+            mapOf("hs-2" to ItemKind.Habit, "cs-2" to ItemKind.Chore, "es-2" to ItemKind.Event),
+            source.currentSeriesKinds(),
+        )
     }
 
     @Test

@@ -162,12 +162,32 @@ class OutboxOccurrenceWriterTest {
         val outbox = FakeOutboxStore()
         val writer = OutboxOccurrenceWriter(store, outbox) { now }
 
-        writer.mark("one-off", OccurrenceAction.Complete)
-        writer.mark("web-only", OccurrenceAction.Complete)
+        // Every verb, not just mark: clear and reschedule share the same guard and would otherwise
+        // enqueue a request the endpoints cannot route.
+        for (id in listOf("one-off", "web-only")) {
+            writer.mark(id, OccurrenceAction.Complete)
+            writer.clear(id)
+            writer.reschedule(id, LocalDate(2026, 6, 10))
+        }
 
-        // Neither is actionable: status untouched, nothing enqueued.
+        // Neither is actionable: status and date untouched, nothing enqueued.
         assertEquals(WorkingState.Open, store.get("one-off")?.status)
         assertEquals(WorkingState.Open, store.get("web-only")?.status)
+        assertEquals(date, store.get("one-off")?.date)
+        assertTrue(outbox.all.isEmpty())
+    }
+
+    @Test
+    fun anUnknownRowIdIsANoOp() = runTest {
+        // The View can only pass an id it rendered, but the seam is public — a stale id must not throw.
+        val store = InMemoryCalendarStore()
+        val outbox = FakeOutboxStore()
+        val writer = OutboxOccurrenceWriter(store, outbox) { now }
+
+        writer.mark("gone", OccurrenceAction.Complete)
+        writer.clear("gone")
+        writer.reschedule("gone", LocalDate(2026, 6, 10))
+
         assertTrue(outbox.all.isEmpty())
     }
 }
