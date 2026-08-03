@@ -191,7 +191,6 @@ struct CalendarView: View {
     @ViewBuilder
     private func agendaActions(_ item: CalendarItem) -> some View {
         let isHabit = ShellBridgeKt.calendarItemIsHabit(item: item)
-        let canReschedule = ShellBridgeKt.calendarItemIsEvent(item: item)
         HStack(spacing: 8) {
             if !isHabit {
                 actionChip(L.string("common_start")) { component.onMark(itemId: item.id, action: OccurrenceAction.start) }
@@ -201,9 +200,9 @@ struct CalendarView: View {
                 actionChip(L.string("calendar_action_skip")) { component.onMark(itemId: item.id, action: OccurrenceAction.skip) }
             }
             actionChip(L.string("common_clear")) { component.onClear(itemId: item.id) }
-            if canReschedule {
-                actionChip(L.string("calendar_action_reschedule")) { rescheduling = item }
-            }
+            // Reschedule is offered for every actionable firing (#380) — the backend ships habit, chore
+            // and event reschedule over one shared handler; the old Events-only gate was a stale claim.
+            actionChip(L.string("calendar_action_reschedule")) { rescheduling = item }
         }
     }
 

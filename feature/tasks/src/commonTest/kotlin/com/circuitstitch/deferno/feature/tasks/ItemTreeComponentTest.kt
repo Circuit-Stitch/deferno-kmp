@@ -14,6 +14,7 @@ import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -40,7 +41,7 @@ class ItemTreeComponentTest {
         moveEditor: MoveEditor = MoveEditor.NONE,
         shakeToUndoPreference: ShakeToUndoPreference = InMemoryShakeToUndoPreference(),
         trackEvent: (String) -> Unit = {},
-        menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
+        decorations: Flow<ItemRowDecorations> = flowOf(ItemRowDecorations()),
         workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
         definitionStateEditor: DefinitionStateEditor = DefinitionStateEditor.NONE,
         blockedByEditor: BlockedByEditor = BlockedByEditor.NONE,
@@ -57,7 +58,7 @@ class ItemTreeComponentTest {
         moveEditor = moveEditor,
         shakeToUndoPreference = shakeToUndoPreference,
         trackEvent = trackEvent,
-        menuStates = menuStates,
+        decorations = decorations,
         workingStateEditor = workingStateEditor,
         definitionStateEditor = definitionStateEditor,
         blockedByEditor = blockedByEditor,
@@ -341,11 +342,59 @@ class ItemTreeComponentTest {
     @Test
     fun menuStatesAreSurfacedOnTheStateForTheView() = runTest {
         val states = mapOf("root" to TaskMenuState(WorkingState.InProgress, pinned = true, inPlan = false))
-        val c = component(rootAndChild(), menuStates = flowOf(states))
+        val c = component(rootAndChild(), decorations = flowOf(ItemRowDecorations(menuStates = states)))
         backgroundScope.launch { c.state.collect {} }
         advanceUntilIdle()
 
         assertEquals(states, c.state.value.menuStates, "the per-row Task menu state reaches the View")
+    }
+
+    // --- the kind-neutral "in today" set (#386) ---
+
+    @Test
+    fun inTodayIdsAreSurfacedOnTheStateForTheView() = runTest {
+        val ids = setOf("root", "morning-run")
+        val c = component(rootAndChild(), decorations = flowOf(ItemRowDecorations(inTodayIds = ids)))
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(ids, c.state.value.inTodayIds, "the joined in-today set reaches the View verbatim")
+    }
+
+    @Test
+    fun inTodayIdsDefaultToEmptySoAnUnwiredTreeNarrowsToNothingRatherThanEverything() = runTest {
+        val c = component(rootAndChild())
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(emptySet(), c.state.value.inTodayIds, "no join wired → an honestly empty set")
+    }
+
+    /**
+     * The two decorations arrive as one [ItemRowDecorations] but stay **flat** on the state (two Compose
+     * Views and two SwiftUI apps read `menuStates` / `inTodayIds` directly). So the unpack is a real step
+     * that can drop a half silently — assert both land, and that a later emission refreshes both rather
+     * than stranding whichever one the previous frame happened to carry.
+     */
+    @Test
+    fun bothDecorationsReachTheStateAndALaterEmissionUpdatesBoth() = runTest {
+        val decorations = MutableStateFlow(
+            ItemRowDecorations(
+                menuStates = mapOf("root" to TaskMenuState(WorkingState.Open, pinned = false, inPlan = false)),
+                inTodayIds = setOf("root"),
+            ),
+        )
+        val c = component(rootAndChild(), decorations = decorations)
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(setOf("root"), c.state.value.inTodayIds, "the in-today half lands")
+        assertEquals(1, c.state.value.menuStates.size, "and so does the menu half")
+
+        decorations.value = ItemRowDecorations(menuStates = emptyMap(), inTodayIds = setOf("root", "child"))
+        advanceUntilIdle()
+        assertEquals(setOf("root", "child"), c.state.value.inTodayIds, "a later emission refreshes in-today")
+        assertEquals(emptyMap(), c.state.value.menuStates, "and the menu map, in the same frame")
     }
 
     @Test

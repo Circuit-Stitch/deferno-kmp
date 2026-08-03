@@ -42,6 +42,11 @@ data class HabitDetailDto(
     val description: String? = null,
     val recurrence: RecurrenceDto? = null,
     @SerialName("series_id") val seriesId: String? = null,
+    // The occurrence subtask template (#381) — an array of OBJECTS. The detail DTOs used to omit it
+    // entirely, so `ignoreUnknownKeys` dropped it silently: not a crash, but exactly the wire-vs-DTO
+    // drift ADR-0011 exists to prevent. Modelled here so the "faithful full single-item shape" claim
+    // in this file's KDoc is true.
+    @SerialName("subtask_template") val subtaskTemplate: List<SubtaskTemplateDto> = emptyList(),
     // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
     val blocked: Boolean = false,
     @SerialName("is_blocker") val isBlocker: Boolean = false,
@@ -72,6 +77,8 @@ data class ChoreDetailDto(
     val description: String? = null,
     val recurrence: RecurrenceDto? = null,
     @SerialName("series_id") val seriesId: String? = null,
+    // The occurrence subtask template (#381) — see [HabitDetailDto].
+    @SerialName("subtask_template") val subtaskTemplate: List<SubtaskTemplateDto> = emptyList(),
     @SerialName("cadence_mode") val cadenceMode: String? = null,
     // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
     val blocked: Boolean = false,
@@ -102,6 +109,8 @@ data class EventDetailDto(
     val description: String? = null,
     val recurrence: RecurrenceDto? = null,
     @SerialName("series_id") val seriesId: String? = null,
+    // The occurrence subtask template (#381) — see [HabitDetailDto].
+    @SerialName("subtask_template") val subtaskTemplate: List<SubtaskTemplateDto> = emptyList(),
     @SerialName("all_day") val allDay: Boolean = false,
     @SerialName("end_time") val endTime: String? = null,
     @SerialName("start_time_of_day") val startTimeOfDay: String? = null,

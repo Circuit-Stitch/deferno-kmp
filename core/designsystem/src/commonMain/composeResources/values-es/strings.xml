@@ -791,6 +791,7 @@ Gracias.</string>
     <string name="tasks_tree_empty_title">Aún no hay árboles</string>
     <string name="tasks_tree_filtered_empty_body">Todo aquí está hecho. Cambia a «Todas» para verlo de nuevo.</string>
     <string name="tasks_tree_filtered_empty_title">Nada que mostrar aquí</string>
+    <string name="tasks_tree_in_today_empty_body">Nada de aquí está en el plan de hoy. Cambia a «Todas» para verlo todo.</string>
     <string name="tasks_tree_refreshing">Actualizando…</string>
     <string name="tasks_tree_show_blocked">Mostrar bloqueados</string>
     <string name="tasks_unblock_confirm_releases">Esto también desbloquea: %1$s</string>

@@ -812,6 +812,7 @@ Agradeço.</string>
     <!-- “Todas” deve combinar com tasks_filter_all -->
     <string name="tasks_tree_filtered_empty_body">Tudo aqui está concluído. Mude para “Todas” para ver de novo.</string>
     <string name="tasks_tree_filtered_empty_title">Nada para mostrar aqui</string>
+    <string name="tasks_tree_in_today_empty_body">Nada aqui está no plano de hoje. Mude para “Todas” para ver tudo.</string>
     <string name="tasks_tree_refreshing">Atualizando…</string>
     <string name="tasks_tree_show_blocked">Mostrar bloqueadas</string>
     <string name="tasks_unblock_confirm_releases">Isso também desbloqueia: %1$s</string>

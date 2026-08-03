@@ -1,13 +1,15 @@
 package com.circuitstitch.deferno.core.data.habit
 
+import com.circuitstitch.deferno.core.data.recurring.RecurrenceColumns
 import com.circuitstitch.deferno.core.data.recurring.decodeNewlineList
+import com.circuitstitch.deferno.core.data.recurring.decodeRecurrence
+import com.circuitstitch.deferno.core.data.recurring.encodeColumns
 import com.circuitstitch.deferno.core.data.recurring.encodeNewlineList
 import com.circuitstitch.deferno.core.data.recurring.toDefinitionStateOrDefault
 import com.circuitstitch.deferno.core.data.recurring.toHydrationStateOrDefault
 import com.circuitstitch.deferno.core.data.recurring.toInstantOrNull
 import com.circuitstitch.deferno.core.data.recurring.toLocalTimeOrNull
 import com.circuitstitch.deferno.core.data.recurring.toPriorityOrDefault
-import com.circuitstitch.deferno.core.data.recurring.toRecurrenceFrequencyOrDefault
 import com.circuitstitch.deferno.core.database.sql.HabitEntity
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
@@ -20,17 +22,34 @@ import kotlin.time.Instant
  * The row<->domain conversion for the Habit cache (ADR-0001, #71) — sibling of `TaskEntityMapping.kt`.
  * core:database keeps `habitEntity` adapter-free, so the rich-type translation (the [DefinitionState]
  * light switch, the [Recurrence] object, instants, the id value classes) lives here. The [Recurrence]
- * flattens into `recurrence_type` + a `\n`-joined `recurrence_days`; a null `recurrence_type` decodes
- * to a `null` Recurrence (a definition with no rule).
+ * flattens across `recurrence_type` + a `\n`-joined `recurrence_days` + the twelve cadence/bound columns
+ * added in migration 18->19 (#382); a null `recurrence_type` decodes to a `null` Recurrence (a
+ * definition with no rule). The flattening itself lives once in `RecurringEntityCodec.kt` — the three
+ * recurring tables persist the identical shape, and the generated entity types share no supertype.
  */
 fun HabitEntity.toDomain(): Habit = Habit(
     id = HabitId(id),
     orgSlug = org_slug,
     title = title,
     definitionState = definition_state.toDefinitionStateOrDefault(),
-    recurrence = recurrence_type?.let {
-        Recurrence(frequency = it.toRecurrenceFrequencyOrDefault(), days = recurrence_days.decodeNewlineList())
-    },
+    recurrence = decodeRecurrence(
+        RecurrenceColumns(
+            type = recurrence_type,
+            days = recurrence_days,
+            interval = recurrence_interval,
+            anchorType = recurrence_anchor_type,
+            anchorDay = recurrence_anchor_day,
+            anchorNth = recurrence_anchor_nth,
+            anchorWeekday = recurrence_anchor_weekday,
+            month = recurrence_month,
+            day = recurrence_day,
+            rrule = recurrence_rrule,
+            endType = recurrence_end_type,
+            endDate = recurrence_end_date,
+            endCount = recurrence_end_count,
+            rawType = recurrence_raw_type,
+        ),
+    ),
     labels = labels.decodeNewlineList(),
     parentId = parent_id?.let(::TaskId),
     completeBy = complete_by.toInstantOrNull(),
@@ -52,28 +71,43 @@ fun HabitEntity.toDomain(): Habit = Habit(
     priority = priority.toPriorityOrDefault(),
 )
 
-fun Habit.toEntity(): HabitEntity = HabitEntity(
-    id = id.value,
-    org_slug = orgSlug,
-    owner_org_id = ownerOrgId?.value,
-    ref = ref,
-    sequence = sequence,
-    title = title,
-    definition_state = definitionState.name,
-    recurrence_type = recurrence?.frequency?.name,
-    recurrence_days = (recurrence?.days ?: emptyList()).encodeNewlineList(),
-    labels = labels.encodeNewlineList(),
-    parent_id = parentId?.value,
-    complete_by = completeBy?.toString(),
-    deadline_time_of_day = deadlineTimeOfDay?.toString(),
-    pinned = if (pinned) 1L else 0L,
-    date_created = dateCreated.toString(),
-    deleted_at = deletedAt?.toString(),
-    hydration_state = hydration.name,
-    description = description,
-    series_id = seriesId,
-    blocked = if (blocked) 1L else 0L,
-    is_blocker = if (isBlocker) 1L else 0L,
-    target_date = targetDate?.toString(),
-    priority = priority.name,
-)
+fun Habit.toEntity(): HabitEntity {
+    val rule = recurrence.encodeColumns()
+    return HabitEntity(
+        id = id.value,
+        org_slug = orgSlug,
+        owner_org_id = ownerOrgId?.value,
+        ref = ref,
+        sequence = sequence,
+        title = title,
+        definition_state = definitionState.name,
+        recurrence_type = rule.type,
+        recurrence_days = rule.days,
+        labels = labels.encodeNewlineList(),
+        parent_id = parentId?.value,
+        complete_by = completeBy?.toString(),
+        deadline_time_of_day = deadlineTimeOfDay?.toString(),
+        pinned = if (pinned) 1L else 0L,
+        date_created = dateCreated.toString(),
+        deleted_at = deletedAt?.toString(),
+        hydration_state = hydration.name,
+        description = description,
+        series_id = seriesId,
+        blocked = if (blocked) 1L else 0L,
+        is_blocker = if (isBlocker) 1L else 0L,
+        target_date = targetDate?.toString(),
+        priority = priority.name,
+        recurrence_interval = rule.interval,
+        recurrence_anchor_type = rule.anchorType,
+        recurrence_anchor_day = rule.anchorDay,
+        recurrence_anchor_nth = rule.anchorNth,
+        recurrence_anchor_weekday = rule.anchorWeekday,
+        recurrence_month = rule.month,
+        recurrence_day = rule.day,
+        recurrence_rrule = rule.rrule,
+        recurrence_end_type = rule.endType,
+        recurrence_end_date = rule.endDate,
+        recurrence_end_count = rule.endCount,
+        recurrence_raw_type = rule.rawType,
+    )
+}

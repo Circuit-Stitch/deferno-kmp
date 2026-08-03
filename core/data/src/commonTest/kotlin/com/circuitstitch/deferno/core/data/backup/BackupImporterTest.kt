@@ -6,6 +6,7 @@ import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
 import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
 import com.circuitstitch.deferno.core.data.outbox.FakeOutboxStore
 import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
+import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
@@ -16,7 +17,6 @@ import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Recurrence
-import com.circuitstitch.deferno.core.model.RecurrenceFrequency
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -53,7 +53,7 @@ class BackupImporterTest {
         orgSlug = "u-e4h2qk",
         title = "habit-$id",
         definitionState = DefinitionState.Active,
-        recurrence = Recurrence(RecurrenceFrequency.Weekly, days = listOf("mon")),
+        recurrence = Recurrence(Cadence.Weekly(listOf("mon"))),
         dateCreated = created,
         hydration = HydrationState.Full,
     )
@@ -63,7 +63,7 @@ class BackupImporterTest {
         orgSlug = "u-e4h2qk",
         title = "chore-$id",
         definitionState = DefinitionState.Active,
-        recurrence = Recurrence(RecurrenceFrequency.Daily),
+        recurrence = Recurrence(Cadence.Daily),
         cadenceMode = "rolling",
         dateCreated = created,
         hydration = HydrationState.Full,

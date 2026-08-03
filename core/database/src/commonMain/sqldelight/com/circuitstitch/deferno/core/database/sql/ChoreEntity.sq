@@ -32,7 +32,24 @@ CREATE TABLE choreEntity (
     -- Priority enum NAME, like definition_state. Nullable so ADD COLUMN leaves pre-migration rows NULL
     -- (decoded as "no target" / Priority.Normal until the next refresh repopulates).
     target_date TEXT,
-    priority    TEXT
+    priority    TEXT,
+    -- Appended for migration 18->19 (#382) — the rest of the recurrence rule; see HabitEntity.sq for the
+    -- full rationale (flat primitives not a JSON blob; one `recurrence_interval` for both wire spellings
+    -- of the cycle; the anchor trio kept separate from the yearly month/day; NULL end_type = the Never
+    -- bound; raw_type preserves an unmodellable cadence). The chore is where this bug was reported:
+    -- `every_n_days` collapsed to "Unknown" and both live every-N-days chores were unrecoverable.
+    recurrence_interval       INTEGER,
+    recurrence_anchor_type    TEXT,
+    recurrence_anchor_day     INTEGER,
+    recurrence_anchor_nth     INTEGER,
+    recurrence_anchor_weekday TEXT,
+    recurrence_month          INTEGER,
+    recurrence_day            INTEGER,
+    recurrence_rrule          TEXT,
+    recurrence_end_type       TEXT,
+    recurrence_end_date       TEXT,
+    recurrence_end_count      INTEGER,
+    recurrence_raw_type       TEXT
 );
 
 CREATE INDEX choreEntity_owner_org_id ON choreEntity(owner_org_id);
@@ -48,13 +65,10 @@ SELECT * FROM choreEntity WHERE id = ?;
 selectAllIds:
 SELECT id FROM choreEntity;
 
+-- Binds the whole row as one parameter, so the generated signature is `insertOrReplace(ChoreEntity)` and
+-- adding a column never touches the Kotlin call site.
 insertOrReplace:
-INSERT OR REPLACE INTO choreEntity(
-    id, org_slug, owner_org_id, ref, sequence, title, definition_state, recurrence_type,
-    recurrence_days, cadence_mode, labels, parent_id, complete_by, deadline_time_of_day, pinned,
-    date_created, deleted_at, hydration_state, description, series_id, blocked, is_blocker,
-    target_date, priority
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO choreEntity VALUES ?;
 
 deleteById:
 DELETE FROM choreEntity WHERE id = ?;

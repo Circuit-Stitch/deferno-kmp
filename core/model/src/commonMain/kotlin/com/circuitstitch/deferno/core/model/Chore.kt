@@ -13,6 +13,10 @@ import kotlin.time.Instant
  * definition "light switch" [DefinitionState] and carries a [recurrence]; it adds the chore-specific
  * [cadenceMode] (e.g. `rolling` vs `fixed`) the wire ships.
  *
+ * **[cadenceMode] is not a [Cadence]** — the near-collision is the wire's vocabulary, not ours. The
+ * [recurrence]'s [Cadence] says *which days this chore fires on*; [cadenceMode] is an unrelated wire
+ * string about how the schedule advances, and the two never substitute for one another.
+ *
  * **Deferred (ADR-0015):** the "Shared with a Group" / rotation control — Groups are backend-blocked,
  * so a Chore is creatable in v1 *without* a group, and this model carries no group/rotation field.
  *

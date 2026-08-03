@@ -13,8 +13,10 @@ import com.circuitstitch.deferno.core.database.sql.OutboxEntry as OutboxRow
  *
  * Every query is a synchronous SQLDelight call (no observe `Flow` — the processor pulls [syncable] on
  * demand), so the suspend port methods run straight through. Encoding mirrors the `taskEntity`
- * conventions: `path` segments ↔ a `\n`-joined TEXT, instants ↔ RFC3339 strings, the enum method ↔
- * its `.name` decoded **defensively** (an unrecognised stored token degrades rather than throwing).
+ * conventions: `path` segments ↔ a `\n`-joined TEXT, instants ↔ RFC3339 strings, and each enum
+ * ([OutboxMethod], [CollapseRole]) ↔ its `.name` decoded **defensively** (a stored token this build does
+ * not recognise — or, on a row written before its column existed, no token at all — degrades rather than
+ * throwing).
  */
 class SqlDelightOutboxStore(
     private val db: DefernoDatabase,
@@ -32,6 +34,10 @@ class SqlDelightOutboxStore(
             attempts = 0L,
             next_attempt_at = now.toString(),
             created_at = now.toString(),
+            // Written unconditionally, never conditionally on "is this an occurrence route": every row is
+            // then self-describing, and a NULL in the column means exactly one thing — the row was queued
+            // before migration 18->19 added it.
+            collapse_role = request.collapseRole.name,
         )
     }
 
@@ -54,7 +60,8 @@ class SqlDelightOutboxStore(
     }
 
     override suspend fun update(seq: Long, target: String, request: OutboxRequest) {
-        // A heal only re-points id references in target/path/body; the verb never changes.
+        // A heal only re-points id references in target/path/body; the verb and the declared collapse
+        // role never change, so their columns stay untouched (the row keeps the role it was queued with).
         queries.updateEntry(
             target = target,
             path = request.path.joinToString("\n"),
@@ -66,7 +73,10 @@ class SqlDelightOutboxStore(
     override suspend fun count(): Long = queries.count().executeAsOne()
 }
 
-/** Decodes a stored `outboxEntry` row into the domain [OutboxEntry]. Defensive on the method column. */
+/**
+ * Decodes a stored `outboxEntry` row into the domain [OutboxEntry]. Defensive on both token columns
+ * (`method` and `collapse_role`).
+ */
 private fun OutboxRow.toDomain(): OutboxEntry = OutboxEntry(
     seq = seq,
     target = target,
@@ -77,6 +87,11 @@ private fun OutboxRow.toDomain(): OutboxEntry = OutboxEntry(
         // `acceptsActivityStamp` is deliberately not a column: it is an enqueue-time question, and by the
         // time a row is read back the stamp is already inside `body` (the choke-point merged it before
         // this row was written). Replay re-sends those bytes verbatim, so the default `false` is correct.
+        //
+        // `collapseRole` is the opposite case, and the contrast is the point. It is read at FLUSH time,
+        // off a row that has already made the round trip through the database, so nothing earlier can
+        // stand in for it — an un-persisted role would simply be gone by the time the coalescer asks.
+        collapseRole = collapse_role.toCollapseRoleOrDefault(),
     ),
     attempts = attempts.toInt(),
     nextAttemptAt = Instant.parse(next_attempt_at),
@@ -87,3 +102,11 @@ private fun OutboxRow.toDomain(): OutboxEntry = OutboxEntry(
 /** Defensive decode: an unrecognised stored method token degrades to [OutboxMethod.Post] (never throws). */
 private fun String.toOutboxMethodOrDefault(): OutboxMethod =
     OutboxMethod.entries.firstOrNull { it.name == this } ?: OutboxMethod.Post
+
+/**
+ * Defensive decode: a NULL (queued before migration 18->19 added the column) or unrecognised stored role
+ * token degrades to [CollapseRole.Barrier] (never throws) — the fail-closed reading, so an entry whose
+ * role this build cannot read is replayed uncompacted rather than collapsed away.
+ */
+private fun String?.toCollapseRoleOrDefault(): CollapseRole =
+    CollapseRole.entries.firstOrNull { it.name == this } ?: CollapseRole.Barrier

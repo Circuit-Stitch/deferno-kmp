@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -13,8 +14,9 @@ import kotlin.test.assertTrue
  * The real-SQLite integration test for the outbox store (#23, ADR-0006 JVM-fast path). The commonTest
  * fakes prove the replay *algorithm*; this proves the *SQL path* — that [SqlDelightOutboxStore]'s
  * row ↔ domain mapping round-trips through a genuine `DefernoDatabase` over an in-memory
- * `JdbcSqliteDriver`, including the bodiless-DELETE (`body IS NULL`) and the **`AUTOINCREMENT`
- * monotonic-seq guarantee** the FIFO replay order depends on.
+ * `JdbcSqliteDriver`, including the bodiless-DELETE (`body IS NULL`), the declared
+ * [OutboxRequest.collapseRole] the flush-time coalescer reads back off the row (#396), and the
+ * **`AUTOINCREMENT` monotonic-seq guarantee** the FIFO replay order depends on.
  */
 class SqlDelightOutboxStoreTest {
 
@@ -22,12 +24,11 @@ class SqlDelightOutboxStoreTest {
     private val t1 = Instant.parse("2026-06-07T12:00:01Z")
     private val t2 = Instant.parse("2026-06-07T12:00:02Z")
 
-    private fun newStore(): SqlDelightOutboxStore {
-        val db = DefernoDatabase(
-            JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY).also { DefernoDatabase.Schema.create(it) },
-        )
-        return SqlDelightOutboxStore(db)
-    }
+    private fun newDatabase(): DefernoDatabase = DefernoDatabase(
+        JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY).also { DefernoDatabase.Schema.create(it) },
+    )
+
+    private fun newStore(): SqlDelightOutboxStore = SqlDelightOutboxStore(newDatabase())
 
     @Test
     fun enqueueAndPendingRoundTripEntriesInSeqOrder() = runTest {
@@ -90,6 +91,61 @@ class SqlDelightOutboxStoreTest {
         assertEquals(2, store.allUnsynced().size)
         assertEquals(listOf("task:b"), store.syncable().map { it.target }) // the dead-lettered row is gone from the drain view
         assertEquals(1L, store.count()) // only the live `task:b` counts
+    }
+
+    @Test
+    fun theDeclaredCollapseRoleSurvivesTheRoundTripThroughSqlite() = runTest {
+        val store = newStore()
+        store.enqueue(
+            "occurrence:Chore:cho-1-item:2026-06-08",
+            OutboxRequest(
+                OutboxMethod.Put,
+                listOf("chores", "cho-1-item", "occurrences", "2026-06-08"),
+                """{"status":"done"}""",
+                acceptsActivityStamp = true,
+                collapseRole = CollapseRole.Absolute,
+            ),
+            t0,
+        )
+        store.enqueue("task:a", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "a"), "{}"), t1)
+
+        val (occurrence, task) = store.allUnsynced()
+        // The whole point of the column: the coalescer runs at flush, over rows read back out of the
+        // database, so the role the intent declared has to survive the write and the read.
+        assertEquals(CollapseRole.Absolute, occurrence.request.collapseRole)
+        // Every row is self-describing — a write that declared nothing round-trips as the fail-closed
+        // default rather than as a NULL the reader has to interpret.
+        assertEquals(CollapseRole.Barrier, task.request.collapseRole)
+        // The deliberate contrast, enqueued `true` on the same request: `acceptsActivityStamp` is NOT a
+        // column, because it is only ever asked at enqueue — by read time the stamp is already inside
+        // `body`, which replay re-sends verbatim. So it comes back false, and that is correct.
+        assertFalse(occurrence.request.acceptsActivityStamp)
+    }
+
+    @Test
+    fun aRowQueuedBeforeTheCollapseRoleColumnExistedDecodesAsABarrier() = runTest {
+        // Migration 18->19 adds `collapse_role` with no back-fill, so every entry already in the queue on
+        // upgrade carries a NULL. `SqlDelightOutboxStore.enqueue` can never produce that shape (it always
+        // writes a name), so the generated query is driven directly — the only way to build the row a
+        // pre-migration build left behind.
+        val db = newDatabase()
+        db.outboxEntryQueries.enqueue(
+            target = "occurrence:Chore:cho-1-item:2026-06-08",
+            method = OutboxMethod.Put.name,
+            path = listOf("chores", "cho-1-item", "occurrences", "2026-06-08").joinToString("\n"),
+            body = """{"status":"done"}""",
+            attempts = 0L,
+            next_attempt_at = t0.toString(),
+            created_at = t0.toString(),
+            collapse_role = null,
+        )
+
+        val entry = SqlDelightOutboxStore(db).allUnsynced().single()
+        assertEquals(OutboxMethod.Put, entry.request.method)
+        assertEquals(listOf("chores", "cho-1-item", "occurrences", "2026-06-08"), entry.request.path)
+        // NULL means only "queued before the column existed". It must fail closed: an old row replays
+        // uncompacted, rather than being read as an absolute write that silently eats its neighbours.
+        assertEquals(CollapseRole.Barrier, entry.request.collapseRole)
     }
 
     @Test

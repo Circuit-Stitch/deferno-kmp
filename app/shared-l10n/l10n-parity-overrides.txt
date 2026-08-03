@@ -248,14 +248,6 @@ android tasks_detail_subtask_mark_done_a11y
 android tasks_detail_subtask_mark_not_done_a11y
 android tasks_detail_title
 android tasks_external_ref_prefix
-android tasks_kind_a11y_chore
-android tasks_kind_a11y_event
-android tasks_kind_a11y_habit
-android tasks_kind_a11y_task
-android tasks_kind_label_chore
-android tasks_kind_label_event
-android tasks_kind_label_habit
-android tasks_kind_label_task
 android tasks_tree_actions_for_item
 android tasks_working_state_open
 android update_badge_available

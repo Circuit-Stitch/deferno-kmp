@@ -109,8 +109,50 @@ wrapped in the standard `version: 0.1` envelope unless noted.
 - Per-kind fields: **habit/chore/event** carry `recurrence` + `series_id` + `subtask_template`;
   **chore** adds `cadence_mode`; **event** adds `all_day` + `end_time`; **task** carries
   `next_task_id` + `finished_at` + `attachments` + `comment`. Shared base ≈ 24 fields.
+- **`subtask_template` is an array of OBJECTS**, not of strings (#381): each element is
+  `{ id: uuid, title: string, description?: string }` (`backend/src/subtask_template.rs`), max 50
+  entries, `title` ≤ 200 chars. `description` is `#[serde(default, skip_serializing_if =
+  "String::is_empty")]`, so **the key is absent whenever the description is empty** and on every legacy
+  row — the client field must default to `""`. Modelling the element as a `String` made the first
+  populated template throw inside the *whole* `/items` decode, stalling the cold sync for all four kinds.
 - List vs detail: list endpoints return **summaries** (no `kind`); single-item endpoints return full
   objects. The cache tracks a summary-vs-full hydration state (ADR-0001).
+
+### Recurrence: the wire is FLAT, and `openapi-0.1.json` is WRONG about it
+
+> **Do not model `recurrence` from `contracts/openapi-0.1.json`.** Its `#/components/schemas/Recurrence`
+> is `{"required":["cadence","end"],"properties":{"cadence":{…},"end":{…}}}` — a **nested** `cadence`
+> object with a **required** `end`. utoipa derived that from the Rust struct's *fields* and never saw the
+> hand-written `impl Serialize`, so **the server emits neither shape the spec advertises**. The
+> `Cadence`, `RecurrenceEnd`, `MonthlyAnchor` and `SubtaskTemplate` sub-schemas *are* accurate; only the
+> `Recurrence` wrapper lies. Code against `backend/src/models/recurrence.rs`. (#382)
+
+The backend hand-writes `Serialize`/`Deserialize` because `#[serde(flatten)]` does not round-trip over
+an internally-tagged enum: **the cadence's own fields are hoisted beside `type` at the top level, and
+only the bound is nested, under `end`.** All six cadences:
+
+```
+{"type":"daily"}
+{"type":"every_n_days","n":3}
+{"type":"weekly","days":["Mon","Wed"]}                              // chrono::Weekday Display: Mon..Sun
+{"type":"monthly","interval":1,"on":{"type":"day_of_month","day":15}}
+{"type":"monthly","interval":2,"on":{"type":"nth_weekday","nth":-1,"weekday":"Fri"}}   // nth is i8: 1..5 or -1 = last
+{"type":"yearly","interval":1,"month":6,"day":14}
+{"type":"custom","rrule":"FREQ=WEEKLY;BYDAY=MO,WE"}                 // owns its own bound; `end` is meaningless beside it
+```
+
+…plus an optional bound:
+
+- **absent `end` ⇒ `never`.** This is the *only* encoding of never the server produces — `Serialize`
+  skips the key when `is_never()`. Its `Deserialize` does accept an explicit `{"type":"never"}`, so read
+  tolerantly; never write one.
+- `{"type":"on_date","date":"2027-01-31"}` — inclusive of that whole **local** day (becomes `UNTIL` at
+  local EOD).
+- `{"type":"after_count","n":10}` — becomes `COUNT`.
+
+Model this as a **flat, all-defaulted data class, never a kotlinx sealed hierarchy**: `DefernoJson`
+registers no `polymorphicDefaultDeserializer`, so an unknown future discriminator would *throw* inside
+the single-call `/items` decode and reproduce the #381 cold-sync stall.
 - `/tasks/today` is a *different* payload: `{ task: TaskSummary, priority_score, urgency_reason }`
   (nested `task`), still wrapped in `ItemEnvelope`. `/tasks/plan` is a flat ordered list of
   `TaskSummary` envelopes.

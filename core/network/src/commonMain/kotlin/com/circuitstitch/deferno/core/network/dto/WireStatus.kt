@@ -83,6 +83,34 @@ enum class PriorityWire {
 }
 
 /**
+ * Wire `ItemKind` → domain [com.circuitstitch.deferno.core.model.ItemKind] — the four work-item kinds,
+ * snake_case (here: plain lowercase). Not a "status" enum, but it lives beside them because it shares
+ * their exact tolerant-reader mechanism: [DefernoJson]'s `coerceInputValues` coerces an additive future
+ * kind to the property default, so [Unknown] is the safe landing spot rather than a decode crash.
+ *
+ * Modelled for the **calendar feed** (`CalendarEvent.kind`, #311/#380), where it is the routing signal
+ * that makes a firing actionable. It is deliberately *not* reused for the item-read DTOs: those key off
+ * a `type` discriminator with its own sealed-kind machinery ([ItemView]), which stays as it is.
+ */
+@Serializable
+enum class ItemKindWire {
+    @SerialName("task")
+    Task,
+
+    @SerialName("habit")
+    Habit,
+
+    @SerialName("chore")
+    Chore,
+
+    @SerialName("event")
+    Event,
+
+    /** Fallback for an additive/unknown wire token (coerced here by [DefernoJson]). */
+    Unknown,
+}
+
+/**
  * Wire `OccurrenceStatus` → domain `OccurrenceState`. Underscored tokens; carries the server-derived
  * punctuality split (`done_on_time`/`done_late`). `dropped` (event terminal) maps to `Skipped`.
  */

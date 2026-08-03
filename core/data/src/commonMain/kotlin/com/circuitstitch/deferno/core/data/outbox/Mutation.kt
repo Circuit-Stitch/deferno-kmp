@@ -471,21 +471,29 @@ private fun patchRecurring(kind: ItemKind, id: String, build: JsonObjectBuilder.
  * A [Mutation] against one dated firing (an Occurrence) of a recurring definition (#74) — the
  * firing-level sibling of `TaskMutation`. It is the write half of the Calendar surface, deferred at
  * envelope v0.1 (see the class note above) until #71 supplied the firing domain + cache. Unlike a Task
- * intent it targets a `(kind, seriesId, date)` firing, because the occurrence endpoints are kind-scoped
- * (`/habits|chores|events/{seriesId}/occurrences/{date}`). Offline-first (ADR-0001): these target an
- * **existing** server entity, so they ride the normal outbox — *not* online-only like create.
+ * intent it targets a `(kind, definitionId, date)` firing, because the occurrence endpoints are
+ * kind-scoped (`/habits|chores|events/{definitionId}/occurrences/…`). Offline-first (ADR-0001): these
+ * target an **existing** server entity, so they ride the normal outbox — *not* online-only like create.
+ *
+ * **The `{id}` path segment is the ITEM id, never the series id (#380).** Every occurrence handler
+ * resolves it through `load_owned_{habit,chore,event}` → `load_item_for_user`, so it wants the *item*
+ * the firing projects from — the chain Head, which the calendar feed emits as `task_id` and
+ * [CalendarItem.taskId] already carries. The addressed item is only an entry point: the server walks
+ * the chain and resolves the owning Segment itself from that id + the date (ADR 2026-07-19). A
+ * `series_id` in that slot loads nothing and 404s — which the sender maps to *success*, so the write
+ * evaporates in silence. Hence [definitionId], not `seriesId`.
  *
  * [applyTo] is the pure optimistic transform of the cached [CalendarItem] (the calendar surface acts on
  * feed rows, whose progress is a [WorkingState] — the no-`missed` axis, design-principle #4). [itemId]
- * is the local row id the writer updates; the firing identity ([kind]/[seriesId]/[date]) drives the
- * endpoint + body.
+ * is the local row id the writer updates; the firing identity ([kind]/[definitionId]/[date]) drives the
+ * endpoint + body, and is also what [OccurrenceTargets] encodes into [target].
  *
  * | Intent | Method + endpoint | Minimal body |
  * |---|---|---|
  * | [MarkOccurrence] habit | `POST habits/{id}/occurrences` | `{"done":<bool>,"date":"<yyyy-mm-dd>"}` |
  * | [MarkOccurrence] chore | `PUT chores/{id}/occurrences/{date}` | `{"status":"<in_progress\|done\|skipped>"}` |
  * | [MarkOccurrence] event | `POST events/{id}/occurrences/{date}` | `{"action":"<in_progress\|done\|dropped>"}` |
- * | [ClearOccurrence] | `DELETE {kind}/{id}/occurrences/{date}` | *(no body)* |
+ * | [ClearOccurrence] | `POST {kind}/{id}/occurrences/{date}/clear` | `{}` |
  * | [RescheduleOccurrence] | `POST {kind}/{id}/occurrences/{date}/reschedule` | `{"new_date":"<yyyy-mm-dd>"}` |
  */
 sealed interface OccurrenceMutation : Mutation {
@@ -495,13 +503,16 @@ sealed interface OccurrenceMutation : Mutation {
     /** Which recurring kind — selects the kind-scoped endpoint + body shape. */
     val kind: ItemKind
 
-    /** The recurring definition id the occurrence endpoints key on. */
-    val seriesId: String
+    /**
+     * The recurring **item** id the occurrence endpoints key on — the chain Head the firing projects
+     * from ([CalendarItem.taskId]), *not* the series id (see the class note).
+     */
+    val definitionId: String
 
     /** The firing's calendar day (the `{date}` path segment). */
     val date: LocalDate
 
-    override val target: String get() = "occurrence:${kind.name}:$seriesId:$date"
+    override val target: String get() = OccurrenceTargets.of(kind, definitionId, date)
 
     /** The optimistic local effect on the cached firing row — **pure** and idempotent. */
     fun applyTo(item: CalendarItem): CalendarItem
@@ -512,11 +523,14 @@ sealed interface OccurrenceMutation : Mutation {
  * in the body (the UI offers a habit only Complete). A **chore** or **event** carries the kind-appropriate
  * wire token via [toWireToken]. Optimistically sets the cached row's [WorkingState] (Start -> In-progress,
  * Complete → Done, Skip → Dropped); replay-safe — re-applying yields the same state.
+ *
+ * All three shapes declare [CollapseRole.Absolute] (#396): a mark fully determines the firing's state, so
+ * a later write on the same firing makes this one redundant and the flush-time coalescer may drop it.
  */
 data class MarkOccurrence(
     override val itemId: String,
     override val kind: ItemKind,
-    override val seriesId: String,
+    override val definitionId: String,
     override val date: LocalDate,
     val action: OccurrenceAction,
 ) : OccurrenceMutation {
@@ -525,24 +539,27 @@ data class MarkOccurrence(
     override fun toRequest(): OutboxRequest = when (kind) {
         ItemKind.Habit -> OutboxRequest(
             OutboxMethod.Post,
-            listOf("habits", seriesId, "occurrences"),
+            listOf("habits", definitionId, "occurrences"),
             buildJsonObject {
                 put("done", action == OccurrenceAction.Complete)
                 put("date", date.toString())
             }.toString(),
             acceptsActivityStamp = true,
+            collapseRole = CollapseRole.Absolute,
         )
         ItemKind.Chore -> OutboxRequest(
             OutboxMethod.Put,
-            listOf("chores", seriesId, "occurrences", date.toString()),
+            listOf("chores", definitionId, "occurrences", date.toString()),
             buildJsonObject { put("status", action.toWireToken(OccurrenceKind.Chore)) }.toString(),
             acceptsActivityStamp = true,
+            collapseRole = CollapseRole.Absolute,
         )
         ItemKind.Event -> OutboxRequest(
             OutboxMethod.Post,
-            listOf("events", seriesId, "occurrences", date.toString()),
+            listOf("events", definitionId, "occurrences", date.toString()),
             buildJsonObject { put("action", action.toWireToken(OccurrenceKind.Event)) }.toString(),
             acceptsActivityStamp = true,
+            collapseRole = CollapseRole.Absolute,
         )
         ItemKind.Task -> error("MarkOccurrence is only valid for a recurring kind, not Task")
     }
@@ -558,18 +575,22 @@ data class MarkOccurrence(
  * CDN `DELETE`-body behavior, and it left no alias — the old route is simply gone. The body is
  * `ActivityBody`, whose every field is optional, so an empty `{}` is a valid clear; the `activity`
  * stamp is injected at the outbox choke-point ([ActivityStamp]) rather than built here.
+ *
+ * Declares [CollapseRole.Absolute] (#396) alongside the marks: a clear is `set_…_occurrence(id, date,
+ * None)`, an absolute write of the firing's whole state, and it returns `204` whether or not a status was
+ * ever recorded — so collapsing an unsent mark into a later clear cannot error.
  */
 data class ClearOccurrence(
     override val itemId: String,
     override val kind: ItemKind,
-    override val seriesId: String,
+    override val definitionId: String,
     override val date: LocalDate,
 ) : OccurrenceMutation {
     override fun applyTo(item: CalendarItem): CalendarItem = item.copy(status = WorkingState.Open)
 
     override fun toRequest(): OutboxRequest = OutboxRequest(
         OutboxMethod.Post,
-        listOf(kind.recurringPath(), seriesId, "occurrences", date.toString(), "clear"),
+        listOf(kind.recurringPath(), definitionId, "occurrences", date.toString(), "clear"),
         // An empty object, not null: a null body sends no entity at all, and the stamping decorator
         // needs an object to merge `activity` into. Event-clear declares its body `oneOf [null,
         // ActivityBody]` (the Rust handler types it `Option<Json<…>>`) rather than a bare `$ref`, so it
@@ -577,20 +598,28 @@ data class ClearOccurrence(
         // not the 35 a scan that skips `oneOf` arms finds).
         "{}",
         acceptsActivityStamp = true,
+        collapseRole = CollapseRole.Absolute,
     )
 }
 
 /**
  * Reschedule a firing to [newDate] (#74). Optimistically moves the cached row to the new day (its
- * start/end times are corrected on the next window reconcile). Kept kind-general for forward
- * compatibility, but the UI only offers it for **Events** in v1 — the habit/chore reschedule endpoints
- * are server-side not-yet-implemented, and enqueuing a guaranteed failure would move the row then snap it
- * back, which reads as shaming-by-failure (design-principle #4).
+ * start/end times are corrected on the next window reconcile). Offered for **all three** recurring
+ * kinds (#380): the backend ships `POST /{habits|chores|events}/{id}/occurrences/{date}/reschedule`
+ * over one shared `reschedule_recurring_occurrence`, so the long-standing "Events only in v1" gate was
+ * stale doc, not a contract. A habit/chore reschedule marks the origin date dropped with a
+ * `rescheduled_to` pointer — a server-sanctioned move, not a failure that would snap the row back.
+ *
+ * Declares [CollapseRole.Barrier] (#396) **explicitly**, though that is also the default: the barrier is a
+ * deliberate statement about this route and belongs beside it, not something a reader has to infer from an
+ * omission. A reschedule is an absolute write over *two* days, and its target names only the origin, so
+ * collapsing anything into or across it would trade a promise in the contract for a backend detail — and
+ * would erase the server-side Activity entry for a mark the user really did perform.
  */
 data class RescheduleOccurrence(
     override val itemId: String,
     override val kind: ItemKind,
-    override val seriesId: String,
+    override val definitionId: String,
     override val date: LocalDate,
     val newDate: LocalDate,
 ) : OccurrenceMutation {
@@ -598,9 +627,10 @@ data class RescheduleOccurrence(
 
     override fun toRequest(): OutboxRequest = OutboxRequest(
         OutboxMethod.Post,
-        listOf(kind.recurringPath(), seriesId, "occurrences", date.toString(), "reschedule"),
+        listOf(kind.recurringPath(), definitionId, "occurrences", date.toString(), "reschedule"),
         buildJsonObject { put("new_date", newDate.toString()) }.toString(),
         acceptsActivityStamp = true,
+        collapseRole = CollapseRole.Barrier,
     )
 }
 

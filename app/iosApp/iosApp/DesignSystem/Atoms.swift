@@ -36,6 +36,32 @@ func kindColor(_ kind: ItemKind, _ colors: DefernoColors) -> Color {
     return colors.primary // Task (+ any future kind)
 }
 
+/// The **spoken** word for an Item's kind (Compose `TreeAtoms.kindA11yLabel`) — the lowercase noun
+/// "task"/"habit"/"chore"/"event". Colour is the only kind cue on a row, and colour is invisible to
+/// VoiceOver and unreliable for a colour-blind reader, so any row that shows a kind dot owes its
+/// accessibility label this word (#393).
+///
+/// Deliberately NOT `kindDisplayLabel(...).lowercased()`: the display strings are all-caps by
+/// translation, VoiceOver reads all-caps either letter-by-letter or in the shouted voice, and
+/// Devanagari has no case at all — so the catalog carries two separate families and the split is the
+/// whole point. Same rule `SectionLabel`/`Eyebrow` follow for their uppercased glyphs.
+func kindA11yLabel(_ kind: ItemKind) -> String {
+    if kind == ItemKind.habit { return L.string("tasks_kind_a11y_habit") }
+    if kind == ItemKind.event { return L.string("tasks_kind_a11y_event") }
+    if kind == ItemKind.chore { return L.string("tasks_kind_a11y_chore") }
+    return L.string("tasks_kind_a11y_task") // Task (+ any future kind)
+}
+
+/// The **visible** all-caps kind marker (Compose `TreeAtoms.kindLabel`) — "TASK", "HÁBITO". The
+/// resource holds the exact rendered text, so never `.uppercased()` it here. Pair every use with
+/// `kindA11yLabel` on whatever element VoiceOver reads.
+func kindDisplayLabel(_ kind: ItemKind) -> String {
+    if kind == ItemKind.habit { return L.string("tasks_kind_label_habit") }
+    if kind == ItemKind.event { return L.string("tasks_kind_label_event") }
+    if kind == ItemKind.chore { return L.string("tasks_kind_label_chore") }
+    return L.string("tasks_kind_label_task") // Task (+ any future kind)
+}
+
 // MARK: - Mono text atoms
 
 /// An eyebrow band label — "YOUR DAY", "BRANCHES" (Compose `SectionLabel`): mono, semibold, uppercased,

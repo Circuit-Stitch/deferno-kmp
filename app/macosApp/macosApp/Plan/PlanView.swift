@@ -307,7 +307,13 @@ struct PlanView: View {
         }
         .onTapGesture { component.onTaskClicked(id: task.id) }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(task.blocked ? "\(task.title), blocked, \(task.workingState.label)" : "\(task.title), \(task.workingState.label)")
+        // The blocked flag localizes like every other word VoiceOver reads — it used to be a literal
+        // English ", blocked" that never translated (#393). No kind here: the plan is Tasks only.
+        .accessibilityLabel(
+            task.blocked
+                ? "\(task.title), \(L.string("common_blocked")), \(task.workingState.label)"
+                : "\(task.title), \(task.workingState.label)"
+        )
         .accessibilityHint(L.string("plan_row_opens_tree_hint"))
     }
 

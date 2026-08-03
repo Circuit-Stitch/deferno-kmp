@@ -16,7 +16,7 @@ interface CalendarRepository {
     /** The per-day entry counts for the half-open `[from, to)` window — the month grid's cell markers. */
     fun observeMarkers(from: LocalDate, to: LocalDate): Flow<Map<LocalDate, Int>>
 
-    /** One calendar day's agenda — its Occurrences + dated items, kind-resolved. */
+    /** One calendar day's agenda — its Occurrences + dated items. */
     fun observeDay(date: LocalDate): Flow<List<CalendarItem>>
 
     /** Pull the `[from, to)` window from the feed in [tz] and full-replace the cached span (ADR-0001). */
@@ -29,14 +29,17 @@ interface CalendarRepository {
 /**
  * The offline-first [CalendarRepository] (ADR-0001, #74): the local store is the single source of truth,
  * the feed only refreshes it. A refresh fetches the feed FIRST and writes nothing on failure (the cached
- * window stays intact, never blanked); on success it reseeds the `series_id -> kind` index from the
- * known definitions and full-replaces the window so the grid + agenda re-emit. [reconcile] replays the
- * last window so a freshly-flushed occurrence write reconciles against server truth (LWW).
+ * window stays intact, never blanked); on success it full-replaces the window so the grid + agenda
+ * re-emit. [reconcile] replays the last window so a freshly-flushed occurrence write reconciles against
+ * server truth (LWW).
+ *
+ * The feed row's own `kind` (required since #311) is **persisted with the row** (#380), so a firing
+ * refreshed here stays actionable for as long as its row survives — there is nothing to re-derive, and
+ * a window the feed has not touched keeps whatever kind it was written with.
  */
 class OfflineCalendarRepository(
     private val localStore: CalendarLocalStore,
     private val remoteSource: CalendarRemoteSource,
-    private val seriesKindSource: SeriesKindSource,
 ) : CalendarRepository {
 
     private var lastWindow: Window? = null
@@ -54,7 +57,6 @@ class OfflineCalendarRepository(
             is RemoteSnapshot.Available -> result.value
             RemoteSnapshot.Unavailable -> return
         }
-        localStore.replaceSeriesKinds(seriesKindSource.currentSeriesKinds())
         localStore.replaceWindow(from, to, items)
     }
 

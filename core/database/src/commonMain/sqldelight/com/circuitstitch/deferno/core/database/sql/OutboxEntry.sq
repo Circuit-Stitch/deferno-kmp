@@ -29,7 +29,14 @@ CREATE TABLE outboxEntry (
     -- exhausted). A dead-lettered row is NEVER deleted here — its outbound request is preserved, not
     -- silently dropped — but it is excluded from `selectSyncableInOrder` so the processor never replays
     -- it again. It stays in the queue so the reconcile clobber-guards can still see it. NULL = live.
-    failed_at       TEXT
+    failed_at       TEXT,
+    -- How this entry participates in the flush-time occurrence collapse (#396): the `CollapseRole` enum
+    -- NAME (`Absolute`/`Barrier`), DECLARED at enqueue by whoever picked the route rather than re-derived
+    -- from `path` at replay time — the same convention `OutboxRequest.acceptsActivityStamp` states, and
+    -- for the same reason (a whitelist written against path shape drifts loose from the contract).
+    -- NULL = Barrier: a row queued before this column existed, or a token this build does not recognise,
+    -- fails closed — never collapsed into, never absorbing a predecessor.
+    collapse_role   TEXT
 );
 
 -- The whole queue (live + dead-lettered) in FIFO order. The comment reconcile clobber-guard (#143) and
@@ -48,8 +55,8 @@ SELECT * FROM outboxEntry WHERE failed_at IS NULL ORDER BY seq;
 -- Append a mutation to the tail. `seq` is assigned by AUTOINCREMENT; a fresh entry starts at
 -- attempts = 0 with next_attempt_at = now (ready to dispatch immediately).
 enqueue:
-INSERT INTO outboxEntry(target, method, path, body, attempts, next_attempt_at, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO outboxEntry(target, method, path, body, attempts, next_attempt_at, created_at, collapse_role)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 -- Drop a successfully-dispatched entry from the queue.
 deleteBySeq:

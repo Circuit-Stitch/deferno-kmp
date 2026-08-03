@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.network.mapper
 
+import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.Event
@@ -7,15 +8,19 @@ import com.circuitstitch.deferno.core.model.EventId
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.MonthlyAnchor
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Recurrence
-import com.circuitstitch.deferno.core.model.RecurrenceFrequency
+import com.circuitstitch.deferno.core.model.RecurrenceBound
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.dto.ChoreDetailDto
 import com.circuitstitch.deferno.core.network.dto.EventDetailDto
 import com.circuitstitch.deferno.core.network.dto.HabitDetailDto
 import com.circuitstitch.deferno.core.network.dto.ItemView
+import com.circuitstitch.deferno.core.network.dto.MonthlyAnchorDto
 import com.circuitstitch.deferno.core.network.dto.RecurrenceDto
+import com.circuitstitch.deferno.core.network.dto.RecurrenceEndDto
+import kotlinx.datetime.LocalDate
 import kotlin.time.Instant
 
 /**
@@ -31,22 +36,69 @@ import kotlin.time.Instant
  */
 
 /**
- * The wire `recurrence` object → domain [Recurrence]. The loosely-typed wire `type` condenses to a
- * [RecurrenceFrequency]; an unmodelled/absent token degrades to [RecurrenceFrequency.Unknown] (the
- * row stays usable). `null` DTO → `null` domain (a non-recurring item carries no rule).
+ * The wire `recurrence` object → domain [Recurrence]. **This is where the rule used to be destroyed**
+ * (#382): the mapper condensed the flat wire object down to `frequency` + `days` and dropped
+ * `every_n_days.n`, `monthly.interval`/`.on`, `yearly.interval`/`.month`/`.day`, `custom.rrule` and the
+ * whole `end` bound on the floor — at the **network** boundary, before anything was cached, so the DB
+ * was only ever a faithful mirror of an already-lossy domain.
+ *
+ * This is one of only two places a [Recurrence] is ever built (the other is the row codec in
+ * `core:data`), which is what lets the domain be a sealed [Cadence] while the DTO stays a flat,
+ * all-defaulted bag — see [Cadence]. `null` DTO → `null` domain (a non-recurring item carries no rule).
  */
-fun RecurrenceDto?.toDomain(): Recurrence? = this?.let {
-    Recurrence(frequency = type.toRecurrenceFrequency(), days = days)
+fun RecurrenceDto?.toDomain(): Recurrence? = this?.let { dto ->
+    Recurrence(cadence = dto.toCadence(), bound = dto.end.toDomain())
 }
 
-/** `recurrence.type` token → [RecurrenceFrequency]; unknown/absent degrades to [RecurrenceFrequency.Unknown]. */
-private fun String?.toRecurrenceFrequency(): RecurrenceFrequency = when (this) {
-    "daily" -> RecurrenceFrequency.Daily
-    "weekly" -> RecurrenceFrequency.Weekly
-    "monthly" -> RecurrenceFrequency.Monthly
-    "yearly" -> RecurrenceFrequency.Yearly
-    else -> RecurrenceFrequency.Unknown
+/**
+ * The wire `type` token plus the parameters hoisted beside it → the one [Cadence] variant that owns
+ * them. Every arm is tolerant (ADR-0005): the parameters arrive as independent nullable fields, so a
+ * cadence naming itself `monthly` with no `interval` is a shape this reader has to accept, and an
+ * over-strict read here would resurrect the whole-snapshot decode stall of #381.
+ *
+ * The chosen defaults are readings, not guesses. An absent multiplier means "every one of them" — `1`
+ * is the wire's own default for `interval`/`n`, so `?: 1` restores what the sender omitted rather than
+ * inventing a cycle. An absent `custom.rrule` leaves nothing to preserve, hence `""`. An unmodelled or
+ * missing `type` is the only genuinely lossy arm, and [Cadence.Unmodelled] keeps the token itself so
+ * the rule survives a cache/backup round-trip under its own name (#382).
+ */
+private fun RecurrenceDto.toCadence(): Cadence = when (type) {
+    "daily" -> Cadence.Daily
+    "every_n_days" -> Cadence.EveryNDays(n ?: 1)
+    "weekly" -> Cadence.Weekly(days)
+    "monthly" -> Cadence.Monthly(interval ?: 1, on.toDomain())
+    "yearly" -> Cadence.Yearly(interval ?: 1, month ?: 1, day ?: 1)
+    "custom" -> Cadence.Custom(rrule ?: "")
+    else -> Cadence.Unmodelled(type ?: "")
 }
+
+/**
+ * The nested wire `recurrence.end` → domain [RecurrenceBound]. An **absent** `end` is the never bound
+ * (the only encoding the server emits — its `Serialize` skips the key), and an explicit
+ * `{"type":"never"}` is tolerated because the backend's `Deserialize` accepts one. Anything unparseable
+ * — an unknown token, an `on_date` with no/garbled `date`, an `after_count` with no `n` — degrades to
+ * [RecurrenceBound.Never] rather than throwing: an over-strict bound would resurrect exactly the
+ * whole-snapshot decode failure of #381.
+ */
+private fun RecurrenceEndDto?.toDomain(): RecurrenceBound = when (this?.type) {
+    "on_date" -> date.toLocalDateOrNull()?.let(RecurrenceBound::OnDate) ?: RecurrenceBound.Never
+    "after_count" -> n?.let(RecurrenceBound::AfterCount) ?: RecurrenceBound.Never
+    else -> RecurrenceBound.Never
+}
+
+/**
+ * The nested wire `recurrence.on` → domain [MonthlyAnchor]; an unknown token or a half-populated anchor
+ * degrades to `null` (the monthly rule is still usable, it just cannot say which day).
+ */
+private fun MonthlyAnchorDto?.toDomain(): MonthlyAnchor? = when (this?.type) {
+    "day_of_month" -> day?.let(MonthlyAnchor::DayOfMonth)
+    "nth_weekday" -> if (nth != null && weekday != null) MonthlyAnchor.NthWeekday(nth, weekday) else null
+    else -> null
+}
+
+/** Parses the `on_date` bound's ISO-8601 date, or `null` when absent/unparseable (defensive). */
+private fun String?.toLocalDateOrNull(): LocalDate? =
+    this?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 
 // --- Habit ---
 

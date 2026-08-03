@@ -15,11 +15,16 @@ import kotlin.time.Instant
  * (#74). Reads are local Flows over fixed sample data — no network or database; `refreshWindow` /
  * `reconcile` are no-ops (the sample is the source of truth). The real app reads the DI-provided
  * OfflineCalendarRepository (ADR-0014); this stays a test fixture.
+ *
+ * The sample rows are served verbatim, which is what production does too (#380): a row's `kind` is a
+ * stored column, so what the feed asserted is what the agenda reads back — a sample row with no series,
+ * or one carrying no kind, degrades to read-only exactly as it would in the app.
  */
 internal class DemoCalendarRepository(
     private val markers: Map<LocalDate, Int> = emptyMap(),
     private val agenda: Map<LocalDate, List<CalendarItem>> = emptyMap(),
 ) : CalendarRepository {
+
     override fun observeMarkers(from: LocalDate, to: LocalDate): Flow<Map<LocalDate, Int>> =
         MutableStateFlow(markers.filterKeys { it >= from && it < to })
 
@@ -33,7 +38,12 @@ internal class DemoCalendarRepository(
 /**
  * Sample Calendar content for the screenshot tests (#74): a small, calm month (design-principles.md) —
  * a few days with marker dots, and a selected day whose agenda shows a Habit / Chore / Event firing
- * plus a dated Task, so the kind-aware action set + the gentle status labels render in the baseline.
+ * plus a dated Task, so the kind-aware action set, the read-only degradation and the gentle status
+ * labels all render in the baseline.
+ *
+ * Every firing keeps its item id (`task-…`) distinct from its series id (`…-series`) — the distinction
+ * #380 turns on: the occurrence endpoints address the item, while the series id only says "this row is
+ * a firing".
  */
 internal object SampleCalendar {
     val day: LocalDate = LocalDate(2026, 6, 15)
@@ -60,9 +70,9 @@ internal object SampleCalendar {
 
     val agenda: Map<LocalDate, List<CalendarItem>> = mapOf(
         day to listOf(
-            item("h1", ItemKind.Habit, "hab-1", "Morning stretch"),
-            item("c1", ItemKind.Chore, "cho-1", "Water the plants", status = WorkingState.Done),
-            item("e1", ItemKind.Event, "evt-1", "Team standup"),
+            item("h1", ItemKind.Habit, "hab-1-series", "Morning stretch"),
+            item("c1", ItemKind.Chore, "cho-1-series", "Water the plants", status = WorkingState.Done),
+            item("e1", ItemKind.Event, "evt-1-series", "Team standup"),
             // A one-off dated Task (no series) — rendered, read-only (acted on in Tasks).
             item("t1", kind = null, seriesId = null, title = "Pay the rent"),
         ),

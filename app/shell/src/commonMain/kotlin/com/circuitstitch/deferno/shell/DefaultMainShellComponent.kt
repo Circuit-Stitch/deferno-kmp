@@ -68,6 +68,7 @@ import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Priority
+import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
@@ -98,6 +99,7 @@ import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachments
 import com.circuitstitch.deferno.feature.tasks.DefaultTasksComponent
 import com.circuitstitch.deferno.feature.tasks.SearchComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
+import com.circuitstitch.deferno.feature.tasks.ItemRowDecorations
 import com.circuitstitch.deferno.feature.tasks.SearchTasks
 import com.circuitstitch.deferno.feature.tasks.TaskMenuState
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
@@ -119,10 +121,12 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.plus
 import kotlin.time.Instant
 import kotlin.coroutines.CoroutineContext
 
@@ -306,14 +310,33 @@ class DefaultMainShellComponent(
         )
     }
 
-    // The Item-tree command menu's per-row Task state (#231): join each Task's working-state + pinned flag
-    // with whether it's in today's plan (keyed by id) so the menu can label Pin↔Unpin / Add↔Remove-from-plan
-    // and swap the kind-aware status block. Only Tasks appear (the status/Pin/plan writes are Task-only);
-    // a non-Task tree row simply has no entry. Cold + offline-first (both reads are local Flows, ADR-0001).
-    private val treeMenuStates: Flow<Map<String, TaskMenuState>> =
-        combine(taskRepository.observeTasks(), planRepository.observePlan(today, timeZone)) { tasks, plan ->
+    // The Item tree's per-row decorations (#231/#386), joined here because this is the only layer where
+    // `today`, the time zone, and the Task + plan + calendar reads all live. One `combine` over three
+    // sources, not two joins over four: today's plan is the shared arm, and subscribing to it twice (as
+    // the two separate joins did) meant two live plan queries for one screen.
+    //
+    // The two halves are deliberately NOT the same shape, and unifying them would be a bug:
+    //  - `menuStates` is Task-only by construction — the Pin/plan/status writes it labels are Task-only,
+    //    so a non-Task tree row simply has no entry and the menu falls back to its cross-kind subset.
+    //  - `inTodayIds` is deliberately kind-neutral and WIDER (semantics in [inTodayIds] below): narrowing
+    //    "In today" through the Task-only map is exactly the mistake that would make every
+    //    Habit/Chore/Event vanish — a confident "no" to "is my habit on my plan today?".
+    //
+    // Cold + offline-first (all three reads are local DB Flows, ADR-0001) — and all three emit their
+    // current cached value on subscription, so `combine` yields a first frame without waiting on the network.
+    private val treeDecorations: Flow<ItemRowDecorations> =
+        combine(
+            taskRepository.observeTasks(),
+            planRepository.observePlan(today, timeZone),
+            calendarRepository.observeDay(today),
+        ) { tasks, plan, day ->
             val planIds = plan.mapTo(HashSet(plan.size)) { it.id.value }
-            tasks.associate { it.id.value to TaskMenuState(it.workingState, it.pinned, it.id.value in planIds) }
+            ItemRowDecorations(
+                menuStates = tasks.associate {
+                    it.id.value to TaskMenuState(it.workingState, it.pinned, it.id.value in planIds)
+                },
+                inTodayIds = inTodayIds(plan, day),
+            )
         }
 
     // The Inbox "accept" seam (ADR-0015 Inbox amendment): commit a draft as a real Task through the same
@@ -569,7 +592,7 @@ class DefaultMainShellComponent(
                         setLabels = setLabels,
                         deleteTask = deleteTask,
                         onDeviceAttachments = onDeviceAttachments,
-                        menuStates = treeMenuStates,
+                        decorations = treeDecorations,
                         setPinned = setPinned,
                         addToPlan = addToPlan,
                         removeFromPlan = removeFromPlan,
@@ -720,6 +743,20 @@ class DefaultMainShellComponent(
             if (assistant.availability.value?.entitled == true) {
                 _destinations.value = destinationsFor(assistantEntitled = true)
             }
+        }
+        // Warm **today's** calendar window once per session (#386). Without this the tree's "In today"
+        // segment reads whatever stale span the DB happens to hold: `refreshWindow` has exactly one other
+        // production caller — the Calendar Destination's own init — so a user who never opens Calendar
+        // would get an "In today" that confidently hides every recurring item. That is worse than the
+        // decorative segment it replaces, so the fix isn't complete without this kick.
+        //
+        // Once at construction, deliberately NOT on every resume: `refreshWindow` also sets the
+        // repository's `lastWindow`, which the outbox's `reconcile()` replays after a flush — a
+        // resume-time kick would quietly re-point reconcile at today while the user browses another
+        // month. Best-effort: an unavailable pull writes nothing and leaves the cache intact (ADR-0001).
+        overlayScope.launch {
+            runCatching { calendarRepository.refreshWindow(today, today.plus(1, DateTimeUnit.DAY), timeZone) }
+                .onFailure { Logger("ShellInToday").i { "today-window warm-up failed: ${it.message}" } }
         }
     }
 
@@ -1076,6 +1113,36 @@ private fun destinationsFor(assistantEntitled: Boolean): List<Destination> =
         it != Destination.Profile &&
             (it != Destination.Assistant || assistantEntitled)
     }
+
+/**
+ * The kind-neutral **"in today"** id set the Item tree's first filter segment narrows on (#386): today's
+ * [plan] (Task ids) unioned with every recurring definition that has a firing in today's calendar [day].
+ * Before this the segment consulted no date, no plan and no calendar at all — it was a synonym for
+ * "Active" on Apple and for **"All"** on Compose, which made it actively misleading in bug reports about
+ * the plan.
+ *
+ * **The recurring arm keys on [CalendarItem.seriesId], the *definition* id** — the id a tree row carries
+ * verbatim. Not `taskId`: that is the id the *occurrence endpoints* address (#380), a different job for a
+ * different consumer. The two must not be harmonised.
+ *
+ * Two deliberate exclusions, both mirroring the reference client (`webui/src/utils/itemFilter.ts`) rather
+ * than inventing a rule:
+ *  - **A merely-dated Task is not "in today".** A one-off dated feed row has no series, so it contributes
+ *    nothing; a Task is in today because it is on the plan. The reference keeps its date-range gate
+ *    separate from its plan/overdue gates for the same reason.
+ *  - **No overdue arm.** The cross-kind `Item` projection carries no `complete_by`, so "late" is not
+ *    derivable here at all. If one ever lands, mirror the reference's exclusion: habits and events are
+ *    never overdue (`itemFilter.ts:82`), only tasks and chores.
+ *
+ * Total by construction: a null [CalendarItem.seriesId] is dropped rather than guessed, and an id present
+ * on both sides collapses to one entry.
+ */
+internal fun inTodayIds(plan: List<Task>, day: List<CalendarItem>): Set<String> {
+    val ids = HashSet<String>(plan.size + day.size)
+    plan.mapTo(ids) { it.id.value }
+    day.mapNotNullTo(ids) { it.seriesId }
+    return ids
+}
 
 /**
  * Dismiss the Tasks Destination's open detail (ADR-0049). The Item [TasksComponent.tree] is the
