@@ -36,9 +36,11 @@ import org.robolectric.annotation.Config
  *
  * It drives a real [DefaultTasksComponent] over an in-memory repository on [Dispatchers.Unconfined]
  * (state resolves synchronously, so opening a task before capture is enough) — the same harness the
- * interaction tests use. Record with `./gradlew :app:androidApp:recordRoborazziDebug`; CI guards
- * regressions with `verifyRoborazziDebug`. With no Roborazzi mode set, `captureRoboImage` is a no-op,
- * so these also run harmlessly as part of the normal unit-test task.
+ * interaction tests use. Record with `./gradlew :app:androidApp:recordRoborazziStagingDebug` (baselines
+ * are flavor-agnostic — record once), compare with `verifyRoborazziStagingDebug`. **Neither is on the
+ * `check` path or in CI**, so only a deliberate local run catches a drifted golden. With no Roborazzi
+ * mode set, `captureRoboImage` is a no-op, so these also run harmlessly as part of the normal unit-test
+ * task.
  */
 @RunWith(RobolectricTestRunner::class)
 @OptIn(ExperimentalTestApi::class)

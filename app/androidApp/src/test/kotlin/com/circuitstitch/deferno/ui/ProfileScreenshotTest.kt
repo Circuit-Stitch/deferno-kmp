@@ -21,7 +21,9 @@ import org.robolectric.RobolectricTestRunner
  * Roborazzi screenshot baselines (#70) for the Profile Destination across its `/auth/me` states in the
  * Deferno palette (light + dark) — the signed-in identity card (avatar/name/@handle/Org chip + the
  * Account controls), the loading strip, and the offline/unavailable notice. Record with
- * `./gradlew :app:androidApp:recordRoborazziDebug`; with no Roborazzi mode set `captureRoboImage` is a
+ * `./gradlew :app:androidApp:recordRoborazziStagingDebug` (baselines are flavor-agnostic — record once),
+ * compare with `verifyRoborazziStagingDebug`. **Neither is on the `check` path or in CI**, so only a
+ * deliberate local run catches a drifted golden. With no Roborazzi mode set `captureRoboImage` is a
  * no-op, so these also run as part of the normal unit-test task.
  */
 @RunWith(RobolectricTestRunner::class)

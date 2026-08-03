@@ -26,7 +26,9 @@ import org.robolectric.annotation.Config
  * Roborazzi screenshot baselines (#72) for the Settings tier-3 drill-down: the category list (with
  * the coming-soon stub rows), the Appearance detail (deferno/light and mono/dark), and a coming-soon
  * stub detail. Drives a real [DefaultSettingsComponent] over the in-memory settings fakes (the same
- * harness the interaction tests use). Record with `:app:androidApp:recordRoborazziDebug`.
+ * harness the interaction tests use). Record with `:app:androidApp:recordRoborazziStagingDebug`
+ * (baselines are flavor-agnostic — record once), compare with `verifyRoborazziStagingDebug`. **Neither is
+ * on the `check` path or in CI**, so only a deliberate local run catches a drifted golden.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w400dp-h800dp")

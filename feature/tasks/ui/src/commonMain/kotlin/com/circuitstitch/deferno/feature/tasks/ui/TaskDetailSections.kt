@@ -608,9 +608,14 @@ private fun journeyLabelText(label: JourneyLabel): String = stringResource(
     },
 )
 
-/** The relative-day reading (ADR-0044) mapped to its localized string — discrete keys, plurals for N days. */
+/**
+ * The relative-day reading (ADR-0044) mapped to its localized string — discrete keys, plurals for N days.
+ * `internal` rather than private since #384: the Item tree's recurrence subtitle renders the *same*
+ * reading for its "Next: …" clause ([recurrenceSummary]), and a second mapping would be a second set of
+ * five locale files to keep in lockstep for a phrase that is word-for-word identical.
+ */
 @Composable
-private fun relativeDayText(rel: RelativeDay): String = when (rel) {
+internal fun relativeDayText(rel: RelativeDay): String = when (rel) {
     RelativeDay.Today -> stringResource(Res.string.tasks_detail_due_today)
     RelativeDay.Tomorrow -> stringResource(Res.string.tasks_detail_due_tomorrow)
     RelativeDay.Yesterday -> stringResource(Res.string.tasks_detail_due_yesterday)
