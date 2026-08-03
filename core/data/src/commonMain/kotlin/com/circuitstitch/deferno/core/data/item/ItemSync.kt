@@ -32,6 +32,20 @@ import com.circuitstitch.deferno.core.model.TaskId
  * the reconcile entirely, leaving every cache intact; an [RemoteSnapshot.Available] snapshot always
  * reconciles, even when empty (a genuinely-emptied server purges the caches).
  *
+ * **Why a wire-model bug looks exactly like being offline — the #381 hazard, worth knowing before you
+ * add a DTO field.** [RemoteSnapshot] is binary: `asSnapshot()` collapses *every* `ApiResult.Failure`
+ * to [RemoteSnapshot.Unavailable], and a body that failed to deserialize is one of them
+ * (`ApiError.Transport`). So a DTO whose shape does not match the wire is indistinguishable here from
+ * a dropped connection — and because the early return above sits over *all four* reconciles, one
+ * un-decodable Habit freezes the Task cache too. It is silent by construction: the intended,
+ * correct offline behaviour and a total cold-sync stall take the same code path and surface no error.
+ *
+ * That is why the `/items` DTOs must be **tolerant, never strict**: `ignoreUnknownKeys` for additive
+ * fields, a defaulted `...Wire.Unknown` for every enum, defaults for optional fields, and flat
+ * tolerant classes rather than sealed hierarchies for nested wire objects (`DefernoJson` registers no
+ * `polymorphicDefaultDeserializer`, so an unknown discriminator throws). A shape assumption asserted
+ * strictly here is not a loud failure — it is an invisible one.
+ *
  * **Offline creates protected from the purge (#185).** A row created offline rides the outbox and is
  * absent from the server snapshot until its create replays, so the still-[pending][PendingCreateStore]
  * ids are excluded from every kind's orphan set (a pending id is a global UUID — mapping it into each
