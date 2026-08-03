@@ -810,6 +810,7 @@ Vielen Dank.</string>
     <!-- Eingebettetes „Alle“ muss zu tasks_filter_all passen -->
     <string name="tasks_tree_filtered_empty_body">Hier ist alles erledigt. Wechsle zu „Alle“, um es wieder zu sehen.</string>
     <string name="tasks_tree_filtered_empty_title">Hier gibt es gerade nichts zu sehen</string>
+    <string name="tasks_tree_in_today_empty_body">Hier steht nichts im heutigen Plan. Wechsle zu „Alle“, um alles zu sehen.</string>
     <string name="tasks_tree_refreshing">Wird aktualisiert…</string>
     <string name="tasks_tree_show_blocked">Blockierte anzeigen</string>
     <string name="tasks_unblock_confirm_releases">Damit wird die Blockierung aufgehoben für: %1$s</string>

@@ -811,6 +811,7 @@
     <!-- “सभी” tasks_filter_all से मेल खाता है -->
     <string name="tasks_tree_filtered_empty_body">यहाँ सब कुछ पूर्ण है। इसे फिर से देखने के लिए “सभी” पर जाएँ।</string>
     <string name="tasks_tree_filtered_empty_title">यहाँ दिखाने को कुछ नहीं</string>
+    <string name="tasks_tree_in_today_empty_body">यहाँ कुछ भी आज की योजना में नहीं है। सब कुछ देखने के लिए “सभी” पर जाएँ।</string>
     <string name="tasks_tree_refreshing">रीफ़्रेश हो रहा है…</string>
     <string name="tasks_tree_show_blocked">अवरुद्ध दिखाएँ</string>
     <string name="tasks_unblock_confirm_releases">इससे ये भी अनवरुद्ध होंगे: %1$s</string>
