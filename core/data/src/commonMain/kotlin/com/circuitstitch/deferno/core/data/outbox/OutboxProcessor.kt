@@ -15,12 +15,19 @@ import kotlin.time.Instant
  * The outcome counts of one [OutboxProcessor.flush] pass. [dropped] counts entries **dead-lettered** this
  * pass (terminally rejected / attempts-exhausted) — they are preserved in the queue ([OutboxEntry.failedAt]),
  * not deleted; [remaining] is the live (still-syncable) queue size.
+ *
+ * [coalesced] counts entries the pass **deleted before dispatching anything** because a later write on the
+ * same firing superseded them (#396, [coalesceOccurrences]) — writes that never reached the network at all,
+ * so they are neither succeeded nor dropped. It is appended and defaulted rather than slotted in beside its
+ * siblings: [FlushResult] crosses the module boundary into the shell's outbox driver, and reordering the
+ * parameters would break every construction site that names them.
  */
 data class FlushResult(
     val succeeded: Int,
     val dropped: Int,
     val retried: Int,
     val remaining: Long,
+    val coalesced: Int = 0,
 )
 
 /**
@@ -28,6 +35,16 @@ data class FlushResult(
  * retrying with backoff and re-reconciling the cache after a successful flush. The app calls [flush]
  * on a trigger (reconnect / foreground); `now` is passed in so the readiness + backoff timing is fully
  * deterministic under test (ADR-0006 JVM-fast path).
+ *
+ * **Compact, then drain (#396).** Each pass first deletes the queued occurrence writes a later write on
+ * the same firing has superseded ([coalesceOccurrences]), so an offline mark → clear → mark of one firing
+ * replays as the one server write it means rather than three. It runs at the very top of [flush] — inside
+ * the mutex the pass already holds (an enqueue-time merge would race the in-flight send) and *before* the
+ * readiness break below, so it compacts the whole live queue rather than only its ready prefix. The pass
+ * only ever deletes, and the survivor of a collapsed run is always the latest entry keeping its own seq,
+ * so the FIFO guarantee below is untouched: every surviving entry replays exactly where it would have.
+ * One deliberate consequence: compacting away a backed-off head *unblocks* the queue, and the survivor
+ * dispatches immediately on its own attempt count rather than inheriting the superseded entry's penalty.
  *
  * **Strict FIFO, head-of-line.** Entries replay in [OutboxEntry.seq] (enqueue) order. A *transient*
  * failure on the head ([SendOutcome.Retryable]) backs the head off and **stops** the pass — later
@@ -80,6 +97,10 @@ class OutboxProcessor(
         var succeeded = 0
         var dropped = 0
         var retried = 0
+
+        // Compact first (#396), so a superseded write is never dispatched — not even when it is the
+        // backed-off head that would otherwise hold the whole queue behind it.
+        val coalesced = compact()
 
         for (entry in store.syncable()) {
             // [syncable] is live rows only — a dead-lettered entry (a prior terminal rejection) is already
@@ -159,7 +180,28 @@ class OutboxProcessor(
             }
         }
 
-        FlushResult(succeeded = succeeded, dropped = dropped, retried = retried, remaining = store.count())
+        FlushResult(
+            succeeded = succeeded,
+            dropped = dropped,
+            retried = retried,
+            remaining = store.count(),
+            coalesced = coalesced,
+        )
+    }
+
+    /**
+     * Deletes the queued occurrence writes a later write on the same firing superseded (#396), returning
+     * how many went. Caller-side of [coalesceOccurrences]: the decision is pure and lives there, this only
+     * applies it. Reads [OutboxStore.syncable] so a dead-lettered row is never a candidate, and logs at
+     * debug — a coalesce is expected, healthy behaviour after an offline stretch, not a fault.
+     */
+    private suspend fun compact(): Int {
+        val superseded = coalesceOccurrences(store.syncable())
+        for (seq in superseded) store.delete(seq)
+        if (superseded.isNotEmpty()) {
+            log.d { "coalesced ${superseded.size} superseded occurrence write(s) (seq ${superseded.joinToString()})" }
+        }
+        return superseded.size
     }
 
     /**
