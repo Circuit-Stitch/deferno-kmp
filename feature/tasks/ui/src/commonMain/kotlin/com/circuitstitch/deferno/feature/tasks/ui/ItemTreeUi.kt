@@ -82,6 +82,7 @@ import com.circuitstitch.deferno.core.designsystem.component.SearchBarDisplay
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
 import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_a11y_phrase_join
 import com.circuitstitch.deferno.core.designsystem.resources.common_add
 import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
 import com.circuitstitch.deferno.core.designsystem.resources.common_cannot_be_undone
@@ -655,7 +656,12 @@ private fun ItemTreeRow(
                     // `[GitHub#12]` ref prefix the AnnotatedString may carry. That is deliberate and not a
                     // bug to "fix": SourceIndicator announces provenance on its own, and Apple speaks the
                     // bare title too.
-                    val titleA11y = "${item.title}, ${kindA11yLabel(item.kind)}"
+                    //
+                    // The two fragments are joined through `common_a11y_phrase_join`, not a literal ", ":
+                    // this is a phrase a user hears, so both the separator and the order belong to the
+                    // translator (hi already reorders the analogous `tasks_recurrence_a11y_prefix`).
+                    val titleA11y =
+                        stringResource(Res.string.common_a11y_phrase_join, item.title, kindA11yLabel(item.kind))
                     Text(
                         // A dimmed `[GitHub#N]` ref prefix for a synced/imported item, alongside the
                         // SourceIndicator mark; null provenance renders the bare title unchanged.

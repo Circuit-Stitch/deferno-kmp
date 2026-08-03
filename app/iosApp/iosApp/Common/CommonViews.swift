@@ -63,9 +63,10 @@ struct ItemRowView: View {
     /// reading is derived per render on purpose: "Next: Tomorrow" is a claim about *today*, and the Flow
     /// behind the tree only re-emits when the database changes, never when the clock does.
     ///
-    /// Evaluated ONCE per row render, in `body`, and threaded to both consumers. It is not a computed
-    /// property read twice: each call crosses the Kotlin bridge seven times and derives the cursor twice
-    /// over, and this is per-row, per-frame work in a scrolling tree.
+    /// Evaluated ONCE per row render, in `body`, and threaded to both consumers rather than read twice as
+    /// a computed property: each read still crosses the Kotlin bridge and re-derives the cursor, and this
+    /// is per-row, per-frame work in a scrolling tree. (One crossing, not eight — `recurrenceLineTokens`
+    /// returns every piece of the line as a single value.)
     private var recurrence: (text: String, spoken: String)? { L.recurrenceLine(row.item) }
 
     /// The title's spoken label: "Water the plants, habit, Repeats Weekly on Mon, Wed · Next: Tomorrow".
@@ -73,9 +74,12 @@ struct ItemRowView: View {
     /// muted mono filigree — it *looks* decorative, so a VoiceOver user swiping the row would skip the one
     /// thing that says this item comes back. The `MonoMeta` hides itself to keep it from being said twice.
     private func titleA11yLabel(_ recurrence: (text: String, spoken: String)?) -> String {
-        let base = "\(row.item.title), \(kindA11yLabel(row.item.kind))"
+        // Joined through `common_a11y_phrase_join`, not a literal ", ": this is a phrase a user hears, so
+        // both the separator and the order belong to the translator (hi already reorders the analogous
+        // `tasks_recurrence_a11y_prefix`). The Compose row joins on the same key.
+        let base = L.format("common_a11y_phrase_join", row.item.title, kindA11yLabel(row.item.kind))
         guard let spoken = recurrence?.spoken else { return base }
-        return "\(base), \(spoken)"
+        return L.format("common_a11y_phrase_join", base, spoken)
     }
 
     var body: some View {

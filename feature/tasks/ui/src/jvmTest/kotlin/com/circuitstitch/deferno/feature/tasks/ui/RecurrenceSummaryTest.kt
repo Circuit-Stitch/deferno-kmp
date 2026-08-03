@@ -1,7 +1,9 @@
 package com.circuitstitch.deferno.feature.tasks.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runComposeUiTest
+import com.circuitstitch.deferno.core.designsystem.format.LocalToday
 import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Item
@@ -23,10 +25,16 @@ import kotlinx.datetime.TimeZone
  * `Item.recurrence` + the `RecurrenceCursor` reading. One edit covers **Android and desktop**: both
  * shells render the same `ItemTreeContent`, so this is the only Compose home for these assertions.
  *
- * The table walks every `Cadence` arm, both non-`Never` `RecurrenceBound` arms and all three
+ * The table walks every `CadenceReading` arm, both non-open-ended `RecurrenceBound` arms and all three
  * `RecurrenceCursor` arms, because each one is a separate string key across five locales and a silently
- * wrong arm looks exactly like a right one. It also pins the three **RENDERER RULES** the string catalog
- * records on the keys themselves — every one of them is a trap a future author walks into once.
+ * wrong arm looks exactly like a right one.
+ *
+ * **Phrasing only.** The three RENDERER RULES the string catalog records on the keys themselves — the
+ * `EveryNDays(1)` fold, the interval floor, which weekday tokens survive and in what order — belong to
+ * `RecurrenceReadingTest` now, because they belong to the shared reading all four platforms consume. What
+ * is left here is the half only Compose can get wrong: which key each arm reaches for, and how the three
+ * clauses join. The cases below still pass a raw `Cadence` because that is what a row holds; they assert
+ * the phrase, not the normalisation that produced it.
  *
  * Two harness notes:
  *  - The summary is Composable (it reads `stringResource`/`pluralStringResource`), so each case is
@@ -39,7 +47,7 @@ import kotlinx.datetime.TimeZone
 @OptIn(ExperimentalTestApi::class)
 class RecurrenceSummaryTest {
 
-    /** Pinned "today"; every fixture instant below is read against it in [ZONE], never the wall clock. */
+    /** Pinned "today"; every fixture instant below is read against it in [zone], never the wall clock. */
     private val today = LocalDate(2026, 6, 15)
 
     /** UTC so an `Instant` → day resolution can't drift with the machine's zone. */
@@ -78,11 +86,20 @@ class RecurrenceSummaryTest {
         recurrenceCursorAt = Instant.parse("2026-01-04T12:00:00Z"),
     )
 
+    /**
+     * Captures the phrase out of a one-shot composition. "Today" is pinned through `LocalToday` rather
+     * than a parameter — [recurrenceSummary] takes [zone] as its ONLY date input and derives the day from
+     * it, so a caller cannot resolve the cursor's instant in one zone and "today" in another. That is the
+     * same seam the screenshot goldens pin, and the reason this harness has one fewer knob than the phrase
+     * has inputs.
+     */
     private fun summaryOf(item: Item): RecurrenceSummary? {
         var captured: RecurrenceSummary? = null
         runComposeUiTest {
             setContent {
-                captured = recurrenceSummary(item, today = today, zone = zone, locale = Locale.ENGLISH)
+                CompositionLocalProvider(LocalToday provides today) {
+                    captured = recurrenceSummary(item, zone = zone, locale = Locale.ENGLISH)
+                }
             }
             waitForIdle()
         }
@@ -139,14 +156,15 @@ class RecurrenceSummaryTest {
         assertEquals("Weekly on Mon, Fri", textOf(cadenceOnly(Cadence.Weekly(listOf("Mon", "Blursday", "Fri")))))
     }
 
-    /** The row states WHICH days, not the order the server serialized them in — and never twice. */
+    /**
+     * The ISO day numbers the shared reading hands over become CLDR labels in week order. Which tokens
+     * survive, deduped and sorted, is `RecurrenceReadingTest`'s to assert — this pins only that the
+     * numbers reach `shortWeekdayLabels` index-aligned, which is the half a renderer can get wrong.
+     */
     @Test
-    fun weekdaysRenderInWeekOrderWithoutDuplicates() {
-        assertEquals(
-            listOf("Mon", "Wed", "Sat"),
-            localizedWeekdays(listOf("Sat", "wed", "Mon", "Wed"), Locale.ENGLISH),
-        )
-        assertEquals(emptyList(), localizedWeekdays(listOf("Blursday"), Locale.ENGLISH))
+    fun weekdayNumbersRenderAsLocalizedLabelsInWeekOrder() {
+        assertEquals("Weekly on Mon, Wed, Sat", textOf(cadenceOnly(Cadence.Weekly(listOf("Sat", "wed", "Mon")))))
+        assertEquals("Weekly on Sun", textOf(cadenceOnly(Cadence.Weekly(listOf("Sun")))))
     }
 
     /** Neither raw wire payload is ever shown to a user — that is the whole point of both keys. */

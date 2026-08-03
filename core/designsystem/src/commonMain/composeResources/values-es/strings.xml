@@ -194,6 +194,7 @@
     <string name="calendar_reschedule_pick_day">Elige un nuevo día para «%1$s»</string>
 
     <!-- ── common ─────────────────────────────────────────────── -->
+    <string name="common_a11y_phrase_join">%1$s, %2$s</string>
     <string name="common_account">Cuenta</string>
     <string name="common_add">Agregar</string>
     <string name="common_add_named_cd">Agregar %1$s</string>

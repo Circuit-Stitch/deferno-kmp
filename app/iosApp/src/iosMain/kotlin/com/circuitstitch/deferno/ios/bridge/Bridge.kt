@@ -4,21 +4,16 @@ import com.circuitstitch.deferno.core.data.task.AttachmentUpload
 import com.circuitstitch.deferno.core.model.ActivityField
 import com.circuitstitch.deferno.core.model.ActivityFieldChange
 import com.circuitstitch.deferno.core.model.ActivityFieldValue
-import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.Comment
-import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.JourneyLabel
 import com.circuitstitch.deferno.core.model.JourneyStyle
-import com.circuitstitch.deferno.core.model.RecurrenceBound
-import com.circuitstitch.deferno.core.model.RecurrenceCursor
 import com.circuitstitch.deferno.core.model.RelativeDay
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.model.journeyStatus
-import com.circuitstitch.deferno.core.model.recurrenceCursor
 import com.circuitstitch.deferno.core.model.relativeDay
 import com.circuitstitch.deferno.feature.tasks.ActivityItem
 import com.circuitstitch.deferno.feature.tasks.ParentSummary
@@ -237,177 +232,6 @@ fun taskDueRelativeCount(task: Task): Int = task.completeBy?.let { instant ->
         else -> 0
     }
 } ?: 0
-
-// ---------------------------------------------------------------------------------------------------
-// Recurring-row readings (#384) — the cadence, the end bound and the next-due cursor a recurring [Item]'s
-// tree row renders as ONE subtitle line under its title. Kept IDENTICAL to
-// app/macosApp .../macos/bridge/Bridge.kt.
-//
-// `core/model` is exported wholesale, so Swift can already *see* `item.recurrence` — but it cannot take it
-// apart. [Cadence]/[RecurrenceBound]/[RecurrenceCursor] are sealed, and a bridged sealed type arrives as an
-// opaque class Swift can neither `==` nor pattern-match in a static framework. So these expose the house
-// idiom instead — stable String tokens, exactly like [journeyLabelToken]/[taskDueRelativeToken] — and the
-// SwiftUI `L.cadence`/`L.cadenceBound`/`L.cursor` map each to its `tasks_cadence_*`/`tasks_recurrence_*`
-// catalog key.
-//
-// **The token is always the discriminator.** The paired count/date accessors return 0 for an arm that
-// carries no number, so a `0` is never a value to render — Swift reads one only after a token asked for it.
-//
-// Nothing here formats a day or names a weekday: Kotlin/Native has no java.time, and CLAUDE.md forbids a
-// hand-rolled per-locale table regardless of platform. The wire's English weekday tokens and a bare epoch
-// day cross as-is, and Swift resolves both through CLDR (`Calendar.shortWeekdaySymbols`, `DateFormatter`).
-// ---------------------------------------------------------------------------------------------------
-
-/**
- * This item's cadence with `EveryNDays(1)` folded into [Cadence.Daily] — the single place that
- * normalisation happens, deliberately *below* the two Swift twins rather than in each of them.
- *
- * "Every 1 day" is what [Cadence.Daily] already says, so `tasks_cadence_every_n_days`' `one` arm is
- * unreachable by design (it exists only so the plural is well-formed, and several locales drop the numeral
- * outright — de does — so the phrase is not even grammatical everywhere). A stride of `0` folds here too:
- * it cannot be rendered as a stride at all, and "Daily" is the least-wrong reading of a rule that fires
- * without one.
- */
-private fun renderedCadence(item: Item): Cadence? = when (val cadence = item.recurrence?.cadence) {
-    is Cadence.EveryNDays -> if (cadence.n <= 1) Cadence.Daily else cadence
-    else -> cadence
-}
-
-/**
- * The cadence token: `DAILY | EVERY_N_DAYS | WEEKLY | MONTHLY | YEARLY | CUSTOM | UNMODELLED`, or `null`
- * when the item carries no rule — every [Task], and a recurring definition whose rule did not survive the
- * wire. Swift renders it via `L.cadence` (with [itemCadenceCount]/[itemCadenceWeekdays]).
- *
- * `UNMODELLED` never carries the raw wire token across, and `CUSTOM` never carries the rrule: both are
- * machine text, and the catalog's phrases for them ("Repeats" / "Custom schedule") deliberately promise
- * nothing this build cannot actually read (#382).
- */
-fun itemCadenceToken(item: Item): String? = when (renderedCadence(item)) {
-    null -> null
-    Cadence.Daily -> "DAILY"
-    is Cadence.EveryNDays -> "EVERY_N_DAYS"
-    is Cadence.Weekly -> "WEEKLY"
-    is Cadence.Monthly -> "MONTHLY"
-    is Cadence.Yearly -> "YEARLY"
-    is Cadence.Custom -> "CUSTOM"
-    is Cadence.Unmodelled -> "UNMODELLED"
-}
-
-/**
- * The number the cadence plural agrees on: [Cadence.EveryNDays]'s stride, or the `interval` of a
- * [Cadence.Monthly]/[Cadence.Yearly]. 0 for every other arm — they carry no number, and their token says so.
- *
- * An interval of 1 crosses **unchanged**, unlike the `EveryNDays(1)` fold above: `tasks_cadence_monthly` /
- * `tasks_cadence_yearly` put the plain adverb ("Monthly"/"Yearly") in their own `one` arm, so the catalog
- * already does that normalising and doing it here as well would be the same rule written twice. A
- * non-positive interval is floored at 1 for the same reason the stride is: "Every 0 months" is not a
- * sentence, and the adverb is the least-wrong reading of a rule that fires without an interval.
- */
-fun itemCadenceCount(item: Item): Int = when (val cadence = renderedCadence(item)) {
-    is Cadence.EveryNDays -> cadence.n
-    is Cadence.Monthly -> cadence.interval.coerceAtLeast(1)
-    is Cadence.Yearly -> cadence.interval.coerceAtLeast(1)
-    else -> 0
-}
-
-/**
- * The wire's weekday tokens in ISO order — [Cadence.Weekly.days] ships `chrono::Weekday`'s Display form
- * (`"Mon"`..`"Sun"`), which is **English regardless of the user's locale**. This list only turns a token
- * into an index and back; it is never displayed, so it is not the per-locale weekday table CLAUDE.md bans.
- */
-private val WireWeekdayTokens = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-
-/**
- * The days a [Cadence.Weekly] rule fires on, as the wire's **English** `chrono::Weekday` tokens, never a
- * localized label — Swift maps each through `Calendar.shortWeekdaySymbols`, so the day NAMES come from CLDR
- * on the platform that owns the locale (CLAUDE.md forbids the per-locale table the alternative would need).
- *
- * The list is canonicalised here rather than in either Swift twin, because how it reads is a rendering rule
- * the two must agree on: a token this build cannot place is **dropped** (a rule it cannot fully read still
- * round-trips the cache verbatim, #382 — it must degrade to a shorter list, not take the row down),
- * duplicates collapse, and what survives is sorted into week ORDER. `["Wed", "Mon"]` therefore reads
- * "Mon, Wed": the row states which days a rule fires on, not the order the server happened to serialize
- * them in. The order is ISO (Monday-first, the rule's own week) even where the locale's week starts on
- * Sunday — the four platforms are specified to render this line identically, and Compose sorts the same way.
- *
- * Empty for every other cadence, and for a Weekly rule whose day list did not survive the wire or whose
- * every token was unplaceable — all of which is exactly the day-less "Weekly" reading
- * `tasks_cadence_weekly` exists for.
- */
-fun itemCadenceWeekdays(item: Item): List<String> {
-    val days = (renderedCadence(item) as? Cadence.Weekly)?.days ?: return emptyList()
-    return days
-        .mapNotNull { token -> WireWeekdayTokens.firstOrNull { it.equals(token, ignoreCase = true) } }
-        .distinct()
-        .sortedBy(WireWeekdayTokens::indexOf)
-}
-
-// [MonthlyAnchor] — and [Cadence.Yearly]'s month/day — deliberately have NO seam here. "The 2nd Tuesday"
-// needs ordinal+weekday grammar that de/es/hi/pt have no existing key family to copy, and the webui does
-// not render it on a row either. The row says how OFTEN a thing repeats; #383's detail surface is where
-// exactly WHEN belongs. An accessor for it would be a boundary crossing with nothing on the far side.
-
-/**
- * The end-bound token: `ON_DATE | AFTER_COUNT`, or `null` for [RecurrenceBound.Never] — the open-ended
- * default ("the trash goes out every Tuesday", forever), which renders nothing at all rather than a word
- * saying it is unbounded.
- *
- * Note this is the rule's **upper bound**, the peer of the cadence — not [itemCursorToken] below, which is
- * where the series has walked *to*. Reading one as the other is the #384 trap the two names exist to stop.
- */
-fun itemBoundToken(item: Item): String? = when (item.recurrence?.bound) {
-    null, RecurrenceBound.Never -> null
-    is RecurrenceBound.OnDate -> "ON_DATE"
-    is RecurrenceBound.AfterCount -> "AFTER_COUNT"
-}
-
-/** The firing count of an `AFTER_COUNT` bound (the wire's `COUNT`); 0 for every other bound. */
-fun itemBoundCount(item: Item): Int = (item.recurrence?.bound as? RecurrenceBound.AfterCount)?.n ?: 0
-
-/**
- * An `ON_DATE` bound (the wire's `UNTIL`) as **epoch days**; 0 otherwise — the token is the discriminator,
- * so the 1970-01-01 that a bare 0 decodes to is never something Swift reaches.
- *
- * Days, not the epoch *seconds* every picker seam crosses on, because this is a calendar DAY with no clock
- * and no zone: seconds would force Swift to pick a zone to read them in, and every user west of Greenwich
- * would see the day before. Swift reconstructs UTC midnight and formats in UTC, so the day survives intact.
- */
-fun itemBoundDateEpochDays(item: Item): Int =
-    (item.recurrence?.bound as? RecurrenceBound.OnDate)?.date?.toEpochDays()?.toInt() ?: 0
-
-/**
- * The [RecurrenceCursor] reading: `EXHAUSTED | TODAY | TOMORROW | YESTERDAY | DAYS_AWAY | DAYS_AGO`, or
- * `null` for `NoCursor` — a Task, or an **Archived** definition, whose stale cursor the reading deliberately
- * refuses to believe. Swift renders it via `L.cursor` (with [itemCursorCount]).
- *
- * Derived here on every call rather than carried on the row: [recurrenceCursor] is a reading against
- * *today*, and the Flow behind the Item tree only re-emits when the database changes — a value baked at
- * emit time would still be claiming "Tomorrow" tomorrow.
- *
- * The five relative-day arms are deliberately the SAME tokens [taskDueRelativeToken] emits, so Swift maps
- * them through the one `L.relativeDay` and the `tasks_detail_due_*` keys it already owns. A cursor pointing
- * *backwards* is normal rather than corrupt (a missed Habit's cursor sits where it stopped advancing), so
- * `DAYS_AGO` is an honest reading here, not an error state.
- */
-fun itemCursorToken(item: Item): String? = when (val cursor = item.recurrenceCursor()) {
-    RecurrenceCursor.NoCursor -> null
-    RecurrenceCursor.Exhausted -> "EXHAUSTED"
-    is RecurrenceCursor.DueOn -> when (cursor.day) {
-        RelativeDay.Today -> "TODAY"
-        RelativeDay.Tomorrow -> "TOMORROW"
-        RelativeDay.Yesterday -> "YESTERDAY"
-        is RelativeDay.DaysAway -> "DAYS_AWAY"
-        is RelativeDay.DaysAgo -> "DAYS_AGO"
-    }
-}
-
-/** The day count for the cursor's `DAYS_AWAY`/`DAYS_AGO` plural (else 0) — feeds `L.cursor(token, count)`. */
-fun itemCursorCount(item: Item): Int =
-    when (val day = (item.recurrenceCursor() as? RecurrenceCursor.DueOn)?.day) {
-        is RelativeDay.DaysAway -> day.days
-        is RelativeDay.DaysAgo -> day.days
-        else -> 0
-    }
 
 /** Whether [comment] is the current user's (gates inline Edit/Delete) — both ids are erased [UserId]s. */
 fun commentIsMine(state: TaskDetailState, comment: Comment): Boolean {
