@@ -43,6 +43,12 @@ data class ItemTreeState(
     // entry (the write layer is Task-centric). The View reads it to label Pin↔Unpin / Add↔Remove-from-plan
     // and to swap the status block; a non-Task row (no entry) gets the cross-kind subset (Add subtask · Move).
     val menuStates: Map<String, TaskMenuState> = emptyMap(),
+    // The kind-neutral **"in today"** id set the View's first filter segment narrows on (#386): today's
+    // plan (Task ids) unioned with every recurring definition that has a firing today. Unlike [menuStates]
+    // this is NOT Task-only — a Habit/Chore/Event row is in today exactly when it fires today, which is why
+    // the segment stopped being a synonym for "Active". Empty by default (a View wired without it shows
+    // nothing under "In today", never everything — an honest narrowing beats a silent lie).
+    val inTodayIds: Set<String> = emptySet(),
     // The "Blocked by…" picker (#291), non-null while open. Component-owned (not View-local like the
     // simple confirms): its candidates come from the UNFILTERED item set (the ready-only rows prune
     // exactly the blocked items a blocker chain needs) with the would-be-cycle ids already excluded.
@@ -275,6 +281,10 @@ class DefaultItemTreeComponent(
     // the shell builds off the Task list + today's plan, surfaced on [ItemTreeState.menuStates]. Defaulted
     // empty so the read/move-only tests build without it (like [moveEditor]); a non-Task row has no entry.
     private val menuStates: Flow<Map<String, TaskMenuState>> = flowOf(emptyMap()),
+    // The kind-neutral "in today" id set (#386), joined by the shell off today's plan + today's calendar
+    // window and surfaced verbatim on [ItemTreeState.inTodayIds] for the View's first filter segment.
+    // Defaulted empty so the read/move-only tests build without it (like [menuStates]).
+    private val inTodayIds: Flow<Set<String>> = flowOf(emptySet()),
     // The kind-aware menu's Task-only write seams (#231), threaded from the shell over CommandExecutor.
     // All default to no-ops so the existing read/move/navigation tests construct the component without them.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
@@ -309,6 +319,13 @@ class DefaultItemTreeComponent(
     private val blockedByPicker = MutableStateFlow<BlockedByPickerState?>(null)
     private val blockedByError = MutableStateFlow<BlockedByEditError?>(null)
 
+    // Kotlin's **typed** `combine` tops out at five flows, and both tiers of the state join below are
+    // already at that ceiling. A sixth source would silently bind the `vararg` overload instead and hand
+    // the lambda an `Array<Any?>` — the compiler stops checking and every read becomes an unchecked cast.
+    // So the two per-row joins ride one typed slot as a Pair (#386).
+    private val menuAndInToday: Flow<Pair<Map<String, TaskMenuState>, Set<String>>> =
+        combine(menuStates, inTodayIds) { menus, today -> menus to today }
+
     override val state: StateFlow<ItemTreeState> =
         combine(
             combine(itemRepository.observeItems(), foldStore.overrides, refreshing, liftedId, showBlocked) { items, ov, isRefreshing, lifted, showBlockedNow ->
@@ -333,13 +350,14 @@ class DefaultItemTreeComponent(
                 )
             },
             lastUndoable.current,
-            menuStates,
+            menuAndInToday,
             blockedByPicker,
             blockedByError,
-        ) { core, undoable, menus, picker, edgeError ->
+        ) { core, undoable, (menus, today), picker, edgeError ->
             core.copy(
                 lastMove = undoable?.let { MoveUndo(it.id, it.structural, it.operation) },
                 menuStates = menus,
+                inTodayIds = today,
                 blockedByPicker = picker,
                 blockedByError = edgeError,
             )

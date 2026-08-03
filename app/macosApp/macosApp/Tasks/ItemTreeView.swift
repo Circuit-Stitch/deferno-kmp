@@ -24,10 +24,12 @@ struct ItemTreeView: View {
     @StateObject private var state: StateFlowObserver<ItemTreeState>
     @Environment(\.defernoColors) private var colors
 
-    /// Local in-list filter (#231), client-side over `state.rows` by terminal state. Defaults to **All**
-    /// so the tree's existing behaviour is unchanged — the filter is an opt-in narrowing. `Item` carries
-    /// only `isTerminal` (no working state on the cross-kind projection yet), so In today / Active both map
-    /// to "non-terminal" and All shows everything (terminal rows de-emphasized).
+    /// Local in-list filter (#231/#386), client-side over `state.rows`. Defaults to **All** so the tree's
+    /// existing behaviour is unchanged — the filter is an opt-in narrowing. Three real arms, mirroring
+    /// Compose `visibleTreeRows` and the iOS twin: **In today** (0) narrows to the component's kind-neutral
+    /// `inTodayIds` (today's plan ∪ today's firings, joined by the shell) — until #386 it shared segment 1's
+    /// predicate, so the label was decorative; **Active** (1) hides terminal rows; **All** (2) shows
+    /// everything (terminal rows de-emphasized).
     @State private var filterIndex: Int = 2
 
     /// The inline tree filter text (#263 parity, ⌘F-focusable). Empty → no filtering; otherwise a
@@ -55,7 +57,7 @@ struct ItemTreeView: View {
     var body: some View {
         let value = state.value
         let inMoveMode = value.moveMode != nil
-        let visibleRows = filteredRows(value.rows)
+        let visibleRows = filteredRows(value)
         let treeCount = value.rows.filter { $0.depth == 0 }.count
 
         ZStack(alignment: .top) {
@@ -85,7 +87,8 @@ struct ItemTreeView: View {
                     if visibleRows.isEmpty && !value.isRefreshing {
                         emptyState(
                             allEmpty: value.rows.isEmpty,
-                            searching: !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            searching: !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                            inToday: filterIndex == 0
                         )
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
@@ -232,12 +235,17 @@ struct ItemTreeView: View {
         .padding(.vertical, 8)
     }
 
-    private func filteredRows(_ rows: [ItemRow]) -> [ItemRow] {
-        // In today / Active → non-terminal only; All → everything. Applied to the *match*, never to a
-        // kept ancestor (an ancestor shows to root the match even if it's terminal).
+    /// Takes the whole state, not just its rows: the **In today** arm needs `inTodayIds` alongside them
+    /// (and reading both off one snapshot keeps the predicate and the rows from tearing).
+    private func filteredRows(_ state: ItemTreeState) -> [ItemRow] {
+        let rows = state.rows
+        // In today → the shell's kind-neutral in-today set (#386; a Task on today's plan or a recurring
+        // definition firing today); Active → non-terminal only; All → everything. Applied to the *match*,
+        // never to a kept ancestor (an ancestor shows to root the match even if it's filtered out itself).
         func stateMatch(_ row: ItemRow) -> Bool {
             switch filterIndex {
-            case 0, 1: return !row.item.isTerminal
+            case 0: return state.inTodayIds.contains(row.item.id)
+            case 1: return !row.item.isTerminal
             default: return true
             }
         }
@@ -266,16 +274,20 @@ struct ItemTreeView: View {
 
     /// `allEmpty` → the forest itself is empty. Otherwise rows exist but the active narrowing hid them:
     /// `searching` distinguishes a no-match query (clear the search) from the segmented filter hiding
-    /// everything (switch to All) — one copy for both would misdirect half the time.
+    /// everything (switch to All) — one copy for both would misdirect half the time. `inToday` splits that
+    /// last case again (#386): now that segment 0 really narrows, the shared "Everything here is done" body
+    /// would misdiagnose an empty one — nothing is done, nothing is simply on today's plan.
     @ViewBuilder
-    private func emptyState(allEmpty: Bool, searching: Bool) -> some View {
+    private func emptyState(allEmpty: Bool, searching: Bool, inToday: Bool) -> some View {
         EmptyStateView(
             title: allEmpty ? L.string("tasks_tree_empty_title") : (searching ? L.string("search_no_matches_title") : L.string("tasks_tree_filtered_empty_title")),
             message: allEmpty
                 ? L.string("tasks_tree_empty_body")
                 : (searching
                     ? L.string("tasks_tree_search_empty_body")
-                    : L.string("tasks_tree_filtered_empty_body"))
+                    : (inToday
+                        ? L.string("tasks_tree_in_today_empty_body")
+                        : L.string("tasks_tree_filtered_empty_body")))
         )
     }
 

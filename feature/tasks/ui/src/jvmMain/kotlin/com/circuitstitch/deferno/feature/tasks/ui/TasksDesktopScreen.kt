@@ -152,6 +152,7 @@ private fun TreePane(
             canUndo = state.lastMove != null,
             onUndoMove = component::undoLastMove,
             menuStates = state.menuStates,
+            inTodayIds = state.inTodayIds,
             onAddSubtask = component::onAddSubtask,
             onSetPinned = component::onSetPinned,
             onSetInPlan = component::onSetInPlan,
