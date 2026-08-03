@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.atTime
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
@@ -136,6 +137,48 @@ fun addTaskDeadlineTime(component: TaskDetailComponent) = component.onSetDeadlin
 
 /** Clear the deadline clock time → all-day (#348); the DUE date stays. */
 fun clearTaskDeadlineTime(component: TaskDetailComponent) = component.onSetDeadlineTime(null)
+
+// --- The soft TARGET DATE (#375) — a PEER of the hard deadline above, not a second deadline. ----------
+//
+// Two things shape this seam, and both are the opposite of the deadline seam it sits under:
+//
+//  1. It is **date-granular, full stop.** There is no `targetTimeOfDay` to pair with
+//     [Task.deadlineTimeOfDay], so there is deliberately no `applyTargetPicker`, no "add a time" and no
+//     all-day/timed three-state here — just a date in and a date out.
+//  2. It is **independent** of `completeBy`. Any combination of the two is valid and neither constrains
+//     the other, so [clearTaskTargetDate] drops only the soft target. The target date ranks; it never
+//     moves the calendar.
+//
+// The component stores the picked day as that day's *inclusive end* (23:59:59, device zone), which is why
+// the seed below re-reads the DAY and hands back its START — feeding the stored instant straight to a
+// picker would be the all-day-deadline "11:59 PM" bug (see [taskDeadlinePickerEpochSeconds]) reborn in a
+// new field. Round-tripping through the day is also what makes the seed idempotent.
+
+/**
+ * The seed instant (epoch seconds, the start of the target day at the device zone) for the **date-only**
+ * Target date picker; `-1.0` when the Task carries no soft target — the same out-of-band "unset" sentinel
+ * the deadline seed and every `OptionalDatePickerRow` use.
+ */
+fun taskTargetDatePickerEpochSeconds(task: Task): Double {
+    val target = task.targetDate ?: return -1.0
+    val zone = TimeZone.currentSystemDefault()
+    return target.toLocalDateTime(zone).date.atStartOfDayIn(zone).toEpochMilliseconds() / 1000.0
+}
+
+/** Set the soft Target date from a `DatePicker` selection (epoch seconds → the device-zone calendar day). */
+fun setTaskTargetDate(component: TaskDetailComponent, epochSeconds: Double) {
+    val day = Instant.fromEpochMilliseconds((epochSeconds * 1000).toLong())
+        .toLocalDateTime(TimeZone.currentSystemDefault()).date
+    component.onSetTargetDate(day)
+}
+
+/** Clear the soft Target date. Independent of the hard deadline — this never touches `completeBy`. */
+fun clearTaskTargetDate(component: TaskDetailComponent) = component.onSetTargetDate(null)
+
+// PRIORITY (#375) has **no** bridge seam on purpose. `Priority` is a plain `core:model` enum (exported)
+// with no value class, no Instant and no clock arithmetic, so SKIE bridges it into a Swift value-type
+// enum: the View reads `task.priority` and calls `component.onSetPriority(priority:)` directly, exactly
+// as it already does with `WorkingState`. Adding a pass-through here would be a seam that only forwards.
 
 /** Read-only PROPERTIES labels for the Swift view — the opaque-typed fields it can't format itself. */
 fun taskTimeLabel(task: Task): String = task.deadlineTimeOfDay?.toString() ?: "—"
@@ -287,7 +330,8 @@ data class HistoryLine(
 
 /** One old→new field diff row for the ChangeDiffSheet — the typed twin of designsystem `DiffRow`. */
 data class TrailDiffRow(
-    val fieldToken: String,           // TITLE|DESCRIPTION|DEADLINE|LABELS|STATUS|PINNED (Unknown dropped)
+    // TITLE|DESCRIPTION|DEADLINE|LABELS|STATUS|PINNED|TARGET_DATE|PRIORITY (Unknown dropped)
+    val fieldToken: String,
     val before: TrailDiffSide,
     val after: TrailDiffSide,
 )
@@ -295,9 +339,10 @@ data class TrailDiffRow(
 /**
  * One side (before/after) of a [TrailDiffRow]. [kind]=PRESENT carries [value]; CLEARED/UNAVAILABLE render
  * a localized word Swift-side. For a PRESENT side the [value] is the RAW model value — Swift does the
- * per-field formatting: DEADLINE = RFC3339 instant (Swift parses+formats), STATUS = wire token
- * (open|in-progress|in-review|done|dropped), PINNED = "true"/"false", others verbatim. Mirrors
- * `toDiffValue`/`formatFieldValue` with the formatting moved to Swift (Kotlin/Native has no java.time).
+ * per-field formatting: DEADLINE and TARGET_DATE = RFC3339 instant (Swift parses+formats), STATUS = wire
+ * token (open|in-progress|in-review|done|dropped), PRIORITY = wire token (fire|normal|backlog), PINNED =
+ * "true"/"false", others verbatim. Mirrors `toDiffValue`/`formatFieldValue` with the formatting moved to
+ * Swift (Kotlin/Native has no java.time).
  */
 data class TrailDiffSide(
     val kind: String,                 // PRESENT|CLEARED|UNAVAILABLE
@@ -422,6 +467,10 @@ internal fun diffFieldToken(field: ActivityField): String? = when (field) {
     ActivityField.Labels -> "LABELS"
     ActivityField.Status -> "STATUS"
     ActivityField.Pinned -> "PINNED"
+    // The #375 peers get their OWN tokens — the soft target is never folded into DEADLINE, or the Trail
+    // would report a deadline change for an edit that never touched `complete_by`.
+    ActivityField.TargetDate -> "TARGET_DATE"
+    ActivityField.Priority -> "PRIORITY"
     ActivityField.Unknown -> null
 }
 

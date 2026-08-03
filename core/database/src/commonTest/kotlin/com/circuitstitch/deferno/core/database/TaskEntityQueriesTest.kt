@@ -37,6 +37,8 @@ class TaskEntityQueriesTest {
         attachmentCount: Long? = null,
         attachmentTotalSize: Long? = null,
         blockedBy: String? = null,
+        targetDate: String? = null,
+        priority: String? = null,
     ) = taskEntityQueries.insertOrReplace(
         id = id,
         org_slug = "u-e4h2qk",
@@ -69,6 +71,8 @@ class TaskEntityQueriesTest {
         attachment_count = attachmentCount,
         attachment_total_size = attachmentTotalSize,
         blocked_by = blockedBy,
+        target_date = targetDate,
+        priority = priority,
     )
 
     @Test

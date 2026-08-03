@@ -37,3 +37,26 @@ extension WorkingState {
         [.open, .inProgress, .inReview, .done, .dropped]
     }
 }
+
+extension Priority {
+    /// The localized urgency-bucket label (#375). `Priority` bridges (via SKIE) as a Swift value-type enum,
+    /// so we match the cases by value equality rather than a `switch` — the same idiom as ``WorkingState/label``.
+    ///
+    /// `Backlog` reads as "Backlog" and never as hidden / archived / dropped: the bottom bucket **sinks** an
+    /// item in a ranked view and keeps it visible (`core/model` `Priority`). A label implying otherwise would
+    /// describe a behaviour this app does not have — and would make the bucket read like `WorkingState.dropped`,
+    /// which is a different axis entirely.
+    var label: String {
+        if self == Priority.fire { return L.string("common_priority_fire") }
+        if self == Priority.normal { return L.string("common_priority_normal") }
+        if self == Priority.backlog { return L.string("common_priority_backlog") }
+        return name
+    }
+
+    /// The three buckets in **rank order**, most urgent first — the order `Priority.bucketRank` defines, and
+    /// the order the picker offers them in. Spelled out rather than taken from `allCases` so the offered order
+    /// is pinned by this file (and `PriorityTests`) rather than by a bridge detail.
+    static var ordered: [Priority] {
+        [.fire, .normal, .backlog]
+    }
+}

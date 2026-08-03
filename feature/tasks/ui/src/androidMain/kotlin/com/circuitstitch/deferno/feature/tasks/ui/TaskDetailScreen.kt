@@ -105,6 +105,8 @@ fun TaskDetailScreen(
             onAddToPlan = component::onAddToPlanClicked,
             onSetWorkingState = component::onSetWorkingState,
             onSetDeadline = component::onSetDeadline,
+            onSetTargetDate = component::onSetTargetDate,
+            onSetPriority = component::onSetPriority,
             onSetLabels = component::onSetLabels,
             onToggleSubtask = component::onToggleSubtaskDone,
             onToggleSubtaskExpand = component::onToggleSubtaskExpand,

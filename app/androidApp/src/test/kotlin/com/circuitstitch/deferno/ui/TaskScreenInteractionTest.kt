@@ -26,6 +26,7 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.feature.plan.PlanState
@@ -36,6 +37,8 @@ import com.circuitstitch.deferno.feature.tasks.TaskDetailState
 import com.circuitstitch.deferno.feature.tasks.buildItemTree
 import com.circuitstitch.deferno.feature.tasks.ui.TaskDetailScreen
 import com.circuitstitch.deferno.feature.tasks.ui.TaskListScreen
+import kotlinx.datetime.LocalDate
+import kotlin.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -246,6 +249,83 @@ class TaskScreenInteractionTest {
         composeRule.onNodeWithText("Set aside").performClick()
 
         assertEquals(listOf(WorkingState.Dropped), component.workingStateSets)
+    }
+
+    @Test
+    fun taskDetail_targetDateRow_showsTheEmptyStateAndOpensADatePicker() {
+        // #375: the soft TARGET DATE row is always present — with none set it reads the muted "No target
+        // date" (never "—" and never a "due"/deadline word) inside its own self-describing row a11y, and
+        // tapping it opens a DATE picker: a target is date-granular, so there is no time axis to offer.
+        val task = sampleTask("1", "Plan the spring launch")
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        setContent { TaskDetailScreen(component) }
+
+        composeRule.onNodeWithContentDescription("Target date: No target date. Tap to change.")
+            .performScrollTo()
+            .performClick()
+
+        // The M3 DatePickerDialog is up (Set / Cancel), and no clock affordance rode in with it.
+        composeRule.onNodeWithText("Set").assertIsDisplayed()
+        composeRule.onNodeWithText("Cancel").assertIsDisplayed()
+    }
+
+    @Test
+    fun taskDetail_targetDateClear_forwardsNull_andLeavesTheDeadlineAlone() {
+        // Clearing the soft target forwards a null through onSetTargetDate ONLY — the hard deadline write
+        // seam must not be touched, since the two dates are independent peers (#375).
+        val task = sampleTask(
+            "1", "Plan the spring launch",
+            completeBy = Instant.parse("2026-06-30T17:00:00Z"),
+            targetDate = Instant.parse("2026-06-20T23:59:59Z"),
+        )
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        setContent { TaskDetailScreen(component) }
+
+        composeRule.onNodeWithContentDescription("Clear target date").performScrollTo().performClick()
+
+        assertEquals(listOf<LocalDate?>(null), component.targetDateSets)
+        assertEquals(emptyList<LocalDate?>(), component.deadlineSets)
+    }
+
+    @Test
+    fun taskDetail_targetDateRow_readsTheSetDay() {
+        // A set target renders its day in the row's a11y — beside, and distinct from, the WHEN deadline row.
+        val task = sampleTask("1", targetDate = Instant.parse("2026-06-20T23:59:59Z"))
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        setContent { TaskDetailScreen(component) }
+
+        composeRule.onNodeWithContentDescription("Target date: 2026-06-20. Tap to change.")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun taskDetail_priorityRow_opensPickerAndForwardsTheSelectedBucket() {
+        // #375: PRIORITY is the STATUS row's twin — a read-only bucket whose whole row (a11y "Priority:
+        // <bucket>. Tap to change.") opens the picker sheet; choosing there forwards the one write.
+        val task = sampleTask("1", "Plan the spring launch")
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        setContent { TaskDetailScreen(component) }
+
+        composeRule.onNodeWithContentDescription("Priority: Normal. Tap to change.").performScrollTo().performClick()
+        composeRule.onNodeWithText("Fire").performClick()
+
+        assertEquals(listOf(Priority.Fire), component.prioritySets)
+    }
+
+    @Test
+    fun taskDetail_priorityPicker_offersBacklogAsAVisiblePeerBucket() {
+        // Backlog SINKS an item in ranked views but keeps it visible — so it is a plain third choice in the
+        // picker, never dressed up as hiding/archiving/dropping. A Fire task reads FIRE in the row a11y.
+        val task = sampleTask("1", priority = Priority.Fire)
+        val component = FakeTaskDetailComponent(TaskDetailState(task = task, isHydrating = false))
+        setContent { TaskDetailScreen(component) }
+
+        composeRule.onNodeWithContentDescription("Priority: Fire. Tap to change.").performScrollTo().performClick()
+        composeRule.onNodeWithText("Set priority").assertIsDisplayed()
+        composeRule.onNodeWithText("Backlog").performClick()
+
+        assertEquals(listOf(Priority.Backlog), component.prioritySets)
     }
 
     @Test

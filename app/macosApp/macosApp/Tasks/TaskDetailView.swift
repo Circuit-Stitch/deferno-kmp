@@ -43,6 +43,8 @@ struct TaskDetailView: View {
     @State private var tab: DetailTab = .info
     /// Whether the status-picker sheet is up (opened by tapping the STATUS row — the inline chips are gone).
     @State private var showingStatusPicker = false
+    /// Whether the priority-picker sheet is up (opened from the PRIORITY row — its twin, #375).
+    @State private var showingPriorityPicker = false
     /// Whether the overflow's Delete confirmation is up.
     @State private var showingDeleteConfirm = false
     /// The Trail row whose old→new change diff is open in a sheet, or nil (ADR-0046 / #260).
@@ -146,6 +148,12 @@ struct TaskDetailView: View {
             StatusPickerSheet(current: task.workingState) {
                 component.onSetWorkingState(target: $0)
                 showingStatusPicker = false
+            }
+        }
+        .sheet(isPresented: $showingPriorityPicker) {
+            PriorityPickerSheet(current: task.priority) {
+                component.onSetPriority(priority: $0)
+                showingPriorityPicker = false
             }
         }
         // The tapped Trail row's old→new change diff (#260). `.sheet(item:)` — unlike the five other
@@ -354,21 +362,28 @@ struct TaskDetailView: View {
         .accessibilityLabel(L.string("tasks_detail_more_actions"))
     }
 
-    // MARK: - Properties (Status · When · Labels · Owner · Source · Attachments)
+    // MARK: - Properties (Status · When · Target date · Priority · Labels · Owner · Source · Attachments)
 
     /// The properties table. Only the rows an item actually carries appear: OWNER is a shared/multi-group
     /// concern (one org means every item has the same owner and the row is noise), SOURCE exists only for
-    /// an imported item. WHEN and ATTACHMENTS are unconditional — each holds its own add affordance.
+    /// an imported item. WHEN, TARGET DATE, PRIORITY and ATTACHMENTS are unconditional — each holds its own
+    /// affordance (and priority is never absent at all).
     ///
     /// There is deliberately **no TIME row** any more: the WHEN picker below owns the clock, so a separate
     /// read-only "11:59 PM" line duplicated it and (worse) printed the all-day end-of-day sentinel as if it
     /// were a real deadline time. iOS's table never had one.
+    ///
+    /// **Row order carries meaning (#375).** The soft TARGET DATE sits directly under the hard WHEN so the two
+    /// date axes read as the peers they are, and PRIORITY sits next to them because it is the third input to
+    /// the same "what surfaces first" question. Neither is a deadline, and neither moves the calendar.
     @ViewBuilder
     private func propertiesSection(_ task: Task, _ value: TaskDetailState) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             SectionTitle(L.string("tasks_detail_section_properties"))
             statusRow(task)
             dueRow(task)
+            targetDateRow(task)
+            priorityRow(task)
             labelsRow(task)
             let ownerLabel = BridgeKt.taskOwnerLabel(task: task)
             if value.ownerGroupCount > 1 && ownerLabel != "—" {
@@ -562,6 +577,92 @@ struct TaskDetailView: View {
             }
         }
         .frame(minHeight: Layout.minTouchTarget)
+    }
+
+    /// The editable TARGET DATE row (#375) — the **soft** "when I want this done by" day. It is the WHEN row
+    /// above minus the clock axis, and that subtraction is structural, not a simplification:
+    ///
+    /// * **A target has no time of day.** There is no `targetTimeOfDay` to pair with `deadlineTimeOfDay`, so
+    ///   the field is `[.date]` only and there is no "add time" affordance, no all-day/timed three-state and
+    ///   no `applyTargetPicker` twin of `applyDeadlinePicker` — only one axis can move.
+    /// * **It is not a deadline and never reads as one.** The two are independent peers: any combination is
+    ///   valid, neither constrains the other, and Clear here drops the soft target while `completeBy` stays
+    ///   exactly as it was. A target date changes what surfaces first in a ranked view; it never moves the
+    ///   calendar, which is why this row carries no relative-day reading ("In 3 days") — that urgency
+    ///   vocabulary belongs to the hard deadline.
+    ///
+    /// The picker seeds from `taskTargetDatePickerEpochSeconds` (the day's *start*), never from the stored
+    /// instant: the component records a picked day as its inclusive END (23:59:59), so feeding that straight
+    /// to a field would be the all-day-deadline "11:59 PM" bug reborn in a new field.
+    @ViewBuilder
+    private func targetDateRow(_ task: Task) -> some View {
+        let epochSeconds = BridgeKt.taskTargetDatePickerEpochSeconds(task: task)
+        HStack {
+            if epochSeconds >= 0 {
+                DatePicker(
+                    L.string("tasks_detail_property_target_date"),
+                    selection: Binding(
+                        get: { Date(timeIntervalSince1970: epochSeconds) },
+                        set: { BridgeKt.setTaskTargetDate(component: component, epochSeconds: $0.timeIntervalSince1970) }
+                    ),
+                    // What keeps the bridge's negative "unset" sentinel out of band: `.field` is typeable, so
+                    // without a floor a hand-entered pre-1970 day would round-trip to "No target date". Same
+                    // reasoning — and the same epoch+1day floor, which avoids rendering "12/31/1969" west of
+                    // UTC — as `OptionalDatePickerRow`.
+                    in: Date(timeIntervalSince1970: 86_400)...,
+                    displayedComponents: [.date]
+                )
+                // The desktop stepper field, matching the WHEN row above (see its note on why macOS does not
+                // take iOS's chip + graphical-calendar popover).
+                .datePickerStyle(.field)
+                .accessibilityLabel(L.string("tasks_detail_property_target_date"))
+                Button(L.string("common_clear")) { BridgeKt.clearTaskTargetDate(component: component) }
+                    .font(.subheadline)
+                    .accessibilityLabel(L.string("tasks_detail_clear_target_date_a11y"))
+            } else {
+                // `minWidth`, not the fixed 72pt the STATUS/OWNER rows use: those labels are short in every
+                // locale, "Target date" is not ("Fecha objetivo"), and a truncated property name is worse
+                // than a column that gives a little.
+                Text(L.string("tasks_detail_property_target_date"))
+                    .font(.subheadline).foregroundStyle(colors.inkMuted).frame(minWidth: 72, alignment: .leading)
+                // Spelled out rather than the table's bare "—": this row's absence is a real product state
+                // ("no soft target"), and the two date rows sit adjacent — an em dash on both would make the
+                // undated Task read as one missing value rather than two independent ones.
+                Text(L.string("tasks_detail_no_target_date")).foregroundStyle(colors.inkMuted)
+                Spacer()
+                Button(L.string("common_set")) {
+                    BridgeKt.setTaskTargetDate(component: component, epochSeconds: Date().timeIntervalSince1970)
+                }
+                .font(.subheadline)
+                .accessibilityLabel(L.string("tasks_detail_set_target_date"))
+            }
+        }
+        .frame(minHeight: Layout.minTouchTarget)
+    }
+
+    /// The PRIORITY row (#375): a read-only reading of the item's urgency **bucket** that opens the priority
+    /// picker on click — deliberately the exact shape of the STATUS row above, because it answers the same
+    /// kind of question (which bucket is this in?) with the same small closed set, and a second idiom for that
+    /// on one screen would be noise.
+    ///
+    /// Priority is **never absent**: "no priority" is `Normal`, a real value every item carries. So unlike the
+    /// two date rows this one has no "—"/Set branch and no clear affordance — there is nothing to clear it to.
+    /// It is a peer of `pinned` and orthogonal to it: pinning does not raise priority, and Fire does not pin.
+    @ViewBuilder
+    private func priorityRow(_ task: Task) -> some View {
+        Button { showingPriorityPicker = true } label: {
+            HStack {
+                Text(L.string("tasks_detail_property_priority"))
+                    .font(.subheadline).foregroundStyle(colors.inkMuted).frame(minWidth: 72, alignment: .leading)
+                Text(task.priority.label).font(.body).foregroundStyle(colors.onSurface)
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(colors.inkMuted)
+            }
+            .frame(minHeight: Layout.minTouchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L.format("tasks_detail_priority_row_a11y", task.priority.label))
     }
 
     @ViewBuilder
@@ -907,6 +1008,34 @@ private struct StatusPickerSheet: View {
                         ? L.format("tasks_detail_working_state_current_a11y", state.label)
                         : L.format("tasks_detail_set_working_state_a11y", state.label)
                 ) { onSelect(state) }
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 240, alignment: .leading)
+    }
+}
+
+/// The priority-picker sheet (#375) — the twin of ``StatusPickerSheet``, one `SelectableChip` per urgency
+/// bucket in **rank order** (Fire → Normal → Backlog), the current one marked selected; a click forwards the
+/// intent and dismisses.
+///
+/// There is no "none" chip, because there is no such value: priority is never null and the middle bucket *is*
+/// "no priority". And `Backlog` is offered plainly as a bucket — it **sinks** an item in ranked views and
+/// keeps it visible, so this sheet must never present it as hiding, archiving or dropping the item (that is
+/// `WorkingState.dropped`, on a different axis and reached from the STATUS picker).
+private struct PriorityPickerSheet: View {
+    let current: Priority
+    let onSelect: (Priority) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L.string("tasks_detail_priority_picker_title"))
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+            ForEach(Priority.ordered, id: \.self) { priority in
+                // No accessibilityLabel override: `SelectableChip` speaks the bucket name and adds the
+                // `.isSelected` trait, which is exactly the reading a three-way choice wants.
+                SelectableChip(label: priority.label, selected: priority == current) { onSelect(priority) }
             }
         }
         .padding(20)

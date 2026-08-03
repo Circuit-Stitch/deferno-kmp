@@ -301,7 +301,7 @@ enum L {
     /// A diff-row / changed-field label from a field token — mirrors `ActivityDiffFormat.activityFieldLabel`.
     /// DESCRIPTION deliberately reads `new_notes_label` (not an `activity_field_*` key) to match Compose.
     /// Uses: activity_field_title, new_notes_label, activity_field_deadline, common_labels,
-    /// activity_field_status, activity_field_pinned.
+    /// activity_field_status, activity_field_pinned, activity_field_target_date, activity_field_priority.
     static func diffFieldLabel(_ token: String) -> String {
         switch token {
         case "TITLE":       return string("activity_field_title")
@@ -310,15 +310,20 @@ enum L {
         case "LABELS":      return string("common_labels")
         case "STATUS":      return string("activity_field_status")
         case "PINNED":      return string("activity_field_pinned")
+        // The soft target reads as its own field, never "deadline" (#375) — the Trail must not report a
+        // deadline change for an edit that never touched `complete_by`.
+        case "TARGET_DATE": return string("activity_field_target_date")
+        case "PRIORITY":    return string("activity_field_priority")
         default:            return token
         }
     }
 
     /// The resolved display text for one diff side — mirrors `toDiffValue`/`formatFieldValue`. CLEARED /
-    /// UNAVAILABLE render a word (never struck); PRESENT is formatted per field. DEADLINE is parsed +
-    /// formatted Swift-side (see `TrailDateFormat`); STATUS reuses the wire-token status label;
-    /// PINNED = yes/no. Uses: activity_diff_value_cleared, activity_diff_value_unavailable,
-    /// activity_value_pinned, activity_value_unpinned (+ statusWireLabel).
+    /// UNAVAILABLE render a word (never struck); PRESENT is formatted per field. DEADLINE and TARGET_DATE are
+    /// parsed + formatted Swift-side (see `TrailDateFormat`); STATUS reuses the wire-token status label,
+    /// PRIORITY the wire-token bucket label; PINNED = yes/no. Uses: activity_diff_value_cleared,
+    /// activity_diff_value_unavailable, activity_value_pinned, activity_value_unpinned (+ statusWireLabel,
+    /// priorityWireLabel).
     static func diffValueText(fieldToken: String, side: TrailDiffSide) -> String {
         switch side.kind {
         case "CLEARED":     return string("activity_diff_value_cleared")
@@ -327,8 +332,11 @@ enum L {
         }
         let raw = side.value ?? ""
         switch fieldToken {
-        case "DEADLINE": return TrailDateFormat.deadline(raw)
+        // Both are captured as instants, so both render through the one instant formatter. They stay
+        // separate *fields* (see diffFieldLabel) — they just share a value shape.
+        case "DEADLINE", "TARGET_DATE": return TrailDateFormat.instantValue(raw)
         case "STATUS":   return statusWireLabel(raw)
+        case "PRIORITY": return priorityWireLabel(raw)
         case "PINNED":   return raw == "true" ? string("activity_value_pinned")
                                               : string("activity_value_unpinned")
         default:         return raw
@@ -346,6 +354,18 @@ enum L {
         case "done":        return string("calendar_action_done")
         case "dropped":     return string("tasks_set_aside")
         default:            return token
+        }
+    }
+
+    /// A wire priority token → localized bucket label (the diff-row PRIORITY value, #375). The Swift twin of
+    /// Compose `activityPriorityLabel`, reusing the same words the detail row shows; an unrecognised token
+    /// degrades to itself. Uses: common_priority_fire, common_priority_normal, common_priority_backlog.
+    static func priorityWireLabel(_ token: String) -> String {
+        switch token {
+        case "fire":    return string("common_priority_fire")
+        case "normal":  return string("common_priority_normal")
+        case "backlog": return string("common_priority_backlog")
+        default:        return token
         }
     }
 }

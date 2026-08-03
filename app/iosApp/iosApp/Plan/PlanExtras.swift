@@ -10,7 +10,7 @@ import SwiftUI
 
 /// A calm "where do I start" helper. It shows **one** suggested task at a time; "This one" picks it
 /// (`onPick`), "Something else" cycles to the next idea without judgement. Derives its candidates from
-/// `tasks` (pinned + still-open first), so it never asks the user to scan the whole list.
+/// `tasks` (Fire + pinned + still-open first), so it never asks the user to scan the whole list.
 struct WhatNextView: View {
     let tasks: [Task]
     let onPick: (Task) -> Void
@@ -19,13 +19,17 @@ struct WhatNextView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
 
-    /// The ordered ideas: pinned first, then still-open, then the rest — de-duplicated by identity.
+    /// The ordered ideas: the Fire bucket first, then pinned, then still-open, then the rest —
+    /// de-duplicated by identity. Fire leads because the person already said *this one is urgent*; asking
+    /// them again about something calmer first would be the helper second-guessing them. This orders the
+    /// **suggestion** only — the Plan list itself stays exactly as they arranged it.
     private var candidates: [Task] {
         var seen = Set<String>()
         var ordered: [Task] = []
         func add(_ list: [Task]) {
             for t in list where seen.insert(t.stableKey).inserted { ordered.append(t) }
         }
+        add(tasks.filter { $0.priority == .fire })
         add(tasks.filter { $0.pinned })
         add(tasks.filter { !$0.workingState.isTerminal })
         add(tasks)
@@ -40,6 +44,9 @@ struct WhatNextView: View {
 
     /// The derived "why" line for the current idea (mirrors `PlanScreen.whyLine`).
     private func whyLine(_ task: Task) -> String {
+        // The Fire bucket answers "why this one?" more directly than the pin does — it is the person's own
+        // stated urgency, so it speaks first.
+        if task.priority == .fire { return L.string("plan_why_fire") }
         if task.pinned { return L.string("plan_why_pinned") }
         if !task.workingState.isTerminal { return L.string("plan_why_quick_win") }
         return L.string("plan_picker_already_done")

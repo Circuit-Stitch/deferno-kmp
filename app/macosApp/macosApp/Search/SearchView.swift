@@ -137,7 +137,7 @@ struct SearchView: View {
     private func sortFilter(_ value: SearchState) -> some View {
         let current = ShellBridgeKt.searchCurrentSortKey(state: value)
         return filterSection(L.string("search_filter_sort")) {
-            wrap(ShellBridgeKt.searchSortValues().map { (sortLabel(ShellBridgeKt.searchSortKey(sort: $0)), $0) }) { sort in
+            wrap(ShellBridgeKt.searchSortValues().map { (searchSortLabel(ShellBridgeKt.searchSortKey(sort: $0)), $0) }) { sort in
                 chip(sort.0, selected: ShellBridgeKt.searchSortKey(sort: sort.1) == current) {
                     ShellBridgeKt.setSearchSort(component: component, sort: sort.1)
                 }
@@ -192,15 +192,25 @@ struct SearchView: View {
             ForEach(items.indices, id: \.self) { i in chip(items[i]) }
         }
     }
+}
 
-    private func sortLabel(_ key: String) -> String {
-        switch key {
-        case "Relevance": return L.string("search_sort_best_match")
-        case "TitleAsc": return L.string("search_sort_title_asc")
-        case "DeadlineAsc": return L.string("search_sort_soonest_due")
-        case "AttachmentSizeDesc": return L.string("search_sort_biggest_attachments")
-        default: return key
-        }
+/// A `SearchSort` enum name → its localized chip label.
+///
+/// **The `default:` arm below renders the RAW enum name**, so a sort added to `core/data`'s `SearchSort` and
+/// not added here silently ships a chip reading "PriorityRank" — which is exactly what happened when the
+/// ranked sort landed (#375). File-level and `internal` rather than a method on `SearchView` so
+/// `macosAppTests` can walk every `SearchSort` entry and fail on the next one that has no arm; a `switch`
+/// over a String key cannot be made exhaustive by the compiler, so the test is the only thing that can.
+func searchSortLabel(_ key: String) -> String {
+    switch key {
+    case "Relevance": return L.string("search_sort_best_match")
+    case "TitleAsc": return L.string("search_sort_title_asc")
+    case "DeadlineAsc": return L.string("search_sort_soonest_due")
+    case "AttachmentSizeDesc": return L.string("search_sort_biggest_attachments")
+    // The canonical ranked order (#375): urgency bucket, then the soonest of the soft target date / hard
+    // deadline, then the deadline, then age. NOT a deadline sort — "DeadlineAsc" above is that one.
+    case "PriorityRank": return L.string("search_sort_priority")
+    default: return key
     }
 }
 

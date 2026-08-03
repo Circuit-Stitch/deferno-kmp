@@ -91,10 +91,12 @@ import com.circuitstitch.deferno.core.designsystem.resources.plan_today_subtitle
 import com.circuitstitch.deferno.core.designsystem.resources.plan_today_title
 import com.circuitstitch.deferno.core.designsystem.resources.plan_whats_next_subtitle
 import com.circuitstitch.deferno.core.designsystem.resources.plan_whats_next_title
+import com.circuitstitch.deferno.core.designsystem.resources.plan_why_fire
 import com.circuitstitch.deferno.core.designsystem.resources.plan_why_pinned
 import com.circuitstitch.deferno.core.designsystem.resources.plan_why_quick_win
 import com.circuitstitch.deferno.core.designsystem.resources.plan_your_day_section_caps
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.feature.plan.PlanComponent
@@ -168,8 +170,18 @@ internal sealed interface PlanMode {
     data class Focus(val taskId: TaskId) : PlanMode
 }
 
-/** The task we gently suggest starting with: the first pinned one, else the first in the plan. */
-private fun List<Task>.suggested(): Task? = firstOrNull { it.pinned } ?: firstOrNull()
+/**
+ * The task we gently suggest starting with: the first [Priority.Fire] one, else the first pinned one, else
+ * the first in the plan. Fire outranks pinned (#375) — the person marked it urgent, which is a stronger
+ * "start here" signal than having parked it at the top.
+ *
+ * This picks; it does **not** sort. The Plan's order is the one the person arranged, and stays exactly as
+ * they left it — only the ✦ suggestion (and its "why" line) moves.
+ *
+ * `internal` (not private) so the precedence is unit-testable as the pure function it is.
+ */
+internal fun List<Task>.suggested(): Task? =
+    firstOrNull { it.priority == Priority.Fire } ?: firstOrNull { it.pinned } ?: firstOrNull()
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
 // 1. "Today" — the hero
@@ -570,6 +582,9 @@ private fun whyLine(task: Task): String = when {
         Res.string.common_due,
         formatDeadlineDate(task.completeBy!!, TimeZone.currentSystemDefault()),
     )
+    // The urgency bucket the person set themselves (#375) outranks "you pinned it" — it is the more
+    // deliberate signal of the two. Undated, so it sits below the hard deadline reading above.
+    task.priority == Priority.Fire -> stringResource(Res.string.plan_why_fire)
     task.pinned -> stringResource(Res.string.plan_why_pinned)
     else -> stringResource(Res.string.plan_why_quick_win)
 }

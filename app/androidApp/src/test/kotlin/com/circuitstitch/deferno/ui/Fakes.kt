@@ -13,6 +13,7 @@ import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -80,6 +81,9 @@ internal fun sampleTask(
     labels: List<String> = emptyList(),
     completeBy: Instant? = null,
     deadlineTimeOfDay: kotlinx.datetime.LocalTime? = null,
+    // The soft target day + the urgency bucket (#375) — peers of the deadline / of pinned, not of each other.
+    targetDate: Instant? = null,
+    priority: Priority = Priority.Normal,
     ownerOrgId: OrgId? = null,
     blocked: Boolean = false,
 ): Task = Task(
@@ -94,6 +98,8 @@ internal fun sampleTask(
     children = children.map(::TaskId),
     completeBy = completeBy,
     deadlineTimeOfDay = deadlineTimeOfDay,
+    targetDate = targetDate,
+    priority = priority,
     sequence = sequence,
     pinned = pinned,
     description = description,
@@ -237,6 +243,13 @@ internal class FakeTaskDetailComponent(
     val deadlineSets = mutableListOf<LocalDate?>()
     val labelSets = mutableListOf<List<String>>()
 
+    /**
+     * The #375 property edits: the soft target day (null = clear the soft target — it never touches the hard
+     * deadline) and the urgency bucket (never null — "no priority" is [Priority.Normal]).
+     */
+    val targetDateSets = mutableListOf<LocalDate?>()
+    val prioritySets = mutableListOf<Priority>()
+
     /** The web-parity detail intents the View forwarded, in order. */
     val subtaskToggles = mutableListOf<TaskId>()
     val subtaskExpandToggles = mutableListOf<Pair<String, Boolean>>()
@@ -267,6 +280,8 @@ internal class FakeTaskDetailComponent(
     override fun onChangeStatusRequested() { changeStatusRequestedCount++ }
     override fun onSetWorkingState(target: WorkingState) { workingStateSets += target }
     override fun onSetDeadline(date: LocalDate?) { deadlineSets += date }
+    override fun onSetTargetDate(date: LocalDate?) { targetDateSets += date }
+    override fun onSetPriority(priority: Priority) { prioritySets += priority }
     override fun onSetLabels(labels: List<String>) { labelSets += labels }
     override fun onToggleSubtaskDone(subtask: Task) { subtaskToggles += subtask.id }
     override fun onToggleSubtaskExpand(id: String, currentlyExpanded: Boolean) { subtaskExpandToggles += id to currentlyExpanded }
