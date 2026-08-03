@@ -63,9 +63,10 @@ struct ItemRowView: View {
     /// reading is derived per render on purpose: "Next: Tomorrow" is a claim about *today*, and the Flow
     /// behind the tree only re-emits when the database changes, never when the clock does.
     ///
-    /// Evaluated ONCE per row render, in `body`, and threaded to both consumers. It is not a computed
-    /// property read twice: each call crosses the Kotlin bridge seven times and derives the cursor twice
-    /// over, and this is per-row, per-frame work in a scrolling tree.
+    /// Evaluated ONCE per row render, in `body`, and threaded to both consumers rather than read twice as
+    /// a computed property: each read still crosses the Kotlin bridge and re-derives the cursor, and this
+    /// is per-row, per-frame work in a scrolling tree. (One crossing, not eight — `recurrenceLineTokens`
+    /// returns every piece of the line as a single value.)
     private var recurrence: (text: String, spoken: String)? { L.recurrenceLine(row.item) }
 
     /// The title's spoken label: "Water the plants, habit, Repeats Weekly on Mon, Wed · Next: Tomorrow".

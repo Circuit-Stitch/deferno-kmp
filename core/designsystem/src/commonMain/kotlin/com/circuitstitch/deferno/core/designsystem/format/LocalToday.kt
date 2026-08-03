@@ -30,4 +30,21 @@ val LocalToday = staticCompositionLocalOf<LocalDate?> { null }
  */
 val currentToday: LocalDate
     @Composable @ReadOnlyComposable
-    get() = LocalToday.current ?: Clock.System.todayIn(TimeZone.currentSystemDefault())
+    get() = currentToday(TimeZone.currentSystemDefault())
+
+/**
+ * "Today" resolved in an explicit [zone] — for a reading that also resolves an *instant* to a day and
+ * must do both in the same zone.
+ *
+ * Take this overload rather than pairing the [currentToday] property with a separate zone argument. A
+ * caller holding two independent values has no way to keep them coupled, and the failure is silent: pass
+ * a non-device zone (which is exactly what #392 will do once an account zone exists) and "today" quietly
+ * stays resolved in the device's, shifting every reading by a day for anyone near a date boundary. Here
+ * the zone is the only input, so the two cannot come apart.
+ *
+ * The [LocalToday] test override still wins, and is zone-agnostic by design: a test pinning the day is
+ * pinning the *answer*, not asking for it to be recomputed somewhere else.
+ */
+@Composable
+@ReadOnlyComposable
+fun currentToday(zone: TimeZone): LocalDate = LocalToday.current ?: Clock.System.todayIn(zone)

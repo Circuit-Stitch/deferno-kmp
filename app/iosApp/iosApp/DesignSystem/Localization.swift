@@ -300,83 +300,99 @@ enum L {
     }
 
     // MARK: Recurrence cadence / bound / cursor (typed tokens — #384)
+    //
+    // Every rule these four functions could disagree about — the `EveryNDays(1)` fold, the interval floor,
+    // which weekday tokens survive and in what ORDER, which wire parameters never reach a row — is settled
+    // before it gets here, by `Item.recurrenceReading` in :feature:tasks, which the Compose row reads too.
+    // What is left below is phrasing: a token picks a catalog key. Do not add arithmetic here — a rule
+    // written in Swift is a rule the other three platforms don't have.
 
-    /// The **cadence** phrase for a `BridgeKt.itemCadenceToken` token — "Daily", "Every 3 days",
-    /// "Weekly on Mon, Wed", "Monthly", "Every 2 years", "Custom schedule" — paired with whether that
-    /// phrase is *already a verb*, which is the one thing [recurrenceLine] must know before wrapping it in
-    /// the screen-reader prefix.
+    /// The **cadence** phrase — "Daily", "Every 3 days", "Weekly on Mon, Wed", "Monthly", "Every 2 years",
+    /// "Custom schedule" — paired with whether that phrase is *already a verb*, which is the one thing
+    /// [recurrenceLine] must know before wrapping it in the screen-reader prefix.
     ///
-    /// `count` is the stride/interval the plural agrees on and `weekdays` are the wire's English
-    /// `chrono::Weekday` tokens; both are inert on the arms that don't use them (the bridge sends 0 and an
-    /// empty list). Uses: tasks_cadence_daily, tasks_cadence_every_n_days, tasks_cadence_weekly,
+    /// The paired counts are **optional**, and each `guard` below states what happens without one rather
+    /// than defaulting a number into a sentence. By construction the count is present for exactly the three
+    /// arms that read it; if that ever stops being true, the vaguer-but-true "Repeats" beats inventing a
+    /// stride. Uses: tasks_cadence_daily, tasks_cadence_every_n_days, tasks_cadence_weekly,
     /// tasks_cadence_weekly_on, tasks_cadence_monthly, tasks_cadence_yearly, tasks_cadence_custom,
     /// tasks_cadence_unknown.
-    static func cadence(_ token: String, count: Int, weekdays: [String]) -> (phrase: String, isBareVerb: Bool) {
-        switch token {
-        case "DAILY":        return (string("tasks_cadence_daily"), false)
-        // `EveryNDays(1)` never arrives — the bridge folds it into DAILY, which is what it means and what
+    static func cadence(_ tokens: RecurrenceLineTokens) -> (phrase: String, isBareVerb: Bool) {
+        let count = tokens.cadenceCount?.intValue
+        switch tokens.cadence {
+        case "DAILY": return (string("tasks_cadence_daily"), false)
+        // `EveryNDays(1)` never arrives — the reading folds it into DAILY, which is what it means and what
         // several locales insist on (de drops the numeral, so "Every 1 day" isn't grammatical there at all).
-        case "EVERY_N_DAYS": return (plural("tasks_cadence_every_n_days", count), false)
-        case "WEEKLY":       return (weeklyPhrase(weekdays), false)
+        case "EVERY_N_DAYS":
+            guard let count else { break }
+            return (plural("tasks_cadence_every_n_days", count), false)
+        case "WEEKLY": return (weeklyPhrase(tokens.weekdays), false)
         // An interval of 1 reads as the plain adverb — and that IS each plural's `one` arm, so the catalog
         // does the normalising and there is nothing to special-case here.
-        case "MONTHLY":      return (plural("tasks_cadence_monthly", count), false)
-        case "YEARLY":       return (plural("tasks_cadence_yearly", count), false)
+        case "MONTHLY":
+            guard let count else { break }
+            return (plural("tasks_cadence_monthly", count), false)
+        case "YEARLY":
+            guard let count else { break }
+            return (plural("tasks_cadence_yearly", count), false)
         // Never the raw rrule: it is machine text, and paraphrasing it would be a guess dressed as a fact.
-        case "CUSTOM":       return (string("tasks_cadence_custom"), false)
-        // UNMODELLED — and any cadence a future backend adds that this build has never heard of. Both land
-        // on the same deliberately-vague verb phrase ("Repeats"), and both must SKIP the a11y prefix:
-        // wrapping either speaks "Repeats Repeats". That rule is written on tasks_cadence_unknown itself,
-        // and returning the flag from the same switch is what keeps the two arms from drifting apart.
-        default:             return (string("tasks_cadence_unknown"), true)
+        case "CUSTOM": return (string("tasks_cadence_custom"), false)
+        default: break
         }
+        // UNSPECIFIED — plus any cadence a future backend adds that this build has never heard of, and the
+        // count-less arms above. All land on the same deliberately-vague verb phrase ("Repeats"), and all
+        // must SKIP the a11y prefix: wrapping it speaks "Repeats Repeats". That rule is written on
+        // tasks_cadence_unknown itself, and returning the flag from here is what keeps the two in step.
+        return (string("tasks_cadence_unknown"), true)
     }
 
-    /// "Weekly on Mon, Wed" — or the bare "Weekly" when the day list is empty or nothing in it is a weekday
-    /// this build can place, which is exactly the reading `tasks_cadence_weekly` exists for.
+    /// "Weekly on Mon, Wed" — or the bare "Weekly" when the day list is empty, which is exactly the reading
+    /// `tasks_cadence_weekly` exists for (the shared reading empties it when no token could be placed).
     ///
-    /// The day NAMES come from CLDR (`Calendar.shortWeekdaySymbols`), never a hand-rolled per-locale table
-    /// (CLAUDE.md). The joiner is the catalog's `tasks_cadence_weekday_separator` rather than
-    /// `ListFormatter`: a list formatter inserts a conjunction ("Mon, Wed, and Fri") that the Compose twin
-    /// — which has no ListFormatter and joins on that same key — could never produce, and this line is
-    /// specified to read identically on all four platforms.
-    private static func weeklyPhrase(_ weekdays: [String]) -> String {
+    /// `isoDays` are ISO day numbers, 1 = Monday … 7 = Sunday, already deduped and in week order. The day
+    /// NAMES come from CLDR (`Calendar.shortWeekdaySymbols`), never a hand-rolled per-locale table
+    /// (CLAUDE.md) — that array is **Sunday-first** (index 0 = Sunday) for every locale and calendar
+    /// identifier, which is a property of the symbol array and not of the user's `firstWeekday`, so ISO
+    /// modulo 7 lands each day on its own symbol. Deriving an offset from `firstWeekday` instead would
+    /// silently rotate every label for anyone whose week starts on Monday.
+    ///
+    /// The joiner is the catalog's `tasks_cadence_weekday_separator` rather than `ListFormatter`: a list
+    /// formatter inserts a conjunction ("Mon, Wed, and Fri") that the Compose twin — which has no
+    /// ListFormatter and joins on that same key — could never produce, and this line is specified to read
+    /// identically on all four platforms.
+    private static func weeklyPhrase(_ isoDays: [KotlinInt]) -> String {
         let symbols = Calendar.current.shortWeekdaySymbols
-        guard symbols.count == 7 else { return string("tasks_cadence_weekly") }
-        let labels = weekdays.compactMap { weekdaySymbolIndex[$0].map { symbols[$0] } }
-        guard !labels.isEmpty else { return string("tasks_cadence_weekly") }
-        let joined = labels.joined(separator: string("tasks_cadence_weekday_separator"))
+        guard symbols.count == 7, !isoDays.isEmpty else { return string("tasks_cadence_weekly") }
+        let joined = isoDays
+            .map { symbols[$0.intValue % 7] }
+            .joined(separator: string("tasks_cadence_weekday_separator"))
         return format("tasks_cadence_weekly_on", joined)
     }
 
-    /// The wire's English `chrono::Weekday` token → its index in `Calendar.shortWeekdaySymbols`.
-    ///
-    /// That array is **Sunday-first** (index 0 = Sunday) for every locale and every calendar identifier —
-    /// it is a property of the symbol array, not of the user's `firstWeekday`. Deriving the offset from
-    /// `firstWeekday` instead would silently rotate every label for anyone whose week starts on Monday.
-    private static let weekdaySymbolIndex: [String: Int] = [
-        "Sun": 0, "Mon": 1, "Tue": 2, "Wed": 3, "Thu": 4, "Fri": 5, "Sat": 6,
-    ]
-
-    /// The end-**bound** phrase for a `BridgeKt.itemBoundToken` token — "until Jun 14, 2026" / "10 times" —
-    /// or nil for `RecurrenceBound.Never`, the open-ended default, which says nothing at all rather than a
-    /// word announcing that it is unbounded. Lowercase, because it always follows a cadence inside
-    /// `tasks_cadence_with_bound`. Uses: tasks_cadence_until, tasks_cadence_times.
-    static func cadenceBound(_ token: String?, count: Int, epochDays: Int) -> String? {
-        switch token {
-        case "ON_DATE":     return format("tasks_cadence_until", boundDay(epochDays))
-        case "AFTER_COUNT": return plural("tasks_cadence_times", count)
-        default:            return nil
+    /// The end-**bound** phrase — "until Jun 14, 2026" / "10 times" — or nil for an open-ended rule, the
+    /// default, which says nothing at all rather than a word announcing that it is unbounded. Lowercase,
+    /// because it always follows a cadence inside `tasks_cadence_with_bound`. A bound whose paired value is
+    /// missing renders nothing too: a clause is optional here, so dropping it is a real answer rather than
+    /// a fallback. Uses: tasks_cadence_until, tasks_cadence_times.
+    static func cadenceBound(_ tokens: RecurrenceLineTokens) -> String? {
+        switch tokens.bound {
+        case "ON_DATE":
+            guard let epochDays = tokens.boundEpochDays?.intValue else { return nil }
+            return format("tasks_cadence_until", boundDay(epochDays))
+        case "AFTER_COUNT":
+            guard let count = tokens.boundCount?.intValue else { return nil }
+            return plural("tasks_cadence_times", count)
+        default: return nil
         }
     }
 
-    /// A `RecurrenceBound.OnDate` day (epoch days, from the bridge) as a locale day — "Jun 14, 2026" in
-    /// en-US, "14 juin 2026" in fr-FR.
+    /// An `ON_DATE` bound's day (epoch days, from the reading) as a locale day — "Jun 14, 2026" in en-US,
+    /// "14 juin 2026" in fr-FR.
     ///
-    /// **Read in UTC, deliberately.** The value is a calendar DAY with no clock and no zone; the bridge
-    /// sends epoch days and this reconstructs UTC midnight, so formatting it in the device zone would print
-    /// the day before for every user west of Greenwich. `Foundation.TimeZone` is spelled out because the
-    /// Deferno framework exports kotlinx-datetime's `TimeZone` under that same Swift name.
+    /// **Read in UTC, deliberately.** The value is a calendar DAY with no clock and no zone; this
+    /// reconstructs UTC midnight, so formatting it in the device zone would print the day before for every
+    /// user west of Greenwich. `Foundation.TimeZone` is spelled out because the Deferno framework exports
+    /// kotlinx-datetime's `TimeZone` under that same Swift name.
     private static func boundDay(_ epochDays: Int) -> String {
         boundDayFormatter.string(from: Date(timeIntervalSince1970: Double(epochDays) * 86_400))
     }
@@ -394,9 +410,9 @@ enum L {
         return formatter
     }()
 
-    /// The next-due phrase for a `BridgeKt.itemCursorToken` token: "Next: Tomorrow" for a live series,
-    /// "Series ended" for one that hit its bound, nil for `NoCursor` (a Task, or an Archived definition
-    /// whose stale cursor the reading deliberately refuses to believe).
+    /// The next-due phrase: "Next: Tomorrow" for a live series, "Series ended" for one that hit its bound,
+    /// nil for no cursor at all (a Task, or an Archived definition whose stale cursor the reading
+    /// deliberately refuses to believe).
     ///
     /// The five relative-day arms are the SAME tokens the Task-detail WHEN row uses, so they pass straight
     /// through [relativeDay] and the `tasks_detail_due_*` keys instead of being re-mapped here. A cursor
@@ -405,10 +421,15 @@ enum L {
     /// for the same reason: the server also reports it when its 400-day lookahead finds nothing, so a rare
     /// enough rule can read as ended while still being live. Uses: tasks_recurrence_series_ended,
     /// tasks_recurrence_next_due.
-    static func cursor(_ token: String?, _ n: Int) -> String? {
-        guard let token else { return nil }
+    static func cursor(_ tokens: RecurrenceLineTokens) -> String? {
+        guard let token = tokens.cursor else { return nil }
         if token == "EXHAUSTED" { return string("tasks_recurrence_series_ended") }
-        return format("tasks_recurrence_next_due", relativeDay(token, n))
+        let days = tokens.cursorCount?.intValue
+        // DAYS_AWAY/DAYS_AGO are the only arms that read a count, and it is non-nil for exactly those. If
+        // one ever arrives without it there is no honest number to say, so drop the clause entirely rather
+        // than let a placeholder render "in 0 days" — the cadence still carries the row.
+        if days == nil, token == "DAYS_AWAY" || token == "DAYS_AGO" { return nil }
+        return format("tasks_recurrence_next_due", relativeDay(token, days ?? 0))
     }
 
     /// The whole recurrence subtitle for an Item-tree row (#384) — the visible line and its VoiceOver
@@ -422,15 +443,15 @@ enum L {
     /// - the cadence always shows once a rule exists, while the bound and the cursor each independently may
     ///   not, so the line degrades to a bare "Weekly" without leaving a dangling separator behind.
     ///
+    /// **One bridge crossing per row.** `recurrenceLineTokens` returns every piece as a single value, so the
+    /// cadence and the cursor are each derived once. The shape this replaced was eight paired getters that
+    /// re-derived both from scratch on every call — per row, per frame, in a scrolling tree.
+    ///
     /// The row hides the visible line from VoiceOver and speaks `spoken` as part of the title's label: a
     /// muted mono line looks decorative but is load-bearing, and it is far too easy to swipe past.
     static func recurrenceLine(_ item: Item) -> (text: String, spoken: String)? {
-        guard let token = BridgeKt.itemCadenceToken(item: item) else { return nil }
-        let read = cadence(
-            token,
-            count: Int(BridgeKt.itemCadenceCount(item: item)),
-            weekdays: BridgeKt.itemCadenceWeekdays(item: item)
-        )
+        guard let tokens = RecurrenceReadingKt.recurrenceLineTokens(item: item) else { return nil }
+        let read = cadence(tokens)
         var text = read.phrase
         var spoken = read.isBareVerb ? read.phrase : format("tasks_recurrence_a11y_prefix", read.phrase)
         func append(_ part: String?) {
@@ -438,12 +459,8 @@ enum L {
             text = format("tasks_cadence_with_bound", text, part)
             spoken = format("tasks_cadence_with_bound", spoken, part)
         }
-        append(cadenceBound(
-            BridgeKt.itemBoundToken(item: item),
-            count: Int(BridgeKt.itemBoundCount(item: item)),
-            epochDays: Int(BridgeKt.itemBoundDateEpochDays(item: item))
-        ))
-        append(cursor(BridgeKt.itemCursorToken(item: item), Int(BridgeKt.itemCursorCount(item: item))))
+        append(cadenceBound(tokens))
+        append(cursor(tokens))
         return (text, spoken)
     }
 

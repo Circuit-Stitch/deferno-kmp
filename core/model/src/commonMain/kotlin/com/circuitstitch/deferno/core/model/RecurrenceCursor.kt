@@ -7,7 +7,7 @@ import kotlin.time.Clock
 
 /**
  * What a recurring [Item]'s **cursor** currently says — the pure reading over [Item.recurrence] +
- * [Item.completeBy] that an [Item tree] row or a detail ribbon renders (#384). A typed code, not a
+ * [Item.recurrenceCursorAt] that an [Item tree] row or a detail ribbon renders (#384). A typed code, not a
  * string: per CLAUDE.md's localization rule the View maps it to a localized phrase (Compose via
  * `Res.string`, Swift via `L`), so this type stays iOS-safe and needs no parity override.
  *
@@ -64,8 +64,8 @@ sealed interface RecurrenceCursor {
 }
 
 /**
- * The [RecurrenceCursor] reading for this [Item] against [today], resolving [Item.completeBy] to a
- * calendar day in [zone]. Delegates the day math to [relativeDay] rather than repeating it.
+ * The [RecurrenceCursor] reading for this [Item] against [today], resolving [Item.recurrenceCursorAt]
+ * to a calendar day in [zone]. Delegates the day math to [relativeDay] rather than repeating it.
  *
  * **Call this at render time; never bake it into repository state.** `ItemRepository.observeItems()`
  * is a cold `Flow` over the local caches (ADR-0001) that only re-emits when the *database* changes —
