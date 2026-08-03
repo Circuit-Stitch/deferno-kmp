@@ -74,9 +74,12 @@ struct ItemRowView: View {
     /// muted mono filigree — it *looks* decorative, so a VoiceOver user swiping the row would skip the one
     /// thing that says this item comes back. The `MonoMeta` hides itself to keep it from being said twice.
     private func titleA11yLabel(_ recurrence: (text: String, spoken: String)?) -> String {
-        let base = "\(row.item.title), \(kindA11yLabel(row.item.kind))"
+        // Joined through `common_a11y_phrase_join`, not a literal ", ": this is a phrase a user hears, so
+        // both the separator and the order belong to the translator (hi already reorders the analogous
+        // `tasks_recurrence_a11y_prefix`). The Compose row joins on the same key.
+        let base = L.format("common_a11y_phrase_join", row.item.title, kindA11yLabel(row.item.kind))
         guard let spoken = recurrence?.spoken else { return base }
-        return "\(base), \(spoken)"
+        return L.format("common_a11y_phrase_join", base, spoken)
     }
 
     var body: some View {

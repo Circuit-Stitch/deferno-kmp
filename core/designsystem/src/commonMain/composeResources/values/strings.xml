@@ -245,6 +245,8 @@
 
     <!-- ── common ─────────────────────────────────────────────── -->
     <!-- Merges desktop menu, Settings category (+chrome title), Profile section heading -->
+    <!-- Joins two spoken fragments into ONE screen-reader phrase: “Water the plants, habit”, then that plus the recurrence line. Args: the phrase so far, the fragment to append. The separator AND the order are the translator's to choose — do not hand-write “, ” at a call site -->
+    <string name="common_a11y_phrase_join">%1$s, %2$s</string>
     <string name="common_account">Account</string>
     <!-- Verb button (submit a subtask/label). Single word — confirm imperative verb in translation -->
     <string name="common_add">Add</string>
