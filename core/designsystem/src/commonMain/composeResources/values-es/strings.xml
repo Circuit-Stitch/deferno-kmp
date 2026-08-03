@@ -651,6 +651,37 @@ Gracias.</string>
     <string name="tasks_blocked_by_dialog_title">¿Qué está bloqueando «%1$s»?</string>
     <string name="tasks_blocked_by_error_offline">Sin conexión: los bloqueos no se pueden cambiar ahora.</string>
     <string name="tasks_blocked_by_error_rejected">El cambio fue rechazado: crearía un ciclo de dependencias o cruzaría organizaciones.</string>
+    <!-- Vocabulario de cadencia (#384) — la frase de «cada cuánto se repite» en la fila del elemento. Toda la familia usa «Cada …» para que las variantes con y sin número casen -->
+    <string name="tasks_cadence_custom">Programación personalizada</string>
+    <string name="tasks_cadence_daily">Cada día</string>
+    <plurals name="tasks_cadence_every_n_days">
+        <item quantity="one">Cada %1$d día</item>
+        <item quantity="other">Cada %1$d días</item>
+    </plurals>
+    <!-- El caso «one» omite el intervalo, como en inglés -->
+    <plurals name="tasks_cadence_monthly">
+        <item quantity="one">Cada mes</item>
+        <item quantity="other">Cada %1$d meses</item>
+    </plurals>
+    <plurals name="tasks_cadence_times">
+        <item quantity="one">%1$d vez</item>
+        <item quantity="other">%1$d veces</item>
+    </plurals>
+    <!-- Deliberadamente vago: esta versión no sabe leer la regla -->
+    <string name="tasks_cadence_unknown">Se repite</string>
+    <!-- En minúscula: va detrás de la cadencia dentro de tasks_cadence_with_bound -->
+    <string name="tasks_cadence_until">hasta el %1$s</string>
+    <!-- El espacio final forma parte del valor -->
+    <string name="tasks_cadence_weekday_separator">, </string>
+    <string name="tasks_cadence_weekly">Cada semana</string>
+    <!-- Los días de la semana son masculinos en español, así que «los» sirve para toda la lista: «los lun, mié» -->
+    <string name="tasks_cadence_weekly_on">Cada semana los %1$s</string>
+    <!-- Mantener el · -->
+    <string name="tasks_cadence_with_bound">%1$s · %2$s</string>
+    <plurals name="tasks_cadence_yearly">
+        <item quantity="one">Cada año</item>
+        <item quantity="other">Cada %1$d años</item>
+    </plurals>
     <string name="tasks_delete_item_confirm_title">¿Eliminar «%1$s»?</string>
     <string name="tasks_detail_add_caption">Agregar leyenda</string>
     <string name="tasks_detail_add_comment_placeholder">Agrega un comentario…</string>
@@ -776,6 +807,11 @@ Gracias.</string>
     <string name="tasks_moved_snackbar">Movido</string>
     <string name="tasks_progress_done">%1$d de %2$d hechas</string>
     <string name="tasks_progress_fraction">%1$d de %2$d</string>
+    <!-- Prefijo para lectores de pantalla: «Se repite Cada semana los lun, mié» -->
+    <string name="tasks_recurrence_a11y_prefix">Se repite %1$s</string>
+    <!-- «Próxima» concuerda con «la próxima repetición» -->
+    <string name="tasks_recurrence_next_due">Próxima: %1$s</string>
+    <string name="tasks_recurrence_series_ended">Serie finalizada</string>
     <!-- Registro suave para WorkingState.Dropped — nunca «abandonar/descartar» -->
     <string name="tasks_set_aside">Apartar</string>
     <string name="tasks_set_aside_confirm_title">¿Apartar «%1$s»?</string>

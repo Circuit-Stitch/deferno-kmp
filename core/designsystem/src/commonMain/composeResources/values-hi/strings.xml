@@ -665,6 +665,39 @@
     <string name="tasks_blocked_by_dialog_title">“%1$s” को क्या रोक रहा है?</string>
     <string name="tasks_blocked_by_error_offline">आप ऑफ़लाइन हैं — अभी अवरोधक बदले नहीं जा सकते।</string>
     <string name="tasks_blocked_by_error_rejected">वह बदलाव अस्वीकार हुआ — इससे निर्भरता-चक्र बनता या यह संगठनों के पार जाता।</string>
+    <!-- दोहराव-अंतराल की शब्दावली (#384) — आइटम की पंक्ति पर 'कितनी बार दोहराता है' वाली पंक्ति; पूरा परिवार 'हर …' पर टिका है -->
+    <string name="tasks_cadence_custom">कस्टम शेड्यूल</string>
+    <string name="tasks_cadence_daily">हर दिन</string>
+    <!-- 'हर' के बाद संज्ञा एकवचन ही रहती है — दोनों रूप जानबूझकर एक जैसे हैं -->
+    <plurals name="tasks_cadence_every_n_days">
+        <item quantity="one">हर %1$d दिन</item>
+        <item quantity="other">हर %1$d दिन</item>
+    </plurals>
+    <!-- 'one' में अंतराल नहीं आता, अंग्रेज़ी की तरह -->
+    <plurals name="tasks_cadence_monthly">
+        <item quantity="one">हर महीने</item>
+        <item quantity="other">हर %1$d महीने</item>
+    </plurals>
+    <!-- 'बार' का रूप नहीं बदलता — दोनों रूप एक जैसे -->
+    <plurals name="tasks_cadence_times">
+        <item quantity="one">%1$d बार</item>
+        <item quantity="other">%1$d बार</item>
+    </plurals>
+    <!-- जानबूझकर अस्पष्ट — यह बिल्ड नियम पढ़ ही नहीं सकता -->
+    <string name="tasks_cadence_unknown">दोहराता है</string>
+    <!-- 'तक' परसर्ग तारीख़ के बाद आता है -->
+    <string name="tasks_cadence_until">%1$s तक</string>
+    <!-- अंत का स्पेस मान का हिस्सा है -->
+    <string name="tasks_cadence_weekday_separator">, </string>
+    <string name="tasks_cadence_weekly">हर सप्ताह</string>
+    <!-- 'को' परसर्ग पूरी दिन-सूची के बाद: "हर सप्ताह सोम, बुध को" -->
+    <string name="tasks_cadence_weekly_on">हर सप्ताह %1$s को</string>
+    <!-- · वैसा ही रखें -->
+    <string name="tasks_cadence_with_bound">%1$s · %2$s</string>
+    <plurals name="tasks_cadence_yearly">
+        <item quantity="one">हर साल</item>
+        <item quantity="other">हर %1$d साल</item>
+    </plurals>
     <string name="tasks_delete_item_confirm_title">“%1$s” हटाएँ?</string>
     <string name="tasks_detail_add_caption">कैप्शन जोड़ें</string>
     <string name="tasks_detail_add_comment_placeholder">टिप्पणी जोड़ें…</string>
@@ -794,6 +827,11 @@
     <string name="tasks_moved_snackbar">मूव किया गया</string>
     <string name="tasks_progress_done">%2$d में से %1$d पूर्ण</string>
     <string name="tasks_progress_fraction">%2$d में से %1$d</string>
+    <!-- स्क्रीन-रीडर उपसर्ग — हिंदी में क्रिया अंत में आती है, इसलिए तर्क पहले: "हर सप्ताह सोम, बुध को दोहराता है" -->
+    <string name="tasks_recurrence_a11y_prefix">%1$s दोहराता है</string>
+    <!-- "अगली बार: कल" — खाली 'अगली:' से ज़्यादा स्वाभाविक -->
+    <string name="tasks_recurrence_next_due">अगली बार: %1$s</string>
+    <string name="tasks_recurrence_series_ended">शृंखला समाप्त</string>
     <!-- सौम्य 'अलग रखें' — कभी 'छोड़ा/त्यागा' नहीं -->
     <string name="tasks_set_aside">अलग रखें</string>
     <string name="tasks_set_aside_confirm_title">“%1$s” अलग रखें?</string>

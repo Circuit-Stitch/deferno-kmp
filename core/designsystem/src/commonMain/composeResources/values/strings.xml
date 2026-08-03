@@ -859,6 +859,42 @@ Thank you.</string>
     <string name="tasks_blocked_by_error_offline">You're offline — blockers can't be changed right now.</string>
     <!-- Server 400 verdict, typed (the raw prose is logged, not shown) -->
     <string name="tasks_blocked_by_error_rejected">That change was rejected — it would create a dependency cycle or cross organizations.</string>
+    <!-- Recurrence cadence vocabulary (#384) — the “how often does this repeat” phrase on a recurring item's tree row, one arm per core/model Cadence variant. It never says *when next*; that is tasks_recurrence_next_due. -->
+    <!-- Cadence.Custom — a raw RFC-5545 rrule the client renders but deliberately does not paraphrase -->
+    <string name="tasks_cadence_custom">Custom schedule</string>
+    <string name="tasks_cadence_daily">Daily</string>
+    <!-- Cadence.EveryNDays — arg = the stride in days. RENDERER RULE: normalise EveryNDays(1) to tasks_cadence_daily (it means exactly that), so the 'one' arm stays unreachable — it exists only so the plural is well-formed. Locales differ on whether “Every 1 day” is even grammatical (de drops the numeral outright) -->
+    <plurals name="tasks_cadence_every_n_days">
+        <item quantity="one">Every %1$d day</item>
+        <item quantity="other">Every %1$d days</item>
+    </plurals>
+    <!-- Cadence.Monthly — the 'one' arm drops the interval (an interval of 1 reads as the plain adverb); only 'other' names it -->
+    <plurals name="tasks_cadence_monthly">
+        <item quantity="one">Monthly</item>
+        <item quantity="other">Every %1$d months</item>
+    </plurals>
+    <!-- RecurrenceBound.AfterCount — arg = firings in the series; a bound, so it renders inside tasks_cadence_with_bound -->
+    <plurals name="tasks_cadence_times">
+        <item quantity="one">%1$d time</item>
+        <item quantity="other">%1$d times</item>
+    </plurals>
+    <!-- Cadence.Unmodelled — deliberately vague: this build genuinely cannot read the rule (#382), so promise nothing about it. RENDERER RULE: already a verb phrase, so tasks_recurrence_a11y_prefix must SKIP this arm — wrapping it speaks “Repeats Repeats” (and its exact twin in all five locales) -->
+    <string name="tasks_cadence_unknown">Repeats</string>
+    <!-- RecurrenceBound.OnDate — lowercase, it follows a cadence inside tasks_cadence_with_bound. Arg = a formatted date -->
+    <string name="tasks_cadence_until">until %1$s</string>
+    <!-- Joins weekday abbreviations inside tasks_cadence_weekly_on — the TRAILING SPACE is part of the value -->
+    <string name="tasks_cadence_weekday_separator">, </string>
+    <!-- Cadence.Weekly whose day list is empty or unreadable -->
+    <string name="tasks_cadence_weekly">Weekly</string>
+    <!-- Cadence.Weekly — arg = weekday abbreviations joined by tasks_cadence_weekday_separator (“Mon, Wed”). RENDERER RULE: Cadence.Weekly.days holds the wire's ENGLISH chrono::Weekday tokens (“Mon”..“Sun”) — localize via LocalizedDateFormats.shortWeekdayLabels() (CLDR), never a hand-rolled per-locale table (CLAUDE.md). Apple needs its own CLDR source; the bridge stays java.time-free -->
+    <string name="tasks_cadence_weekly_on">Weekly on %1$s</string>
+    <!-- Joins a cadence to its end bound: “Weekly · until 14 Jun”. Args: cadence, bound. Keep the · in every locale -->
+    <string name="tasks_cadence_with_bound">%1$s · %2$s</string>
+    <!-- Cadence.Yearly — 'one' drops the interval, like tasks_cadence_monthly -->
+    <plurals name="tasks_cadence_yearly">
+        <item quantity="one">Yearly</item>
+        <item quantity="other">Every %1$d years</item>
+    </plurals>
     <!-- Curly quotes — adapt quote style per locale -->
     <string name="tasks_delete_item_confirm_title">Delete “%1$s”?</string>
     <string name="tasks_detail_add_caption">Add caption</string>
@@ -1031,6 +1067,12 @@ Thank you.</string>
     <string name="tasks_progress_done">%1$d of %2$d done</string>
     <!-- done-of-total meta (collapsed parent + Subtasks header trailing); args: done, total -->
     <string name="tasks_progress_fraction">%1$d of %2$d</string>
+    <!-- Screen-reader wrapper around the cadence phrase (#384): “Repeats Weekly on Mon, Wed”. Arg = the rendered cadence. RENDERER RULE: do NOT wrap tasks_cadence_unknown — that key is the same verb phrase and would speak “Repeats Repeats”; announce the Unmodelled arm bare -->
+    <string name="tasks_recurrence_a11y_prefix">Repeats %1$s</string>
+    <!-- Next firing of a live series; arg = a formatted or relative date (“Tomorrow”) -->
+    <string name="tasks_recurrence_next_due">Next: %1$s</string>
+    <!-- A bounded series with no firings left — replaces tasks_recurrence_next_due; the cadence phrase stays -->
+    <string name="tasks_recurrence_series_ended">Series ended</string>
     <!-- App vocabulary for WorkingState.Dropped — VERB phrase ('put aside for now', deliberately gentle, never 'drop/abandon'). One key for menu entries AND the working-state chip label -->
     <string name="tasks_set_aside">Set aside</string>
     <!-- Destructive-unblock confirm for an isBlocker row; arg = title -->
