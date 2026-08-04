@@ -192,6 +192,35 @@ class OutboxOccurrenceWriterTest {
     }
 
     @Test
+    fun aRescheduleToTheSameDayIsRefused_soACompletedFiringKeepsItsResolution() = runTest {
+        // A "move" to the day the firing already sits on is one mis-tap away — the month grid completes
+        // an armed reschedule on ANY day-cell tap, including the currently selected one — and it is
+        // destructive if the writer honours it. Origin and destination are then the SAME
+        // (kind, definitionId, date) key, so the two upserts run in order against one row: origin writes
+        // Skipped, destination overwrites it with Scheduled, and a firing the user had already marked
+        // Done silently loses its resolution. The queued request is a `400` besides ("new_date must
+        // differ from the origin date" is the server's own precondition), which the sender classifies
+        // Terminal and dead-letters — so nothing retries and nothing converges the destroyed fact back.
+        val scene = scene()
+        val completed =
+            OccurrenceFact(ItemKind.Habit, "hab-3-item", date, OccurrenceResolution.DoneOnTime, doneAt = now)
+        scene.facts.seed(completed)
+
+        scene.writer().reschedule("ce-1", date)
+
+        // The completion survives, whole — resolution *and* the `done_at` the user's tick recorded.
+        assertEquals(
+            OccurrenceResolution.DoneOnTime,
+            scene.facts.get(ItemKind.Habit, "hab-3-item", date)?.resolution,
+        )
+        assertEquals(completed, scene.facts.get(ItemKind.Habit, "hab-3-item", date))
+        // Nothing was queued: the request would only ever dead-letter.
+        assertTrue(scene.outbox.all.isEmpty())
+        // …and the agenda row did not move (it had nowhere to move to).
+        assertEquals(date, scene.calendar.get("ce-1")?.date)
+    }
+
+    @Test
     fun aHabitMarkOnlyHonorsComplete_neverSilentlyUncompletes() = runTest {
         val scene = scene()
         scene.facts.seed(

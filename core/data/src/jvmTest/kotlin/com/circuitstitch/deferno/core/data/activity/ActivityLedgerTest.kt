@@ -438,6 +438,12 @@ class ActivityLedgerTest {
         assertEquals(ActivitySummary(ActivityVerb.DeletedTask), entry("task:abc", OutboxMethod.Delete).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.Created, "habit"), entry("create:Habit:h1", OutboxMethod.Post).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.MovedItem), entry("item:i1", OutboxMethod.Patch).summaryInfo())
+        // `item:{id}` is the target of two unlike intents, so it reads the METHOD like the `task` arm
+        // above. It was Move's alone (`POST items/{id}/move`) until #389 gave the recurring kinds a
+        // kind-neutral chain-wide `DELETE items/{id}`, which shares it — without the branch an offline
+        // delete reads "Moved an item" in the un-reconciled feed until the server's entry supersedes it.
+        assertEquals(ActivitySummary(ActivityVerb.DeletedItem), entry("item:i1", OutboxMethod.Delete).summaryInfo())
+        assertEquals(ActivitySummary(ActivityVerb.MovedItem), entry("item:i1", OutboxMethod.Post).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.UpdatedPlan), entry("plan:2026-06-21:UTC", OutboxMethod.Post).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.ChangedSettings), entry("settings", OutboxMethod.Patch).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.UpdatedOccurrence, "event"), entry("occurrence:Event:s1:2026-06-21", OutboxMethod.Patch).summaryInfo())

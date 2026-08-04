@@ -214,6 +214,29 @@ class OccurrenceMutationTest {
     }
 
     @Test
+    fun anEventCompletionIsAlwaysOnTime_whereTheSameShapeMakesAChoreLate() {
+        // An Event has no late concept, and that is parity with the server rather than a preference: its
+        // Done arm hard-codes `DoneOnTime` ("events never produce DoneLate", event_occurrences.rs:229)
+        // and `validate_for_event` rejects the variant outright ("events do not have a late concept",
+        // occurrence.rs:280). Deciding punctuality here would invent a resolution the server cannot
+        // store — an event's `complete_by` IS its start time on that date, so EVERY event ticked after
+        // it began would optimistically read "Done late" and then flip on the next reconcile.
+        val startedAt = Instant.parse("2026-06-08T09:00:00Z") // an hour before `now` — the DoneLate shape
+        val onRecord = fact(completeBy = startedAt)
+
+        val event = MarkOccurrence("ce-1", ItemKind.Event, "evt-1-item", date, OccurrenceAction.Complete)
+        assertEquals(OccurrenceResolution.DoneOnTime, event.applyTo(onRecord, now).resolution)
+        // Still a completion in every other respect — only the punctuality split is bypassed.
+        assertEquals(now, event.applyTo(onRecord, now).doneAt)
+        assertEquals(startedAt, event.applyTo(onRecord, now).completeBy)
+
+        // The contrast that stops the above passing vacuously: the IDENTICAL fact and instant on a chore
+        // does go late, so this is the Event arm alone, not every kind quietly rounded to on-time.
+        val chore = MarkOccurrence("ce-1", ItemKind.Chore, "cho-1-item", date, OccurrenceAction.Complete)
+        assertEquals(OccurrenceResolution.DoneLate, chore.applyTo(onRecord, now).resolution)
+    }
+
+    @Test
     fun aClearIsTheAbsenceOfAFactNotAScheduledOne() {
         // The distinction the whole fact table exists to keep: `null` means the server holds no record,
         // which is what a clear leaves behind. An OccurrenceResolution.Scheduled fact would claim a row

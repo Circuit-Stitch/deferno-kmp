@@ -81,6 +81,16 @@ class OutboxOccurrenceWriter(
 
     override suspend fun reschedule(itemId: String, newDate: LocalDate) {
         val firing = actionableFiring(itemId) ?: return
+        // Defensive, and destructive if omitted: a "move" to the day the firing already sits on. The month
+        // grid completes an armed reschedule on *any* day-cell tap, including the currently selected one, so
+        // this is a single mis-tap away. Origin and destination would then be the SAME (kind, id, date) row,
+        // and the two upserts below would run in order against it — origin writes Skipped, destination
+        // overwrites it with Scheduled — so a firing the user had already marked Done silently loses its
+        // resolution. The queued request is a `400` besides ("new_date must differ from the origin date" is
+        // the server's own precondition), which the sender classifies Terminal and dead-letters, so nothing
+        // ever retries and nothing converges the destroyed fact back. Refuse it here, the same way [mark]
+        // refuses a meaningless habit action.
+        if (newDate == firing.date) return
         val mutation = RescheduleOccurrence(itemId, firing.kind!!, firing.taskId, firing.date, newDate)
         // The agenda row moves days; the two firings it moves between each get the resolution the
         // server will write there (origin skipped, destination scheduled — see the intent's KDoc).

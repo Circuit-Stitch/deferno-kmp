@@ -616,7 +616,18 @@ data class MarkOccurrence(
         resolution = when (action) {
             OccurrenceAction.Start -> OccurrenceResolution.InProgress
             OccurrenceAction.Skip -> OccurrenceResolution.Skipped
-            OccurrenceAction.Complete -> completionResolution(now, fact?.completeBy)
+            // An Event has no late concept, and this is parity rather than a preference: the server's
+            // Done arm hard-codes `DoneOnTime` ("events never produce DoneLate", `event_occurrences.rs:229`)
+            // and `validate_for_event` rejects the variant outright ("events do not have a late concept",
+            // `occurrence.rs:280`). Deciding punctuality here for an Event would invent a resolution the
+            // server cannot store — an event's `complete_by` is its start time on that date, so *any* event
+            // ticked after it began would optimistically read "Done late" and then flip on the next
+            // reconcile. The read mapper already condenses the stored status rather than recomputing it;
+            // this keeps the write path honest to the same rule.
+            OccurrenceAction.Complete -> when (kind) {
+                ItemKind.Event -> OccurrenceResolution.DoneOnTime
+                else -> completionResolution(now, fact?.completeBy)
+            }
         },
         doneAt = now.takeIf { action == OccurrenceAction.Complete },
         completeBy = fact?.completeBy,
