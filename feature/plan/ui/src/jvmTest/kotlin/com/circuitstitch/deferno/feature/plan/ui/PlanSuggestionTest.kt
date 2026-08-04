@@ -45,11 +45,12 @@ class PlanSuggestionTest {
         priority: Priority = Priority.Normal,
         pinned: Boolean = false,
         completeBy: Instant? = null,
+        workingState: WorkingState = WorkingState.Open,
     ) = Task(
         id = TaskId(id),
         orgSlug = "u-deferno",
         title = title,
-        workingState = WorkingState.Open,
+        workingState = workingState,
         priority = priority,
         pinned = pinned,
         completeBy = completeBy,
@@ -132,6 +133,70 @@ class PlanSuggestionTest {
         assertEquals(
             TaskId("1"),
             listOf(task("1", "Someday idea", priority = Priority.Backlog)).suggestedTask()?.id,
+        )
+    }
+
+    // --- the pick, and finished work (#375 review) ---
+
+    /**
+     * A finished task is never what to start next. It keeps whatever priority bucket it had, and the Plan
+     * does render terminal rows (`observeActive()` filters tombstones, not states), so an unguarded Fire
+     * arm answers "start here" with something already done.
+     *
+     * This is the **Compose half of the #375 review**, which landed on both Apple views and never here —
+     * `PlanView.swift`'s `suggested(_:)` has gated the Fire lane on open work since then, so until this
+     * fix Android and desktop picked a different row than iPhone and Mac for the same day.
+     */
+    @Test
+    fun suggested_neverStartsWithAFinishedFireTask() {
+        val picked = listOf(
+            task("1", "Call the plumber", priority = Priority.Fire, workingState = WorkingState.Done),
+            task("2", "Water the plants"),
+        ).suggestedTask()
+
+        assertEquals(TaskId("2"), picked?.id, "the open task, not the finished Fire one")
+    }
+
+    @Test
+    fun suggested_skipsFinishedWorkAtTheFallbackTierToo() {
+        // Not just the Fire lane: the plain "first in the plan" arm is guarded as well, so a day whose
+        // first row is done still suggests the first row you could actually pick up.
+        assertEquals(
+            TaskId("2"),
+            listOf(
+                task("1", "Yesterday's leftovers", workingState = WorkingState.Dropped),
+                task("2", "Water the plants"),
+            ).suggestedTask()?.id,
+        )
+    }
+
+    @Test
+    fun suggested_stillReturnsARowWhenEverythingIsFinished() {
+        // The final arm is deliberately unguarded (mirroring `PlanView.swift`): a fully-finished day keeps
+        // its banner rather than silently losing it. Losing the ✦ on the one day you cleared the plan
+        // would read as a bug, not as praise.
+        assertEquals(
+            TaskId("1"),
+            listOf(
+                task("1", "Water the plants", workingState = WorkingState.Done),
+                task("2", "Call the plumber", workingState = WorkingState.Done),
+            ).suggestedTask()?.id,
+        )
+    }
+
+    /**
+     * The `pinned` arm is deliberately NOT terminal-guarded, because `PlanView.swift`'s isn't either.
+     * Pinning this down stops a well-meaning "fix" to one platform from re-opening the divergence the
+     * test above closes — if this behaviour is ever changed, it must change on all four platforms at once.
+     */
+    @Test
+    fun suggested_keepsApplesUnguardedPinnedArm_soTheFourPlatformsStayIdentical() {
+        assertEquals(
+            TaskId("1"),
+            listOf(
+                task("1", "Water the plants", pinned = true, workingState = WorkingState.Done),
+                task("2", "Call the plumber"),
+            ).suggestedTask()?.id,
         )
     }
 
@@ -236,6 +301,36 @@ class PlanSuggestionTest {
 
         onNodeWithText("You said this one's urgent").assertExists()
         onNodeWithText("You said this one matters").assertDoesNotExist()
+    }
+
+    /**
+     * "Already done" outranks every reason-to-start, including the deadline arm above it (#375 review).
+     * The string was in all five Compose locale files with no code reading it while both Apple views
+     * rendered it — `L10nCatalogParityTest` compares the catalogs to each other and never to a call site,
+     * so a translated-but-orphaned key looks identical to a used one.
+     */
+    @Test
+    fun whyLine_readsAlreadyDone_forAFinishedTask_evenWhenItIsFireAndDated() = runComposeUiTest {
+        setContent {
+            Themed {
+                WhatsNextContent(
+                    tasks = listOf(
+                        task(
+                            "1",
+                            "Call the plumber",
+                            priority = Priority.Fire,
+                            completeBy = Instant.parse("2026-06-20T17:00:00Z"),
+                            workingState = WorkingState.Done,
+                        ),
+                    ),
+                    onBack = {},
+                    onStartFocus = {},
+                )
+            }
+        }
+
+        onNodeWithText("Already wrapped up — pick another?").assertExists()
+        onNodeWithText("You said this one's urgent").assertDoesNotExist()
     }
 
     @Test

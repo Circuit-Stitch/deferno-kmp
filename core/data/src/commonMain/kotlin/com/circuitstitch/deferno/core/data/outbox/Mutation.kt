@@ -77,7 +77,7 @@ import kotlin.time.Instant
 sealed interface Mutation {
 
     /**
-     * A coarse partition key for the entity this intent targets — `task:{id}` or `plan:{date}:{tz}`.
+     * A coarse partition key for the entity this intent targets — `task:{id}` or `plan:{date}`.
      * Stored on the outbox row for diagnostics/observability; the FIFO replay order is the global
      * enqueue sequence (not partitioned by target) so strict ordering is preserved across entities.
      */
@@ -113,10 +113,15 @@ sealed interface PlanMutation : Mutation {
     val tz: String
 
     /**
-     * The coalesce key is the **day**, not `(day, zone)` (#385). The server keeps one plan per date
-     * (`user:{id}:daily_plan:{date}`) and reads the zone only to decide which date that is, so two
-     * queued writes for the same date under different zones target the same list — keying them apart
-     * would let them stop collapsing into each other while still racing for the same server state.
+     * The entity a plan write targets is the **day**, not `(day, zone)` (#385). The server keeps one
+     * plan per date (`user:{id}:daily_plan:{date}`) and reads the zone only to decide *which* date, so
+     * `plan:$date:$tz` named a partition that does not exist server-side: two queued writes for the same
+     * date under different zones are writes to the one list, and the target should say so.
+     *
+     * This is a **naming** correction, not a behavioural one. Per [Mutation.target] the value is coarse
+     * diagnostic metadata — replay is globally FIFO by enqueue sequence, never partitioned by target —
+     * and [OutboxCoalescing] collapses occurrence targets only, leaving every queued plan write to
+     * replay in the position it was enqueued. Nothing about which writes reach the server changes here.
      */
     override val target: String get() = "plan:$date"
 

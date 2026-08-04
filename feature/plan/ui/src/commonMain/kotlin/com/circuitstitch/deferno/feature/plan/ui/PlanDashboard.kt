@@ -86,6 +86,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.plan_focus_subtitle
 import com.circuitstitch.deferno.core.designsystem.resources.plan_need_attention
 import com.circuitstitch.deferno.core.designsystem.resources.plan_nothing_overdue
 import com.circuitstitch.deferno.core.designsystem.resources.plan_pick_for_me
+import com.circuitstitch.deferno.core.designsystem.resources.plan_picker_already_done
 import com.circuitstitch.deferno.core.designsystem.resources.plan_rather_not_decide
 import com.circuitstitch.deferno.core.designsystem.resources.plan_refreshing
 import com.circuitstitch.deferno.core.designsystem.resources.plan_see_everything
@@ -190,7 +191,20 @@ internal sealed interface PlanMode {
  * `internal` (not private) so the precedence is unit-testable as the pure function it is.
  */
 internal fun List<Task>.suggestedTask(): Task? =
-    firstOrNull { it.priority == Priority.Fire } ?: firstOrNull { it.pinned } ?: firstOrNull()
+    // **Open work only in the Fire lane.** A finished task keeps whatever priority bucket it had, so an
+    // unguarded Fire arm promotes a Done item to the very first suggestion — and the Plan does render
+    // terminal rows (`observeActive()` filters tombstones, not states). The #375 review caught this and
+    // landed the guard on both Apple views; the Compose half never followed, so until now Android and
+    // desktop answered "start here" with a finished task where iPhone and Mac answered correctly.
+    //
+    // Mirrored arm for arm from `PlanView.swift`'s `suggested(_:)` — including the two quirks, so the
+    // parity is real rather than approximate: the `pinned` arm is deliberately NOT terminal-guarded (a
+    // pinned finished task still outranks an unpinned open one), and the final bare `firstOrNull()`
+    // means an all-terminal day still shows a banner instead of silently losing it.
+    firstOrNull { it.priority == Priority.Fire && !it.workingState.isTerminal }
+        ?: firstOrNull { it.pinned }
+        ?: firstOrNull { !it.workingState.isTerminal }
+        ?: firstOrNull()
 
 internal fun List<PlanRow>.suggested(): PlanRow? {
     // Task rows only. The banner's verb is "Start", and starting is what you do to a Task — a Habit is a
@@ -653,6 +667,13 @@ internal fun ChoiceCard(
 /** The derived "why" line for a choice. */
 @Composable
 private fun whyLine(task: Task): String = when {
+    // "Already done" outranks every reason-to-start, including the deadline reading below: a finished
+    // task's answer to "why this one?" is that it is finished. Both Apple views have said this since the
+    // #375 review; Compose had the translated string in all five locale files and no code reading it, so
+    // Android and desktop told you a completed task was "a quick win, if you want momentum".
+    // (`L10nCatalogParityTest` could not catch that — it compares the catalogs to each other, never to a
+    // call site.)
+    task.workingState.isTerminal -> stringResource(Res.string.plan_picker_already_done)
     task.completeBy != null -> stringResource(
         Res.string.common_due,
         formatDeadlineDate(task.completeBy!!, TimeZone.currentSystemDefault()),

@@ -22,6 +22,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+/** The ordered Task refs a plan fixture wants — a plan write is kind-neutral since #385. */
+private fun taskRef(id: String) = PlanItemRef(id, ItemKind.Task)
+
 /**
  * The intent → endpoint → minimal-body table (ADR-0001, ADR-0011, #23). Pins the EXACT wire request
  * each [Mutation] emits — proving the load-bearing rules: a set emits its value, a "clear" emits an
@@ -34,8 +37,6 @@ import kotlin.test.assertTrue
  * 422s — Terminal — and dead-letters the user's write, which is far worse than the missing audit row a
  * wrong `false` costs.
  */
-private fun taskRef(id: String) = PlanItemRef(id, ItemKind.Task)
-
 class MutationTest {
 
     private val created = Instant.parse("2026-05-20T16:11:42Z")
@@ -297,13 +298,16 @@ class MutationTest {
     }
 
     /**
-     * The plan's coalesce key is the **day**, not `(day, zone)` (#385). The server holds one plan per
-     * date and reads the zone only to decide which date that is, so two queued writes for the same date
-     * under different zones race for the same server state — keying them apart would stop them
-     * collapsing into each other while doing nothing about the race.
+     * A plan write's target names the **day**, not `(day, zone)` (#385). The server holds one plan per
+     * date and reads the zone only to decide which date that is, so `plan:$date:$tz` named a partition
+     * that does not exist server-side.
+     *
+     * Diagnostic metadata only, per [Mutation.target] — replay stays globally FIFO by enqueue sequence,
+     * and [coalesceOccurrences] collapses occurrence targets alone, so no plan write is coalesced away
+     * by this. Pinned so the target can't quietly re-acquire the zone.
      */
     @Test
-    fun planTargetsCoalesceOnTheDayNotTheZone() {
+    fun planTargetsNameTheDayNotTheZone() {
         assertEquals("plan:2026-06-07", PlanAdd(taskRef("t1"), date, tz).target)
         assertEquals(
             PlanAdd(taskRef("t1"), date, tz).target,
