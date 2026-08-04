@@ -81,6 +81,8 @@ import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SearchBarDisplay
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
+import com.circuitstitch.deferno.core.designsystem.component.kindA11yLabel
+import com.circuitstitch.deferno.core.designsystem.component.kindColor
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.common_a11y_phrase_join
 import com.circuitstitch.deferno.core.designsystem.resources.common_add

@@ -74,9 +74,9 @@ class CommandExecutor(
             is SetTaskTargetDate -> taskWriter.setTargetDate(command.taskId, command.targetDate)
             is SetTaskPriority -> taskWriter.setPriority(command.taskId, command.priority)
             is DeleteTask -> taskWriter.delete(command.taskId)
-            is AddToPlan -> planWriter.add(command.taskId, command.date, command.tz)
-            is RemoveFromPlan -> planWriter.remove(command.taskId, command.date, command.tz)
-            is ReorderPlan -> planWriter.reorder(command.taskIds, command.date, command.tz)
+            is AddToPlan -> planWriter.add(command.ref, command.date, command.tz)
+            is RemoveFromPlan -> planWriter.remove(command.itemId, command.date, command.tz)
+            is ReorderPlan -> planWriter.reorder(command.refs, command.date, command.tz)
             // Create (#185) is offline-first — it always returns Created → Accepted(itemId); convert
             // (ADR-0016) is online-only and may return Offline/Failed. Both return the writer's own
             // outcome (NOT a blanket Accepted) so a convert's connectivity refusal stays structured.

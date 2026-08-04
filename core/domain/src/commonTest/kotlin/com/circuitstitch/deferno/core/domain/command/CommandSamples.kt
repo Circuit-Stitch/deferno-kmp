@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.domain.command
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
+import com.circuitstitch.deferno.core.model.PlanItemRef
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
@@ -40,9 +41,9 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.SetTaskLabels -> SetTaskLabels(TaskId("t1"), listOf("home", "errands"))
     CommandKind.SetTaskPinned -> SetTaskPinned(TaskId("t1"), pinned = true)
     CommandKind.DeleteTask -> DeleteTask(TaskId("t1"))
-    CommandKind.AddToPlan -> AddToPlan(TaskId("t1"), SAMPLE_DATE, SAMPLE_TZ)
-    CommandKind.RemoveFromPlan -> RemoveFromPlan(TaskId("t1"), SAMPLE_DATE, SAMPLE_TZ)
-    CommandKind.ReorderPlan -> ReorderPlan(listOf(TaskId("t1")), SAMPLE_DATE, SAMPLE_TZ)
+    CommandKind.AddToPlan -> AddToPlan(PlanItemRef("t1", ItemKind.Task), SAMPLE_DATE, SAMPLE_TZ)
+    CommandKind.RemoveFromPlan -> RemoveFromPlan("t1", SAMPLE_DATE, SAMPLE_TZ)
+    CommandKind.ReorderPlan -> ReorderPlan(listOf(PlanItemRef("t1", ItemKind.Task)), SAMPLE_DATE, SAMPLE_TZ)
     CommandKind.StartTask -> StartTask(TaskId("t1"))
     CommandKind.SendTaskToReview -> SendTaskToReview(TaskId("t1"))
     CommandKind.OpenTask -> OpenTask(TaskId("t1"))

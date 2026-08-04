@@ -69,6 +69,7 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.PlanRow
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
 import com.circuitstitch.deferno.core.speech.EmptySpeechEngineCatalog
@@ -330,7 +331,7 @@ class DefaultMainShellComponent(
             planRepository.observePlan(today, timeZone),
             calendarRepository.observeDay(today),
         ) { tasks, plan, day ->
-            val planIds = plan.mapTo(HashSet(plan.size)) { it.id.value }
+            val planIds = plan.mapTo(HashSet(plan.size)) { it.item.id }
             ItemRowDecorations(
                 menuStates = tasks.associate {
                     it.id.value to TaskMenuState(it.workingState, it.pinned, it.id.value in planIds)
@@ -1137,9 +1138,9 @@ private fun destinationsFor(assistantEntitled: Boolean): List<Destination> =
  * Total by construction: a null [CalendarItem.seriesId] is dropped rather than guessed, and an id present
  * on both sides collapses to one entry.
  */
-internal fun inTodayIds(plan: List<Task>, day: List<CalendarItem>): Set<String> {
+internal fun inTodayIds(plan: List<PlanRow>, day: List<CalendarItem>): Set<String> {
     val ids = HashSet<String>(plan.size + day.size)
-    plan.mapTo(ids) { it.id.value }
+    plan.mapTo(ids) { it.item.id }
     day.mapNotNullTo(ids) { it.seriesId }
     return ids
 }

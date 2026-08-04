@@ -331,11 +331,17 @@ interface AccountDataBindings {
 
     @Provides
     @SingleIn(AccountScope::class)
+    // All four kind stores, not just Tasks (#385): the plan is a cross-kind curation, and resolving
+    // its ordering against the Task cache alone is what made a seeded Habit/Chore vanish on read.
     fun planRepository(
         planStore: PlanLocalStore,
         remoteSource: PlanRemoteSource,
         taskStore: TaskLocalStore,
-    ): PlanRepository = OfflinePlanRepository(planStore, remoteSource, taskStore)
+        habitStore: HabitLocalStore,
+        choreStore: ChoreLocalStore,
+        eventStore: EventLocalStore,
+    ): PlanRepository =
+        OfflinePlanRepository(planStore, remoteSource, taskStore, habitStore, choreStore, eventStore)
 
     // The Calendar feed cache (#74): the local source of truth the month grid + day agenda observe; a
     // window refresh full-replaces the span and a write applies optimistically here.

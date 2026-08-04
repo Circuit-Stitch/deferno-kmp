@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.PlanRow
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -96,29 +97,35 @@ internal class DemoItemRepository(initial: List<Item>) : ItemRepository {
     }
 }
 
-/** Project demo Tasks into the cross-kind Item read model (mirrors `OfflineItemRepository`'s mapping). */
-internal fun List<Task>.toDemoItems(): List<Item> = map {
-    Item(
-        id = it.id.value,
-        kind = ItemKind.Task,
-        title = it.title,
-        parentId = it.parentId?.value,
-        sequence = it.sequence,
-        isTerminal = it.workingState.isTerminal,
-        descendantDone = it.descendantDone,
-        descendantTotal = it.descendantTotal,
-    )
-}
+/** Project a demo Task into the cross-kind Item read model (mirrors `OfflineItemRepository`'s mapping). */
+internal fun Task.toDemoItem(): Item = Item(
+    id = id.value,
+    kind = ItemKind.Task,
+    title = title,
+    parentId = parentId?.value,
+    sequence = sequence,
+    isTerminal = workingState.isTerminal,
+    descendantDone = descendantDone,
+    descendantTotal = descendantTotal,
+)
+
+/** Project demo Tasks into the cross-kind Item read model. */
+internal fun List<Task>.toDemoItems(): List<Item> = map { it.toDemoItem() }
 
 /**
  * In-memory [PlanRepository] **test fake** for the shell + Compose-View tests (#27/#55). [observePlan]
  * ignores `date`/`tz` (a single demo day) and [refreshPlan] is a no-op; [add] lets a test mirror an
  * "add to plan" intent. The real app uses the DI-provided OfflinePlanRepository (#68, ADR-0014).
+ *
+ * The demo day is Tasks only — the sample data has no recurring definitions — so the [PlanRow]s it
+ * emits all carry their `task` (#385). Taking `List<Task>` in and projecting on the way out keeps the
+ * sample data one list rather than two that could disagree.
  */
 internal class DemoPlanRepository(initial: List<Task>) : PlanRepository {
     private val plan = MutableStateFlow(initial)
 
-    override fun observePlan(date: LocalDate, tz: String): Flow<List<Task>> = plan
+    override fun observePlan(date: LocalDate, tz: String): Flow<List<PlanRow>> =
+        plan.map { tasks -> tasks.map { PlanRow(item = it.toDemoItem(), task = it) } }
 
     override suspend fun refreshPlan(date: LocalDate, tz: String) {
         // Offline demo: nothing to pull.

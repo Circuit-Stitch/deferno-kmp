@@ -110,6 +110,14 @@ sealed interface ItemView {
         // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
         val blocked: Boolean = false,
         @SerialName("is_blocker") val isBlocker: Boolean = false,
+        // The day's firing, inline (#385). Present ONLY on `/items/plan`, where the seeder attaches each
+        // recurring row's occurrence beside the flattened definition fields; `/items` never sends it,
+        // hence the default. Modelled even though nothing consumes it yet, because an UNMODELLED wire
+        // field is invisible to the contract-fixture harness — which is exactly how #381
+        // (`subtask_template`) and #382 (`recurrence.end`) each shipped. Its status may be a server
+        // *reading* rather than a stored fact (see [OccurrenceDto]); ADR-0053 forbids persisting that,
+        // so this is render-only and never reaches a table.
+        @SerialName("today_occurrence") val todayOccurrence: OccurrenceDto? = null,
     ) : ItemView
 
     /** The `chore` variant — adds `cadence_mode` over the shared recurring base. */
@@ -143,6 +151,14 @@ sealed interface ItemView {
         // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
         val blocked: Boolean = false,
         @SerialName("is_blocker") val isBlocker: Boolean = false,
+        // The day's firing, inline (#385). Present ONLY on `/items/plan`, where the seeder attaches each
+        // recurring row's occurrence beside the flattened definition fields; `/items` never sends it,
+        // hence the default. Modelled even though nothing consumes it yet, because an UNMODELLED wire
+        // field is invisible to the contract-fixture harness — which is exactly how #381
+        // (`subtask_template`) and #382 (`recurrence.end`) each shipped. Its status may be a server
+        // *reading* rather than a stored fact (see [OccurrenceDto]); ADR-0053 forbids persisting that,
+        // so this is render-only and never reaches a table.
+        @SerialName("today_occurrence") val todayOccurrence: OccurrenceDto? = null,
     ) : ItemView
 
     /** The `event` variant — adds `all_day` + `end_time` + start/end time-of-day over the recurring base. */
@@ -178,6 +194,14 @@ sealed interface ItemView {
         // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
         val blocked: Boolean = false,
         @SerialName("is_blocker") val isBlocker: Boolean = false,
+        // The day's firing, inline (#385). Present ONLY on `/items/plan`, where the seeder attaches each
+        // recurring row's occurrence beside the flattened definition fields; `/items` never sends it,
+        // hence the default. Modelled even though nothing consumes it yet, because an UNMODELLED wire
+        // field is invisible to the contract-fixture harness — which is exactly how #381
+        // (`subtask_template`) and #382 (`recurrence.end`) each shipped. Its status may be a server
+        // *reading* rather than a stored fact (see [OccurrenceDto]); ADR-0053 forbids persisting that,
+        // so this is render-only and never reaches a table.
+        @SerialName("today_occurrence") val todayOccurrence: OccurrenceDto? = null,
     ) : ItemView
 }
 

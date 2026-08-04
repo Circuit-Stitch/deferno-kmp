@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -64,8 +65,12 @@ import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.component.StartPill
 import com.circuitstitch.deferno.core.designsystem.component.TextLink
 import com.circuitstitch.deferno.core.designsystem.component.TreeChip
+import com.circuitstitch.deferno.core.designsystem.component.kindA11yLabel
+import com.circuitstitch.deferno.core.designsystem.component.kindColor
+import com.circuitstitch.deferno.core.designsystem.component.kindLabel
 import com.circuitstitch.deferno.core.designsystem.format.currentToday
 import com.circuitstitch.deferno.core.designsystem.resources.Res
+import com.circuitstitch.deferno.core.designsystem.resources.common_a11y_phrase_join
 import com.circuitstitch.deferno.core.designsystem.resources.common_due
 import com.circuitstitch.deferno.core.designsystem.resources.common_mark_done_cd
 import com.circuitstitch.deferno.core.designsystem.resources.common_mark_not_done_cd
@@ -81,6 +86,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.plan_focus_subtitle
 import com.circuitstitch.deferno.core.designsystem.resources.plan_need_attention
 import com.circuitstitch.deferno.core.designsystem.resources.plan_nothing_overdue
 import com.circuitstitch.deferno.core.designsystem.resources.plan_pick_for_me
+import com.circuitstitch.deferno.core.designsystem.resources.plan_picker_already_done
 import com.circuitstitch.deferno.core.designsystem.resources.plan_rather_not_decide
 import com.circuitstitch.deferno.core.designsystem.resources.plan_refreshing
 import com.circuitstitch.deferno.core.designsystem.resources.plan_see_everything
@@ -96,10 +102,12 @@ import com.circuitstitch.deferno.core.designsystem.resources.plan_why_pinned
 import com.circuitstitch.deferno.core.designsystem.resources.plan_why_quick_win
 import com.circuitstitch.deferno.core.designsystem.resources.plan_your_day_section_caps
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import com.circuitstitch.deferno.core.model.PlanRow
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.feature.plan.PlanComponent
+import com.circuitstitch.deferno.feature.plan.suggestedTask
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -109,7 +117,8 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * The daily Plan pane (#27) restyled to the "See the trees" direction — the app's calm home
  * (design-principles.md: "open into today's Plan, not the whole backlog"). A thin renderer of
- * [PlanComponent]: observes today's ordered Tasks and forwards taps (open the Task).
+ * [PlanComponent]: observes today's ordered rows — items of any kind since #385 — and forwards taps
+ * (open the Task; a recurring row has no detail surface to open yet, #383).
  *
  * On top of that it hosts three **local** sub-screens with no shell ripple (no Decompose, no
  * navigation): Today → What's next? (a decision helper) → Focus (a single-task surface). Mode lives
@@ -130,7 +139,7 @@ fun PlanScreen(component: PlanComponent, modifier: Modifier = Modifier) {
 
     when (val m = mode) {
         PlanMode.Today -> PlanContent(
-            tasks = state.tasks,
+            rows = state.rows,
             isRefreshing = state.isRefreshing,
             onTaskClick = component::onTaskClicked,
             today = today,
@@ -139,15 +148,17 @@ fun PlanScreen(component: PlanComponent, modifier: Modifier = Modifier) {
             modifier = modifier,
         )
 
+        // What's next? and Focus are Task verbs — "start this", "work on it until done". A recurring
+        // commitment has no such verb, so both take the Task projection of the plan rather than every row.
         PlanMode.WhatsNext -> WhatsNextContent(
-            tasks = state.tasks,
+            tasks = state.rows.mapNotNull { it.task },
             onBack = { mode = PlanMode.Today },
             onStartFocus = { mode = PlanMode.Focus(it) },
             modifier = modifier,
         )
 
         is PlanMode.Focus -> {
-            val task = state.tasks.firstOrNull { it.id == m.taskId }
+            val task = state.rows.firstNotNullOfOrNull { row -> row.task?.takeIf { it.id == m.taskId } }
             if (task == null) {
                 // The task vanished (refresh dropped it); fall back to Today rather than a blank screen.
                 mode = PlanMode.Today
@@ -170,19 +181,6 @@ internal sealed interface PlanMode {
     data class Focus(val taskId: TaskId) : PlanMode
 }
 
-/**
- * The task we gently suggest starting with: the first [Priority.Fire] one, else the first pinned one, else
- * the first in the plan. Fire outranks pinned (#375) — the person marked it urgent, which is a stronger
- * "start here" signal than having parked it at the top.
- *
- * This picks; it does **not** sort. The Plan's order is the one the person arranged, and stays exactly as
- * they left it — only the ✦ suggestion (and its "why" line) moves.
- *
- * `internal` (not private) so the precedence is unit-testable as the pure function it is.
- */
-internal fun List<Task>.suggested(): Task? =
-    firstOrNull { it.priority == Priority.Fire } ?: firstOrNull { it.pinned } ?: firstOrNull()
-
 // ───────────────────────────────────────────────────────────────────────────────────────────────
 // 1. "Today" — the hero
 // ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -190,7 +188,7 @@ internal fun List<Task>.suggested(): Task? =
 /** Stateless Today body — rendered directly by screenshot/UI tests with fixed inputs. */
 @Composable
 internal fun PlanContent(
-    tasks: List<Task>,
+    rows: List<PlanRow>,
     isRefreshing: Boolean,
     onTaskClick: (TaskId) -> Unit,
     today: LocalDate,
@@ -202,13 +200,19 @@ internal fun PlanContent(
 ) {
     val scheme = MaterialTheme.colorScheme
     val brand = MaterialTheme.defernoColors
-    val suggested = tasks.suggested()
+    // The ✦ is picked from the day's **Task projection**, not its rows (#385). The banner's verb is
+    // "Start", and starting is what you do to a Task — a Habit is a commitment you keep, not work you pick
+    // up, and tapping through leads to Focus mode, which is Task-shaped end to end. So a plan of nothing
+    // but recurring rows gets no ✦ at all, which is the honest outcome rather than a suggestion nobody can
+    // act on. The precedence itself is the one shared [suggestedTask]; both SwiftUI Plan views project
+    // their rows the same way before calling it.
+    val suggested: Task? = suggestedTask(rows.mapNotNull { it.task })
 
     Column(modifier = modifier.fillMaxSize().background(scheme.surface)) {
         if (isRefreshing) {
             LoadingStrip(label = stringResource(Res.string.plan_refreshing))
         }
-        if (tasks.isEmpty() && !isRefreshing) {
+        if (rows.isEmpty() && !isRefreshing) {
             EmptyPlan()
             return@Column
         }
@@ -236,7 +240,7 @@ internal fun PlanContent(
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = pluralStringResource(Res.plurals.plan_today_subtitle, tasks.size, tasks.size),
+                        text = pluralStringResource(Res.plurals.plan_today_subtitle, rows.size, rows.size),
                         style = MaterialTheme.typography.bodyMedium,
                         color = scheme.onSurfaceVariant,
                     )
@@ -263,12 +267,17 @@ internal fun PlanContent(
             }
 
             // The day list. The suggested row is a highlighted card; the rest are flat.
-            itemsIndexed(tasks) { index, task ->
-                val isSuggested = task.id == suggested?.id
+            itemsIndexed(rows) { index, row ->
+                // The `suggested != null` check is load-bearing, not defensive: a bare
+                // `row.task?.id == suggested?.id` compares null to null on an all-recurring day — no ✦ was
+                // picked, every row has no Task — and would highlight the whole list as suggested.
+                val isSuggested = suggested != null && row.task?.id == suggested.id
                 DayRow(
-                    task = task,
+                    row = row,
                     highlighted = isSuggested,
-                    onClick = { onTaskClick(task.id) },
+                    // Only a Task opens: no recurring kind has a detail surface on any platform yet
+                    // (#383), so a recurring row carries no tap rather than one that goes nowhere.
+                    onClick = row.task?.let { task -> { onTaskClick(task.id) } },
                 )
                 if (!isSuggested) {
                     HorizontalDivider(
@@ -298,7 +307,7 @@ internal fun PlanContent(
                         trailingChevron = true,
                     )
                     Text(
-                        text = attentionLabel(tasks, today),
+                        text = attentionLabel(rows, today),
                         style = MaterialTheme.typography.bodySmall,
                         color = brand.inkMuted,
                     )
@@ -308,11 +317,20 @@ internal fun PlanContent(
     }
 }
 
-/** "Nothing's overdue" or "{n} need attention" — gentle, never alarming. */
+/**
+ * "Nothing's overdue" or "{n} need attention" — gentle, never alarming.
+ *
+ * Counts Task rows only. Deciding that a recurring firing is unresolved needs the occurrence-fact table
+ * (#390) and the derivation in Half B of #385; until then a recurring row contributes zero rather than
+ * being guessed at in either direction.
+ */
 @Composable
-private fun attentionLabel(tasks: List<Task>, today: LocalDate): String {
+private fun attentionLabel(rows: List<PlanRow>, today: LocalDate): String {
     val nowStart = today.atStartOfDayInstant()
-    val overdue = tasks.count { t -> t.completeBy?.let { it < nowStart } == true && !t.workingState.isTerminal }
+    val overdue = rows.count { row ->
+        val t = row.task ?: return@count false
+        t.completeBy?.let { it < nowStart } == true && !t.workingState.isTerminal
+    }
     return if (overdue == 0) {
         stringResource(Res.string.plan_nothing_overdue)
     } else {
@@ -355,16 +373,27 @@ private fun SuggestionBanner(task: Task, onStart: () -> Unit, modifier: Modifier
  * A single day row. The suggested one is a highlighted [surfaceContainerLow] card with a ✦ before the
  * title; the rest are flat (the caller draws the dividers).
  *
- * ponytail: the CheckDot toggles a LOCAL remembered state only — PlanComponent has no completion
- * intent. Real persistence needs a new `PlanComponent.onToggleDone(id)` intent + a repository write
- * (follow-up). For now the tick is an optimistic visual that resets on recompose-from-scratch.
+ * **A row is one of four kinds (#385).** A Task row keeps everything it had — the completion dot, the
+ * deadline subline, the open-on-tap. A Habit/Chore/Event row renders its title and a kind marker, and
+ * deliberately carries neither:
+ *
+ * - **No completion control.** A firing's done-state is a *reading* against today, not a stored fact
+ *   (ADR-0053), and the fact table it will be derived from does not exist yet (#390). An unchecked dot
+ *   would assert "not done" on no evidence. The dot this row used to draw for Tasks was worse than
+ *   that — it toggled a `remember`ed local boolean with nothing behind it, a tick that silently reset
+ *   on recompose. Both Apple Plan views already refuse to fake it ("No completion intent yet — opening
+ *   the task is the honest action"), so Compose now matches them instead of being the odd one out.
+ * - **No tap.** No recurring kind has a detail surface on any platform (#383), so [onClick] is null for
+ *   those rows and the clickable — and its "Open …" a11y action — is not attached at all. A row that
+ *   cannot be opened should not announce that it can.
  */
 @Composable
-private fun DayRow(task: Task, highlighted: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun DayRow(row: PlanRow, highlighted: Boolean, onClick: (() -> Unit)?, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val brand = MaterialTheme.defernoColors
-    // ponytail: optimistic local "done" — no onToggleDone intent yet (see KDoc).
-    var done by remember(task.id) { mutableStateOf(task.workingState.isTerminal) }
+    val item = row.item
+    val task = row.task
+    val done = task?.workingState?.isTerminal == true
 
     val rowModifier = if (highlighted) {
         modifier
@@ -379,19 +408,35 @@ private fun DayRow(task: Task, highlighted: Boolean, onClick: () -> Unit, modifi
     Row(
         modifier = rowModifier
             .heightIn(min = 64.dp)
-            .clickable(onClickLabel = stringResource(Res.string.common_open_named_cd, task.title), onClick = onClick)
+            .let { m ->
+                if (onClick == null) {
+                    m
+                } else {
+                    m.clickable(
+                        onClickLabel = stringResource(Res.string.common_open_named_cd, item.title),
+                        onClick = onClick,
+                    )
+                }
+            }
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CheckDot(
-            checked = done,
-            onCheckedChange = { done = it },
-            contentDescription = if (done) {
-                stringResource(Res.string.common_mark_not_done_cd, task.title)
-            } else {
-                stringResource(Res.string.common_mark_done_cd, task.title)
-            },
-        )
+        if (task != null) {
+            CheckDot(
+                checked = done,
+                // Opening is the honest action while there is no completion intent on PlanComponent —
+                // the same contract both SwiftUI Plan views already state.
+                onCheckedChange = { onClick?.invoke() },
+                contentDescription = stringResource(Res.string.common_open_named_cd, item.title),
+            )
+        } else {
+            // Centred in the CheckDot's own 24.dp footprint so the two row shapes share a title column —
+            // a bare 10.dp KindDot would leave a recurring row's title hanging 7.dp to the left of every
+            // Task's, which reads as a nesting level that isn't there.
+            Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                KindDot(color = kindColor(item.kind))
+            }
+        }
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -404,24 +449,36 @@ private fun DayRow(task: Task, highlighted: Boolean, onClick: () -> Unit, modifi
                     )
                     Spacer(Modifier.width(6.dp))
                 }
+                // The kind rides the title's spoken label rather than the dot's: the dot is decorative
+                // reinforcement, and a screen-reader user needs "Take a Walk, habit" as one phrase. Joined
+                // through the catalog key, never a literal ", " — separator and order belong to the
+                // translator (mirrors the Item tree, #385).
+                val titleA11y = if (task == null) {
+                    stringResource(Res.string.common_a11y_phrase_join, item.title, kindA11yLabel(item.kind))
+                } else {
+                    item.title
+                }
                 Text(
-                    text = task.title,
+                    text = item.title,
+                    modifier = Modifier.weight(1f, fill = false).semantics { contentDescription = titleA11y },
                     style = MaterialTheme.typography.titleMedium,
                     // A blocked row mutes like a done one but WITHOUT the strike — "blocked, not finished"
                     // (mirrors the tree's ItemTreeRow, #290/#292). Manually-added blocked items stay on the plan.
-                    color = if (done || task.blocked) brand.inkMuted else scheme.onSurface,
+                    color = if (done || item.blocked) brand.inkMuted else scheme.onSurface,
                     textDecoration = if (done) TextDecoration.LineThrough else null,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
                 )
-                if (task.blocked) {
+                if (item.blocked) {
                     Spacer(Modifier.width(6.dp))
                     BlockedChip()
                 }
             }
             Text(
-                text = task.deadlineLabel(),
+                // A Task's subline is its deadline; a recurring row's is its kind, which is the fact that
+                // makes it legible as something other than a Task. The cadence phrase ("every Tuesday")
+                // wants the recurrence reading and lands with the rest of the row work in #383/Half B.
+                text = task?.deadlineLabel() ?: kindLabel(item.kind),
                 style = MaterialTheme.typography.bodySmall,
                 color = brand.inkMuted,
             )
@@ -448,7 +505,7 @@ internal fun WhatsNextContent(
     // pick to Fire — a marker someone may well set on something below the fold — makes it reachable.)
     // Picking inside the rendered set also keeps this a pick rather than a reorder: the three cards are
     // still the plan's first three, in the order the person arranged them.
-    val suggested = remember(choices) { choices.suggested() }
+    val suggested = remember(choices) { suggestedTask(choices) }
     var selectedId by remember(tasks) { mutableStateOf(suggested?.id) }
     val selected = choices.firstOrNull { it.id == selectedId }
 
@@ -584,6 +641,13 @@ internal fun ChoiceCard(
 /** The derived "why" line for a choice. */
 @Composable
 private fun whyLine(task: Task): String = when {
+    // "Already done" outranks every reason-to-start, including the deadline reading below: a finished
+    // task's answer to "why this one?" is that it is finished. Both Apple views have said this since the
+    // #375 review; Compose had the translated string in all five locale files and no code reading it, so
+    // Android and desktop told you a completed task was "a quick win, if you want momentum".
+    // (`L10nCatalogParityTest` could not catch that — it compares the catalogs to each other, never to a
+    // call site.)
+    task.workingState.isTerminal -> stringResource(Res.string.plan_picker_already_done)
     task.completeBy != null -> stringResource(
         Res.string.common_due,
         formatDeadlineDate(task.completeBy!!, TimeZone.currentSystemDefault()),

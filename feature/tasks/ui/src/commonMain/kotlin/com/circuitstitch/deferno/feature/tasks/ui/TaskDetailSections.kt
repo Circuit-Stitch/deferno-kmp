@@ -74,6 +74,7 @@ import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.ProgressBarThin
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
+import com.circuitstitch.deferno.core.designsystem.component.kindColor
 import com.circuitstitch.deferno.core.designsystem.format.currentToday
 import com.circuitstitch.deferno.core.designsystem.format.formatInstant
 import com.circuitstitch.deferno.core.designsystem.format.localDayIso

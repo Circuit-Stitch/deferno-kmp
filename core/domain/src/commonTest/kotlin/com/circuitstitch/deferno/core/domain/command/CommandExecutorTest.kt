@@ -4,6 +4,7 @@ import com.circuitstitch.deferno.core.data.task.BlockedByResult
 import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.PlanItemRef
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
@@ -95,21 +96,47 @@ class CommandExecutorTest {
         val tw = FakeTaskWriter()
         val pw = FakePlanWriter()
         val ex = executor(tw, pw)
-        val id2 = TaskId("t2")
+        val ref = PlanItemRef(id.value, ItemKind.Task)
+        val ref2 = PlanItemRef("t2", ItemKind.Task)
 
-        ex.execute(AddToPlan(id, SAMPLE_DATE, SAMPLE_TZ))
-        ex.execute(RemoveFromPlan(id, SAMPLE_DATE, SAMPLE_TZ))
-        ex.execute(ReorderPlan(listOf(id2, id), SAMPLE_DATE, SAMPLE_TZ))
+        ex.execute(AddToPlan(ref, SAMPLE_DATE, SAMPLE_TZ))
+        ex.execute(RemoveFromPlan(id.value, SAMPLE_DATE, SAMPLE_TZ))
+        ex.execute(ReorderPlan(listOf(ref2, ref), SAMPLE_DATE, SAMPLE_TZ))
 
         assertEquals(
             listOf(
-                FakePlanWriter.Call.Add(id, SAMPLE_DATE, SAMPLE_TZ),
-                FakePlanWriter.Call.Remove(id, SAMPLE_DATE, SAMPLE_TZ),
-                FakePlanWriter.Call.Reorder(listOf(id2, id), SAMPLE_DATE, SAMPLE_TZ),
+                FakePlanWriter.Call.Add(ref, SAMPLE_DATE, SAMPLE_TZ),
+                FakePlanWriter.Call.Remove(id.value, SAMPLE_DATE, SAMPLE_TZ),
+                FakePlanWriter.Call.Reorder(listOf(ref2, ref), SAMPLE_DATE, SAMPLE_TZ),
             ),
             pw.calls,
         )
         assertTrue(tw.calls.isEmpty(), "plan commands must not touch the task writer")
+    }
+
+    /**
+     * The kind survives the executor untouched (#385). [ReorderPlan] is the drag-drop result, so it
+     * carries whatever the Plan is showing — a Habit among Tasks. Coercing that ref to Task on the way
+     * through would write the local ordering under a kind the next resolve can't find it by, dropping
+     * the row from the client's own optimistic write.
+     */
+    @Test
+    fun forwardsANonTaskRefWithItsKindIntact() = runTest {
+        val pw = FakePlanWriter()
+        val ex = executor(FakeTaskWriter(), pw)
+        val habit = PlanItemRef("h1", ItemKind.Habit)
+        val task = PlanItemRef("t1", ItemKind.Task)
+
+        ex.execute(AddToPlan(habit, SAMPLE_DATE, SAMPLE_TZ))
+        ex.execute(ReorderPlan(listOf(habit, task), SAMPLE_DATE, SAMPLE_TZ))
+
+        assertEquals(
+            listOf(
+                FakePlanWriter.Call.Add(habit, SAMPLE_DATE, SAMPLE_TZ),
+                FakePlanWriter.Call.Reorder(listOf(habit, task), SAMPLE_DATE, SAMPLE_TZ),
+            ),
+            pw.calls,
+        )
     }
 
     @Test

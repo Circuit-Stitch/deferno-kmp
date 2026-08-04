@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.domain.command
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
+import com.circuitstitch.deferno.core.model.PlanItemRef
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
@@ -228,19 +229,26 @@ data class DeleteTask(override val taskId: TaskId) : TaskCommand {
 }
 
 // --- Plan: 1:1 with PlanWriter ---
+//
+// Kind-neutral since #385 — a plan holds items of any kind. [ReorderPlan] is the one that *had* to
+// widen rather than merely wanting to: it is the drag-drop result, so it carries whatever the Plan is
+// currently showing. Stamping Task on those refs would have written a Habit into the local ordering
+// under the wrong kind, and the next resolve would have failed to find it in the Task cache and
+// dropped the row — reintroducing the exact disappearance this issue exists to fix, this time from
+// the client's own optimistic write.
 
-/** Add the Task to the `(date, tz)` plan (idempotent — a no-op if already present). */
-data class AddToPlan(val taskId: TaskId, override val date: LocalDate, override val tz: String) : PlanCommand {
+/** Add the item to the `(date, tz)` plan (idempotent — a no-op if already present). */
+data class AddToPlan(val ref: PlanItemRef, override val date: LocalDate, override val tz: String) : PlanCommand {
     override val kind: CommandKind get() = CommandKind.AddToPlan
 }
 
-/** Remove the Task from the `(date, tz)` plan. */
-data class RemoveFromPlan(val taskId: TaskId, override val date: LocalDate, override val tz: String) : PlanCommand {
+/** Remove the item from the `(date, tz)` plan. Removal needs no kind — the id locates the slot. */
+data class RemoveFromPlan(val itemId: String, override val date: LocalDate, override val tz: String) : PlanCommand {
     override val kind: CommandKind get() = CommandKind.RemoveFromPlan
 }
 
-/** Set the `(date, tz)` plan to exactly [taskIds] in order — the drag-drop result (mirrors `PlanReorder`). */
-data class ReorderPlan(val taskIds: List<TaskId>, override val date: LocalDate, override val tz: String) : PlanCommand {
+/** Set the `(date, tz)` plan to exactly [refs] in order — the drag-drop result (mirrors `PlanReorder`). */
+data class ReorderPlan(val refs: List<PlanItemRef>, override val date: LocalDate, override val tz: String) : PlanCommand {
     override val kind: CommandKind get() = CommandKind.ReorderPlan
 }
 

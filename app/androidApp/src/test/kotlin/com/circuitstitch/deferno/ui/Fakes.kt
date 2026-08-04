@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.PlanRow
 import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Priority
@@ -128,6 +129,23 @@ internal object SampleTasks {
     val children: List<Task> = listOf(
         sampleTask("1a", "Draft the announcement", parentId = "1", sequence = 1),
         sampleTask("1b", "Schedule the post", WorkingState.Done, parentId = "1", sequence = 2),
+    )
+
+    /** [list] as the Plan sees it (#385): four Task rows, each carrying its concrete [Task]. */
+    val planRows: List<PlanRow> = list.map {
+        PlanRow(item = Item(it.id.value, ItemKind.Task, it.title, isTerminal = it.workingState.isTerminal), task = it)
+    }
+
+    /**
+     * The day that used to render blank (#385): a Habit and a Chore among the Tasks. A recurring row
+     * carries no [Task] — no completion dot, no deadline subline, no tap — so this fixture is what pins
+     * the two shapes rendering side by side.
+     */
+    val crossKindPlanRows: List<PlanRow> = listOf(
+        planRows[0],
+        PlanRow(item = Item("h1", ItemKind.Habit, "Take a Walk")),
+        planRows[1],
+        PlanRow(item = Item("c1", ItemKind.Chore, "Take shot")),
     )
 
     /** The cross-kind Item forest (#227): a parent that decomposes, plus terminal (dimmed) leaves. */

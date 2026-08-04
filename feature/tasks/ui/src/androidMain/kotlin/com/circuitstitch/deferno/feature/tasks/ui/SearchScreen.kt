@@ -65,6 +65,9 @@ import com.circuitstitch.deferno.core.designsystem.component.PrimaryActionButton
 import com.circuitstitch.deferno.core.designsystem.component.SectionLabel
 import com.circuitstitch.deferno.core.designsystem.component.SegmentedFilter
 import com.circuitstitch.deferno.core.designsystem.component.SessionExpiredBanner
+import com.circuitstitch.deferno.core.designsystem.component.kindA11yLabel
+import com.circuitstitch.deferno.core.designsystem.component.kindColor
+import com.circuitstitch.deferno.core.designsystem.component.kindLabel
 import com.circuitstitch.deferno.core.designsystem.format.currentToday
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.common_back

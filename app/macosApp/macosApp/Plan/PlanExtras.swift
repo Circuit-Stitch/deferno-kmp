@@ -21,31 +21,14 @@ struct WhatNextView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
 
-    /// The ordered ideas: **Fire** first, then pinned, then still-open, then the rest — de-duplicated by
-    /// identity.
-    ///
-    /// Fire leads for the same reason it leads ``whyLine(_:)``: the top urgency bucket is an explicit
-    /// "start here" the person set, and this surface exists to answer exactly that. `Backlog` gets **no**
-    /// arm of its own and is deliberately not filtered out — the bottom bucket sinks, it never disappears
-    /// (#375), so a backlogged task simply arrives through the later passes like anything else and is still
-    /// offered once the earlier ideas are exhausted.
-    ///
-    /// This is a *suggestion* order, not a re-sort of the Plan: `PlanView` renders the curated list exactly
-    /// as the person arranged it.
-    private var candidates: [Task] {
-        var seen = Set<String>()
-        var ordered: [Task] = []
-        func add(_ list: [Task]) {
-            for t in list where seen.insert(t.stableKey).inserted { ordered.append(t) }
-        }
-        // Gate the Fire lane on OPEN work. A finished task keeps whatever bucket it had, so an
-        // unfiltered Fire lane promotes a Done item to the very first suggestion (#375 review).
-        add(tasks.filter { $0.priority == Priority.fire && !$0.workingState.isTerminal })
-        add(tasks.filter { $0.pinned })
-        add(tasks.filter { !$0.workingState.isTerminal })
-        add(tasks)
-        return ordered
-    }
+    /// The ordered ideas, from the **one** shared rule (#375): `suggestionOrder` in `PlanSuggestion.kt`
+    /// (`:feature:plan`), which Compose and iOS read too. The four passes, why Fire leads them (the same
+    /// reason it leads ``whyLine(_:)`` below), why `Backlog` gets no pass of its own and is not filtered
+    /// out either, and why this is a *suggestion* order rather than a re-sort of the Plan all live in that
+    /// function's KDoc — this view no longer keeps a Swift copy of them to drift from. `PlanView`'s ✦
+    /// banner is this list's first entry (`PlanSuggestionKt.suggestedTask(tasks:)`), so the sheet and the
+    /// banner cannot disagree.
+    private var candidates: [Task] { PlanSuggestionKt.suggestionOrder(tasks: tasks) }
 
     private var current: Task? {
         let list = candidates

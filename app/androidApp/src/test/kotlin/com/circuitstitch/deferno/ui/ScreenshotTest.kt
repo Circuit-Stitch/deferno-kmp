@@ -405,16 +405,25 @@ class ScreenshotTest {
 
     @Test
     fun plan_populated_light() = capture("plan_populated_light") {
-        PlanScreen(FakePlanComponent(PlanState(tasks = SampleTasks.list)))
+        PlanScreen(FakePlanComponent(PlanState(rows = SampleTasks.planRows)))
     }
 
     @Test
     fun plan_populated_dark() = capture("plan_populated_dark", darkTheme = true) {
-        PlanScreen(FakePlanComponent(PlanState(tasks = SampleTasks.list)))
+        PlanScreen(FakePlanComponent(PlanState(rows = SampleTasks.planRows)))
     }
 
     @Test
     fun plan_empty_light() = capture("plan_empty_light") {
-        PlanScreen(FakePlanComponent(PlanState(tasks = emptyList())))
+        PlanScreen(FakePlanComponent(PlanState(rows = emptyList())))
+    }
+
+    /**
+     * The day that used to render blank (#385). A recurring row shows its kind dot and a kind subline
+     * where a Task shows a CheckDot and a deadline — the visual proof that both shapes read as peers.
+     */
+    @Test
+    fun plan_crossKind_light() = capture("plan_crossKind_light") {
+        PlanScreen(FakePlanComponent(PlanState(rows = SampleTasks.crossKindPlanRows)))
     }
 }

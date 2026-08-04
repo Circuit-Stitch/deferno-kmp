@@ -71,8 +71,13 @@ class OfflineItemRepository(
 }
 
 // --- kind -> Item projection. parentId/id unwrap the wire UUID to the string the forest compares on. ---
+//
+// `internal`, not private: this is the ONE kind -> Item projection in the module. The daily Plan
+// resolves its ordering across the same four stores (#385) and needs the identical mapping, so it
+// consumes these rather than growing a second copy that would drift — the same reasoning that gave
+// `RecurrenceReading` a single home.
 
-private fun Task.toItem() = Item(
+internal fun Task.toItem() = Item(
     id = id.value,
     kind = ItemKind.Task,
     title = title,
@@ -100,9 +105,9 @@ private fun Task.toItem() = Item(
 // is there to say this is a series at all. It lands on the projection as `recurrenceCursorAt`, not
 // `completeBy`, precisely because the Task arm above deliberately projects NEITHER: a Task's `completeBy`
 // is a plain deadline, and forwarding it here would make every dated Task read as a series.
-private fun Habit.toItem() = recurringItem(id.value, ItemKind.Habit, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
-private fun Chore.toItem() = recurringItem(id.value, ItemKind.Chore, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
-private fun Event.toItem() = recurringItem(id.value, ItemKind.Event, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
+internal fun Habit.toItem() = recurringItem(id.value, ItemKind.Habit, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
+internal fun Chore.toItem() = recurringItem(id.value, ItemKind.Chore, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
+internal fun Event.toItem() = recurringItem(id.value, ItemKind.Event, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
 
 private fun recurringItem(
     id: String,

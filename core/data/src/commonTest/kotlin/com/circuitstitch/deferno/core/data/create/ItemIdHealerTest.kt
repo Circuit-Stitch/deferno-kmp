@@ -4,9 +4,11 @@ import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequest
 import com.circuitstitch.deferno.core.data.outbox.FakeOutboxStore
 import com.circuitstitch.deferno.core.data.plan.FakePlanLocalStore
+import com.circuitstitch.deferno.core.data.plan.taskRefs
 import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
 import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.PlanItemRef
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -60,7 +62,7 @@ class ItemIdHealerTest {
         f.taskStore.upsert(task("client", parentId = "parent", children = listOf("kid")))
         f.taskStore.upsert(task("parent", children = listOf("client")))
         f.taskStore.upsert(task("kid", parentId = "client"))
-        f.planStore.replacePlan(day, "UTC", listOf(TaskId("parent"), TaskId("client")))
+        f.planStore.replacePlan(day, "UTC", taskRefs("parent", "client"))
         // A queued edit against the offline-created task (enqueued before its create replayed).
         f.outbox.enqueue("task:client", OutboxRequest(OutboxMethod.Patch, listOf("tasks", "client"), """{"title":"x"}"""), created)
 
@@ -76,7 +78,7 @@ class ItemIdHealerTest {
         assertEquals(listOf(TaskId("server")), f.taskStore.all.getValue(TaskId("parent")).children)
         assertEquals(TaskId("server"), f.taskStore.all.getValue(TaskId("kid")).parentId)
         // Plan slot follows.
-        assertEquals(listOf(TaskId("parent"), TaskId("server")), f.planStore.all.values.single())
+        assertEquals(taskRefs("parent", "server"), f.planStore.all.values.single())
         // Queued outbox entry re-pointed (target, path, body).
         val entry = f.outbox.all.single()
         assertEquals("task:server", entry.target)
@@ -103,6 +105,28 @@ class ItemIdHealerTest {
         f.healer.heal("client", "server", ItemKind.Habit)
 
         assertTrue(f.attachmentReKeys.isEmpty())
+    }
+
+    /**
+     * The plan sweep stopped being Task-only in #385. A recurring definition can be planned, so an
+     * offline-created Habit/Chore/Event that landed on a day before its id was healed leaves a plan slot
+     * pointing at a dead client id — exactly the Task case, now reachable for the other three. The slot's
+     * `kind` is untouched: only the id was wrong.
+     */
+    @Test
+    fun healRepointsAPlanSlotForEveryRecurringKind() = runTest {
+        for (kind in listOf(ItemKind.Habit, ItemKind.Chore, ItemKind.Event)) {
+            val f = Fixture()
+            f.planStore.replacePlan(day, "UTC", listOf(PlanItemRef("client", kind), PlanItemRef("other", kind)))
+
+            f.healer.heal("client", "server", kind)
+
+            assertEquals(
+                listOf(PlanItemRef("server", kind), PlanItemRef("other", kind)),
+                f.planStore.all.values.single(),
+                "a planned $kind follows its canonical id",
+            )
+        }
     }
 
     @Test
