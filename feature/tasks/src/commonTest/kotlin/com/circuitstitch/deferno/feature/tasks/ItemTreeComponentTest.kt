@@ -48,6 +48,7 @@ class ItemTreeComponentTest {
         setPinned: suspend (TaskId, Boolean) -> Unit = { _, _ -> },
         createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
         deleteTask: suspend (TaskId) -> Unit = { _ -> },
+        deleteDefinition: suspend (String) -> Unit = { _ -> },
         addToPlan: suspend (TaskId) -> Unit = { _ -> },
         removeFromPlan: suspend (TaskId) -> Unit = { _ -> },
     ) = DefaultItemTreeComponent(
@@ -65,6 +66,7 @@ class ItemTreeComponentTest {
         setPinned = setPinned,
         createSubtask = createSubtask,
         deleteTask = deleteTask,
+        deleteDefinition = deleteDefinition,
         addToPlan = addToPlan,
         removeFromPlan = removeFromPlan,
         coroutineContext = StandardTestDispatcher(testScheduler),
@@ -503,15 +505,75 @@ class ItemTreeComponentTest {
         assertTrue(sets.isEmpty(), "an uncached row resolves no kind → no write")
     }
 
+    /** A Task and a Habit side by side — the fixture the two Delete routes are told apart on (#389). */
+    private fun taskAndHabit() = FakeItemRepository(
+        listOf(
+            Item(id = "root", kind = ItemKind.Task, title = "root", sequence = 0),
+            Item(id = "hab", kind = ItemKind.Habit, title = "habit", sequence = 1, definitionState = DefinitionState.Active),
+        ),
+    )
+
     @Test
     fun deleteDispatchesTheDestructiveWrite() = runTest {
         val deleted = mutableListOf<TaskId>()
-        val c = component(rootAndChild(), deleteTask = { deleted += it })
+        val definitionsDeleted = mutableListOf<String>()
+        val c = component(
+            taskAndHabit(),
+            deleteTask = { deleted += it },
+            deleteDefinition = { definitionsDeleted += it },
+        )
+        backgroundScope.launch { c.state.collect {} } // populate state.rows so the kind resolves
+        advanceUntilIdle()
 
         c.onDelete("root")
         advanceUntilIdle()
 
         assertEquals(listOf(TaskId("root")), deleted)
+        assertTrue(definitionsDeleted.isEmpty(), "a Task row never takes the kind-neutral route")
+    }
+
+    @Test
+    fun deletingARecurringRowTakesTheKindNeutralRouteAndNotTheTaskSeam() = runTest {
+        // #389: the Delete entry is offered for every kind, so the component resolves the row's kind and
+        // picks the write. Routing a Habit id down the TaskId-typed seam is SILENT data loss, not an
+        // error: OutboxTaskWriter applies inside `store.get(taskId)?.let {}` (no such row → nothing
+        // applied, the row stays on screen), then `DELETE tasks/{habitId}` 404s and the sender maps 404 to
+        // success, dropping the queued write. So the Task seam staying empty is the load-bearing half.
+        val deleted = mutableListOf<TaskId>()
+        val definitionsDeleted = mutableListOf<String>()
+        val c = component(
+            taskAndHabit(),
+            deleteTask = { deleted += it },
+            deleteDefinition = { definitionsDeleted += it },
+        )
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onDelete("hab")
+        advanceUntilIdle()
+
+        assertEquals(listOf("hab"), definitionsDeleted, "the raw id, no kind — `DELETE items/{id}` resolves it")
+        assertTrue(deleted.isEmpty(), "a recurring row must NEVER reach the Task-only delete seam")
+    }
+
+    @Test
+    fun deleteForAnUncachedRowIsANoOp() = runTest {
+        // No row means no kind, and a guessed route is exactly the silent-loss path above — so neither
+        // seam fires. Mirrors [setDefinitionStateForAnUncachedRowIsANoOp]'s `?: return`.
+        val deleted = mutableListOf<TaskId>()
+        val definitionsDeleted = mutableListOf<String>()
+        val c = component(
+            taskAndHabit(),
+            deleteTask = { deleted += it },
+            deleteDefinition = { definitionsDeleted += it },
+        )
+        backgroundScope.launch { c.state.collect {} }
+        advanceUntilIdle()
+
+        c.onDelete("ghost")
+        advanceUntilIdle()
+
+        assertTrue(deleted.isEmpty() && definitionsDeleted.isEmpty(), "an uncached row resolves no kind → no write")
     }
 
     // --- "Blocked by…" dependency edges (#291) ---

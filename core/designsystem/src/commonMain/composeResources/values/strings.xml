@@ -357,15 +357,23 @@
     <string name="common_state_selected">Selected</string>
     <!-- Arg = localized status label -->
     <string name="common_status_a11y">Status: %1$s</string>
-    <!-- Status adjective ('completed'): calendar chip, task working-state chip, search status preset. Distinct from common_done button -->
+    <!-- Status adjective ('completed'): task working-state chip, search status preset, and the calendar chip for a dated-Task row. Distinct from common_done button. A recurring FIRING splits this on punctuality instead — common_status_done_on_time / common_status_done_late -->
     <string name="common_status_done">Done</string>
+    <!-- OccurrenceState.DoneLate on a calendar firing — done_at fell after the deadline the firing carried at write time. The punctuality bound is INCLUSIVE (backend occurrences.rs: done_at at or before complete_by), so an exactly-on-the-deadline firing reads common_status_done_on_time and never this. Register: it records that the work HAPPENED; no exclamation, no 'overdue' (ADR-0053 decision 7) -->
+    <string name="common_status_done_late">Done late</string>
+    <!-- OccurrenceState.DoneOnTime on a calendar firing. Only a firing carries a punctuality axis; the WorkingState chip keeps the unsplit common_status_done -->
+    <string name="common_status_done_on_time">Done on time</string>
     <!-- Shared status vocabulary: calendar chip + task working-state chip -->
     <string name="common_status_in_progress">In progress</string>
     <string name="common_status_in_review">In review</string>
-    <!-- WorkingState.Open on calendar — deliberately neutral (never 'overdue/missed') -->
+    <!-- OccurrenceState.Missed — a past firing of an Active definition with no resolution, INSIDE synced Occurrence coverage. Named plainly on purpose: ADR-0053 decision 7 reverses the earlier suppression ('gentleness is vocabulary, not suppression'), so the state is modelled faithfully and read in a flat register. Say 'Missed'; never 'overdue', 'failed', or a second-person 'you missed' -->
+    <string name="common_status_missed">Missed</string>
+    <!-- OccurrenceState.Scheduled (a firing that has not come due) + WorkingState.Open on calendar — still deliberately neutral, never 'overdue'. It is no longer the catch-all for a past unresolved day: that is common_status_missed inside Occurrence coverage and common_status_unknown outside it -->
     <string name="common_status_scheduled">Scheduled</string>
-    <!-- Gentle rendering of WorkingState.Dropped on calendar -->
+    <!-- Gentle rendering of WorkingState.Dropped on calendar + OccurrenceState.Skipped on a firing -->
     <string name="common_status_skipped">Skipped</string>
+    <!-- OccurrenceState.Unknown — this device has never synced that date, so how the firing went is genuinely not known (ADR-0053 decision 4: a day OUTSIDE Occurrence coverage is unknown, not Missed). States the device fact rather than guessing, and must not read as a failure — absent information, not a problem -->
+    <string name="common_status_unknown">Not synced</string>
     <!-- Search date-range CLOSE edge — the picker-row twin of common_from -->
     <string name="common_to">To</string>
     <!-- Snackbar action + dialog confirm; merges tasks + inbox occurrences -->
@@ -897,6 +905,8 @@ Thank you.</string>
         <item quantity="one">Yearly</item>
         <item quantity="other">Every %1$d years</item>
     </plurals>
+    <!-- Body of the destructive confirm when the row is a recurring definition (Habit/Chore/Event), under tasks_delete_item_confirm_title. EVERY CLAUSE IS LOAD-BEARING and none of it may be softened into a promise the write cannot keep: the client sends the kind-neutral chain-wide DELETE /items/{id} (what the webui calls for every kind), so it retires EVERY segment of the rule, not just the era on screen — hence 'the whole repeating series'. But the server's delete is a SOFT delete: it leaves the occurrence records and the recurrence series rows in place. So this copy states what is kept instead of promising a cascade. Never write 'and all its occurrences' here -->
+    <string name="tasks_delete_definition_confirm_body">This removes the whole repeating series from every list and plan. Its recorded past occurrences are kept.</string>
     <!-- Curly quotes — adapt quote style per locale -->
     <string name="tasks_delete_item_confirm_title">Delete “%1$s”?</string>
     <string name="tasks_detail_add_caption">Add caption</string>

@@ -20,11 +20,16 @@ import kotlin.time.Instant
 
 /**
  * Real-SQLite integration for the Calendar feed cache (#74, ADR-0006 JVM-fast path) — the windowed
- * sibling of `OccurrenceLocalStoreTest`. It proves the SQL path over a genuine `DefernoDatabase`: the
- * row<->domain round-trip, the half-open `[from, to)` window query, the per-day markers, the `kind`
- * column (it survives the write, and an unrecognised stored token degrades to `null` = read-only), the
- * full-window replace (a vanished row is cleared), and that the agenda re-emits on a window refresh
- * (ADR-0001).
+ * sibling of `OccurrenceFactLocalStoreTest`. (It said `OccurrenceLocalStoreTest` until #390, when that
+ * store was replaced by the fact + coverage pair per ADR-0053 decision 4.)
+ *
+ * It proves the SQL path over a genuine `DefernoDatabase`: the row<->domain round-trip, the half-open
+ * `[from, to)` window query, the per-day markers, the `kind` column (it survives the write, and an
+ * unrecognised stored token degrades to `null` = read-only), the full-window replace (a vanished row is
+ * cleared), and that the agenda re-emits on a window refresh (ADR-0001).
+ *
+ * What it deliberately does **not** prove is how a firing went: that is a fact keyed
+ * `(kind, definitionId, date)` in the sibling store, never a column here.
  */
 class CalendarLocalStoreTest {
 

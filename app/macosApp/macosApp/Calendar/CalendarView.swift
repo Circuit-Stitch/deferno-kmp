@@ -2,9 +2,17 @@ import Deferno
 import SwiftUI
 
 /// The Calendar Destination (#74): a single-pane month grid + day agenda over Occurrences. A thin
-/// renderer of `CalendarComponent`. Gentle vocabulary throughout — no "overdue"/"late"/"missed"; a
-/// scheduled firing simply reads as "Scheduled". Reschedule uses an in-View "pick a new day" mode
-/// (identical to Android by design — no native date picker), arming the next day-cell tap.
+/// renderer of `CalendarComponent`.
+///
+/// Each agenda row is a `CalendarFiring` — the feed row paired with how *that day's* firing went — and
+/// the chip renders whatever pre-localized token `ShellBridgeKt.occurrenceStatusToken` hands it, so
+/// this View never re-derives a reading and never reads `item.status` for a firing (an offline mark no
+/// longer touches that field, so a chip driven off it would look frozen). The vocabulary is factual
+/// rather than suppressed (ADR-0053 decision 7): a past unfinished firing reads "Missed", and a day
+/// this device has never synced reads "Not synced" rather than being guessed at.
+///
+/// Reschedule uses an in-View "pick a new day" mode (identical to Android by design — no native date
+/// picker), arming the next day-cell tap.
 struct CalendarView: View {
     let component: CalendarComponent
     @StateObject private var state: StateFlowObserver<CalendarState>
@@ -161,8 +169,11 @@ struct CalendarView: View {
                                message: L.string("calendar_empty_body"))
             } else {
                 List {
-                    ForEach(value.agenda, id: \.id) { item in
-                        agendaRow(item)
+                    // Keyed on the *row* id: `CalendarFiring` is the (row, reading) pair and has no id
+                    // of its own — the identity that must stay stable across re-emissions is the feed
+                    // row's, since a fact landing re-emits the whole agenda with fresh readings.
+                    ForEach(value.agenda, id: \.item.id) { firing in
+                        agendaRow(firing)
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(colors.background)
                     }
@@ -172,12 +183,13 @@ struct CalendarView: View {
         }
     }
 
-    private func agendaRow(_ item: CalendarItem) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func agendaRow(_ firing: CalendarFiring) -> some View {
+        let item = firing.item
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(item.title).font(.headline).foregroundStyle(colors.onSurface)
                 Spacer()
-                agendaStatusChip(item.status)
+                agendaStatusChip(firing)
             }
             if ShellBridgeKt.calendarItemActionable(item: item) {
                 agendaActions(item)
@@ -215,25 +227,20 @@ struct CalendarView: View {
             .frame(minHeight: 36)
     }
 
-    private func agendaStatusChip(_ status: WorkingState) -> some View {
-        Text(agendaStatusLabel(status))
+    /// The reading, rendered. Both the word and the tint come from the shared bridge — there is no
+    /// `if` chain here to forget a state, and no second copy of the mapping to drift from the iOS
+    /// twin or from Compose. See `ShellBridgeKt.occurrenceStatusToken` for why it lives there.
+    private func agendaStatusChip(_ firing: CalendarFiring) -> some View {
+        let isDone = ShellBridgeKt.occurrenceStatusIsDone(firing: firing)
+        return Text(L.string(ShellBridgeKt.occurrenceStatusToken(firing: firing)))
             .font(.caption.weight(.medium))
             .padding(.horizontal, 8)
             .padding(.vertical, 2)
-            .background(status == WorkingState.done ? colors.successContainer : colors.surfaceVariant, in: Capsule())
+            .background(isDone ? colors.successContainer : colors.surfaceVariant, in: Capsule())
             .foregroundStyle(colors.onSurface)
     }
 
-    // MARK: Labels (gentle vocabulary)
-
-    private func agendaStatusLabel(_ status: WorkingState) -> String {
-        if status == WorkingState.open { return L.string("common_status_scheduled") }
-        if status == WorkingState.inProgress { return L.string("common_status_in_progress") }
-        if status == WorkingState.inReview { return L.string("common_status_in_review") }
-        if status == WorkingState.done { return L.string("common_status_done") }
-        if status == WorkingState.dropped { return L.string("common_status_skipped") }
-        return status.label
-    }
+    // MARK: Labels
 
     private func monthLabel(_ date: LocalDate) -> String {
         let month = Int(ShellBridgeKt.localDateMonthNumber(date: date))

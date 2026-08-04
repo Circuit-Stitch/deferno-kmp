@@ -422,6 +422,12 @@ class DefaultRootComponent(
                         // The Calendar Destination's feed source + occurrence-act seam (#74).
                         calendarRepository = session.calendarRepository,
                         occurrenceEditor = session.occurrenceEditor,
+                        // …and the three inputs its agenda derives each firing's Occurrence state
+                        // from (#402, ADR-0053 decision 4): the stored facts, this device's synced
+                        // coverage, and each definition's Active/Archived light switch.
+                        occurrenceFactLocalStore = session.occurrenceFactLocalStore,
+                        occurrenceCoverageLocalStore = session.occurrenceCoverageLocalStore,
+                        definitionStateSource = session.definitionStateSource,
                         workingStateEditor = session.workingStateEditor,
                         // The Tasks Item-tree non-Task status seam (#299), routed through this Account's executor.
                         definitionStateEditor = session.definitionStateEditor,
@@ -448,6 +454,10 @@ class DefaultRootComponent(
                         // The detail's destructive Delete seam (kebab → confirm), routed through this
                         // Account's command executor (DeleteTask). The Item-tree command menu (#231) reuses it.
                         deleteTask = session.deleteTask,
+                        // The Item tree's kind-neutral Delete (#389) for a recurring row, routed through
+                        // this Account's executor (DeleteItem → `DELETE items/{id}`, the whole Series chain).
+                        // The tree picks between this and [deleteTask] by the row's resolved kind.
+                        deleteDefinition = session.deleteDefinition,
                         // The Item-tree command menu's Task-only Pin + plan-toggle writes (#231), routed
                         // through this Account's command executor; add/remove pre-bind today's (date, tz).
                         setPinned = session.setPinned,

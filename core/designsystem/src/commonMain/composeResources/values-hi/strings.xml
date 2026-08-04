@@ -271,11 +271,18 @@
     <string name="common_state_selected">चयनित</string>
     <string name="common_status_a11y">स्थिति: %1$s</string>
     <string name="common_status_done">पूर्ण</string>
+    <!-- बारी की समयबद्धता: यह दर्ज करती है कि काम हुआ — कोई विस्मयादिबोधक नहीं, कभी 'देर हुई!' नहीं -->
+    <string name="common_status_done_late">देर से पूर्ण</string>
+    <string name="common_status_done_on_time">समय पर पूर्ण</string>
     <string name="common_status_in_progress">प्रगति पर</string>
     <string name="common_status_in_review">समीक्षा में</string>
-    <!-- जानबूझकर तटस्थ — कभी 'देर हुई/चूक गए' नहीं -->
+    <!-- सिंक की गई अवधि के भीतर, बिना किसी दर्ज परिणाम के बीती हुई बारी — सीधे नाम से (ADR-0053): कभी 'देर हुई' नहीं, कभी 'आप चूक गए' नहीं -->
+    <string name="common_status_missed">छूट गई</string>
+    <!-- जानबूझकर तटस्थ — कभी 'देर हुई' नहीं; अब यह बीते दिनों को नहीं ढकती: वह common_status_missed या common_status_unknown है -->
     <string name="common_status_scheduled">निर्धारित</string>
     <string name="common_status_skipped">छोड़ा गया</string>
+    <!-- इस डिवाइस ने वह तारीख़ कभी सिंक नहीं की: जानकारी अनुपलब्ध है, कोई गड़बड़ी नहीं -->
+    <string name="common_status_unknown">सिंक नहीं हुई</string>
     <string name="common_to">तक</string>
     <string name="common_undo">पूर्ववत करें</string>
     <string name="common_username_handle">@%1$s</string>
@@ -699,6 +706,8 @@
         <item quantity="one">हर साल</item>
         <item quantity="other">हर %1$d साल</item>
     </plurals>
+    <!-- हटाना पूरी शृंखला पर लागू होता है (नियम का हर संस्करण), पर यह नरम विलोपन है: दर्ज बारियाँ बनी रहती हैं — किसी कैस्केड का वादा न करें -->
+    <string name="tasks_delete_definition_confirm_body">इससे पूरी दोहराने वाली शृंखला हर सूची और योजना से हट जाती है। पहले दर्ज हो चुकी पिछली बारियाँ बनी रहती हैं।</string>
     <string name="tasks_delete_item_confirm_title">“%1$s” हटाएँ?</string>
     <string name="tasks_detail_add_caption">कैप्शन जोड़ें</string>
     <string name="tasks_detail_add_comment_placeholder">टिप्पणी जोड़ें…</string>

@@ -273,11 +273,18 @@
     <string name="common_state_selected">Ausgewählt</string>
     <string name="common_status_a11y">Status: %1$s</string>
     <string name="common_status_done">Erledigt</string>
+    <!-- Pünktlichkeit eines Termins: hält fest, dass es GEMACHT wurde — kein Ausrufezeichen, nie „überfällig“ -->
+    <string name="common_status_done_late">Verspätet erledigt</string>
+    <string name="common_status_done_on_time">Pünktlich erledigt</string>
     <string name="common_status_in_progress">In Arbeit</string>
     <string name="common_status_in_review">In Prüfung</string>
-    <!-- Bewusst neutral (nie „überfällig/verpasst“) -->
+    <!-- Vergangener Termin ohne Eintrag, innerhalb der synchronisierten Abdeckung. Bewusst schlicht benannt (ADR-0053): nie „überfällig“, nie in der Du-Form -->
+    <string name="common_status_missed">Verpasst</string>
+    <!-- Bewusst neutral (nie „überfällig“). Deckt die Vergangenheit nicht mehr ab: das ist common_status_missed bzw. common_status_unknown -->
     <string name="common_status_scheduled">Geplant</string>
     <string name="common_status_skipped">Übersprungen</string>
+    <!-- Dieses Gerät hat den Tag nie synchronisiert: fehlende Information, kein Fehler -->
+    <string name="common_status_unknown">Nicht synchronisiert</string>
     <string name="common_to">Bis</string>
     <string name="common_undo">Rückgängig</string>
     <string name="common_username_handle">@%1$s</string>
@@ -698,6 +705,8 @@ Vielen Dank.</string>
         <item quantity="one">Jährlich</item>
         <item quantity="other">Alle %1$d Jahre</item>
     </plurals>
+    <!-- Das Löschen betrifft die ganze Kette (jede Fassung der Regel), ist aber ein SANFTES Löschen: erfasste Termine bleiben. Keine Kaskade versprechen -->
+    <string name="tasks_delete_definition_confirm_body">Das entfernt die ganze wiederkehrende Serie aus allen Listen und Plänen. Bereits erfasste vergangene Termine bleiben erhalten.</string>
     <!-- Deutsche Anführungszeichen „…“ -->
     <string name="tasks_delete_item_confirm_title">„%1$s“ löschen?</string>
     <string name="tasks_detail_add_caption">Beschriftung hinzufügen</string>

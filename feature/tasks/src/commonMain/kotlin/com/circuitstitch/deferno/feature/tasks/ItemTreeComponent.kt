@@ -205,8 +205,9 @@ interface ItemTreeComponent {
 
     // --- Kind-aware command menu (ADR-0049 decision 7, #231): the long-press row menu's write intents.
     // Each carries the row's current value (the "args from the row" rule — the component's StateFlow is
-    // WhileSubscribed). The status/Pin/plan/Delete writes are Task-only (the native command layer is
-    // Task-centric); the View only surfaces them for a Task row (one with a [ItemTreeState.menuStates] entry). ---
+    // WhileSubscribed). The status/Pin/plan writes are Task-only (the native command layer is Task-centric);
+    // the View only surfaces them for a Task row (one with a [ItemTreeState.menuStates] entry). **Delete is
+    // not** — since #389 it is offered for every kind and dispatches per the row's resolved kind. ---
 
     /**
      * Create a Task child under [parentId] (any kind — only Tasks carry a parent, so a "subtask" is always a
@@ -231,7 +232,23 @@ interface ItemTreeComponent {
      */
     fun onSetDefinitionState(id: String, target: DefinitionState)
 
-    /** Delete Task [id] permanently (the menu's destructive Delete — the View confirms first, #231). */
+    /**
+     * Delete the row [id] — the menu's destructive Delete (the View confirms first, #231). Offered for
+     * **every** kind since #389, so the component resolves the row's [ItemKind] from its current tree
+     * state exactly as [onSetDefinitionState] does and picks the write from it: a Task keeps the
+     * TaskId-typed `DeleteTask` seam (the Task detail's own delete, with its already-tombstoned gate),
+     * a recurring definition takes the kind-neutral `DELETE items/{id}` seam.
+     *
+     * **The kind resolution is not a nicety — routing a recurring id down the Task seam loses the
+     * write in silence.** `OutboxTaskWriter.submit` applies optimistically inside
+     * `store.get(mutation.taskId)?.let { … }`, and the Task cache holds no Habit row, so nothing is
+     * applied and the row stays on screen; then `DELETE tasks/{habitId}` 404s on flush and the sender
+     * maps 404 → success (idempotent-under-LWW), dropping the queued entry. No error surfaces anywhere.
+     *
+     * A row absent from the current tree (uncached) is a **no-op** — the same `?: return` as
+     * [onSetDefinitionState], for the same reason: there is no kind to route on, and a guessed route is
+     * exactly the silent-loss path above. Every View calls this from a row it is already rendering.
+     */
     fun onDelete(id: String)
 
     // --- "Blocked by…" dependency edges (#291): Task-only, online-only (server-validated) writes. ---
@@ -295,6 +312,12 @@ class DefaultItemTreeComponent(
     // The "Add subtask" create seam: [TaskId] is the parent's raw id (any kind — the child is always a Task).
     private val createSubtask: suspend (TaskId, String) -> Unit = { _, _ -> },
     private val deleteTask: suspend (TaskId) -> Unit = { _ -> },
+    // The **kind-neutral** delete seam (#389) a non-Task row's Delete takes: the raw Item id, no kind,
+    // dispatching `DeleteItem` → `DELETE items/{id}`. Deliberately separate from [deleteTask] rather than
+    // replacing it — that one is TaskId-typed, carries the already-tombstoned `enabledFor` gate and stays
+    // the Task detail's delete, so the tree keeps using it for the kind it fits. Defaults to a no-op like
+    // its siblings so the read/move/navigation-only tests construct the component without it.
+    private val deleteDefinition: suspend (String) -> Unit = { _ -> },
     private val addToPlan: suspend (TaskId) -> Unit = { _ -> },
     private val removeFromPlan: suspend (TaskId) -> Unit = { _ -> },
     coroutineContext: CoroutineContext = Dispatchers.Default,
@@ -467,7 +490,17 @@ class DefaultItemTreeComponent(
     }
 
     override fun onDelete(id: String) {
-        scope.launch { deleteTask(TaskId(id)) }
+        // Resolve the row's kind off the current flattened tree, like [onSetDefinitionState] — the two
+        // deletes address different id types and hit different routes, and the tree row is the cross-kind
+        // Item projection that knows which. An uncached row is a no-op rather than a guessed route: the
+        // Task route applied to a recurring id writes nothing locally and is then dropped as a 404-success.
+        val kind = state.value.rows.firstOrNull { it.item.id == id }?.item?.kind ?: return
+        scope.launch {
+            // The kind is resolved to PICK the seam, not forwarded down it: `DELETE items/{id}` carries no
+            // kind by design (the server resolves it and deletes the whole Series chain, where the per-kind
+            // `DELETE {habits|chores|events}/{id}` would archive one Segment and leave siblings alive).
+            if (kind == ItemKind.Task) deleteTask(TaskId(id)) else deleteDefinition(id)
+        }
     }
 
     // --- "Blocked by…" dependency edges (#291) ---

@@ -17,8 +17,19 @@ enum Layout {
 }
 
 extension WorkingState {
-    /// The plain, non-shaming label (design-principles.md). `WorkingState` bridges as an Objective-C
-    /// class (not a Swift enum), so we match on the singleton entries by identity rather than a `switch`.
+    /// The plain, non-shaming label (design-principles.md) — **the Tasks vocabulary**, and only that.
+    /// It is a label for an *item's* progress, so it says "Open" and "Done"; a recurring firing's day
+    /// is a different axis (`OccurrenceState`) with its own words, and this is not its fallback. The
+    /// calendar chip used to end an `if` chain here and would have printed "Open"/"Done" for the four
+    /// readings #402 adds — it now renders a token from `ShellBridgeKt.occurrenceStatusToken` instead,
+    /// where a Kotlin `when` makes the mapping exhaustive.
+    ///
+    /// SKIE bridges the Kotlin enum to a real `@frozen` Swift enum (see the generated
+    /// `Model.WorkingState.swift`), so an exhaustive `switch` *is* available here; the `if` chain plus
+    /// `return name` is retained deliberately, because `@frozen` means a member added on the Kotlin
+    /// side would otherwise break this file's compile only once the Apple CI job runs — long after the
+    /// shared change merges. The catch-all is the cost of that, which is exactly why a mapping that
+    /// must not silently fall through belongs in Kotlin rather than here.
     var label: String {
         if self == WorkingState.open { return L.string("tasks_menu_open") }
         if self == WorkingState.inProgress { return L.string("common_status_in_progress") }

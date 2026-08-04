@@ -87,6 +87,22 @@ SELECT * FROM habitEntity WHERE id = ?;
 selectAllIds:
 SELECT id FROM habitEntity;
 
+-- Just the "light switch" — the kind-neutral definition-state read (ADR-0053 decision 4, #390). The
+-- occurrence-state reading needs a definition's Active/Archived switch and nothing else about it, and
+-- rebuilding the whole domain Habit (fourteen recurrence columns and a sealed Cadence) to get at one
+-- enum is waste on a flow the day agenda re-collects on every write. Tombstones are excluded: a deleted
+-- definition has no light switch, and the reading treats an absent state as Unknown rather than
+-- deriving Missed for it.
+--
+-- The name is kind-qualified on purpose. SQLDelight hoists a MULTI-column query's row type to a
+-- top-level class in the shared package (see the generated `SelectMarkersInRange`), so the same query
+-- name in habitEntity, choreEntity and eventEntity would collide at codegen.
+selectHabitDefinitionStates:
+SELECT id, definition_state FROM habitEntity WHERE deleted_at IS NULL;
+
+selectHabitDefinitionStateById:
+SELECT definition_state FROM habitEntity WHERE id = ? AND deleted_at IS NULL;
+
 -- Binds the whole row as one parameter, so the generated signature is `insertOrReplace(HabitEntity)` and
 -- adding a column never touches the Kotlin call site.
 insertOrReplace:

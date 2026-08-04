@@ -116,6 +116,10 @@ class DefaultTasksComponent(
     // to a no-op so existing tests/callers build without supplying it. The Item tree's command menu (#231)
     // reuses it (and [workingStateEditor] / [createSubtask]) for a Task row's Delete / status / Add subtask.
     private val deleteTask: suspend (TaskId) -> Unit = { _ -> },
+    // The tree pane's **kind-neutral** delete seam (#389) — the raw Item id, no kind, for a recurring
+    // row's Delete (`DELETE items/{id}`, the whole Series chain). Threaded only into the tree: the detail
+    // slot is Task-only, so it keeps [deleteTask]. No-op default like its Task twin.
+    private val deleteDefinition: suspend (String) -> Unit = { _ -> },
     // The tree pane's per-row decorations (#231/#386) — the Task-only menu state (Pin/plan/status labels)
     // and the kind-neutral "in today" set — joined once by the shell and passed straight through.
     // Defaulted to the empty [ItemRowDecorations] so existing tests/callers build without it.
@@ -158,6 +162,7 @@ class DefaultTasksComponent(
             setPinned = setPinned,
             createSubtask = createSubtask,
             deleteTask = deleteTask,
+            deleteDefinition = deleteDefinition,
             addToPlan = addToPlan,
             removeFromPlan = removeFromPlan,
             coroutineContext = coroutineContext,

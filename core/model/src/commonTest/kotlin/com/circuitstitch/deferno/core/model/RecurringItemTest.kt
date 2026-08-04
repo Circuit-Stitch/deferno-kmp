@@ -8,10 +8,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Contract for the recurring-definition domain projections (Habit / Chore / Event) and the
- * [Occurrence]: the tombstone read helper, the summary defaults, and — the load-bearing glossary
- * invariant — that a *definition* carries a [DefinitionState] while an *Occurrence* carries an
- * [OccurrenceState], two distinct types that can never be confused (ADR-0011, #71).
+ * Contract for the recurring-definition domain projections (Habit / Chore / Event) and one dated
+ * firing of them: the tombstone read helper, the summary defaults, and — the load-bearing glossary
+ * invariant — that a *definition* carries a [DefinitionState] while a *firing* carries an
+ * [OccurrenceResolution], two distinct types that can never be confused (ADR-0011, #71).
  */
 class RecurringItemTest {
 
@@ -113,18 +113,25 @@ class RecurringItemTest {
     }
 
     @Test
-    fun occurrenceIsDistinctFromItsDefinitionAndUsesOccurrenceState() {
-        val occurrence = Occurrence(
-            id = OccurrenceId("o-1"),
-            definitionId = "h-1",
+    fun aFiringIsDistinctFromItsDefinitionAndCarriesAResolutionNotADefinitionState() {
+        // The firing is an [OccurrenceFact] keyed by (kind, definitionId, date) — it has no id of its
+        // own, because a habit occurrence has none on the wire at all (#390, ADR-0053 decision 4). The
+        // domain `Occurrence` this test used to build was a read projection of an id the client could
+        // never join against anything it writes, and it retired with the store that held it.
+        val firing = OccurrenceFact(
             kind = ItemKind.Habit,
+            definitionId = "h-1",
             date = LocalDate(2026, 5, 4),
-            state = OccurrenceState.Scheduled,
+            resolution = OccurrenceResolution.InProgress,
         )
-        assertEquals(ItemKind.Habit, occurrence.kind)
-        assertEquals("h-1", occurrence.definitionId)
-        // The Occurrence's state is an OccurrenceState — never a DefinitionState.
-        assertEquals(OccurrenceState.Scheduled, occurrence.state)
-        assertFalse(occurrence.state.isResolved)
+        assertEquals(ItemKind.Habit, firing.kind)
+        assertEquals("h-1", firing.definitionId)
+        // The firing's progress is an OccurrenceResolution — never a DefinitionState. `InProgress` is
+        // the one token both vocabularies could plausibly have shared, and they do not.
+        assertEquals(OccurrenceResolution.InProgress, firing.resolution)
+        assertFalse(firing.resolution.isTerminal)
+        // And a resolution is not a *reading*: nothing here says Scheduled or Missed, which are
+        // functions of today and are derived by `resolveOccurrenceState`, never stored.
+        assertEquals(null, firing.doneAt)
     }
 }

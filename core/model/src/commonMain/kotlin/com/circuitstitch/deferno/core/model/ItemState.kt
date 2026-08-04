@@ -36,11 +36,20 @@ enum class DefinitionState {
 }
 
 /**
- * How one dated firing of a recurring definition went (CONTEXT.md → "Occurrence state"). The
- * client only ever *writes* a coarse [OccurrenceAction]; these finer read states — `Scheduled`,
- * `Missed`, and the on-time/late punctuality split of "done" — are **server-derived**. Condensed
- * from the wire `OccurrenceStatus`/`DerivedChoreOccurrenceStatus` family; `Missed` is kept
- * distinct from `Skipped`.
+ * How one dated firing of a recurring definition went (CONTEXT.md → "Occurrence state") — a
+ * **reading, never a stored value** (ADR-0053 decision 4). It is derived at render time by
+ * [resolveOccurrenceState] from the stored [OccurrenceFact], [OccurrenceCoverage], the parent's
+ * [DefinitionState] and today; it is never persisted, and `occurrence_state` is never a column.
+ *
+ * **Not "server-derived".** That earlier claim was wrong in the way that mattered: only the
+ * *resolution* and the punctuality inputs come from the server. The `Scheduled` vs `Missed` split is
+ * a function of `today` over a firing with no resolution, which is exactly why the client can — and
+ * must — re-derive it with the server gone. The backend says as much itself, annotating its
+ * `DerivedChoreOccurrenceStatus` members "Scheduled — future or today, no record" and "Missed — past,
+ * no record, chore Active".
+ *
+ * The stored half is the separate, narrower [OccurrenceResolution]; `Missed` and [Unknown] are the two
+ * members that appear here and can never appear there.
  */
 enum class OccurrenceState {
     Scheduled,
@@ -49,6 +58,13 @@ enum class OccurrenceState {
     DoneLate,
     Skipped,
     Missed,
+
+    /**
+     * This device has never synced that date, so how the firing went is genuinely not known — and the
+     * surface says so rather than letting an unsynced past day read as [Missed] (ADR-0053 decision 4).
+     * Appended last: never reorder an existing member.
+     */
+    Unknown,
     ;
 
     /** Whether this firing is finished (any "done" punctuality, skipped, or missed). */

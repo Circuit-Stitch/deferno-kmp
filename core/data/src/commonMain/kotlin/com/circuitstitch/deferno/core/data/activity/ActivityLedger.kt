@@ -220,7 +220,12 @@ private fun ActivityEntry.targetSummary(): ActivitySummary {
     val parts = target.split(":")
     return when (parts.firstOrNull()) {
         "create" -> ActivitySummary(ActivityVerb.Created, parts.getOrElse(1) { "item" }.lowercase())
-        "item" -> ActivitySummary(ActivityVerb.MovedItem)
+        // Method-aware for the same reason the `task` arm below is: `item:{id}` is now the target of two
+        // unlike intents. It was Move's alone until #389 gave the recurring kinds a delete, which is the
+        // kind-neutral chain-wide `DELETE items/{id}` and so shares the target. Without the branch an
+        // offline delete reads "Moved an item" in the un-reconciled feed until the server's own entry
+        // supersedes it.
+        "item" -> ActivitySummary(if (method == OutboxMethod.Delete) ActivityVerb.DeletedItem else ActivityVerb.MovedItem)
         "plan" -> ActivitySummary(ActivityVerb.UpdatedPlan)
         "task" -> ActivitySummary(if (method == OutboxMethod.Delete) ActivityVerb.DeletedTask else ActivityVerb.UpdatedTask)
         "occurrence" -> ActivitySummary(

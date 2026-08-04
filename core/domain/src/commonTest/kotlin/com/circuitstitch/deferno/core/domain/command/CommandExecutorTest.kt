@@ -273,19 +273,19 @@ class CommandExecutorTest {
             val isCreate = kind in CommandKind.createKinds
             val isOccurrence = kind in CommandKind.occurrenceKinds
             val isSettings = kind in CommandKind.settingsKinds
-            val isMove = kind in CommandKind.moveKinds
+            val isItem = kind in CommandKind.itemKinds
             val isDefinition = kind in CommandKind.definitionKinds
             val isBlockedBy = kind == CommandKind.SetTaskBlockedBy
             assertEquals(if (isPlan) 1 else 0, pw.calls.size, "kind $kind plan-writer calls")
             assertEquals(
-                if (isPlan || isCreate || isOccurrence || isSettings || isMove || isDefinition || isBlockedBy) 0 else 1,
+                if (isPlan || isCreate || isOccurrence || isSettings || isItem || isDefinition || isBlockedBy) 0 else 1,
                 tw.calls.size,
                 "kind $kind task-writer calls",
             )
             assertEquals(if (isCreate) 1 else 0, cw.calls.size, "kind $kind create-writer calls")
             assertEquals(if (isOccurrence) 1 else 0, ow.calls.size, "kind $kind occurrence-writer calls")
             assertEquals(if (isSettings) 1 else 0, sw.calls.size, "kind $kind settings-writer calls")
-            assertEquals(if (isMove) 1 else 0, iw.calls.size, "kind $kind item-writer calls")
+            assertEquals(if (isItem) 1 else 0, iw.calls.size, "kind $kind item-writer calls")
             assertEquals(if (isDefinition) 1 else 0, dw.calls.size, "kind $kind definition-writer calls")
             assertEquals(if (isBlockedBy) 1 else 0, bw.calls.size, "kind $kind blockedBy-writer calls")
         }
@@ -333,10 +333,50 @@ class CommandExecutorTest {
         assertEquals(CommandResult.Accepted(CommandKind.MoveItem), ex.execute(MoveItem("h1", newParentId = null, position = 0)))
 
         assertEquals(
-            listOf(FakeItemWriter.Call("h1", "t1", 3), FakeItemWriter.Call("h1", null, 0)),
+            listOf<FakeItemWriter.Call>(
+                FakeItemWriter.Call.Move("h1", "t1", 3),
+                FakeItemWriter.Call.Move("h1", null, 0),
+            ),
             iw.calls,
         )
         assertTrue(tw.calls.isEmpty(), "a move must not touch the task writer")
+    }
+
+    @Test
+    fun deleteItemRoutesToTheItemWriterWithTheRawIdAndNoKind() = runTest {
+        // #389: the kind-neutral soft delete. It is offline-first (optimistic tombstone + enqueue), so
+        // it is Accepted, and it forwards ONLY the raw Item id — the server route resolves the kind and
+        // deletes the whole Series chain. The same command deletes a Habit and a Task, which is what
+        // lets the Item tree offer one Delete for every row.
+        val tw = FakeTaskWriter()
+        val iw = FakeItemWriter()
+        val ex = executor(tw, FakePlanWriter(), item = iw)
+
+        assertEquals(CommandResult.Accepted(CommandKind.DeleteItem), ex.execute(DeleteItem("h1")))
+        assertEquals(CommandResult.Accepted(CommandKind.DeleteItem), ex.execute(DeleteItem("t1")))
+
+        assertEquals(
+            listOf<FakeItemWriter.Call>(FakeItemWriter.Call.Delete("h1"), FakeItemWriter.Call.Delete("t1")),
+            iw.calls,
+        )
+        // The regression this guards: routing a recurring row's delete to the Task seam sends
+        // `DELETE tasks/{habitId}`, which 404s — and the outbox maps 404 to success, so the write
+        // evaporates while the optimistic tombstone sticks. Silent divergence, no error anywhere.
+        assertTrue(tw.calls.isEmpty(), "the kind-neutral delete must never reach the Task writer")
+    }
+
+    @Test
+    fun theKindNeutralDeleteIsNotGatedByATombstonedTaskRow() = runTest {
+        // [DeleteTask] is rejected NotApplicable once the cached row is tombstoned; [DeleteItem] is not
+        // gated at all (the gate is Task-typed and blind to the recurring rows it exists for), so even a
+        // mistakenly-supplied deleted Task row must not swallow it. Pins the deliberate asymmetry.
+        val iw = FakeItemWriter()
+        val ex = executor(FakeTaskWriter(), FakePlanWriter(), item = iw)
+
+        val result = ex.execute(DeleteItem("h1"), current = task(deleted = true))
+
+        assertEquals(CommandResult.Accepted(CommandKind.DeleteItem), result)
+        assertEquals(listOf<FakeItemWriter.Call>(FakeItemWriter.Call.Delete("h1")), iw.calls)
     }
 
     @Test
@@ -357,13 +397,93 @@ class CommandExecutorTest {
         )
 
         assertEquals(
-            listOf(
-                FakeDefinitionWriter.Call("h1", ItemKind.Habit, DefinitionState.Archived),
-                FakeDefinitionWriter.Call("c2", ItemKind.Chore, DefinitionState.Active),
+            listOf<FakeDefinitionWriter.Call>(
+                FakeDefinitionWriter.Call.SetState("h1", ItemKind.Habit, DefinitionState.Archived),
+                FakeDefinitionWriter.Call.SetState("c2", ItemKind.Chore, DefinitionState.Active),
             ),
             dw.calls,
         )
         assertTrue(tw.calls.isEmpty(), "a definition-state set must not touch the task writer")
+    }
+
+    @Test
+    fun setDefinitionTargetDateRoutesToTheDefinitionWriterAndCarriesAnExplicitClear() = runTest {
+        // #378: the recurring half of the soft target date. Offline-first (optimistic apply + enqueue),
+        // so Accepted, and it forwards the raw id / kind / instant to the DefinitionWriter alone.
+        val tw = FakeTaskWriter()
+        val dw = FakeDefinitionWriter()
+        val ex = executor(tw, FakePlanWriter(), definition = dw)
+
+        assertEquals(
+            CommandResult.Accepted(CommandKind.SetDefinitionTargetDate),
+            ex.execute(SetDefinitionTargetDate("h1", ItemKind.Habit, SAMPLE_TARGET_DATE)),
+        )
+        // A null operand is the CLEAR, not "leave it alone": the command must reach the writer, which
+        // emits an explicit JSON null. Dropping it here would make the clear a silent server no-op.
+        assertEquals(
+            CommandResult.Accepted(CommandKind.SetDefinitionTargetDate),
+            ex.execute(SetDefinitionTargetDate("e3", ItemKind.Event, null)),
+        )
+
+        assertEquals(
+            listOf<FakeDefinitionWriter.Call>(
+                FakeDefinitionWriter.Call.SetTargetDate("h1", ItemKind.Habit, SAMPLE_TARGET_DATE),
+                FakeDefinitionWriter.Call.SetTargetDate("e3", ItemKind.Event, null),
+            ),
+            dw.calls,
+        )
+        assertTrue(tw.calls.isEmpty(), "a recurring target-date set must not touch the task writer")
+    }
+
+    @Test
+    fun setDefinitionPriorityRoutesToTheDefinitionWriterWithEveryBucket() = runTest {
+        // #378: the recurring half of the urgency bucket. Every bucket is a real value — there is no
+        // null form — so Backlog and Normal are ordinary writes, not "clear the priority".
+        val tw = FakeTaskWriter()
+        val dw = FakeDefinitionWriter()
+        val ex = executor(tw, FakePlanWriter(), definition = dw)
+
+        for (priority in Priority.entries) {
+            assertEquals(
+                CommandResult.Accepted(CommandKind.SetDefinitionPriority),
+                ex.execute(SetDefinitionPriority("c1", ItemKind.Chore, priority)),
+            )
+        }
+
+        assertEquals(
+            Priority.entries.map<Priority, FakeDefinitionWriter.Call> {
+                FakeDefinitionWriter.Call.SetPriority("c1", ItemKind.Chore, it)
+            },
+            dw.calls,
+        )
+        assertTrue(tw.calls.isEmpty(), "a recurring priority set must not touch the task writer")
+    }
+
+    @Test
+    fun theRecurringFieldEditsNeverCollapseOntoTheirTaskTwins() = runTest {
+        // The mis-routing this whole pair of kinds exists to prevent: a Habit's target date / priority
+        // must NOT go through the TaskWriter (which would PATCH `tasks/{habitId}` — a 404 the outbox
+        // maps to success, so the edit would vanish silently). Asserted as a per-writer census rather
+        // than by inspecting operands, so a future "simplification" that reuses the Task seam fails here.
+        val tw = FakeTaskWriter()
+        val dw = FakeDefinitionWriter()
+        val ex = executor(tw, FakePlanWriter(), definition = dw)
+
+        ex.execute(SetDefinitionTargetDate("h1", ItemKind.Habit, SAMPLE_TARGET_DATE))
+        ex.execute(SetDefinitionPriority("h1", ItemKind.Habit, Priority.Fire))
+        // …while the Task twins still route to the Task seam, unchanged.
+        ex.execute(SetTaskTargetDate(id, SAMPLE_TARGET_DATE))
+        ex.execute(SetTaskPriority(id, Priority.Fire))
+
+        assertEquals(2, dw.calls.size, "both recurring edits belong to the definition writer")
+        assertEquals(
+            listOf<FakeTaskWriter.Call>(
+                FakeTaskWriter.Call.SetTargetDate(id, SAMPLE_TARGET_DATE),
+                FakeTaskWriter.Call.SetPriority(id, Priority.Fire),
+            ),
+            tw.calls,
+            "only the Task twins may reach the Task writer",
+        )
     }
 
     @Test

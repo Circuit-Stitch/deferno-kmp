@@ -5,6 +5,10 @@ import com.circuitstitch.deferno.core.data.assistant.ConversationStore
 import com.circuitstitch.deferno.core.data.attachment.OnDeviceStorageUsage
 import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
+import com.circuitstitch.deferno.core.data.definition.DefinitionRef
+import com.circuitstitch.deferno.core.data.definition.DefinitionStateSource
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.outbox.FlushResult
@@ -23,6 +27,7 @@ import com.circuitstitch.deferno.core.domain.command.ClearTaskDeadline
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.domain.command.CommandResult
 import com.circuitstitch.deferno.core.domain.command.CreateItem
+import com.circuitstitch.deferno.core.domain.command.DeleteItem
 import com.circuitstitch.deferno.core.domain.command.DeleteTask
 import com.circuitstitch.deferno.core.domain.command.MarkOccurrence
 import com.circuitstitch.deferno.core.domain.command.MoveItem
@@ -48,6 +53,8 @@ import kotlinx.coroutines.flow.first
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
+import com.circuitstitch.deferno.core.model.OccurrenceCoverage
+import com.circuitstitch.deferno.core.model.OccurrenceFact
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.PlanItemRef
@@ -65,6 +72,7 @@ import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachment
 import com.circuitstitch.deferno.feature.tasks.OnDeviceAttachments
 import com.circuitstitch.deferno.feature.tasks.WorkingStateEditor
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import com.circuitstitch.deferno.core.domain.command.SetTaskDeadlineTime
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -222,6 +230,16 @@ interface AccountSession {
     val deleteTask: suspend (TaskId) -> Unit
 
     /**
+     * The Item tree's **kind-neutral** Delete seam (#389): maps a raw Item id to the destructive
+     * `DeleteItem` Command (`DELETE items/{id}`, optimistic tombstone + outbox enqueue), so the feature
+     * layer never touches the registry directly. The sibling of [deleteTask], not its replacement — the
+     * tree resolves the row's kind and takes this one only once it knows the row is *not* a Task, because
+     * a recurring id sent down the TaskId-typed seam applies nothing locally and is then dropped as a
+     * 404-success. Defaulted to a no-op so test fakes build without overriding it.
+     */
+    val deleteDefinition: suspend (String) -> Unit get() = { _ -> }
+
+    /**
      * The Tasks Item-tree move seam the modal move mode drives (ADR-0049 #228): maps a relative move to a
      * `MoveItem` Command and dispatches it through the command executor (optimistic cross-kind reorder +
      * outbox enqueue), so the feature layer never touches the registry directly (mirrors [workingStateEditor]).
@@ -238,6 +256,25 @@ interface AccountSession {
 
     /** The Calendar Destination's windowed feed read source (#74) — the month grid + day agenda observe it. */
     val calendarRepository: CalendarRepository
+
+    /**
+     * The three inputs of the render-time **Occurrence state** reading (ADR-0053 decision 4, #390/#402)
+     * that the feed row cannot supply: what the server has on record for a dated firing
+     * ([occurrenceFactLocalStore]), which date ranges this device has actually synced
+     * ([occurrenceCoverageLocalStore]), and each recurring definition's Active/Archived light switch
+     * ([definitionStateSource]). The Calendar component joins them per agenda row against `today`.
+     *
+     * Three accessors, not one, because they answer three different questions — and specifically
+     * because a missing fact is evidence only *inside* coverage. Outside it, it means this device has
+     * never looked, which the reading reports as Unknown instead of deriving a Missed out of ignorance.
+     *
+     * Defaulted to inert instances so the shell's test fakes build without supplying them (as
+     * [blockedByEditor] and [securityRepository] are). An inert set reads Unknown on every firing,
+     * which is the honest answer for a session with no data behind it.
+     */
+    val occurrenceFactLocalStore: OccurrenceFactLocalStore get() = InertOccurrenceFactLocalStore
+    val occurrenceCoverageLocalStore: OccurrenceCoverageLocalStore get() = InertOccurrenceCoverageLocalStore
+    val definitionStateSource: DefinitionStateSource get() = InertDefinitionStateSource
 
     /**
      * The Assistant Destination's on-device Conversation cache (ADR-0040, #282): the source of truth for
@@ -304,6 +341,49 @@ interface AccountSession {
     suspend fun flushOutbox(now: Instant): FlushResult
 }
 
+/*
+ * The inert defaults for the three occurrence-state read ports (#402). They live here rather than in
+ * ShellDefaults.kt only because that file is outside this change's write set; they are the same idiom
+ * as `NoopCalendarRepository` and belong beside it.
+ *
+ * An empty fact store paired with empty coverage is not "everything is fine" — it is "this device has
+ * looked at nothing", and `resolveOccurrenceState` reads that as Unknown on every firing. That is the
+ * right default for a session with no data behind it, and it is deliberately NOT the same as a store
+ * that reports full coverage and no facts, which would derive Missed for every past day.
+ */
+
+internal object InertOccurrenceFactLocalStore : OccurrenceFactLocalStore {
+    override fun observeOn(date: LocalDate) = flowOf(emptyList<OccurrenceFact>())
+    override fun observeInRange(kind: ItemKind, definitionId: String, from: LocalDate, to: LocalDate) =
+        flowOf(emptyList<OccurrenceFact>())
+
+    override fun observe(kind: ItemKind, definitionId: String, date: LocalDate) = flowOf<OccurrenceFact?>(null)
+    override suspend fun get(kind: ItemKind, definitionId: String, date: LocalDate): OccurrenceFact? = null
+    override suspend fun upsert(fact: OccurrenceFact) {}
+    override suspend fun delete(kind: ItemKind, definitionId: String, date: LocalDate) {}
+    override suspend fun replaceRange(
+        kind: ItemKind,
+        definitionId: String,
+        from: LocalDate,
+        to: LocalDate,
+        facts: List<OccurrenceFact>,
+    ) {}
+
+    override suspend fun transaction(block: suspend (OccurrenceFactLocalStore) -> Unit) = block(this)
+}
+
+internal object InertOccurrenceCoverageLocalStore : OccurrenceCoverageLocalStore {
+    override fun observeCovering(date: LocalDate) = flowOf(emptyList<OccurrenceCoverage>())
+    override suspend fun get(kind: ItemKind, definitionId: String) = emptyList<OccurrenceCoverage>()
+    override suspend fun record(coverage: OccurrenceCoverage) {}
+    override suspend fun clear(kind: ItemKind, definitionId: String) {}
+}
+
+internal object InertDefinitionStateSource : DefinitionStateSource {
+    override fun observeAll() = flowOf(emptyMap<DefinitionRef, DefinitionState>())
+    override suspend fun get(kind: ItemKind, definitionId: String): DefinitionState? = null
+}
+
 /**
  * Production [AccountSession] over the per-Account [AccountComponent] DI graph (ADR-0014). The
  * component owns the Account's encrypted DB, repositories, outbox, and command executor; this adapts
@@ -345,6 +425,12 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val settingsRepository: SettingsRepository get() = component.settingsRepository
     override val securityRepository: SecurityRepository get() = component.securityRepository
     override val calendarRepository: CalendarRepository get() = component.calendarRepository
+
+    // The occurrence-state reading's three inputs, straight off the AccountScope graph (#390).
+    override val occurrenceFactLocalStore: OccurrenceFactLocalStore get() = component.occurrenceFactLocalStore
+    override val occurrenceCoverageLocalStore: OccurrenceCoverageLocalStore
+        get() = component.occurrenceCoverageLocalStore
+    override val definitionStateSource: DefinitionStateSource get() = component.definitionStateSource
     override val conversationStore: ConversationStore get() = component.conversationStore
 
     override fun observeBrainDumpDrafts() = component.brainDumpDraftRepository.observeDrafts()
@@ -423,6 +509,9 @@ class AccountComponentSession(private val component: AccountComponent) : Account
 
     override val deleteTask: suspend (TaskId) -> Unit =
         commandDeleteTask(component.commandExecutor)
+
+    override val deleteDefinition: suspend (String) -> Unit =
+        commandDeleteDefinition(component.commandExecutor)
 
     override val moveEditor: MoveEditor =
         commandMoveEditor(component.commandExecutor)
@@ -519,6 +608,18 @@ internal fun commandSetLabels(executor: CommandExecutor): suspend (TaskId, List<
  */
 internal fun commandDeleteTask(executor: CommandExecutor): suspend (TaskId) -> Unit =
     { id -> executor.execute(DeleteTask(id)) }
+
+/**
+ * The Item tree's kind-neutral Delete seam backed by a [CommandExecutor] (#389): dispatches the
+ * destructive [DeleteItem] over the raw Item id (the writer tombstones whichever per-kind cache holds the
+ * row + enqueues `DELETE items/{id}`). **No [ItemKind] operand** — the tree resolves the kind to choose
+ * between this seam and [commandDeleteTask], but never forwards it, because the server resolves the kind
+ * itself and deletes the whole Series chain; the per-kind mirror would archive one Segment and leave a
+ * live sibling to reappear. No `current` row either: the kind is not Task-typed, so there is nothing a
+ * Task-shaped `enabledFor` gate could read, and the write is idempotent server-side anyway.
+ */
+internal fun commandDeleteDefinition(executor: CommandExecutor): suspend (String) -> Unit =
+    { id -> executor.execute(DeleteItem(id)) }
 
 /**
  * The Pin write seam backed by a [CommandExecutor] (#231): dispatches [SetTaskPinned] with the target flag

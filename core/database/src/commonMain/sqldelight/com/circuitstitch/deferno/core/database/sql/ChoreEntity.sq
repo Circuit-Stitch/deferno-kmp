@@ -65,6 +65,14 @@ SELECT * FROM choreEntity WHERE id = ?;
 selectAllIds:
 SELECT id FROM choreEntity;
 
+-- Just the "light switch" — the kind-neutral definition-state read (ADR-0053 decision 4, #390); see
+-- HabitEntity.sq for the full rationale, including why the query name is kind-qualified.
+selectChoreDefinitionStates:
+SELECT id, definition_state FROM choreEntity WHERE deleted_at IS NULL;
+
+selectChoreDefinitionStateById:
+SELECT definition_state FROM choreEntity WHERE id = ? AND deleted_at IS NULL;
+
 -- Binds the whole row as one parameter, so the generated signature is `insertOrReplace(ChoreEntity)` and
 -- adding a column never touches the Kotlin call site.
 insertOrReplace:

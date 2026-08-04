@@ -263,11 +263,18 @@
     <string name="common_status_a11y">Estado: %1$s</string>
     <!-- Adjetivo de estado (femenino: la tarea/la ocurrencia) -->
     <string name="common_status_done">Hecha</string>
+    <!-- Puntualidad de una ocurrencia: registra que SÍ se hizo — sin exclamación ni «vencida» -->
+    <string name="common_status_done_late">Hecha con retraso</string>
+    <string name="common_status_done_on_time">Hecha a tiempo</string>
     <string name="common_status_in_progress">En curso</string>
     <string name="common_status_in_review">En revisión</string>
-    <!-- Deliberadamente neutral — nunca «atrasada/vencida» -->
+    <!-- Ocurrencia pasada sin resolver, dentro de la cobertura sincronizada. Se nombra con llaneza (ADR-0053): nunca «atrasada/vencida» ni en segunda persona -->
+    <string name="common_status_missed">Perdida</string>
+    <!-- Deliberadamente neutral — nunca «atrasada/vencida». Ya no cubre el pasado: eso es common_status_missed o common_status_unknown -->
     <string name="common_status_scheduled">Programada</string>
     <string name="common_status_skipped">Omitida</string>
+    <!-- Este dispositivo nunca sincronizó esa fecha: información ausente, no un fallo -->
+    <string name="common_status_unknown">Sin sincronizar</string>
     <string name="common_to">Hasta</string>
     <string name="common_undo">Deshacer</string>
     <string name="common_username_handle">@%1$s</string>
@@ -683,6 +690,8 @@ Gracias.</string>
         <item quantity="one">Cada año</item>
         <item quantity="other">Cada %1$d años</item>
     </plurals>
+    <!-- El borrado es en cadena (toda la regla, no solo el tramo visible) pero es un borrado SUAVE: no elimina las ocurrencias registradas. No prometer ninguna cascada -->
+    <string name="tasks_delete_definition_confirm_body">Esto quita toda la serie repetida de cada lista y plan. Sus ocurrencias pasadas ya registradas se conservan.</string>
     <string name="tasks_delete_item_confirm_title">¿Eliminar «%1$s»?</string>
     <string name="tasks_detail_add_caption">Agregar leyenda</string>
     <string name="tasks_detail_add_comment_placeholder">Agrega un comentario…</string>
