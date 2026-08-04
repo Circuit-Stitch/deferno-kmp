@@ -1,0 +1,45 @@
+-- Migration 20 -> 21: the client stores occurrence FACTS and never readings (#390, ADR-0053 decision 4).
+--
+-- `occurrenceEntity` stored an `occurrence_state` column holding the whole reading — including the
+-- Scheduled-vs-Missed split, which is `date < today` over an unresolved firing. A value that is a
+-- function of today cannot be stored: a row cached on 1 August still read "Scheduled" on 5 August, and
+-- offline across midnight it was confidently wrong. It is replaced by `occurrenceFactEntity`, which
+-- holds only the STORED resolution and its timestamps, beside `occurrenceCoverageEntity`, which records
+-- which date ranges have actually been synced. Occurrence state is derived at render time from the two
+-- plus the definition's light switch and today, and is never a column again.
+--
+-- The key changes too, not just the columns: the old primary key was the server's occurrence UUID — an
+-- id a habit occurrence does not carry on the wire at all — so a cached row could never be joined
+-- against `OccurrenceTargets.of`, the `(kind, definition_id, date)` identity the write path has always
+-- used. The new table adopts that identity as its composite primary key.
+--
+-- Dropped and recreated empty rather than rebuilt-and-carried. `occurrenceEntity` is a refetchable
+-- cache of a kind-scoped occurrence read and nothing in this client ever wrote to it (it had no
+-- repository, no remote source and no call site), so there is nothing here worth a carry-forward — and
+-- a carry-forward would in any case have to invent a stored resolution from a reading that had already
+-- gone stale, which is the exact defect being removed.
+--
+-- Never edit a released migration or snapshot — ADR-0022 runbook.
+DROP TABLE occurrenceEntity;
+
+CREATE TABLE occurrenceFactEntity (
+    kind            TEXT NOT NULL,
+    definition_id   TEXT NOT NULL,
+    occurrence_date TEXT NOT NULL,
+    resolution      TEXT NOT NULL,
+    done_at         TEXT,
+    complete_by     TEXT,
+    PRIMARY KEY (kind, definition_id, occurrence_date)
+);
+
+-- The primary key indexes the per-definition window read; this one serves the cross-definition day read
+-- (every kind, every definition, one calendar day), which the key's leading `kind` column cannot.
+CREATE INDEX occurrenceFactEntity_occurrence_date ON occurrenceFactEntity(occurrence_date);
+
+CREATE TABLE occurrenceCoverageEntity (
+    kind          TEXT NOT NULL,
+    definition_id TEXT NOT NULL,
+    from_date     TEXT NOT NULL,
+    to_date       TEXT NOT NULL,
+    PRIMARY KEY (kind, definition_id, from_date)
+);

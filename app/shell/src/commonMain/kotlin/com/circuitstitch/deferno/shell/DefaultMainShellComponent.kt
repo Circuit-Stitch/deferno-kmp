@@ -28,6 +28,9 @@ import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
+import com.circuitstitch.deferno.core.data.definition.DefinitionStateSource
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.feedback.FeedbackResult
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
@@ -153,6 +156,13 @@ class DefaultMainShellComponent(
     // many shell tests build without supplying them (mirrors workingStateEditor/searchTasks/create).
     private val calendarRepository: CalendarRepository = NoopCalendarRepository,
     private val occurrenceEditor: OccurrenceEditor = NoopOccurrenceEditor,
+    // The Calendar agenda's occurrence-state reading inputs (#402, ADR-0053 decision 4), forwarded
+    // straight into the Calendar component, which joins them per row against `today`. Inert defaults
+    // like the two above, so the many shell tests build without supplying them — an inert set reads
+    // Unknown on every firing, which is what "this device has looked at nothing" honestly means.
+    private val occurrenceFactLocalStore: OccurrenceFactLocalStore = InertOccurrenceFactLocalStore,
+    private val occurrenceCoverageLocalStore: OccurrenceCoverageLocalStore = InertOccurrenceCoverageLocalStore,
+    private val definitionStateSource: DefinitionStateSource = InertDefinitionStateSource,
     // The Tasks working-state write seam (#73), threaded into the Tasks Destination's component so its
     // detail can issue lifecycle Commands. Defaults to a no-op so the many shell tests build without it.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
@@ -559,7 +569,14 @@ class DefaultMainShellComponent(
                         componentContext = childContext,
                         calendarRepository = calendarRepository,
                         occurrenceEditor = occurrenceEditor,
-                        today = today,
+                        occurrenceFacts = occurrenceFactLocalStore,
+                        occurrenceCoverage = occurrenceCoverageLocalStore,
+                        definitionStates = definitionStateSource,
+                        // A provider, not a value. It is this session's constructor-time `today` and
+                        // stays a snapshot for now (making it live across midnight is #392's work,
+                        // and is not separable from the timezone restructure) — but the component
+                        // re-reads it on every emission, so #392 can make it live with no retype here.
+                        today = { today },
                         tz = timeZone,
                         output = ::onCalendarOutput,
                         coroutineContext = coroutineContext,

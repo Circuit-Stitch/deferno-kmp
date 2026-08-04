@@ -9,8 +9,14 @@ import kotlinx.serialization.Serializable
  * one-off dated item, and a synced external event into one dated block: [taskId] is the underlying
  * item **and the id every occurrence endpoint keys on**, [seriesId] the recurring series the firing
  * belongs to (absent for a one-off, and never a path key — #380), [kind] the work-item kind the row
- * projects, and [status] the item's `TaskStatus` (the feed reports progress on the Task axis even for
- * firings — there is no *occurrence*-status on the wire).
+ * projects, and [status] the item's `TaskStatus`.
+ *
+ * **[status] is the item's, not the firing's.** This feed row carries no occurrence status: the
+ * backend projects the *definition's* `TaskStatus` onto every date it fires on, so the same value
+ * repeats across a series and changes only when the definition does. An occurrence status does exist
+ * on the wire — it is just on the kind-scoped occurrence endpoints (`GET /habits/{id}/occurrences` and
+ * its Chore/Event siblings), which is where the client gets its facts (ADR-0053 decision 4). Reading
+ * this field as "how that day went" is the defect #397 exists to close.
  *
  * [kind] has been a **required** `CalendarEvent` property since #311, added precisely so a client can
  * route a kind-scoped occurrence action straight from the feed row rather than maintaining a

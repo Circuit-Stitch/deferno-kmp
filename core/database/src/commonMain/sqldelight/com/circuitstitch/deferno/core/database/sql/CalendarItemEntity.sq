@@ -5,9 +5,17 @@
 --
 -- Adapter-free primitives (TEXT/INTEGER), conversion in CalendarEntityMapping.kt. `item_date` is the
 -- local calendar day (ISO `yyyy-mm-dd`, projected into the user's tz at the edge) — indexed because the
--- grid/agenda query by date window. `working_state` is a WorkingState (the feed reports progress on the
--- Task axis even for firings — there is no `missed`/`late`, which is what keeps the surface non-shaming,
--- design-principle #4). `labels` is a `\n`-joined TEXT.
+-- grid/agenda query by date window. `labels` is a `\n`-joined TEXT.
+--
+-- `working_state` is a WorkingState, and since ADR-0053 it is meaningful for **non-firing rows only** —
+-- a one-off dated Task, whose lifecycle genuinely is the Task axis. This column used to carry the whole
+-- answer for a firing too, on the argument that the feed's Task-axis vocabulary has no `missed`/`late`
+-- and that losing them kept the surface non-shaming. ADR-0053 decision 7 reverses that rationale
+-- explicitly: gentleness is vocabulary, not suppression — an on-time rate and a completion heatmap
+-- cannot be computed from data that was discarded, and the rendered words stay factual regardless. A
+-- firing's state is now the render-time reading over `occurrenceFactEntity` + `occurrenceCoverageEntity`
+-- + the definition's light switch + today, and this column is not consulted for it. What makes a row a
+-- firing rather than a dated Task is `series_id`.
 --
 -- `kind` is the ItemKind enum NAME, written straight off the feed row (`CalendarEvent.kind` has been
 -- required since #311) and decoded defensively in CalendarEntityMapping.kt. It replaced a

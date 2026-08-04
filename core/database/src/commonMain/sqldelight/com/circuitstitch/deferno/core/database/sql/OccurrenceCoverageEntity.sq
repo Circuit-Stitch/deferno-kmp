@@ -1,0 +1,57 @@
+-- Which date ranges this device has actually **synced** for a recurring definition (ADR-0053 decision 4,
+-- CONTEXT.md -> "Occurrence coverage"). It is the bookkeeping that makes "there is no fact for 3 March"
+-- answerable: inside coverage that absence is *evidence* (nothing was recorded, so the firing is
+-- unresolved); outside it the absence is only *ignorance*, and the reading says Unknown rather than
+-- inventing a Missed. Without this table the two are indistinguishable and every unsynced past day
+-- reads as Missed — the ambiguity the whole epic exists to remove.
+--
+-- Deliberately a SECOND table rather than a nullable column on `occurrenceFactEntity`: coverage is a
+-- property of a *range*, not of a firing, and the days it is most needed for are exactly the days that
+-- have no fact row to hang it on.
+--
+-- Both bounds are **INCLUSIVE** — a row records exactly the `?from=&to=` window the kind-scoped
+-- occurrence endpoint was asked for, and those bounds are inclusive server-side. The columns are
+-- `from_date`/`to_date` because `from` and `to` are SQL keywords.
+--
+-- Rows for one definition are held **disjoint and non-adjacent-safe**, and the coalescing is done in
+-- Kotlin by `List<OccurrenceCoverage>.mergeCoverage` — read-merge-write inside one transaction — and
+-- deliberately NOT in SQL. Two windows that overlap or genuinely abut (`to + 1 day == from`) join,
+-- because joining them asserts nothing that was not actually fetched; two windows with a gap stay two
+-- rows, because merging them would swallow the gap into "synced" and re-introduce the derived-Missed
+-- defect one layer down. That rule is worth one pure, separately-tested function rather than a clever
+-- `UPDATE … WHERE` nobody can prove.
+--
+-- `(kind, definition_id, from_date)` as PRIMARY KEY: a definition may hold many ranges but only ever one
+-- starting on a given day (two would have been coalesced), and the key supplies the index the
+-- per-definition `ORDER BY from_date` read walks, so no separate index is declared for it. The
+-- cross-definition "which ranges contain this day" read is a small full scan by design — this table
+-- holds a handful of rows per definition, not one per firing.
+--
+-- Adapter-free primitives (ISO `yyyy-mm-dd` days); conversion in SqlDelightOccurrenceCoverageLocalStore.kt.
+CREATE TABLE occurrenceCoverageEntity (
+    kind          TEXT NOT NULL,
+    definition_id TEXT NOT NULL,
+    from_date     TEXT NOT NULL,
+    to_date       TEXT NOT NULL,
+    PRIMARY KEY (kind, definition_id, from_date)
+);
+
+-- The day agenda's companion read to `occurrenceFactEntity.selectOn`: every definition whose synced
+-- coverage contains this day, so a row with no fact can be told apart from a row never looked at.
+selectCovering:
+SELECT * FROM occurrenceCoverageEntity
+WHERE from_date <= ? AND to_date >= ?
+ORDER BY kind, definition_id, from_date;
+
+selectForDefinition:
+SELECT * FROM occurrenceCoverageEntity WHERE kind = ? AND definition_id = ? ORDER BY from_date;
+
+-- Binds the whole row as one parameter (the sibling tables' idiom).
+insertOrReplace:
+INSERT OR REPLACE INTO occurrenceCoverageEntity VALUES ?;
+
+-- Used both to forget a definition wholesale and as the delete half of the read-merge-write in
+-- `record`: the merged set replaces the definition's rows rather than being patched in place, so a
+-- coalesce that shortens the row count cannot leave an orphan behind.
+deleteForDefinition:
+DELETE FROM occurrenceCoverageEntity WHERE kind = ? AND definition_id = ?;

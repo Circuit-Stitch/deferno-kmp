@@ -16,9 +16,13 @@ import kotlin.time.Instant
  * `core:network`; the domain [CalendarItem] is clean.
  *
  * Two projections happen here:
- * - **Status condenses** through the existing [TaskStatusWire.toWorkingState] — the feed reports
- *   progress on the Task axis even for recurring firings, and condensing to [com.circuitstitch.deferno.core.model.WorkingState]
- *   (which has no `missed`/`late`) is what keeps the calendar structurally non-shaming (design-principle #4).
+ * - **Status condenses** through the existing [TaskStatusWire.toWorkingState]. This is the *item's*
+ *   working state: the feed stamps a recurring definition's `TaskStatus` onto every date it fires on,
+ *   so the condensed value is load-bearing only for a one-off dated Task. A firing's own state is the
+ *   derived [com.circuitstitch.deferno.core.model.OccurrenceState] reading, joined from the occurrence
+ *   endpoints' facts at render time and never mapped here (ADR-0053 decision 4). Condensing away
+ *   `missed`/`late` was once recorded as a non-shaming win; it was a loss of information, and
+ *   gentleness is vocabulary rather than suppression (ADR-0053 decision 7).
  * - **The local day** is [CalendarEventDto.start] projected into [tz] — the day the row buckets onto in
  *   the month grid + agenda (the wire ships UTC instants; the grid is a local-day view).
  *

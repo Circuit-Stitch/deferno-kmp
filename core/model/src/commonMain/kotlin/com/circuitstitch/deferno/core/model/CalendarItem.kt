@@ -12,11 +12,24 @@ import kotlin.time.Instant
  * coarse [OccurrenceAction] to the kind-scoped occurrence endpoints, which key on **[taskId] + [date]**
  * — [seriesId] identifies *which* series the firing belongs to, but is never a path key (#380).
  *
- * **Why [status] is a [WorkingState], not an [OccurrenceState].** The feed reports every row's progress
- * as the wire `TaskStatus`, condensed here to [WorkingState] — even for recurring firings. This is a
- * deliberate gentleness win (design-principle #4): `WorkingState` has **no `Missed`/`late` concept**, so
- * the calendar surface literally cannot shame a past, unfinished firing — it just reads as `Open`
- * (rendered "Scheduled"). The richer [OccurrenceState] punctuality split stays server-side and unread.
+ * **[status] is the item's working state, and it is meaningless on a firing.** The feed reports every
+ * row's progress as the wire `TaskStatus` — even for recurring firings, where the value it reports is
+ * the *definition's* status stamped onto each of its dates. A live Habit therefore reads `Open` on
+ * every one of its firings forever, however many were checked in, and archiving the definition flips
+ * its entire history to `Done`. It is a fact about the item, not about the day.
+ *
+ * A firing's own state is the derived [OccurrenceState] reading, produced by `resolveOccurrenceState`
+ * from the stored [OccurrenceFact]s, this device's [OccurrenceCoverage], the definition's
+ * [DefinitionState] and `today`, and carried beside the row as [CalendarFiring.occurrence] (ADR-0053
+ * decision 4). This class deliberately does not hold it: the reading is a function of `today`, and a
+ * value cached on a row would still be claiming "Scheduled" a week after the day passed.
+ *
+ * This **reverses** the rationale this file used to record — that condensing to a type with no
+ * `Missed`/`late` concept was a gentleness win, because the surface then could not shame a past,
+ * unfinished firing. It bought that by discarding the distinction, which is not how this product is
+ * kind: gentleness is vocabulary, not suppression (ADR-0053 decision 7). `Missed` is modelled
+ * faithfully — an on-time rate and a completion heatmap cannot be computed without it — and the
+ * rendered words stay factual, in the register the string catalog already fixes.
  *
  * **Why [kind] is nullable.** It arrives on the feed row (required since #311) and condenses through the
  * DTO mapper, but tolerantly: an additive kind token we do not recognise degrades to `null` rather than
@@ -47,7 +60,12 @@ data class CalendarItem(
     val end: Instant,
     /** Whether the row renders as an all-day chip rather than a timed block. */
     val allDay: Boolean,
-    /** Progress, condensed from the feed's `TaskStatus` — never an [OccurrenceState] (see class note). */
+    /**
+     * The **item's** progress, condensed from the feed's `TaskStatus`. Genuinely meaningful for a
+     * one-off dated Task ([isDatedTask]); on a recurring firing it is the definition's status stamped
+     * onto the date and says nothing about that day — read [CalendarFiring.occurrence] instead
+     * (see the class note).
+     */
     val status: WorkingState,
     /** The row's kind as the feed reported it; `null` when the token was one this build does not model. */
     val kind: ItemKind?,

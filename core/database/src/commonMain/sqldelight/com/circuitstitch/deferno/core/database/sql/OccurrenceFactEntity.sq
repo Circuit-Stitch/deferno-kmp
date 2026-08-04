@@ -1,0 +1,77 @@
+-- The local source-of-truth table of **stored occurrence resolutions** (ADR-0001, ADR-0053 decision 4,
+-- #390): what the server holds ON RECORD for one dated firing of a recurring definition, and nothing
+-- that is a function of today. It replaces `occurrenceEntity`, which stored the whole *reading* in an
+-- `occurrence_state` column — including the Scheduled-vs-Missed split, which is `date < today` and so
+-- goes stale the moment the cached day passes. A row fetched on 1 August still claimed "Scheduled" on
+-- 5 August; that is the defect ADR-0053 was written to close. Occurrence state is derived at render
+-- time (`resolveOccurrenceState`) and is never a column here.
+--
+-- Keyed `(kind, definition_id, occurrence_date)` — the identity the WRITE path has always used, through
+-- `OccurrenceTargets.of` (`occurrence:<Kind>:<id>:<date>`). `definition_id` is the recurring **item** id
+-- (the chain Head the firing projects from), never the series id. The old table keyed on the server's
+-- occurrence UUID, an id a habit occurrence does not carry on the wire at all, so its rows could never
+-- be joined against anything this client writes.
+--
+-- `(kind, definition_id, occurrence_date)` as PRIMARY KEY supplies the unique index the per-definition
+-- `ORDER BY occurrence_date` window read walks, so no separate index is declared for it — the
+-- `dailyPlanEntry` precedent. The one explicit index is on `occurrence_date` alone, for the
+-- cross-definition day read (every kind, every definition, one calendar day) that the day agenda
+-- issues: the primary key's leading `kind` column cannot serve a query that does not constrain it.
+--
+-- `resolution` is an **OccurrenceResolution** enum NAME — the STORED partition of the wire vocabulary
+-- (Scheduled/InProgress/DoneOnTime/DoneLate/Skipped), never an OccurrenceState, which is the wider
+-- reading and includes the two values nothing stores. Five members because the stored vocabulary
+-- genuinely differs per kind: a chore stores four, an event stores five including a real `scheduled`
+-- (its list endpoint returns only stored rows), and a habit stores no status at all — done-ness is
+-- `done_at != null` and nothing else.
+--
+-- `complete_by` is the deadline this firing carried **at the time it was resolved**, kept because the
+-- punctuality split (on-time vs late) is a function of it and the definition's live `complete_by` is a
+-- Recurrence cursor that has since walked on. `done_at` is the resolution timestamp.
+--
+-- Adapter-free primitives (`occurrence_date` an ISO `yyyy-mm-dd` day, the two timestamps RFC3339);
+-- conversion in OccurrenceFactEntityMapping.kt.
+CREATE TABLE occurrenceFactEntity (
+    kind            TEXT NOT NULL,
+    definition_id   TEXT NOT NULL,
+    occurrence_date TEXT NOT NULL,
+    resolution      TEXT NOT NULL,
+    done_at         TEXT,
+    complete_by     TEXT,
+    PRIMARY KEY (kind, definition_id, occurrence_date)
+);
+
+CREATE INDEX occurrenceFactEntity_occurrence_date ON occurrenceFactEntity(occurrence_date);
+
+-- The day-agenda read: every recorded firing on one calendar day, across ALL definitions and kinds.
+-- This is why the standalone `occurrence_date` index exists.
+selectOn:
+SELECT * FROM occurrenceFactEntity WHERE occurrence_date = ? ORDER BY kind, definition_id;
+
+-- One definition's window, both bounds INCLUSIVE — matching the `?from=&to=` the kind-scoped occurrence
+-- endpoint is asked for (and what an Occurrence coverage row records), so a fetched window and its
+-- cached facts describe exactly the same span.
+selectInRange:
+SELECT * FROM occurrenceFactEntity
+WHERE kind = ? AND definition_id = ? AND occurrence_date >= ? AND occurrence_date <= ?
+ORDER BY occurrence_date;
+
+selectOne:
+SELECT * FROM occurrenceFactEntity WHERE kind = ? AND definition_id = ? AND occurrence_date = ?;
+
+-- Binds the whole row as one parameter, so the generated signature is `insertOrReplace(OccurrenceFactEntity)`
+-- and adding a column never touches the Kotlin call site (see the sibling recurring tables).
+insertOrReplace:
+INSERT OR REPLACE INTO occurrenceFactEntity VALUES ?;
+
+-- The local half of a Clear: the firing returns to unresolved, which is the ABSENCE of a fact rather
+-- than a fact reading "Scheduled".
+deleteOne:
+DELETE FROM occurrenceFactEntity WHERE kind = ? AND definition_id = ? AND occurrence_date = ?;
+
+-- A window full-replace clears the span before re-seeding it, so a resolution the server no longer
+-- reports inside `[from, to]` does not linger — which is what makes a server-side Clear converge here
+-- (the `calendarItemEntity.deleteInRange` idiom, with inclusive bounds).
+deleteInRange:
+DELETE FROM occurrenceFactEntity
+WHERE kind = ? AND definition_id = ? AND occurrence_date >= ? AND occurrence_date <= ?;

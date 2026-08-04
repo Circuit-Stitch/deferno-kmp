@@ -11,12 +11,14 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.comment.CommentRepository
 import com.circuitstitch.deferno.core.data.comment.CommentWriter
+import com.circuitstitch.deferno.core.data.definition.DefinitionStateSource
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
-import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.security.SecurityRepository
@@ -115,11 +117,20 @@ abstract class AccountComponent(
     abstract val eventLocalStore: EventLocalStore
 
     /**
-     * The Occurrence (firing-level) read seam (#71 AC #4, #171): observe-only over the local cache,
-     * like the recurring-definition stores. Exposing it anchors anvil's compile-time validation of
-     * the Occurrence chain (store → DB).
+     * The three inputs of the render-time [Occurrence state] reading (ADR-0053 decision 4, #390):
+     * what the server has on record for a dated firing, which ranges have actually been synced, and
+     * each definition's Active/Archived light switch. They are exposed as three separate accessors
+     * because they answer three separate questions — a missing fact means "unresolved" only *inside*
+     * coverage, and outside it means "this device has never looked", which the reading reports as
+     * Unknown rather than deriving a Missed out of ignorance.
+     *
+     * These replace the former `occurrenceLocalStore`, whose single `occurrence_state` column stored
+     * the whole reading. Exposing them anchors anvil's compile-time validation of the chain (each
+     * store → DB) and gives the shell the accessors the Calendar's day agenda resolves its rows from.
      */
-    abstract val occurrenceLocalStore: OccurrenceLocalStore
+    abstract val occurrenceFactLocalStore: OccurrenceFactLocalStore
+    abstract val occurrenceCoverageLocalStore: OccurrenceCoverageLocalStore
+    abstract val definitionStateSource: DefinitionStateSource
 
     /**
      * The Calendar feed read repository (#74): the windowed month grid + day agenda source, observed

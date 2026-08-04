@@ -26,8 +26,10 @@ import com.circuitstitch.deferno.core.data.create.LedgerRecordingItemConverter
 import com.circuitstitch.deferno.core.data.create.OfflineCreateWriter
 import com.circuitstitch.deferno.core.data.create.PendingCreateStore
 import com.circuitstitch.deferno.core.data.create.SqlDelightPendingCreateStore
+import com.circuitstitch.deferno.core.data.definition.DefinitionStateSource
 import com.circuitstitch.deferno.core.data.definition.DefinitionWriter
 import com.circuitstitch.deferno.core.data.definition.OutboxDefinitionWriter
+import com.circuitstitch.deferno.core.data.definition.SqlDelightDefinitionStateSource
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
@@ -38,8 +40,10 @@ import com.circuitstitch.deferno.core.data.item.OfflineItemRepository
 import com.circuitstitch.deferno.core.data.item.OutboxItemWriter
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
-import com.circuitstitch.deferno.core.data.occurrence.OccurrenceLocalStore
-import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceCoverageLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.data.activity.ActivityLedgerStore
 import com.circuitstitch.deferno.core.data.activity.ActivityRemoteSource
 import com.circuitstitch.deferno.core.data.activity.ActivitySync
@@ -284,11 +288,33 @@ interface AccountDataBindings {
     ): BackupImporter =
         BackupImporter(taskStore, habitStore, choreStore, eventStore, outbox, pendingCreateStore, localAttachments)
 
-    // The Occurrence (firing-level) local store (#71, AC #4): the per-Account SQLDelight cache an
-    // occurrence read from the kind-scoped endpoint seeds into, so it joins the observe Flow (ADR-0001).
+    // The occurrence FACT cache (#390, ADR-0053 decision 4): the per-Account SQLDelight table an
+    // occurrence read from the kind-scoped endpoint seeds into, holding only what the server has on
+    // record for a dated firing. It replaces the old `occurrenceLocalStore`, whose one column stored
+    // the whole reading — including the Scheduled-vs-Missed split, which is a function of today and so
+    // went stale in the cache.
     @Provides
     @SingleIn(AccountScope::class)
-    fun occurrenceLocalStore(db: DefernoDatabase): OccurrenceLocalStore = SqlDelightOccurrenceLocalStore(db)
+    fun occurrenceFactLocalStore(db: DefernoDatabase): OccurrenceFactLocalStore =
+        SqlDelightOccurrenceFactLocalStore(db)
+
+    // Its inseparable companion: which date ranges have actually been synced. Bound beside the facts
+    // rather than folded into them because with facts alone "no row for 3 March" cannot be told apart
+    // from "this device has never looked", and the reading would report every unsynced past day as
+    // Missed (CONTEXT.md -> "Occurrence coverage").
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun occurrenceCoverageLocalStore(db: DefernoDatabase): OccurrenceCoverageLocalStore =
+        SqlDelightOccurrenceCoverageLocalStore(db)
+
+    // The third reading input: a definition's Active/Archived light switch, read kind-neutrally so no
+    // consumer fans a `when (kind)` over the three per-kind stores (#385's dispatch, removed). It gates
+    // the derived Missed — archiving does not clear a recurring cursor server-side, so a definition
+    // switched off in January would otherwise read as overdue every day since.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun definitionStateSource(db: DefernoDatabase): DefinitionStateSource =
+        SqlDelightDefinitionStateSource(db)
 
     // The offline-first `GET /items` cold sync (ADR-0049, #226): one snapshot pull reconciled into all
     // four per-kind stores, honoring the server-windowed done-visibility window. The snapshot source is
@@ -356,12 +382,17 @@ interface AccountDataBindings {
         remoteSource: CalendarRemoteSource,
     ): CalendarRepository = OfflineCalendarRepository(localStore, remoteSource)
 
-    // The Occurrence (firing) write seam (#74): optimistic CalendarItem apply + outbox enqueue. Offline-
-    // first like the Task writer (these target an existing firing — not online-only like create).
+    // The Occurrence (firing) write seam (#74): optimistic fact apply + outbox enqueue. Offline-first
+    // like the Task writer (these target an existing firing — not online-only like create). The
+    // calendar cache resolves which firing an act names and holds the agenda row a reschedule moves;
+    // the optimism itself lands on the fact table, keyed by the firing identity (#390, ADR-0053).
     @Provides
     @SingleIn(AccountScope::class)
-    fun occurrenceWriter(calendarStore: CalendarLocalStore, outbox: OutboxStore): OccurrenceWriter =
-        OutboxOccurrenceWriter(calendarStore, outbox)
+    fun occurrenceWriter(
+        calendarStore: CalendarLocalStore,
+        factStore: OccurrenceFactLocalStore,
+        outbox: OutboxStore,
+    ): OccurrenceWriter = OutboxOccurrenceWriter(calendarStore, factStore, outbox)
 
     /**
      * The offline-first create + (online-only) convert writer (#185, ADR-0001 forward path from

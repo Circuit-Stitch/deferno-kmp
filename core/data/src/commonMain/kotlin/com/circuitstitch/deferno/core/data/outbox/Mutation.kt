@@ -8,6 +8,8 @@ import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
+import com.circuitstitch.deferno.core.model.OccurrenceFact
+import com.circuitstitch.deferno.core.model.OccurrenceResolution
 import com.circuitstitch.deferno.core.model.PlanItemRef
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
@@ -16,9 +18,9 @@ import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.completionResolution
 import com.circuitstitch.deferno.core.network.mapper.OccurrenceKind
 import com.circuitstitch.deferno.core.network.mapper.toWireToken
-import com.circuitstitch.deferno.core.network.mapper.toWorkingState
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.serialization.json.JsonNull
@@ -516,10 +518,13 @@ internal fun patchRecurring(kind: ItemKind, id: String, build: JsonObjectBuilder
  * `series_id` in that slot loads nothing and 404s — which the sender maps to *success*, so the write
  * evaporates in silence. Hence [definitionId], not `seriesId`.
  *
- * [applyTo] is the pure optimistic transform of the cached [CalendarItem] (the calendar surface acts on
- * feed rows, whose progress is a [WorkingState] — the no-`missed` axis, design-principle #4). [itemId]
- * is the local row id the writer updates; the firing identity ([kind]/[definitionId]/[date]) drives the
- * endpoint + body, and is also what [OccurrenceTargets] encodes into [target].
+ * **The optimism lands on the fact table, not on the agenda row (#390, ADR-0053).** These intents used
+ * to write the cached [CalendarItem]'s [WorkingState], which cannot express how a *firing* went: that
+ * axis has no `missed` and no punctuality, so a completion recorded offline was indistinguishable from
+ * a Task being closed. The optimistic write is now an [OccurrenceFact] keyed by the firing identity
+ * ([kind]/[definitionId]/[date]) — the same key [OccurrenceTargets] encodes into [target], so what the
+ * outbox replays and what the cache believes are addressed identically. [itemId] survives as the
+ * agenda row the act came from (see below), not as the optimism's key.
  *
  * | Intent | Method + endpoint | Minimal body |
  * |---|---|---|
@@ -530,7 +535,13 @@ internal fun patchRecurring(kind: ItemKind, id: String, build: JsonObjectBuilder
  * | [RescheduleOccurrence] | `POST {kind}/{id}/occurrences/{date}/reschedule` | `{"new_date":"<yyyy-mm-dd>"}` |
  */
 sealed interface OccurrenceMutation : Mutation {
-    /** The local [CalendarItem] row id the optimistic [applyTo] updates. */
+    /**
+     * The local [CalendarItem] row the act was performed on — the agenda row the View handed the
+     * writer. It is deliberately **not** the optimism's key (the firing identity below is): a firing's
+     * resolution belongs to `(kind, definitionId, date)` and outlives any one feed row. Only
+     * [RescheduleOccurrence] still writes this row, because moving a firing to another day moves the
+     * agenda entry, which is a fact about the *feed*, not about how the firing went.
+     */
     val itemId: String
 
     /** Which recurring kind — selects the kind-scoped endpoint + body shape. */
@@ -546,16 +557,47 @@ sealed interface OccurrenceMutation : Mutation {
     val date: LocalDate
 
     override val target: String get() = OccurrenceTargets.of(kind, definitionId, date)
+}
 
-    /** The optimistic local effect on the cached firing row — **pure** and idempotent. */
-    fun applyTo(item: CalendarItem): CalendarItem
+/**
+ * The [OccurrenceMutation]s whose entire optimistic effect lands on the **one** firing they target —
+ * a pure, idempotent `fact -> fact?` transform over what the client believes the server has on record.
+ *
+ * Both nulls are meaningful and they are not the same null. A null **argument** is "nothing on record
+ * for that date yet", which is the ordinary case (the client writes long before it has ever synced the
+ * window). A null **result** is "the server holds no record", which on a fact table is the *absence* of
+ * a row — the writer deletes it. That is why a [ClearOccurrence] must never write a
+ * [OccurrenceResolution.Scheduled] fact: `Scheduled` there means "a row exists and records no
+ * progress", which is a different, stronger claim than "cleared" (ADR-0053 decision 4).
+ *
+ * `now` is passed in rather than read from a clock so the transform stays pure and re-applying it with
+ * the same instant is a no-op — the replay contract every intent in this file honours.
+ *
+ * [RescheduleOccurrence] deliberately does **not** join this seam. It writes two keys (the origin day
+ * and the destination day) plus the agenda row, so a single-key `fact -> fact?` would be a half-truth;
+ * it carries its own named transforms instead, and the writer drives them.
+ */
+sealed interface FiringResolutionMutation : OccurrenceMutation {
+    /** What this device believes the server holds for the firing after the write — `null` for "no record". */
+    fun applyTo(fact: OccurrenceFact?, now: Instant): OccurrenceFact?
 }
 
 /**
  * Mark a firing (#74). A **habit** is binary — `done = (action == Complete)` with the firing's `date`
  * in the body (the UI offers a habit only Complete). A **chore** or **event** carries the kind-appropriate
- * wire token via [toWireToken]. Optimistically sets the cached row's [WorkingState] (Start -> In-progress,
- * Complete → Done, Skip → Dropped); replay-safe — re-applying yields the same state.
+ * wire token via [toWireToken].
+ *
+ * The optimistic fact mirrors what the server will store, arm for arm — verified against the chore
+ * setter, which is the only kind whose wire vocabulary spells out all three outcomes
+ * (`backend/src/handlers/occurrences.rs:1371-1378`): `in_progress` records no `done_at`, `skipped`
+ * records no `done_at`, and `done` records `done_at = now` with the punctuality decided by
+ * [completionResolution] against the deadline. So a completion marked offline can already read
+ * **Done late**, which the old [WorkingState] apply had no way to say.
+ *
+ * The deadline it decides against is the one the last synced [OccurrenceFact] carried, because that is
+ * the only one this device has; a firing never synced has none, and with nothing to be late against the
+ * honest optimistic reading is on time. The server recomputes `complete_by` from the owning Segment's
+ * deadline template (`occurrences.rs:1614-1626`), so the next reconcile is what settles it.
  *
  * All three shapes declare [CollapseRole.Absolute] (#396): a mark fully determines the firing's state, so
  * a later write on the same firing makes this one redundant and the flush-time coalescer may drop it.
@@ -566,8 +608,19 @@ data class MarkOccurrence(
     override val definitionId: String,
     override val date: LocalDate,
     val action: OccurrenceAction,
-) : OccurrenceMutation {
-    override fun applyTo(item: CalendarItem): CalendarItem = item.copy(status = action.toWorkingState())
+) : FiringResolutionMutation {
+    override fun applyTo(fact: OccurrenceFact?, now: Instant): OccurrenceFact = OccurrenceFact(
+        kind = kind,
+        definitionId = definitionId,
+        date = date,
+        resolution = when (action) {
+            OccurrenceAction.Start -> OccurrenceResolution.InProgress
+            OccurrenceAction.Skip -> OccurrenceResolution.Skipped
+            OccurrenceAction.Complete -> completionResolution(now, fact?.completeBy)
+        },
+        doneAt = now.takeIf { action == OccurrenceAction.Complete },
+        completeBy = fact?.completeBy,
+    )
 
     override fun toRequest(): OutboxRequest = when (kind) {
         ItemKind.Habit -> OutboxRequest(
@@ -600,8 +653,13 @@ data class MarkOccurrence(
 
 /**
  * Clear a firing's status (#74) — the forgiving "let it go back to Scheduled" undo (design-principle #8),
- * uniform across kinds via `POST …/occurrences/{date}/clear`. Optimistically resets the cached row to
- * [WorkingState.Open].
+ * uniform across kinds via `POST …/occurrences/{date}/clear`.
+ *
+ * Optimistically it **removes** the fact: a clear is `set_…_occurrence(id, date, None)`, and what the
+ * server is left holding for that date is nothing at all. Writing an [OccurrenceResolution.Scheduled]
+ * fact instead would be a stronger claim than the truth ("a row exists recording no progress") and
+ * would freeze the firing at Scheduled forever — a past day inside synced coverage is supposed to read
+ * Missed once it is past, and a stored `Scheduled` never ages (ADR-0053 decision 4).
  *
  * The verb is a **POST soft-delete, not a `DELETE`** (#364): the backend retired the bodiless
  * `DELETE …/occurrences/{date}` so Activity-ledger metadata could ride in a body without depending on
@@ -618,8 +676,8 @@ data class ClearOccurrence(
     override val kind: ItemKind,
     override val definitionId: String,
     override val date: LocalDate,
-) : OccurrenceMutation {
-    override fun applyTo(item: CalendarItem): CalendarItem = item.copy(status = WorkingState.Open)
+) : FiringResolutionMutation {
+    override fun applyTo(fact: OccurrenceFact?, now: Instant): OccurrenceFact? = null
 
     override fun toRequest(): OutboxRequest = OutboxRequest(
         OutboxMethod.Post,
@@ -636,12 +694,26 @@ data class ClearOccurrence(
 }
 
 /**
- * Reschedule a firing to [newDate] (#74). Optimistically moves the cached row to the new day (its
- * start/end times are corrected on the next window reconcile). Offered for **all three** recurring
- * kinds (#380): the backend ships `POST /{habits|chores|events}/{id}/occurrences/{date}/reschedule`
- * over one shared `reschedule_recurring_occurrence`, so the long-standing "Events only in v1" gate was
- * stale doc, not a contract. A habit/chore reschedule marks the origin date dropped with a
- * `rescheduled_to` pointer — a server-sanctioned move, not a failure that would snap the row back.
+ * Reschedule a firing to [newDate] (#74). Offered for **all three** recurring kinds (#380): the backend
+ * ships `POST /{habits|chores|events}/{id}/occurrences/{date}/reschedule` over one shared
+ * `reschedule_recurring_occurrence`, so the long-standing "Events only in v1" gate was stale doc, not a
+ * contract.
+ *
+ * **Three optimistic effects, which is why this intent does not join [FiringResolutionMutation].** The
+ * server's move touches two firings, and the client's also moves the agenda row:
+ * - the origin day becomes [OccurrenceResolution.Skipped] with no `done_at` — the backend writes
+ *   `status = Dropped, done_at = None, rescheduled_to = new_date` (`occurrences.rs:1650-1661`). This
+ *   is a *server-sanctioned* move, not a failure, and recording it is what stops the vacated day from
+ *   later deriving as Missed out of the absence the move left behind;
+ * - the destination day becomes [OccurrenceResolution.Scheduled] with no `done_at` —
+ *   `status = Scheduled, done_at = None, rescheduled_from = origin` (`occurrences.rs:1663-1674`).
+ *   `Scheduled` is genuinely stored here: the server really does hold a row that records no progress;
+ * - the cached [CalendarItem] moves to the new day (its start/end times are corrected on the next
+ *   window reconcile). That one is a fact about the *feed*, not about how a firing went, which is why
+ *   it is still a [CalendarItem] transform and not a fact.
+ *
+ * Neither fact transform invents a deadline: each keeps whatever `complete_by` that date already had
+ * on record (the server recomputes both from the owning Segment, `occurrences.rs:1656`/`:1669`).
  *
  * Declares [CollapseRole.Barrier] (#396) **explicitly**, though that is also the default: the barrier is a
  * deliberate statement about this route and belongs beside it, not something a reader has to infer from an
@@ -656,7 +728,28 @@ data class RescheduleOccurrence(
     override val date: LocalDate,
     val newDate: LocalDate,
 ) : OccurrenceMutation {
-    override fun applyTo(item: CalendarItem): CalendarItem = item.copy(date = newDate)
+    /** The agenda row moves to [newDate]; nothing about how the firing went is said here. */
+    fun applyTo(item: CalendarItem): CalendarItem = item.copy(date = newDate)
+
+    /** The vacated day, recorded as the deliberate skip the server writes there. */
+    fun originFact(fact: OccurrenceFact?): OccurrenceFact = OccurrenceFact(
+        kind = kind,
+        definitionId = definitionId,
+        date = date,
+        resolution = OccurrenceResolution.Skipped,
+        doneAt = null,
+        completeBy = fact?.completeBy,
+    )
+
+    /** The destination day, holding a row that records no progress — a stored `Scheduled`. */
+    fun destinationFact(fact: OccurrenceFact?): OccurrenceFact = OccurrenceFact(
+        kind = kind,
+        definitionId = definitionId,
+        date = newDate,
+        resolution = OccurrenceResolution.Scheduled,
+        doneAt = null,
+        completeBy = fact?.completeBy,
+    )
 
     override fun toRequest(): OutboxRequest = OutboxRequest(
         OutboxMethod.Post,

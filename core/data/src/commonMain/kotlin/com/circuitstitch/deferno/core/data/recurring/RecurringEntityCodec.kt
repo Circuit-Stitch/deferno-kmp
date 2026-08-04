@@ -4,7 +4,6 @@ import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.MonthlyAnchor
-import com.circuitstitch.deferno.core.model.OccurrenceState
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.RecurrenceBound
@@ -13,7 +12,7 @@ import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
- * Shared row<->domain codec helpers for the recurring caches (Habit/Chore/Event/Occurrence, #71).
+ * Shared row<->domain codec helpers for the recurring definition caches (Habit/Chore/Event, #71).
  * Factored out of the three near-identical entity mappings so the encoding rules (the `\n`-joined
  * lists, the boolean<->INTEGER, the **defensive** enum decode that degrades an unrecognised stored
  * token rather than throwing) live in one place — the same rules `TaskEntityMapping.kt` uses, kept
@@ -37,9 +36,10 @@ fun String?.toLocalTimeOrNull(): LocalTime? =
 fun String.toDefinitionStateOrDefault(): DefinitionState =
     DefinitionState.entries.firstOrNull { it.name == this } ?: DefinitionState.Active
 
-/** Defensive decode: an unrecognised stored token degrades to [OccurrenceState.Scheduled]. */
-fun String.toOccurrenceStateOrDefault(): OccurrenceState =
-    OccurrenceState.entries.firstOrNull { it.name == this } ?: OccurrenceState.Scheduled
+// There is deliberately no `toOccurrenceStateOrDefault` here any more (#390, ADR-0053 decision 4).
+// An OccurrenceState is a render-time *reading*, so it is never a column and there is nothing to
+// decode: the stored half of a firing is an OccurrenceResolution, decoded by the occurrence fact
+// mapping alongside the table that holds it.
 
 /**
  * The flat column projection of a domain [Recurrence] (#382) — the shared shape the three recurring

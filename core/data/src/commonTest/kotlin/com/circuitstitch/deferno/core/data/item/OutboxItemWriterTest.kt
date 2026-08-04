@@ -6,7 +6,11 @@ import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
 import com.circuitstitch.deferno.core.data.outbox.FakeOutboxStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
 import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
+import com.circuitstitch.deferno.core.model.Chore
+import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
+import com.circuitstitch.deferno.core.model.Event
+import com.circuitstitch.deferno.core.model.EventId
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.Item
@@ -130,6 +134,84 @@ class OutboxItemWriterTest {
         writer(tasks, FakeHabitLocalStore(), outbox).move(id = "ghost", newParentId = "a", position = 0)
 
         assertEquals(task("a", 0), tasks.all.getValue(TaskId("a"))) // unchanged
+        assertEquals(1, outbox.all.size) // the write is not lost — it reconciles on replay
+    }
+
+    // --- delete (#389): kind-neutral, chain-wide, optimistically a tombstone ---
+
+    private fun chore(id: String) = Chore(
+        id = ChoreId(id), orgSlug = "u-test", title = "c-$id",
+        definitionState = DefinitionState.Active, dateCreated = now,
+    )
+
+    private fun event(id: String) = Event(
+        id = EventId(id), orgSlug = "u-test", title = "e-$id",
+        definitionState = DefinitionState.Active, dateCreated = now,
+    )
+
+    private fun fullWriter(
+        tasks: FakeTaskLocalStore = FakeTaskLocalStore(),
+        habits: FakeHabitLocalStore = FakeHabitLocalStore(),
+        chores: FakeChoreLocalStore = FakeChoreLocalStore(),
+        events: FakeEventLocalStore = FakeEventLocalStore(),
+        outbox: FakeOutboxStore = FakeOutboxStore(),
+    ) = OutboxItemWriter(tasks, habits, chores, events, outbox, now = { now })
+
+    @Test
+    fun deleteTombstonesTheRowInWhicheverStoreHoldsItAndEnqueuesTheItemDelete() = runTest {
+        val habits = FakeHabitLocalStore(mapOf(HabitId("h1") to habit("h1", 0)))
+        val tasks = FakeTaskLocalStore(mapOf(TaskId("t1") to task("t1", 1)))
+        val outbox = FakeOutboxStore()
+
+        fullWriter(tasks = tasks, habits = habits, outbox = outbox).delete("h1")
+
+        // A tombstone, not a row removal: the row survives to reconcile against, and every
+        // observeActive filters it out, so the tree drops it immediately.
+        val tombstoned = habits.all.getValue(HabitId("h1"))
+        assertEquals(now, tombstoned.deletedAt)
+        assertTrue(tombstoned.isDeleted)
+        assertNull(tasks.all.getValue(TaskId("t1")).deletedAt, "a sibling of another kind must not be touched")
+
+        val entry = outbox.all.single()
+        assertEquals("item:h1", entry.target)
+        assertEquals(OutboxMethod.Delete, entry.request.method)
+        // `items`, not `habits`: the per-kind route archives ONE Segment and leaves the chain alive,
+        // so the survivor would pop back as an item the user just deleted.
+        assertEquals(listOf("items", "h1"), entry.request.path)
+        assertNull(entry.request.body)
+        assertEquals(now, entry.nextAttemptAt)
+    }
+
+    @Test
+    fun deleteReachesEveryKindIncludingTheTaskItTakesNoKindOperandFor() = runTest {
+        for ((id, stores) in listOf<Pair<String, () -> Triple<FakeTaskLocalStore, FakeChoreLocalStore, FakeEventLocalStore>>>(
+            "t1" to { Triple(FakeTaskLocalStore(mapOf(TaskId("t1") to task("t1", 0))), FakeChoreLocalStore(), FakeEventLocalStore()) },
+            "c1" to { Triple(FakeTaskLocalStore(), FakeChoreLocalStore(mapOf(ChoreId("c1") to chore("c1"))), FakeEventLocalStore()) },
+            "e1" to { Triple(FakeTaskLocalStore(), FakeChoreLocalStore(), FakeEventLocalStore(mapOf(EventId("e1") to event("e1")))) },
+        )) {
+            val (tasks, chores, events) = stores()
+            val outbox = FakeOutboxStore()
+
+            fullWriter(tasks = tasks, chores = chores, events = events, outbox = outbox).delete(id)
+
+            val deletedAt = tasks.all[TaskId(id)]?.deletedAt
+                ?: chores.all[ChoreId(id)]?.deletedAt
+                ?: events.all[EventId(id)]?.deletedAt
+            assertEquals(now, deletedAt, "$id must be tombstoned in its own store")
+            // One route for all four kinds — the server resolves the kind itself.
+            assertEquals(listOf("items", id), outbox.all.single().request.path)
+        }
+    }
+
+    @Test
+    fun deleteOfAnUncachedIdStillEnqueuesButMaterialisesNoRow() = runTest {
+        val tasks = FakeTaskLocalStore(mapOf(TaskId("a") to task("a", 0)))
+        val outbox = FakeOutboxStore()
+
+        fullWriter(tasks = tasks, outbox = outbox).delete("ghost")
+
+        assertEquals(task("a", 0), tasks.all.getValue(TaskId("a"))) // unchanged
+        assertEquals(1, tasks.all.size, "no phantom row materialised")
         assertEquals(1, outbox.all.size) // the write is not lost — it reconciles on replay
     }
 }

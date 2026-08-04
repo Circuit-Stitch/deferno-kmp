@@ -2,10 +2,13 @@ package com.circuitstitch.deferno.core.data.outbox
 
 import com.circuitstitch.deferno.core.data.calendar.CalendarLocalStore
 import com.circuitstitch.deferno.core.data.calendar.OutboxOccurrenceWriter
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.CalendarSource
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
+import com.circuitstitch.deferno.core.model.OccurrenceFact
+import com.circuitstitch.deferno.core.model.OccurrenceResolution
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -13,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -48,12 +52,14 @@ class OccurrenceOfflineToOnlineTest {
 
     private fun scene(): Scene {
         val calendar = FakeCalendarStore().apply { seed(firing()) }
+        val facts = FakeFactStore()
         val outbox = FakeOutboxStore()
-        return Scene(calendar, outbox, OutboxOccurrenceWriter(calendar, outbox) { t0 })
+        return Scene(calendar, facts, outbox, OutboxOccurrenceWriter(calendar, facts, outbox) { t0 })
     }
 
     private class Scene(
         val calendar: FakeCalendarStore,
+        val facts: FakeFactStore,
         val outbox: FakeOutboxStore,
         val writer: OutboxOccurrenceWriter,
     ) {
@@ -76,17 +82,27 @@ class OccurrenceOfflineToOnlineTest {
         val processor = OutboxProcessor(outbox, sender, reconcile = {})
     }
 
+    /**
+     * What this device believes the server holds for the firing on [on] — `null` for "no record".
+     * Since #390 that is where the optimism lives: the agenda row's `status` is a [WorkingState], an
+     * axis with no punctuality and no `missed`, and a firing needs both (ADR-0053 decision 4).
+     */
+    private suspend fun Scene.recordedState(on: LocalDate = day): OccurrenceResolution? =
+        facts.get(ItemKind.Chore, "cho-1-item", on)?.resolution
+
     @Test
     fun anOfflineMarkClearMarkOnOneFiringReachesTheServerAsExactlyOneWrite() = runTest {
         val scene = scene()
 
         // --- OFFLINE: the user marks the chore done, undoes it, then marks it done again. ---
         scene.writer.mark("ce-1", OccurrenceAction.Complete)
-        assertEquals(WorkingState.Done, scene.calendar.get("ce-1")?.status)
+        assertEquals(OccurrenceResolution.DoneOnTime, scene.recordedState())
+        // The undo removes the record entirely — a cleared firing is one the server holds nothing for,
+        // which is what lets it go on deriving as Scheduled today and Missed once today has passed.
         scene.writer.clear("ce-1")
-        assertEquals(WorkingState.Open, scene.calendar.get("ce-1")?.status)
+        assertNull(scene.recordedState())
         scene.writer.mark("ce-1", OccurrenceAction.Complete)
-        assertEquals(WorkingState.Done, scene.calendar.get("ce-1")?.status)
+        assertEquals(OccurrenceResolution.DoneOnTime, scene.recordedState())
 
         // Three intents queued: `enqueue` appends, always — the merge is the flush's job, deliberately
         // (an enqueue-time merge would race the processor's in-flight send).
@@ -105,7 +121,7 @@ class OccurrenceOfflineToOnlineTest {
         assertEquals(0L, scene.outbox.count())
 
         // The optimism the user has been looking at all along is untouched by any of it.
-        assertEquals(WorkingState.Done, scene.calendar.get("ce-1")?.status)
+        assertEquals(OccurrenceResolution.DoneOnTime, scene.recordedState())
     }
 
     @Test
@@ -123,7 +139,7 @@ class OccurrenceOfflineToOnlineTest {
         assertEquals(0, offline.succeeded)
         assertEquals(1, offline.retried)
         assertEquals(1L, scene.outbox.count()) // only the survivor is left to retry
-        assertEquals(WorkingState.Done, scene.calendar.get("ce-1")?.status) // optimism stands
+        assertEquals(OccurrenceResolution.DoneOnTime, scene.recordedState()) // optimism stands
 
         scene.online = true
         val online = scene.processor.flush(t0 + 2.seconds) // past backoff(1) == 1s
@@ -145,7 +161,11 @@ class OccurrenceOfflineToOnlineTest {
         scene.writer.mark("ce-1", OccurrenceAction.Complete)
         scene.writer.reschedule("ce-1", LocalDate(2026, 6, 10))
         assertEquals(LocalDate(2026, 6, 10), scene.calendar.get("ce-1")?.date)
+        // The vacated day is recorded as the skip the server writes there, not left as a hole that a
+        // past date inside synced coverage would derive into Missed.
+        assertEquals(OccurrenceResolution.Skipped, scene.recordedState())
         scene.writer.mark("ce-1", OccurrenceAction.Complete)
+        assertEquals(OccurrenceResolution.DoneOnTime, scene.recordedState(LocalDate(2026, 6, 10)))
 
         scene.online = true
         val result = scene.processor.flush(t0)
@@ -202,4 +222,44 @@ private class FakeCalendarStore : CalendarLocalStore {
     override fun observeByDate(date: LocalDate): Flow<List<CalendarItem>> = flowOf(emptyList())
     override fun observeMarkers(from: LocalDate, to: LocalDate): Flow<Map<LocalDate, Int>> = flowOf(emptyMap())
     override suspend fun replaceWindow(from: LocalDate, to: LocalDate, items: List<CalendarItem>) {}
+}
+
+/**
+ * A minimal in-memory [OccurrenceFactLocalStore] keyed exactly as the real table is,
+ * `(kind, definitionId, date)` — the same identity [OccurrenceTargets] encodes — so what the writer
+ * records and what a reader would look up cannot drift apart in the fake alone.
+ */
+private class FakeFactStore : OccurrenceFactLocalStore {
+    private val rows = mutableMapOf<Triple<ItemKind, String, LocalDate>, OccurrenceFact>()
+
+    private fun key(kind: ItemKind, definitionId: String, date: LocalDate) = Triple(kind, definitionId, date)
+
+    override suspend fun get(kind: ItemKind, definitionId: String, date: LocalDate): OccurrenceFact? =
+        rows[key(kind, definitionId, date)]
+
+    override suspend fun upsert(fact: OccurrenceFact) {
+        rows[key(fact.kind, fact.definitionId, fact.date)] = fact
+    }
+
+    override suspend fun delete(kind: ItemKind, definitionId: String, date: LocalDate) {
+        rows.remove(key(kind, definitionId, date))
+    }
+
+    override suspend fun transaction(block: suspend (OccurrenceFactLocalStore) -> Unit) = block(this)
+
+    override fun observeOn(date: LocalDate): Flow<List<OccurrenceFact>> = flowOf(emptyList())
+    override fun observeInRange(
+        kind: ItemKind,
+        definitionId: String,
+        from: LocalDate,
+        to: LocalDate,
+    ): Flow<List<OccurrenceFact>> = flowOf(emptyList())
+    override fun observe(kind: ItemKind, definitionId: String, date: LocalDate): Flow<OccurrenceFact?> = flowOf(null)
+    override suspend fun replaceRange(
+        kind: ItemKind,
+        definitionId: String,
+        from: LocalDate,
+        to: LocalDate,
+        facts: List<OccurrenceFact>,
+    ) = Unit
 }

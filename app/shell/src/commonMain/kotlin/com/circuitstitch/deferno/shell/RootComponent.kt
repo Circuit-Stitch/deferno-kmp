@@ -422,6 +422,12 @@ class DefaultRootComponent(
                         // The Calendar Destination's feed source + occurrence-act seam (#74).
                         calendarRepository = session.calendarRepository,
                         occurrenceEditor = session.occurrenceEditor,
+                        // …and the three inputs its agenda derives each firing's Occurrence state
+                        // from (#402, ADR-0053 decision 4): the stored facts, this device's synced
+                        // coverage, and each definition's Active/Archived light switch.
+                        occurrenceFactLocalStore = session.occurrenceFactLocalStore,
+                        occurrenceCoverageLocalStore = session.occurrenceCoverageLocalStore,
+                        definitionStateSource = session.definitionStateSource,
                         workingStateEditor = session.workingStateEditor,
                         // The Tasks Item-tree non-Task status seam (#299), routed through this Account's executor.
                         definitionStateEditor = session.definitionStateEditor,

@@ -274,11 +274,18 @@
     <string name="common_status_a11y">Status: %1$s</string>
     <!-- Adjetivo de status — distinto do botão common_done -->
     <string name="common_status_done">Concluída</string>
+    <!-- Pontualidade de uma ocorrência: registra que o trabalho ACONTECEU — sem exclamação, nunca 'atrasada!' -->
+    <string name="common_status_done_late">Concluída com atraso</string>
+    <string name="common_status_done_on_time">Concluída no prazo</string>
     <string name="common_status_in_progress">Em andamento</string>
     <string name="common_status_in_review">Em revisão</string>
-    <!-- Deliberadamente neutro (nunca 'atrasada/perdida') -->
+    <!-- Ocorrência passada sem resolução, dentro da cobertura sincronizada. Nomeada com franqueza (ADR-0053): nunca 'atrasada', nunca na segunda pessoa -->
+    <string name="common_status_missed">Perdida</string>
+    <!-- Deliberadamente neutro (nunca 'atrasada'). Já não cobre o passado: isso é common_status_missed ou common_status_unknown -->
     <string name="common_status_scheduled">Agendada</string>
     <string name="common_status_skipped">Pulada</string>
+    <!-- Este dispositivo nunca sincronizou essa data: informação ausente, não uma falha -->
+    <string name="common_status_unknown">Não sincronizada</string>
     <string name="common_to">Até</string>
     <string name="common_undo">Desfazer</string>
     <string name="common_username_handle">@%1$s</string>
@@ -699,6 +706,8 @@ Agradeço.</string>
         <item quantity="one">Anualmente</item>
         <item quantity="other">A cada %1$d anos</item>
     </plurals>
+    <!-- A exclusão vale para a cadeia inteira (todas as versões da regra), mas é uma exclusão SUAVE: as ocorrências registradas permanecem. Não prometer cascata -->
+    <string name="tasks_delete_definition_confirm_body">Isso remove a série repetida inteira de todas as listas e planos. As ocorrências passadas já registradas são mantidas.</string>
     <string name="tasks_delete_item_confirm_title">Excluir “%1$s”?</string>
     <string name="tasks_detail_add_caption">Adicionar legenda</string>
     <string name="tasks_detail_add_comment_placeholder">Adicionar um comentário…</string>

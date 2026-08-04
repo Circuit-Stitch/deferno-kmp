@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.data.item
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.outbox.DeleteItem
 import com.circuitstitch.deferno.core.data.outbox.Move
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
 import com.circuitstitch.deferno.core.data.task.TaskLocalStore
@@ -27,6 +28,10 @@ import kotlin.time.Instant
  * the tree re-flattens at once — and enqueues a [Move] (`POST items/{id}/move`) for replay. A server
  * **400** (cycle) is a terminal rejection the next cold-snapshot reconcile corrects (LWW).
  *
+ * [delete] tombstones the row in whichever of the four stores holds it and enqueues a [DeleteItem]
+ * (`DELETE items/{id}`). Holding all four stores already is what makes this the right home for the
+ * kind-neutral delete rather than the kind-scoped `DefinitionWriter` (#389).
+ *
  * [now] is injected (default the system clock) so the enqueue time is deterministic under test (ADR-0006).
  */
 class OutboxItemWriter(
@@ -41,6 +46,27 @@ class OutboxItemWriter(
     override suspend fun move(id: String, newParentId: String?, position: Int) {
         applyOptimistically(planMove(snapshot(), id, newParentId, position), movedId = id, newParentId = newParentId)
         Move(id, newParentId, position).let { outbox.enqueue(it.target, it.toRequest(), now()) }
+    }
+
+    /**
+     * A **tombstone**, not a row removal — the `DeleteTask` model (`task.copy(deletedAt = …)`), even
+     * though all three recurring stores also expose a hard `delete(id)`. A tombstoned row still exists to
+     * reconcile against if the replay ever fails terminally; a hard-deleted one leaves nothing behind and
+     * the next snapshot would resurrect it as if it were new. All four kinds carry `deletedAt` and every
+     * `observeActive` filters on it, so the tree drops the row immediately either way.
+     *
+     * One `now()` for both the tombstone and the enqueue, so the local delete time and the queued write
+     * agree. An Item id is unique across the four kinds, so at most one of the four probes finds a row —
+     * the other three are empty reads. That is what the kind-neutral seam costs, and it is what lets the
+     * caller pass no [ItemKind]: the tree row it addresses is the cross-kind Item projection.
+     */
+    override suspend fun delete(id: String) {
+        val deletedAt = now()
+        taskStore.transaction { s -> s.get(TaskId(id))?.let { s.upsert(it.copy(deletedAt = deletedAt)) } }
+        habitStore.transaction { s -> s.get(HabitId(id))?.let { s.upsert(it.copy(deletedAt = deletedAt)) } }
+        choreStore.transaction { s -> s.get(ChoreId(id))?.let { s.upsert(it.copy(deletedAt = deletedAt)) } }
+        eventStore.transaction { s -> s.get(EventId(id))?.let { s.upsert(it.copy(deletedAt = deletedAt)) } }
+        DeleteItem(id).let { outbox.enqueue(it.target, it.toRequest(), deletedAt) }
     }
 
     /** The current cross-kind Item set — only the fields [planMove] orders on (id/kind/title/parent/seq). */

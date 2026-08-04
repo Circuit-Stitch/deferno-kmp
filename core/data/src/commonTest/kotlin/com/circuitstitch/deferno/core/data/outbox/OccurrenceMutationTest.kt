@@ -4,6 +4,8 @@ import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.CalendarSource
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
+import com.circuitstitch.deferno.core.model.OccurrenceFact
+import com.circuitstitch.deferno.core.model.OccurrenceResolution
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
@@ -17,7 +19,9 @@ import kotlin.time.Instant
  * The occurrence write intents (#74) — the firing-level sibling of `MutationTest`. It pins the
  * per-kind endpoint + minimal body the outbox replays (the habit-binary / chore-PUT / event-action
  * asymmetry), the [OutboxMethod] each uses (incl. the new `PUT` for a chore set-status), and the pure,
- * idempotent optimistic [applyTo] on the cached [CalendarItem] (the no-`missed` WorkingState axis).
+ * idempotent optimistic transform — which since #390 produces an [OccurrenceFact], the thing the
+ * server actually stores, rather than a [CalendarItem]'s [WorkingState], an axis with no `missed` and
+ * no punctuality that could not describe a firing at all (ADR-0053 decision 4).
  *
  * **Every fixture keeps the item id and the series id visibly distinct** (`hab-3-item` vs `hab-3-series`)
  * because that is the whole of #380: the endpoints resolve `{id}` through `load_item_for_user`, so the
@@ -27,6 +31,19 @@ import kotlin.time.Instant
 class OccurrenceMutationTest {
 
     private val date = LocalDate(2026, 6, 8)
+    private val now = Instant.parse("2026-06-08T10:00:00Z")
+
+    /** What this device believes the server already holds for the firing — the `applyTo` input. */
+    private fun fact(
+        resolution: OccurrenceResolution = OccurrenceResolution.Scheduled,
+        completeBy: Instant? = null,
+    ) = OccurrenceFact(
+        kind = ItemKind.Chore,
+        definitionId = "cho-1-item",
+        date = date,
+        resolution = resolution,
+        completeBy = completeBy,
+    )
 
     private fun item(status: WorkingState = WorkingState.Open, date: LocalDate = this.date) = CalendarItem(
         id = "ce-1",
@@ -149,14 +166,86 @@ class OccurrenceMutationTest {
     @Test
     fun optimisticApplyIsPureAndIdempotent() {
         val mark = MarkOccurrence("ce-1", ItemKind.Event, "evt-1-item", date, OccurrenceAction.Complete)
-        val once = mark.applyTo(item())
-        assertEquals(WorkingState.Done, once.status)
-        // Replay-safe: applying twice is the same as once (mirrors the wire intent's idempotence).
-        assertEquals(once, mark.applyTo(once))
+        val once = mark.applyTo(fact(), now)
+        assertEquals(OccurrenceResolution.DoneOnTime, once.resolution)
+        assertEquals(now, once.doneAt)
+        // Replay-safe: applying twice with the same instant is the same as once (the intent's own
+        // idempotence, which is why `now` is a parameter and not a clock read).
+        assertEquals(once, mark.applyTo(once, now))
 
-        assertEquals(WorkingState.Dropped, MarkOccurrence("ce-1", ItemKind.Chore, "c", date, OccurrenceAction.Skip).applyTo(item()).status)
-        assertEquals(WorkingState.Open, ClearOccurrence("ce-1", ItemKind.Habit, "h", date).applyTo(item(status = WorkingState.Done)).status)
-        assertEquals(LocalDate(2026, 6, 10), RescheduleOccurrence("ce-1", ItemKind.Event, "e", date, LocalDate(2026, 6, 10)).applyTo(item()).date)
+        // Start records progress without claiming completion; skip is terminal but has no `done_at`.
+        // Both mirror the chore setter arm for arm (occurrences.rs:1371-1378).
+        val started = MarkOccurrence("ce-1", ItemKind.Chore, "cho-1-item", date, OccurrenceAction.Start).applyTo(fact(), now)
+        assertEquals(OccurrenceResolution.InProgress, started.resolution)
+        assertNull(started.doneAt)
+        val skipped = MarkOccurrence("ce-1", ItemKind.Chore, "cho-1-item", date, OccurrenceAction.Skip).applyTo(fact(), now)
+        assertEquals(OccurrenceResolution.Skipped, skipped.resolution)
+        assertNull(skipped.doneAt)
+    }
+
+    @Test
+    fun aCompletionDecidesItsOwnPunctualityAgainstTheDeadlineOnRecord() {
+        val mark = MarkOccurrence("ce-1", ItemKind.Chore, "cho-1-item", date, OccurrenceAction.Complete)
+        val deadline = Instant.parse("2026-06-08T17:00:00Z")
+
+        // The whole reason the optimism moved off WorkingState: a firing marked done offline can say
+        // *how* it went. Before the deadline is on time…
+        assertEquals(
+            OccurrenceResolution.DoneOnTime,
+            mark.applyTo(fact(completeBy = deadline), Instant.parse("2026-06-08T16:59:59Z")).resolution,
+        )
+        // …exactly on it is still on time (the bound is INCLUSIVE, decide_chore_done_status:1164-1173)…
+        assertEquals(OccurrenceResolution.DoneOnTime, mark.applyTo(fact(completeBy = deadline), deadline).resolution)
+        // …and after it is late, optimistically, with no server round trip.
+        assertEquals(
+            OccurrenceResolution.DoneLate,
+            mark.applyTo(fact(completeBy = deadline), Instant.parse("2026-06-08T17:00:01Z")).resolution,
+        )
+
+        // A firing this device has never synced carries no deadline, and with nothing to be late
+        // against the only honest optimistic reading is on time. `null` in, `null` kept.
+        val unsynced = mark.applyTo(null, now)
+        assertEquals(OccurrenceResolution.DoneOnTime, unsynced.resolution)
+        assertNull(unsynced.completeBy)
+        // The fact is keyed by the intent's own firing identity even when nothing was on record.
+        assertEquals(ItemKind.Chore, unsynced.kind)
+        assertEquals("cho-1-item", unsynced.definitionId)
+        assertEquals(date, unsynced.date)
+    }
+
+    @Test
+    fun aClearIsTheAbsenceOfAFactNotAScheduledOne() {
+        // The distinction the whole fact table exists to keep: `null` means the server holds no record,
+        // which is what a clear leaves behind. An OccurrenceResolution.Scheduled fact would claim a row
+        // exists that records no progress — a stronger statement, and one that never ages into Missed.
+        val clear = ClearOccurrence("ce-1", ItemKind.Habit, "hab-3-item", date)
+        assertNull(clear.applyTo(fact(resolution = OccurrenceResolution.DoneLate), now))
+        // Idempotent over the absence it produces.
+        assertNull(clear.applyTo(null, now))
+    }
+
+    @Test
+    fun aRescheduleWritesBothDaysAndMovesTheAgendaRow() {
+        // The server's move is two writes (occurrences.rs:1650-1674): the origin day is dropped with a
+        // `rescheduled_to` pointer, the destination day gets a scheduled row. Recording only the
+        // destination would leave the vacated day deriving as Missed from the hole the move left.
+        val move = RescheduleOccurrence("ce-1", ItemKind.Event, "evt-1-item", date, LocalDate(2026, 6, 10))
+        val deadline = Instant.parse("2026-06-08T17:00:00Z")
+
+        val origin = move.originFact(fact(resolution = OccurrenceResolution.InProgress, completeBy = deadline))
+        assertEquals(OccurrenceResolution.Skipped, origin.resolution)
+        assertEquals(date, origin.date)
+        assertNull(origin.doneAt)
+        assertEquals(deadline, origin.completeBy) // kept, never invented
+
+        val destination = move.destinationFact(null)
+        assertEquals(OccurrenceResolution.Scheduled, destination.resolution)
+        assertEquals(LocalDate(2026, 6, 10), destination.date)
+        assertNull(destination.doneAt)
+        assertNull(destination.completeBy)
+
+        // The agenda row moves days — a fact about the feed, not about how the firing went.
+        assertEquals(LocalDate(2026, 6, 10), move.applyTo(item()).date)
     }
 
     @Test

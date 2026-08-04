@@ -7902,6 +7902,74 @@
         }
       }
     },
+    "common_status_done_late": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done late"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hecha con retraso"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verspätet erledigt"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "देर से पूर्ण"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Concluída com atraso"
+          }
+        }
+      }
+    },
+    "common_status_done_on_time": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done on time"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hecha a tiempo"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pünktlich erledigt"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समय पर पूर्ण"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Concluída no prazo"
+          }
+        }
+      }
+    },
     "common_status_in_progress": {
       "localizations": {
         "en": {
@@ -7970,6 +8038,40 @@
         }
       }
     },
+    "common_status_missed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Missed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perdida"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verpasst"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "छूट गई"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perdida"
+          }
+        }
+      }
+    },
     "common_status_scheduled": {
       "localizations": {
         "en": {
@@ -8034,6 +8136,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pulada"
+          }
+        }
+      }
+    },
+    "common_status_unknown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not synced"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin sincronizar"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht synchronisiert"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सिंक नहीं हुई"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não sincronizada"
           }
         }
       }
@@ -16806,6 +16942,40 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "tasks_delete_definition_confirm_body": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This removes the whole repeating series from every list and plan. Its recorded past occurrences are kept."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto quita toda la serie repetida de cada lista y plan. Sus ocurrencias pasadas ya registradas se conservan."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das entfernt die ganze wiederkehrende Serie aus allen Listen und Plänen. Bereits erfasste vergangene Termine bleiben erhalten."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इससे पूरी दोहराने वाली शृंखला हर सूची और योजना से हट जाती है। पहले दर्ज हो चुकी पिछली बारियाँ बनी रहती हैं।"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Isso remove a série repetida inteira de todas as listas e planos. As ocorrências passadas já registradas são mantidas."
           }
         }
       }

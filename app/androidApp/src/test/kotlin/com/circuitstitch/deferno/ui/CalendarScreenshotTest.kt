@@ -13,6 +13,9 @@ import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.demo.DemoCalendarRepository
+import com.circuitstitch.deferno.demo.DemoDefinitionStateSource
+import com.circuitstitch.deferno.demo.DemoOccurrenceCoverageStore
+import com.circuitstitch.deferno.demo.DemoOccurrenceFactStore
 import com.circuitstitch.deferno.demo.SampleCalendar
 import com.circuitstitch.deferno.feature.calendar.CalendarComponent
 import com.circuitstitch.deferno.feature.calendar.DefaultCalendarComponent
@@ -34,6 +37,11 @@ import org.robolectric.annotation.Config
  * [DefaultCalendarComponent] over an in-memory [DemoCalendarRepository] on [Dispatchers.Unconfined]
  * (state resolves synchronously), with a **fixed** `today` so the baseline never drifts with the clock.
  *
+ * Each agenda chip is now a *derived* occurrence-state reading, so the harness supplies all three of
+ * its inputs (facts, coverage, definition state) beside the feed rows — see [SampleCalendar]. Fixing
+ * `today` matters more than it used to: the Scheduled-vs-Missed split is a function of it, so a
+ * clock-read here would make the baselines rot overnight rather than merely drift.
+ *
  * Record with `./gradlew :app:androidApp:recordRoborazziStagingDebug` (baselines are flavor-agnostic —
  * record once), compare with `verifyRoborazziStagingDebug`. **Neither is on the `check` path or in CI**,
  * so only a deliberate local run catches a drifted golden. With no Roborazzi mode set, `captureRoboImage`
@@ -51,7 +59,12 @@ class CalendarScreenshotTest {
             componentContext = DefaultComponentContext(LifecycleRegistry()),
             calendarRepository = DemoCalendarRepository(SampleCalendar.markers, SampleCalendar.agenda),
             occurrenceEditor = NoopOccurrenceEditor,
-            today = SampleCalendar.day,
+            // The agenda chips are derived, so the baseline needs all three reading inputs, not just
+            // the feed rows: without coverage every firing would capture as Unknown.
+            occurrenceFacts = DemoOccurrenceFactStore(SampleCalendar.facts),
+            occurrenceCoverage = DemoOccurrenceCoverageStore(SampleCalendar.coverage),
+            definitionStates = DemoDefinitionStateSource(SampleCalendar.definitionStates),
+            today = { SampleCalendar.day },
             tz = "UTC",
             output = {},
             coroutineContext = Dispatchers.Unconfined,
