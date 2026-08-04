@@ -1,0 +1,24 @@
+-- Migration 19 -> 20: the daily plan becomes kind-neutral, and stops keying on the timezone (#385).
+--
+-- `task_id` pointed at `taskEntity` by construction, so a Habit or Chore the server had seeded into
+-- the day was dropped on read with no diagnostic — the schema half of the blank Plan. `tz` leaves the
+-- key because the server has exactly one plan per day (`user:{id}:daily_plan:{date}`, no zone); it
+-- stays as a column because which zone a day was captured under is worth holding for later timezone
+-- work.
+--
+-- Dropped and recreated empty rather than rebuilt-and-carried. The table is a cache of a server
+-- snapshot that is refetched whenever the Plan is opened, so there is nothing here worth a
+-- carry-forward — and the PRIMARY KEY narrowing would otherwise need a collision rule for a device
+-- that had cached one date under two zones.
+--
+-- Never edit a released migration or snapshot — ADR-0022 runbook.
+DROP TABLE dailyPlanEntry;
+
+CREATE TABLE dailyPlanEntry (
+    plan_date TEXT NOT NULL,
+    position  INTEGER NOT NULL,
+    item_id   TEXT NOT NULL,
+    kind      TEXT,
+    tz        TEXT NOT NULL,
+    PRIMARY KEY (plan_date, position)
+);

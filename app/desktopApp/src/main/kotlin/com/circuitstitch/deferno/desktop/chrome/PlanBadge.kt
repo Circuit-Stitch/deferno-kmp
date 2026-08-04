@@ -1,6 +1,6 @@
 package com.circuitstitch.deferno.desktop.chrome
 
-import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.PlanRow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,13 +27,13 @@ class PlanBadge(
     scope: CoroutineScope,
 ) {
     /** The Active Account's today-plan flow; `null` = no Active Account (clears the badge). */
-    private val plan = MutableStateFlow<Flow<List<Task>>?>(null)
+    private val plan = MutableStateFlow<Flow<List<PlanRow>>?>(null)
 
     init {
         if (backend.badgeSupported) {
             scope.launch {
-                plan.collectLatest { tasks ->
-                    (tasks ?: flowOf(emptyList()))
+                plan.collectLatest { rows ->
+                    (rows ?: flowOf(emptyList()))
                         .map(::planBadgeText)
                         .distinctUntilChanged()
                         .collect { backend.setBadge(it) }
@@ -43,7 +43,7 @@ class PlanBadge(
     }
 
     /** Re-point the badge at the Active Account's today-plan, or clear it with `null` (sign-out). */
-    fun trackPlan(plan: Flow<List<Task>>?) {
+    fun trackPlan(plan: Flow<List<PlanRow>>?) {
         this.plan.value = plan
     }
 }
@@ -51,8 +51,17 @@ class PlanBadge(
 /**
  * The badge text for today's plan: the count of tasks still to do — not Done/Dropped, not a
  * tombstone — and `null` (no badge) when nothing remains, so finishing the plan clears the dock.
+ *
+ * **Task rows only** (#385). A plan holds items of any kind, but deciding that a recurring firing is
+ * still outstanding needs the occurrence-fact table (#390) — a firing's done-state is a *reading*
+ * against today, not a stored fact (ADR-0053). Counting one anyway would put a number on the dock
+ * that never goes down; a recurring row therefore contributes zero, exactly as it does in the Plan's
+ * own attention footer.
  */
-internal fun planBadgeText(tasks: List<Task>): String? =
-    tasks.count { !it.workingState.isTerminal && !it.isDeleted }
+internal fun planBadgeText(rows: List<PlanRow>): String? =
+    rows.count { row ->
+        val task = row.task ?: return@count false
+        !task.workingState.isTerminal && !task.isDeleted
+    }
         .takeIf { it > 0 }
         ?.toString()

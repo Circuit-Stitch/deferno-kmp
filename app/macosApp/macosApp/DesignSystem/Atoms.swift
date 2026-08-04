@@ -151,7 +151,7 @@ struct KindDot: View {
 struct CheckDot: View {
     let checked: Bool
     var enabled: Bool = true
-    var size: CGFloat = 24
+    var size: CGFloat = Layout.checkDotSize
     let onToggle: () -> Void
     @Environment(\.defernoColors) private var colors
 

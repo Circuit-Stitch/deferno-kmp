@@ -1,7 +1,8 @@
 package com.circuitstitch.deferno.core.data.plan
 
 import com.circuitstitch.deferno.core.data.RemoteSnapshot
-import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.PlanItemRef
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -23,10 +24,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Behaviour of [KtorPlanRemoteSource] (#22) over Ktor's MockEngine (ADR-0006, no real network).
- * Proves it pulls the flat ordered `/tasks/plan` snapshot, keeps just the ids in plan order, and
- * honours the offline-first contract: an error response yields `null` so a failed plan refresh
- * leaves the cached plan intact (ADR-0001).
+ * Behaviour of [KtorPlanRemoteSource] (#22, #385) over Ktor's MockEngine (ADR-0006, no real network).
+ * Proves it pulls the flat ordered **`/items/plan`** snapshot, keeps just the kind-tagged refs in plan
+ * order, and honours the offline-first contract: an error response yields
+ * [RemoteSnapshot.Unavailable] so a failed plan refresh leaves the cached plan intact (ADR-0001).
  */
 class KtorPlanRemoteSourceTest {
 
@@ -35,9 +36,26 @@ class KtorPlanRemoteSourceTest {
 
     private val planEnvelope = """
         {"version":"0.1","data":[
-            {"id":"c","org_slug":"u-e4h2qk","title":"c","date_created":"2026-05-20T16:11:42Z"},
-            {"id":"a","org_slug":"u-e4h2qk","title":"a","date_created":"2026-05-20T16:11:42Z"},
-            {"id":"b","org_slug":"u-e4h2qk","title":"b","date_created":"2026-05-20T16:11:42Z"}
+            {"type":"task","id":"c","org_slug":"u-e4h2qk","title":"c","date_created":"2026-05-20T16:11:42Z"},
+            {"type":"task","id":"a","org_slug":"u-e4h2qk","title":"a","date_created":"2026-05-20T16:11:42Z"},
+            {"type":"task","id":"b","org_slug":"u-e4h2qk","title":"b","date_created":"2026-05-20T16:11:42Z"}
+        ]}
+    """.trimIndent()
+
+    /**
+     * The shape that made the Plan blank: a day of recurring rows. Each carries the inline
+     * `today_occurrence` and the redundant `kind` the `/items/plan` seeder attaches — both must pass
+     * straight through the tolerant reader without a new DTO.
+     */
+    private val recurringPlanEnvelope = """
+        {"version":"0.1","data":[
+            {"type":"habit","kind":"habit","id":"h1","org_slug":"u-e4h2qk","title":"Take a Walk",
+             "date_created":"2026-05-20T16:11:42Z",
+             "today_occurrence":{"id":"occ-1","parent_id":"h1","scheduled_date":"2026-06-06","status":"open"}},
+            {"type":"chore","kind":"chore","id":"c1","org_slug":"u-e4h2qk","title":"Take shot",
+             "date_created":"2026-05-20T16:11:42Z"},
+            {"type":"event","kind":"event","id":"e1","org_slug":"u-e4h2qk","title":"Standup",
+             "date_created":"2026-05-20T16:11:42Z"}
         ]}
     """.trimIndent()
 
@@ -46,10 +64,43 @@ class KtorPlanRemoteSourceTest {
         var captured: HttpRequestData? = null
         val source = KtorPlanRemoteSource(client { req -> captured = req; respondJson(planEnvelope) })
 
-        val ids = (source.fetchPlan(date, tz) as RemoteSnapshot.Available).value
+        val refs = (source.fetchPlan(date, tz) as RemoteSnapshot.Available).value
 
-        assertTrue(captured?.url?.encodedPath?.endsWith("/tasks/plan") == true)
-        assertEquals(listOf(TaskId("c"), TaskId("a"), TaskId("b")), ids)
+        assertTrue(captured?.url?.encodedPath?.endsWith("/items/plan") == true)
+        assertEquals(taskRefs("c", "a", "b"), refs)
+    }
+
+    /**
+     * **The wire half of the reported bug (#385).** `/tasks/plan` resolves the day's ordered ids against
+     * the server's Task store alone and drops the rest, so this exact day came back as `[]`. The
+     * polymorphic mirror returns every row tagged by kind, and the tag is what the resolve dispatches
+     * on — dropping it is how a Habit came to be looked up in the Task cache and vanish.
+     */
+    @Test
+    fun fetchPlanTagsEachRowWithItsKind() = runTest {
+        val source = KtorPlanRemoteSource(client { respondJson(recurringPlanEnvelope) })
+
+        val refs = (source.fetchPlan(date, tz) as RemoteSnapshot.Available).value
+
+        assertEquals(
+            listOf(
+                PlanItemRef("h1", ItemKind.Habit),
+                PlanItemRef("c1", ItemKind.Chore),
+                PlanItemRef("e1", ItemKind.Event),
+            ),
+            refs,
+        )
+    }
+
+    @Test
+    fun fetchPlanPassesTheDayAndZoneAsQueryParameters() = runTest {
+        var captured: HttpRequestData? = null
+        val source = KtorPlanRemoteSource(client { req -> captured = req; respondJson(planEnvelope) })
+
+        source.fetchPlan(date, tz)
+
+        assertEquals("2026-06-06", captured?.url?.parameters?.get("date"))
+        assertEquals(tz, captured?.url?.parameters?.get("tz"))
     }
 
     @Test

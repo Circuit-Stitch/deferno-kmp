@@ -23,7 +23,7 @@ import com.circuitstitch.deferno.core.model.TaskId
  * What it re-points (client → canonical):
  * - the Item row itself in its kind's local store (insert under the canonical id, delete the client row);
  * - **Task only** — `parentId` / `children` references on every other Task row (the decomposition tree);
- * - **Task only** — plan slots referencing the id ([PlanLocalStore.rekeyTask]);
+ * - **every kind** — plan slots referencing the id ([PlanLocalStore.rekeyItem]);
  * - **Task only** — on-device attachment rows keyed by the id ([rekeyAttachments], gh#223): a brain-dump
  *   recording attached at accept time is keyed by the create-time client id, so without this it would be
  *   orphaned (`forTask(canonicalId)` finds nothing) the moment the Task moves to the server id;
@@ -32,8 +32,10 @@ import com.circuitstitch.deferno.core.model.TaskId
  *   collision-safe (ids don't appear as substrings of unrelated content).
  *
  * The recurring kinds (Habit/Chore/Event) are recurring *definitions* — not parents/children of each
- * other and not in the daily plan (the plan holds Tasks) — so healing one is just the row re-key + the
- * outbox sweep. The pending-create row's own re-key + confirm is owned by the listener, not here.
+ * other — so healing one is the row re-key, the plan sweep and the outbox sweep. The plan sweep stopped
+ * being Task-only in #385, when the daily plan became kind-neutral: a recurring definition can be
+ * planned, so it can hold a plan slot pointing at a dead client id exactly as a Task can. The
+ * pending-create row's own re-key + confirm is owned by the listener, not here.
  */
 class ItemIdHealer(
     private val taskStore: TaskLocalStore,
@@ -62,6 +64,11 @@ class ItemIdHealer(
             ItemKind.Chore -> healChore(clientId, canonicalId)
             ItemKind.Event -> healEvent(clientId, canonicalId)
         }
+        // Kind-neutral, so it sits here rather than inside healTask (#385): the daily plan holds items
+        // of ANY kind, so an offline-created Habit/Chore/Event that was planned before its id was
+        // healed leaves a plan slot pointing at the dead client id — exactly the Task case this line
+        // has always covered, now reachable for the other three.
+        planStore.rekeyItem(clientId, canonicalId)
         outbox.repointId(clientId, canonicalId)
         return true
     }
@@ -85,7 +92,6 @@ class ItemIdHealer(
                 }
             }
         }
-        planStore.rekeyTask(from, to)
         rekeyAttachments(clientId, canonicalId)
     }
 

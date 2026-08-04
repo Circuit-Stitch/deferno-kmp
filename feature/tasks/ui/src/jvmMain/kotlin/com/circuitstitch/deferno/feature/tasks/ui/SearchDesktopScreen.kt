@@ -47,6 +47,9 @@ import com.circuitstitch.deferno.core.designsystem.component.BlockedChip
 import com.circuitstitch.deferno.core.designsystem.component.KindDot
 import com.circuitstitch.deferno.core.designsystem.component.MonoMeta
 import com.circuitstitch.deferno.core.designsystem.component.SessionExpiredBanner
+import com.circuitstitch.deferno.core.designsystem.component.kindA11yLabel
+import com.circuitstitch.deferno.core.designsystem.component.kindColor
+import com.circuitstitch.deferno.core.designsystem.component.kindLabel
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.common_close
 import com.circuitstitch.deferno.core.designsystem.resources.common_open_named_cd

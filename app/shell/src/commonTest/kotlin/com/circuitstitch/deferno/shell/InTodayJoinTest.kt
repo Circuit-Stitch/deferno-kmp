@@ -9,6 +9,7 @@ import com.circuitstitch.deferno.core.model.CalendarSource
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.PlanRow
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -59,6 +60,12 @@ class InTodayJoinTest {
         hydration = HydrationState.Summary,
     )
 
+    /** A plan row of any kind — the plan stopped being Tasks-only in #385, so the join takes rows. */
+    private fun planRow(id: String, kind: ItemKind = ItemKind.Task) = PlanRow(
+        item = Item(id = id, kind = kind, title = id),
+        task = task(id).takeIf { kind == ItemKind.Task },
+    )
+
     /** A recurring firing: a row that belongs to a series ([seriesId]) — the definition id a tree row carries. */
     private fun firing(seriesId: String?, taskId: String, kind: ItemKind? = ItemKind.Habit) = CalendarItem(
         id = "feed-$taskId-$today",
@@ -79,11 +86,24 @@ class InTodayJoinTest {
     @Test
     fun unionsTodaysPlanTasksWithTodaysRecurringFirings() {
         val ids = inTodayIds(
-            plan = listOf(task("t-1"), task("t-2")),
+            plan = listOf(planRow("t-1"), planRow("t-2")),
             day = listOf(firing(seriesId = "h-morning-run", taskId = "occ-1")),
         )
 
         assertEquals(setOf("t-1", "t-2", "h-morning-run"), ids)
+    }
+
+    /**
+     * A recurring definition seeded onto the *plan* counts through the plan arm on its own id, without
+     * needing a matching calendar firing (#385). Before the plan became kind-neutral this row could not
+     * reach the join at all — the repository dropped it — so "In today" answered "no" for a Habit the
+     * server had put on the day.
+     */
+    @Test
+    fun aPlannedRecurringDefinitionCountsThroughThePlanArm() {
+        val ids = inTodayIds(plan = listOf(planRow("h-walk", ItemKind.Habit)), day = emptyList())
+
+        assertEquals(setOf("h-walk"), ids)
     }
 
     /**
@@ -111,7 +131,7 @@ class InTodayJoinTest {
 
     @Test
     fun collapsesAnIdPresentOnBothSidesToOneEntry() {
-        val ids = inTodayIds(plan = listOf(task("shared")), day = listOf(firing(seriesId = "shared", taskId = "occ")))
+        val ids = inTodayIds(plan = listOf(planRow("shared")), day = listOf(firing(seriesId = "shared", taskId = "occ")))
 
         assertEquals(setOf("shared"), ids)
     }

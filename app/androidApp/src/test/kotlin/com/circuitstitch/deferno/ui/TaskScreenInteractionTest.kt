@@ -381,7 +381,7 @@ class TaskScreenInteractionTest {
 
     @Test
     fun plan_rowTap_opensTask() {
-        val component = FakePlanComponent(PlanState(tasks = SampleTasks.list))
+        val component = FakePlanComponent(PlanState(rows = SampleTasks.planRows))
         setContent { PlanScreen(component) }
 
         // Refresh moved to the shell's single top bar (Cand 1); the isolated Plan pane is just the list.
@@ -390,9 +390,25 @@ class TaskScreenInteractionTest {
         assertEquals(listOf(TaskId("3")), component.clicked)
     }
 
+    /**
+     * A recurring row is rendered but **not** tappable (#385). No recurring kind has a detail surface on
+     * any platform yet (#383), so the row carries no `clickable` at all — a tap that went nowhere, and an
+     * "Open …" action VoiceOver/TalkBack would announce, are both worse than the absence.
+     */
+    @Test
+    fun plan_recurringRow_rendersButDoesNotOpen() {
+        val component = FakePlanComponent(PlanState(rows = SampleTasks.crossKindPlanRows))
+        setContent { PlanScreen(component) }
+
+        composeRule.onNodeWithText("Take a Walk").assertIsDisplayed()
+        composeRule.onNodeWithText("Take a Walk").performClick()
+
+        assertEquals(emptyList<TaskId>(), component.clicked)
+    }
+
     @Test
     fun plan_empty_showsGentleCopy() {
-        val component = FakePlanComponent(PlanState(tasks = emptyList()))
+        val component = FakePlanComponent(PlanState(rows = emptyList()))
         setContent { PlanScreen(component) }
 
         composeRule.onNodeWithText("Your plan is clear").assertIsDisplayed()

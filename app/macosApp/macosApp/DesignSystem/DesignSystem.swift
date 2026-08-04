@@ -17,6 +17,12 @@ enum Layout {
     static let gutter: CGFloat = 10
     /// Vertical padding inside a row — compact desktop density (the iOS twin uses 12pt).
     static let rowVerticalPadding: CGFloat = 5
+    /// The drawn diameter of a `CheckDot`. Its *hit* area is floored at `minTouchTarget`, so the leading
+    /// slot a row reserves is `checkDotSlot`, not this — see `CheckDot`.
+    static let checkDotSize: CGFloat = 24
+    /// The leading slot a Plan row reserves for its dot, so a Task's completion dot and a recurring row's
+    /// kind marker share one title column (#385). Matches `CheckDot`'s outer, pointer-target frame.
+    static var checkDotSlot: CGFloat { max(checkDotSize, minTouchTarget) }
 }
 
 extension WorkingState {

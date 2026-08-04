@@ -2,7 +2,8 @@ package com.circuitstitch.deferno.core.data.plan
 
 import com.circuitstitch.deferno.core.data.outbox.FakeOutboxStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
-import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.PlanItemRef
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlin.time.Instant
@@ -27,37 +28,66 @@ class OutboxPlanWriterTest {
         val plan = FakePlanLocalStore()
         val outbox = FakeOutboxStore()
 
-        writer(plan, outbox).add(TaskId("t1"), date, tz)
+        writer(plan, outbox).add(PlanItemRef("t1", ItemKind.Task), date, tz)
 
-        assertEquals(listOf(TaskId("t1")), plan.currentPlan(date, tz))
+        assertEquals(taskRefs("t1"), plan.currentPlan(date))
         val entry = outbox.all.single()
-        assertEquals("plan:2026-06-07:America/Los_Angeles", entry.target)
+        assertEquals("plan:2026-06-07", entry.target)
         assertEquals(OutboxMethod.Post, entry.request.method)
-        assertEquals(listOf("tasks", "plan", "add"), entry.request.path)
+        assertEquals(listOf("items", "plan", "add"), entry.request.path)
         assertEquals("""{"task_id":"t1","date":"2026-06-07","tz":"America/Los_Angeles"}""", entry.request.body)
     }
 
     @Test
     fun removeDropsOptimisticallyAndEnqueues() = runTest {
-        val plan = FakePlanLocalStore(mapOf(FakePlanLocalStore.PlanKey(date, tz) to listOf(TaskId("t1"), TaskId("t2"))))
+        val plan = FakePlanLocalStore(mapOf(date to taskRefs("t1", "t2")))
         val outbox = FakeOutboxStore()
 
-        writer(plan, outbox).remove(TaskId("t1"), date, tz)
+        writer(plan, outbox).remove("t1", date, tz)
 
-        assertEquals(listOf(TaskId("t2")), plan.currentPlan(date, tz))
-        assertEquals(listOf("tasks", "plan", "remove"), outbox.all.single().request.path)
+        assertEquals(taskRefs("t2"), plan.currentPlan(date))
+        assertEquals(listOf("items", "plan", "remove"), outbox.all.single().request.path)
     }
 
     @Test
     fun reorderReplacesOptimisticallyAndEnqueues() = runTest {
-        val plan = FakePlanLocalStore(mapOf(FakePlanLocalStore.PlanKey(date, tz) to listOf(TaskId("t1"), TaskId("t2"))))
+        val plan = FakePlanLocalStore(mapOf(date to taskRefs("t1", "t2")))
         val outbox = FakeOutboxStore()
 
-        writer(plan, outbox).reorder(listOf(TaskId("t2"), TaskId("t1")), date, tz)
+        writer(plan, outbox).reorder(taskRefs("t2", "t1"), date, tz)
 
-        assertEquals(listOf(TaskId("t2"), TaskId("t1")), plan.currentPlan(date, tz))
+        assertEquals(taskRefs("t2", "t1"), plan.currentPlan(date))
         val entry = outbox.all.single()
-        assertEquals(listOf("tasks", "plan", "reorder"), entry.request.path)
+        assertEquals(listOf("items", "plan", "reorder"), entry.request.path)
         assertEquals("""{"task_ids":["t2","t1"],"date":"2026-06-07","tz":"America/Los_Angeles"}""", entry.request.body)
+    }
+
+    /**
+     * The optimistic local write keeps each ref's kind (#385). A reorder is the drag-drop result, so it
+     * carries whatever the Plan is showing; writing a Habit into the cached ordering tagged as a Task
+     * would make the very next resolve look for it in the Task cache, find nothing, and drop the row —
+     * the disappearance this issue fixes, reintroduced from the client's own write.
+     */
+    @Test
+    fun theOptimisticOrderingKeepsEachRefsKind() = runTest {
+        val plan = FakePlanLocalStore()
+        val writer = writer(plan, FakeOutboxStore())
+        val habit = PlanItemRef("h1", ItemKind.Habit)
+        val task = PlanItemRef("t1", ItemKind.Task)
+
+        writer.add(habit, date, tz)
+        writer.reorder(listOf(task, habit), date, tz)
+
+        assertEquals(listOf(task, habit), plan.currentPlan(date))
+    }
+
+    /** The zone is stamped on the day the write touched — recorded, never part of the key (#385). */
+    @Test
+    fun theWriteRecordsTheZoneItWasMadeUnder() = runTest {
+        val plan = FakePlanLocalStore()
+
+        writer(plan, FakeOutboxStore()).add(PlanItemRef("t1", ItemKind.Task), date, tz)
+
+        assertEquals(tz, plan.zoneOf(date))
     }
 }

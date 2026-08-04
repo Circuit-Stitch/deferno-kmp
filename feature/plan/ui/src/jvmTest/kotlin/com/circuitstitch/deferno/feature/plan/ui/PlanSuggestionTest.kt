@@ -10,6 +10,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.v2.runComposeUiTest
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoPalette
 import com.circuitstitch.deferno.core.designsystem.theme.DefernoTheme
+import com.circuitstitch.deferno.core.model.Item
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.PlanRow
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -53,6 +56,20 @@ class PlanSuggestionTest {
         dateCreated = Instant.parse("2026-06-01T09:00:00Z"),
     )
 
+    /** A Task plan row — `task` populated, which is what every Task-shaped affordance keys on (#385). */
+    private fun taskRow(
+        id: String,
+        title: String,
+        priority: Priority = Priority.Normal,
+        pinned: Boolean = false,
+    ) = task(id, title, priority, pinned).let {
+        PlanRow(item = Item(id = it.id.value, kind = ItemKind.Task, title = it.title), task = it)
+    }
+
+    /** A recurring plan row — no `task`, no deadline, no working state. */
+    private fun recurringRow(id: String, title: String, kind: ItemKind = ItemKind.Habit) =
+        PlanRow(item = Item(id = id, kind = kind, title = title))
+
     @Composable
     private fun Themed(content: @Composable () -> Unit) {
         DefernoTheme(palette = DefernoPalette.Deferno) {
@@ -69,7 +86,7 @@ class PlanSuggestionTest {
         val picked = listOf(
             task("1", "Water the plants", pinned = true),
             task("2", "Call the plumber", priority = Priority.Fire),
-        ).suggested()
+        ).suggestedTask()
 
         assertEquals(TaskId("2"), picked?.id)
     }
@@ -80,13 +97,13 @@ class PlanSuggestionTest {
         // person put at the top.
         assertEquals(
             TaskId("2"),
-            listOf(task("1", "Water the plants"), task("2", "Call the plumber", pinned = true)).suggested()?.id,
+            listOf(task("1", "Water the plants"), task("2", "Call the plumber", pinned = true)).suggestedTask()?.id,
         )
         assertEquals(
             TaskId("1"),
-            listOf(task("1", "Water the plants"), task("2", "Call the plumber")).suggested()?.id,
+            listOf(task("1", "Water the plants"), task("2", "Call the plumber")).suggestedTask()?.id,
         )
-        assertNull(emptyList<Task>().suggested())
+        assertNull(emptyList<Task>().suggestedTask())
     }
 
     @Test
@@ -96,7 +113,7 @@ class PlanSuggestionTest {
             task("1", "Water the plants"),
             task("2", "Call the plumber", priority = Priority.Fire),
             task("3", "File the taxes", priority = Priority.Fire),
-        ).suggested()
+        ).suggestedTask()
 
         assertEquals(TaskId("2"), picked?.id)
     }
@@ -110,12 +127,45 @@ class PlanSuggestionTest {
             listOf(
                 task("1", "Someday idea", priority = Priority.Backlog),
                 task("2", "Call the plumber", priority = Priority.Fire),
-            ).suggested()?.id,
+            ).suggestedTask()?.id,
         )
         assertEquals(
             TaskId("1"),
-            listOf(task("1", "Someday idea", priority = Priority.Backlog)).suggested()?.id,
+            listOf(task("1", "Someday idea", priority = Priority.Backlog)).suggestedTask()?.id,
         )
+    }
+
+    // --- the pick, across a cross-kind day (#385) ---
+
+    /**
+     * The ✦ is Task-only. Its verb is "Start", and starting is what you do to a Task — a Habit is a
+     * commitment you keep, not work you pick up, and tapping through leads to Focus mode, which is
+     * Task-shaped end to end. The plan became cross-kind in #385, so the row-level helper delegates to
+     * the same one precedence rule the What's-next screen uses and the two cannot drift.
+     */
+    @Test
+    fun suggested_picksTheTaskRowUsingTheSamePrecedence() {
+        val picked = listOf(
+            recurringRow("h1", "Take a Walk"),
+            taskRow("1", "Water the plants", pinned = true),
+            taskRow("2", "Call the plumber", priority = Priority.Fire),
+        ).suggested()
+
+        assertEquals("2", picked?.item?.id)
+        assertEquals(TaskId("2"), picked?.task?.id, "the picked row still carries its concrete Task")
+    }
+
+    @Test
+    fun suggested_isNullWhenTheDayHoldsNothingStartable() {
+        // A plan of nothing but recurring rows gets no ✦ — the honest outcome rather than a suggestion
+        // whose "Start" button leads to a Focus mode that cannot render it.
+        assertNull(
+            listOf(
+                recurringRow("h1", "Take a Walk"),
+                recurringRow("c1", "Take shot", ItemKind.Chore),
+            ).suggested(),
+        )
+        assertNull(emptyList<PlanRow>().suggested())
     }
 
     // --- the curated order ---
@@ -129,9 +179,9 @@ class PlanSuggestionTest {
         setContent {
             Themed {
                 PlanContent(
-                    tasks = listOf(
-                        task("1", "Water the plants"),
-                        task("2", "Call the plumber", priority = Priority.Fire),
+                    rows = listOf(
+                        taskRow("1", "Water the plants"),
+                        taskRow("2", "Call the plumber", priority = Priority.Fire),
                     ),
                     isRefreshing = false,
                     onTaskClick = {},
@@ -224,9 +274,9 @@ class PlanSuggestionTest {
         val choices = plan.take(3)
 
         // Across the whole plan the Fire task wins — but it is not rendered...
-        assertEquals("far-fire", plan.suggested()?.id?.value)
+        assertEquals("far-fire", plan.suggestedTask()?.id?.value)
         // ...so the screen must pick inside what it draws, and always resolve to a rendered card.
-        val suggested = choices.suggested()
+        val suggested = choices.suggestedTask()
         assertEquals("a", suggested?.id?.value)
         assertTrue(choices.any { it.id == suggested?.id }, "the suggestion must be one of the rendered cards")
     }

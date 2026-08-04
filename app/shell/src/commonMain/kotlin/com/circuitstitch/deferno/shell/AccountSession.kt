@@ -50,6 +50,7 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.Priority
+import com.circuitstitch.deferno.core.model.PlanItemRef
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.ThemeFamily
 import com.circuitstitch.deferno.core.model.ThemeMode
@@ -386,11 +387,14 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     }
 
     override suspend fun addToPlan(taskId: TaskId, date: LocalDate, tz: String) {
-        component.commandExecutor.execute(AddToPlan(taskId, date, tz))
+        // A Task, truthfully: this seam is driven from Task-only surfaces (the task kebab, the
+        // breakdown screen). The command itself is kind-neutral since #385 — nothing here can name a
+        // Habit yet, so the ref is stamped at the one call site that knows the kind for certain.
+        component.commandExecutor.execute(AddToPlan(PlanItemRef(taskId.value, ItemKind.Task), date, tz))
     }
 
     override suspend fun removeFromPlan(taskId: TaskId, date: LocalDate, tz: String) {
-        component.commandExecutor.execute(RemoveFromPlan(taskId, date, tz))
+        component.commandExecutor.execute(RemoveFromPlan(taskId.value, date, tz))
     }
 
     override val setPinned: suspend (TaskId, Boolean) -> Unit =

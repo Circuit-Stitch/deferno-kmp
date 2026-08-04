@@ -4,7 +4,9 @@ import com.circuitstitch.deferno.core.data.plan.PlanRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.PlanRow
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -86,7 +88,13 @@ internal class DemoTaskRepository(initial: List<Task>) : TaskRepository {
 internal class DemoPlanRepository(initial: List<Task>) : PlanRepository {
     private val plan = MutableStateFlow(initial)
 
-    override fun observePlan(date: LocalDate, tz: String): Flow<List<Task>> = plan
+    // The demo day is Tasks only — the sample data has no recurring definitions — so every emitted
+    // [PlanRow] carries its `task` (#385). Taking `List<Task>` in and projecting on the way out keeps
+    // the sample data one list rather than two that could disagree.
+    override fun observePlan(date: LocalDate, tz: String): Flow<List<PlanRow>> =
+        plan.map { tasks ->
+            tasks.map { PlanRow(item = Item(id = it.id.value, kind = ItemKind.Task, title = it.title), task = it) }
+        }
 
     override suspend fun refreshPlan(date: LocalDate, tz: String) {
         // Offline demo: nothing to pull.

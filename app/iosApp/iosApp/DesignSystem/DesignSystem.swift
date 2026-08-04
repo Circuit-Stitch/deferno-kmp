@@ -11,6 +11,9 @@ enum Layout {
     static let minTouchTarget: CGFloat = 48
     static let rowMinHeight: CGFloat = 64
     static let gutter: CGFloat = 16
+    /// The drawn diameter of a `CheckDot` — and therefore the leading slot a Plan row reserves, so a
+    /// Task's completion dot and a recurring row's kind marker share one title column (#385).
+    static let checkDotSize: CGFloat = 24
 }
 
 extension WorkingState {

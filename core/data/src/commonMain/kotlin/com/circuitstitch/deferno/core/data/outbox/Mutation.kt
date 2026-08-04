@@ -8,6 +8,7 @@ import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
+import com.circuitstitch.deferno.core.model.PlanItemRef
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -110,10 +111,17 @@ sealed interface TaskMutation : Mutation {
 sealed interface PlanMutation : Mutation {
     val date: LocalDate
     val tz: String
-    override val target: String get() = "plan:$date:$tz"
 
-    /** The optimistic local effect on the day's ordered ids — **pure** and idempotent. */
-    fun applyTo(order: List<TaskId>): List<TaskId>
+    /**
+     * The coalesce key is the **day**, not `(day, zone)` (#385). The server keeps one plan per date
+     * (`user:{id}:daily_plan:{date}`) and reads the zone only to decide which date that is, so two
+     * queued writes for the same date under different zones target the same list — keying them apart
+     * would let them stop collapsing into each other while still racing for the same server state.
+     */
+    override val target: String get() = "plan:$date"
+
+    /** The optimistic local effect on the day's ordered refs — **pure** and idempotent. */
+    fun applyTo(order: List<PlanItemRef>): List<PlanItemRef>
 }
 
 /**
@@ -298,28 +306,35 @@ internal fun TaskMutation.beforeValues(task: Task): JsonObject? = when (this) {
 }
 
 // --- Plan intents ---
+//
+// Kind-neutral since #385: a plan holds items of any kind, so these carry a [PlanItemRef] rather than
+// a [TaskId]. **The wire body keys stay `task_id`/`task_ids`** — that is the server's spelling, not a
+// claim about kind. Its handler validates the id with the kind-neutral `is_user_item` (it resolves a
+// Habit/Chore/Event id fine), and both `/tasks/plan/*` and `/items/plan/*` bind the very same handler
+// functions, so this was never a correctness gap on the write side — only the read was.
 
-/** Add a Task to a day's plan (idempotent: a no-op locally if already present). */
-data class PlanAdd(val taskId: TaskId, override val date: LocalDate, override val tz: String) : PlanMutation {
-    override fun applyTo(order: List<TaskId>): List<TaskId> = if (taskId in order) order else order + taskId
+/** Add an item to a day's plan (idempotent: a no-op locally if already present). */
+data class PlanAdd(val ref: PlanItemRef, override val date: LocalDate, override val tz: String) : PlanMutation {
+    override fun applyTo(order: List<PlanItemRef>): List<PlanItemRef> =
+        if (order.any { it.id == ref.id }) order else order + ref
     override fun toRequest(): OutboxRequest = postPlan("add") {
-        put("task_id", taskId.value); put("date", date.toString()); put("tz", tz)
+        put("task_id", ref.id); put("date", date.toString()); put("tz", tz)
     }
 }
 
-/** Remove a Task from a day's plan (idempotent: a no-op locally if already absent). */
-data class PlanRemove(val taskId: TaskId, override val date: LocalDate, override val tz: String) : PlanMutation {
-    override fun applyTo(order: List<TaskId>): List<TaskId> = order - taskId
+/** Remove an item from a day's plan (idempotent: a no-op locally if already absent). */
+data class PlanRemove(val itemId: String, override val date: LocalDate, override val tz: String) : PlanMutation {
+    override fun applyTo(order: List<PlanItemRef>): List<PlanItemRef> = order.filterNot { it.id == itemId }
     override fun toRequest(): OutboxRequest = postPlan("remove") {
-        put("task_id", taskId.value); put("date", date.toString()); put("tz", tz)
+        put("task_id", itemId); put("date", date.toString()); put("tz", tz)
     }
 }
 
 /** Set a day's plan to an exact order (idempotent: replays to the same order). */
-data class PlanReorder(val taskIds: List<TaskId>, override val date: LocalDate, override val tz: String) : PlanMutation {
-    override fun applyTo(order: List<TaskId>): List<TaskId> = taskIds
+data class PlanReorder(val refs: List<PlanItemRef>, override val date: LocalDate, override val tz: String) : PlanMutation {
+    override fun applyTo(order: List<PlanItemRef>): List<PlanItemRef> = refs
     override fun toRequest(): OutboxRequest = postPlan("reorder") {
-        putJsonArray("task_ids") { taskIds.forEach { add(it.value) } }
+        putJsonArray("task_ids") { refs.forEach { add(it.id) } }
         put("date", date.toString()); put("tz", tz)
     }
 }
@@ -435,11 +450,17 @@ private fun patchTask(id: TaskId, build: JsonObjectBuilder.() -> Unit): OutboxRe
         acceptsActivityStamp = true,
     )
 
-/** A `POST tasks/plan/{action}` whose body is exactly the keys [build] sets. */
+/**
+ * A `POST items/plan/{action}` whose body is exactly the keys [build] sets.
+ *
+ * `items`, not `tasks` (#385) — the two paths bind the identical handler functions, so this is a
+ * naming-honesty change rather than a behavioural one: the plan being written is kind-neutral, and
+ * the path should say so alongside the read that already moved to `/items/plan`.
+ */
 private fun postPlan(action: String, build: JsonObjectBuilder.() -> Unit): OutboxRequest =
     OutboxRequest(
         OutboxMethod.Post,
-        listOf("tasks", "plan", action),
+        listOf("items", "plan", action),
         buildJsonObject(build).toString(),
         acceptsActivityStamp = true,
     )

@@ -5,7 +5,7 @@ import com.circuitstitch.deferno.core.data.outbox.PlanAdd
 import com.circuitstitch.deferno.core.data.outbox.PlanMutation
 import com.circuitstitch.deferno.core.data.outbox.PlanRemove
 import com.circuitstitch.deferno.core.data.outbox.PlanReorder
-import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.PlanItemRef
 import kotlinx.datetime.LocalDate
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -26,15 +26,15 @@ class OutboxPlanWriter(
     private val now: () -> Instant = { Clock.System.now() },
 ) : PlanWriter {
 
-    override suspend fun add(taskId: TaskId, date: LocalDate, tz: String) = submit(PlanAdd(taskId, date, tz))
+    override suspend fun add(ref: PlanItemRef, date: LocalDate, tz: String) = submit(PlanAdd(ref, date, tz))
 
-    override suspend fun remove(taskId: TaskId, date: LocalDate, tz: String) = submit(PlanRemove(taskId, date, tz))
+    override suspend fun remove(itemId: String, date: LocalDate, tz: String) = submit(PlanRemove(itemId, date, tz))
 
-    override suspend fun reorder(taskIds: List<TaskId>, date: LocalDate, tz: String) =
-        submit(PlanReorder(taskIds, date, tz))
+    override suspend fun reorder(refs: List<PlanItemRef>, date: LocalDate, tz: String) =
+        submit(PlanReorder(refs, date, tz))
 
     private suspend fun submit(mutation: PlanMutation) {
-        val current = planStore.currentPlan(mutation.date, mutation.tz)
+        val current = planStore.currentPlan(mutation.date)
         planStore.replacePlan(mutation.date, mutation.tz, mutation.applyTo(current))
         outbox.enqueue(mutation.target, mutation.toRequest(), now())
     }

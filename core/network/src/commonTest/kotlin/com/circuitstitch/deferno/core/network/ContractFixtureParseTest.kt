@@ -103,6 +103,12 @@ class ContractFixtureParseTest {
     }
 
     // --- plan.json → Envelope<List<TaskSummaryDto>>, incl. brand-new rows that omit ref+sequence ---
+    //
+    // This is a capture of the LEGACY `/tasks/plan`, which the client stopped reading in #385 (its
+    // handler resolves the day against the Task store alone, so a day holding a Habit came back `[]`).
+    // The fixture is retained rather than deleted because it is the only captured row that omits
+    // `ref`+`sequence` — a real brand-new-server-seeded shape, and the thing this test pins. The
+    // kind-tagged `/items/plan` the client reads now has no capture yet (see fixtures/README.md).
 
     @Test
     fun planParsesIncludingBrandNewRowsThatOmitRefAndSequence() = runTest {

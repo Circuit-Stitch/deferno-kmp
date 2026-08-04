@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -29,60 +28,25 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.sp
 import com.circuitstitch.deferno.core.designsystem.component.DefernoIcons
+import com.circuitstitch.deferno.core.designsystem.component.kindA11yLabel
+import com.circuitstitch.deferno.core.designsystem.component.kindColor
+import com.circuitstitch.deferno.core.designsystem.component.kindLabel
 import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.common_collapse_named_cd
 import com.circuitstitch.deferno.core.designsystem.resources.common_expand_named_cd
 import com.circuitstitch.deferno.core.designsystem.resources.common_state_collapsed
 import com.circuitstitch.deferno.core.designsystem.resources.common_state_expanded
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_a11y_chore
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_a11y_event
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_a11y_habit
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_a11y_task
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_label_chore
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_label_event
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_label_habit
-import com.circuitstitch.deferno.core.designsystem.resources.tasks_kind_label_task
-import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
-import com.circuitstitch.deferno.core.model.ItemKind
 import org.jetbrains.compose.resources.stringResource
 
 // Tasks-specific design helpers for the "See the trees" restyle. The reusable atoms (SectionLabel,
 // TreeChip, KindDot, ProgressBarThin, CheckDot, SearchBarDisplay, SegmentedFilter, DashedAddButton,
 // MonoMeta, Eyebrow, DefernoIcons, …) now live in the shared design system —
 // com.circuitstitch.deferno.core.designsystem.component — so the Tasks Views import them from there.
-// Only the kind→colour/label mapping + the tree rail/node are feature-local (they know the Item tree), so
-// they stay here.
-
-/** The four equal Item kinds (ADR-0049) each carry a calm colour; reinforcement, never the sole signal. */
-@Composable
-internal fun kindColor(kind: ItemKind): Color = when (kind) {
-    ItemKind.Task -> MaterialTheme.colorScheme.primary
-    ItemKind.Habit -> MaterialTheme.defernoColors.success
-    ItemKind.Event -> MaterialTheme.colorScheme.secondary
-    ItemKind.Chore -> MaterialTheme.colorScheme.tertiary
-}
-
-/** The plain, upper-case label for a kind, e.g. "TASK" — used as a TreeChip marker. */
-@Composable
-internal fun kindLabel(kind: ItemKind): String = stringResource(
-    when (kind) {
-        ItemKind.Task -> Res.string.tasks_kind_label_task
-        ItemKind.Habit -> Res.string.tasks_kind_label_habit
-        ItemKind.Event -> Res.string.tasks_kind_label_event
-        ItemKind.Chore -> Res.string.tasks_kind_label_chore
-    },
-)
-
-/** The lowercase kind name for a KindDot's TalkBack label, e.g. "task" (search result rows). */
-@Composable
-internal fun kindA11yLabel(kind: ItemKind): String = stringResource(
-    when (kind) {
-        ItemKind.Task -> Res.string.tasks_kind_a11y_task
-        ItemKind.Habit -> Res.string.tasks_kind_a11y_habit
-        ItemKind.Event -> Res.string.tasks_kind_a11y_event
-        ItemKind.Chore -> Res.string.tasks_kind_a11y_chore
-    },
-)
+// The kind→colour/label/spoken-name mapping went the same way in #385, when the daily Plan became the
+// second surface rendering all four kinds: a feature slice may not depend on another feature slice, and
+// a kind vocabulary that must stay identical everywhere belongs to the design system rather than being
+// duplicated (see KindAtoms.kt). Only the tree rail/node are still feature-local — they know the Item
+// tree — so they stay here.
 
 /** The rail reads as a calm tint of the row's accent (#231), not a loud line — apply to the kind colour. */
 internal const val RailTintAlpha = 0.5f

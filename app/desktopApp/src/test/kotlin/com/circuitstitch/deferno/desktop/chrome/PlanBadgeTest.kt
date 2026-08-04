@@ -1,5 +1,8 @@
 package com.circuitstitch.deferno.desktop.chrome
 
+import com.circuitstitch.deferno.core.model.Item
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.PlanRow
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -37,6 +40,20 @@ class PlanBadgeTest {
     @Test
     fun badgeText_excludesTombstones() {
         assertNull(planBadgeText(listOf(task("a", WorkingState.Open, deleted = true))))
+    }
+
+    /**
+     * A recurring row contributes zero (#385). Whether today's firing is still outstanding is a reading
+     * against the occurrence-fact table (#390), which does not exist — counting one anyway would pin a
+     * number to the dock that nothing on this device could ever clear.
+     */
+    @Test
+    fun badgeText_countsNoRecurringRowUntilTheirFiringsAreKnown() {
+        assertNull(planBadgeText(listOf(recurring("h", ItemKind.Habit), recurring("c", ItemKind.Chore))))
+        assertEquals(
+            "1",
+            planBadgeText(listOf(recurring("h", ItemKind.Habit), task("a", WorkingState.Open))),
+        )
     }
 
     @Test
@@ -91,12 +108,19 @@ class PlanBadgeTest {
         assertEquals(0, plan.subscriptionCount.value)
     }
 
-    private fun task(id: String, state: WorkingState, deleted: Boolean = false): Task = Task(
-        id = TaskId(id),
-        orgSlug = "org",
-        title = "Task $id",
-        workingState = state,
-        dateCreated = Instant.fromEpochMilliseconds(0),
-        deletedAt = if (deleted) Instant.fromEpochMilliseconds(1) else null,
-    )
+    private fun task(id: String, state: WorkingState, deleted: Boolean = false): PlanRow {
+        val task = Task(
+            id = TaskId(id),
+            orgSlug = "org",
+            title = "Task $id",
+            workingState = state,
+            dateCreated = Instant.fromEpochMilliseconds(0),
+            deletedAt = if (deleted) Instant.fromEpochMilliseconds(1) else null,
+        )
+        return PlanRow(item = Item(id = id, kind = ItemKind.Task, title = task.title), task = task)
+    }
+
+    /** A recurring plan row: an Item with no concrete Task — the shape the badge must not count. */
+    private fun recurring(id: String, kind: ItemKind): PlanRow =
+        PlanRow(item = Item(id = id, kind = kind, title = "$kind $id"))
 }

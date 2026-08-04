@@ -9,6 +9,7 @@ import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.PlanItemRef
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -33,6 +34,8 @@ import kotlin.test.assertTrue
  * 422s — Terminal — and dead-letters the user's write, which is far worse than the missing audit row a
  * wrong `false` costs.
  */
+private fun taskRef(id: String) = PlanItemRef(id, ItemKind.Task)
+
 class MutationTest {
 
     private val created = Instant.parse("2026-05-20T16:11:42Z")
@@ -182,9 +185,9 @@ class MutationTest {
 
     @Test
     fun planAddEmitsTaskIdDateTz() {
-        val request = PlanAdd(TaskId("t1"), date, tz).toRequest()
+        val request = PlanAdd(taskRef("t1"), date, tz).toRequest()
         assertEquals(OutboxMethod.Post, request.method)
-        assertEquals(listOf("tasks", "plan", "add"), request.path)
+        assertEquals(listOf("items", "plan", "add"), request.path)
         assertEquals("""{"task_id":"t1","date":"2026-06-07","tz":"America/Los_Angeles"}""", request.body)
         // Shared with plan remove + reorder via the postPlan builder.
         assertTrue(request.acceptsActivityStamp)
@@ -192,16 +195,36 @@ class MutationTest {
 
     @Test
     fun planRemoveEmitsTaskIdDateTz() {
-        val request = PlanRemove(TaskId("t1"), date, tz).toRequest()
-        assertEquals(listOf("tasks", "plan", "remove"), request.path)
+        val request = PlanRemove("t1", date, tz).toRequest()
+        assertEquals(listOf("items", "plan", "remove"), request.path)
         assertEquals("""{"task_id":"t1","date":"2026-06-07","tz":"America/Los_Angeles"}""", request.body)
     }
 
     @Test
     fun planReorderEmitsOrderedTaskIds() {
-        val request = PlanReorder(listOf(TaskId("t1"), TaskId("t2")), date, tz).toRequest()
-        assertEquals(listOf("tasks", "plan", "reorder"), request.path)
+        val request = PlanReorder(listOf(taskRef("t1"), taskRef("t2")), date, tz).toRequest()
+        assertEquals(listOf("items", "plan", "reorder"), request.path)
         assertEquals("""{"task_ids":["t1","t2"],"date":"2026-06-07","tz":"America/Los_Angeles"}""", request.body)
+    }
+
+    /**
+     * A non-Task ref rides the same wire shape (#385). The body key stays `task_id` — that is the
+     * server's spelling for "the item this plan slot points at", not a claim about kind; its handler
+     * validates the id with the kind-neutral `is_user_item`. The kind stays client-side, where it is
+     * what lets the local resolve find the row in the right cache.
+     */
+    @Test
+    fun aPlanWriteForARecurringItemUsesTheSameWireShape() {
+        val add = PlanAdd(PlanItemRef("h1", ItemKind.Habit), date, tz).toRequest()
+        assertEquals(listOf("items", "plan", "add"), add.path)
+        assertEquals("""{"task_id":"h1","date":"2026-06-07","tz":"America/Los_Angeles"}""", add.body)
+
+        val reorder = PlanReorder(
+            listOf(PlanItemRef("h1", ItemKind.Habit), PlanItemRef("c1", ItemKind.Chore), taskRef("t1")),
+            date,
+            tz,
+        ).toRequest()
+        assertEquals("""{"task_ids":["h1","c1","t1"],"date":"2026-06-07","tz":"America/Los_Angeles"}""", reorder.body)
     }
 
     @Test
@@ -270,8 +293,23 @@ class MutationTest {
     fun targetsPartitionByEntity() {
         assertEquals("task:a", SetWorkingState(TaskId("a"), WorkingState.Done).target)
         assertEquals("task:a", DeleteTask(TaskId("a"), created).target)
-        assertEquals("plan:2026-06-07:America/Los_Angeles", PlanAdd(TaskId("t1"), date, tz).target)
         assertEquals("item:x", Move(id = "x", newParentId = null, position = 0).target)
+    }
+
+    /**
+     * The plan's coalesce key is the **day**, not `(day, zone)` (#385). The server holds one plan per
+     * date and reads the zone only to decide which date that is, so two queued writes for the same date
+     * under different zones race for the same server state — keying them apart would stop them
+     * collapsing into each other while doing nothing about the race.
+     */
+    @Test
+    fun planTargetsCoalesceOnTheDayNotTheZone() {
+        assertEquals("plan:2026-06-07", PlanAdd(taskRef("t1"), date, tz).target)
+        assertEquals(
+            PlanAdd(taskRef("t1"), date, tz).target,
+            PlanRemove("t2", date, "Europe/Berlin").target,
+            "the same day under a different zone is the same plan",
+        )
     }
 
     // --- optimistic apply: correctness + idempotence (replay-safety) ---
@@ -320,19 +358,39 @@ class MutationTest {
 
     @Test
     fun planApplyTransformsAndIsIdempotent() {
-        val t1 = TaskId("t1")
-        val t2 = TaskId("t2")
+        val t1 = taskRef("t1")
+        val t2 = taskRef("t2")
 
         val added = PlanAdd(t1, date, tz)
         assertEquals(listOf(t1), added.applyTo(emptyList()))
         assertEquals(listOf(t1), added.applyTo(listOf(t1)), "add is a no-op when already present")
 
-        val removed = PlanRemove(t1, date, tz)
+        val removed = PlanRemove("t1", date, tz)
         assertEquals(listOf(t2), removed.applyTo(listOf(t1, t2)))
         assertEquals(listOf(t2), removed.applyTo(listOf(t2)), "remove is a no-op when already absent")
 
         val reordered = PlanReorder(listOf(t2, t1), date, tz)
         assertEquals(listOf(t2, t1), reordered.applyTo(listOf(t1, t2)))
         assertEquals(listOf(t2, t1), reordered.applyTo(listOf(t2, t1)), "reorder replays to the same order")
+    }
+
+    /**
+     * The optimistic apply is keyed on the **id**, never on the whole ref (#385). Presence and removal
+     * both have to answer "is this item on the day", and a ref that arrives with a `null` kind (an
+     * unrecognised server token) names the same slot as one that arrived tagged — treating those as two
+     * different entries would let a plan hold the same item twice, or refuse to remove it.
+     */
+    @Test
+    fun planApplyMatchesOnTheIdRegardlessOfKind() {
+        val habit = PlanItemRef("h1", ItemKind.Habit)
+        val untagged = PlanItemRef("h1", kind = null)
+
+        assertEquals(
+            listOf(untagged),
+            PlanAdd(habit, date, tz).applyTo(listOf(untagged)),
+            "add is a no-op for an id already present, whatever kind the cached ref carries",
+        )
+        assertEquals(emptyList(), PlanRemove("h1", date, tz).applyTo(listOf(untagged)))
+        assertEquals(listOf(habit, taskRef("t1")), PlanAdd(taskRef("t1"), date, tz).applyTo(listOf(habit)))
     }
 }
