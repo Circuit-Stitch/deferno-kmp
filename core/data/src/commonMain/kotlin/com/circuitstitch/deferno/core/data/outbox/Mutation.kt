@@ -245,9 +245,16 @@ data class SetTargetDate(override val taskId: TaskId, val targetDate: Instant?) 
  *
  * **Deliberately not nullable.** The server types this `Option<Priority>`, where omit means "leave
  * unchanged" and there is *no* null form: `priority` is never absent on a row, it defaults to `Normal`.
- * So "clearing" it is spelled `SetPriority(Normal)`, and an explicit `null` would be a 422 — Terminal —
- * which the outbox would dead-letter rather than merely retry. This is the one nullable-looking field on
- * the PATCH surface that must never emit [JsonNull].
+ * So "clearing" it is spelled `SetPriority(Normal)`, and this is the one nullable-looking field on the
+ * PATCH surface that must never emit [JsonNull].
+ *
+ * **The failure mode is silence, not a dead-letter.** An earlier version of this note claimed a
+ * `JsonNull` here would 422 and be classified Terminal. It would not. The field is a plain
+ * `#[serde(default)] Option<Priority>` on all four kinds, with none of the strict deserializer the
+ * `status` field uses, so `{"priority":null}` folds to `None` — indistinguishable from omit — and the
+ * write succeeds as a **200 no-op**. Nothing fails, nothing retries, nothing dead-letters; the
+ * optimistic value simply stays wrong until the next reconcile quietly reverts it. The rule is
+ * unchanged and the reason for it is stronger: a loud rejection would at least be observable.
  */
 data class SetPriority(override val taskId: TaskId, val priority: Priority) : TaskMutation {
     override fun applyTo(task: Task): Task = task.copy(priority = priority)
@@ -485,7 +492,7 @@ private fun patchSettings(build: JsonObjectBuilder.() -> Unit): OutboxRequest =
  * sets — the recurring-kind mirror of [patchTask]. [kind] selects the kind-scoped prefix
  * (`habits`/`chores`/`events`); a `Task` is rejected (it has no definition state).
  */
-private fun patchRecurring(kind: ItemKind, id: String, build: JsonObjectBuilder.() -> Unit): OutboxRequest =
+internal fun patchRecurring(kind: ItemKind, id: String, build: JsonObjectBuilder.() -> Unit): OutboxRequest =
     OutboxRequest(
         OutboxMethod.Patch,
         listOf(kind.recurringPath(), id),
@@ -661,7 +668,7 @@ data class RescheduleOccurrence(
 }
 
 /** The kind-scoped recurring endpoint prefix (`habits`/`chores`/`events`) — occurrence + definition routes. */
-private fun ItemKind.recurringPath(): String = when (this) {
+internal fun ItemKind.recurringPath(): String = when (this) {
     ItemKind.Habit -> "habits"
     ItemKind.Chore -> "chores"
     ItemKind.Event -> "events"
