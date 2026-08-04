@@ -107,6 +107,7 @@ import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.feature.plan.PlanComponent
+import com.circuitstitch.deferno.feature.plan.suggestedTask
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -180,42 +181,6 @@ internal sealed interface PlanMode {
     data class Focus(val taskId: TaskId) : PlanMode
 }
 
-/**
- * The task we gently suggest starting with: the first [Priority.Fire] one, else the first pinned one, else
- * the first in the plan. Fire outranks pinned (#375) — the person marked it urgent, which is a stronger
- * "start here" signal than having parked it at the top.
- *
- * This picks; it does **not** sort. The Plan's order is the one the person arranged, and stays exactly as
- * they left it — only the ✦ suggestion (and its "why" line) moves.
- *
- * `internal` (not private) so the precedence is unit-testable as the pure function it is.
- */
-internal fun List<Task>.suggestedTask(): Task? =
-    // **Open work only in the Fire lane.** A finished task keeps whatever priority bucket it had, so an
-    // unguarded Fire arm promotes a Done item to the very first suggestion — and the Plan does render
-    // terminal rows (`observeActive()` filters tombstones, not states). The #375 review caught this and
-    // landed the guard on both Apple views; the Compose half never followed, so until now Android and
-    // desktop answered "start here" with a finished task where iPhone and Mac answered correctly.
-    //
-    // Mirrored arm for arm from `PlanView.swift`'s `suggested(_:)` — including the two quirks, so the
-    // parity is real rather than approximate: the `pinned` arm is deliberately NOT terminal-guarded (a
-    // pinned finished task still outranks an unpinned open one), and the final bare `firstOrNull()`
-    // means an all-terminal day still shows a banner instead of silently losing it.
-    firstOrNull { it.priority == Priority.Fire && !it.workingState.isTerminal }
-        ?: firstOrNull { it.pinned }
-        ?: firstOrNull { !it.workingState.isTerminal }
-        ?: firstOrNull()
-
-internal fun List<PlanRow>.suggested(): PlanRow? {
-    // Task rows only. The banner's verb is "Start", and starting is what you do to a Task — a Habit is a
-    // commitment you keep, not work you pick up, and tapping through leads to Focus mode, which is
-    // Task-shaped end to end. A plan of nothing but recurring rows therefore gets no ✦, which is the
-    // honest outcome rather than a suggestion nobody can act on (#385).
-    val taskRows = filter { it.task != null }
-    val pick = taskRows.mapNotNull { it.task }.suggestedTask() ?: return null
-    return taskRows.first { it.task!!.id == pick.id }
-}
-
 // ───────────────────────────────────────────────────────────────────────────────────────────────
 // 1. "Today" — the hero
 // ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -235,7 +200,13 @@ internal fun PlanContent(
 ) {
     val scheme = MaterialTheme.colorScheme
     val brand = MaterialTheme.defernoColors
-    val suggested = rows.suggested()
+    // The ✦ is picked from the day's **Task projection**, not its rows (#385). The banner's verb is
+    // "Start", and starting is what you do to a Task — a Habit is a commitment you keep, not work you pick
+    // up, and tapping through leads to Focus mode, which is Task-shaped end to end. So a plan of nothing
+    // but recurring rows gets no ✦ at all, which is the honest outcome rather than a suggestion nobody can
+    // act on. The precedence itself is the one shared [suggestedTask]; both SwiftUI Plan views project
+    // their rows the same way before calling it.
+    val suggested: Task? = suggestedTask(rows.mapNotNull { it.task })
 
     Column(modifier = modifier.fillMaxSize().background(scheme.surface)) {
         if (isRefreshing) {
@@ -280,8 +251,8 @@ internal fun PlanContent(
             if (suggested != null) {
                 item(key = "banner") {
                     SuggestionBanner(
-                        task = suggested.task!!,
-                        onStart = { onStartFocus(suggested.task!!.id) },
+                        task = suggested,
+                        onStart = { onStartFocus(suggested.id) },
                         modifier = Modifier.padding(horizontal = 20.dp),
                     )
                     Spacer(Modifier.height(20.dp))
@@ -297,7 +268,10 @@ internal fun PlanContent(
 
             // The day list. The suggested row is a highlighted card; the rest are flat.
             itemsIndexed(rows) { index, row ->
-                val isSuggested = row.item.id == suggested?.item?.id
+                // The `suggested != null` check is load-bearing, not defensive: a bare
+                // `row.task?.id == suggested?.id` compares null to null on an all-recurring day — no ✦ was
+                // picked, every row has no Task — and would highlight the whole list as suggested.
+                val isSuggested = suggested != null && row.task?.id == suggested.id
                 DayRow(
                     row = row,
                     highlighted = isSuggested,
@@ -531,7 +505,7 @@ internal fun WhatsNextContent(
     // pick to Fire — a marker someone may well set on something below the fold — makes it reachable.)
     // Picking inside the rendered set also keeps this a pick rather than a reorder: the three cards are
     // still the plan's first three, in the order the person arranged them.
-    val suggested = remember(choices) { choices.suggestedTask() }
+    val suggested = remember(choices) { suggestedTask(choices) }
     var selectedId by remember(tasks) { mutableStateOf(suggested?.id) }
     val selected = choices.firstOrNull { it.id == selectedId }
 

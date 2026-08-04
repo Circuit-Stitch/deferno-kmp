@@ -10,11 +10,16 @@ kotlin {
     }
 
     sourceSets {
-        // commonMain holds the reusable atoms (the plan row, state label, empty/loading states) for a
-        // future desktop View to share; the Android-native screen lives in androidMain.
+        // commonMain holds the whole dashboard — the "See the trees" restyle lifted the Today/What's-next/
+        // Focus body itself here, not just the atoms (PlanDashboard.kt), so Android and desktop render one
+        // source and jvmMain only wraps it at a reading width.
         commonMain.dependencies {
             implementation(project(":core:model"))
             implementation(project(":core:designsystem"))
+            // The Views render `PlanComponent` and read the shared ✦ precedence (`suggestedTask`, #375) —
+            // both from commonMain code, so the slice dependency belongs here rather than being declared
+            // once per platform. Mirrors feature/tasks/ui, whose commonMain helper does the same.
+            implementation(project(":feature:plan"))
 
             implementation(libs.compose.runtime)
             // stringResource/pluralStringResource over core:designsystem's shared string catalog
@@ -24,20 +29,22 @@ kotlin {
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
         }
-        // The Android-native Plan screen (#27): renders the shared PlanComponent (#25). Kept out of
-        // commonMain so desktop/iOS get their own native screens (ADR-0007), not this phone layout.
-        androidMain.dependencies {
-            implementation(project(":feature:plan"))
-        }
-        // The desktop-native Plan screen: renders the shared PlanComponent, reusing the commonMain
-        // atoms (PlanTaskRow, EmptyPlan, …) — `internal`, but visible here because jvmMain shares
-        // this module. The desktop counterpart of the Android screen (ADR-0007), not it stretched.
-        jvmMain.dependencies {
-            implementation(project(":feature:plan"))
-        }
-        // The dashboard's own render/logic tests on the JVM-fast path (no device) — the same harness
-        // feature/tasks/ui uses. They cover the shared body both platforms render: the ✦ suggestion
-        // precedence, the choice cards' "why" line, and that the day list keeps the curated order.
+        // No per-platform dependency block: androidMain carries no sources at all, and jvmMain holds only
+        // PlanDesktopScreen, which centres the shared `PlanScreen` at a reading width — the desktop
+        // counterpart rather than the phone layout stretched, which ADR-0007 names an explicit non-goal.
+        // Both compile against the slice through commonMain above.
+
+        // The dashboard's own render tests on the JVM-fast path (no device) — the same harness
+        // feature/tasks/ui uses. Every one of them goes through a real composition of the shared body
+        // both platforms draw, which is the only way to answer what they ask: the choice cards' "why"
+        // line; that the day list keeps the curated order around the ✦ banner; that the ✦ highlight lands
+        // on the suggested row and on no other, so a day of nothing but recurring rows gets none at all;
+        // and that What's-next picks from the three cards it draws rather than from the whole day. The ✦
+        // precedence itself is `:feature:plan`'s (`suggestedTask`), tested in that module's commonTest —
+        // which is where it has to live to be *compiled* against the Apple targets that read the same
+        // function, and to run on the Android host as well as the JVM. (Only the JVM and Android host runs
+        // happen in CI: ci.yml is `ubuntu-latest`, so the Apple test tasks self-disable there — ADR-0006,
+        // the gap #368 tracks.)
         jvmTest.dependencies {
             implementation(libs.compose.ui.test.junit4)
             implementation(compose.desktop.currentOs)

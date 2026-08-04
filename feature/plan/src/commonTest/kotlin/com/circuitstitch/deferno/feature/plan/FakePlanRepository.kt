@@ -5,6 +5,7 @@ import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.PlanRow
+import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -38,11 +39,25 @@ class FakePlanRepository(initial: List<PlanRow> = emptyList()) : PlanRepository 
 
 private val FIXED_CREATED = Instant.parse("2026-06-01T00:00:00Z")
 
-internal fun task(id: String, title: String = "Task $id"): Task = Task(
+/**
+ * A Task fixture. [priority], [pinned] and [workingState] are the three fields the ✦ precedence reads
+ * ([suggestedTask]), so they are parameters here rather than a second fixture next to those tests. All
+ * three are defaulted, so the component tests that predate them — which reach this through [taskRow],
+ * as `taskRow("a")` — keep getting an ordinary open Task and were not touched.
+ */
+internal fun task(
+    id: String,
+    title: String = "Task $id",
+    priority: Priority = Priority.Normal,
+    pinned: Boolean = false,
+    workingState: WorkingState = WorkingState.Open,
+): Task = Task(
     id = TaskId(id),
     orgSlug = "u-test",
     title = title,
-    workingState = WorkingState.Open,
+    workingState = workingState,
+    priority = priority,
+    pinned = pinned,
     dateCreated = FIXED_CREATED,
     hydration = HydrationState.Summary,
 )
@@ -52,7 +67,12 @@ internal fun task(id: String, title: String = "Task $id"): Task = Task(
  * here rather than reused from `core:data`'s projection because a component test reads only the id,
  * kind and title off it; the projection's fidelity is `core:data`'s to prove.
  */
-internal fun taskRow(id: String, title: String = "Task $id"): PlanRow = task(id, title).let { t ->
+internal fun taskRow(
+    id: String,
+    title: String = "Task $id",
+    priority: Priority = Priority.Normal,
+    pinned: Boolean = false,
+): PlanRow = task(id, title, priority, pinned).let { t ->
     PlanRow(
         item = Item(id = t.id.value, kind = ItemKind.Task, title = t.title),
         task = t,

@@ -19,24 +19,12 @@ struct WhatNextView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
 
-    /// The ordered ideas: the Fire bucket first, then pinned, then still-open, then the rest —
-    /// de-duplicated by identity. Fire leads because the person already said *this one is urgent*; asking
-    /// them again about something calmer first would be the helper second-guessing them. This orders the
-    /// **suggestion** only — the Plan list itself stays exactly as they arranged it.
-    private var candidates: [Task] {
-        var seen = Set<String>()
-        var ordered: [Task] = []
-        func add(_ list: [Task]) {
-            for t in list where seen.insert(t.stableKey).inserted { ordered.append(t) }
-        }
-        // Gate the Fire lane on OPEN work. A finished task keeps whatever bucket it had, so an
-        // unfiltered Fire lane promotes a Done item to the very first suggestion (#375 review).
-        add(tasks.filter { $0.priority == .fire && !$0.workingState.isTerminal })
-        add(tasks.filter { $0.pinned })
-        add(tasks.filter { !$0.workingState.isTerminal })
-        add(tasks)
-        return ordered
-    }
+    /// The ordered ideas, from the **one** shared rule (#375): `suggestionOrder` in `PlanSuggestion.kt`
+    /// (`:feature:plan`), which Compose and macOS read too. The four passes, why Fire leads and why the
+    /// order is a suggestion rather than a re-sort of the Plan all live in that function's KDoc — this
+    /// view no longer keeps a Swift copy of them to drift from. `PlanView`'s ✦ banner is this list's first
+    /// entry (`PlanSuggestionKt.suggestedTask(tasks:)`), so the sheet and the banner cannot disagree.
+    private var candidates: [Task] { PlanSuggestionKt.suggestionOrder(tasks: tasks) }
 
     private var current: Task? {
         let list = candidates

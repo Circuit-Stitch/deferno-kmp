@@ -65,29 +65,6 @@ struct PlanView: View {
         _state = StateObject(wrappedValue: StateFlowObserver(component.state))
     }
 
-    /// The task we gently suggest starting with: the first open Fire one, else the first pinned one,
-    /// else the first non-terminal, else simply the first (mirrors Compose `suggestedTask()`).
-    private func suggested(_ tasks: [Task]) -> Task? {
-        // Fire first, mirroring Compose `List<Task>.suggestedTask()` — the person marking something
-        // urgent is a stronger "start here" signal than having parked it at the top. Open work only:
-        // a finished task is never what to start next. Still a PICK, never a re-sort of the plan.
-        tasks.first(where: { $0.priority == .fire && !$0.workingState.isTerminal })
-            ?? tasks.first(where: { $0.pinned })
-            ?? tasks.first(where: { !$0.workingState.isTerminal })
-            ?? tasks.first
-    }
-
-    /// The ✦ row, if the day holds anything startable. **Task rows only** (#385): the banner's verb is
-    /// "Start", and starting is what you do to a Task — a Habit is a commitment you keep, and tapping
-    /// through leads to Focus, which is Task-shaped end to end. A day of nothing but recurring rows gets
-    /// no ✦, which is honest rather than a suggestion nobody can act on. Mirrors Compose's
-    /// `List<PlanRow>.suggested()`, which delegates to the same one precedence rule so the two can't drift.
-    private func suggestedRow(_ rows: [PlanRow]) -> PlanRow? {
-        let taskRows = rows.filter { $0.task != nil }
-        guard let pick = suggested(taskRows.compactMap(\.task)) else { return nil }
-        return taskRows.first { $0.task?.stableKey == pick.stableKey }
-    }
-
     /// "Nothing's overdue" or "{n} need attention" — gentle, never alarming. PlanState carries no
     /// deadline instants on iOS, so we count un-finished tasks as the calmest available proxy.
     ///
@@ -111,7 +88,14 @@ struct PlanView: View {
         // What's-next and Focus are Task verbs — "start this", "work on it until done". A recurring
         // commitment has no such verb, so both take the Task projection rather than every row.
         let taskProjection = rows.compactMap(\.task)
-        let suggestion = suggestedRow(rows)
+        // The ✦, from the **one** shared precedence rule (#375): `PlanSuggestion.kt` in `:feature:plan`,
+        // which Compose and macOS call too — this view no longer keeps a Swift copy of the four arms to
+        // drift from theirs. It is fed the same Task projection, which is what makes the ✦ Task-only
+        // (#385): the banner's verb is "Start", and starting is what you do to a Task — a Habit is a
+        // commitment you keep, and tapping through leads to Focus, which is Task-shaped end to end. A day
+        // of nothing but recurring rows gets no ✦, which is honest rather than a suggestion nobody can
+        // act on.
+        let suggestion: Task? = PlanSuggestionKt.suggestedTask(tasks: taskProjection)
 
         Group {
             if value.isRefreshing && rows.isEmpty {
@@ -129,8 +113,8 @@ struct PlanView: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         header(count: rows.count)
 
-                        if let suggestion, let suggestedTask = suggestion.task {
-                            suggestionBanner(task: suggestedTask)
+                        if let suggestion {
+                            suggestionBanner(task: suggestion)
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 20)
                         }
@@ -143,7 +127,11 @@ struct PlanView: View {
                         // class). `item.id` is already the raw UUID String the plan is ordered by, and it
                         // is unique across the day whatever kind the row is.
                         ForEach(Array(rows.enumerated()), id: \.element.item.id) { index, row in
-                            let isSuggested = row.item.id == suggestion?.item.id
+                            // The `suggestion != nil` check is load-bearing, not defensive: a bare
+                            // `row.task?.stableKey == suggestion?.stableKey` compares nil to nil on an
+                            // all-recurring day — nothing was suggested, no row has a Task — and would
+                            // highlight every row as the ✦.
+                            let isSuggested = suggestion != nil && row.task?.stableKey == suggestion?.stableKey
                             dayRow(row: row, highlighted: isSuggested)
                             if !isSuggested && index < rows.count - 1 {
                                 Divider()
