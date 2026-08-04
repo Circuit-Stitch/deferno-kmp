@@ -3,7 +3,6 @@ package com.circuitstitch.deferno.core.network.mapper
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.core.model.OccurrenceResolution
-import com.circuitstitch.deferno.core.model.OccurrenceState
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.dto.DefStatusWire
@@ -20,9 +19,11 @@ import kotlin.test.assertNull
  * when the backend ships an additive status. The read/write asymmetry of occurrence actions is
  * also covered: the client only ever *writes* a coarse action, mapped to the kind-appropriate token.
  *
- * The occurrence family is covered on **both** axes (ADR-0053 decision 4): `toOccurrenceState`, the
- * render-time reading, and `toResolution`/`toResolutionOrNull`, the stored fact. The two differ in more
- * than name — the fact mapper refuses to condense the chore endpoint's two *derived* arms at all.
+ * The occurrence family is covered on the **one** axis this module owns (ADR-0053 decision 4):
+ * `toResolution`/`toResolutionOrNull`, the stored fact. The render-time reading has no mapper here by
+ * design and is pinned by `core:model`'s `OccurrenceStateResolverTest` instead. What this file still
+ * proves about the split is the load-bearing half — the fact mapper refuses to condense the chore
+ * endpoint's two *derived* arms at all.
  */
 class StatusMapperTest {
 
@@ -75,26 +76,11 @@ class StatusMapperTest {
         }
     }
 
-    @Test
-    fun occurrenceStatusWireMapsToOccurrenceState() {
-        assertEquals(OccurrenceState.Scheduled, OccurrenceStatusWire.Scheduled.toOccurrenceState())
-        assertEquals(OccurrenceState.InProgress, OccurrenceStatusWire.InProgress.toOccurrenceState())
-        assertEquals(OccurrenceState.DoneOnTime, OccurrenceStatusWire.DoneOnTime.toOccurrenceState())
-        assertEquals(OccurrenceState.DoneLate, OccurrenceStatusWire.DoneLate.toOccurrenceState())
-        assertEquals(OccurrenceState.Skipped, OccurrenceStatusWire.Dropped.toOccurrenceState())
-        assertEquals(OccurrenceState.Scheduled, OccurrenceStatusWire.Unknown.toOccurrenceState())
-    }
-
-    @Test
-    fun derivedChoreOccurrenceStatusWireMapsToOccurrenceState() {
-        assertEquals(OccurrenceState.Scheduled, DerivedChoreOccurrenceStatusWire.Scheduled.toOccurrenceState())
-        assertEquals(OccurrenceState.Missed, DerivedChoreOccurrenceStatusWire.Missed.toOccurrenceState())
-        assertEquals(OccurrenceState.InProgress, DerivedChoreOccurrenceStatusWire.InProgress.toOccurrenceState())
-        assertEquals(OccurrenceState.DoneOnTime, DerivedChoreOccurrenceStatusWire.DoneOnTime.toOccurrenceState())
-        assertEquals(OccurrenceState.DoneLate, DerivedChoreOccurrenceStatusWire.DoneLate.toOccurrenceState())
-        assertEquals(OccurrenceState.Skipped, DerivedChoreOccurrenceStatusWire.Skipped.toOccurrenceState())
-        assertEquals(OccurrenceState.Scheduled, DerivedChoreOccurrenceStatusWire.Unknown.toOccurrenceState())
-    }
+    // The two wire → OccurrenceState cases that used to sit here were removed with the mappers
+    // themselves (#390). Nothing in the module can produce a reading from a wire token any more, so
+    // there is nothing to assert: the corresponding contract now lives in `core:model`'s
+    // OccurrenceStateResolverTest, which pins the reading against facts, coverage and today — the three
+    // inputs a wire token does not carry and which a mapper here could only have guessed at.
 
     @Test
     fun occurrenceStatusWireMapsToAStoredResolutionAndIsTotal() {

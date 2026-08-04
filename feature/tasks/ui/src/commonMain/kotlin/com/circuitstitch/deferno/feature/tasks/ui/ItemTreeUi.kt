@@ -104,6 +104,7 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_badge_blocker
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_blocked_by_dialog_title
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_blocked_by_error_offline
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_blocked_by_error_rejected
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_delete_definition_confirm_body
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_delete_item_confirm_title
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_filter_active
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_filter_all
@@ -573,6 +574,9 @@ private fun ItemTreeRow(
     onOpenBlockedByPicker: (id: String) -> Unit = {},
 ) {
     val item = row.item
+    // Hoisted above the row body because BOTH the menu and the Delete confirm below it read the kind —
+    // the menu to gate the Task-only entries, the confirm to pick the recurring scope line (#389).
+    val isTask = item.kind == ItemKind.Task
     // Three distinct row states (#290): a terminal (Done/Dropped/Archived) item strikes + mutes the title;
     // a `blocked` item mutes it too but WITHOUT the strike — a distinct "blocked, not finished" read —
     // and wears a "Blocked" pill; an `isBlocker` item gates others and wears a "Blocker" badge. Blocked
@@ -761,14 +765,15 @@ private fun ItemTreeRow(
             // plus the native Move action. Kind is read straight off the row ([item.kind]), never inferred
             // from whether the per-row Task state has joined: a Task whose [menuState] hasn't loaded yet (the
             // tree rows come from the Item repo, [menuState] from the Task+plan repos — independent Flows) is
-            // still a Task. The status block, Pin, Add-to-plan and Delete are Task-only writes (the native
-            // command layer is Task-centric — MoveItem is the lone cross-kind write), so a non-Task row gets
-            // only the cross-kind subset: Add subtask · Move (Open routes to the Task-only detail). Pin/plan/
-            // status need the joined values, so they render once [menuState] is present; Open/Delete need only
-            // the id, so they gate on kind alone. "Set aside"/"Delete" are destructive (error-tinted; the word,
-            // not just colour, carries the signal — a11y). The arbitrary-parent "Move to…" entry + picker land
-            // together in #229; the menu opens by long-press (a TalkBack custom action) — keyboard open is #300.
-            val isTask = item.kind == ItemKind.Task
+            // still a Task. The status block, Pin and Add-to-plan are Task-only writes (the native command
+            // layer is Task-centric there), so a non-Task row gets the cross-kind subset: Add subtask · Move ·
+            // its own definition-state block · Delete (Open routes to the Task-only detail). Pin/plan/status
+            // need the joined values, so they render once [menuState] is present; Open needs only the id, so
+            // it gates on kind alone. Delete is offered for EVERY kind since #389 — it hangs below both status
+            // blocks, and the component (not this menu) resolves which route the row's kind takes. "Set
+            // aside"/"Delete" are destructive (error-tinted; the word, not just colour, carries the signal —
+            // a11y). The arbitrary-parent "Move to…" entry + picker land together in #229; the menu opens by
+            // long-press (a TalkBack custom action) — keyboard open is #300.
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 if (isTask) {
                     DropdownMenuItem(
@@ -852,37 +857,66 @@ private fun ItemTreeRow(
                             )
                         }
                     }
-                    HorizontalDivider()
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.tasks_menu_delete_permanent), color = MaterialTheme.colorScheme.error) },
-                        onClick = { menuOpen = false; confirmDelete = true },
-                    )
                 }
                 if (!isTask) {
                     // Kind-aware status block for a non-Task definition (ADR-0049 decision 7, #299): the
                     // recurring "light switch" — Archive an active Habit/Chore/Event, or Activate an archived
-                    // one. A non-Task row carries no working state, so [item.isTerminal] IS its archived bit
-                    // (ItemRepository maps DefinitionState.Archived → terminal); the verb needs no joined state.
-                    // Archive is reversible (via Activate), so it isn't error-tinted; the component resolves kind.
+                    // one. The verb needs no joined state; the component resolves the kind. Archive is
+                    // reversible (via Activate), so it isn't error-tinted.
+                    //
+                    // Read off the FULL light switch, not the archived bit. `DefinitionState` has three
+                    // values (ItemState.kt:32-36) and `isTerminal` is only `state == Archived`, so an
+                    // **InReview** definition took the `else` arm and was offered Archive alone — a dead end
+                    // with no path back to Active, which both Apple menus have never had. Each verb now
+                    // appears exactly when it is not the state the row is already in. `definitionState` is
+                    // nullable on the cross-kind projection (Item.kt:74 — null for a Task, and for any
+                    // fixture that predates #299), so `isTerminal` stays the fallback: an unpopulated
+                    // recurring row behaves exactly as it did before.
+                    val definitionState = item.definitionState
+                        ?: if (item.isTerminal) DefinitionState.Archived else DefinitionState.Active
                     HorizontalDivider()
-                    if (item.isTerminal) {
+                    if (definitionState != DefinitionState.Active) {
                         DropdownMenuItem(
                             text = { Text(stringResource(Res.string.tasks_menu_activate)) },
                             onClick = { menuOpen = false; onSetDefinitionState(item.id, DefinitionState.Active) },
                         )
-                    } else {
+                    }
+                    if (definitionState != DefinitionState.Archived) {
                         DropdownMenuItem(
                             text = { Text(stringResource(Res.string.tasks_menu_archive)) },
                             onClick = { menuOpen = false; onSetDefinitionState(item.id, DefinitionState.Archived) },
                         )
                     }
+                    // Deliberately NOT the third Apple arm ("Send to review", tasks_menu_send_to_review):
+                    // `DefinitionState.InReview` is "retained faithfully pending a backend clarification"
+                    // (ItemState.kt:27-31, ADR-0011), so Compose does not yet offer a verb that puts a row
+                    // INTO it — only the way out. Closing that last arm of the Compose↔Apple gap waits on
+                    // the clarification, not on this slice.
                 }
+                // Delete closes the menu for EVERY kind (#389) — it is not part of either status block,
+                // which is why it sits outside both and after them. That ordering is the webui's
+                // (itemKebab.test.ts pins Archive before Delete) and it keeps the destructive verb last on
+                // every row, Task or not. The entry needs only the id; the component resolves the row's kind
+                // and routes `DELETE tasks/{id}` vs the chain-wide `DELETE items/{id}` behind it, so no View
+                // on any platform has to know which. Destructive, so it detours through the confirm below.
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.tasks_menu_delete_permanent), color = MaterialTheme.colorScheme.error) },
+                    onClick = { menuOpen = false; confirmDelete = true },
+                )
             }
         }
     }
 
     // Delete confirm (destructive, #231) — mirrors the Task-detail kebab's confirm (TaskDetailContent).
     // A blocker's confirm additionally names the dependents the delete releases (#291).
+    //
+    // A **recurring** row's confirm leads with what deleting a definition actually does (#389). It is not
+    // decoration: the delete is chain-wide (every Segment of the rule goes, not just the era on screen),
+    // and it is a SOFT delete server-side — the occurrence records and the recurrence series rows survive.
+    // The string says exactly that and promises no cascade; do not soften it into "and all its
+    // occurrences", which the write does not do. It comes first because it defines the scope the rest of
+    // the body then qualifies. A Task row's confirm is unchanged — there is no series to scope.
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -890,6 +924,7 @@ private fun ItemTreeRow(
             text = {
                 Text(
                     listOfNotNull(
+                        if (isTask) null else stringResource(Res.string.tasks_delete_definition_confirm_body),
                         unblockReleasesLine(isBlocker = item.isBlocker, dependentTitles = dependentTitles),
                         stringResource(Res.string.common_cannot_be_undone),
                     ).joinToString("\n\n"),

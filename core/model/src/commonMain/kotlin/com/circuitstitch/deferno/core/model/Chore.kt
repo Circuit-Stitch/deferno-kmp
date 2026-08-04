@@ -20,8 +20,11 @@ import kotlin.time.Instant
  * **Deferred (ADR-0015):** the "Shared with a Group" / rotation control — Groups are backend-blocked,
  * so a Chore is creatable in v1 *without* a group, and this model carries no group/rotation field.
  *
- * **Definition vs Occurrence (glossary).** This is the *definition*; one dated firing is a separate
- * [Occurrence] with its own [OccurrenceState].
+ * **Definition vs Occurrence (glossary).** This is the *definition*; one dated firing is an
+ * [OccurrenceFact] keyed by `(kind, definitionId, date)` — where `definitionId` is *this* [id] — and
+ * how that firing went is the separate render-time [OccurrenceState] derived from the fact, the
+ * definition's own [definitionState], coverage and today (ADR-0053 decision 4). There is deliberately
+ * no `Occurrence` type: a firing is a key plus a fact, never a row with an identity of its own.
  */
 data class Chore(
     val id: ChoreId,

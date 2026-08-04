@@ -1,8 +1,6 @@
 package com.circuitstitch.deferno.core.model
 
-import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.plus
 
 /**
  * Which dates this device has actually **synced** for one recurring definition (CONTEXT.md →
@@ -48,7 +46,11 @@ fun List<OccurrenceCoverage>.mergeCoverage(new: OccurrenceCoverage): List<Occurr
     for (range in mine.sortedBy { it.from }) {
         // Adjacent counts as touching: a range ending the day before the next begins leaves no
         // unsynced day between them, so joining them asserts nothing that was not actually fetched.
-        val touches = range.from <= candidate.to.plusOneDay() && candidate.from <= range.to.plusOneDay()
+        // `LocalDate.addDays` (OccurrenceHistory.kt) is the module's one piece of calendar arithmetic;
+        // this file had a private `plusOneDay` doing the same thing until #390. Going through the
+        // calendar rather than epoch days is what makes 31 December adjacent to 1 January here with no
+        // special case, and keeps the whole file free of any instant, zone or UTC.
+        val touches = range.from <= candidate.to.addDays(1) && candidate.from <= range.to.addDays(1)
         if (touches) {
             candidate = candidate.copy(
                 from = minOf(candidate.from, range.from),
@@ -65,9 +67,3 @@ fun List<OccurrenceCoverage>.mergeCoverage(new: OccurrenceCoverage): List<Occurr
 /** Whether any synced range for that definition covers [date]. */
 fun List<OccurrenceCoverage>.covers(kind: ItemKind, definitionId: String, date: LocalDate): Boolean =
     any { it.kind == kind && it.definitionId == definitionId && it.covers(date) }
-
-/**
- * The next calendar day — the repo's existing `plus(1, DateTimeUnit.…)` idiom, so month and year
- * ends are handled by the calendar rather than by hand.
- */
-private fun LocalDate.plusOneDay(): LocalDate = plus(1, DateTimeUnit.DAY)

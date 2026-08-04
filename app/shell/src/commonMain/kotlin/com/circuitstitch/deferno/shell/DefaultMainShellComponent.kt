@@ -199,6 +199,10 @@ class DefaultMainShellComponent(
     // The Task detail's destructive Delete seam (kebab → confirm), threaded into the detail (overlay +
     // Tasks Destination). Defaults to a no-op so the many shell tests build without it.
     private val deleteTask: suspend (TaskId) -> Unit = { _ -> },
+    // The Item tree's kind-neutral Delete seam (#389) for a recurring row — a raw Item id, no kind
+    // (`DELETE items/{id}`). Threaded into the Tasks Destination only; the Task detail keeps [deleteTask].
+    // No-op default so the many shell tests build without supplying it.
+    private val deleteDefinition: suspend (String) -> Unit = { _ -> },
     // The Item-tree command menu's Task-only Pin + plan-toggle seams (#231), threaded into the Tasks
     // Destination. [addToPlan]/[removeFromPlan] are pre-bound to (today, timeZone) by the RootComponent; the
     // per-row Task state (status/Pin/plan labels) is joined below off the Task list + today's plan. All
@@ -609,6 +613,7 @@ class DefaultMainShellComponent(
                         setPriority = setPriority,
                         setLabels = setLabels,
                         deleteTask = deleteTask,
+                        deleteDefinition = deleteDefinition,
                         onDeviceAttachments = onDeviceAttachments,
                         decorations = treeDecorations,
                         setPinned = setPinned,

@@ -51,10 +51,24 @@ enum class CommandCategory {
     /** The Active Account's User-setting writes ([CommandKind.SetTheme] …) — the backed Settings categories (#173). */
     Settings,
 
-    /** Cross-kind tree move — reparent + reorder ([CommandKind.MoveItem], ADR-0049 #228). */
-    Move,
+    /**
+     * The **kind-neutral cross-kind Item verbs** — the ones that belong to no per-kind writer and route
+     * to `ItemWriter`: reparent + reorder ([CommandKind.MoveItem], ADR-0049 #228) and the kind-neutral
+     * soft delete ([CommandKind.DeleteItem], #389).
+     *
+     * Renamed from `Move` when the delete joined it (#389): a category is a presentation grouping the
+     * palette sections on, **not** the frozen external contract — that is [CommandId], and every id here
+     * is untouched. Two singleton categories for one writer would have been the alternative. [Create]
+     * keeps its own name because create/convert *mint or retype* an item rather than acting on an
+     * existing cross-kind row.
+     */
+    Item,
 
-    /** Recurring-definition state — the Habit/Chore/Event "light switch" ([CommandKind.SetDefinitionState], #299). */
+    /**
+     * Recurring-definition edits — the Habit/Chore/Event "light switch" ([CommandKind.SetDefinitionState],
+     * #299) plus the two soft-planning fields (#378). Deleting a definition is **not** here: it is
+     * kind-neutral, so it lives in [Item].
+     */
     Definition,
 }
 
@@ -142,7 +156,7 @@ enum class CommandKind(
     // so it stays out of [taskKinds]. Appended at the end (CommandIds are a public contract — never
     // reorder/rename existing entries). Offline-first (optimistic apply + enqueue), so NOT onlineOnly;
     // it targets a tree node, not a Task row, so no [enabledFor] rule applies.
-    MoveItem(CommandId("item.move"), CommandCategory.Move),
+    MoveItem(CommandId("item.move"), CommandCategory.Item),
 
     // The recurring-definition "light switch" (#299): set a Habit/Chore/Event's DefinitionState, routed
     // through the registry to the `DefinitionWriter` seam. Its own category (not Status — that's the Task
@@ -171,12 +185,39 @@ enum class CommandKind(
     // that never moves the calendar); [SetTaskPriority] is Organize, beside [SetTaskPinned], because it
     // structures work rather than scheduling it. Both offline-first (optimistic apply + enqueue), so NOT
     // onlineOnly, and both valid in any working state, so they fall to [enabledFor]'s `else -> true`.
-    // Task-only for now: the server carries both fields on all four kinds, but this client has no
-    // per-field PATCH seam for a recurring definition (only the DefinitionState light switch), so the
-    // recurring kinds READ them without yet being able to write them.
+    // Task-only when they landed — the server carries both fields on all four kinds, but the client had
+    // no per-field PATCH seam for a recurring definition, so the recurring kinds could READ them without
+    // being able to write them. [SetDefinitionTargetDate] / [SetDefinitionPriority] below close that.
     // Appended at the end (CommandIds are a public contract — never reorder/rename existing entries).
     SetTaskTargetDate(CommandId("task.set-target-date"), CommandCategory.Schedule),
     SetTaskPriority(CommandId("task.set-priority"), CommandCategory.Organize),
+
+    // The recurring halves of the two soft-planning fields (#378): the same `target_date` / `priority`
+    // the Task verbs above write, on a Habit/Chore/Event definition instead. They are their own kinds
+    // rather than a widening of the Task ones because a [CommandId] is a frozen external binding: an OS
+    // intent or agent schema already bound to `task.set-priority` must keep meaning "a Task", and the
+    // operand differs anyway (a raw cross-kind Item id + an ItemKind, not a TaskId). [Definition]
+    // category beside the light switch — NOT the Schedule/Organize their Task twins sit in, because
+    // those feed [taskKinds] and these are not per-Task commands (raw cross-kind id, different writer).
+    // Offline-first (optimistic apply + enqueue) so NOT onlineOnly,
+    // and — like every definition command — no [enabledFor] rule: the gate is Task-typed and can't see
+    // a recurring row at all. Appended at the end (CommandIds are a public contract).
+    SetDefinitionTargetDate(CommandId("definition.set-target-date"), CommandCategory.Definition),
+    SetDefinitionPriority(CommandId("definition.set-priority"), CommandCategory.Definition),
+
+    // The kind-neutral soft delete (#389): `DELETE items/{id}`, the verb the Item tree means by "delete
+    // this row" for a recurring definition as much as for a Task. A SECOND delete kind rather than a
+    // widening of [DeleteTask]: `task.delete` is already bound by OS intents / agent schemas as
+    // "delete a Task" and carries a TaskId, and silently changing what an existing binding does is the
+    // one thing a stable CommandId forbids. [Item] category (it routes to `ItemWriter`, beside
+    // [MoveItem]) so it stays out of [taskKinds]; destructive, so a binding surface confirms first —
+    // and that confirmation must state the real semantic: a soft delete of the whole Series chain that
+    // keeps the occurrence records and the recurrence series. Offline-first, so NOT onlineOnly. It gets
+    // no [enabledFor] rule for the same reason [MoveItem] doesn't: the gate takes a Task, so it would
+    // guard Task ids and be blind to exactly the recurring rows this kind exists for — and the write is
+    // idempotent anyway (the server returns early on an already-tombstoned row, and a 404 maps to
+    // success). Appended at the end (CommandIds are a public contract).
+    DeleteItem(CommandId("item.delete"), CommandCategory.Item, destructive = true),
     ;
 
     /**
@@ -193,7 +234,13 @@ enum class CommandKind(
      *
      * Edit / schedule / organize / plan / settings kinds always apply (a clear or a relabel is valid in
      * any state; plan membership is a list concern the caller already knows; a User-setting write has no
-     * Task row at all, #173), so only the status verbs and the destructive delete carry a real rule.
+     * Task row at all, #173), so only the status verbs and [DeleteTask] carry a real rule.
+     *
+     * The gate is **Task-typed**, so the cross-kind kinds ([MoveItem], [DeleteItem], the definition
+     * edits) deliberately have none: a rule there would guard Task ids and be blind to exactly the
+     * recurring rows those kinds exist for, which is a worse contract than no rule at all. [DeleteItem]
+     * is destructive *and* ungated for that reason — its safety affordance is the confirmation the
+     * [destructive] flag drives, not this gate.
      */
     fun enabledFor(task: Task?): Boolean = when (this) {
         OpenTask -> task == null || task.workingState != WorkingState.Open
@@ -214,7 +261,7 @@ enum class CommandKind(
                     it.category != CommandCategory.Create &&
                     it.category != CommandCategory.Occurrence &&
                     it.category != CommandCategory.Settings &&
-                    it.category != CommandCategory.Move &&
+                    it.category != CommandCategory.Item &&
                     it.category != CommandCategory.Definition
             }
 
@@ -230,10 +277,13 @@ enum class CommandKind(
         /** The User-setting catalog the Settings Destination's backed categories drive (#173). */
         val settingsKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Settings }
 
-        /** The cross-kind tree-move catalog the modal move mode / keyboard drives (ADR-0049 #228). */
-        val moveKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Move }
+        /**
+         * The kind-neutral cross-kind Item catalog — the modal move mode / keyboard's reparent+reorder
+         * (ADR-0049 #228) and the Item tree's delete (#389), both routed to `ItemWriter`.
+         */
+        val itemKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Item }
 
-        /** The recurring-definition state catalog the Item-tree command menu drives (#299). */
+        /** The recurring-definition edit catalog the Item-tree command menu drives (#299, #378). */
         val definitionKinds: List<CommandKind> get() = entries.filter { it.category == CommandCategory.Definition }
     }
 }

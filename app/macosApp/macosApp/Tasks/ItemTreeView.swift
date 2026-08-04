@@ -301,13 +301,23 @@ struct ItemTreeView: View {
 ///
 /// The menu is **kind-aware** (ADR-0049 decision 7): a Task row gets Open · Open in New Window · Add
 /// subtask · Move · Undo move · Pin/Unpin · Add/Remove from plan · the working-state block (Start working /
-/// Mark done / Set aside) · Delete; a recurring (non-Task) row gets the cross-kind subset Add subtask ·
+/// Mark done / Set aside); a recurring (non-Task) row gets the cross-kind subset Add subtask ·
 /// Move · Undo move plus the **definition-state block** Activate / Send to review / Archive (#299). `Pin`,
-/// plan, the working-state block and `Delete` stay Task-only (mirrors Android). Each handler computes its
+/// plan and the working-state block stay Task-only (mirrors Android). Each handler computes its
 /// target from the row's current value — the "args from the row" rule — since the tree row is a cross-kind
 /// `Item` projection that may have no joined state. `isTask` is the shared bridge helper
 /// (`BridgeKt.itemKindIsTask`); per-row status comes from the joined `menuState` (Task) or
 /// `item.definitionState` (non-Task, `nil` for a Task).
+///
+/// **Delete is NOT kind-gated (#389).** It is the menu's shared tail, below whichever status block the row
+/// got, so a Habit/Chore/Event can be deleted from the tree exactly as a Task can. Archive *then* Delete is
+/// deliberate and matches the webui kebab, whose own ordering test pins it
+/// (`webui/src/components/itemKebab.test.ts:49-50`). It rides on the id alone: the shared
+/// `ItemTreeComponent.onDelete(id:)` resolves the row's `ItemKind` itself and routes to the kind-neutral
+/// chain-wide `DELETE /items/{id}`, the same route the webui calls for every kind. Nothing here needs the
+/// kind, so nothing here passes it. Note this stays a MENU verb only — the row body's
+/// `simultaneousGesture(TapGesture(count: 2))` below sends both of its clicks on to whatever child control
+/// sits under the pointer, so a tap-driven destructive affordance on the row itself would be unsafe here.
 ///
 /// This row is also the **entry point for the detached detail window** (#196, ADR-0033) — the `task-detail`
 /// scene in `DefernoApp` and `TaskDetailWindowRoot.openTaskDetailWindow` were both live but unreachable
@@ -336,6 +346,17 @@ private struct ItemRowContainer: View {
     private var inMoveMode: Bool { moveMode != nil }
     private var isLifted: Bool { moveMode?.liftedId == row.item.id }
     private var isTask: Bool { BridgeKt.itemKindIsTask(kind: row.item.kind) }
+
+    /// The delete confirm's body (#389). A Task gets the generic irreversibility line it always had. A
+    /// recurring row gets the series-scope line FIRST and then that same generic line — both are true and
+    /// both matter, and dropping the irreversibility warning from the *more* destructive of the two deletes
+    /// would be the wrong trade. Joined with a blank line, mirroring how the Compose confirm stacks its own paragraphs
+    /// (`ItemTreeUi.kt`'s `listOfNotNull(...).joinToString("\n\n")`).
+    private var deleteConfirmBody: String {
+        isTask
+            ? L.string("common_cannot_be_undone")
+            : L.string("tasks_delete_definition_confirm_body") + "\n\n" + L.string("common_cannot_be_undone")
+    }
 
     /// The single detached-window trigger (#196, ADR-0033), shared by all three entry points — the context
     /// menu item, the double-click accelerator and the VoiceOver rotor action — so the gates can't drift
@@ -392,7 +413,13 @@ private struct ItemRowContainer: View {
         // right-click, so without this "Open in New Window" was mouse-or-menu only. Gated identically to
         // the double-click, so on a non-Task row it is inert exactly as the double-click is.
         .accessibilityAction(named: Text(L.string("tasks_menu_open_in_new_window"))) { openDetailWindow() }
-        // Delete confirm (destructive, #231) — mirrors the Task-detail kebab's confirm.
+        // Delete confirm (destructive, #231) — mirrors the Task-detail kebab's confirm. The title and the
+        // write are kind-agnostic — only the row's title and id — but the BODY is not (#389): a recurring
+        // row's delete is chain-wide, so it leads with what that actually does to the series before the
+        // generic irreversibility line. The copy is deliberately factual about a SOFT delete — the whole
+        // repeating series leaves every list and plan, and its recorded occurrences are kept — because
+        // promising a cascade the server does not perform would be a lie the user could later catch. See
+        // the catalog comment above `tasks_delete_definition_confirm_body`.
         .confirmationDialog(
             L.format("tasks_delete_item_confirm_title", row.item.title),
             isPresented: $confirmDelete,
@@ -401,7 +428,7 @@ private struct ItemRowContainer: View {
             Button(L.string("common_delete"), role: .destructive) { component.onDelete(id: row.item.id) }
             Button(L.string("common_cancel"), role: .cancel) {}
         } message: {
-            Text(L.string("common_cannot_be_undone"))
+            Text(deleteConfirmBody)
         }
         // Add subtask (#231): a native title prompt — the tree has no inline add field (that's the detail's).
         // The child is always a Task (only Tasks carry a parent). A blank title is gated out (Add disabled).
@@ -456,8 +483,7 @@ private struct ItemRowContainer: View {
 
             if isTask {
                 // Pin / plan / the working-state block need the joined per-row state (label direction + which
-                // verb to hide), so they appear once it's present; Delete needs only the id, so it rides the
-                // kind gate alone.
+                // verb to hide), so they appear once it's present.
                 if let menu = menuState {
                     Divider()
                     Button { component.onSetPinned(id: row.item.id, pinned: !menu.pinned) } label: {
@@ -488,10 +514,6 @@ private struct ItemRowContainer: View {
                         }
                     }
                 }
-                Divider()
-                Button(role: .destructive) { confirmDelete = true } label: {
-                    Label(L.string("tasks_menu_delete_permanent"), systemImage: "trash")
-                }
             } else if let definition = row.item.definitionState {
                 // The non-Task definition-state block (#299): Activate / Send to review / Archive, hiding the
                 // verb for the current state (mirrors the Task working-state block). The shared component
@@ -514,6 +536,17 @@ private struct ItemRowContainer: View {
                         Label(L.string("tasks_menu_archive"), systemImage: "archivebox")
                     }
                 }
+            }
+
+            // Destructive Delete — the SHARED TAIL (#389), below whichever status block the row got, so it
+            // renders for every kind rather than only for a Task. Archive-then-Delete is the order the webui
+            // kebab uses and pins in its own test; the two verbs are genuinely different (Archive retires the
+            // rule but keeps it reachable, Delete removes the whole chain from every list and plan), so a
+            // recurring row wants both. It needs only the id — `ItemTreeComponent.onDelete(id:)` resolves the
+            // kind itself — which is exactly why it needs no kind gate. The row confirms first.
+            Divider()
+            Button(role: .destructive) { confirmDelete = true } label: {
+                Label(L.string("tasks_menu_delete_permanent"), systemImage: "trash")
             }
         }
     }

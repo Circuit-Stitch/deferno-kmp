@@ -47,7 +47,6 @@ class IdsTest {
         assertFailsWith<IllegalArgumentException> { HabitId("") }
         assertFailsWith<IllegalArgumentException> { ChoreId("  ") }
         assertFailsWith<IllegalArgumentException> { EventId("") }
-        assertFailsWith<IllegalArgumentException> { OccurrenceId("   ") }
     }
 
     @Test
@@ -55,7 +54,6 @@ class IdsTest {
         assertEquals("h-1", HabitId("h-1").value)
         assertEquals("c-1", ChoreId("c-1").value)
         assertEquals("e-1", EventId("e-1").value)
-        assertEquals("o-1", OccurrenceId("o-1").value)
     }
 
     @Test

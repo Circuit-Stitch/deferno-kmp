@@ -14,9 +14,16 @@ import kotlin.time.Instant
  * [DefinitionState] — **not** the Task [WorkingState] — and it carries a [recurrence] rule.
  *
  * **Definition vs Occurrence (glossary).** This is the *definition*: the recurring template and its
- * on/off [definitionState]. A single dated firing of it is a separate [Occurrence] with its own
- * [OccurrenceState]; the two states are deliberately distinct types so neither is mistaken for the
- * other.
+ * on/off [definitionState]. A single dated firing of it is a separate thing, and since #390 there is
+ * no `Occurrence` *type* to point at: a firing is identified by `(kind, definitionId, date)`, what is
+ * on record about it is an [OccurrenceFact] under that key, and how it went is the render-time
+ * [OccurrenceState] read off that fact plus coverage and today. The definition's state and the
+ * firing's state stay deliberately distinct types so neither is mistaken for the other (ADR-0053
+ * decision 4).
+ *
+ * A Habit firing is the sharpest case for that split: the wire row is `{habit_id, date, done_at}`
+ * with no id and no status column, so a Habit occurrence is *only* addressable by this definition's
+ * id and a date.
  */
 data class Habit(
     val id: HabitId,

@@ -19,10 +19,12 @@ import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
  * **safe default** so a row the backend statuses additively stays usable rather than disappearing or
  * crashing the reader.
  *
- * The occurrence family condenses on **two axes**, and they are not interchangeable (ADR-0053
- * decision 4): `toOccurrenceState` produces a render-time *reading* (which may say `Missed`), while
- * `toResolution`/`toResolutionOrNull` produce the *stored* [OccurrenceResolution] — the only half that
- * may reach a row. The reading is never persisted; the fact is never re-derived.
+ * The occurrence family condenses to **one** axis here, and that is the point (ADR-0053 decision 4):
+ * `toResolution`/`toResolutionOrNull` produce the *stored* [OccurrenceResolution], the only half of a
+ * firing that may reach a row. The other half — the render-time *reading* [OccurrenceState], which may
+ * say `Missed` — is not condensable from a wire token and has no mapper in this file; it is derived in
+ * `core:model` from the fact plus coverage plus today. The reading is never persisted; the fact is
+ * never re-derived.
  */
 
 /**
@@ -105,41 +107,25 @@ fun Priority.toWireToken(): String = when (this) {
     Priority.Backlog -> "backlog"
 }
 
-/**
- * `OccurrenceStatus` → [OccurrenceState]. `dropped` (the event terminal) condenses to
- * [OccurrenceState.Skipped]; [OccurrenceStatusWire.Unknown] degrades to [OccurrenceState.Scheduled]
- * (an unresolved firing) rather than fabricating a resolution.
- */
-fun OccurrenceStatusWire.toOccurrenceState(): OccurrenceState = when (this) {
-    OccurrenceStatusWire.Scheduled -> OccurrenceState.Scheduled
-    OccurrenceStatusWire.InProgress -> OccurrenceState.InProgress
-    OccurrenceStatusWire.DoneOnTime -> OccurrenceState.DoneOnTime
-    OccurrenceStatusWire.DoneLate -> OccurrenceState.DoneLate
-    OccurrenceStatusWire.Dropped -> OccurrenceState.Skipped
-    OccurrenceStatusWire.Unknown -> OccurrenceState.Scheduled
-}
-
-/**
- * `DerivedChoreOccurrenceStatus` → [OccurrenceState] — the read superset, including the
- * server-derived `scheduled`/`missed`. `skipped` condenses to [OccurrenceState.Skipped], `missed` is
- * kept distinct as [OccurrenceState.Missed]; [DerivedChoreOccurrenceStatusWire.Unknown] degrades to
- * [OccurrenceState.Scheduled].
- */
-fun DerivedChoreOccurrenceStatusWire.toOccurrenceState(): OccurrenceState = when (this) {
-    DerivedChoreOccurrenceStatusWire.Scheduled -> OccurrenceState.Scheduled
-    DerivedChoreOccurrenceStatusWire.Missed -> OccurrenceState.Missed
-    DerivedChoreOccurrenceStatusWire.InProgress -> OccurrenceState.InProgress
-    DerivedChoreOccurrenceStatusWire.DoneOnTime -> OccurrenceState.DoneOnTime
-    DerivedChoreOccurrenceStatusWire.DoneLate -> OccurrenceState.DoneLate
-    DerivedChoreOccurrenceStatusWire.Skipped -> OccurrenceState.Skipped
-    DerivedChoreOccurrenceStatusWire.Unknown -> OccurrenceState.Scheduled
-}
+// There are deliberately **no wire → [OccurrenceState] mappers** here (#390, ADR-0053 decision 4).
+// `OccurrenceStatusWire.toOccurrenceState` and `DerivedChoreOccurrenceStatusWire.toOccurrenceState`
+// lived here until this slice and lost their last production caller when the read stack moved onto
+// facts; they were removed rather than left as dead public API, because what they offered is precisely
+// the shortcut the ADR forbids. An [OccurrenceState] is a *reading*: it is a function of the stored
+// fact, the parent's [DefinitionState], `OccurrenceCoverage` and today. Three of those four are not on
+// the wire, so a mapper from a wire token alone can only guess — and it guessed exactly the two ways
+// the ADR calls out, degrading an unreadable token to `Scheduled` and passing the server's UTC-derived
+// `missed` through as if it were an answer about the user's local today.
+//
+// A reading is produced in one place: `resolveOccurrenceState` in `core:model`, from an
+// `OccurrenceFact` this file's `toResolution` / `toResolutionOrNull` built. The wire condenses to
+// facts here; the reading is derived there.
 
 /**
  * `OccurrenceStatus` → [OccurrenceResolution] — the **fact** condensation for an event firing (#390,
- * ADR-0053 decision 4). Distinct from [OccurrenceStatusWire.toOccurrenceState] above, which produces a
- * render-time *reading*: this produces the half that is genuinely stored and may therefore be written
- * to a row.
+ * ADR-0053 decision 4). Distinct from an [OccurrenceState], which is a render-time *reading* and is
+ * derived in `core:model`, never mapped from a wire token here: this produces the half that is
+ * genuinely stored and may therefore be written to a row.
  *
  * **Total, and deliberately never `null`** — unlike its chore sibling
  * [DerivedChoreOccurrenceStatusWire.toResolutionOrNull]. `GET /events/{id}/occurrences` returns only

@@ -27,6 +27,7 @@ import com.circuitstitch.deferno.core.domain.command.ClearTaskDeadline
 import com.circuitstitch.deferno.core.domain.command.CommandExecutor
 import com.circuitstitch.deferno.core.domain.command.CommandResult
 import com.circuitstitch.deferno.core.domain.command.CreateItem
+import com.circuitstitch.deferno.core.domain.command.DeleteItem
 import com.circuitstitch.deferno.core.domain.command.DeleteTask
 import com.circuitstitch.deferno.core.domain.command.MarkOccurrence
 import com.circuitstitch.deferno.core.domain.command.MoveItem
@@ -227,6 +228,16 @@ interface AccountSession {
      * enqueue, ADR-0001/0007), so the feature layer never touches the registry directly (mirrors [setDeadline]).
      */
     val deleteTask: suspend (TaskId) -> Unit
+
+    /**
+     * The Item tree's **kind-neutral** Delete seam (#389): maps a raw Item id to the destructive
+     * `DeleteItem` Command (`DELETE items/{id}`, optimistic tombstone + outbox enqueue), so the feature
+     * layer never touches the registry directly. The sibling of [deleteTask], not its replacement — the
+     * tree resolves the row's kind and takes this one only once it knows the row is *not* a Task, because
+     * a recurring id sent down the TaskId-typed seam applies nothing locally and is then dropped as a
+     * 404-success. Defaulted to a no-op so test fakes build without overriding it.
+     */
+    val deleteDefinition: suspend (String) -> Unit get() = { _ -> }
 
     /**
      * The Tasks Item-tree move seam the modal move mode drives (ADR-0049 #228): maps a relative move to a
@@ -499,6 +510,9 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val deleteTask: suspend (TaskId) -> Unit =
         commandDeleteTask(component.commandExecutor)
 
+    override val deleteDefinition: suspend (String) -> Unit =
+        commandDeleteDefinition(component.commandExecutor)
+
     override val moveEditor: MoveEditor =
         commandMoveEditor(component.commandExecutor)
 
@@ -594,6 +608,18 @@ internal fun commandSetLabels(executor: CommandExecutor): suspend (TaskId, List<
  */
 internal fun commandDeleteTask(executor: CommandExecutor): suspend (TaskId) -> Unit =
     { id -> executor.execute(DeleteTask(id)) }
+
+/**
+ * The Item tree's kind-neutral Delete seam backed by a [CommandExecutor] (#389): dispatches the
+ * destructive [DeleteItem] over the raw Item id (the writer tombstones whichever per-kind cache holds the
+ * row + enqueues `DELETE items/{id}`). **No [ItemKind] operand** — the tree resolves the kind to choose
+ * between this seam and [commandDeleteTask], but never forwards it, because the server resolves the kind
+ * itself and deletes the whole Series chain; the per-kind mirror would archive one Segment and leave a
+ * live sibling to reappear. No `current` row either: the kind is not Task-typed, so there is nothing a
+ * Task-shaped `enabledFor` gate could read, and the write is idempotent server-side anyway.
+ */
+internal fun commandDeleteDefinition(executor: CommandExecutor): suspend (String) -> Unit =
+    { id -> executor.execute(DeleteItem(id)) }
 
 /**
  * The Pin write seam backed by a [CommandExecutor] (#231): dispatches [SetTaskPinned] with the target flag

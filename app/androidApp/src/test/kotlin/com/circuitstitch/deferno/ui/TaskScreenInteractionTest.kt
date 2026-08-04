@@ -133,6 +133,73 @@ class TaskScreenInteractionTest {
     }
 
     @Test
+    fun itemTree_nonTaskRow_deleteForwardsTheDeleteIntent() {
+        // #389: Delete is offered for EVERY kind — it hangs below the definition-state block rather than
+        // inside the Task-only branch, so a recurring row can reach it at all. The View still passes only
+        // the id; the component resolves the kind and picks `DELETE items/{id}` over the Task route.
+        val habit = Item("h1", ItemKind.Habit, "Stretch daily", sequence = 0)
+        val component = FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(listOf(habit))))
+        setContent { TaskListScreen(component) }
+
+        composeRule.onNodeWithText("Stretch daily").performTouchInput { longClick() }
+        composeRule.onNodeWithText("Delete (Permanent!)").performClick()
+        // Destructive, so it detours through the confirm — nothing is dispatched until it's accepted.
+        assertEquals(emptyList<String>(), component.deleted)
+        composeRule.onNodeWithText("Delete").performClick()
+
+        assertEquals(listOf("h1"), component.deleted)
+    }
+
+    @Test
+    fun itemTree_nonTaskRow_deleteConfirmStatesTheSeriesScopeAndThatOccurrencesAreKept() {
+        // The copy is load-bearing (#389): the client sends the chain-wide `DELETE items/{id}`, so the
+        // whole repeating series goes — but it is a SOFT delete, so the recorded occurrences survive. The
+        // confirm says exactly that and promises no cascade. A Task row gets no such line (next test).
+        val habit = Item("h1", ItemKind.Habit, "Stretch daily", sequence = 0)
+        val component = FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(listOf(habit))))
+        setContent { TaskListScreen(component) }
+
+        composeRule.onNodeWithText("Stretch daily").performTouchInput { longClick() }
+        composeRule.onNodeWithText("Delete (Permanent!)").performClick()
+
+        composeRule
+            .onNodeWithText(
+                "This removes the whole repeating series from every list and plan. " +
+                    "Its recorded past occurrences are kept.\n\nThis can't be undone.",
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun itemTree_taskRow_deleteConfirmCarriesNoSeriesLine() {
+        // A Task has no series to scope, so its confirm is unchanged by #389 — the recurring line is
+        // conditional, not unconditional prose bolted onto every delete.
+        val task = Item("t1", ItemKind.Task, "Water the plants", sequence = 0)
+        val component = FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(listOf(task))))
+        setContent { TaskListScreen(component) }
+
+        composeRule.onNodeWithText("Water the plants").performTouchInput { longClick() }
+        composeRule.onNodeWithText("Delete (Permanent!)").performClick()
+
+        composeRule.onNodeWithText("This can't be undone.").assertIsDisplayed()
+    }
+
+    @Test
+    fun itemTree_inReviewNonTaskRow_offersBothActivateAndArchive() {
+        // The definition-state block reads the full light switch, not the archived bit: an InReview
+        // definition is neither Active nor Archived, so BOTH verbs apply. Before #389 it took the
+        // `isTerminal` else-arm and was offered Archive alone — a dead end with no path back to Active.
+        val inReview = Item("h1", ItemKind.Habit, "Stretch daily", sequence = 0, definitionState = DefinitionState.InReview)
+        val component = FakeItemTreeComponent(ItemTreeState(rows = buildItemTree(listOf(inReview))))
+        setContent { TaskListScreen(component) }
+
+        composeRule.onNodeWithText("Stretch daily").performTouchInput { longClick() }
+        composeRule.onNodeWithText("Activate").performClick()
+
+        assertEquals(listOf("h1" to DefinitionState.Active), component.definitionStatesSet)
+    }
+
+    @Test
     fun itemTree_empty_showsGentleCopy() {
         val component = FakeItemTreeComponent(ItemTreeState(rows = emptyList()))
         setContent { TaskListScreen(component) }

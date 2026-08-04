@@ -68,17 +68,14 @@ value class EventId(val value: String) {
     }
 }
 
-/**
- * Stable identifier of an [Occurrence] — the UUID of one dated firing of a recurring definition. An
- * Occurrence is distinct from its parent definition (CONTEXT.md → "Occurrence"); this is the
- * firing's own id, not the definition's [HabitId]/[ChoreId]/[EventId].
- */
-@JvmInline
-value class OccurrenceId(val value: String) {
-    init {
-        require(value.isNotBlank()) { "OccurrenceId must not be blank" }
-    }
-}
+// There is deliberately **no `OccurrenceId`** here (#390, ADR-0053 decision 4). A dated firing is
+// identified by `(kind, definitionId, date)` — the identity the write path has always used through
+// `OccurrenceTargets.of` — and what is stored about it is an [OccurrenceFact] under that key. The
+// server's per-firing UUID was modelled here until #390 and had no production caller by then: a Habit
+// occurrence has no id of its own on the wire at all (`HabitOccurrenceDto` is `{habit_id, date,
+// done_at}`), so a UUID key could never be joined against anything this client writes, and keying a
+// row on it is exactly what ADR-0053 replaced. `OccurrenceDto.id` stays a plain wire `String` on the
+// one path that still decodes it (`today_occurrence` on a plan row), which is all it ever was.
 
 /**
  * Which of the four item kinds an item is (CONTEXT.md → "Item"). The clean domain mirror of the wire

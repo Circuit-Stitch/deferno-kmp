@@ -19,13 +19,16 @@ import com.circuitstitch.deferno.core.agent.InferenceEngineOrigin
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
 import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.model.Account
+import com.circuitstitch.deferno.core.model.CalendarFiring
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.ChatMessage
 import com.circuitstitch.deferno.core.model.ChatRole
 import com.circuitstitch.deferno.core.model.Conversation
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.OccurrenceState
 import com.circuitstitch.deferno.core.model.User
 import com.circuitstitch.deferno.core.model.UserSettings
+import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.speech.SpeechEngineOption
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import com.circuitstitch.deferno.ios.TasksRoot
@@ -454,6 +457,64 @@ fun markerCount(state: CalendarState, date: LocalDate): Int = state.markers[date
  */
 fun calendarItemActionable(item: CalendarItem): Boolean = item.isActionableOccurrence
 fun calendarItemIsHabit(item: CalendarItem): Boolean = item.kind == ItemKind.Habit
+
+/**
+ * The agenda chip's label as a **string-catalog key**, not as a bridged enum — Swift renders
+ * `L.string(token)` and has no branch to forget. Same idiom as `journeyLabelToken` (Bridge.kt:197):
+ * a reading crosses as a stable token, and the mapping from reading to word stays in shared code.
+ *
+ * **Why this seam exists at all.** Both Apple chips used to be a five-`if` chain over `WorkingState`
+ * inside the View, ending in a `return status.label` catch-all — and `WorkingState.label`
+ * (DesignSystem.swift) speaks the *Tasks* vocabulary: `tasks_menu_open` for Open,
+ * `calendar_action_done` for Done. SKIE does bridge a Kotlin enum to a real `@frozen` Swift enum
+ * (build/skie/.../Model.OccurrenceState.swift), so an exhaustive `switch` was available to those
+ * chips — but neither twin used one, so the four readings this slice adds (`DoneOnTime`, `DoneLate`,
+ * `Missed`, `Unknown`) would have dropped through the catch-all and printed Tasks words on a calendar
+ * surface, with nothing failing to compile. As a Kotlin `when` it is exhaustiveness the compiler
+ * enforces, in the module that owns the enum — and it is ONE mapping rather than two hand-kept Swift
+ * copies (iosApp/Calendar/CalendarView.swift and macosApp/Calendar/CalendarView.swift are twins that
+ * have already drifted from each other's Compose sibling once).
+ *
+ * **The `null` arm is a semantic rule, not a rendering default.** A row with no reading is not a
+ * firing — a one-off dated Task, an unresolved-kind row, or a synced external event — and its own
+ * [CalendarItem.status] is a genuine fact about *that item* (see the [CalendarFiring] KDoc). Swift
+ * re-deriving that rule would be a second place to get it wrong.
+ *
+ * [OccurrenceState.Unknown] renders as absent information ("Not synced"), never as an error and never
+ * as the Scheduled dash: this device has simply never synced that date (ADR-0053 decision 4).
+ */
+fun occurrenceStatusToken(firing: CalendarFiring): String = when (firing.occurrence) {
+    OccurrenceState.Scheduled -> "common_status_scheduled"
+    OccurrenceState.InProgress -> "common_status_in_progress"
+    OccurrenceState.DoneOnTime -> "common_status_done_on_time"
+    OccurrenceState.DoneLate -> "common_status_done_late"
+    OccurrenceState.Skipped -> "common_status_skipped"
+    OccurrenceState.Missed -> "common_status_missed"
+    OccurrenceState.Unknown -> "common_status_unknown"
+    null -> when (firing.item.status) {
+        WorkingState.Open -> "common_status_scheduled"
+        WorkingState.InProgress -> "common_status_in_progress"
+        WorkingState.InReview -> "common_status_in_review"
+        WorkingState.Done -> "common_status_done"
+        WorkingState.Dropped -> "common_status_skipped"
+    }
+}
+
+/**
+ * Whether the chip takes the success-container tint. Deliberately a *second* seam rather than a field
+ * on the first: the label splits "done" on punctuality and the tint does not — a firing that happened
+ * is a firing that happened, however late.
+ *
+ * `Missed` and [OccurrenceState.Unknown] both take the neutral tint. `Missed` is stated in words and
+ * never coloured at (ADR-0053 decision 7 — gentleness is vocabulary, not suppression), and an unsynced
+ * day is absent information rather than a failure, so tinting it would be asserting something this
+ * device does not know.
+ */
+fun occurrenceStatusIsDone(firing: CalendarFiring): Boolean = when (firing.occurrence) {
+    OccurrenceState.DoneOnTime, OccurrenceState.DoneLate -> true
+    null -> firing.item.status == WorkingState.Done
+    else -> false
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Date/time picker seams — the New form's date + deadline clock + Event window, and the Search range.

@@ -454,6 +454,10 @@ class DefaultRootComponent(
                         // The detail's destructive Delete seam (kebab → confirm), routed through this
                         // Account's command executor (DeleteTask). The Item-tree command menu (#231) reuses it.
                         deleteTask = session.deleteTask,
+                        // The Item tree's kind-neutral Delete (#389) for a recurring row, routed through
+                        // this Account's executor (DeleteItem → `DELETE items/{id}`, the whole Series chain).
+                        // The tree picks between this and [deleteTask] by the row's resolved kind.
+                        deleteDefinition = session.deleteDefinition,
                         // The Item-tree command menu's Task-only Pin + plan-toggle writes (#231), routed
                         // through this Account's command executor; add/remove pre-bind today's (date, tz).
                         setPinned = session.setPinned,

@@ -55,6 +55,12 @@ class CommandKindTest {
                 CommandKind.SetTaskDeadlineTime to "task.set-deadline-time",
                 CommandKind.SetTaskTargetDate to "task.set-target-date",
                 CommandKind.SetTaskPriority to "task.set-priority",
+                // #378: NEW ids, not a reuse of the Task ones. Anything already bound to
+                // `task.set-priority` must keep meaning "a Task", so the recurring verbs get their own.
+                CommandKind.SetDefinitionTargetDate to "definition.set-target-date",
+                CommandKind.SetDefinitionPriority to "definition.set-priority",
+                // #389: likewise a NEW id — `task.delete` stays the TaskId-typed Task delete.
+                CommandKind.DeleteItem to "item.delete",
             ),
             CommandKind.entries.associateWith { it.id.value },
         )
@@ -81,8 +87,15 @@ class CommandKindTest {
     }
 
     @Test
-    fun deleteIsTheOnlyDestructiveKind() {
-        assertEquals(listOf(CommandKind.DeleteTask), CommandKind.entries.filter { it.destructive })
+    fun theTwoDeleteVerbsAreTheOnlyDestructiveKinds() {
+        // The destructive set is the confirm/undo trigger every binding surface reads, so it is pinned
+        // exactly — in catalog order. #389 added the second member: the kind-neutral [DeleteItem], which
+        // is destructive for a stronger reason than [DeleteTask] (it removes the whole Series chain of a
+        // recurring definition, not one row). Nothing else in the catalog may quietly join this set.
+        assertEquals(
+            listOf(CommandKind.DeleteTask, CommandKind.DeleteItem),
+            CommandKind.entries.filter { it.destructive },
+        )
     }
 
     @Test
@@ -153,6 +166,18 @@ class CommandKindTest {
     }
 
     @Test
+    fun theKindNeutralDeleteIsDestructiveButUngated() {
+        // #389: [DeleteItem] is destructive and yet has no [enabledFor] rule — deliberately, not by
+        // omission. The gate takes a Task, so a rule would guard Task ids while staying blind to exactly
+        // the recurring rows this kind exists for; the write is idempotent anyway. Its safety affordance
+        // is the confirmation the destructive flag drives. Pinned so nobody "fixes" the asymmetry by
+        // copying DeleteTask's rule and quietly half-gating a cross-kind verb.
+        assertTrue(CommandKind.DeleteItem.destructive)
+        assertTrue(CommandKind.DeleteItem.enabledFor(task(deleted = true)))
+        assertTrue(CommandKind.DeleteItem.enabledFor(null))
+    }
+
+    @Test
     fun everyKindIsEnabledForAnUnknownRow() {
         // null = uncached/unknown → never block (the offline write still enqueues + reconciles).
         for (kind in CommandKind.entries) {
@@ -168,7 +193,7 @@ class CommandKindTest {
             CommandKind.createKinds,
             CommandKind.occurrenceKinds,
             CommandKind.settingsKinds,
-            CommandKind.moveKinds,
+            CommandKind.itemKinds,
             CommandKind.definitionKinds,
         )
         assertEquals(CommandKind.entries.toSet(), partitions.flatten().toSet())
@@ -181,23 +206,45 @@ class CommandKindTest {
         assertTrue(CommandKind.createKinds.all { it.category == CommandCategory.Create })
         assertTrue(CommandKind.occurrenceKinds.all { it.category == CommandCategory.Occurrence })
         assertTrue(CommandKind.settingsKinds.all { it.category == CommandCategory.Settings })
-        assertTrue(CommandKind.moveKinds.all { it.category == CommandCategory.Move })
-        assertEquals(listOf(CommandKind.MoveItem), CommandKind.moveKinds, "the move catalog is the single cross-kind move verb")
+        assertTrue(CommandKind.itemKinds.all { it.category == CommandCategory.Item })
+        assertEquals(
+            listOf(CommandKind.MoveItem, CommandKind.DeleteItem),
+            CommandKind.itemKinds,
+            "the Item catalog is the kind-neutral cross-kind verbs — the ones routed to the ItemWriter",
+        )
         assertTrue(CommandKind.definitionKinds.all { it.category == CommandCategory.Definition })
         assertEquals(
-            listOf(CommandKind.SetDefinitionState),
+            listOf(
+                CommandKind.SetDefinitionState,
+                CommandKind.SetDefinitionTargetDate,
+                CommandKind.SetDefinitionPriority,
+            ),
             CommandKind.definitionKinds,
-            "the definition catalog is the single recurring-definition light-switch verb",
+            "the definition catalog is the light switch plus the two soft-planning fields (#378)",
         )
+        // The delete is deliberately NOT in the definition catalog: it takes no ItemKind and works on a
+        // Task too, so grouping it with the recurring edits would imply an operand it does not have.
+        assertTrue(CommandKind.DeleteItem !in CommandKind.definitionKinds)
         assertTrue(
             CommandKind.taskKinds.none {
                 it.category == CommandCategory.Plan ||
                     it.category == CommandCategory.Create ||
                     it.category == CommandCategory.Occurrence ||
                     it.category == CommandCategory.Settings ||
-                    it.category == CommandCategory.Move ||
+                    it.category == CommandCategory.Item ||
                     it.category == CommandCategory.Definition
             },
+        )
+        // The cross-kind kinds must never leak into the Task menu's catalog: taskKinds is defined by
+        // EXCLUSION, so a new kind filed under Edit/Schedule/Organize silently joins it. These three
+        // address a raw Item id, which a TaskId-typed menu binding cannot supply.
+        assertTrue(
+            CommandKind.taskKinds.none {
+                it == CommandKind.DeleteItem ||
+                    it == CommandKind.SetDefinitionTargetDate ||
+                    it == CommandKind.SetDefinitionPriority
+            },
+            "the cross-kind kinds must stay out of the per-Task catalog",
         )
     }
 }

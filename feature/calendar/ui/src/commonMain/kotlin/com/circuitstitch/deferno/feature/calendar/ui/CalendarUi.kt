@@ -71,15 +71,21 @@ import com.circuitstitch.deferno.core.designsystem.resources.common_clear
 import com.circuitstitch.deferno.core.designsystem.resources.common_start
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_done
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_done_late
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_done_on_time
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_in_progress
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_in_review
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_missed
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_scheduled
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_skipped
+import com.circuitstitch.deferno.core.designsystem.resources.common_status_unknown
 import com.circuitstitch.deferno.core.designsystem.resources.common_time_pattern
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
+import com.circuitstitch.deferno.core.model.CalendarFiring
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OccurrenceAction
+import com.circuitstitch.deferno.core.model.OccurrenceState
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -92,9 +98,20 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 // Stateless building blocks for the Calendar View (#74): a month grid + a day agenda over Occurrences.
-// Kept in commonMain (Android + desktop) so both platform screens share them. Gentle by default — no
-// "overdue"/"late"/"missed" anywhere; a past unfinished firing simply reads "Scheduled"
-// (design-principle #4). The Android/desktop screens that host them live in androidMain/jvmMain.
+// Kept in commonMain (Android + desktop) so both platform screens share them. The Android/desktop
+// screens that host them live in androidMain/jvmMain.
+//
+// The agenda is a list of CalendarFiring, not of CalendarItem: each row arrives already paired with
+// the reading of how that day's firing went (ADR-0053 decision 4), derived in the component against
+// the stored facts, this device's synced coverage, the definition's light switch and today. Nothing
+// here re-derives it, and nothing here reads `CalendarItem.status` for a firing — on a firing that
+// column is the *definition's* progress stamped onto every one of its days, and an offline mark no
+// longer touches it at all, so a chip driven by it would sit frozen through every check-in.
+//
+// The register is flat rather than euphemistic: a past unresolved firing inside synced coverage reads
+// "Missed", and one outside it reads "Not synced". That is not a loss of gentleness — gentleness is
+// vocabulary, not suppression (ADR-0053 decision 7). The catalog keeps the words plain, and the
+// colours below never add a reproach on top of them.
 
 /** Minimum height for a tappable control — design-principles.md "≥44–48dp" touch targets. */
 internal val MinTouchTarget = 48.dp
@@ -113,7 +130,7 @@ fun CalendarContent(
     visibleMonth: LocalDate,
     selectedDay: LocalDate,
     markers: Map<LocalDate, Int>,
-    agenda: List<CalendarItem>,
+    agenda: List<CalendarFiring>,
     onDaySelected: (LocalDate) -> Unit,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
@@ -318,11 +335,17 @@ internal fun RescheduleBanner(item: CalendarItem, onCancel: () -> Unit, modifier
     }
 }
 
-/** The selected day's agenda: its Occurrences + dated items, or a gentle empty state. */
+/**
+ * The selected day's agenda: its firings + dated items, or a gentle empty state.
+ *
+ * [items] are [CalendarFiring]s — the feed row plus how that day's firing went. The list key is still
+ * the row's own id: a firing has no id of its own, and the reading is a value derived *for* the row,
+ * not a second identity.
+ */
 @Composable
 internal fun DayAgenda(
     date: LocalDate,
-    items: List<CalendarItem>,
+    items: List<CalendarFiring>,
     onMark: (itemId: String, action: OccurrenceAction) -> Unit,
     onClear: (itemId: String) -> Unit,
     onStartReschedule: (CalendarItem) -> Unit,
@@ -343,9 +366,9 @@ internal fun DayAgenda(
                 // Edge-to-edge (ADR-0035 #2): pad the last agenda row clear of the system nav bar.
                 contentPadding = WindowInsets.systemBars.only(WindowInsetsSides.Bottom).asPaddingValues(),
             ) {
-                items(items, key = { it.id }) { item ->
+                items(items, key = { it.item.id }) { firing ->
                     AgendaRow(
-                        item = item,
+                        firing = firing,
                         onMark = onMark,
                         onClear = onClear,
                         onStartReschedule = onStartReschedule,
@@ -375,16 +398,25 @@ private fun EmptyAgenda(modifier: Modifier = Modifier) {
     }
 }
 
-/** One agenda entry: title + neutral status, and the kind-aware action set for an actionable firing. */
+/**
+ * One agenda entry: title + the row's status reading, and the kind-aware action set for an actionable
+ * firing.
+ *
+ * It takes the whole [CalendarFiring] rather than the row alone because the two things it renders come
+ * from the two halves: the title, clock and action set are properties of the [CalendarItem], while the
+ * chip is the derived reading beside it. Passing only the row is what used to force the chip to read
+ * `item.status` — the defect ADR-0053 decision 4 closes.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun AgendaRow(
-    item: CalendarItem,
+    firing: CalendarFiring,
     onMark: (itemId: String, action: OccurrenceAction) -> Unit,
     onClear: (itemId: String) -> Unit,
     onStartReschedule: (CalendarItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val item = firing.item
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
@@ -409,7 +441,7 @@ internal fun AgendaRow(
                 }
             }
             Spacer(Modifier.width(12.dp))
-            AgendaStatusChip(item.status)
+            AgendaStatusChip(firing)
         }
         if (item.isActionableOccurrence) {
             Spacer(Modifier.height(8.dp))
@@ -441,20 +473,25 @@ private fun ActionChip(label: String, onClick: () -> Unit) {
     )
 }
 
-/** A neutral status label — colour reinforces, never the sole signal (WCAG); no shaming vocabulary. */
+/**
+ * The row's status label — colour reinforces, never the sole signal (WCAG).
+ *
+ * It renders the reading it is handed and derives nothing: for a firing the answer already sits on
+ * [CalendarFiring.occurrence], resolved in the component against facts, coverage, the definition's
+ * light switch and today (ADR-0053 decision 4). Re-deriving it here would put a clock read inside a
+ * composable and would make the chip un-testable at a fixed date.
+ *
+ * **The null is load-bearing.** `occurrence == null` does not mean "unknown" — it means *this row is
+ * not a firing at all* (a one-off dated Task, an unresolved-kind row, a synced external event), so
+ * there is no occurrence axis to read and the row's own [WorkingState] is the honest answer. That
+ * status is a genuine fact about *that item*; it is only meaningless when stamped onto a firing.
+ * [OccurrenceState.Unknown] is the entirely different claim "this device has never synced that date".
+ */
 @Composable
-private fun AgendaStatusChip(status: WorkingState, modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    val brand = MaterialTheme.defernoColors
-    val (label, container, content) = when (status) {
-        // A scheduled-but-unfinished firing — including a past one — reads plainly as "Scheduled"
-        // (design-principle #4: no "overdue"/"missed"/"late").
-        WorkingState.Open -> Triple(stringResource(Res.string.common_status_scheduled), scheme.surfaceVariant, scheme.onSurfaceVariant)
-        WorkingState.InProgress -> Triple(stringResource(Res.string.common_status_in_progress), scheme.primaryContainer, scheme.onPrimaryContainer)
-        WorkingState.InReview -> Triple(stringResource(Res.string.common_status_in_review), scheme.secondaryContainer, scheme.onSecondaryContainer)
-        WorkingState.Done -> Triple(stringResource(Res.string.common_status_done), brand.successContainer, brand.onSuccessContainer)
-        WorkingState.Dropped -> Triple(stringResource(Res.string.common_status_skipped), scheme.surfaceVariant, brand.inkMuted)
-    }
+private fun AgendaStatusChip(firing: CalendarFiring, modifier: Modifier = Modifier) {
+    val occurrence = firing.occurrence
+    val (label, container, content) =
+        if (occurrence == null) datedRowChipStyle(firing.item.status) else firingChipStyle(occurrence)
     val statusDescription = stringResource(Res.string.common_status_a11y, label)
     Text(
         text = label,
@@ -466,6 +503,73 @@ private fun AgendaStatusChip(status: WorkingState, modifier: Modifier = Modifier
             .padding(horizontal = 8.dp, vertical = 2.dp)
             .clearAndSetSemantics { contentDescription = statusDescription },
     )
+}
+
+/**
+ * How a firing's reading paints: (label, container, content). Exhaustive over all seven
+ * [OccurrenceState] members deliberately — a new state must break this build rather than fall through
+ * to a generic label, which is exactly what the Apple side *cannot* have (a Kotlin enum bridges to
+ * Swift as an Objective-C class, so a Swift match is an `if`-chain with a silent catch-all).
+ *
+ * Tone is spent only where it earns its keep:
+ * - **Missed** is deliberately not an error colour. The word is already exact; painting it red would
+ *   add the reproach ADR-0053 decision 7 says the register must not carry. It shares the muted
+ *   past-tense tone with **Skipped**: both are days that have closed, and the difference between them
+ *   is the word — which is precise — not the colour, which would only be a verdict.
+ * - **Done late** shares Done-on-time's success tone. Both record that the work *happened*; the
+ *   punctuality split belongs in the label, where it is information.
+ * - **Not synced** ([OccurrenceState.Unknown]) gets no container at all. Absent information must read
+ *   as an aside rather than as a badge announcing a state, and above all it must never look like the
+ *   Scheduled chip: "we have never looked at that day" and "nothing was due yet" are different claims,
+ *   and showing the second when we mean the first is the guess this whole slice exists to stop.
+ */
+@Composable
+private fun firingChipStyle(occurrence: OccurrenceState): Triple<String, Color, Color> {
+    val scheme = MaterialTheme.colorScheme
+    val brand = MaterialTheme.defernoColors
+    return when (occurrence) {
+        OccurrenceState.Scheduled ->
+            Triple(stringResource(Res.string.common_status_scheduled), scheme.surfaceVariant, scheme.onSurfaceVariant)
+        OccurrenceState.InProgress ->
+            Triple(stringResource(Res.string.common_status_in_progress), scheme.primaryContainer, scheme.onPrimaryContainer)
+        OccurrenceState.DoneOnTime ->
+            Triple(stringResource(Res.string.common_status_done_on_time), brand.successContainer, brand.onSuccessContainer)
+        OccurrenceState.DoneLate ->
+            Triple(stringResource(Res.string.common_status_done_late), brand.successContainer, brand.onSuccessContainer)
+        OccurrenceState.Skipped ->
+            Triple(stringResource(Res.string.common_status_skipped), scheme.surfaceVariant, brand.inkMuted)
+        OccurrenceState.Missed ->
+            Triple(stringResource(Res.string.common_status_missed), scheme.surfaceVariant, brand.inkMuted)
+        OccurrenceState.Unknown ->
+            Triple(stringResource(Res.string.common_status_unknown), Color.Transparent, brand.inkMuted)
+    }
+}
+
+/**
+ * How a **non-firing** row paints — a one-off dated Task, an unresolved-kind row, a synced external
+ * event. This is the original chip, now reached only where [WorkingState] still means something: the
+ * item's own progress through its own lifecycle.
+ *
+ * `Open` keeps reading "Scheduled" and is still deliberately neutral here, but it is no longer the
+ * catch-all for a past unresolved day — that day is a *firing*, and it now reads Missed or Not synced
+ * on the branch above.
+ */
+@Composable
+private fun datedRowChipStyle(status: WorkingState): Triple<String, Color, Color> {
+    val scheme = MaterialTheme.colorScheme
+    val brand = MaterialTheme.defernoColors
+    return when (status) {
+        WorkingState.Open ->
+            Triple(stringResource(Res.string.common_status_scheduled), scheme.surfaceVariant, scheme.onSurfaceVariant)
+        WorkingState.InProgress ->
+            Triple(stringResource(Res.string.common_status_in_progress), scheme.primaryContainer, scheme.onPrimaryContainer)
+        WorkingState.InReview ->
+            Triple(stringResource(Res.string.common_status_in_review), scheme.secondaryContainer, scheme.onSecondaryContainer)
+        WorkingState.Done ->
+            Triple(stringResource(Res.string.common_status_done), brand.successContainer, brand.onSuccessContainer)
+        WorkingState.Dropped ->
+            Triple(stringResource(Res.string.common_status_skipped), scheme.surfaceVariant, brand.inkMuted)
+    }
 }
 
 // --- pure helpers (date → display) ---

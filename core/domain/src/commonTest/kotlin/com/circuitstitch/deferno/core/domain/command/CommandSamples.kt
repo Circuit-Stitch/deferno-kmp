@@ -62,6 +62,12 @@ internal fun sampleCommand(kind: CommandKind): Command = when (kind) {
     CommandKind.SetTaskDeadlineTime -> SetTaskDeadlineTime(TaskId("t1"), LocalTime(9, 0))
     CommandKind.SetTaskTargetDate -> SetTaskTargetDate(TaskId("t1"), SAMPLE_TARGET_DATE)
     CommandKind.SetTaskPriority -> SetTaskPriority(TaskId("t1"), Priority.Fire)
+    // The recurring twins (#378) sample a DIFFERENT kind each (Chore / Event) so the catalog-wide
+    // dispatch test exercises more than one branch of the writer's kind routing.
+    CommandKind.SetDefinitionTargetDate -> SetDefinitionTargetDate("c1", ItemKind.Chore, SAMPLE_TARGET_DATE)
+    CommandKind.SetDefinitionPriority -> SetDefinitionPriority("e1", ItemKind.Event, Priority.Backlog)
+    // The kind-neutral delete (#389) — a raw Item id and no kind, deliberately.
+    CommandKind.DeleteItem -> DeleteItem("h1")
 }
 
 /** Concise [Task] fixture for the enablement tests. */

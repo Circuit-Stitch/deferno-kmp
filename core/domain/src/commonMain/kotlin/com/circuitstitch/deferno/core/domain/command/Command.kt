@@ -173,9 +173,19 @@ data class SetTaskPinned(override val taskId: TaskId, val pinned: Boolean) : Tas
 
 /**
  * Set (or clear) the Task's **soft target date** (#375) — when the person *wants* it done by, as
- * opposed to [SetTaskDeadline]'s hard "when it must be done by". The two are peers and fully
- * independent: this never touches `complete_by`, and no `targetDate <= completeBy` rule is enforced
- * (all four combinations are valid). It drives sorting/surfacing only — never the calendar.
+ * opposed to [SetTaskDeadline]'s hard "when it must be done by". It writes `target_date` **alone** and
+ * never touches `complete_by`, and it drives sorting/surfacing only — never the calendar.
+ *
+ * **The two are not independent peers: the soft date is bounded by the hard one.** This note used to
+ * say "no `targetDate <= completeBy` rule is enforced (all four combinations are valid)". That is false
+ * at backend HEAD. #629 added `clamp_target_date` (backend/src/models/item_kind.rs:144-150), invoked
+ * from `apply_write_invariants` (:183) — the one function every content mutation on all four kinds
+ * funnels through — and it silently pulls a `target_date` later than `complete_by` **down** to the
+ * deadline and stores it clamped. There is no 400 and no error body to read: a caller that sets a
+ * target past the deadline simply gets a value the server never keeps. The recurring sibling
+ * [SetDefinitionTargetDate] reproduces that clamp in its optimistic apply so the local row equals what
+ * the server will store; the Task write path does not yet, so a Task's optimistic row can show the
+ * unclamped value until the next reconcile quietly corrects it.
  *
  * One command with a nullable operand rather than a Set/Clear pair, following [SetTaskDeadlineTime]
  * (#348) rather than the older [SetTaskDeadline]/[ClearTaskDeadline] split: it maps 1:1 onto the
@@ -297,7 +307,12 @@ data class ConvertItem(
     override val kind: CommandKind get() = CommandKind.ConvertItem
 }
 
-// --- Move (OFFLINE-FIRST, cross-kind tree reorder/reparent, ADR-0049 #228) ---
+// --- Cross-kind Item verbs (OFFLINE-FIRST) — 1:1 with the ItemWriter seam ---
+//
+// The verbs that are kind-neutral BY NATURE and so belong to no per-kind writer: a move spans all four
+// kinds at once (ADR-0049 #228 — a Habit may sit under a Task), and a delete is one route the server
+// resolves the kind for itself (#389). Both address the raw cross-kind Item id string, like
+// [ConvertItem] and unlike the TaskId-typed [DeleteTask].
 
 /**
  * Move the Item [id] under [newParentId] (`null` = detach to root) to insertion index [position] among
@@ -313,14 +328,52 @@ data class MoveItem(val id: String, val newParentId: String?, val position: Int)
     override val kind: CommandKind get() = CommandKind.MoveItem
 }
 
-// --- Definition state (OFFLINE-FIRST, recurring Habit/Chore/Event "light switch", #299) ---
+/**
+ * Soft-delete the Item [id], **whatever kind it is** (`DELETE items/{id}`, #389) — the verb the Item
+ * tree means by "delete this row", for a recurring definition as much as for a Task. Flagged
+ * [CommandKind.destructive] so a binding surface confirms first (docs/design-principles.md: forgiving,
+ * no destructive surprises). Offline-first: the
+ * [com.circuitstitch.deferno.core.data.item.ItemWriter] tombstones the row optimistically + enqueues.
+ *
+ * **No [ItemKind] operand, deliberately** — and that is the whole point of the command, not an
+ * omission. The kind-neutral route resolves the kind server-side and, for a recurring kind, deletes the
+ * **whole Series chain**. The tempting per-kind mirror `DELETE {habits|chores|events}/{id}` binds
+ * `archive_habit`/`archive_chore`/`archive_event`, which soft-deletes ONE Segment of a chain and leaves
+ * its siblings alive — so a definition whose rule was ever edited would keep a live sibling that pops
+ * back into the next snapshot as an item the user just deleted. See
+ * [com.circuitstitch.deferno.core.data.outbox.DeleteItem].
+ *
+ * **It is a SOFT delete and it does NOT cascade.** The server sets `deleted_at` and unhooks the row
+ * from the org index, root order, every daily plan, search and the pinned set. It never removes the
+ * occurrence records and never deletes the recurrence series. Confirmation copy on any surface binding
+ * this command must say exactly that and never promise more.
+ *
+ * Distinct from [DeleteTask], which is not superseded: that one is TaskId-typed, routes to the
+ * [com.circuitstitch.deferno.core.data.task.TaskWriter] and carries the `enabledFor` already-tombstoned
+ * gate, and it stays the Task detail screen's delete. This one is what a cross-kind row list dispatches
+ * once it has resolved that the row is *not* a Task.
+ */
+data class DeleteItem(val id: String) : Command {
+    override val kind: CommandKind get() = CommandKind.DeleteItem
+}
+
+// --- Recurring definition edits (OFFLINE-FIRST, Habit/Chore/Event, #299 + #378) ---
 
 /**
- * A [Command] setting a recurring **definition's** [DefinitionState] (the Habit/Chore/Event light switch),
- * the recurring-kind sibling of the Task status verbs. Cross-kind, so it addresses the **raw Item id
- * string** (like [MoveItem] / [ConvertItem]) and carries [itemKind] so the writer/outbox pick the
- * kind-scoped route. [itemKind] is named for ItemKind (not `kind`) because [Command.kind] is the
- * [CommandKind] catalog token — the two namespaces can't share the name.
+ * A [Command] editing a recurring **definition** — a Habit/Chore/Event row, not a Task and not one of
+ * its dated firings. Cross-kind, so it addresses the **raw Item id string** (like [MoveItem] /
+ * [ConvertItem]) and carries [itemKind] so the writer/outbox pick the kind-scoped
+ * `{habits|chores|events}/{id}` route. [itemKind] is named for ItemKind (not `kind`) because
+ * [Command.kind] is the [CommandKind] catalog token — the two namespaces can't share the name.
+ *
+ * **The interface carries only what every member shares — the address, never an operand.** It held
+ * `val target: DefinitionState` while [SetDefinitionState] was the family's only member (#299); #378
+ * added the two per-field siblings, and each would have been forced to declare a meaningless
+ * definition state it never reads. An operand belongs to the one command that means it.
+ *
+ * All three are offline-first: the [com.circuitstitch.deferno.core.data.definition.DefinitionWriter]
+ * applies each optimistically to the right per-kind cache + enqueues, so none is [CommandKind.onlineOnly].
+ * Deleting a definition is **not** in this family — that is the kind-neutral [DeleteItem].
  */
 sealed interface DefinitionCommand : Command {
     /** The raw cross-kind Item id of the recurring definition. */
@@ -328,25 +381,56 @@ sealed interface DefinitionCommand : Command {
 
     /** Which recurring kind — selects the per-kind store + `{habits|chores|events}/{id}` endpoint. */
     val itemKind: ItemKind
-
-    /** The definition state to set. */
-    val target: DefinitionState
 }
 
 /**
  * Set the recurring definition [itemId] (of [itemKind]) to [target] (`PATCH {kind}/{id} {"status":…}`,
  * #299). A **single** state-setter — not verb-per-state — because a definition is a simple light switch
  * (Archive → Archived, Restore → Active); the binding layer picks the verb from the current value, like
- * [SetTaskPinned]. Offline-first: the
- * [com.circuitstitch.deferno.core.data.definition.DefinitionWriter] applies it optimistically + enqueues,
- * so NOT online-only.
+ * [SetTaskPinned].
  */
 data class SetDefinitionState(
     override val itemId: String,
     override val itemKind: ItemKind,
-    override val target: DefinitionState,
+    val target: DefinitionState,
 ) : DefinitionCommand {
     override val kind: CommandKind get() = CommandKind.SetDefinitionState
+}
+
+/**
+ * Set (or clear) the recurring definition's **soft target date** (#375, #378) — the recurring sibling of
+ * [SetTaskTargetDate], and half of what closes the asymmetry where the client could *read* both soft
+ * fields on all four kinds but only *write* them on a Task. A `null` [targetDate] means **clear it**
+ * (the writer emits an explicit `null`, never an omitted key — an omitted key is a silent server no-op).
+ *
+ * The server's write-time clamp (see [SetTaskTargetDate]) applies here too, and this is where it bites
+ * hardest — so, unlike the Task path, the writer **reproduces it locally**: the optimistic apply pulls a
+ * [targetDate] past the definition's `complete_by` down to that deadline. A recurring item's
+ * `complete_by` is a moving cursor that is routinely in the past, so an unclamped future target on a
+ * lapsed Habit would appear to save and then vanish on the next reconcile — the control would look
+ * broken rather than clamped.
+ */
+data class SetDefinitionTargetDate(
+    override val itemId: String,
+    override val itemKind: ItemKind,
+    val targetDate: Instant?,
+) : DefinitionCommand {
+    override val kind: CommandKind get() = CommandKind.SetDefinitionTargetDate
+}
+
+/**
+ * Set the recurring definition's **urgency bucket** (#375, #378) — the recurring sibling of
+ * [SetTaskPriority], with that command's contract unchanged: **not nullable**, because the server types
+ * `priority` as an `Option<Priority>` with no null form. "No priority" is [Priority.Normal], a real
+ * value, so there is nothing to clear and clearing is spelled `SetDefinitionPriority(itemId, kind,
+ * Priority.Normal)`.
+ */
+data class SetDefinitionPriority(
+    override val itemId: String,
+    override val itemKind: ItemKind,
+    val priority: Priority,
+) : DefinitionCommand {
+    override val kind: CommandKind get() = CommandKind.SetDefinitionPriority
 }
 
 // --- Occurrence: acting on one dated firing from the Calendar (#74) — OFFLINE-FIRST ---

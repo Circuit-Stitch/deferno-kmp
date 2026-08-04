@@ -13,8 +13,13 @@ import kotlin.time.Instant
  * the definition "light switch" [DefinitionState] and carries a [recurrence]; an Event adds a fixed
  * time window — [completeBy] is the start, [endTime] the end — and an [allDay] flag.
  *
- * **Definition vs Occurrence (glossary).** This is the *definition*; one dated firing is a separate
- * [Occurrence] with its own [OccurrenceState].
+ * **Definition vs Occurrence (glossary).** This is the *definition*; one dated firing is an
+ * [OccurrenceFact] keyed by `(kind, definitionId, date)` — where `definitionId` is *this* [id] — and
+ * how that firing went is the separate render-time [OccurrenceState] derived from the fact, the
+ * definition's own [definitionState], coverage and today (ADR-0053 decision 4). There is deliberately
+ * no `Occurrence` type: a firing is a key plus a fact, never a row with an identity of its own. The
+ * Event endpoint is the one kind that does ship a per-firing UUID, and it is still not the key — a
+ * client cannot join on an id its Habit sibling has never had on the wire.
  *
  * **Time-of-day (#348).** [completeBy]/[endTime] carry the start/end *days*; [startTimeOfDay]/
  * [endTimeOfDay] carry the clock time within them (`null` = all-day). [allDay] is now **derived,

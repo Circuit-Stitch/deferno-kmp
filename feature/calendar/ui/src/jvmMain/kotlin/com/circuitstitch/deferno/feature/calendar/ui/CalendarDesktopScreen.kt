@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.circuitstitch.deferno.core.model.CalendarFiring
 import com.circuitstitch.deferno.core.model.CalendarItem
 import com.circuitstitch.deferno.core.model.OccurrenceAction
 import com.circuitstitch.deferno.feature.calendar.CalendarComponent
@@ -74,7 +75,10 @@ internal fun CalendarDesktopContent(
     visibleMonth: LocalDate,
     selectedDay: LocalDate,
     markers: Map<LocalDate, Int>,
-    agenda: List<CalendarItem>,
+    // Firings, not bare rows: each carries the reading of how that day went beside the feed row, and
+    // the shared `DayAgenda`/`AgendaRow` atoms below render it (ADR-0053 decision 4). Desktop inherits
+    // the whole chip change by composing the same commonMain atoms the phone does.
+    agenda: List<CalendarFiring>,
     onDaySelected: (LocalDate) -> Unit,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,

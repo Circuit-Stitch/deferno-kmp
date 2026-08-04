@@ -93,11 +93,18 @@ class CommandExecutor(
             is SetTracking -> settingsWriter.setTracking(command.enabled)
             is SetDragAndDrop -> settingsWriter.setDragAndDrop(command.enabled)
             is SetDoneVisibility -> settingsWriter.setDoneVisibility(command.globalSeconds, command.dashboardSeconds)
-            // Cross-kind tree move (ADR-0049 #228): optimistic reorder + outbox enqueue, offline-first.
+            // Cross-kind Item verbs (ItemWriter): optimistic apply + outbox enqueue, offline-first.
+            // The move is ADR-0049 #228; the delete is the kind-neutral `DELETE items/{id}` (#389) —
+            // it forwards the raw id and NO kind, which is the whole point: the server resolves the kind
+            // and deletes the entire Series chain, where the per-kind route would archive one Segment.
             is MoveItem -> itemWriter.move(command.id, command.newParentId, command.position)
-            // Recurring-definition "light switch" (#299): optimistic per-kind apply + outbox enqueue,
-            // offline-first. Carries itemKind so the writer routes to the right per-kind store/endpoint.
+            is DeleteItem -> itemWriter.delete(command.id)
+            // Recurring-definition edits (#299 light switch, #378 soft-planning fields): optimistic
+            // per-kind apply + outbox enqueue, offline-first. Each carries itemKind so the writer routes
+            // to the right per-kind store/endpoint — the executor never resolves a kind itself.
             is SetDefinitionState -> definitionWriter.setDefinitionState(command.itemId, command.itemKind, command.target)
+            is SetDefinitionTargetDate -> definitionWriter.setTargetDate(command.itemId, command.itemKind, command.targetDate)
+            is SetDefinitionPriority -> definitionWriter.setPriority(command.itemId, command.itemKind, command.priority)
             // Dependency edges (#291) are online-only like convert: the writer's own verdict comes back
             // (optimistic apply + PATCH + revert-on-400), so the menu can surface the server's message.
             is SetTaskBlockedBy ->
