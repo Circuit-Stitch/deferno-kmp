@@ -1,0 +1,64 @@
+{
+  "name": "override-on-a-dst-shifted-slot",
+  "note": "An override on a DST-shifted firing must key on the SHIFTED wall time (03:30), because that is the RECURRENCE-ID the expansion produced. Keying on the nominal 02:30 would silently miss.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-03-06T02:30:00",
+    "tzid": "America/New_York",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": [
+      {
+        "recurrence_id": "2026-03-08T03:30:00",
+        "is_cancelled": true,
+        "moved_to_local": null
+      }
+    ]
+  },
+  "window": {
+    "from": "2026-03-05",
+    "to": "2026-03-11"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-03-06T02:30:00",
+      "start_local": "2026-03-06T02:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-07T02:30:00",
+      "start_local": "2026-03-07T02:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-08T03:30:00",
+      "start_local": "2026-03-08T03:30:00",
+      "is_cancelled": true,
+      "is_override": true
+    },
+    {
+      "recurrence_id": "2026-03-09T02:30:00",
+      "start_local": "2026-03-09T02:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-10T02:30:00",
+      "start_local": "2026-03-10T02:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-11T02:30:00",
+      "start_local": "2026-03-11T02:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

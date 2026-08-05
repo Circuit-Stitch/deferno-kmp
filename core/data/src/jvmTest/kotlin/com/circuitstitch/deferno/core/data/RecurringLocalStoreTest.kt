@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
 import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.Cadence
+import com.circuitstitch.deferno.core.model.CadenceMode
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
@@ -90,7 +91,7 @@ class RecurringLocalStoreTest {
             title = "trash",
             definitionState = DefinitionState.Archived,
             recurrence = Recurrence(Cadence.Daily),
-            cadenceMode = "rolling",
+            cadenceMode = CadenceMode.Rolling,
             dateCreated = created,
         )
         store.upsert(chore)
@@ -98,6 +99,50 @@ class RecurringLocalStoreTest {
 
         store.delete(ChoreId("c-1"))
         assertNull(store.get(ChoreId("c-1")))
+    }
+
+    /**
+     * The `cadence_mode` column against real SQLite (#401). The stored token is a **persisted format**:
+     * every row an earlier build cached holds the literal `rolling`/`fixed`/NULL it read straight off
+     * the wire, so typing the field only stays a no-migration change if the write side keeps emitting
+     * the wire token. Two failures this catches, both silent:
+     *
+     * - writing the Kotlin variant name (`"Rolling"`) — the next read would no longer recognise it, and
+     *   the whole cache would decode as [CadenceMode.Unmodelled] under a name the server never sent;
+     * - flattening an unrecognised mode to the default, which reschedules the user's chore on restore
+     *   rather than merely failing to render it (the same preservation rule as `Cadence.Unmodelled`).
+     */
+    @Test
+    fun aCadenceModeRoundTripsRealSqliteUnderItsWireTokenIncludingAnUnmodelledOne() = runTest {
+        val database = db()
+        val store = SqlDelightChoreLocalStore(database, Dispatchers.Default)
+        val base = Chore(
+            id = ChoreId("c-mode"),
+            orgSlug = "u-e4h2qk",
+            title = "trash",
+            definitionState = DefinitionState.Active,
+            recurrence = Recurrence(Cadence.Daily),
+            dateCreated = created,
+        )
+
+        for (mode in listOf(CadenceMode.Rolling, CadenceMode.Fixed, CadenceMode.Unmodelled("drifting"))) {
+            store.upsert(base.copy(cadenceMode = mode))
+            assertEquals(mode, store.get(ChoreId("c-mode"))?.cadenceMode, "round-trip of $mode")
+        }
+
+        // The COLUMN itself, read raw: the wire token, never the Kotlin variant name.
+        store.upsert(base.copy(cadenceMode = CadenceMode.Fixed))
+        assertEquals("fixed", database.choreEntityQueries.selectById("c-mode").executeAsOne().cadence_mode)
+        store.upsert(base.copy(cadenceMode = CadenceMode.Rolling))
+        assertEquals("rolling", database.choreEntityQueries.selectById("c-mode").executeAsOne().cadence_mode)
+
+        // A pre-#401 row — NULL because no client code ever set the field — is Rolling, not an unknown.
+        // Simulated by writing the column back to NULL behind the store, which is the state every chore
+        // this client created is already in.
+        database.choreEntityQueries.insertOrReplace(
+            database.choreEntityQueries.selectById("c-mode").executeAsOne().copy(cadence_mode = null),
+        )
+        assertEquals(CadenceMode.Rolling, store.get(ChoreId("c-mode"))?.cadenceMode)
     }
 
     /**
@@ -119,7 +164,7 @@ class RecurringLocalStoreTest {
             title = "replace the filter",
             definitionState = DefinitionState.Active,
             recurrence = Recurrence(Cadence.EveryNDays(30), bound = RecurrenceBound.AfterCount(10)),
-            cadenceMode = "rolling",
+            cadenceMode = CadenceMode.Rolling,
             dateCreated = created,
         )
 

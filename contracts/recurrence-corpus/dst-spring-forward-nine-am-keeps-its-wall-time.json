@@ -1,0 +1,52 @@
+{
+  "name": "dst-spring-forward-nine-am-keeps-its-wall-time",
+  "note": "The ordinary case: 09:00 stays 09:00 across the transition and only the UTC offset moves. Expanding in the frozen zone and projecting afterwards is what makes this true.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-03-06T09:00:00",
+    "tzid": "America/New_York",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-03-05",
+    "to": "2026-03-10"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-03-06T09:00:00",
+      "start_local": "2026-03-06T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-07T09:00:00",
+      "start_local": "2026-03-07T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-08T09:00:00",
+      "start_local": "2026-03-08T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-09T09:00:00",
+      "start_local": "2026-03-09T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-10T09:00:00",
+      "start_local": "2026-03-10T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

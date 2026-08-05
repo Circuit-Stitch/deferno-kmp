@@ -1,0 +1,21 @@
+{
+  "name": "window-entirely-before-the-anchor-is-empty",
+  "note": "A past window on a series that has not started yet.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2025-01-01",
+    "to": "2025-12-31"
+  },
+  "outcome": "firings",
+  "firings": []
+}

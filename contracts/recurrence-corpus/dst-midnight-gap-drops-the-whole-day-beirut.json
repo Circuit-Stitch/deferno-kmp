@@ -1,0 +1,82 @@
+{
+  "name": "dst-midnight-gap-drops-the-whole-day-beirut",
+  "note": "The same mechanism in a second zone, anchored exactly at 00:00.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-03-25T00:00:00",
+    "tzid": "Asia/Beirut",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-03-20",
+    "to": "2026-04-04"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-03-25T00:00:00",
+      "start_local": "2026-03-25T00:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-26T00:00:00",
+      "start_local": "2026-03-26T00:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-27T00:00:00",
+      "start_local": "2026-03-27T00:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-28T00:00:00",
+      "start_local": "2026-03-28T00:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-30T00:00:00",
+      "start_local": "2026-03-30T00:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-31T00:00:00",
+      "start_local": "2026-03-31T00:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-01T00:00:00",
+      "start_local": "2026-04-01T00:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-02T00:00:00",
+      "start_local": "2026-04-02T00:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-03T00:00:00",
+      "start_local": "2026-04-03T00:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-04T00:00:00",
+      "start_local": "2026-04-04T00:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

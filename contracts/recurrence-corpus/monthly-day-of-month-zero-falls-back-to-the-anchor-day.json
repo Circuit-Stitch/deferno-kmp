@@ -1,0 +1,63 @@
+{
+  "name": "monthly-day-of-month-zero-falls-back-to-the-anchor-day",
+  "note": "A BYMONTHDAY of ZERO is not an empty rule: it leaves no day part at all, and an RRULE with no day selector takes its day from DTSTART. This fires on the anchor's own day of month, exactly as a bare FREQ=MONTHLY would.",
+  "rrule": "FREQ=MONTHLY;BYMONTHDAY=0",
+  "recurrence": {
+    "interval": 1,
+    "on": {
+      "day": 0,
+      "type": "day_of_month"
+    },
+    "type": "monthly"
+  },
+  "series": {
+    "dtstart_local": "2026-01-03T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2026-07-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-01-03T09:00:00",
+      "start_local": "2026-01-03T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-02-03T09:00:00",
+      "start_local": "2026-02-03T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-03T09:00:00",
+      "start_local": "2026-03-03T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-03T09:00:00",
+      "start_local": "2026-04-03T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-05-03T09:00:00",
+      "start_local": "2026-05-03T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-06-03T09:00:00",
+      "start_local": "2026-06-03T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

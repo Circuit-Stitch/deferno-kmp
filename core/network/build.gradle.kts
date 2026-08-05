@@ -12,6 +12,13 @@ plugins {
     id("deferno.di")
 }
 
+// The convention's `sourceDir` already defaults to contracts/fixtures; the package is stated
+// explicitly because it has no default (a forgotten block must fail, not land in another module's
+// package — see ContractFixturesExtension).
+contractFixtures {
+    packageName = "com.circuitstitch.deferno.core.network.fixtures"
+}
+
 kotlin {
     android {
         namespace = "com.circuitstitch.deferno.core.network"

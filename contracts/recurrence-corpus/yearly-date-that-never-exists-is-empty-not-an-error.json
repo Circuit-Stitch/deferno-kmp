@@ -1,0 +1,24 @@
+{
+  "name": "yearly-date-that-never-exists-is-empty-not-an-error",
+  "note": "BYMONTH=2;BYMONTHDAY=30 fires in no year ever. That is an EMPTY grid, not a refusal — which is exactly the distinction a client must not collapse.",
+  "rrule": "FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30",
+  "recurrence": {
+    "day": 30,
+    "interval": 1,
+    "month": 2,
+    "type": "yearly"
+  },
+  "series": {
+    "dtstart_local": "2026-01-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2036-01-01"
+  },
+  "outcome": "firings",
+  "firings": []
+}

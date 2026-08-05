@@ -1,0 +1,37 @@
+{
+  "name": "yearly-anchor-later-in-year-than-the-rule-date",
+  "note": "The anchor's own year is in the phase but its firing precedes the anchor.",
+  "rrule": "FREQ=YEARLY;BYMONTH=6;BYMONTHDAY=14",
+  "recurrence": {
+    "day": 14,
+    "interval": 1,
+    "month": 6,
+    "type": "yearly"
+  },
+  "series": {
+    "dtstart_local": "2026-09-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2029-01-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2027-06-14T09:00:00",
+      "start_local": "2027-06-14T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2028-06-14T09:00:00",
+      "start_local": "2028-06-14T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "name": "every-n-days-stride-phase-is-the-anchor",
+  "note": "every_n_days emits FREQ=DAILY;INTERVAL=n with no BY part, so the phase comes entirely from DTSTART. A client striding from today, or from the live complete_by cursor, is off by however far that cursor has walked.",
+  "rrule": "FREQ=DAILY;INTERVAL=3",
+  "recurrence": {
+    "n": 3,
+    "type": "every_n_days"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-04-01",
+    "to": "2026-04-19"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-04-01T09:00:00",
+      "start_local": "2026-04-01T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-04T09:00:00",
+      "start_local": "2026-04-04T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-07T09:00:00",
+      "start_local": "2026-04-07T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-10T09:00:00",
+      "start_local": "2026-04-10T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-13T09:00:00",
+      "start_local": "2026-04-13T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-16T09:00:00",
+      "start_local": "2026-04-16T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-19T09:00:00",
+      "start_local": "2026-04-19T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

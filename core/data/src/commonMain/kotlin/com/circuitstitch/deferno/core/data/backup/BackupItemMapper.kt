@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.RecurrenceBound
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.wireToken
 import com.circuitstitch.deferno.core.network.dto.DefStatusWire
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.LocalAttachmentDto
@@ -90,7 +91,11 @@ internal fun Chore.toItemView(): ItemView.Chore = ItemView.Chore(
     description = description,
     recurrence = recurrence?.toDto(),
     seriesId = seriesId,
-    cadenceMode = cadenceMode,
+    // The exact wire token, never the Kotlin variant name: `items.json` IS the API's own snake-case JSON
+    // (ADR-0041), so re-casing it — or defaulting an unmodelled mode down to `rolling` — silently
+    // rewrites the user's chore on restore. Rolling emits its token explicitly because the server does
+    // too (no `skip_serializing_if`); see [CadenceMode.wireToken].
+    cadenceMode = cadenceMode.wireToken,
 )
 
 internal fun Event.toItemView(): ItemView.Event = ItemView.Event(

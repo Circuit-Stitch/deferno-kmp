@@ -1,0 +1,184 @@
+{
+  "name": "monthly-nth-weekday-zero-is-every-such-weekday",
+  "note": "An `nth` of ZERO is a third arm, not a degenerate one: the crate maps it to NWeekday::Every, so this is EVERY Friday of every month — 26 firings where the nth arms give six. A client that treated 0 as unplaceable would render a live weekly-ish schedule as 'nothing is scheduled'.",
+  "rrule": "FREQ=MONTHLY;BYDAY=0FR",
+  "recurrence": {
+    "interval": 1,
+    "on": {
+      "nth": 0,
+      "type": "nth_weekday",
+      "weekday": "Fri"
+    },
+    "type": "monthly"
+  },
+  "series": {
+    "dtstart_local": "2026-01-02T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2026-07-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-01-02T09:00:00",
+      "start_local": "2026-01-02T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-01-09T09:00:00",
+      "start_local": "2026-01-09T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-01-16T09:00:00",
+      "start_local": "2026-01-16T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-01-23T09:00:00",
+      "start_local": "2026-01-23T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-01-30T09:00:00",
+      "start_local": "2026-01-30T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-02-06T09:00:00",
+      "start_local": "2026-02-06T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-02-13T09:00:00",
+      "start_local": "2026-02-13T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-02-20T09:00:00",
+      "start_local": "2026-02-20T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-02-27T09:00:00",
+      "start_local": "2026-02-27T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-06T09:00:00",
+      "start_local": "2026-03-06T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-13T09:00:00",
+      "start_local": "2026-03-13T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-20T09:00:00",
+      "start_local": "2026-03-20T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-27T09:00:00",
+      "start_local": "2026-03-27T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-03T09:00:00",
+      "start_local": "2026-04-03T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-10T09:00:00",
+      "start_local": "2026-04-10T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-17T09:00:00",
+      "start_local": "2026-04-17T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-24T09:00:00",
+      "start_local": "2026-04-24T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-05-01T09:00:00",
+      "start_local": "2026-05-01T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-05-08T09:00:00",
+      "start_local": "2026-05-08T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-05-15T09:00:00",
+      "start_local": "2026-05-15T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-05-22T09:00:00",
+      "start_local": "2026-05-22T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-05-29T09:00:00",
+      "start_local": "2026-05-29T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-06-05T09:00:00",
+      "start_local": "2026-06-05T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-06-12T09:00:00",
+      "start_local": "2026-06-12T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-06-19T09:00:00",
+      "start_local": "2026-06-19T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-06-26T09:00:00",
+      "start_local": "2026-06-26T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

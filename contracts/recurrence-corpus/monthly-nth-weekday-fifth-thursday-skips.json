@@ -1,0 +1,58 @@
+{
+  "name": "monthly-nth-weekday-fifth-thursday-skips",
+  "note": "A fifth Thursday exists in only some months; the rest fire nothing.",
+  "rrule": "FREQ=MONTHLY;BYDAY=5TH",
+  "recurrence": {
+    "interval": 1,
+    "on": {
+      "nth": 5,
+      "type": "nth_weekday",
+      "weekday": "Thu"
+    },
+    "type": "monthly"
+  },
+  "series": {
+    "dtstart_local": "2026-01-29T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2027-01-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-01-29T09:00:00",
+      "start_local": "2026-01-29T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-30T09:00:00",
+      "start_local": "2026-04-30T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-07-30T09:00:00",
+      "start_local": "2026-07-30T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-10-29T09:00:00",
+      "start_local": "2026-10-29T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-12-31T09:00:00",
+      "start_local": "2026-12-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

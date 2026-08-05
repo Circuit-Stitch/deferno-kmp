@@ -1,0 +1,65 @@
+{
+  "name": "dst-stride-stays-on-wall-clock-days",
+  "note": "An INTERVAL stride counts calendar days, not fixed 24-hour spans, so a transition inside the stride does not shift the phase.",
+  "rrule": "FREQ=DAILY;INTERVAL=3",
+  "recurrence": {
+    "n": 3,
+    "type": "every_n_days"
+  },
+  "series": {
+    "dtstart_local": "2026-03-04T09:00:00",
+    "tzid": "America/New_York",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-03-01",
+    "to": "2026-03-24"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-03-04T09:00:00",
+      "start_local": "2026-03-04T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-07T09:00:00",
+      "start_local": "2026-03-07T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-10T09:00:00",
+      "start_local": "2026-03-10T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-13T09:00:00",
+      "start_local": "2026-03-13T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-16T09:00:00",
+      "start_local": "2026-03-16T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-19T09:00:00",
+      "start_local": "2026-03-19T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-22T09:00:00",
+      "start_local": "2026-03-22T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "refusal-yearly-month-out-of-range",
+  "note": "A yearly month outside 1..=12 is a PARSE error — the rule refuses rather than firing nothing.",
+  "rrule": "FREQ=YEARLY;BYMONTH=13;BYMONTHDAY=5",
+  "recurrence": {
+    "day": 5,
+    "interval": 1,
+    "month": 13,
+    "type": "yearly"
+  },
+  "series": {
+    "dtstart_local": "2026-01-15T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2031-01-01"
+  },
+  "outcome": "not_expandable",
+  "error": "RRule(\"RRule parsing error: `13` is not a valid BYMONTH value. Expected a comma-separated list of values in range 1..=12, e.g. `6,9,10`\")"
+}

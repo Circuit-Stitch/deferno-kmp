@@ -1,0 +1,52 @@
+{
+  "name": "dst-fall-back-wall-time-inside-the-fold",
+  "note": "01:30 happens twice on 2026-11-01 in America/New_York; the earlier instant wins.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-10-30T01:30:00",
+    "tzid": "America/New_York",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-10-29",
+    "to": "2026-11-03"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-10-30T01:30:00",
+      "start_local": "2026-10-30T01:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-10-31T01:30:00",
+      "start_local": "2026-10-31T01:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-11-01T01:30:00",
+      "start_local": "2026-11-01T01:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-11-02T01:30:00",
+      "start_local": "2026-11-02T01:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-11-03T01:30:00",
+      "start_local": "2026-11-03T01:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

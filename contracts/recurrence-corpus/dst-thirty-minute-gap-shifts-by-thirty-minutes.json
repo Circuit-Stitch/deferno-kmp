@@ -1,0 +1,58 @@
+{
+  "name": "dst-thirty-minute-gap-shifts-by-thirty-minutes",
+  "note": "Australia/Lord_Howe's gap is half an hour, so 02:15 becomes 02:45 rather than 03:15. A client that hardcoded a one-hour shift passes every US case and fails this one.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-10-02T02:15:00",
+    "tzid": "Australia/Lord_Howe",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-10-01",
+    "to": "2026-10-07"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-10-02T02:15:00",
+      "start_local": "2026-10-02T02:15:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-10-03T02:15:00",
+      "start_local": "2026-10-03T02:15:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-10-04T02:45:00",
+      "start_local": "2026-10-04T02:45:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-10-05T02:15:00",
+      "start_local": "2026-10-05T02:15:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-10-06T02:15:00",
+      "start_local": "2026-10-06T02:15:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-10-07T02:15:00",
+      "start_local": "2026-10-07T02:15:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.core.data.backup
 
+import com.circuitstitch.deferno.core.model.cadenceModeFromWire
+import com.circuitstitch.deferno.core.model.wireToken
 import com.circuitstitch.deferno.core.network.dto.CreateChorePayload
 import com.circuitstitch.deferno.core.network.dto.CreateEventPayload
 import com.circuitstitch.deferno.core.network.dto.CreateHabitPayload
@@ -54,7 +56,13 @@ internal fun ItemView.Habit.toCreatePayload(): CreateHabitPayload = CreateHabitP
 internal fun ItemView.Chore.toCreatePayload(): CreateChorePayload = CreateChorePayload(
     title = title,
     recurrence = recurrence ?: RESTORE_FALLBACK_CADENCE,
-    cadenceMode = cadenceMode,
+    // Through the codec rather than passed through raw, even though both sides are a `String?`. The
+    // importer replays a restored chore TWICE — an optimistic local upsert via `asChoreOrNull()` (which
+    // types the token) and this create payload — so routing both through the one codec is what stops the
+    // cached row and the row the server ends up with from disagreeing about the mode. An unmodelled token
+    // still goes back out under its own name; only an absent one is made explicit, as `rolling`, which is
+    // the value the server's own `#[serde(default)]` would have supplied anyway.
+    cadenceMode = cadenceModeFromWire(cadenceMode).wireToken,
     description = description,
     completeBy = completeBy,
     deadlineTimeOfDay = deadlineTimeOfDay,

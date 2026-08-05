@@ -1,0 +1,32 @@
+{
+  "name": "bound-until-on-the-anchor-day",
+  "note": "A bound landing on the anchor's own day still yields that one firing.",
+  "rrule": "FREQ=DAILY;UNTIL=20260402T065959Z",
+  "recurrence": {
+    "end": {
+      "date": "2026-04-01",
+      "type": "on_date"
+    },
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2026-12-31"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-04-01T09:00:00",
+      "start_local": "2026-04-01T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "name": "override-moves-and-cancels",
+  "note": "Overrides key on the ORIGINAL local wall time (RFC 5545 RECURRENCE-ID), never on the moved time and never on a date. A moved firing keeps its slot's position in the list, and a CANCELLED firing is still emitted — flagged, not absent.",
+  "rrule": "FREQ=WEEKLY;BYDAY=WE",
+  "recurrence": {
+    "days": [
+      "Wed"
+    ],
+    "type": "weekly"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": [
+      {
+        "recurrence_id": "2026-04-08T09:00:00",
+        "is_cancelled": false,
+        "moved_to_local": "2026-04-09T14:00:00"
+      },
+      {
+        "recurrence_id": "2026-04-15T09:00:00",
+        "is_cancelled": true,
+        "moved_to_local": null
+      }
+    ]
+  },
+  "window": {
+    "from": "2026-04-01",
+    "to": "2026-04-30"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-04-01T09:00:00",
+      "start_local": "2026-04-01T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-08T09:00:00",
+      "start_local": "2026-04-09T14:00:00",
+      "is_cancelled": false,
+      "is_override": true
+    },
+    {
+      "recurrence_id": "2026-04-15T09:00:00",
+      "start_local": "2026-04-15T09:00:00",
+      "is_cancelled": true,
+      "is_override": true
+    },
+    {
+      "recurrence_id": "2026-04-22T09:00:00",
+      "start_local": "2026-04-22T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-29T09:00:00",
+      "start_local": "2026-04-29T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

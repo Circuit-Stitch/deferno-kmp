@@ -23,6 +23,7 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.cadenceModeFromWire
 import com.circuitstitch.deferno.core.network.ApiError
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
@@ -127,7 +128,10 @@ class OfflineCreateWriter(
                 orgSlug = orgSlug(),
                 title = payload.title,
                 definitionState = DefinitionState.Active,
-                cadenceMode = payload.cadenceMode,
+                // The payload token stays a `String?` (it is the wire body); the optimistic local row is
+                // typed, so it parses here. A payload that names no mode gets Rolling — the same value
+                // the server will default it to, so the optimistic row already matches the eventual truth.
+                cadenceMode = cadenceModeFromWire(payload.cadenceMode),
                 labels = payload.labels.orEmpty(),
                 completeBy = payload.completeBy.toInstantOrNull(),
                 deadlineTimeOfDay = payload.deadlineTimeOfDay.toLocalTimeOrNull(),

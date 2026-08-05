@@ -1,0 +1,27 @@
+{
+  "name": "refusal-monthly-nth-weekday-fifth-from-last",
+  "note": "One past that range is a validation error and refuses the whole grid.",
+  "rrule": "FREQ=MONTHLY;BYDAY=-5FR",
+  "recurrence": {
+    "interval": 1,
+    "on": {
+      "nth": -5,
+      "type": "nth_weekday",
+      "weekday": "Fri"
+    },
+    "type": "monthly"
+  },
+  "series": {
+    "dtstart_local": "2026-01-02T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2026-07-01"
+  },
+  "outcome": "not_expandable",
+  "error": "RRule(\"RRule validation error: `BYDAY` is `-5`, but with the current frequency (MONTHLY) is not allowed outside the range: `-4..=5`.\")"
+}

@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.network.mapper
 
 import com.circuitstitch.deferno.core.model.Cadence
+import com.circuitstitch.deferno.core.model.CadenceMode
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.MonthlyAnchor
@@ -60,7 +61,7 @@ class RecurringItemMapperTest {
         val chore = items.firstNotNullOf { it.asChoreOrNull() }
 
         assertEquals("47338a14-a07f-4ddf-ad73-f5edc977dab0", chore.id.value)
-        assertEquals("rolling", chore.cadenceMode)
+        assertEquals(CadenceMode.Rolling, chore.cadenceMode)
         assertEquals(Cadence.Weekly(listOf("Tue")), chore.recurrence?.cadence)
         assertEquals(DefinitionState.Active, chore.definitionState)
         // #382 — this assertion used to be impossible: the `end` bound had no domain representation at
@@ -118,7 +119,7 @@ class RecurringItemMapperTest {
             cadenceMode = "fixed",
             recurrence = RecurrenceDto(type = "monthly"),
         ).toDomain()
-        assertEquals("fixed", chore.cadenceMode)
+        assertEquals(CadenceMode.Fixed, chore.cadenceMode)
         // A bare `{"type":"monthly"}` — no cycle, no anchor — reads as "every month, day unspecified".
         assertEquals(Cadence.Monthly(interval = 1, on = null), chore.recurrence?.cadence)
 
@@ -151,6 +152,30 @@ class RecurringItemMapperTest {
             Recurrence(Cadence.EveryNDays(3), bound = RecurrenceBound.AfterCount(10)),
             event.recurrence,
         )
+    }
+
+    /**
+     * `cadence_mode` is typed **at this mapper**, and the guard rail is that it must stay a raw `String?`
+     * on the DTO (#401). Decoded from real JSON rather than a hand-built DTO precisely because that is
+     * the step a `@Serializable enum` would break: `DefernoJson` sets `coerceInputValues = true`
+     * (ADR-0005), which rewrites an unrecognised enum token to the property default — the unknown mode
+     * would arrive already flattened to `rolling` and no mapper could recover it. So this test fails the
+     * moment someone "tidies" the DTO into an enum.
+     */
+    @Test
+    fun anUnrecognisedCadenceModeSurvivesTheDecodeInsteadOfBeingCoercedToTheDefault() {
+        fun choreJson(modeKey: String) = DefernoJson.decodeFromString(
+            ItemView.serializer(),
+            """{"type":"chore","id":"c-1","org_slug":"u-e4h2qk","title":"trash","status":"active",
+               "date_created":"2026-05-12T19:52:01Z"$modeKey}""",
+        ).asChoreOrNull()!!
+
+        assertEquals(CadenceMode.Unmodelled("drifting"), choreJson(""","cadence_mode":"drifting"""").cadenceMode)
+        assertEquals(CadenceMode.Fixed, choreJson(""","cadence_mode":"fixed"""").cadenceMode)
+        // An OMITTED key is Rolling, not an unknown — the backend's `#[serde(default)]`. Same for an
+        // explicit null, which `coerceInputValues` folds onto the DTO's own `String?` default.
+        assertEquals(CadenceMode.Rolling, choreJson("").cadenceMode)
+        assertEquals(CadenceMode.Rolling, choreJson(""","cadence_mode":null""").cadenceMode)
     }
 
     @Test

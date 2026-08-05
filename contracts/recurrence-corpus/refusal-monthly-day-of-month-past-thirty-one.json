@@ -1,0 +1,26 @@
+{
+  "name": "refusal-monthly-day-of-month-past-thirty-one",
+  "note": "A day of month past 31 is a PARSE error, not a month that never matches — so the whole rule refuses. Contrast the yearly Feb-30 case, which parses fine and legitimately fires nothing.",
+  "rrule": "FREQ=MONTHLY;BYMONTHDAY=32",
+  "recurrence": {
+    "interval": 1,
+    "on": {
+      "day": 32,
+      "type": "day_of_month"
+    },
+    "type": "monthly"
+  },
+  "series": {
+    "dtstart_local": "2026-01-15T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2026-07-01"
+  },
+  "outcome": "not_expandable",
+  "error": "RRule(\"RRule parsing error: `32` is not a valid BYMONTHDAY value. Expected a comma-separated list of values in range -31..=31, e.g. `-30,10`\")"
+}

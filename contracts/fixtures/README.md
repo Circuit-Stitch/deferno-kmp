@@ -48,7 +48,10 @@ exists. This is the mandatory negative test; see `../CONTRACT-NOTES.md` → "Err
 These files are the single source of truth for the contract-fixture harness in `core/network`
 (`ContractFixtureParseTest`). They are **not** read at runtime: the `deferno.contract-fixtures`
 convention plugin embeds each file verbatim into a generated `ContractFixtures` object on the
-`commonTest` source set (Gradle task `generateContractFixtures`), so the harness loads every fixture
+`commonTest` source set (Gradle task `generateContractFixtures` — the directory, package and object
+name come from that module's `contractFixtures { }` block; a sibling directory
+`../recurrence-corpus/` uses the same convention to carry the generated occurrence grid into
+`core/model`), so the harness loads every fixture
 on **every KMP target — JVM, Android host, and iOS — with no platform file IO.** Each fixture is fed
 through the *shipping* read path (the tolerant reader + envelope/version handling in `requestApi`)
 and asserted against its wire DTO.

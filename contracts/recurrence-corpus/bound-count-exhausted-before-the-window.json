@@ -1,0 +1,25 @@
+{
+  "name": "bound-count-exhausted-before-the-window",
+  "note": "A COUNT exhausted before the window opens yields an empty grid, not a refusal.",
+  "rrule": "FREQ=DAILY;COUNT=3",
+  "recurrence": {
+    "end": {
+      "n": 3,
+      "type": "after_count"
+    },
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-05-01",
+    "to": "2026-06-01"
+  },
+  "outcome": "firings",
+  "firings": []
+}

@@ -1,0 +1,23 @@
+{
+  "name": "refusal-excluded-date-inside-a-dst-gap",
+  "note": "EXDATE lines go through the same parser, so an unresolvable exclusion fails the whole expansion rather than being quietly ignored.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-03-06T09:00:00",
+    "tzid": "America/New_York",
+    "until_utc": null,
+    "exdates": [
+      "2026-03-08T02:30:00"
+    ],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-03-01",
+    "to": "2026-03-14"
+  },
+  "outcome": "not_expandable",
+  "error": "RRule(\"RRule parsing error: EXDATE:20260308T023000 is not a valid datetime in local timezone.\")"
+}

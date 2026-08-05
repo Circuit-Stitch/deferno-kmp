@@ -1,0 +1,51 @@
+{
+  "name": "monthly-day-of-month-skips-short-months",
+  "note": "Skip, never clamp. BYMONTHDAY=31 produces NOTHING in a month without a 31st; there is no last-day-of-the-month fallback.",
+  "rrule": "FREQ=MONTHLY;BYMONTHDAY=31",
+  "recurrence": {
+    "interval": 1,
+    "on": {
+      "day": 31,
+      "type": "day_of_month"
+    },
+    "type": "monthly"
+  },
+  "series": {
+    "dtstart_local": "2026-01-31T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2026-08-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-01-31T09:00:00",
+      "start_local": "2026-01-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-31T09:00:00",
+      "start_local": "2026-03-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-05-31T09:00:00",
+      "start_local": "2026-05-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-07-31T09:00:00",
+      "start_local": "2026-07-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

@@ -41,13 +41,35 @@ class RecurringItemTest {
             title = "trash",
             definitionState = DefinitionState.Active,
             recurrence = Recurrence(Cadence.Weekly(listOf("Tue"))),
-            cadenceMode = "rolling",
+            cadenceMode = CadenceMode.Rolling,
             dateCreated = created,
         )
-        // The chore's `cadenceMode` and its recurrence's [Cadence] are unrelated despite the names.
-        assertEquals("rolling", chore.cadenceMode)
+        // The chore's [CadenceMode] and its recurrence's [Cadence] are unrelated despite the names: one
+        // says how the schedule ADVANCES after a completion, the other says which days it FIRES on.
+        assertEquals(CadenceMode.Rolling, chore.cadenceMode)
         assertEquals(Cadence.Weekly(listOf("Tue")), chore.recurrence?.cadence)
         // Deferred (ADR-0015): no group/rotation field exists on the model at all.
+    }
+
+    /**
+     * The field is **non-null and defaults to [CadenceMode.Rolling]** (#401), which is a claim about the
+     * backend and not a convenience: `Chore.cadence_mode` is `#[serde(default)]` over a `#[default]
+     * Rolling` variant, so a chore that states no mode *is* rolling. Every client-created chore is in
+     * exactly that position — no client code has ever set the field — so a nullable "not stated yet"
+     * third state would describe the whole local cache and mean nothing.
+     */
+    @Test
+    fun aChoreThatStatesNoModeIsRollingRatherThanUnknown() {
+        val chore = Chore(
+            id = ChoreId("c-1"),
+            orgSlug = "u-e4h2qk",
+            title = "trash",
+            definitionState = DefinitionState.Active,
+            recurrence = Recurrence(Cadence.Daily),
+            dateCreated = created,
+        )
+        assertEquals(CadenceMode.Rolling, chore.cadenceMode)
+        assertEquals(CadenceMode.Fixed, chore.copy(cadenceMode = CadenceMode.Fixed).cadenceMode)
     }
 
     @Test

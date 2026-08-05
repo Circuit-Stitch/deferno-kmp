@@ -1,0 +1,69 @@
+{
+  "name": "monthly-interval-two-skipped-month-still-consumes-the-interval",
+  "note": "A period that yields no valid date is skipped WITHOUT shifting the phase: every other month from January fires Jan, Mar, May, Jul, then January again, because September and November have no 31st.",
+  "rrule": "FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=31",
+  "recurrence": {
+    "interval": 2,
+    "on": {
+      "day": 31,
+      "type": "day_of_month"
+    },
+    "type": "monthly"
+  },
+  "series": {
+    "dtstart_local": "2026-01-31T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2027-06-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-01-31T09:00:00",
+      "start_local": "2026-01-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-31T09:00:00",
+      "start_local": "2026-03-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-05-31T09:00:00",
+      "start_local": "2026-05-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-07-31T09:00:00",
+      "start_local": "2026-07-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2027-01-31T09:00:00",
+      "start_local": "2027-01-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2027-03-31T09:00:00",
+      "start_local": "2027-03-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2027-05-31T09:00:00",
+      "start_local": "2027-05-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

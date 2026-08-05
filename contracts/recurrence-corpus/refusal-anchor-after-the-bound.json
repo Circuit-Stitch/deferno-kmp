@@ -1,0 +1,25 @@
+{
+  "name": "refusal-anchor-after-the-bound",
+  "note": "An anchor after the rule's UNTIL is rejected outright by the rrule crate — the shape that once bricked a whole calendar (Deferno#428/#429).",
+  "rrule": "FREQ=DAILY;UNTIL=20250102T075959Z",
+  "recurrence": {
+    "end": {
+      "date": "2025-01-01",
+      "type": "on_date"
+    },
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2026-12-31"
+  },
+  "outcome": "not_expandable",
+  "error": "RRule(\"RRule validation error: `UNTIL` is `2025-01-02T07:59:59+00:00`, but `DTSTART` (`2026-04-01T09:00:00-07:00`) is later. That should not be happening.\")"
+}

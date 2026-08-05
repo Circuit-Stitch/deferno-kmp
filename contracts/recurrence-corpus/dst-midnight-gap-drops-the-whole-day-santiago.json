@@ -1,0 +1,64 @@
+{
+  "name": "dst-midnight-gap-drops-the-whole-day-santiago",
+  "note": "America/Santiago springs forward AT midnight, so the fallback has no valid local midnight to add elapsed time to and the firing is dropped outright. The day is simply absent from the grid. kotlinx-datetime's own resolution would shift it forward instead, which is why the client cannot lean on the library here.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-09-04T00:30:00",
+    "tzid": "America/Santiago",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-09-03",
+    "to": "2026-09-11"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-09-04T00:30:00",
+      "start_local": "2026-09-04T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-09-05T00:30:00",
+      "start_local": "2026-09-05T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-09-07T00:30:00",
+      "start_local": "2026-09-07T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-09-08T00:30:00",
+      "start_local": "2026-09-08T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-09-09T00:30:00",
+      "start_local": "2026-09-09T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-09-10T00:30:00",
+      "start_local": "2026-09-10T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-09-11T00:30:00",
+      "start_local": "2026-09-11T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}
