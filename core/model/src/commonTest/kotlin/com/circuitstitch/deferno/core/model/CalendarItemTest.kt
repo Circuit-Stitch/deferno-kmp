@@ -8,10 +8,14 @@ import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /**
- * The two derived predicates on a calendar feed row (#74, #380) — the gates every renderer and the
- * occurrence write path key on. [CalendarItem.isActionableOccurrence] is deliberately a **conjunction
- * of four independent conditions**, each of which has a real failure mode behind it, so each is pinned
- * separately here rather than being implied by one happy-path case.
+ * The three derived predicates on a calendar feed row (#74, #380, #386) — the gates every renderer, the
+ * occurrence write path and the tree's "in today" join key on. [CalendarItem.isActionableOccurrence] is
+ * deliberately a **conjunction of four independent conditions**, each of which has a real failure mode
+ * behind it, so each is pinned separately here rather than being implied by one happy-path case.
+ *
+ * The read/write split is pinned too: [CalendarItem.isRecurringFiring] answers "does a definition fire
+ * here?" and [CalendarItem.isActionableOccurrence] narrows it with the two *kind* clauses that exist only
+ * to route a kind-scoped write. Collapsing them hides a genuinely-firing row from a reader (#386).
  */
 class CalendarItemTest {
 
@@ -79,6 +83,35 @@ class CalendarItemTest {
         assertFalse(row().isDatedTask)
         // …and neither is a series-less external event.
         assertFalse(row(seriesId = null, source = CalendarSource.External).isDatedTask)
+    }
+
+    @Test
+    fun anUnresolvedKindFiringIsStillAFiringEvenThoughItIsNotActionable() {
+        // The read/write asymmetry #386 turned on: the kind clauses are write-routing preconditions, so a
+        // firing this build cannot route an action for is still a firing that happened.
+        val unresolved = row(kind = null)
+        assertTrue(unresolved.isRecurringFiring)
+        assertFalse(unresolved.isActionableOccurrence)
+    }
+
+    @Test
+    fun aSeriesCarryingRowIsAFiringWhateverItsKind() {
+        // The read gate says NOTHING about kind — pinned on both shapes that would otherwise let it
+        // silently re-acquire one of `isActionableOccurrence`'s two kind clauses.
+        assertTrue(row(kind = null).isRecurringFiring)
+        assertTrue(row(kind = ItemKind.Task).isRecurringFiring)
+        assertFalse(row(kind = ItemKind.Task).isActionableOccurrence)
+    }
+
+    @Test
+    fun anExternalOrSeriesLessRowIsNotARecurringFiring() {
+        assertFalse(row(source = CalendarSource.External).isRecurringFiring)
+        assertFalse(row(seriesId = null).isRecurringFiring)
+        // Over Deferno-owned rows the two are complements, but an external row is in NEITHER — so
+        // `!isDatedTask` is not a spelling of `isRecurringFiring`.
+        val external = row(seriesId = null, source = CalendarSource.External)
+        assertFalse(external.isRecurringFiring)
+        assertFalse(external.isDatedTask)
     }
 
     @Test

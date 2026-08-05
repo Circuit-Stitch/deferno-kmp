@@ -1139,31 +1139,45 @@ private fun destinationsFor(assistantEntitled: Boolean): List<Destination> =
 
 /**
  * The kind-neutral **"in today"** id set the Item tree's first filter segment narrows on (#386): today's
- * [plan] (Task ids) unioned with every recurring definition that has a firing in today's calendar [day].
- * Before this the segment consulted no date, no plan and no calendar at all — it was a synonym for
- * "Active" on Apple and for **"All"** on Compose, which made it actively misleading in bug reports about
- * the plan.
+ * [plan] (item ids of any kind since #385) unioned with every recurring definition that has a firing in
+ * today's calendar [day]. Before this the segment consulted no date, no plan and no calendar at all — it
+ * was a synonym for "Active" on Apple and for **"All"** on Compose, which made it actively misleading in
+ * bug reports about the plan.
  *
- * **The recurring arm keys on [CalendarItem.seriesId], the *definition* id** — the id a tree row carries
- * verbatim. Not `taskId`: that is the id the *occurrence endpoints* address (#380), a different job for a
- * different consumer. The two must not be harmonised.
+ * **The recurring arm keys on [CalendarItem.taskId] — the definition's own *item* id.** That is the value
+ * a tree row carries: `Habit/Chore/Event.toItem()` (`core/data` `ItemRepository.kt`) stamps `Item.id` from
+ * the definition's `id`, and the feed emits that same id as `task_id`. **Never [CalendarItem.seriesId]**:
+ * a recurring item carries a series id *beside* its own id — two distinct uuids, as the captured
+ * `contracts/fixtures/items-sample.json` pins for all three recurring kinds (one habit: `id` `77dd6a6e-…`,
+ * `series_id` `b7c21959-…`). A tree row is an `Item`, and `Item` has no series field at all, so a set keyed
+ * on series ids intersects the tree in nothing: an "In today" silently empty for every Habit, Chore and
+ * Event, which reads as a confident "no". This KDoc asserted the exact opposite, and the test that should
+ * have caught it keyed its fixture the same wrong way.
  *
  * Two deliberate exclusions, both mirroring the reference client (`webui/src/utils/itemFilter.ts`) rather
  * than inventing a rule:
- *  - **A merely-dated Task is not "in today".** A one-off dated feed row has no series, so it contributes
- *    nothing; a Task is in today because it is on the plan. The reference keeps its date-range gate
- *    separate from its plan/overdue gates for the same reason.
+ *  - **A merely-dated Task is not "in today".** This no longer falls out of nullability — `taskId` is
+ *    non-null on *every* feed row, so a dated row would match its own tree row — hence the explicit
+ *    [CalendarItem.isRecurringFiring] gate. A Task is in today because it is on the plan, never because
+ *    it merely carries a date; the reference keeps its date-range gate separate from its plan/overdue
+ *    gates for the same reason. That gate's `source` clause carries the same weight: an external event is
+ *    stored as an Event-*kind* item, so its `taskId` is a real Deferno item id too.
  *  - **No overdue arm.** The cross-kind `Item` projection carries no `complete_by`, so "late" is not
  *    derivable here at all. If one ever lands, mirror the reference's exclusion: habits and events are
  *    never overdue (`itemFilter.ts:82`), only tasks and chores.
  *
- * Total by construction: a null [CalendarItem.seriesId] is dropped rather than guessed, and an id present
- * on both sides collapses to one entry.
+ * The gate is [CalendarItem.isRecurringFiring] and **not** [CalendarItem.isActionableOccurrence]: the
+ * latter additionally demands a resolved, non-Task kind, which are *write*-routing preconditions. A habit
+ * whose kind token this build predates still fires today, and hiding it here would recreate this very
+ * defect for exactly the rows the tolerant decoder exists to keep visible.
+ *
+ * Total by construction: a row that is not a firing is dropped rather than guessed, and an id present on
+ * both sides collapses to one entry.
  */
 internal fun inTodayIds(plan: List<PlanRow>, day: List<CalendarItem>): Set<String> {
     val ids = HashSet<String>(plan.size + day.size)
     plan.mapTo(ids) { it.item.id }
-    day.mapNotNullTo(ids) { it.seriesId }
+    for (row in day) if (row.isRecurringFiring) ids += row.taskId
     return ids
 }
 

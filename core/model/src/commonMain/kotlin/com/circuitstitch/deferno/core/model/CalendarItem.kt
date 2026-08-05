@@ -74,10 +74,27 @@ data class CalendarItem(
     val labels: List<String> = emptyList(),
 ) {
     /**
-     * A recurring firing this client can **act on** via the occurrence endpoints: it is a Deferno-owned
-     * row, it belongs to a series, and its [kind] resolved to one of the recurring kinds. A one-off
-     * dated Task ([seriesId] `null`), an unresolved-kind row, and anything synced from outside Deferno
-     * are all excluded — the agenda offers occurrence actions only here.
+     * A **recurring firing** — a Deferno-owned row that belongs to a series. The *read* gate: "does this
+     * row mean a recurring definition fires on this date?". Over Deferno-owned rows it is the exact
+     * complement of [isDatedTask]; an [CalendarSource.External] or [CalendarSource.Unknown] row is in
+     * neither, so `!isDatedTask` is **not** a spelling of this.
+     *
+     * The row it selects carries its definition's **item** id in [taskId] — which is what an `Item` tree
+     * row is keyed by ([seriesId] names the series and is no item's id, so a set built from it intersects
+     * the tree in nothing, #386).
+     *
+     * Deliberately says nothing about [kind]: that clause belongs to [isActionableOccurrence], which
+     * narrows this gate because it routes a kind-scoped *write*. A reader consuming no kind-scoped data
+     * needs it — an unrecognised-kind firing still fires; it merely renders read-only.
+     */
+    val isRecurringFiring: Boolean
+        get() = source == CalendarSource.Deferno && seriesId != null
+
+    /**
+     * A recurring firing this client can **act on** via the occurrence endpoints: it is a firing
+     * ([isRecurringFiring]) whose [kind] also resolved to one of the recurring kinds. A one-off dated
+     * Task ([seriesId] `null`), an unresolved-kind row, and anything synced from outside Deferno are all
+     * excluded — the agenda offers occurrence actions only here.
      *
      * The [source] clause is the backend's own instruction ("clients gate actionability on `source`, not
      * `kind`"): an external event is stored as an Event-*kind* item, so once [kind] arrives on the wire
@@ -86,7 +103,7 @@ data class CalendarItem(
      * row must not sprout a Done chip that posts to `/events/{id}/occurrences`.
      */
     val isActionableOccurrence: Boolean
-        get() = source == CalendarSource.Deferno && seriesId != null && kind != null && kind != ItemKind.Task
+        get() = isRecurringFiring && kind != null && kind != ItemKind.Task
 
     /** A one-off dated item (a Task with a deadline) — rendered in the agenda, acted on via the Task path. */
     val isDatedTask: Boolean get() = seriesId == null && source == CalendarSource.Deferno
