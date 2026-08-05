@@ -10,6 +10,7 @@ import com.circuitstitch.deferno.core.data.activity.changes
 import com.circuitstitch.deferno.core.data.activity.commentBody
 import com.circuitstitch.deferno.core.data.activity.commentTaskId
 import com.circuitstitch.deferno.core.data.activity.itemId
+import com.circuitstitch.deferno.core.data.activity.occurrenceItemId
 import com.circuitstitch.deferno.core.data.activity.summaryInfo
 import com.circuitstitch.deferno.core.model.ActivityFieldChange
 import com.circuitstitch.deferno.core.model.Item
@@ -160,9 +161,12 @@ class DefaultActivityComponent(
 }
 
 private fun ActivityEntry.toRow(byId: Map<String, Item>): ActivityFeedRow {
-    // Effective id resolves a comment row to its task too (comment targets have no itemId()); kept local
-    // to the feed so the shared itemId() — the Task Trail's ledger filter — is unchanged.
-    val effectiveId = itemId() ?: commentTaskId()
+    // Effective id also resolves the two target shapes that carry an item id but are held back from
+    // itemId(): a comment's task, and an occurrence's recurring definition (#406 — segment 2 of an
+    // `occurrence:` target is the definition's own item id, not the series id). Kept local to the feed so
+    // the shared itemId() — the Task Trail's ledger filter — is unchanged, and neither a comment nor a
+    // check-in silently lands in a Trail as a side effect of a deep-link fix.
+    val effectiveId = itemId() ?: commentTaskId() ?: occurrenceItemId()
     val item = effectiveId?.let(byId::get)
     return ActivityFeedRow(
         seq = seq,

@@ -23,8 +23,9 @@ import kotlin.time.Instant
 /**
  * The Activity feed's read-time join (#260): [DefaultActivityComponent] resolves each ledger row's item id
  * against the item cache to carry the short ref ("#41") + kind, and surfaces a comment's text + its
- * (Task-scoped) item — including a comment row, whose task-tagged target has no `itemId()`, via
- * `commentTaskId()`. An id absent from the cache (a brand-new sequence, or an aged-out/deleted item)
+ * (Task-scoped) item — including the two shapes deliberately held back from `itemId()` (the Task Trail's
+ * filter key): a comment row, resolved via `commentTaskId()`, and an occurrence row, resolved via
+ * `occurrenceItemId()`. An id absent from the cache (a brand-new sequence, or an aged-out/deleted item)
  * resolves to no ref, so the View falls back to the plain copy. Driven on [UnconfinedTestDispatcher] so the
  * `combine` + `stateIn(WhileSubscribed)` upstream runs eagerly when `first` subscribes.
  *
@@ -91,6 +92,27 @@ class DefaultActivityComponentTest {
         assertEquals("#41", row.itemRef)
         assertEquals(ActivityVerb.Commented, row.summaryInfo.verb)
         assertEquals("take a look?", row.commentBody)
+    }
+
+    /**
+     * A locally-queued check-in (#406). Segment 2 of an `occurrence:` target is the recurring definition's
+     * **own item id**, so the row joins the item cache like any other — it used to render with no ref, no
+     * kind badge and a dead "Open item", because `itemId()` returned null on a comment that claimed
+     * occurrence targets were "keyed by series". They are not; the series id is a separate uuid the item
+     * merely carries.
+     */
+    @Test
+    fun resolvesAnOccurrenceRowToItsRecurringDefinition() = runTest(UnconfinedTestDispatcher()) {
+        val c = component(
+            listOf(entry("occurrence:Habit:h-1:2026-06-21", OutboxMethod.Post)),
+            listOf(item("h-1", ItemKind.Habit, 41)),
+            UnconfinedTestDispatcher(testScheduler),
+        )
+        val row = c.state.first { it.rows.isNotEmpty() }.rows.single()
+        assertEquals("h-1", row.itemId) // openable — resolved via occurrenceItemId()
+        assertEquals("#41", row.itemRef)
+        assertEquals(ItemKind.Habit, row.itemKind)
+        assertEquals(ActivityVerb.UpdatedOccurrence, row.summaryInfo.verb)
     }
 
     @Test
