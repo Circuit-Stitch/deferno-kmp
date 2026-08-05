@@ -13,6 +13,7 @@ import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.RecurrenceBound
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.cadenceModeFromWire
 import com.circuitstitch.deferno.core.network.dto.ChoreDetailDto
 import com.circuitstitch.deferno.core.network.dto.EventDetailDto
 import com.circuitstitch.deferno.core.network.dto.HabitDetailDto
@@ -157,13 +158,21 @@ fun ItemView.asHabitOrNull(): Habit? = (this as? ItemView.Habit)?.let { v ->
 
 // --- Chore ---
 
+/**
+ * The wire `cadence_mode` token is typed **here**, in the mapper, and the DTO field deliberately stays a
+ * plain `String?`. Making it a `@Serializable enum` would look tidier and would silently destroy the
+ * thing [com.circuitstitch.deferno.core.model.CadenceMode.Unmodelled] exists to preserve: `DefernoJson`
+ * sets `coerceInputValues = true` (ADR-0005), which rewrites an unrecognised enum token to the
+ * property's default before any mapper is reached — the unknown mode would arrive already flattened to
+ * `rolling`. Same asymmetry, same reason, as the flat [RecurrenceDto] behind the sealed [Cadence].
+ */
 fun ChoreDetailDto.toDomain(): Chore = Chore(
     id = ChoreId(id),
     orgSlug = orgSlug,
     title = title,
     definitionState = status.toDefinitionState(),
     recurrence = recurrence.toDomain(),
-    cadenceMode = cadenceMode,
+    cadenceMode = cadenceModeFromWire(cadenceMode),
     labels = labels,
     parentId = parentId?.let(::TaskId),
     completeBy = completeBy.toInstantOrNull(),
@@ -191,7 +200,7 @@ fun ItemView.asChoreOrNull(): Chore? = (this as? ItemView.Chore)?.let { v ->
         title = v.title,
         definitionState = v.status.toDefinitionState(),
         recurrence = v.recurrence.toDomain(),
-        cadenceMode = v.cadenceMode,
+        cadenceMode = cadenceModeFromWire(v.cadenceMode),
         labels = v.labels,
         parentId = v.parentId?.let(::TaskId),
         completeBy = v.completeBy.toInstantOrNull(),

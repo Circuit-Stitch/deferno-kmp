@@ -1,0 +1,56 @@
+{
+  "name": "bound-count-dst-dropped-slot-does-not-consume",
+  "note": "A firing the zone drops is never generated, so it never consumes a COUNT either — five firings come back, with the dropped day simply missing from the middle. This is the opposite of the EXDATE rule below, and the two are one stage apart.",
+  "rrule": "FREQ=DAILY;COUNT=5",
+  "recurrence": {
+    "end": {
+      "n": 5,
+      "type": "after_count"
+    },
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-09-04T00:30:00",
+    "tzid": "America/Santiago",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-09-01",
+    "to": "2026-09-20"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-09-04T00:30:00",
+      "start_local": "2026-09-04T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-09-05T00:30:00",
+      "start_local": "2026-09-05T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-09-07T00:30:00",
+      "start_local": "2026-09-07T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-09-08T00:30:00",
+      "start_local": "2026-09-08T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-09-09T00:30:00",
+      "start_local": "2026-09-09T00:30:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

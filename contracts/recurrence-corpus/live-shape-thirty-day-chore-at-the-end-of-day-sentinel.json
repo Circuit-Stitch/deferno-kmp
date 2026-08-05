@@ -1,0 +1,57 @@
+{
+  "name": "live-shape-thirty-day-chore-at-the-end-of-day-sentinel",
+  "note": "A real recurring item as it appears on the wire today: a 30-day rolling chore anchored at the 23:59:59 no-time-of-day sentinel. The anchor's own time of day is carried by every firing, and it sits exactly on the inclusive-end-of-day bound.",
+  "rrule": "FREQ=DAILY;INTERVAL=30;UNTIL=20261222T075959Z",
+  "recurrence": {
+    "end": {
+      "date": "2026-12-21",
+      "type": "on_date"
+    },
+    "n": 30,
+    "type": "every_n_days"
+  },
+  "series": {
+    "dtstart_local": "2026-08-22T23:59:59",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-08-01",
+    "to": "2027-01-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-08-22T23:59:59",
+      "start_local": "2026-08-22T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-09-21T23:59:59",
+      "start_local": "2026-09-21T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-10-21T23:59:59",
+      "start_local": "2026-10-21T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-11-20T23:59:59",
+      "start_local": "2026-11-20T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-12-20T23:59:59",
+      "start_local": "2026-12-20T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

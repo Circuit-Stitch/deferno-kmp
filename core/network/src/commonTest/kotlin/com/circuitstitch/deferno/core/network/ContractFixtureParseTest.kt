@@ -194,6 +194,9 @@ class ContractFixtureParseTest {
 
         val chore = assertIs<ItemView.Chore>(items[2])
         assertEquals("47338a14-a07f-4ddf-ad73-f5edc977dab0", chore.id)
+        // Still the RAW token, deliberately: the DTO keeps `cadence_mode` a `String?` and the typing into
+        // a `CadenceMode` happens in the mapper (#401), because `coerceInputValues` would flatten an
+        // unrecognised mode to the default before an enum-typed DTO field could preserve it.
         assertEquals("rolling", chore.cadenceMode)
         assertEquals(listOf("Tue"), chore.recurrence?.days)
         // #382: the `end` bound was unmodelled, so `ignoreUnknownKeys` discarded it silently.

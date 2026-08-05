@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.data.backup
 
 import com.circuitstitch.deferno.core.model.Cadence
+import com.circuitstitch.deferno.core.model.CadenceMode
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
@@ -11,6 +12,7 @@ import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.RecurrenceBound
 import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.dto.ItemView
+import com.circuitstitch.deferno.core.network.mapper.asChoreOrNull
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import kotlinx.datetime.LocalDate
 import kotlinx.serialization.encodeToString
@@ -125,6 +127,54 @@ class BackupRecurrenceMapperTest {
         val exported = habitWith(future).toItemView()
         assertEquals("fortnightly", exported.recurrence?.type)
         assertEquals(future, roundTrip(future))
+    }
+
+    /**
+     * The same #382 preservation rule, applied to a Chore's `cadence_mode` (#401). The mode is not
+     * decoration — [CadenceMode.Rolling] is what makes the backend measure the next deadline from the
+     * completion rather than from the rule — so a restore that silently rewrites it reschedules the
+     * user's chore. Three separate ways that could happen, all pinned here: emitting the Kotlin variant
+     * name instead of the wire token, flattening an unrecognised mode down to `rolling`, and dropping
+     * the key so the restored chore falls back to the server's default.
+     */
+    @Test
+    fun aChoresCadenceModeSurvivesTheExportImportRoundTripUnderItsOwnWireToken() {
+        fun choreWith(mode: CadenceMode) = Chore(
+            id = ChoreId("c-1"),
+            orgSlug = "u-e4h2qk",
+            title = "trash",
+            definitionState = DefinitionState.Active,
+            recurrence = Recurrence(Cadence.Daily),
+            cadenceMode = mode,
+            dateCreated = created,
+        )
+
+        fun roundTripMode(mode: CadenceMode): CadenceMode {
+            val json = DefernoJson.encodeToString(ItemView.serializer(), choreWith(mode).toItemView())
+            val reread = DefernoJson.decodeFromString(ItemView.serializer(), json)
+            return (reread as ItemView.Chore).asChoreOrNull()!!.cadenceMode
+        }
+
+        // The mode a future backend adds comes back as ITSELF, not as the default it is not.
+        assertEquals(CadenceMode.Unmodelled("drifting"), roundTripMode(CadenceMode.Unmodelled("drifting")))
+        assertEquals(CadenceMode.Fixed, roundTripMode(CadenceMode.Fixed))
+        assertEquals(CadenceMode.Rolling, roundTripMode(CadenceMode.Rolling))
+
+        // The exported bytes carry the WIRE token — `items.json` IS the API's own snake-case JSON
+        // (ADR-0041), so `"Rolling"` / `"Unmodelled"` there would be a restore the server rejects or
+        // misreads. Rolling emits its token explicitly, exactly as the server's own Serialize does.
+        fun exportedJson(mode: CadenceMode) =
+            DefernoJson.encodeToString(ItemView.serializer(), choreWith(mode).toItemView())
+
+        val drifting = exportedJson(CadenceMode.Unmodelled("drifting"))
+        assertTrue(drifting.contains("\"cadence_mode\":\"drifting\""), drifting)
+        assertTrue(exportedJson(CadenceMode.Rolling).contains("\"cadence_mode\":\"rolling\""))
+        assertTrue(exportedJson(CadenceMode.Fixed).contains("\"cadence_mode\":\"fixed\""))
+
+        // …and the create payload the import replays carries the same token, so the row the server ends
+        // up with agrees with the optimistic local row the importer upserts alongside it.
+        val payload = choreWith(CadenceMode.Unmodelled("drifting")).toItemView().toCreatePayload()
+        assertEquals("drifting", payload.cadenceMode)
     }
 
     @Test

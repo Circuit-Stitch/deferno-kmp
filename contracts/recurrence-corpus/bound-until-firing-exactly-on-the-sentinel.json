@@ -1,0 +1,86 @@
+{
+  "name": "bound-until-firing-exactly-on-the-sentinel",
+  "note": "The boundary the inclusivity is actually ABOUT. UNTIL is the local 23:59:59 sentinel, so only an anchor at that same time of day produces a firing landing EXACTLY on it — and it is kept. Every other bound case in this corpus fires at 09:00, where inclusive and exclusive give the same answer and a client could get this wrong undetected.",
+  "rrule": "FREQ=DAILY;UNTIL=20260411T065959Z",
+  "recurrence": {
+    "end": {
+      "date": "2026-04-10",
+      "type": "on_date"
+    },
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T23:59:59",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-03-01",
+    "to": "2026-06-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-04-01T23:59:59",
+      "start_local": "2026-04-01T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-02T23:59:59",
+      "start_local": "2026-04-02T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-03T23:59:59",
+      "start_local": "2026-04-03T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-04T23:59:59",
+      "start_local": "2026-04-04T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-05T23:59:59",
+      "start_local": "2026-04-05T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-06T23:59:59",
+      "start_local": "2026-04-06T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-07T23:59:59",
+      "start_local": "2026-04-07T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-08T23:59:59",
+      "start_local": "2026-04-08T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-09T23:59:59",
+      "start_local": "2026-04-09T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-10T23:59:59",
+      "start_local": "2026-04-10T23:59:59",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

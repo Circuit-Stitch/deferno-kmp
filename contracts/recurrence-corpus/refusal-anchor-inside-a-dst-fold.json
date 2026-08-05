@@ -1,0 +1,21 @@
+{
+  "name": "refusal-anchor-inside-a-dst-fold",
+  "note": "An AMBIGUOUS anchor is refused too — the parser rejects a fold as firmly as a gap, which is stricter than the iterator's own fallback.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-11-01T01:30:00",
+    "tzid": "America/New_York",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-10-25",
+    "to": "2026-11-10"
+  },
+  "outcome": "not_expandable",
+  "error": "RRule(\"RRule parsing error: DTSTART:20261101T013000 is not a valid datetime in local timezone. This value is ambiguous and can be `2026-11-01T01:30:00-04:00` or `2026-11-01T01:30:00-05:00`\")"
+}

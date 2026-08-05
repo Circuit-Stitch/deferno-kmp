@@ -1,0 +1,52 @@
+{
+  "name": "dst-fall-back-nine-am-keeps-its-wall-time",
+  "note": "The same, in the other direction.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-10-30T09:00:00",
+    "tzid": "America/New_York",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-10-29",
+    "to": "2026-11-03"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-10-30T09:00:00",
+      "start_local": "2026-10-30T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-10-31T09:00:00",
+      "start_local": "2026-10-31T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-11-01T09:00:00",
+      "start_local": "2026-11-01T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-11-02T09:00:00",
+      "start_local": "2026-11-02T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-11-03T09:00:00",
+      "start_local": "2026-11-03T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

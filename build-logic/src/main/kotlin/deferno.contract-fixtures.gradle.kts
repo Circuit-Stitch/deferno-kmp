@@ -1,10 +1,21 @@
+import com.circuitstitch.deferno.gradle.ContractFixturesExtension
 import org.gradle.api.tasks.PathSensitivity
+import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.getByType
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
-// Convention: embed the captured golden envelopes from the repo-root `contracts/fixtures/` into a
-// module's `commonTest` source set as a generated Kotlin object, so the contract-fixture harness
-// (#19) can load every fixture on EVERY KMP target (JVM, Android host, iOS) with no runtime file IO.
+// Convention: embed a directory of captured JSON from the repo-root `contracts/` into a module's
+// `commonTest` source set as a generated Kotlin object, so a golden-file harness can load every file
+// on EVERY KMP target (JVM, Android host, iOS) with no runtime file IO.
+//
+// Two consumers, and the second is what made this configurable (ADR-0004: abstractions are earned at
+// the second consumer):
+//   - `core:network` embeds `contracts/fixtures` — the captured response envelopes (#19).
+//   - `core:model` embeds `contracts/recurrence-corpus` — the occurrence grid the Rust generated,
+//     which pins the offline expander (#401, ADR-0053 decision 5).
+// The directory, package and object name come from the `contractFixtures { }` block; see
+// `ContractFixturesExtension`. A module hosts exactly ONE set: a Gradle plugin applies once per
+// project, and the task name and generated-source directory below are fixed strings.
 //
 // Why codegen, not test resources: KMP `commonTest` has no portable resource reader (iOS especially),
 // and the fixtures live OUTSIDE the module (repo-root `contracts/`). Embedding them as String
@@ -19,17 +30,34 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 // only to conventions that apply an external Gradle plugin). The `pluginManager.withPlugin` guard
 // keeps the source-set wiring independent of plugin-apply order.
 
-private val fixturesDir = rootProject.layout.projectDirectory.dir("contracts/fixtures")
+private val contractFixtures = extensions.create<ContractFixturesExtension>("contractFixtures").apply {
+    sourceDir.convention(rootProject.layout.projectDirectory.dir("contracts/fixtures"))
+    objectName.convention("ContractFixtures")
+    // packageName gets NO convention on purpose — see ContractFixturesExtension's KDoc.
+}
 private val generatedSrcDir = layout.buildDirectory.dir("generated/contract-fixtures/commonTest/kotlin")
 
 private val generateContractFixtures = tasks.register("generateContractFixtures") {
-    val inputDir = fixturesDir
+    // Hoisted to task-local Providers here, and resolved with `.get()` only inside the action: the
+    // action must not capture the extension object, which is owned by the script-plugin instance the
+    // configuration cache cannot serialize (same reason the helpers below are local).
+    val inputDir = contractFixtures.sourceDir
+    val packageName = contractFixtures.packageName
+    val objectName = contractFixtures.objectName
     val outputDir = generatedSrcDir
-    // Track only the consumed *.json files — NOT the directory's README — so a doc-only edit to
-    // contracts/fixtures/README.md doesn't needlessly bust the cache and rerun generation + the
-    // downstream commonTest compile. Adding/removing a *.json still re-runs (and cleans stale output).
-    inputs.files(inputDir.asFileTree.matching { include("*.json") })
+    // Captured as a plain File so the action never reaches for `rootProject`, which the
+    // configuration cache forbids at execution time. Used only to render the provenance comment.
+    val rootDirFile = rootProject.layout.projectDirectory.asFile
+    // Track only the consumed *.json files — NOT the directory's README — so a doc-only edit to a
+    // README doesn't needlessly bust the cache and rerun generation + the downstream commonTest
+    // compile. Adding/removing a *.json still re-runs (and cleans stale output).
+    inputs.files(inputDir.map { it.asFileTree.matching { include("*.json") } })
         .withPropertyName("fixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+    // Declared as inputs so a rename actually re-runs. Without these Gradle reports UP-TO-DATE after
+    // a package/object change and the stale generated file survives — `out.deleteRecursively()` below
+    // only runs when the task does.
+    inputs.property("packageName", packageName)
+    inputs.property("objectName", objectName)
     outputs.dir(outputDir).withPropertyName("generatedSource")
     // Helpers are LOCAL to the task action: a top-level script function would make the action capture
     // the script-plugin object, which the configuration cache cannot serialize.
@@ -39,9 +67,18 @@ private val generateContractFixtures = tasks.register("generateContractFixtures"
         // be re-captured — so guard the ceiling and fail with a clear, actionable message rather than
         // the opaque "constant string too long" the Kotlin compiler would emit against generated code.
         val maxLiteralBytes = 60_000
+        val pkg = packageName.get()
+        val obj = objectName.get()
 
+        // Any character a Kotlin identifier cannot carry becomes `_`, and a leading digit gets a `_`
+        // prefix: a corpus case named `29-feb-skip.json` would otherwise emit `val 29_FEB_SKIP`, which
+        // does not compile. No fixture has ever started with a digit, which is why this never fired.
         fun constName(fileName: String): String =
-            fileName.removeSuffix(".json").replace('-', '_').replace('.', '_').uppercase()
+            fileName.removeSuffix(".json")
+                .map { if (it.isLetterOrDigit() || it == '_') it else '_' }
+                .joinToString("")
+                .uppercase()
+                .let { if (it.firstOrNull()?.isDigit() == true) "_$it" else it }
 
         // Renders [raw] as a single-line, fully-escaped Kotlin String literal (incl. the quotes).
         fun kotlinStringLiteral(raw: String): String {
@@ -64,30 +101,33 @@ private val generateContractFixtures = tasks.register("generateContractFixtures"
 
         val out = outputDir.get().asFile
         out.deleteRecursively()
-        val pkgDir = out.resolve("com/circuitstitch/deferno/core/network/fixtures")
+        val pkgDir = out.resolve(pkg.replace('.', '/'))
         pkgDir.mkdirs()
 
-        val fixtures = inputDir.asFile.listFiles { f -> f.isFile && f.name.endsWith(".json") }
+        val sourceDirFile = inputDir.get().asFile
+        val fixtures = sourceDirFile.listFiles { f -> f.isFile && f.name.endsWith(".json") }
             ?.sortedBy { it.name }
             ?: emptyList()
         if (fixtures.isEmpty()) {
             error(
-                "No *.json fixtures found under ${inputDir.asFile} — the contract-fixture harness would " +
-                    "be vacuous. Expected the captured envelopes (contracts/fixtures/).",
+                "No *.json files found under $sourceDirFile — the golden-file harness reading " +
+                    "$pkg.$obj would be vacuous. Capture them per that directory's README; they are " +
+                    "generated or captured, never hand-authored.",
             )
         }
 
         val code = buildString {
+            val relativeSource = sourceDirFile.relativeToOrSelf(rootDirFile).invariantSeparatorsPath
             appendLine("// GENERATED — do not edit by hand.")
-            appendLine("// Source: contracts/fixtures (re-capture per contracts/fixtures/README.md).")
+            appendLine("// Source: $relativeSource (re-capture per that directory's README).")
             appendLine("// Emitted by the generateContractFixtures task (build-logic: deferno.contract-fixtures).")
-            appendLine("package com.circuitstitch.deferno.core.network.fixtures")
+            appendLine("package $pkg")
             appendLine()
             appendLine("/**")
-            appendLine(" * The captured golden envelopes from `contracts/fixtures/`, embedded verbatim so the")
-            appendLine(" * contract-fixture harness loads them on every KMP target with no runtime file IO (#19).")
+            appendLine(" * The captured golden files from `$relativeSource`, embedded verbatim so the harness")
+            appendLine(" * over them loads every one on every KMP target with no runtime file IO (#19).")
             appendLine(" */")
-            appendLine("internal object ContractFixtures {")
+            appendLine("internal object $obj {")
             fixtures.forEach { f ->
                 val literal = kotlinStringLiteral(f.readText())
                 val literalBytes = literal.toByteArray(Charsets.UTF_8).size
@@ -101,7 +141,7 @@ private val generateContractFixtures = tasks.register("generateContractFixtures"
                 append("    val ").append(constName(f.name)).append(": String = ").appendLine(literal)
             }
             appendLine()
-            appendLine("    /** Every captured fixture, keyed by its file name. */")
+            appendLine("    /** Every captured file, keyed by its file name. */")
             appendLine("    val ALL: Map<String, String> = mapOf(")
             fixtures.forEach { f ->
                 append("        ").append(kotlinStringLiteral(f.name)).append(" to ")
@@ -110,7 +150,7 @@ private val generateContractFixtures = tasks.register("generateContractFixtures"
             appendLine("    )")
             appendLine("}")
         }
-        pkgDir.resolve("ContractFixtures.kt").writeText(code)
+        pkgDir.resolve("$obj.kt").writeText(code)
     }
 }
 

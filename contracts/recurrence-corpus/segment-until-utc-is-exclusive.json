@@ -1,0 +1,46 @@
+{
+  "name": "segment-until-utc-is-exclusive",
+  "note": "The Segment bound until_utc is EXCLUSIVE — a firing landing exactly on it is dropped. Note the opposite inclusivity to the rule's UNTIL above; a superseded segment carries both bounds at once.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": "2026-04-05T16:00:00Z",
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-03-01",
+    "to": "2026-06-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-04-01T09:00:00",
+      "start_local": "2026-04-01T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-02T09:00:00",
+      "start_local": "2026-04-02T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-03T09:00:00",
+      "start_local": "2026-04-03T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-04T09:00:00",
+      "start_local": "2026-04-04T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "name": "monthly-nth-weekday-second-wednesday",
+  "note": "BYDAY={nth}{code}.",
+  "rrule": "FREQ=MONTHLY;BYDAY=2WE",
+  "recurrence": {
+    "interval": 1,
+    "on": {
+      "nth": 2,
+      "type": "nth_weekday",
+      "weekday": "Wed"
+    },
+    "type": "monthly"
+  },
+  "series": {
+    "dtstart_local": "2026-01-14T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2026-07-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-01-14T09:00:00",
+      "start_local": "2026-01-14T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-02-11T09:00:00",
+      "start_local": "2026-02-11T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-03-11T09:00:00",
+      "start_local": "2026-03-11T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-08T09:00:00",
+      "start_local": "2026-04-08T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-05-13T09:00:00",
+      "start_local": "2026-05-13T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-06-10T09:00:00",
+      "start_local": "2026-06-10T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

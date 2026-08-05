@@ -1,0 +1,43 @@
+{
+  "name": "yearly-twenty-ninth-of-february-skips",
+  "note": "Three years in four have no firing at all — skip, never clamp to the 28th.",
+  "rrule": "FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29",
+  "recurrence": {
+    "day": 29,
+    "interval": 1,
+    "month": 2,
+    "type": "yearly"
+  },
+  "series": {
+    "dtstart_local": "2024-02-29T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2024-01-01",
+    "to": "2033-01-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2024-02-29T09:00:00",
+      "start_local": "2024-02-29T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2028-02-29T09:00:00",
+      "start_local": "2028-02-29T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2032-02-29T09:00:00",
+      "start_local": "2032-02-29T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

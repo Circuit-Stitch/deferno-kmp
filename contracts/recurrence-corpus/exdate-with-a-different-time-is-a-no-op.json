@@ -1,0 +1,57 @@
+{
+  "name": "exdate-with-a-different-time-is-a-no-op",
+  "note": "An EXDATE on the right day but the wrong time of day matches nothing — exclusion is on the instant, not the date.",
+  "rrule": "FREQ=WEEKLY;BYDAY=WE",
+  "recurrence": {
+    "days": [
+      "Wed"
+    ],
+    "type": "weekly"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [
+      "2026-04-08T10:00:00"
+    ],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-04-01",
+    "to": "2026-04-30"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-04-01T09:00:00",
+      "start_local": "2026-04-01T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-08T09:00:00",
+      "start_local": "2026-04-08T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-15T09:00:00",
+      "start_local": "2026-04-15T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-22T09:00:00",
+      "start_local": "2026-04-22T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-29T09:00:00",
+      "start_local": "2026-04-29T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

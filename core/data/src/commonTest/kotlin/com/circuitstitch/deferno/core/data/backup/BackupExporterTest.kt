@@ -5,6 +5,7 @@ import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
 import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
 import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
 import com.circuitstitch.deferno.core.model.Cadence
+import com.circuitstitch.deferno.core.model.CadenceMode
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Event
@@ -77,7 +78,7 @@ class BackupExporterTest {
         title = "chore-$id",
         definitionState = DefinitionState.Active,
         recurrence = Recurrence(Cadence.Daily),
-        cadenceMode = "rolling",
+        cadenceMode = CadenceMode.Rolling,
         dateCreated = created,
         hydration = HydrationState.Full,
     )

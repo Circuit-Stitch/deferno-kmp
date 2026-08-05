@@ -1,0 +1,21 @@
+{
+  "name": "refusal-anchor-inside-a-dst-gap",
+  "note": "An anchor inside a spring-forward gap will not parse as a DTSTART line, and the whole expansion fails. An unresolvable anchor refuses the grid rather than nudging it.",
+  "rrule": "FREQ=DAILY",
+  "recurrence": {
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-03-08T02:30:00",
+    "tzid": "America/New_York",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-03-01",
+    "to": "2026-03-14"
+  },
+  "outcome": "not_expandable",
+  "error": "RRule(\"RRule parsing error: DTSTART:20260308T023000 is not a valid datetime in local timezone.\")"
+}

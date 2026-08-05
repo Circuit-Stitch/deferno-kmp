@@ -1,0 +1,49 @@
+{
+  "name": "yearly-interval-two-phase-is-the-anchor-year",
+  "note": "A biennial rule counts from the anchor's year.",
+  "rrule": "FREQ=YEARLY;INTERVAL=2;BYMONTH=6;BYMONTHDAY=14",
+  "recurrence": {
+    "day": 14,
+    "interval": 2,
+    "month": 6,
+    "type": "yearly"
+  },
+  "series": {
+    "dtstart_local": "2025-06-14T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2024-01-01",
+    "to": "2033-01-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2025-06-14T09:00:00",
+      "start_local": "2025-06-14T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2027-06-14T09:00:00",
+      "start_local": "2027-06-14T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2029-06-14T09:00:00",
+      "start_local": "2029-06-14T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2031-06-14T09:00:00",
+      "start_local": "2031-06-14T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

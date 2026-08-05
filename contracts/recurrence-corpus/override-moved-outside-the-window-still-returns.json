@@ -1,0 +1,43 @@
+{
+  "name": "override-moved-outside-the-window-still-returns",
+  "note": "The window is applied to the ORIGINAL slot, before overrides — so a firing moved far outside the window still comes back inside it.",
+  "rrule": "FREQ=WEEKLY;BYDAY=WE",
+  "recurrence": {
+    "days": [
+      "Wed"
+    ],
+    "type": "weekly"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": [
+      {
+        "recurrence_id": "2026-04-08T09:00:00",
+        "is_cancelled": false,
+        "moved_to_local": "2026-04-30T14:00:00"
+      }
+    ]
+  },
+  "window": {
+    "from": "2026-04-01",
+    "to": "2026-04-10"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-04-01T09:00:00",
+      "start_local": "2026-04-01T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-08T09:00:00",
+      "start_local": "2026-04-30T14:00:00",
+      "is_cancelled": false,
+      "is_override": true
+    }
+  ]
+}

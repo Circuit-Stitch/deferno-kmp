@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.model
 
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 
 /**
@@ -101,6 +102,24 @@ sealed interface RecurrenceBound {
     /** Bounded by a number of firings from the series anchor (the wire's `COUNT`). */
     data class AfterCount(val n: Int) : RecurrenceBound
 }
+
+/**
+ * The wire's weekday token (`"Mon"`..`"Sun"`, `chrono::Weekday`'s Display form) as a day, or `null` for
+ * a token this build cannot place.
+ *
+ * **English regardless of the reader's locale**, and never displayed — this only turns a wire token into
+ * a day, so it is not the per-locale weekday table CLAUDE.md bans. It lives beside [Cadence], whose KDoc
+ * declares that vocabulary, because both the [Occurrence grid] expander and the display reading need it
+ * and two independent tables of one wire vocabulary is exactly the second specification this model
+ * exists to avoid.
+ */
+fun wireWeekday(token: String): DayOfWeek? =
+    WireWeekdayTokens.indexOfFirst { it.equals(token, ignoreCase = true) }
+        .takeIf { it >= 0 }
+        ?.let { DayOfWeek(it + 1) }
+
+/** The wire's weekday tokens in ISO order (`DayOfWeek(1)` is Monday). */
+private val WireWeekdayTokens = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 /**
  * Which day a [Cadence.Monthly] rule lands on within its cycle — the domain projection of the wire's

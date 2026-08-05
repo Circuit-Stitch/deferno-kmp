@@ -15,6 +15,8 @@ import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.cadenceModeFromWire
+import com.circuitstitch.deferno.core.model.wireToken
 import kotlin.time.Instant
 
 /** Row<->domain conversion for the Chore cache (ADR-0001, #71) — sibling of `HabitEntityMapping.kt`. */
@@ -41,7 +43,10 @@ fun ChoreEntity.toDomain(): Chore = Chore(
             rawType = recurrence_raw_type,
         ),
     ),
-    cadenceMode = cadence_mode,
+    // The stored token is the WIRE token, so the wire codec is also the row codec — see [Chore.toEntity].
+    // A NULL column is not "unknown": it is the pre-#401 default every client-created chore still holds,
+    // and it decodes to Rolling exactly as an absent wire token does (see [cadenceModeFromWire]).
+    cadenceMode = cadenceModeFromWire(cadence_mode),
     labels = labels.decodeNewlineList(),
     parentId = parent_id?.let(::TaskId),
     completeBy = complete_by.toInstantOrNull(),
@@ -75,7 +80,11 @@ fun Chore.toEntity(): ChoreEntity {
         definition_state = definitionState.name,
         recurrence_type = rule.type,
         recurrence_days = rule.days,
-        cadence_mode = cadenceMode,
+        // A PERSISTED FORMAT, not a display string (the same warning `RecurringEntityCodec` carries for
+        // `recurrence_type`): every row an earlier build cached holds the literal `rolling`/`fixed`/NULL
+        // it read off the wire, so this must emit the wire token and never the Kotlin variant name. That
+        // the two already agree is what makes this a no-migration change.
+        cadence_mode = cadenceMode.wireToken,
         labels = labels.encodeNewlineList(),
         parent_id = parentId?.value,
         complete_by = completeBy?.toString(),

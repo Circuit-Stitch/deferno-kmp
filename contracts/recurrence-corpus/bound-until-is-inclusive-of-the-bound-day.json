@@ -1,0 +1,86 @@
+{
+  "name": "bound-until-is-inclusive-of-the-bound-day",
+  "note": "The rule's UNTIL is INCLUSIVE, and it is the canonical inclusive-end-of-day sentinel in the frozen zone — so the whole bound day is kept regardless of the reader's UTC offset sign.",
+  "rrule": "FREQ=DAILY;UNTIL=20260411T065959Z",
+  "recurrence": {
+    "end": {
+      "date": "2026-04-10",
+      "type": "on_date"
+    },
+    "type": "daily"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-03-01",
+    "to": "2026-06-01"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-04-01T09:00:00",
+      "start_local": "2026-04-01T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-02T09:00:00",
+      "start_local": "2026-04-02T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-03T09:00:00",
+      "start_local": "2026-04-03T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-04T09:00:00",
+      "start_local": "2026-04-04T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-05T09:00:00",
+      "start_local": "2026-04-05T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-06T09:00:00",
+      "start_local": "2026-04-06T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-07T09:00:00",
+      "start_local": "2026-04-07T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-08T09:00:00",
+      "start_local": "2026-04-08T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-09T09:00:00",
+      "start_local": "2026-04-09T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-10T09:00:00",
+      "start_local": "2026-04-10T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

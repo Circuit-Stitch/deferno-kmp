@@ -1,0 +1,47 @@
+{
+  "name": "every-n-days-later-window-keeps-the-phase",
+  "note": "The same rule read over a window that starts long after the anchor still lands on the anchor's stride, not on the window's first day.",
+  "rrule": "FREQ=DAILY;INTERVAL=3",
+  "recurrence": {
+    "n": 3,
+    "type": "every_n_days"
+  },
+  "series": {
+    "dtstart_local": "2026-04-01T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-04-10",
+    "to": "2026-04-19"
+  },
+  "outcome": "firings",
+  "firings": [
+    {
+      "recurrence_id": "2026-04-10T09:00:00",
+      "start_local": "2026-04-10T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-13T09:00:00",
+      "start_local": "2026-04-13T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-16T09:00:00",
+      "start_local": "2026-04-16T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    },
+    {
+      "recurrence_id": "2026-04-19T09:00:00",
+      "start_local": "2026-04-19T09:00:00",
+      "is_cancelled": false,
+      "is_override": false
+    }
+  ]
+}

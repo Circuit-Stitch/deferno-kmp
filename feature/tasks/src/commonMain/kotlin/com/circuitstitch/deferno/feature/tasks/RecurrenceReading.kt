@@ -6,7 +6,9 @@ import com.circuitstitch.deferno.core.model.RecurrenceBound
 import com.circuitstitch.deferno.core.model.RecurrenceCursor
 import com.circuitstitch.deferno.core.model.RelativeDay
 import com.circuitstitch.deferno.core.model.recurrenceCursor
+import com.circuitstitch.deferno.core.model.wireWeekday
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import kotlin.time.Clock
@@ -139,18 +141,21 @@ private fun Cadence.reading(): CadenceReading = when (this) {
 }
 
 /**
- * The wire's weekday tokens in ISO order. `Cadence.Weekly.days` ships `chrono::Weekday`'s Display form,
- * which is **English regardless of the user's locale** — this list only turns a token into a day number,
- * it is never displayed, so it is not the per-locale weekday table CLAUDE.md bans.
+ * Rule 3: unplaceable tokens dropped, duplicates collapsed, survivors in week order as ISO 1..7.
+ *
+ * The token table itself lives on [wireWeekday] in `core/model`, beside the [Cadence] KDoc that
+ * declares the vocabulary — this file kept its own copy until the [Occurrence grid] expander needed
+ * the same mapping (#401), and two independent tables of one wire vocabulary is the second
+ * specification this reading exists to prevent.
+ *
+ * Note the differing failure policy, which is deliberate: a *display* line drops what it cannot place
+ * and still says something useful, while the expander refuses the whole grid rather than ship a
+ * schedule quietly missing a day (ADR-0053 — absent, not empty).
  */
-private val WireWeekdayTokens = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-
-/** Rule 3: unplaceable tokens dropped, duplicates collapsed, survivors in week order as ISO 1..7. */
 private fun List<String>.toIsoDayNumbers(): List<Int> =
-    mapNotNull { token -> WireWeekdayTokens.indexOfFirst { it.equals(token, ignoreCase = true) }.takeIf { it >= 0 } }
+    mapNotNull { wireWeekday(it)?.isoDayNumber }
         .distinct()
         .sorted()
-        .map { it + 1 }
 
 /**
  * The flat, token-shaped projection of a [RecurrenceReading] for the **SwiftUI** twins — the typed pieces

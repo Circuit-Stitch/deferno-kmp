@@ -11,11 +11,11 @@ import kotlin.time.Instant
  * A Chore as the rest of the app sees it — a **recurring definition** (CONTEXT.md → "Chore"), the
  * clean domain projection of the wire `chore` item (ADR-0011). Like [Habit] it is governed by the
  * definition "light switch" [DefinitionState] and carries a [recurrence]; it adds the chore-specific
- * [cadenceMode] (e.g. `rolling` vs `fixed`) the wire ships.
+ * [cadenceMode] the wire ships.
  *
  * **[cadenceMode] is not a [Cadence]** — the near-collision is the wire's vocabulary, not ours. The
- * [recurrence]'s [Cadence] says *which days this chore fires on*; [cadenceMode] is an unrelated wire
- * string about how the schedule advances, and the two never substitute for one another.
+ * [recurrence]'s [Cadence] says *which days this chore fires on*; [CadenceMode] says how the schedule
+ * *advances once a firing is closed out*, and the two never substitute for one another.
  *
  * **Deferred (ADR-0015):** the "Shared with a Group" / rotation control — Groups are backend-blocked,
  * so a Chore is creatable in v1 *without* a group, and this model carries no group/rotation field.
@@ -32,7 +32,9 @@ data class Chore(
     val title: String,
     val definitionState: DefinitionState,
     val recurrence: Recurrence? = null,
-    val cadenceMode: String? = null,
+    // NON-NULL, defaulting to Rolling: an absent wire/column token is not "unknown", it IS Rolling —
+    // the backend's `#[default]` — so there is no third state for this field to be in. See [CadenceMode].
+    val cadenceMode: CadenceMode = CadenceMode.Rolling,
     val labels: List<String> = emptyList(),
     val parentId: TaskId? = null,
     val completeBy: Instant? = null,
