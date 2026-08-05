@@ -91,6 +91,14 @@ class RecurrenceCorpusTest {
             "dst-thirty-minute-gap-shifts-by-thirty-minutes.json",
             "dst-midnight-gap-drops-the-whole-day-santiago.json",
             "bound-count-dst-dropped-slot-does-not-consume.json",
+            // The degenerate anchors neither side range-checks. A client reasoning from the field
+            // KDocs rather than from the crate gets every one of these wrong, in both directions.
+            "monthly-day-of-month-zero-falls-back-to-the-anchor-day.json",
+            "monthly-nth-weekday-zero-is-every-such-weekday.json",
+            "yearly-day-zero-falls-back-to-the-anchor-day.json",
+            "refusal-yearly-month-out-of-range.json",
+            "refusal-monthly-day-of-month-past-thirty-one.json",
+            "refusal-monthly-nth-weekday-fifth-from-last.json",
         )
         val missing = required - RecurrenceCorpus.ALL.keys
         assertEquals(emptyList(), missing, "corpus cases went missing; regenerate from the Rust")

@@ -107,6 +107,32 @@ class OccurrenceGridTest {
     }
 
     @Test
+    fun aYearlyDateOutsideTheCratesRangeIsRefused() {
+        // Both are `rrule` PARSE errors, so the rule fails rather than firing nothing — which is what
+        // separates them from `BYMONTH=2;BYMONTHDAY=30`, a rule that parses and legitimately never
+        // matches. Neither side range-checks the field, so a hand-built payload reaches this.
+        assertEquals(
+            ExpansionRefusal.UnplaceableYearlyDate(month = 13, day = 5),
+            refusalOf(expand(Cadence.Yearly(interval = 1, month = 13, day = 5))),
+        )
+        assertEquals(
+            ExpansionRefusal.UnplaceableYearlyDate(month = 6, day = 32),
+            refusalOf(expand(Cadence.Yearly(interval = 1, month = 6, day = 32))),
+        )
+    }
+
+    @Test
+    fun theZeroValuedAnchorsAreGridsNotRefusals() {
+        // Both mean "no day part", which makes the rule take its day from the anchor rather than
+        // making it unplaceable — and an `nth` of zero means EVERY such weekday. Refusing either
+        // would hide a live schedule; the dates themselves are pinned by the corpus, so this asserts
+        // only which side of the Firings/NotExpandable line they fall on.
+        assertTrue(assertIs<Expansion.Firings>(expand(Cadence.Monthly(1, MonthlyAnchor.DayOfMonth(0)))).firings.isNotEmpty())
+        assertTrue(assertIs<Expansion.Firings>(expand(Cadence.Monthly(1, MonthlyAnchor.NthWeekday(0, "Wed")))).firings.isNotEmpty())
+        assertTrue(assertIs<Expansion.Firings>(expand(Cadence.Yearly(1, 4, 0))).firings.isNotEmpty())
+    }
+
+    @Test
     fun aWeeklyRuleWithNoReadableDaysIsRefused() {
         assertEquals(
             ExpansionRefusal.UnplaceableWeekday(emptyList()),

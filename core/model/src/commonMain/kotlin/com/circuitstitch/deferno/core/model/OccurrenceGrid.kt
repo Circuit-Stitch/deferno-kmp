@@ -246,8 +246,20 @@ sealed interface ExpansionRefusal {
      */
     data object MonthlyWithoutAnchor : ExpansionRefusal
 
-    /** A `nth` outside `-4..5`, which `rrule` rejects as a validation error rather than expanding. */
+    /**
+     * A monthly anchor the crate rejects outright rather than expanding: an `nth` outside `-4..5` (a
+     * validation error) or a day of month outside `-31..31` (a parse error). Note where those
+     * boundaries actually sit — an `nth` of `0` and a day of `0` are both *inside* them and both mean
+     * something, so neither is a refusal.
+     */
     data class UnplaceableMonthlyAnchor(val anchor: MonthlyAnchor) : ExpansionRefusal
+
+    /**
+     * A yearly month outside `1..12` or day outside `-31..31`. Both are `rrule` **parse** errors, so
+     * the whole rule fails rather than firing nothing — which is why this is a refusal and the
+     * genuinely-never-firing `BYMONTH=2;BYMONTHDAY=30` is an empty grid instead.
+     */
+    data class UnplaceableYearlyDate(val month: Int, val day: Int) : ExpansionRefusal
 
     /** A weekday token this build's wire vocabulary cannot place, or a weekly rule with no days at all. */
     data class UnplaceableWeekday(val days: List<String>) : ExpansionRefusal
@@ -296,23 +308,27 @@ private sealed interface GridRule {
     /** `FREQ=MONTHLY[;INTERVAL=n];BYMONTHDAY=d` — a month without that day fires nothing. */
     data class MonthlyDay(val interval: Int, val day: Int) : GridRule {
         override fun slotDates(anchorDate: LocalDate, horizon: LocalDate): Sequence<LocalDate> =
-            monthStarts(anchorDate, horizon, interval).mapNotNull { it.withDayOfMonth(day) }
+            monthStarts(anchorDate, horizon, interval)
+                .mapNotNull { it.withMonthDay(day.orAnchorDay(anchorDate)) }
     }
 
-    /** `FREQ=MONTHLY[;INTERVAL=n];BYDAY={nth}{code}`, `nth` negative counting from the month's end. */
+    /**
+     * `FREQ=MONTHLY[;INTERVAL=n];BYDAY={nth}{code}`, `nth` negative counting from the month's end —
+     * and `nth == 0` meaning **every** occurrence of that weekday in the period month, which is a
+     * genuinely different arm rather than a degenerate one (see [nthWeekdaysOfMonth]).
+     */
     data class MonthlyWeekday(val interval: Int, val nth: Int, val weekday: DayOfWeek) : GridRule {
         override fun slotDates(anchorDate: LocalDate, horizon: LocalDate): Sequence<LocalDate> =
-            monthStarts(anchorDate, horizon, interval).mapNotNull { it.nthWeekdayOfMonth(nth, weekday) }
+            monthStarts(anchorDate, horizon, interval).flatMap { it.nthWeekdaysOfMonth(nth, weekday) }
     }
 
     /** `FREQ=YEARLY[;INTERVAL=n];BYMONTH=m;BYMONTHDAY=d` — 29 February fires in leap years only. */
     data class Yearly(val interval: Int, val month: Int, val day: Int) : GridRule {
         override fun slotDates(anchorDate: LocalDate, horizon: LocalDate): Sequence<LocalDate> {
             val step = interval.coerceAtLeast(1)
-            if (month !in 1..12) return emptySequence()
             return generateSequence(LocalDate(anchorDate.year, 1, 1)) { it.plus(step, DateTimeUnit.YEAR) }
                 .takeWhile { it.year <= horizon.year }
-                .mapNotNull { localDateOrNull(it.year, month, day) }
+                .mapNotNull { LocalDate(it.year, month, 1).withMonthDay(day.orAnchorDay(anchorDate)) }
                 .takeWhile { it <= horizon }
         }
     }
@@ -330,13 +346,17 @@ private fun Cadence.toGridRule(): GridRule? = when (this) {
         ?.let { parsed -> GridRule.Weekly(parsed.filterNotNull().toSet()) }
     is Cadence.Monthly -> when (val anchor = on) {
         null -> null
-        is MonthlyAnchor.DayOfMonth -> anchor.day.takeIf { it in 1..31 }
+        // The crate PARSES a BYMONTHDAY in -31..31 and rejects anything else outright, so those two
+        // ranges are where the refusal boundary sits — not at the 1..31 the field's own KDoc describes.
+        is MonthlyAnchor.DayOfMonth -> anchor.day.takeIf { it in MONTH_DAY_RANGE }
             ?.let { GridRule.MonthlyDay(interval, it) }
+        // `nth` is VALIDATED against -4..5, and 0 is inside that range and means something.
         is MonthlyAnchor.NthWeekday -> wireWeekday(anchor.weekday)
-            ?.takeIf { anchor.nth in -4..5 }
+            ?.takeIf { anchor.nth in NTH_RANGE }
             ?.let { GridRule.MonthlyWeekday(interval, anchor.nth, it) }
     }
-    is Cadence.Yearly -> GridRule.Yearly(interval, month, day)
+    is Cadence.Yearly -> takeIf { month in 1..12 && day in MONTH_DAY_RANGE }
+        ?.let { GridRule.Yearly(interval, month, day) }
     is Cadence.Custom, is Cadence.Unmodelled -> null
 }
 
@@ -346,8 +366,11 @@ private fun Cadence.refusal(): ExpansionRefusal = when (this) {
     is Cadence.Weekly -> ExpansionRefusal.UnplaceableWeekday(days)
     is Cadence.Monthly -> on?.let { ExpansionRefusal.UnplaceableMonthlyAnchor(it) }
         ?: ExpansionRefusal.MonthlyWithoutAnchor
-    // Every remaining cadence produces a rule, so this is unreachable by construction.
-    is Cadence.Daily, is Cadence.EveryNDays, is Cadence.Yearly -> ExpansionRefusal.CustomCadence
+    is Cadence.Yearly -> ExpansionRefusal.UnplaceableYearlyDate(month, day)
+    // Both always produce a rule: a stride the crate will not accept yields an empty grid rather than
+    // a parse failure, which is a grid and not a refusal.
+    is Cadence.Daily, is Cadence.EveryNDays ->
+        error("$this always produces a rule; reaching here is a bug in toGridRule")
 }
 
 // ── Calendar helpers ──────────────────────────────────────────────────────────────────────────────
@@ -367,29 +390,65 @@ private fun monthStarts(anchorDate: LocalDate, horizon: LocalDate, interval: Int
     return generateSequence(first) { it.plus(step, DateTimeUnit.MONTH) }.takeWhile { it <= horizon }
 }
 
-/** This month's [day], or `null` when the month is too short — **skip, never clamp**. */
-private fun LocalDate.withDayOfMonth(day: Int): LocalDate? = localDateOrNull(year, month.number, day)
+/**
+ * A `BYMONTHDAY` of **zero** means "no day part at all", and an RRULE with no day selector takes its
+ * day from `DTSTART` — the crate's `finalize_parsed_rrule` back-fills it. Measured: `BYMONTHDAY=0`
+ * anchored on the 3rd fires on the 3rd of every month, exactly as a bare `FREQ=MONTHLY` would.
+ *
+ * Reachable because neither side range-checks it: the wire's `day` is a `u32` with no validation, so a
+ * hand-built payload or a hand-edited Backup `items.json` can carry one.
+ */
+private fun Int.orAnchorDay(anchorDate: LocalDate): Int = if (this == 0) anchorDate.day else this
 
 /**
- * The [nth] [weekday] of this month (negative counts back from the month's end), or `null` when the
- * month has no such day — a fifth Thursday exists in only five months of 2026.
+ * This month's [day], or `null` when the month is too short — **skip, never clamp**. A negative [day]
+ * counts back from the month's end (`-1` is the last day), matching the crate's `-31..31` parse range;
+ * the wire's `u32` cannot express one, but the cache and the Backup file can.
  */
-private fun LocalDate.nthWeekdayOfMonth(nth: Int, weekday: DayOfWeek): LocalDate? {
-    if (nth == 0) return null
-    val first = LocalDate(year, month, 1)
-    val last = first.plus(1, DateTimeUnit.MONTH).addDays(-1)
-    val candidate = if (nth > 0) {
-        val offset = (weekday.isoDayNumber - first.dayOfWeek.isoDayNumber + 7) % 7
-        first.addDays(offset + (nth - 1) * 7)
-    } else {
-        val offset = (last.dayOfWeek.isoDayNumber - weekday.isoDayNumber + 7) % 7
-        last.addDays(-offset - (-nth - 1) * 7)
-    }
-    return candidate.takeIf { it >= first && it <= last }
+private fun LocalDate.withMonthDay(day: Int): LocalDate? = when {
+    day > 0 -> localDateOrNull(year, month.number, day)
+    day < 0 -> lastDayOfMonth().let { last -> localDateOrNull(year, month.number, last.day + 1 + day) }
+    else -> null
 }
+
+/**
+ * The [nth] [weekday] of this month, ascending — empty when the month has no such day (a fifth Thursday
+ * exists in only five months of 2026). Negative [nth] counts back from the month's end.
+ *
+ * **[nth] of zero is not degenerate, it is a third arm.** The crate parses the `BYDAY` prefix and maps
+ * `0` to `NWeekday::Every`, so `BYDAY=0FR` is *every* Friday of the period month and expands
+ * byte-identically to a bare `BYDAY=FR` — 26 firings over six months where the `nth` arms give six.
+ * Returning nothing for it would render a live schedule as "nothing is scheduled", which is precisely
+ * the conflation [Expansion] exists to prevent.
+ */
+private fun LocalDate.nthWeekdaysOfMonth(nth: Int, weekday: DayOfWeek): List<LocalDate> {
+    val first = LocalDate(year, month, 1)
+    val last = lastDayOfMonth()
+    val firstMatch = first.addDays((weekday.isoDayNumber - first.dayOfWeek.isoDayNumber + 7) % 7)
+    if (nth == 0) {
+        return generateSequence(firstMatch) { it.addDays(7) }.takeWhile { it <= last }.toList()
+    }
+    val candidate = if (nth > 0) {
+        firstMatch.addDays((nth - 1) * 7)
+    } else {
+        val lastMatch = last.addDays(-((last.dayOfWeek.isoDayNumber - weekday.isoDayNumber + 7) % 7))
+        lastMatch.addDays((nth + 1) * 7)
+    }
+    return if (candidate >= first && candidate <= last) listOf(candidate) else emptyList()
+}
+
+/** Delegated to the calendar rather than a month-length table: the 1st is never clamped. */
+private fun LocalDate.lastDayOfMonth(): LocalDate =
+    LocalDate(year, month, 1).plus(1, DateTimeUnit.MONTH).addDays(-1)
 
 private fun localDateOrNull(year: Int, month: Int, day: Int): LocalDate? =
     runCatching { LocalDate(year, month, day) }.getOrNull()
+
+/** The crate's `BYMONTHDAY` **parse** range; outside it the whole rule fails to parse. */
+private val MONTH_DAY_RANGE = -31..31
+
+/** The crate's `BYDAY` nth **validation** range for `FREQ=MONTHLY`. Zero is inside it, and means "every". */
+private val NTH_RANGE = -4..5
 
 // ── Zone resolution ───────────────────────────────────────────────────────────────────────────────
 

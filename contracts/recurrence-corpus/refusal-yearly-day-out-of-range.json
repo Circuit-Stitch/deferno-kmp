@@ -1,0 +1,24 @@
+{
+  "name": "refusal-yearly-day-out-of-range",
+  "note": "So is a yearly day past 31.",
+  "rrule": "FREQ=YEARLY;BYMONTH=6;BYMONTHDAY=32",
+  "recurrence": {
+    "day": 32,
+    "interval": 1,
+    "month": 6,
+    "type": "yearly"
+  },
+  "series": {
+    "dtstart_local": "2026-01-15T09:00:00",
+    "tzid": "America/Los_Angeles",
+    "until_utc": null,
+    "exdates": [],
+    "overrides": []
+  },
+  "window": {
+    "from": "2026-01-01",
+    "to": "2031-01-01"
+  },
+  "outcome": "not_expandable",
+  "error": "RRule(\"RRule parsing error: `32` is not a valid BYMONTHDAY value. Expected a comma-separated list of values in range -31..=31, e.g. `-30,10`\")"
+}
