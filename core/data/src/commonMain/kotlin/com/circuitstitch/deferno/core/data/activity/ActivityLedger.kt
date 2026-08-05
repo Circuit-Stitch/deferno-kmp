@@ -1,6 +1,7 @@
 package com.circuitstitch.deferno.core.data.activity
 
 import com.circuitstitch.deferno.core.data.outbox.CommentTargets
+import com.circuitstitch.deferno.core.data.outbox.OccurrenceTargets
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonObject
@@ -245,6 +246,11 @@ private fun ActivityEntry.targetSummary(): ActivitySummary {
  * The item id this change touched for deep-linking, or null where there is no single item. Prefers the
  * server's [ActivityEntry.serverItemId]; a plan-scoped server row is filtered out because the backend
  * files those under an org sentinel rather than a real item, which would deep-link nowhere.
+ *
+ * This is also the **Task Trail's ledger filter key** (`entries.filter { it.itemId() == id }`), which is
+ * why the `else` arm is narrower than "every target that names an item": widening it here would change
+ * which rows a Trail shows as a side effect. The two target shapes that *do* carry an item id but are
+ * deliberately excluded resolve through their own readers, [commentTaskId] and [occurrenceItemId].
  */
 fun ActivityEntry.itemId(): String? {
     serverItemId?.let { id ->
@@ -255,7 +261,9 @@ fun ActivityEntry.itemId(): String? {
     return when (parts.firstOrNull()) {
         "task", "item" -> parts.getOrNull(1)
         "create" -> parts.getOrNull(2)
-        else -> null // plan / settings / occurrence (keyed by series, not a single item) have no deep link yet
+        // plan / settings genuinely name no single item. An `occurrence:` target DOES carry one — see
+        // [occurrenceItemId] — and is held back here only to keep check-ins out of the Trail filter.
+        else -> null
     }
 }
 
@@ -266,6 +274,22 @@ fun ActivityEntry.itemId(): String? {
  * `itemId()`-keyed ledger filter.
  */
 fun ActivityEntry.commentTaskId(): String? = CommentTargets.taskId(target)
+
+/**
+ * The recurring **definition** a firing-level row (`occurrence:<Kind>:<definitionId>:<date>`) touched, or
+ * null for any other target. Segment 2 is a directly resolvable item id — the chain Head the feed emits as
+ * `task_id` — *not* a series id ([OccurrenceTargets]); the endpoints 404 on a series id in that slot, which
+ * is why the scheme keys on the item id in the first place (#406).
+ *
+ * Read through [OccurrenceTargets.parse] rather than re-splitting on `:` so the format keeps exactly one
+ * parser — total and tolerant per ADR-0005, so a malformed or unknown-kind target yields null.
+ *
+ * Kept separate from [itemId] for the same reason [commentTaskId] is: a check-in can resolve its item ref +
+ * deep-link in the Activity feed **without** every occurrence row being pulled into that item's Task Trail
+ * as a side effect of a deep-link fix. Whether a habit's Trail *should* list its check-ins is a product
+ * question this seam deliberately leaves open — answering "yes" is a one-line change at the call site.
+ */
+fun ActivityEntry.occurrenceItemId(): String? = OccurrenceTargets.parse(target)?.definitionId
 
 /**
  * One locally-applied change, in the shape the ledger stores it — the local-write twin of

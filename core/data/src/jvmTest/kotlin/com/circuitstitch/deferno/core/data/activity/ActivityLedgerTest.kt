@@ -446,15 +446,19 @@ class ActivityLedgerTest {
         assertEquals(ActivitySummary(ActivityVerb.MovedItem), entry("item:i1", OutboxMethod.Post).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.UpdatedPlan), entry("plan:2026-06-21:UTC", OutboxMethod.Post).summaryInfo())
         assertEquals(ActivitySummary(ActivityVerb.ChangedSettings), entry("settings", OutboxMethod.Patch).summaryInfo())
-        assertEquals(ActivitySummary(ActivityVerb.UpdatedOccurrence, "event"), entry("occurrence:Event:s1:2026-06-21", OutboxMethod.Patch).summaryInfo())
+        // `def-1`, not `s1`: segment 2 is the recurring DEFINITION's own item id (the chain Head the feed
+        // emits as `task_id`), never the series id — the endpoints 404 on a series id there. A fixture
+        // whose ids encode the wrong relationship is what let #406's "keyed by series" comment read as
+        // true, exactly as #386's fixtures pinned that same false belief as correct behaviour.
+        assertEquals(ActivitySummary(ActivityVerb.UpdatedOccurrence, "event"), entry("occurrence:Event:def-1:2026-06-21", OutboxMethod.Patch).summaryInfo())
         // #364: clear is a POST soft-delete (`…/occurrences/{date}/clear`), so the METHOD no longer
         // distinguishes it from a mark — the path's trailing segment does.
         assertEquals(
             ActivitySummary(ActivityVerb.ClearedOccurrence, "event"),
             entry(
-                "occurrence:Event:s1:2026-06-21",
+                "occurrence:Event:def-1:2026-06-21",
                 OutboxMethod.Post,
-                listOf("events", "s1", "occurrences", "2026-06-21", "clear"),
+                listOf("events", "def-1", "occurrences", "2026-06-21", "clear"),
             ).summaryInfo(),
         )
         assertEquals(ActivitySummary(ActivityVerb.UpdatedItem), entry("weird:thing", OutboxMethod.Patch).summaryInfo())
@@ -474,6 +478,41 @@ class ActivityLedgerTest {
         // Comment ledger rows are non-deep-linking (the edit/delete target carries the comment id, not the task).
         assertNull(entry("comment:c1", OutboxMethod.Patch).itemId())
         assertNull(entry("comment-create:t1:c1", OutboxMethod.Post).itemId())
+        // An occurrence row is held back from itemId() **on purpose** — this is the Task Trail's filter
+        // key, and resolving check-ins here would file every one of them under the definition's Trail as a
+        // side effect. Not because the target names no item: it names one, and [occurrenceItemId] reads it.
+        // There was no case here at all, which is why the false "keyed by series" comment survived (#406).
+        assertNull(entry("occurrence:Habit:def-1:2026-06-21", OutboxMethod.Post).itemId())
+    }
+
+    /**
+     * The firing-level twin of [commentTaskId] (#406). Segment 2 of an `occurrence:` target
+     * is the recurring definition's **own item id**, so an offline check-in resolves its `#seq` ref, its
+     * kind badge and its "Open item" like every other row — it used to render as all three of those blank
+     * because `itemId()` returned null and nothing else was consulted.
+     */
+    @Test
+    fun occurrenceItemIdReadsTheDefinitionItemIdAndIgnoresEveryOtherTarget() {
+        fun entry(target: String) = ActivityEntry(
+            seq = 1,
+            recordedAt = t0,
+            source = ActivitySource.Mobile,
+            target = target,
+            method = OutboxMethod.Post,
+            path = emptyList(),
+        )
+
+        assertEquals("def-1", entry("occurrence:Habit:def-1:2026-06-21").occurrenceItemId())
+        assertEquals("def-1", entry("occurrence:Chore:def-1:2026-06-21").occurrenceItemId())
+        assertEquals("def-1", entry("occurrence:Event:def-1:2026-06-21").occurrenceItemId())
+
+        // Delegated to the one parser (ADR-0005 tolerance), not a hand-rolled `split(':')` — so a target
+        // this build cannot decode degrades to null rather than handing a garbage id to a deep link.
+        assertNull(entry("occurrence:Telepathy:def-1:2026-06-21").occurrenceItemId()) // unknown kind token
+        assertNull(entry("occurrence:Habit:def-1:not-a-date").occurrenceItemId())
+        assertNull(entry("occurrence:Habit:def-1").occurrenceItemId()) // truncated
+        assertNull(entry("task:abc").occurrenceItemId())
+        assertNull(entry("settings").occurrenceItemId())
     }
 
     @Test
