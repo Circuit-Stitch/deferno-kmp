@@ -40,7 +40,7 @@ import kotlin.time.Instant
  * every bug report about the plan.
  *
  * Two halves are asserted here because both can fail silently:
- *  1. [inTodayIds] itself — the union, the `seriesId` (not `taskId`) key, and the deliberate exclusions.
+ *  1. [inTodayIds] itself — the union, the `taskId` (not `seriesId`) key, and the deliberate exclusions.
  *  2. The shell wiring — that the join actually reaches [com.circuitstitch.deferno.feature.tasks.ItemTreeState],
  *     and that the shell **warms today's calendar window**. Without that warm-up the recurring arm reads a
  *     stale cache and "In today" hides every Habit/Chore/Event — worse than the decorative segment it replaces.
@@ -66,19 +66,39 @@ class InTodayJoinTest {
         task = task(id).takeIf { kind == ItemKind.Task },
     )
 
-    /** A recurring firing: a row that belongs to a series ([seriesId]) — the definition id a tree row carries. */
-    private fun firing(seriesId: String?, taskId: String, kind: ItemKind? = ItemKind.Habit) = CalendarItem(
-        id = "feed-$taskId-$today",
-        taskId = taskId,
+    // One habit's two ids, taken verbatim from the captured staging payload
+    // `contracts/fixtures/items-sample.json` (its titles are scrubbed, so this names no habit): an item
+    // carries a series id BESIDE its own id, never as it.
+    private val habitItemId = "77dd6a6e-b936-4f61-9807-c3a6b647f9f1"
+    private val habitSeriesId = "b7c21959-c5f6-4087-8ab2-7690c81e463a"
+
+    /**
+     * A feed row shaped as the wire actually is: [definitionId] is `task_id` — the recurring definition's
+     * **own item id**, which is the value a tree row is keyed by — and [seriesId] is a *different* value
+     * whose only job is to say "this row is a firing". Pass `seriesId = null` for a one-off dated row.
+     *
+     * [seriesId] defaults to a value *derived* from [definitionId] so a caller cannot accidentally reuse
+     * one id as the other. That is the whole point: the helper this replaced took both as bare positional
+     * strings, and every fixture invented a `taskId` matching no tree row — which made keying on
+     * `seriesId` look correct and pinned the defect as intended behaviour.
+     */
+    private fun firing(
+        definitionId: String,
+        seriesId: String? = "$definitionId-series",
+        kind: ItemKind? = ItemKind.Habit,
+        source: CalendarSource = CalendarSource.Deferno,
+    ) = CalendarItem(
+        id = "feed-$definitionId-$today",
+        taskId = definitionId,
         seriesId = seriesId,
-        title = taskId,
+        title = definitionId,
         date = today,
         start = epoch,
         end = epoch,
         allDay = true,
         status = WorkingState.Open,
         kind = kind,
-        source = CalendarSource.Deferno,
+        source = source,
     )
 
     // --- the join itself ---
@@ -87,7 +107,7 @@ class InTodayJoinTest {
     fun unionsTodaysPlanTasksWithTodaysRecurringFirings() {
         val ids = inTodayIds(
             plan = listOf(planRow("t-1"), planRow("t-2")),
-            day = listOf(firing(seriesId = "h-morning-run", taskId = "occ-1")),
+            day = listOf(firing(definitionId = "h-morning-run")),
         )
 
         assertEquals(setOf("t-1", "t-2", "h-morning-run"), ids)
@@ -107,31 +127,85 @@ class InTodayJoinTest {
     }
 
     /**
-     * The one thing this join must not get wrong. `seriesId` is the recurring **definition's** id, which
-     * is exactly what an Item tree row is keyed by; `taskId` is the id the *occurrence endpoints* address
-     * (#380). Keying on `taskId` would produce a set that matches no tree row at all — an "In today" that
-     * is empty for every recurring item, which reads as a confident "no".
+     * The one thing this join must not get wrong (#386). `taskId` is the recurring definition's **own item
+     * id** — the value the feed projects the firing from, and exactly what an Item tree row is keyed by.
+     * `seriesId` is a *different* uuid naming the series, and no `Item` has a field for one — so keying on
+     * it produces a set matching no tree row at all: an "In today" empty for every recurring item, which
+     * reads as a confident "no". Real wire ids, because synthetic ones let this be asserted backwards.
      */
     @Test
-    fun keysTheRecurringArmOnTheSeriesDefinitionIdNotTheOccurrenceTargetId() {
-        val ids = inTodayIds(plan = emptyList(), day = listOf(firing(seriesId = "h-def", taskId = "occ-head")))
+    fun keysTheRecurringArmOnTheDefinitionItemIdNotTheSeriesId() {
+        val ids = inTodayIds(plan = emptyList(), day = listOf(firing(habitItemId, seriesId = habitSeriesId)))
 
-        assertEquals(setOf("h-def"), ids)
-        assertTrue("occ-head" !in ids, "the occurrence-endpoint id is NOT a tree row id")
+        assertEquals(setOf(habitItemId), ids)
+        assertTrue(habitSeriesId !in ids, "the series id is NOT a tree row id — no Item carries one")
     }
 
+    /**
+     * A one-off dated Task in the feed (seriesId null) is in today because it is on the plan, never
+     * because it merely carries a date — the reference client keeps those gates separate too. Under the
+     * `taskId` key this is the load-bearing guard: the row's `taskId` IS its tree row's id, so nothing but
+     * the explicit firing gate stops it.
+     *
+     * This is the real wire shape, which means it is series-less *and* Task-kinded — droppable twice over,
+     * so on its own it cannot tell a series gate from a kind gate. [aSeriesCarryingRowIsInTodayWhateverItsKind]
+     * is what isolates the series clause.
+     */
     @Test
     fun dropsAMerelyDatedRowThatBelongsToNoSeries() {
-        // A one-off dated Task in the feed (seriesId null): in today because it is on the plan, never
-        // because it merely carries a date — the reference client keeps those gates separate too.
-        val ids = inTodayIds(plan = emptyList(), day = listOf(firing(seriesId = null, taskId = "t-dated", kind = null)))
+        val ids = inTodayIds(
+            plan = emptyList(),
+            day = listOf(firing("t-dated", seriesId = null, kind = ItemKind.Task)),
+        )
+
+        assertEquals(emptySet(), ids)
+    }
+
+    /**
+     * The gate is `source == Deferno && seriesId != null` and says **nothing** about kind — pinned here on
+     * the one shape that can prove it: a Deferno row carrying a series whose kind is `Task`. Without this,
+     * swapping the whole gate for `source == Deferno && kind != Task` passes every other case in this file,
+     * because the only series-less fixture is also the only Task-kinded one. That mutant is not academic:
+     * it is what "reuse [CalendarItem.isActionableOccurrence]" quietly becomes.
+     */
+    @Test
+    fun aSeriesCarryingRowIsInTodayWhateverItsKind() {
+        val ids = inTodayIds(plan = emptyList(), day = listOf(firing("t-with-series", kind = ItemKind.Task)))
+
+        assertEquals(setOf("t-with-series"), ids)
+    }
+
+    /**
+     * The write gate ([CalendarItem.isActionableOccurrence]) additionally demands a resolved kind, because
+     * it picks a kind-scoped endpoint. This read gate must not borrow that clause: a habit whose kind
+     * token this build predates still fires today, and dropping it here would recreate #386's symptom for
+     * exactly the rows the tolerant decoder exists to keep visible.
+     */
+    @Test
+    fun anUnresolvedKindFiringIsStillInToday() {
+        val ids = inTodayIds(plan = emptyList(), day = listOf(firing("h-unknown-kind", kind = null)))
+
+        assertEquals(setOf("h-unknown-kind"), ids)
+    }
+
+    /**
+     * A synced Google event is stored as an Event-*kind* item, so under a `taskId` key its id is a real
+     * tree row id — the gate's `source` clause is the only thing keeping it out, and it turns load-bearing
+     * the day the provider's recurrence is expanded into firings.
+     */
+    @Test
+    fun anExternalRowThatCarriesASeriesIsNotInToday() {
+        val ids = inTodayIds(
+            plan = emptyList(),
+            day = listOf(firing("gcal-item", source = CalendarSource.External)),
+        )
 
         assertEquals(emptySet(), ids)
     }
 
     @Test
     fun collapsesAnIdPresentOnBothSidesToOneEntry() {
-        val ids = inTodayIds(plan = listOf(planRow("shared")), day = listOf(firing(seriesId = "shared", taskId = "occ")))
+        val ids = inTodayIds(plan = listOf(planRow("shared")), day = listOf(firing("shared")))
 
         assertEquals(setOf("shared"), ids)
     }
@@ -145,7 +219,10 @@ class InTodayJoinTest {
 
     @Test
     fun theJoinedSetReachesTheItemTreeStateForBothKinds() = runTest {
-        val calendar = RecordingCalendarRepository(day = listOf(firing(seriesId = "h-run", taskId = "occ-1")))
+        // Wire-realistic on purpose: the Habit's tree row is keyed by its ITEM id, and the feed row that
+        // fires it carries that same id as `task_id` plus an unrelated `series_id`. That agreement is the
+        // whole point of the join, so the fixture has to be able to break it.
+        val calendar = RecordingCalendarRepository(day = listOf(firing(habitItemId, seriesId = habitSeriesId)))
         val shell = shell(plan = listOf(task("t-1")), calendar = calendar)
         shell.selectDestination(Destination.Tasks)
         val tree = (shell.stack.value.active.instance as MainShellComponent.DestinationChild.Tasks).component.tree
@@ -153,9 +230,18 @@ class InTodayJoinTest {
         advanceUntilIdle()
 
         assertEquals(
-            setOf("t-1", "h-run"),
+            setOf("t-1", habitItemId),
             tree.state.value.inTodayIds,
             "a planned Task AND a Habit firing today both reach the tree",
+        )
+        // The assertion above pins the set's *contents* but not that they are in the tree's id space —
+        // and #386 was precisely an id-space mismatch, so a set of plausible-looking strings that names no
+        // row is the failure to catch. Both sides of the join are checked against the rows that rendered.
+        val rowIds = tree.state.value.rows.map { it.item.id }.toSet()
+        assertEquals(
+            tree.state.value.inTodayIds,
+            tree.state.value.inTodayIds intersect rowIds,
+            "every joined id must name a loaded tree row — otherwise 'In today' narrows to nothing",
         )
     }
 
@@ -193,7 +279,10 @@ class InTodayJoinTest {
         override fun observeMarkers(from: LocalDate, to: LocalDate): Flow<Map<LocalDate, Int>> =
             MutableStateFlow(emptyMap())
 
-        override fun observeDay(date: LocalDate): Flow<List<CalendarItem>> = MutableStateFlow(day)
+        // Honours [date] rather than returning [day] unconditionally: the shell is supposed to subscribe to
+        // TODAY's window, and a fake that ignores the argument cannot tell that from any other day.
+        override fun observeDay(date: LocalDate): Flow<List<CalendarItem>> =
+            MutableStateFlow(day.filter { it.date == date })
 
         override suspend fun refreshWindow(from: LocalDate, to: LocalDate, tz: String) {
             refreshed += Triple(from, to, tz)
@@ -211,7 +300,7 @@ class InTodayJoinTest {
         itemRepository = DemoItemRepository(
             listOf(
                 Item(id = "t-1", kind = ItemKind.Task, title = "Plan the launch", sequence = 0),
-                Item(id = "h-run", kind = ItemKind.Habit, title = "Morning run", sequence = 1),
+                Item(id = habitItemId, kind = ItemKind.Habit, title = "Take a Walk", sequence = 1),
             ),
         ),
         foldStore = InMemoryItemFoldStore(),
