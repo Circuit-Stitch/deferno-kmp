@@ -102,7 +102,15 @@ class OfflineDefinitionRepository(
             RemoteSnapshot.Unavailable -> return null
         }
 
-        read.definition?.let { upsert(it) }
+        // Insert-or-replace the concrete row, exactly as ItemSync reconciles a snapshot row — the
+        // detail body IS the snapshot shape plus derived fields, so the same mapper builds the same
+        // record. Critically this also lands a definition this device has NEVER cached (a deep link, a
+        // row outside the snapshot window), which is the one case the detail read exists to answer and
+        // the one a merge-onto-cached could not: it would drop the record and render "not found" while
+        // holding the server's answer.
+        read.habit?.let { habits.upsert(it) }
+        read.chore?.let { chores.upsert(it) }
+        read.event?.let { events.upsert(it) }
 
         // A stored resolution is a fact and is cached. An all-zeroes PLACEHOLDER is not — the server
         // answered "nothing recorded for that date", which is a different statement from a resolution
@@ -118,71 +126,5 @@ class OfflineDefinitionRepository(
         }
 
         return DefinitionExtras(chain = read.chain, originLabel = read.originLabel)
-    }
-
-    /**
-     * Upsert the refreshed definition back into its own per-kind store.
-     *
-     * It goes through the concrete store rather than a kind-neutral write because the stores hold the
-     * concrete rows — [RecurringDefinition] is a read projection and deliberately does not carry every
-     * column (a Chore's cadence mode, an Event's end time). So the refreshed *detail* fields are merged
-     * onto the cached row rather than replacing it: a projection round-trip would silently blank the
-     * columns the projection never carried.
-     */
-    private suspend fun upsert(definition: RecurringDefinition) {
-        when (definition.kind) {
-            ItemKind.Task -> Unit
-            ItemKind.Habit -> habits.get(HabitId(definition.id))?.let { cached ->
-                habits.upsert(
-                    cached.copy(
-                        title = definition.title,
-                        definitionState = definition.definitionState,
-                        description = definition.description,
-                        labels = definition.labels,
-                        recurrence = definition.recurrence,
-                        completeBy = definition.cursorAt,
-                        seriesId = definition.seriesId,
-                        series = definition.series,
-                        blocked = definition.blocked,
-                        isBlocker = definition.isBlocker,
-                        hydration = definition.hydration,
-                    ),
-                )
-            }
-            ItemKind.Chore -> chores.get(ChoreId(definition.id))?.let { cached ->
-                chores.upsert(
-                    cached.copy(
-                        title = definition.title,
-                        definitionState = definition.definitionState,
-                        description = definition.description,
-                        labels = definition.labels,
-                        recurrence = definition.recurrence,
-                        completeBy = definition.cursorAt,
-                        seriesId = definition.seriesId,
-                        series = definition.series,
-                        blocked = definition.blocked,
-                        isBlocker = definition.isBlocker,
-                        hydration = definition.hydration,
-                    ),
-                )
-            }
-            ItemKind.Event -> events.get(EventId(definition.id))?.let { cached ->
-                events.upsert(
-                    cached.copy(
-                        title = definition.title,
-                        definitionState = definition.definitionState,
-                        description = definition.description,
-                        labels = definition.labels,
-                        recurrence = definition.recurrence,
-                        completeBy = definition.cursorAt,
-                        seriesId = definition.seriesId,
-                        series = definition.series,
-                        blocked = definition.blocked,
-                        isBlocker = definition.isBlocker,
-                        hydration = definition.hydration,
-                    ),
-                )
-            }
-        }
     }
 }

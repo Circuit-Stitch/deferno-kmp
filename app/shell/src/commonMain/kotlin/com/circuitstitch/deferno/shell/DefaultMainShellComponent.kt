@@ -993,7 +993,9 @@ class DefaultMainShellComponent(
             is ActivityComponent.Output.OpenItem -> {
                 navigation.bringToFront(Config.Tasks)
                 val tasks = stack.value.active.instance as MainShellComponent.DestinationChild.Tasks
-                tasks.component.tree.onOpenDetail(output.id, ItemKind.Task)
+                // The row's own kind, resolved by the Activity component from its item-cache join (#383).
+                // This site used to append `ItemKind.Task`, which deep-linked a Habit into the Task detail.
+                tasks.component.tree.onOpenDetail(output.ref.id, output.ref.kind)
             }
         }
     }
@@ -1003,11 +1005,13 @@ class DefaultMainShellComponent(
             // A result tap opens that Task in the Tasks Destination — dismiss the overlay, switch
             // laterally, then route the open through the list's public intent (the same path a real
             // list tap takes, mirroring onPlanOutput).
-            is SearchComponent.Output.OpenTask -> {
+            is SearchComponent.Output.OpenItem -> {
                 dismissOverlay()
                 navigation.bringToFront(Config.Tasks)
                 val tasks = stack.value.active.instance as MainShellComponent.DestinationChild.Tasks
-                tasks.component.tree.onOpenDetail(output.id.value, ItemKind.Task)
+                // The hit's own kind, not a hardcoded Task (#383) — the tree's open intent has always
+                // taken the pair, and the detail slot now has an arm for both.
+                tasks.component.tree.onOpenDetail(output.ref.id, output.ref.kind)
             }
             SearchComponent.Output.Dismissed -> dismissOverlay()
         }

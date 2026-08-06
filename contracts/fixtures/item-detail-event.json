@@ -1,0 +1,113 @@
+{
+  "data": {
+    "actions": [],
+    "all_day": false,
+    "assignee": null,
+    "blocked": false,
+    "children": [],
+    "complete_by": null,
+    "created_by": "1d35f62e-eed9-44de-96e8-e61a307af83f",
+    "date_created": "2026-05-02T15:00:34.693604023Z",
+    "description": "<description>",
+    "desire": null,
+    "end_time": "2026-04-18T17:30:00Z",
+    "end_time_of_day": "10:30:00",
+    "group_id": null,
+    "id": "1489006f-78d6-4262-8de9-c2e049a3dbaf",
+    "is_blocker": false,
+    "kind": "event",
+    "labels": [],
+    "mood_finish": null,
+    "mood_start": null,
+    "org_slug": "u-e4h2qk",
+    "owner_org_id": "ebca93e5-d663-4624-9fe9-c5361b5b4390",
+    "parent_id": null,
+    "pinned": false,
+    "predecessor_id": "d4f26212-07ac-4ebc-b5d9-fe4649a69a3e",
+    "priority": "normal",
+    "productive": null,
+    "recurrence": {
+      "days": [
+        "Sat"
+      ],
+      "end": {
+        "date": "2026-06-12",
+        "type": "on_date"
+      },
+      "type": "weekly"
+    },
+    "ref": "u-e4h2qk-176",
+    "rev": 2047,
+    "sequence": 176,
+    "series": {
+      "dtstart_local": "2026-04-18T09:00:00",
+      "exdates": [],
+      "overrides": [],
+      "tzid": "America/Los_Angeles",
+      "until_utc": null
+    },
+    "series_chain": {
+      "head": "1489006f-78d6-4262-8de9-c2e049a3dbaf",
+      "requested": "1489006f-78d6-4262-8de9-c2e049a3dbaf",
+      "segments": [
+        {
+          "deleted_at": null,
+          "id": "d4f26212-07ac-4ebc-b5d9-fe4649a69a3e",
+          "recurrence": {
+            "days": [
+              "Sat"
+            ],
+            "type": "weekly"
+          },
+          "series": {
+            "dtstart_local": "2026-04-18T09:00:00",
+            "exdates": [],
+            "overrides": [],
+            "tzid": "America/Los_Angeles",
+            "until_utc": "2026-04-18T16:00:00Z"
+          }
+        },
+        {
+          "deleted_at": null,
+          "id": "1489006f-78d6-4262-8de9-c2e049a3dbaf",
+          "recurrence": {
+            "days": [
+              "Sat"
+            ],
+            "end": {
+              "date": "2026-06-12",
+              "type": "on_date"
+            },
+            "type": "weekly"
+          },
+          "series": {
+            "dtstart_local": "2026-04-18T09:00:00",
+            "exdates": [],
+            "overrides": [],
+            "tzid": "America/Los_Angeles",
+            "until_utc": null
+          }
+        }
+      ],
+      "truncated": false
+    },
+    "series_id": "e75a70de-b209-4eaf-9a3d-19fdfd4c258b",
+    "start_time_of_day": "09:00:00",
+    "status": "active",
+    "subtask_template": [],
+    "target_date": null,
+    "title": "<title>",
+    "today_occurrence": {
+      "attachments": [],
+      "comment": [],
+      "complete_by": "2026-08-05T16:00:00Z",
+      "id": "ca02ee6e-bea4-4ce6-a7ef-248806615370",
+      "parent_id": "1489006f-78d6-4262-8de9-c2e049a3dbaf",
+      "scheduled_date": "2026-08-05",
+      "status": "dropped"
+    },
+    "type": "event",
+    "updated_at": "2026-08-05T16:06:39.180420612Z"
+  },
+  "version": "0.1"
+}

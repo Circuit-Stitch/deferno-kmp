@@ -2,13 +2,15 @@ package com.circuitstitch.deferno.core.data.item
 
 import com.circuitstitch.deferno.core.data.RemoteSnapshot
 import com.circuitstitch.deferno.core.data.asSnapshot
+import com.circuitstitch.deferno.core.model.Chore
+import com.circuitstitch.deferno.core.model.Event
+import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.ItemRef
 import com.circuitstitch.deferno.core.model.OccurrenceFact
 import com.circuitstitch.deferno.core.model.RecurringDefinition
 import com.circuitstitch.deferno.core.model.SeriesChain
 import com.circuitstitch.deferno.core.model.Task
-import com.circuitstitch.deferno.core.model.toDefinition
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.dto.OccurrenceDto
 import com.circuitstitch.deferno.core.network.map
@@ -48,10 +50,22 @@ interface ItemDetailRemoteSource {
 /**
  * One detail read, condensed at the edge (ADR-0011) — no wire type crosses this seam.
  *
- * The split is by *cacheability*, and it is load-bearing. [definition]/[task] are records and are
- * upserted into the local stores. [todayFact] is a stored resolution and belongs in the fact table.
- * [chain] and [originLabel] are neither: a chain era can never be refreshed cold (the snapshot drops
- * superseded segments), so caching one would be a lie no later sync could correct.
+ * The split is by *cacheability*, and it is load-bearing. [habit]/[chore]/[event]/[task] are records
+ * and are upserted into the local stores. [todayFact] is a stored resolution and belongs in the fact
+ * table. [chain] and [originLabel] are neither: a chain era can never be refreshed cold (the snapshot
+ * drops superseded segments), so caching one would be a lie no later sync could correct.
+ *
+ * **The four record fields carry the CONCRETE rows, not the [RecurringDefinition] projection**, and
+ * exactly one is ever non-null (the response's `type` discriminator picks it). The projection is
+ * lossy by design — it carries what a read-only detail *renders* and drops `org_slug`, `date_created`,
+ * a Chore's `cadence_mode`, an Event's times — so a repository handed one can only ever *merge* it
+ * onto a row it already has, and has nothing to write when it has none. That is not hypothetical: the
+ * detail read is the one path that can answer for an item this device never synced (a deep link, a row
+ * outside the snapshot window, an item created on another device), and dropping the record there would
+ * render "not found" while holding the server's answer — the exact defect #383 exists to fix. The
+ * wire mappers already build the full row (`asHabitOrNull()` and friends), which is the same row
+ * `ItemSync` reconciles a snapshot into, so carrying it through costs nothing and makes the upsert a
+ * plain insert-or-replace.
  *
  * **[answeredForToday] is not the same as `todayFact != null`.** The server answers for today either
  * way; it signals "no stored record" with an all-zeroes id rather than by omitting the field. That
@@ -60,7 +74,9 @@ interface ItemDetailRemoteSource {
  * recorded on this flag and never on the presence of a fact.
  */
 data class ItemDetailRead(
-    val definition: RecurringDefinition? = null,
+    val habit: Habit? = null,
+    val chore: Chore? = null,
+    val event: Event? = null,
     val task: Task? = null,
     val todayFact: OccurrenceFact? = null,
     val answeredForToday: Boolean = false,
@@ -101,21 +117,21 @@ internal fun ItemView.toItemDetailRead(requestedKind: ItemKind): ItemDetailRead 
         originLabel = originLabel,
     )
     is ItemView.Habit -> ItemDetailRead(
-        definition = asHabitOrNull()!!.toDefinition(),
+        habit = asHabitOrNull()!!,
         chain = seriesChain.toDomain(),
         originLabel = originLabel,
         todayFact = todayOccurrence.toFactOrNull(requestedKind, id),
         answeredForToday = todayOccurrence != null,
     )
     is ItemView.Chore -> ItemDetailRead(
-        definition = asChoreOrNull()!!.toDefinition(),
+        chore = asChoreOrNull()!!,
         chain = seriesChain.toDomain(),
         originLabel = originLabel,
         todayFact = todayOccurrence.toFactOrNull(requestedKind, id),
         answeredForToday = todayOccurrence != null,
     )
     is ItemView.Event -> ItemDetailRead(
-        definition = asEventOrNull()!!.toDefinition(),
+        event = asEventOrNull()!!,
         chain = seriesChain.toDomain(),
         originLabel = originLabel,
         todayFact = todayOccurrence.toFactOrNull(requestedKind, id),

@@ -30,6 +30,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
@@ -120,7 +121,7 @@ class DefinitionRepositoryTest {
         val f = Fixture(
             habitRows = mapOf(HabitId("h") to habit()),
             read = ItemDetailRead(
-                definition = habit().toDefinition(),
+                habit = habit(),
                 todayFact = OccurrenceFact(ItemKind.Habit, "h", today, OccurrenceResolution.DoneOnTime),
                 answeredForToday = true,
             ),
@@ -147,7 +148,7 @@ class DefinitionRepositoryTest {
         val f = Fixture(
             habitRows = mapOf(HabitId("h") to habit()),
             read = ItemDetailRead(
-                definition = habit().toDefinition(),
+                habit = habit(),
                 todayFact = null,
                 answeredForToday = true,
             ),
@@ -181,7 +182,7 @@ class DefinitionRepositoryTest {
         val chain = SeriesChain(head = "h", requested = "h", segments = emptyList(), truncated = true)
         val f = Fixture(
             habitRows = mapOf(HabitId("h") to habit()),
-            read = ItemDetailRead(definition = habit().toDefinition(), chain = chain, originLabel = "acme/repo#4"),
+            read = ItemDetailRead(habit = habit(), chain = chain, originLabel = "acme/repo#4"),
         )
 
         val extras = f.repository.hydrate(ref, today)
@@ -190,26 +191,42 @@ class DefinitionRepositoryTest {
         assertEquals("acme/repo#4", extras?.originLabel)
     }
 
-    /**
-     * The refreshed detail is MERGED onto the cached row, not swapped for a projection of it.
-     * [com.circuitstitch.deferno.core.model.RecurringDefinition] deliberately carries only what the
-     * detail renders, so a round-trip through it would blank every column it does not carry — here,
-     * the Habit's `orgSlug` and `dateCreated`.
-     */
+    /** The refreshed record replaces the stale cached row wholesale, as an ItemSync reconcile does. */
     @Test
-    fun hydrateMergesOntoTheCachedRowRatherThanReplacingIt() = runTest {
-        val cached = habit(title = "stale")
+    fun hydrateReplacesTheStaleCachedRow() = runTest {
         val f = Fixture(
-            habitRows = mapOf(HabitId("h") to cached),
-            read = ItemDetailRead(definition = habit(title = "fresh").toDefinition()),
+            habitRows = mapOf(HabitId("h") to habit(title = "stale")),
+            read = ItemDetailRead(habit = habit(title = "fresh")),
         )
 
         f.repository.hydrate(ref, today)
 
-        val row = f.habits.get(HabitId("h"))!!
-        assertEquals("fresh", row.title, "the detail's fields win")
-        assertEquals(cached.orgSlug, row.orgSlug, "and the columns the projection never carried survive")
-        assertEquals(cached.dateCreated, row.dateCreated)
+        assertEquals("fresh", f.habits.get(HabitId("h"))?.title)
+    }
+
+    /**
+     * The case that makes the read carry the CONCRETE row rather than the projection: a definition this
+     * device has never cached. The detail read is the one path that can answer for it — a deep link, a
+     * row outside the snapshot window, an item created on another device — and it must land the record,
+     * not drop it. A repository handed only a
+     * [com.circuitstitch.deferno.core.model.RecurringDefinition] cannot: the projection carries neither
+     * `orgSlug` nor `dateCreated`, so it can merge onto an existing row and nothing else, and this
+     * detail would render "not found" while holding the server's answer — #383's own defect, reopened
+     * one layer down.
+     */
+    @Test
+    fun hydrateLandsADefinitionThisDeviceHasNeverCached() = runTest {
+        val f = Fixture(habitRows = emptyMap(), read = ItemDetailRead(habit = habit(title = "first sight")))
+
+        f.repository.hydrate(ref, today)
+
+        val row = assertNotNull(f.habits.get(HabitId("h")), "the detail read must land an uncached row")
+        assertEquals("first sight", row.title)
+        assertEquals("u-e4h2qk", row.orgSlug, "including the columns the projection would have lost")
+        f.repository.observe(ref).test {
+            assertEquals("first sight", awaitItem()?.title, "so the detail renders instead of reading not-found")
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }
 

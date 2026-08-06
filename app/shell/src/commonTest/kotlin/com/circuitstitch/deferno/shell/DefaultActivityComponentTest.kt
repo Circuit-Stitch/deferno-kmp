@@ -9,6 +9,7 @@ import com.circuitstitch.deferno.core.data.activity.ActivityVerb
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemRef
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,13 +61,66 @@ class DefaultActivityComponentTest {
     private fun item(id: String, kind: ItemKind = ItemKind.Task, sequence: Long? = 41) =
         Item(id = id, kind = kind, title = "Ship it", sequence = sequence)
 
-    private fun component(entries: List<ActivityEntry>, items: List<Item>, dispatcher: CoroutineDispatcher) =
-        DefaultActivityComponent(
-            componentContext = DefaultComponentContext(LifecycleRegistry()),
-            observeActivity = { MutableStateFlow(entries) },
-            observeItems = { MutableStateFlow(items) },
-            coroutineContext = dispatcher,
+    private fun component(
+        entries: List<ActivityEntry>,
+        items: List<Item>,
+        dispatcher: CoroutineDispatcher,
+        output: (ActivityComponent.Output) -> Unit = {},
+    ) = DefaultActivityComponent(
+        componentContext = DefaultComponentContext(LifecycleRegistry()),
+        observeActivity = { MutableStateFlow(entries) },
+        observeItems = { MutableStateFlow(items) },
+        output = output,
+        coroutineContext = dispatcher,
+    )
+
+    /**
+     * The deep-link's kind (#383). The shell used to append `ItemKind.Task` at the routing site, so a
+     * Habit's activity row opened the Task-typed detail and read as not-found — while the row's own
+     * item-cache join had the real kind sitting right there. Resolving it here rather than asking the
+     * three platform Views to hand it back is what keeps the three from disagreeing.
+     */
+    @Test
+    fun openItemCarriesTheRowsOwnKindNotAHardcodedTask() = runTest(UnconfinedTestDispatcher()) {
+        val outputs = mutableListOf<ActivityComponent.Output>()
+        val c = component(
+            listOf(entry("occurrence:Habit:h-1:2026-06-21", OutboxMethod.Post)),
+            listOf(item("h-1", ItemKind.Habit, 41)),
+            UnconfinedTestDispatcher(testScheduler),
+            output = outputs::add,
         )
+        c.state.first { it.rows.isNotEmpty() }
+
+        c.openItem("h-1")
+
+        assertEquals(
+            listOf<ActivityComponent.Output>(ActivityComponent.Output.OpenItem(ItemRef("h-1", ItemKind.Habit))),
+            outputs,
+        )
+    }
+
+    /**
+     * An id the item cache cannot resolve — aged out, deleted, or never synced. No kind would open it, so
+     * the Task arm (which renders the plain not-found) stays the fallback, unchanged from before #383.
+     */
+    @Test
+    fun openItemFallsBackToTaskWhenTheCacheCannotNameTheKind() = runTest(UnconfinedTestDispatcher()) {
+        val outputs = mutableListOf<ActivityComponent.Output>()
+        val c = component(
+            listOf(entry("task:gone")),
+            emptyList(),
+            UnconfinedTestDispatcher(testScheduler),
+            output = outputs::add,
+        )
+        c.state.first { it.rows.isNotEmpty() }
+
+        c.openItem("gone")
+
+        assertEquals(
+            listOf<ActivityComponent.Output>(ActivityComponent.Output.OpenItem(ItemRef("gone", ItemKind.Task))),
+            outputs,
+        )
+    }
 
     @Test
     fun resolvesRefAndKindForATaskUpdateRow() = runTest(UnconfinedTestDispatcher()) {

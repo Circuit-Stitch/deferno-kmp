@@ -1,0 +1,60 @@
+{
+  "data": {
+    "actions": [],
+    "assignee": null,
+    "blocked": false,
+    "cadence_mode": "rolling",
+    "children": [],
+    "complete_by": "2026-08-23T06:59:59Z",
+    "created_by": "1d35f62e-eed9-44de-96e8-e61a307af83f",
+    "date_created": "2026-05-11T14:54:53.106944473Z",
+    "description": "<description>",
+    "desire": null,
+    "group_id": null,
+    "id": "2975f1a1-7657-4b2e-82c6-8e98f8bf5fa8",
+    "is_blocker": false,
+    "kind": "chore",
+    "labels": [
+      "medical"
+    ],
+    "mood_finish": null,
+    "mood_start": null,
+    "org_slug": "u-e4h2qk",
+    "owner_org_id": "ebca93e5-d663-4624-9fe9-c5361b5b4390",
+    "parent_id": null,
+    "pinned": true,
+    "priority": "normal",
+    "productive": null,
+    "recurrence": {
+      "n": 30,
+      "type": "every_n_days"
+    },
+    "ref": "u-e4h2qk-275",
+    "rev": 1710,
+    "sequence": 275,
+    "series": {
+      "dtstart_local": "2026-08-22T23:59:59",
+      "exdates": [],
+      "overrides": [],
+      "tzid": "America/Los_Angeles",
+      "until_utc": null
+    },
+    "series_id": "aa8ef113-e77c-4ed5-967d-e604aa3db72c",
+    "status": "active",
+    "subtask_template": [],
+    "target_date": null,
+    "title": "<title>",
+    "today_occurrence": {
+      "attachments": [],
+      "comment": [],
+      "complete_by": "2026-08-06T06:59:59Z",
+      "id": "00000000-0000-0000-0000-000000000000",
+      "parent_id": "2975f1a1-7657-4b2e-82c6-8e98f8bf5fa8",
+      "scheduled_date": "2026-08-05",
+      "status": "scheduled"
+    },
+    "type": "chore",
+    "updated_at": "2026-07-23T22:39:50.822471644Z"
+  },
+  "version": "0.1"
+}

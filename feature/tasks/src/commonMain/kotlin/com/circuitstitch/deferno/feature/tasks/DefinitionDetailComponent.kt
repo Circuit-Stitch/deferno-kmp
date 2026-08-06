@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalSto
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemRef
+import com.circuitstitch.deferno.core.model.OccurrenceCoverage
 import com.circuitstitch.deferno.core.model.RecurringDefinition
 import com.circuitstitch.deferno.core.model.SeriesChain
 import com.circuitstitch.deferno.core.model.TodayOccurrence
@@ -15,10 +16,13 @@ import com.circuitstitch.deferno.core.model.factDateFor
 import com.circuitstitch.deferno.core.model.readTodayOccurrence
 import com.circuitstitch.deferno.core.model.toItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -124,39 +128,56 @@ class DefaultDefinitionDetailComponent(
 
     private val extras = MutableStateFlow(Extras())
 
+    /**
+     * The definition, the day's coverage and the detail-read extras — everything the fact's lookup date
+     * is *derived from*, but not the fact itself. The grid has to be expanded before the right date to
+     * query is known, so the fact subscription hangs off this rather than sitting beside it.
+     */
+    private data class Inputs(
+        val definition: RecurringDefinition?,
+        val covering: List<OccurrenceCoverage>,
+        val extras: Extras,
+    )
+
+    @OptIn(ExperimentalCoroutinesApi::class) // flatMapLatest — re-key the fact query when the slot moves.
     override val state: StateFlow<DefinitionDetailState> = combine(
         definitionRepository.observe(ref),
-        // The fact for today's date. A rescheduled firing keeps its identity at the slot it moved FROM,
-        // so the lookup date is corrected below once the grid is known — this is the common-case read.
-        occurrenceFacts.observe(ref.kind, ref.id, today()),
         occurrenceCoverage.observeCovering(today()),
         extras,
-    ) { definition, factToday, covering, ex ->
+        ::Inputs,
+    ).flatMapLatest { inputs ->
+        val definition = inputs.definition
         val now = today()
         val firing = dayFiring(definition?.recurrence, definition?.series, now)
         // `factDateFor` is the silent-miss guard: when the grid moved an instance onto today, its fact
-        // is filed under the slot it came from, and querying today would read as unresolved.
+        // is filed under the slot it came FROM, so querying today would read a resolved firing as
+        // unresolved. It is also why this is a flatMapLatest and not a fourth `combine` arm — the
+        // date to observe is a function of the expanded grid, so it cannot be known when the flows are
+        // wired, and observing today's date while *reading* the slot's would leave the row stale until
+        // something else re-emitted (the fact table is written by the plan and the calendar, and a
+        // detached macOS detail window is explicitly expected to track those live, ADR-0033).
         val factDate = firing.factDateFor(now)
-        val fact = if (factDate == now) factToday else occurrenceFacts.get(ref.kind, ref.id, factDate)
-        val covered = covering.any { it.kind == ref.kind && it.definitionId == ref.id && it.covers(factDate) }
+        val covered = inputs.covering.any { it.kind == ref.kind && it.definitionId == ref.id && it.covers(factDate) }
 
-        DefinitionDetailState(
-            ref = ref,
-            definition = definition,
-            item = definition?.toItem(),
-            isHydrating = ex.isHydrating,
-            // The already-expanded overload: `firing` is needed above for the slot correction, and
-            // expanding the grid a second time per emission would walk the rule slot by slot again.
-            today = readTodayOccurrence(
-                firing = firing,
-                definitionState = definition?.definitionState,
-                fact = fact,
-                covered = covered,
-                today = now,
-            ),
-            eras = ex.eras,
-            originLabel = ex.originLabel,
-        )
+        occurrenceFacts.observe(ref.kind, ref.id, factDate).map { fact ->
+            DefinitionDetailState(
+                ref = ref,
+                definition = definition,
+                item = definition?.toItem(),
+                isHydrating = inputs.extras.isHydrating,
+                // The already-expanded overload: `firing` is needed above for the slot correction, and
+                // expanding the grid a second time per emission would walk the rule slot by slot again.
+                today = readTodayOccurrence(
+                    firing = firing,
+                    definitionState = definition?.definitionState,
+                    fact = fact,
+                    covered = covered,
+                    today = now,
+                ),
+                eras = inputs.extras.eras,
+                originLabel = inputs.extras.originLabel,
+            )
+        }
     }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), DefinitionDetailState(ref = ref, isHydrating = true))
 
     init {
