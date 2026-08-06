@@ -59,6 +59,11 @@ data class Event(
     // and would otherwise land in Swift as the unstable `description_` (see [Task.description]).
     @property:ObjCName("itemDescription") val description: String? = null,
     val seriesId: String? = null,
+    // The offline expansion inputs behind [seriesId] (#410, ADR-0053) — the frozen anchor, its zone,
+    // the Segment bound and the exceptions that [expandOccurrenceGrid] needs to reproduce this
+    // definition's [[Occurrence grid]] with the network gone. `null` is the wire's deliberate
+    // ELISION — "this device cannot reproduce that grid" — and never an empty one; see [SeriesInputs].
+    val series: SeriesInputs? = null,
     // Server-derived dependency flags (ADR-0034, #289), read-only truth: [blocked] when an ancestor is
     // blocked (the flag inherits down the tree across kinds); [isBlocker] when this gates another. Both
     // default `false` so a payload omitting them decodes cleanly. Edges (`blockedBy`) are Task-only.

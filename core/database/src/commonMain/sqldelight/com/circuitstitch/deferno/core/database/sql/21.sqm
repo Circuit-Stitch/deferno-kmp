@@ -1,0 +1,41 @@
+-- Migration 21 -> 22: the client stores the SERIES EXPANSION INPUTS, so a cached recurring definition
+-- can reproduce its own occurrence grid offline (#410, ADR-0053 decision 2).
+--
+-- `expandOccurrenceGrid` and the corpus that pins it landed in #401, and nothing could call them: the
+-- expander takes a `SeriesInputs` and this client had no DTO field, no mapper arm and no column to
+-- build one from. The wire has carried the block since `Circuit-Stitch/Deferno#643` — on the `/items`
+-- SNAPSHOT, not merely the detail read — so the missing half was entirely local. These two tables are
+-- that half.
+--
+-- Two tables rather than three parallel column sets on habitEntity/choreEntity/eventEntity: `exdates`
+-- and `overrides` are unbounded lists, and the three generated entity types share no supertype, so
+-- inlining them would mean three literal copies of a codec that already carries fourteen recurrence
+-- columns per kind. Keyed `(kind, definition_id)` — `occurrenceFactEntity`'s identity and its rule,
+-- **the definition id, never the series id** (a series id is no item's id, #380).
+--
+-- Additive: two CREATEs, no existing table touched, nothing dropped. Pre-migration caches simply have
+-- no rows here, which decodes to a `null` SeriesInputs — the same reading as the backend's own elision
+-- ("this device cannot reproduce that grid"), and it repopulates on the next refresh.
+--
+-- Never edit a released migration or snapshot — ADR-0022 runbook.
+CREATE TABLE seriesInputsEntity (
+    kind          TEXT NOT NULL,
+    definition_id TEXT NOT NULL,
+    anchor_local  TEXT NOT NULL,
+    tzid          TEXT NOT NULL,
+    until_utc     TEXT,
+    exdates       TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (kind, definition_id)
+);
+
+-- The per-instance exceptions. A child table because an override is a 3-tuple, not a scalar like the
+-- parent's `\n`-joined `exdates`; `recurrence_id` is the firing's ORIGINAL wall time (RFC 5545
+-- `RECURRENCE-ID`), which is what finds the rule slot, and `moved_to_local` is where it moved to.
+CREATE TABLE seriesOverrideEntity (
+    kind           TEXT NOT NULL,
+    definition_id  TEXT NOT NULL,
+    recurrence_id  TEXT NOT NULL,
+    is_cancelled   INTEGER NOT NULL DEFAULT 0,
+    moved_to_local TEXT,
+    PRIMARY KEY (kind, definition_id, recurrence_id)
+);

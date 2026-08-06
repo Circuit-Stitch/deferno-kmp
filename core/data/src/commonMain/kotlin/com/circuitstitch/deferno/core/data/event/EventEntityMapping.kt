@@ -14,11 +14,12 @@ import com.circuitstitch.deferno.core.database.sql.EventEntity
 import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.EventId
 import com.circuitstitch.deferno.core.model.OrgId
+import com.circuitstitch.deferno.core.model.SeriesInputs
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlin.time.Instant
 
 /** Row<->domain conversion for the Event cache (ADR-0001, #71) — sibling of `HabitEntityMapping.kt`. */
-fun EventEntity.toDomain(): Event = Event(
+fun EventEntity.toDomain(series: SeriesInputs? = null): Event = Event(
     id = EventId(id),
     orgSlug = org_slug,
     title = title,
@@ -57,6 +58,10 @@ fun EventEntity.toDomain(): Event = Event(
     ownerOrgId = owner_org_id?.let(::OrgId),
     description = description,
     seriesId = series_id,
+    // The expansion inputs (#410) come from `seriesInputsEntity`, not from this row — they are
+    // unbounded lists and would have tripled this codec as columns. The store passes them in; `null`
+    // (no cached row) reads as "cannot reproduce that grid", never as a grid with no exclusions.
+    series = series,
     // Server-derived dependency flags (#290): NULL (pre-migration / omitted) decodes to false.
     blocked = blocked == 1L,
     isBlocker = is_blocker == 1L,

@@ -14,13 +14,14 @@ import com.circuitstitch.deferno.core.database.sql.ChoreEntity
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.OrgId
+import com.circuitstitch.deferno.core.model.SeriesInputs
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.cadenceModeFromWire
 import com.circuitstitch.deferno.core.model.wireToken
 import kotlin.time.Instant
 
 /** Row<->domain conversion for the Chore cache (ADR-0001, #71) — sibling of `HabitEntityMapping.kt`. */
-fun ChoreEntity.toDomain(): Chore = Chore(
+fun ChoreEntity.toDomain(series: SeriesInputs? = null): Chore = Chore(
     id = ChoreId(id),
     orgSlug = org_slug,
     title = title,
@@ -60,6 +61,10 @@ fun ChoreEntity.toDomain(): Chore = Chore(
     ownerOrgId = owner_org_id?.let(::OrgId),
     description = description,
     seriesId = series_id,
+    // The expansion inputs (#410) come from `seriesInputsEntity`, not from this row — they are
+    // unbounded lists and would have tripled this codec as columns. The store passes them in; `null`
+    // (no cached row) reads as "cannot reproduce that grid", never as a grid with no exclusions.
+    series = series,
     // Server-derived dependency flags (#290): NULL (pre-migration / omitted) decodes to false.
     blocked = blocked == 1L,
     isBlocker = is_blocker == 1L,

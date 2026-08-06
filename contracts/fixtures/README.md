@@ -11,10 +11,31 @@ bugs. The added values are structurally faithful to the Rust wire types
 (`backend/src/subtask_template.rs`, `backend/src/models/recurrence.rs`) and free text stays scrubbed.
 Re-capture from staging as soon as a real account holds such an item, and drop this note.
 
+The same exception now covers the `series` block (#410), and here **part of it is not re-capturable at
+all** — not "no account has one yet", but "no code path can produce one":
+
+- **`exdates` is always `[]` on the wire.** `SeriesInputs::from_series` ships the stored vector and
+  says why in a comment: *"nothing populates EXDATE today, so this is correct for free the day
+  something does"* (`backend/src/models/recurrence.rs`). No handler writes one.
+- **`is_cancelled` is always `false` on the wire.** The only writer of a cancelling override is
+  `TaskRepository::cancel_recurrence_instance`, and **nothing calls it** — no route reaches it. Every
+  override the API can mint today comes from `PATCH …?scope=this`, which hardcodes `is_cancelled:
+  false`.
+- **`until_utc` is set only by a split**, and a split replaces the item (the head segment leaves the
+  `/items` snapshot), so the bound cannot be captured on a row that is still listed.
+
+So the **event** row's block is the shape captured live from staging on 2026-08-05 — a throwaway
+recurring event, `PATCH`ed twice at `scope=this`, yielding two overrides ascending by
+`recurrence_id`, one moved and one not — with the wall times re-pointed onto genuine slots of that
+row's own rule, and the throwaway deleted afterwards. The **chore** row is hand-authored to carry the
+three arms above (a Segment bound, an EXDATE, a cancelled override) against genuine `weekly`/`Tue`
+slots. The **habit** row deliberately carries **no `series` key at all**, pinning the elision the
+backend actually performs — absent is not empty (see `core/model/SeriesInputs.kt`).
+
 | Fixture | Endpoint | Shape |
 |---|---|---|
 | `auth-me.json` | `GET /auth/me` | `Envelope<AuthenticatedUser>` — `id, username, display_name, role, personal_org_id, org_slug, is_admin, console_url` |
-| `items-sample.json` | `GET /items` | `Envelope<[ItemEnvelope<ItemView>]>` — one of **each kind** (task/habit/chore/event); note flattened payload + redundant `kind`. The habit carries a **populated `subtask_template`** (one entry with a `description`, one without — the backend omits the key when empty, #381). The three recurrence rules exercise the **flat** cadence shape and the nested `end` bound (#382): habit `daily` with no `end` (→ the never bound, the only encoding the server emits), chore `weekly`+`days`+`end.after_count`, event `monthly`+`interval`+`on.nth_weekday`(`nth: -1` = last)+`end.on_date` |
+| `items-sample.json` | `GET /items` | `Envelope<[ItemEnvelope<ItemView>]>` — one of **each kind** (task/habit/chore/event); note flattened payload + redundant `kind`. The habit carries a **populated `subtask_template`** (one entry with a `description`, one without — the backend omits the key when empty, #381). The three recurrence rules exercise the **flat** cadence shape and the nested `end` bound (#382): habit `daily` with no `end` (→ the never bound, the only encoding the server emits), chore `weekly`+`days`+`end.after_count`, event `monthly`+`interval`+`on.nth_weekday`(`nth: -1` = last)+`end.on_date`. The **`series` block** (#410) rides three of the four rows differently on purpose: event = captured (two overrides, one moved one not), chore = hand-authored (`until_utc` + `exdates` + a cancelled override), habit = **absent** (the elision), task = n/a |
 | `tasks-sample.json` | `GET /tasks` | `Envelope<[ItemEnvelope<TaskSummary>]>` — summary shape (no `kind`) |
 | `plan.json` | `GET /tasks/plan` (**legacy**) | the daily plan as the Task-only endpoint returns it — ordered `[ItemEnvelope<TaskSummary>]`. **The client no longer reads this route** (#385): its handler resolves the day's ordered ids against the server's Task store alone, so a day holding a Habit or Chore comes back `[]`. Retained because it is the only capture whose rows omit `ref`+`sequence` (a brand-new server-seeded row), which is a real wire shape worth pinning. The kind-tagged `/items/plan` the client reads now has **no captured fixture yet** — see below |
 | `today-sample.json` | `GET /tasks/today` | `Envelope<[ItemEnvelope<TodayEntry>]>` — `task` **nested** + `priority_score`, `urgency_reason` |

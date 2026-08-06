@@ -153,6 +153,26 @@
       },
       "ref": "u-e4h2qk-277",
       "sequence": 277,
+      "series": {
+        "dtstart_local": "2026-08-04T23:59:59",
+        "exdates": [
+          "2026-08-18T23:59:59"
+        ],
+        "overrides": [
+          {
+            "dtstart_local": null,
+            "is_cancelled": true,
+            "recurrence_id": "2026-08-11T23:59:59"
+          },
+          {
+            "dtstart_local": "2026-08-26T18:30:00",
+            "is_cancelled": false,
+            "recurrence_id": "2026-08-25T23:59:59"
+          }
+        ],
+        "tzid": "America/Los_Angeles",
+        "until_utc": "2026-09-16T06:59:59Z"
+      },
       "series_id": "e0806009-9fd6-4ba1-8c78-d45415424d11",
       "status": "active",
       "subtask_template": [],
@@ -196,6 +216,24 @@
       },
       "ref": "u-e4h2qk-176",
       "sequence": 176,
+      "series": {
+        "dtstart_local": "2026-08-28T09:00:00",
+        "exdates": [],
+        "overrides": [
+          {
+            "dtstart_local": "2026-10-31T14:00:00",
+            "is_cancelled": false,
+            "recurrence_id": "2026-10-30T09:00:00"
+          },
+          {
+            "dtstart_local": null,
+            "is_cancelled": false,
+            "recurrence_id": "2026-12-25T09:00:00"
+          }
+        ],
+        "tzid": "America/Los_Angeles",
+        "until_utc": null
+      },
       "series_id": "1092979a-a04d-47be-b7e8-921ed3097005",
       "status": "active",
       "subtask_template": [],

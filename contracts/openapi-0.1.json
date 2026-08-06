@@ -28,7 +28,7 @@
                     "activity"
                 ],
                 "summary": "Global activity feed",
-                "description": "The Activity ledger, scoped to the caller's accessible orgs, newest-first by occurred_at, with filters and two mutually-exclusive keyset cursors (before = scroll-back on occurred_at, since = sync catch-up on observed_at). Supplying both before and since is a 400.",
+                "description": "The Activity ledger, scoped to the caller's accessible orgs, newest-first by occurred_at, with filters and two mutually-exclusive keyset cursors (before = scroll-back on occurred_at, since = sync catch-up on observed_at). A read pages exactly one axis: supplying both before and since is a 400, and so is pairing since with the occurred_at bounds from/to.",
                 "operationId": "get_activity",
                 "parameters": [
                     {
@@ -67,7 +67,7 @@
                         "description": "Restrict to one actor kind (`human` | `assistant` | `system` | `webhook`).",
                         "required": false,
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/components/schemas/ActorKind"
                         }
                     },
                     {
@@ -76,13 +76,13 @@
                         "description": "Restrict to one source (`mobile` | `web` | `mcp` | `api` | `system` | `unknown`).",
                         "required": false,
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/components/schemas/Source"
                         }
                     },
                     {
                         "name": "from",
                         "in": "query",
-                        "description": "Inclusive lower bound on `occurred_at` (RFC 3339).",
+                        "description": "Inclusive lower bound on `occurred_at` (RFC 3339). Cannot be combined\nwith `since`, which pages a different axis.",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -92,7 +92,7 @@
                     {
                         "name": "to",
                         "in": "query",
-                        "description": "Inclusive upper bound on `occurred_at` (RFC 3339).",
+                        "description": "Inclusive upper bound on `occurred_at` (RFC 3339). Cannot be combined\nwith `since`, which pages a different axis.",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -111,7 +111,7 @@
                     {
                         "name": "since",
                         "in": "query",
-                        "description": "Sync catch-up cursor over `observed_at`: return entries observed after\nit. Accepts an opaque token from a previous page's `next_since`, or a\nbare RFC-3339 timestamp for a first sync (\"everything observed after T\").\nWhen set, the feed pages the observed_at axis (ascending) with no gaps.\nMutually exclusive with `before`.",
+                        "description": "Sync catch-up cursor over `observed_at`: return entries observed after\nit. Accepts an opaque token from a previous page's `next_since`, or a\nbare RFC-3339 timestamp for a first sync (\"everything observed after T\").\nWhen set, the feed pages the observed_at axis (ascending) with no gaps.\n\nMutually exclusive with `before`, and with `from`/`to`: those bound\n`occurred_at`, and a client is free to backdate an entry, so the two\naxes can order the same rows differently. Honouring an `occurred_at`\nbound here would drop rows the walk then advances past and never\nrevisits, which would break the no-gaps guarantee this cursor exists to\nprovide. Filter the returned page client-side instead.",
                         "required": false,
                         "schema": {
                             "type": "string"
@@ -140,7 +140,7 @@
                         }
                     },
                     "400": {
-                        "description": "Invalid query parameter: unknown filter value, malformed cursor, or both before and since supplied",
+                        "description": "Invalid query parameter: unknown filter value, malformed cursor, both before and since supplied, or since combined with from/to",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -161,6 +161,56 @@
                     },
                     "503": {
                         "description": "Activity ledger not configured",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer_token": []
+                    },
+                    {
+                        "session_cookie": []
+                    }
+                ]
+            }
+        },
+        "/admin/activity/queue": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Read activity-ledger queue depths",
+                "description": "Current depth of the three activity-ledger queues (pending, in-flight, and parked entries), for operators. The queues are global to the deployment rather than scoped to one organization, so this endpoint is restricted to the staff administrator role. Always answers within a bounded time budget: when the ledger is switched off or the probe cannot complete, `status` carries the reason and the three depths are null.",
+                "operationId": "get_activity_queue_depths",
+                "responses": {
+                    "200": {
+                        "description": "Queue depths, or the reason they are unavailable",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Envelope_ActivityQueueDepths"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Not a staff administrator",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -7561,7 +7611,7 @@
             },
             "ActivityEntryDto": {
                 "type": "object",
-                "description": "One rendered ledger entry. Enums are strings on the wire; `detail` is the\ndecrypted plaintext content.",
+                "description": "One rendered ledger entry. Enums are strings on the wire; `detail` is the\ndecrypted plaintext content.\n\n`actor_kind` and `source` are closed vocabularies, published as constrained\nenums. `action_kind` is deliberately open: a client must tolerate a verb it\ndoes not recognize rather than reject the entry.",
                 "required": [
                     "entry_id",
                     "org_id",
@@ -7571,6 +7621,8 @@
                     "action_kind",
                     "occurred_at",
                     "observed_at",
+                    "skew_seconds",
+                    "backdated",
                     "changed_fields",
                     "detail"
                 ],
@@ -7579,7 +7631,11 @@
                         "type": "string"
                     },
                     "actor_kind": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/ActorKind"
+                    },
+                    "backdated": {
+                        "type": "boolean",
+                        "description": "True when `skew_seconds` exceeds 24 hours \u2014 the entry reached the server\nmaterially later than it claims to have happened. Advisory: the row is a\nfirst-class ledger entry either way."
                     },
                     "changed_fields": {
                         "type": "array",
@@ -7628,8 +7684,13 @@
                         ],
                         "format": "uuid"
                     },
+                    "skew_seconds": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "`observed_at - occurred_at` in whole seconds: how far the claimed\nwall-clock lags server receipt.\n\n**Derived on read, never stored** \u2014 no column, no migration, and the\nthreshold can be retuned without rewriting history. Normally 0 (the two\nstamps are the same instant for a live action). Large and positive means\nthe action was performed offline and replayed later. Small and negative\nis legal: a mildly fast client clock is believed up to 24 hours ahead.\n\nAn `at` more than 24 hours in the future is not believed \u2014 the server\nrecords its own clock instead, and the entry reads as exactly 0 here,\nindistinguishable from one whose client asserted nothing."
+                    },
                     "source": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/Source"
                     },
                     "user_id": {
                         "type": [
@@ -7679,7 +7740,7 @@
                             "null"
                         ],
                         "format": "date-time",
-                        "description": "Client wall-clock the action occurred at. Server time if absent."
+                        "description": "Client wall-clock the action occurred at. Server time if absent.\n\nBelieved without limit into the past \u2014 an offline client replaying a\nmonth-old action has its timestamp recorded exactly as sent. Believed up\nto 24 hours into the future, to tolerate ordinary client clock drift;\nbeyond that the server records its own clock instead."
                     },
                     "id": {
                         "type": [
@@ -7701,6 +7762,55 @@
                         ]
                     }
                 }
+            },
+            "ActivityQueueDepths": {
+                "type": "object",
+                "description": "Depth of the three Activity-ledger queues, or why they could not be read.",
+                "required": [
+                    "status"
+                ],
+                "properties": {
+                    "deadletter": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "format": "int64",
+                        "description": "Entries parked after repeated write failures, or because they could not\nbe parsed. Nothing drains this automatically \u2014 a non-zero value never\nclears on its own and always warrants a look.",
+                        "minimum": 0
+                    },
+                    "inflight": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "format": "int64",
+                        "description": "Entries popped for writing but not yet acknowledged. Steady state is\nzero or near-zero; a stable non-zero value means entries are failing to\nwrite and are backing off.",
+                        "minimum": 0
+                    },
+                    "intake": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "format": "int64",
+                        "description": "Entries captured but not yet written to the ledger store. Growing across\nsuccessive reads means the drain is not keeping up, or is not running.",
+                        "minimum": 0
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/QueueProbeStatus"
+                    }
+                }
+            },
+            "ActorKind": {
+                "type": "string",
+                "description": "A closed, stable actor taxonomy. Broad enough that new callers map onto an\nexisting category (a new integration is still a `Webhook` with a `provider`),\nso \u2014 unlike `action_kind` \u2014 this needs no open `Other` escape hatch.",
+                "enum": [
+                    "human",
+                    "assistant",
+                    "system",
+                    "webhook"
+                ]
             },
             "ApiTokenView": {
                 "type": "object",
@@ -8224,7 +8334,7 @@
                         }
                     }
                 ],
-                "description": "The repeating *cadence* of a recurrence \u2014 the \"every day / every Tuesday /\nthe 15th\" pattern (daily, weekly, monthly, yearly, etc.), independent of\nany end bound. The optional end lives on the wrapping [`Recurrence`] struct."
+                "description": "The repeating *cadence* of a recurrence \u2014 the \"every day / every Tuesday /\nthe 15th\" pattern (daily, weekly, monthly, yearly, etc.), independent of\nany end bound. The optional end lives on the wrapping `Recurrence` object."
             },
             "CadenceMode": {
                 "type": "string",
@@ -8559,7 +8669,7 @@
                             "null"
                         ],
                         "format": "date-time",
-                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. Independent of `complete_by`."
+                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** `complete_by`: never\n*after* it, though equal is legal. A write that would overshoot is\n**clamped** down to `complete_by` rather than rejected, so no stored\nvalue can violate the bound. With no `complete_by` there is no bound\nand the target is kept verbatim."
                     },
                     "title": {
                         "type": "string"
@@ -8722,7 +8832,7 @@
             },
             "CommentListResponse": {
                 "type": "object",
-                "description": "Shape returned by `GET /tasks/{id}/comments` and `GET /items/{id}/comments`.\n\nEntries are [`TimelineComment`]s: for a Task they are item-level comments\n(no occurrence date); for a recurring kind they are the union of every\noccurrence's comments, each tagged with its occurrence date.",
+                "description": "Shape returned by `GET /tasks/{id}/comments` and `GET /items/{id}/comments`.\n\nEntries are `TimelineComment` objects: for a Task they are item-level\ncomments (no occurrence date); for a recurring kind they are the union of\nevery occurrence's comments, each tagged with its occurrence date.",
                 "required": [
                     "comments"
                 ],
@@ -9005,6 +9115,17 @@
                         ],
                         "format": "uuid"
                     },
+                    "priority": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/Priority",
+                                "description": "Non-dated urgency bucket \u2014 `\"fire\"`, `\"normal\"` or `\"backlog\"`. Ranks\nthe series on sorted surfaces and nothing else; it never touches a\ndate. Omit (or send `null`) for the default `\"normal\"` \u2014 the bucket has\na real default, so absent and an explicit `\"normal\"` are the same\nstatement, and there is no clear-to-null form on either verb.\n\nSeries-level like `complete_by`, not per-occurrence. Unlike\n`target_date` it is **not** bounded by `complete_by`: the bucket is\ndeadline-independent by design, so nothing here is clamped. An\nunrecognised bucket is a `400`, never a silent fallback. #647."
+                            }
+                        ]
+                    },
                     "productive": {
                         "type": [
                             "number",
@@ -9021,6 +9142,14 @@
                             "$ref": "#/components/schemas/SubtaskTemplate"
                         },
                         "description": "Optional ordered checklist of subtasks attached to every occurrence.\nOmit (or send `[]`) for none."
+                    },
+                    "target_date": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time",
+                        "description": "Soft target date \u2014 when the user *wants* this done by. Drives\nsorting/surfacing only; it never moves the calendar. Series-level like\n`complete_by`, not per-occurrence. Omit (or send `null`) for none.\n\n**Bounded by `complete_by`**: a target date may never be *after* the\nhard deadline. One that overshoots is silently **clamped** down to\n`complete_by` rather than rejected, so read the response body for the\nstored value. #629."
                     },
                     "title": {
                         "type": "string"
@@ -9128,6 +9257,17 @@
                         ],
                         "format": "uuid"
                     },
+                    "priority": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/Priority",
+                                "description": "Non-dated urgency bucket \u2014 `\"fire\"`, `\"normal\"` or `\"backlog\"`. Ranks\nthe event on sorted surfaces and nothing else. Omit (or send `null`)\nfor the default `\"normal\"` \u2014 the bucket has a real default, so absent\nand an explicit `\"normal\"` are the same statement, and there is no\nclear-to-null form on either verb.\n\nUnlike `target_date` it is **not** bounded by `complete_by` (which on\nan Event is the *start* instant): the bucket is deadline-independent by\ndesign, so nothing here is clamped. An unrecognised bucket is a `400`,\nnever a silent fallback. #647."
+                            }
+                        ]
+                    },
                     "productive": {
                         "type": [
                             "number",
@@ -9158,6 +9298,14 @@
                             "$ref": "#/components/schemas/SubtaskTemplate"
                         },
                         "description": "Optional ordered checklist of subtasks attached to every occurrence.\nOmit (or send `[]`) for none."
+                    },
+                    "target_date": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time",
+                        "description": "Soft target date \u2014 when the user *wants* this done by. On an Event\n`complete_by` is the start instant, so this is not a second deadline:\nit drives sorting/surfacing only and never moves the calendar, and it\nis unrelated to `end_time`. Omit (or send `null`) for none.\n\n**Bounded by `complete_by`**: a target date may never be *after* the\nevent's start instant. One that overshoots is silently **clamped** down\nto it rather than rejected, so read the response body for the stored\nvalue. #629."
                     },
                     "title": {
                         "type": "string"
@@ -9232,6 +9380,17 @@
                         ],
                         "format": "uuid"
                     },
+                    "priority": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/Priority",
+                                "description": "Non-dated urgency bucket \u2014 `\"fire\"`, `\"normal\"` or `\"backlog\"`. Ranks\nthe series on sorted surfaces and nothing else; it never touches a\ndate. Omit (or send `null`) for the default `\"normal\"` \u2014 the bucket has\na real default, so absent and an explicit `\"normal\"` are the same\nstatement, and there is no clear-to-null form on either verb.\n\nSeries-level like `complete_by`, not per-occurrence. Unlike\n`target_date` it is **not** bounded by `complete_by`: the bucket is\ndeadline-independent by design, so nothing here is clamped. An\nunrecognised bucket is a `400`, never a silent fallback. #647."
+                            }
+                        ]
+                    },
                     "productive": {
                         "type": [
                             "number",
@@ -9248,6 +9407,14 @@
                             "$ref": "#/components/schemas/SubtaskTemplate"
                         },
                         "description": "Optional ordered checklist of subtasks attached to every occurrence.\nOmit (or send `[]`) for none."
+                    },
+                    "target_date": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time",
+                        "description": "Soft target date \u2014 when the user *wants* this done by. Drives\nsorting/surfacing only; it never moves the calendar. Series-level like\n`complete_by`, not per-occurrence. Omit (or send `null`) for none.\n\n**Bounded by `complete_by`**: a target date may never be *after* the\nhard deadline. One that overshoots is silently **clamped** down to\n`complete_by` rather than rejected, so read the response body for the\nstored value. #629."
                     },
                     "title": {
                         "type": "string"
@@ -9362,12 +9529,31 @@
                         ],
                         "format": "uuid"
                     },
+                    "priority": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/Priority",
+                                "description": "Non-dated urgency bucket \u2014 `\"fire\"`, `\"normal\"` or `\"backlog\"`. Ranks\nthe item on sorted surfaces and nothing else; it never touches a date.\nOmit (or send `null`) for the default `\"normal\"` \u2014 the bucket has a\nreal default, so absent and an explicit `\"normal\"` are the same\nstatement, and there is no clear-to-null form on either verb.\n\nUnlike `target_date` this is **not** bounded by `complete_by`: the\nbucket is deadline-independent by design, so nothing here is clamped.\nAn unrecognised bucket is a `400`, never a silent fallback to\n`\"normal\"`. #647."
+                            }
+                        ]
+                    },
                     "productive": {
                         "type": [
                             "number",
                             "null"
                         ],
                         "format": "double"
+                    },
+                    "target_date": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time",
+                        "description": "Soft target date \u2014 when the user *wants* this done by. Drives\nsorting/surfacing only; it never moves the calendar. Date-granular in\nintent, so send the inclusive end-of-day instant exactly as you already\ndo for `complete_by`. Omit (or send `null`) for none \u2014 on create there\nis no prior value, so this is a plain `Option`, not the `Patch` the\nupdate payload uses.\n\n**Bounded by `complete_by`**: a target date may never be *after* the\nhard deadline. One that overshoots is silently **clamped** down to\n`complete_by` rather than rejected, so read the response body for the\nstored value. With no `complete_by` there is no bound. #629."
                     },
                     "title": {
                         "type": "string"
@@ -9582,6 +9768,74 @@
                                     "null"
                                 ],
                                 "description": "Sync mode only: pass as `since` to fetch entries observed after this\npage \u2014 an opaque keyset cursor over `observed_at`. `None` in feed mode or\nwhen the page was empty."
+                            }
+                        }
+                    },
+                    "error": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/EnvelopeError"
+                            }
+                        ]
+                    },
+                    "next_since": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Delta-pull high-water-mark cursor. Present only on `?since=` delta\nresponses; elided on every other response (additive, v0.1-safe)."
+                    },
+                    "version": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Envelope_ActivityQueueDepths": {
+                "type": "object",
+                "description": "Serializable envelope. Use `Versioned::ok(data)` for success paths;\n`Versioned::error(code, message)` for failures (or compose via the\n`IntoResponse` impl on `ApiError`).",
+                "required": [
+                    "version"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "description": "Depth of the three Activity-ledger queues, or why they could not be read.",
+                        "required": [
+                            "status"
+                        ],
+                        "properties": {
+                            "deadletter": {
+                                "type": [
+                                    "integer",
+                                    "null"
+                                ],
+                                "format": "int64",
+                                "description": "Entries parked after repeated write failures, or because they could not\nbe parsed. Nothing drains this automatically \u2014 a non-zero value never\nclears on its own and always warrants a look.",
+                                "minimum": 0
+                            },
+                            "inflight": {
+                                "type": [
+                                    "integer",
+                                    "null"
+                                ],
+                                "format": "int64",
+                                "description": "Entries popped for writing but not yet acknowledged. Steady state is\nzero or near-zero; a stable non-zero value means entries are failing to\nwrite and are backing off.",
+                                "minimum": 0
+                            },
+                            "intake": {
+                                "type": [
+                                    "integer",
+                                    "null"
+                                ],
+                                "format": "int64",
+                                "description": "Entries captured but not yet written to the ledger store. Growing across\nsuccessive reads means the drain is not keeping up, or is not running.",
+                                "minimum": 0
+                            },
+                            "status": {
+                                "$ref": "#/components/schemas/QueueProbeStatus"
                             }
                         }
                     },
@@ -10240,7 +10494,7 @@
                                     "null"
                                 ],
                                 "format": "date-time",
-                                "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. Independent of `complete_by`."
+                                "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** `complete_by`: never\n*after* it, though equal is legal. A write that would overshoot is\n**clamped** down to `complete_by` rather than rejected, so no stored\nvalue can violate the bound. With no `complete_by` there is no bound\nand the target is kept verbatim."
                             },
                             "title": {
                                 "type": "string"
@@ -10439,7 +10693,7 @@
                 "properties": {
                     "data": {
                         "type": "object",
-                        "description": "Shape returned by `GET /tasks/{id}/comments` and `GET /items/{id}/comments`.\n\nEntries are [`TimelineComment`]s: for a Task they are item-level comments\n(no occurrence date); for a recurring kind they are the union of every\noccurrence's comments, each tagged with its occurrence date.",
+                        "description": "Shape returned by `GET /tasks/{id}/comments` and `GET /items/{id}/comments`.\n\nEntries are `TimelineComment` objects: for a Task they are item-level\ncomments (no occurrence date); for a recurring kind they are the union of\nevery occurrence's comments, each tagged with its occurrence date.",
                         "required": [
                             "comments"
                         ],
@@ -11037,7 +11291,7 @@
                                     "null"
                                 ],
                                 "format": "date-time",
-                                "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. Independent of `complete_by`."
+                                "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** `complete_by` (the\nevent's start instant): never *after* it, though equal is legal. A\nwrite that would overshoot is **clamped** down to `complete_by` rather\nthan rejected, so no stored value can violate the bound. With no\n`complete_by` there is no bound and the target is kept verbatim."
                             },
                             "title": {
                                 "type": "string"
@@ -11457,7 +11711,7 @@
                                     "null"
                                 ],
                                 "format": "date-time",
-                                "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. Independent of `complete_by`."
+                                "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** `complete_by`: never\n*after* it, though equal is legal. A write that would overshoot is\n**clamped** down to `complete_by` rather than rejected, so no stored\nvalue can violate the bound. With no `complete_by` there is no bound\nand the target is kept verbatim."
                             },
                             "title": {
                                 "type": "string"
@@ -11581,6 +11835,17 @@
                                         ],
                                         "description": "Derived (detail-only): the human-readable origin for the Source cell \u2014\na tracker ref (`owner/repo#N`) for a GitHub-imported item, or the\ncalendar's `display_name` for a calendar event (#518). Absent when a\ncalendar can't be resolved (toggled off / dropped), and the client\nfalls back to the provider label."
                                     },
+                                    "series": {
+                                        "oneOf": [
+                                            {
+                                                "type": "null"
+                                            },
+                                            {
+                                                "$ref": "#/components/schemas/SeriesInputs",
+                                                "description": "The stored recurrence expansion inputs behind a repeating item (habit,\nchore, or recurring event), so a client can reproduce the server's\noccurrence set locally. Absent \u2014 never null \u2014 for an item that no\nrecurring series backs, such as an ordinary task or a one-off event."
+                                            }
+                                        ]
+                                    },
                                     "series_chain": {
                                         "oneOf": [
                                             {
@@ -11589,6 +11854,17 @@
                                             {
                                                 "$ref": "#/components/schemas/SeriesChainView",
                                                 "description": "Present only when this item's recurrence rule has been changed at least\nonce, splitting it into several linked underlying records. Absent for\nordinary items, which are unaffected."
+                                            }
+                                        ]
+                                    },
+                                    "today_occurrence": {
+                                        "oneOf": [
+                                            {
+                                                "type": "null"
+                                            },
+                                            {
+                                                "$ref": "#/components/schemas/Occurrence",
+                                                "description": "Today's occurrence for a repeating item (habit, chore, or event) \u2014 the\nonly place \"is this done today?\" can be answered, since a repeating\nitem's own status is active/archived and never `done`. Absent for tasks.\n\nThis always describes *today's date for this item*; it does not mean the\nitem is scheduled to fire today. When nothing has been recorded for the\ndate the status is `scheduled` and the id is all-zeroes, signalling a\nplaceholder rather than a stored record."
                                             }
                                         ]
                                     }
@@ -11827,7 +12103,7 @@
                                             "null"
                                         ],
                                         "format": "date-time",
-                                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. Independent of `complete_by`."
+                                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** `complete_by`: never\n*after* it, though equal is legal. A write that would overshoot is\n**clamped** down to `complete_by` rather than rejected, so no stored\nvalue can violate the bound. With no `complete_by` there is no bound\nand the target is kept verbatim."
                                     },
                                     "title": {
                                         "type": "string"
@@ -11856,7 +12132,7 @@
                                             },
                                             {
                                                 "$ref": "#/components/schemas/ItemKind",
-                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\n\nThe canonical kind field going forward. Absent when the item payload\nalready carries its own `kind` key, so a response never repeats it \u2014\nread whichever of the two is present."
                                             }
                                         ]
                                     },
@@ -12138,7 +12414,7 @@
                                             "null"
                                         ],
                                         "format": "date-time",
-                                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. Independent of `complete_by`."
+                                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** `complete_by` (the\nevent's start instant): never *after* it, though equal is legal. A\nwrite that would overshoot is **clamped** down to `complete_by` rather\nthan rejected, so no stored value can violate the bound. With no\n`complete_by` there is no bound and the target is kept verbatim."
                                     },
                                     "title": {
                                         "type": "string"
@@ -12167,7 +12443,7 @@
                                             },
                                             {
                                                 "$ref": "#/components/schemas/ItemKind",
-                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\n\nThe canonical kind field going forward. Absent when the item payload\nalready carries its own `kind` key, so a response never repeats it \u2014\nread whichever of the two is present."
                                             }
                                         ]
                                     },
@@ -12423,7 +12699,7 @@
                                             "null"
                                         ],
                                         "format": "date-time",
-                                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. Independent of `complete_by`."
+                                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** `complete_by`: never\n*after* it, though equal is legal. A write that would overshoot is\n**clamped** down to `complete_by` rather than rejected, so no stored\nvalue can violate the bound. With no `complete_by` there is no bound\nand the target is kept verbatim."
                                     },
                                     "title": {
                                         "type": "string"
@@ -12452,7 +12728,7 @@
                                             },
                                             {
                                                 "$ref": "#/components/schemas/ItemKind",
-                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\n\nThe canonical kind field going forward. Absent when the item payload\nalready carries its own `kind` key, so a response never repeats it \u2014\nread whichever of the two is present."
                                             }
                                         ]
                                     },
@@ -12765,7 +13041,7 @@
                                             "null"
                                         ],
                                         "format": "date-time",
-                                        "description": "Soft \"want done by\" target date \u2014 drives sorting/surfacing only, never\ncarry-forward or the calendar. Independent of the hard `complete_by`."
+                                        "description": "Soft \"want done by\" target date \u2014 drives sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** the hard `complete_by`:\nit is never *after* it, though equal is legal. A write that would\novershoot is **clamped** down to `complete_by` rather than rejected, so\nno stored value can violate the bound. With no `complete_by` there is\nno bound and the target is kept verbatim."
                                     },
                                     "title": {
                                         "type": "string"
@@ -12794,7 +13070,7 @@
                                             },
                                             {
                                                 "$ref": "#/components/schemas/ItemKind",
-                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                                "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\n\nThe canonical kind field going forward. Absent when the item payload\nalready carries its own `kind` key, so a response never repeats it \u2014\nread whichever of the two is present."
                                             }
                                         ]
                                     },
@@ -13799,7 +14075,7 @@
                                     "null"
                                 ],
                                 "format": "date-time",
-                                "description": "Soft \"want done by\" target date \u2014 drives sorting/surfacing only, never\ncarry-forward or the calendar. Independent of the hard `complete_by`."
+                                "description": "Soft \"want done by\" target date \u2014 drives sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** the hard `complete_by`:\nit is never *after* it, though equal is legal. A write that would\novershoot is **clamped** down to `complete_by` rather than rejected, so\nno stored value can violate the bound. With no `complete_by` there is\nno bound and the target is kept verbatim."
                             },
                             "title": {
                                 "type": "string"
@@ -14457,7 +14733,7 @@
                                                 },
                                                 {
                                                     "$ref": "#/components/schemas/ItemKind",
-                                                    "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                                    "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\n\nThe canonical kind field going forward. Absent when the item payload\nalready carries its own `kind` key, so a response never repeats it \u2014\nread whichever of the two is present."
                                                 }
                                             ]
                                         },
@@ -14553,7 +14829,7 @@
                                                 },
                                                 {
                                                     "$ref": "#/components/schemas/ItemKind",
-                                                    "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                                    "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\n\nThe canonical kind field going forward. Absent when the item payload\nalready carries its own `kind` key, so a response never repeats it \u2014\nread whichever of the two is present."
                                                 }
                                             ]
                                         },
@@ -14725,7 +15001,7 @@
                                                 },
                                                 {
                                                     "$ref": "#/components/schemas/ItemKind",
-                                                    "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                                    "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\n\nThe canonical kind field going forward. Absent when the item payload\nalready carries its own `kind` key, so a response never repeats it \u2014\nread whichever of the two is present."
                                                 }
                                             ]
                                         },
@@ -15179,7 +15455,7 @@
             },
             "ErrorEnvelope": {
                 "type": "object",
-                "description": "OpenAPI-only view of the error envelope (`{ \"version\": \"0.1\", \"error\": {\u2026} }`).\n\nThe live code emits errors through `Envelope<T>` with `data: None`; this\ndedicated, non-generic struct gives the generated spec \u2014 and the\nSwift/Kotlin clients built from it \u2014 a single named error type to decode\ninto. It is referenced as the `default` response on every documented\noperation. Kept in sync with [`Envelope`] by construction: both serialize\n`version` + `error` identically.",
+                "description": "The error envelope: `{ \"version\": \"0.1\", \"error\": {\u2026} }`.\n\nReturned as the `default` response of every documented operation. A failed\nrequest always carries this shape, so a client can decode one type for\nevery error regardless of which endpoint produced it.",
                 "required": [
                     "version",
                     "error"
@@ -15415,7 +15691,7 @@
                             "null"
                         ],
                         "format": "date-time",
-                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. Independent of `complete_by`."
+                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** `complete_by` (the\nevent's start instant): never *after* it, though equal is legal. A\nwrite that would overshoot is **clamped** down to `complete_by` rather\nthan rejected, so no stored value can violate the bound. With no\n`complete_by` there is no bound and the target is kept verbatim."
                     },
                     "title": {
                         "type": "string"
@@ -15432,7 +15708,7 @@
             },
             "ExternalProvenance": {
                 "type": "object",
-                "description": "Schema mirror for [`ExternalProvenance`]: the exact wire shape (the five\nstored fields plus the derived `write_policy`). The derive gets the field\ndetails right (nullable `Option`s, `date-time` format, the inlined policy\nenum); the manual `ToSchema` impl below delegates to it so the generated\nOpenAPI matches the hand-written `Serialize`. Never registered as its own\ncomponent \u2014 it is only ever reached via that delegation.",
+                "description": "Provenance of an item that originated in an external provider (GitHub,\nGoogle Calendar): the provider's identifiers and timestamps, plus the\nwrite capability derived from them.\n\nPresent only on imported items; a natively created item omits it.",
                 "required": [
                     "id",
                     "source",
@@ -15847,7 +16123,7 @@
                             "null"
                         ],
                         "format": "date-time",
-                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. Independent of `complete_by`."
+                        "description": "Soft \"want done by\" target date \u2014 sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** `complete_by`: never\n*after* it, though equal is legal. A write that would overshoot is\n**clamped** down to `complete_by` rather than rejected, so no stored\nvalue can violate the bound. With no `complete_by` there is no bound\nand the target is kept verbatim."
                     },
                     "title": {
                         "type": "string"
@@ -15932,6 +16208,17 @@
                                 ],
                                 "description": "Derived (detail-only): the human-readable origin for the Source cell \u2014\na tracker ref (`owner/repo#N`) for a GitHub-imported item, or the\ncalendar's `display_name` for a calendar event (#518). Absent when a\ncalendar can't be resolved (toggled off / dropped), and the client\nfalls back to the provider label."
                             },
+                            "series": {
+                                "oneOf": [
+                                    {
+                                        "type": "null"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/SeriesInputs",
+                                        "description": "The stored recurrence expansion inputs behind a repeating item (habit,\nchore, or recurring event), so a client can reproduce the server's\noccurrence set locally. Absent \u2014 never null \u2014 for an item that no\nrecurring series backs, such as an ordinary task or a one-off event."
+                                    }
+                                ]
+                            },
                             "series_chain": {
                                 "oneOf": [
                                     {
@@ -15940,6 +16227,17 @@
                                     {
                                         "$ref": "#/components/schemas/SeriesChainView",
                                         "description": "Present only when this item's recurrence rule has been changed at least\nonce, splitting it into several linked underlying records. Absent for\nordinary items, which are unaffected."
+                                    }
+                                ]
+                            },
+                            "today_occurrence": {
+                                "oneOf": [
+                                    {
+                                        "type": "null"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/Occurrence",
+                                        "description": "Today's occurrence for a repeating item (habit, chore, or event) \u2014 the\nonly place \"is this done today?\" can be answered, since a repeating\nitem's own status is active/archived and never `done`. Absent for tasks.\n\nThis always describes *today's date for this item*; it does not mean the\nitem is scheduled to fire today. When nothing has been recorded for the\ndate the status is `scheduled` and the id is all-zeroes, signalling a\nplaceholder rather than a stored record."
                                     }
                                 ]
                             }
@@ -16052,7 +16350,7 @@
                                     },
                                     {
                                         "$ref": "#/components/schemas/ItemKind",
-                                        "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\nThe canonical field going forward (the webui reads this). It is\nstamped here for inner types that do not already carry their own\n`kind` \u2014 the tagged-union types (`ItemView`, `DailyPlanItem`)\nserialize a `kind` themselves, so their call sites build the\nenvelope via [`ItemEnvelope::new_with_inner_kind`] and leave this\n`None`, avoiding a duplicate `kind` key on the wire."
+                                        "description": "Work-item kind discriminant: `task` | `habit` | `chore` | `event`.\n\nThe canonical kind field going forward. Absent when the item payload\nalready carries its own `kind` key, so a response never repeats it \u2014\nread whichever of the two is present."
                                     }
                                 ]
                             },
@@ -16585,7 +16883,7 @@
                             "string",
                             "null"
                         ],
-                        "description": "See [`PlanTaskPayload::tz`]."
+                        "description": "IANA timezone the client is operating in (e.g. \"America/Los_Angeles\").\nResolves the default day so the mutation lands on the user's local\ncalendar date rather than UTC. Optional: when absent the backend falls\nback to the user's persisted timezone, then UTC."
                     }
                 }
             },
@@ -16704,7 +17002,7 @@
             },
             "Proposal": {
                 "type": "object",
-                "description": "A gated change surfaced to the user, showing exactly what it will do. Only an\nexplicit [`apply_proposal`] executes it; the user may also reject it (discard).",
+                "description": "A gated change surfaced to the user, showing exactly what it will do. Only an\nexplicit `apply_proposal` executes it; the user may also reject it (discard).",
                 "required": [
                     "tool",
                     "input",
@@ -16723,9 +17021,18 @@
                     }
                 }
             },
+            "QueueProbeStatus": {
+                "type": "string",
+                "description": "Whether the queue depths could be read, and if not, why.\n\nA reported reason rather than an absent field: \"the ledger is switched off\"\nand \"Redis did not answer in time\" are very different situations, and a bare\n`null` depth cannot tell them apart.",
+                "enum": [
+                    "ok",
+                    "disabled",
+                    "unavailable"
+                ]
+            },
             "Recurrence": {
                 "type": "object",
-                "description": "A recurrence rule: a repeating [`Cadence`] plus an optional [`RecurrenceEnd`]\nbound.\n\nOn the wire the cadence fields are flattened to the top level, so\n`{\"type\":\"daily\"}` is a valid recurrence, and a `Never` end emits no `end`\nkey (the `end` key appears only for `OnDate` / `AfterCount` bounds).",
+                "description": "A recurrence rule: a repeating `Cadence` plus an optional `RecurrenceEnd`\nbound.\n\nOn the wire the cadence fields are flattened to the top level, so\n`{\"type\":\"daily\"}` is a valid recurrence, and a `Never` end emits no `end`\nkey (the `end` key appears only for `OnDate` / `AfterCount` bounds).",
                 "required": [
                     "cadence",
                     "end"
@@ -16895,6 +17202,53 @@
                     }
                 }
             },
+            "SegmentView": {
+                "type": "object",
+                "description": "One era of a repeating item's history: the rule that was in force for a\nstretch of its life, the stored inputs an expansion of that stretch needs,\nand whether the stretch has since been deleted.\n\nAn item's rule cannot be changed retroactively, so each change closes the\ncurrent era and opens a new one. Reading the eras is how a client\nreproduces the item's whole occurrence history offline instead of only its\ncurrent schedule.\n\nTwo things that cannot be guessed from the fields and must be honoured:\n\n* A deleted era's occurrences are EXCLUDED. It stays listed so the chain of\n  records does not break, but it contributes linkage only \u2014 expanding it\n  would resurrect dates the user deliberately removed.\n* An era's `recurrence` is NOT truncated when a later rule change\n  supersedes it: the rule still reads open-ended. What stops it is\n  `series.until_utc`, which is an exclusive upper bound. Expand the rule\n  without applying that bound and the era runs straight through the change,\n  producing dates the following era already owns.",
+                "required": [
+                    "id",
+                    "recurrence",
+                    "series",
+                    "deleted_at"
+                ],
+                "properties": {
+                    "deleted_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time",
+                        "description": "When this era was deleted, or `null` while it is live."
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "This era's underlying record id. Addressable while `deleted_at` is\nnull; a deleted era's id is listed for linkage only and is not\nfetchable. Note that reads addressed to any era of a chain answer for\nthe whole item, not for that era alone."
+                    },
+                    "recurrence": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/Recurrence",
+                                "description": "The recurrence rule in force during this era. `null` for a one-off\nevent, the only repeating-item shape with no rule."
+                            }
+                        ]
+                    },
+                    "series": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/SeriesInputs",
+                                "description": "This era's stored expansion inputs \u2014 anchor, timezone, upper bound,\nexclusions, and per-occurrence exceptions. `null` when there are none to\nreport: usually because the stored series behind this era has gone\nmissing, and on a record that never had one. Either way this era's dates\ncannot be reproduced locally \u2014 so when `recurrence` is non-null the era\nstill recurs and should be rendered as history you cannot expand, not as\na non-repeating era."
+                            }
+                        ]
+                    }
+                }
+            },
             "SeriesChainView": {
                 "type": "object",
                 "description": "The underlying records behind one recurring item, for clients that want to\naddress them individually (per-record occurrence history, the activity\ntimeline's id filter) even though the item reads as one thing.\n\nA recurrence-rule change cannot rewrite the past, so it starts a new\nunderlying record and links it to the previous one. The item still reads as\none continuous thing; this view is how a client can tell the records apart\nwhen it needs to.",
@@ -16918,14 +17272,84 @@
                     "segments": {
                         "type": "array",
                         "items": {
-                            "type": "string",
-                            "format": "uuid"
+                            "$ref": "#/components/schemas/SegmentView"
                         },
-                        "description": "Every Segment id, root \u2192 Head. Length \u2265 2 whenever this field is\npresent."
+                        "description": "Every underlying record, root \u2192 Head \u2014 one entry per rule era. Length \u2265\n2 whenever this field is present."
                     },
                     "truncated": {
                         "type": "boolean",
                         "description": "A link was unreadable \u2014 a cycle, a dangling pointer, or the depth cap \u2014\nso `segments` may be partial. The response is still usable; this is the\nhonest flag rather than a 500 that would take out the whole detail view."
+                    }
+                }
+            },
+            "SeriesInputs": {
+                "type": "object",
+                "description": "The stored expansion inputs behind a recurring item: the anchor and\ntimezone the series was created with, its optional end bound, the dates\nexcluded from it, and the per-occurrence exceptions recorded against it.\n\nThese are reported verbatim off the stored series, so a client can\nreproduce the server's occurrence set locally. Two properties matter:\n`tzid` is the timezone the series was *created* in \u2014 not the reader's\ncurrent timezone setting \u2014 and `dtstart_local` is the original anchor,\nwhich does not move when an occurrence is completed or rescheduled.",
+                "required": [
+                    "dtstart_local",
+                    "tzid",
+                    "exdates",
+                    "overrides"
+                ],
+                "properties": {
+                    "dtstart_local": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Local wall time the series is anchored at, interpreted in `tzid`."
+                    },
+                    "exdates": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "description": "Local times excluded from the expansion (RFC 5545 `EXDATE`)."
+                    },
+                    "overrides": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SeriesOverrideView"
+                        },
+                        "description": "Per-occurrence exceptions, ascending by `recurrence_id`."
+                    },
+                    "tzid": {
+                        "type": "string",
+                        "description": "IANA timezone the series was created in, e.g. `America/Los_Angeles`."
+                    },
+                    "until_utc": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time",
+                        "description": "Upper bound on the series as a UTC instant; `null` when open-ended."
+                    }
+                }
+            },
+            "SeriesOverrideView": {
+                "type": "object",
+                "description": "One per-occurrence exception recorded against a series.",
+                "required": [
+                    "recurrence_id",
+                    "is_cancelled"
+                ],
+                "properties": {
+                    "dtstart_local": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time",
+                        "description": "Rescheduled local start; `null` when the occurrence was not moved."
+                    },
+                    "is_cancelled": {
+                        "type": "boolean",
+                        "description": "Whether this occurrence is cancelled."
+                    },
+                    "recurrence_id": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "The occurrence this exception applies to, identified by its original\nlocal start time (RFC 5545 `RECURRENCE-ID`)."
                     }
                 }
             },
@@ -17598,7 +18022,7 @@
                             "null"
                         ],
                         "format": "date-time",
-                        "description": "Soft \"want done by\" target date \u2014 drives sorting/surfacing only, never\ncarry-forward or the calendar. Independent of the hard `complete_by`."
+                        "description": "Soft \"want done by\" target date \u2014 drives sorting/surfacing only, never\ncarry-forward or the calendar. **Bounded by** the hard `complete_by`:\nit is never *after* it, though equal is legal. A write that would\novershoot is **clamped** down to `complete_by` rather than rejected, so\nno stored value can violate the bound. With no `complete_by` there is\nno bound and the target is kept verbatim."
                     },
                     "title": {
                         "type": "string"
@@ -17947,7 +18371,7 @@
                         }
                     }
                 ],
-                "description": "An Activity-timeline comment: a stored [`Comment`] plus the\npresentation-only date of the occurrence it was found on.\n\n`occurrence_date` is `null` for task-level comments \u2014 which have no\noccurrence \u2014 and set to the occurrence date for per-occurrence comments\non recurring items. On the wire it flattens to look like a plain comment:\nfor task-level comments the absent `occurrence_date` adds nothing, while\nper-occurrence comments carry the extra date field."
+                "description": "An Activity-timeline comment: a stored comment plus the presentation-only\ndate of the occurrence it was found on.\n\n`occurrence_date` is `null` for task-level comments \u2014 which have no\noccurrence \u2014 and set to the occurrence date for per-occurrence comments\non recurring items. On the wire it flattens to look like a plain comment:\nfor task-level comments the absent `occurrence_date` adds nothing, while\nper-occurrence comments carry the extra date field."
             },
             "TokenKind": {
                 "type": "string",
@@ -18154,7 +18578,7 @@
                             "null"
                         ],
                         "format": "date-time",
-                        "description": "Soft target date: send a value to set it, `null` to clear it,\nor omit to leave it unchanged \u2014 the same `Patch` encoding as\n`complete_by`. A plain soft date, not part of the WHEN/recurrence\nmachinery."
+                        "description": "Soft target date: send a value to set it, `null` to clear it,\nor omit to leave it unchanged \u2014 the same `Patch` encoding as\n`complete_by`. A plain soft date, not part of the WHEN/recurrence\nmachinery.\n\n**Bounded by `complete_by`**: it may never end up *after* the hard\ndeadline. The bound is checked on the resulting pair, so a patch that\nonly pulls `complete_by` earlier drags a stranded target down with it.\nA violation **clamps** rather than 400s \u2014 read the response body for\nthe stored value. #629."
                     },
                     "title": {
                         "type": [
@@ -18319,7 +18743,7 @@
                             "null"
                         ],
                         "format": "date-time",
-                        "description": "Soft target date: send a value to set it, `null` to clear it,\nor omit to leave it unchanged \u2014 the same `Patch` encoding as\n`complete_by`. A plain soft date, not part of the WHEN/recurrence\nmachinery."
+                        "description": "Soft target date: send a value to set it, `null` to clear it,\nor omit to leave it unchanged \u2014 the same `Patch` encoding as\n`complete_by`. A plain soft date, not part of the WHEN/recurrence\nmachinery.\n\n**Bounded by `complete_by`**: it may never end up *after* the hard\ndeadline. The bound is checked on the resulting pair, so a patch that\nonly pulls `complete_by` earlier drags a stranded target down with it.\nA violation **clamps** rather than 400s \u2014 read the response body for\nthe stored value. #629."
                     },
                     "title": {
                         "type": [
@@ -18460,7 +18884,7 @@
                             "null"
                         ],
                         "format": "date-time",
-                        "description": "Soft target date: send a value to set it, `null` to clear it,\nor omit to leave it unchanged \u2014 the same `Patch` encoding as\n`complete_by`. A plain soft date, not part of the WHEN/recurrence\nmachinery."
+                        "description": "Soft target date: send a value to set it, `null` to clear it,\nor omit to leave it unchanged \u2014 the same `Patch` encoding as\n`complete_by`. A plain soft date, not part of the WHEN/recurrence\nmachinery.\n\n**Bounded by `complete_by`**: it may never end up *after* the hard\ndeadline. The bound is checked on the resulting pair, so a patch that\nonly pulls `complete_by` earlier drags a stranded target down with it.\nA violation **clamps** rather than 400s \u2014 read the response body for\nthe stored value. #629."
                     },
                     "title": {
                         "type": [
@@ -18657,7 +19081,7 @@
                             "null"
                         ],
                         "format": "date-time",
-                        "description": "Soft target date: send a value to set it, `null` to clear it,\nor omit to leave it unchanged \u2014 the same `Patch` encoding as\n`complete_by`. A plain soft date, not part of the WHEN/recurrence\nmachinery."
+                        "description": "Soft target date: send a value to set it, `null` to clear it,\nor omit to leave it unchanged \u2014 the same `Patch` encoding as\n`complete_by`. A plain soft date, not part of the WHEN/recurrence\nmachinery.\n\n**Bounded by `complete_by`**: it may never end up *after* the hard\ndeadline. The bound is checked on the resulting pair, so a patch that\nonly pulls `complete_by` earlier drags a stranded target down with it.\nA violation **clamps** rather than 400s \u2014 read the response body for\nthe stored value. #629."
                     },
                     "title": {
                         "type": [
@@ -18875,6 +19299,10 @@
         {
             "name": "feedback",
             "description": "User-submitted feedback (authenticated submit + attachment presign)."
+        },
+        {
+            "name": "admin",
+            "description": "Deployment-wide operator endpoints, restricted to the staff administrator role."
         }
     ]
 }

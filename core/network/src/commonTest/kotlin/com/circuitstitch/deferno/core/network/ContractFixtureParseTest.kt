@@ -22,6 +22,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -192,6 +193,12 @@ class ContractFixtureParseTest {
         // server ever emits (its Serialize skips the key when never), not an omission by the capture.
         assertNull(habit.recurrence?.end)
 
+        // #410: the habit carries a `series_id` but NO `series` block, which is the backend's deliberate
+        // elision and the case the whole nullable type exists for — "no series row backs this item, this
+        // device cannot reproduce that grid". It is emphatically NOT "a grid with no exclusions", and the
+        // fixture pins the difference so nothing downstream can start treating absent as empty.
+        assertNull(habit.series)
+
         val chore = assertIs<ItemView.Chore>(items[2])
         assertEquals("47338a14-a07f-4ddf-ad73-f5edc977dab0", chore.id)
         // Still the RAW token, deliberately: the DTO keeps `cadence_mode` a `String?` and the typing into
@@ -205,6 +212,27 @@ class ContractFixtureParseTest {
         // The chore/event elements omit the dependency fields → they default false (absent case).
         assertEquals(false, chore.blocked)
         assertEquals(false, chore.isBlocker)
+
+        // #410: the chore carries the three arms of the `series` block that NO backend code path can
+        // produce today, which is why this one row is hand-authored (see fixtures/README.md) — `exdates`
+        // is populated by no handler, `is_cancelled` is written only by a function no route calls, and
+        // `until_utc` is set only by a split, which removes the item from this very snapshot. All three
+        // are reachable shapes of the Rust wire type, so the reader must decode them now rather than
+        // discover them the way #381 and #382 were discovered.
+        val choreSeries = assertNotNull(chore.series)
+        assertEquals("2026-08-04T23:59:59", choreSeries.dtstartLocal)
+        assertEquals("America/Los_Angeles", choreSeries.tzid)
+        // The Segment bound — a UTC INSTANT here, unlike every other time in the block, and exclusive.
+        assertEquals("2026-09-16T06:59:59Z", choreSeries.untilUtc)
+        assertEquals(listOf("2026-08-18T23:59:59"), choreSeries.exdates)
+        assertEquals(2, choreSeries.overrides.size)
+        // Ascending by `recurrence_id`, and the cancelling exception carries no moved time.
+        assertEquals("2026-08-11T23:59:59", choreSeries.overrides[0].recurrenceId)
+        assertTrue(choreSeries.overrides[0].isCancelled)
+        assertNull(choreSeries.overrides[0].dtstartLocal)
+        assertEquals("2026-08-25T23:59:59", choreSeries.overrides[1].recurrenceId)
+        assertEquals(false, choreSeries.overrides[1].isCancelled)
+        assertEquals("2026-08-26T18:30:00", choreSeries.overrides[1].dtstartLocal)
 
         val event = assertIs<ItemView.Event>(items[3])
         assertEquals("d4f26212-07ac-4ebc-b5d9-fe4649a69a3e", event.id)
@@ -222,6 +250,30 @@ class ContractFixtureParseTest {
         assertEquals("2027-01-31", event.recurrence?.end?.date)
         assertEquals(false, event.blocked)
         assertEquals(false, event.isBlocker)
+
+        // #410: the event's block is the shape CAPTURED live from staging on 2026-08-05 — two `scope=this`
+        // patches against a throwaway recurring event, yielding two overrides ascending by slot, one moved
+        // and one not. Two facts it pins that the spec cannot:
+        //  - the anchor did NOT move when an occurrence did. `dtstart_local` here is the frozen DTSTART;
+        //    the definition's `complete_by` is a cursor that walks, and the two diverge from the first
+        //    completion onward.
+        //  - `dtstart_local` means the MOVED time one nesting level down. Same key, opposite meaning —
+        //    which is why the domain renames the inner one `movedToLocal`.
+        val eventSeries = assertNotNull(event.series)
+        assertEquals("2026-08-28T09:00:00", eventSeries.dtstartLocal)
+        assertEquals("America/Los_Angeles", eventSeries.tzid)
+        // An open-ended series: no split has been taken, so there is no Segment bound.
+        assertNull(eventSeries.untilUtc)
+        // Empty because nothing server-side populates EXDATE — an empty list, NOT an absent block.
+        assertEquals(emptyList(), eventSeries.exdates)
+        assertEquals(2, eventSeries.overrides.size)
+        assertEquals("2026-10-30T09:00:00", eventSeries.overrides[0].recurrenceId)
+        assertEquals("2026-10-31T14:00:00", eventSeries.overrides[0].dtstartLocal)
+        // A relabel-only exception moves nothing, and `is_cancelled` is false on every override the API
+        // can currently mint.
+        assertEquals("2026-12-25T09:00:00", eventSeries.overrides[1].recurrenceId)
+        assertNull(eventSeries.overrides[1].dtstartLocal)
+        assertEquals(false, eventSeries.overrides[1].isCancelled)
     }
 
     // --- items-sample.json: the captured `task` element is also the faithful /tasks/{id} detail ---

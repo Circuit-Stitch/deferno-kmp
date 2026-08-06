@@ -106,6 +106,10 @@ sealed interface ItemView {
         val description: String? = null,
         val recurrence: RecurrenceDto? = null,
         @SerialName("series_id") val seriesId: String? = null,
+        // The offline expansion inputs (#410) — see [SeriesInputsDto]. Carried on the SNAPSHOT, not
+        // just the detail read, which is what lets an Item-tree row expand its grid with no fetch.
+        // `null` is the backend's deliberate ELISION, never an empty grid.
+        val series: SeriesInputsDto? = null,
         @SerialName("subtask_template") val subtaskTemplate: List<SubtaskTemplateDto> = emptyList(),
         // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
         val blocked: Boolean = false,
@@ -146,6 +150,10 @@ sealed interface ItemView {
         val description: String? = null,
         val recurrence: RecurrenceDto? = null,
         @SerialName("series_id") val seriesId: String? = null,
+        // The offline expansion inputs (#410) — see [SeriesInputsDto]. Carried on the SNAPSHOT, not
+        // just the detail read, which is what lets an Item-tree row expand its grid with no fetch.
+        // `null` is the backend's deliberate ELISION, never an empty grid.
+        val series: SeriesInputsDto? = null,
         @SerialName("subtask_template") val subtaskTemplate: List<SubtaskTemplateDto> = emptyList(),
         @SerialName("cadence_mode") val cadenceMode: String? = null,
         // Server-derived dependency flags (ADR-0034, #289) — default false when omitted.
@@ -186,6 +194,10 @@ sealed interface ItemView {
         val description: String? = null,
         val recurrence: RecurrenceDto? = null,
         @SerialName("series_id") val seriesId: String? = null,
+        // The offline expansion inputs (#410) — see [SeriesInputsDto]. Carried on the SNAPSHOT, not
+        // just the detail read, which is what lets an Item-tree row expand its grid with no fetch.
+        // `null` is the backend's deliberate ELISION, never an empty grid.
+        val series: SeriesInputsDto? = null,
         @SerialName("subtask_template") val subtaskTemplate: List<SubtaskTemplateDto> = emptyList(),
         @SerialName("all_day") val allDay: Boolean = false,
         @SerialName("end_time") val endTime: String? = null,
