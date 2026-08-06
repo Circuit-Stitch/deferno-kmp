@@ -46,20 +46,26 @@ interface DefinitionRepository {
     fun observe(ref: ItemRef): Flow<RecurringDefinition?>
 
     /**
-     * Best-effort detail refresh for [ref], answering for [today].
+     * Best-effort detail refresh for [ref].
      *
-     * Upserts the definition into its per-kind store, records today's stored resolution into the fact
-     * table **and** the day into [[Occurrence coverage]], and returns the read-only extras that must
+     * Upserts the definition into its per-kind store, records the day's stored resolution into the fact
+     * table **and** that day into [[Occurrence coverage]], and returns the read-only extras that must
      * never be cached. Returns `null` when the network is gone — the cached row still renders, which is
      * the whole offline-first posture (ADR-0001).
+     *
+     * **It takes no date, deliberately.** The request carries none: the server answers for its own
+     * notion of today, in the account's zone, and says which day that was. Accepting a date here would
+     * invite a caller to believe the two agree — and writing coverage at the caller's day rather than
+     * the server's is precisely how a day nothing was ever asked about gets marked synced, which the
+     * Calendar then renders as a confident Missed.
      */
-    suspend fun hydrate(ref: ItemRef, today: LocalDate): DefinitionExtras?
+    suspend fun hydrate(ref: ItemRef): DefinitionExtras?
 
     /** The inert implementation — every read empty, every hydrate a no-op. For previews and tests. */
     companion object {
         val NONE: DefinitionRepository = object : DefinitionRepository {
             override fun observe(ref: ItemRef): Flow<RecurringDefinition?> = flowOf(null)
-            override suspend fun hydrate(ref: ItemRef, today: LocalDate): DefinitionExtras? = null
+            override suspend fun hydrate(ref: ItemRef): DefinitionExtras? = null
         }
     }
 }
@@ -96,7 +102,7 @@ class OfflineDefinitionRepository(
         ItemKind.Event -> events.observe(EventId(ref.id)).map { it?.toDefinition() }
     }
 
-    override suspend fun hydrate(ref: ItemRef, today: LocalDate): DefinitionExtras? {
+    override suspend fun hydrate(ref: ItemRef): DefinitionExtras? {
         val read = when (val snapshot = remote.fetch(ref)) {
             is RemoteSnapshot.Available -> snapshot.value
             RemoteSnapshot.Unavailable -> return null
@@ -121,8 +127,13 @@ class OfflineDefinitionRepository(
         // reason the two tables are separate: inside coverage an absent resolution is evidence
         // (unresolved), outside it the same absence is only ignorance (unknown). Recording it only
         // when a fact came back would leave every never-yet-resolved day reading Unknown forever.
-        if (read.answeredForToday) {
-            coverage.record(OccurrenceCoverage(ref.kind, ref.id, from = today, to = today))
+        //
+        // Recorded at the date the SERVER answered for, never at `today`. The request carries no date,
+        // so the server picks the day in the account's zone while `today` comes from the device's; when
+        // they diverge, recording `today` marks a day nothing was ever asked about as synced, and the
+        // Calendar later renders that as a confident Missed. See ItemDetailRead.answeredForDate.
+        read.answeredForDate?.let { answered ->
+            coverage.record(OccurrenceCoverage(ref.kind, ref.id, from = answered, to = answered))
         }
 
         return DefinitionExtras(chain = read.chain, originLabel = read.originLabel)

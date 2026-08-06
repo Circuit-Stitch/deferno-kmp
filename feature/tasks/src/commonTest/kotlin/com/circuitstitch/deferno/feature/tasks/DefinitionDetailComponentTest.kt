@@ -91,7 +91,7 @@ class DefinitionDetailComponentTest {
         ref = ref,
         definitionRepository = object : DefinitionRepository {
             override fun observe(ref: ItemRef): Flow<RecurringDefinition?> = flowOf(definition)
-            override suspend fun hydrate(ref: ItemRef, today: LocalDate): DefinitionExtras? = extras
+            override suspend fun hydrate(ref: ItemRef): DefinitionExtras? = extras
         },
         occurrenceFacts = facts,
         occurrenceCoverage = coverage,
@@ -165,6 +165,46 @@ class DefinitionDetailComponentTest {
 
         assertEquals(DayFiring.Unavailable, c.state.value.today.firing)
         assertTrue(!c.state.value.today.isDue, "an unreproducible grid is never 'due'")
+    }
+
+    /**
+     * The pairing every TODAY cell got wrong: an unexpandable grid on a day the server DID answer for.
+     *
+     * Every successful hydrate records coverage (the server always answers for the recurring kinds), and
+     * `resolveOccurrenceState` derives `Scheduled` from coverage + "today has not passed" with no stored
+     * record behind it. The three renderers all tested `state == Unknown` to decide whether to say "not
+     * available", so this pairing slipped past all of them and rendered the confident "Scheduled" chip
+     * for a grid nobody could expand — the mirror of the "not scheduled today" lie, and the reason the
+     * reading now carries `isStoredResolution` rather than leaving each surface to guess.
+     */
+    @Test
+    fun aCoveredDayWithNoRecordAndNoGridIsNotAKnownState() = runTest {
+        val coverage = FakeCoverageStore().apply { seed(OccurrenceCoverage(ItemKind.Habit, "h", wednesday, wednesday)) }
+        val c = component(definition = definition(series = null), coverage = coverage, today = wednesday)
+        collect(c)
+
+        val today = c.state.value.today
+        assertEquals(DayFiring.Unavailable, today.firing)
+        assertEquals(OccurrenceState.Scheduled, today.state, "derived, purely from coverage + the date")
+        assertTrue(!today.isStoredResolution, "but nothing was actually recorded")
+        assertTrue(!today.isStateKnown, "so the honest line is 'not available', not the Scheduled chip")
+    }
+
+    /** …and the same grid WITH a stored resolution does know the day, so the fact is shown. */
+    @Test
+    fun aStoredResolutionIsKnownEvenWithoutAGrid() = runTest {
+        val facts = FakeFactStore().apply {
+            seed(OccurrenceFact(ItemKind.Habit, "h", wednesday, OccurrenceResolution.DoneOnTime))
+        }
+        val coverage = FakeCoverageStore().apply { seed(OccurrenceCoverage(ItemKind.Habit, "h", wednesday, wednesday)) }
+        val c = component(definition = definition(series = null), facts = facts, coverage = coverage, today = wednesday)
+        collect(c)
+
+        val today = c.state.value.today
+        assertEquals(DayFiring.Unavailable, today.firing)
+        assertTrue(today.isStoredResolution)
+        assertTrue(today.isStateKnown)
+        assertEquals(OccurrenceState.DoneOnTime, today.state)
     }
 
     /** The grid reproduces fine and simply puts nothing on today — a different statement entirely. */

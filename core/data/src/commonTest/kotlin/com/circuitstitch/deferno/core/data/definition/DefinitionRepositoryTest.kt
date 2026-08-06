@@ -123,11 +123,11 @@ class DefinitionRepositoryTest {
             read = ItemDetailRead(
                 habit = habit(),
                 todayFact = OccurrenceFact(ItemKind.Habit, "h", today, OccurrenceResolution.DoneOnTime),
-                answeredForToday = true,
+                answeredForDate = today,
             ),
         )
 
-        f.repository.hydrate(ref, today)
+        f.repository.hydrate(ref)
 
         assertEquals(
             OccurrenceResolution.DoneOnTime,
@@ -137,8 +137,8 @@ class DefinitionRepositoryTest {
     }
 
     /**
-     * The placeholder case, and the reason [ItemDetailRead.answeredForToday] is a separate flag rather
-     * than `todayFact != null`. The server answered — it just had nothing on record — so the day IS
+     * The placeholder case, and the reason [ItemDetailRead.answeredForDate] is carried separately rather
+     * than being inferred from `todayFact != null`. The server answered — it just had nothing on record — so the day IS
      * covered, and coverage is exactly what turns that absence from *unknown* into *unresolved*.
      * Writing a fact here would manufacture a resolution; writing no coverage would leave the detail
      * reading Unknown forever, which is the bug this repository exists to close.
@@ -150,14 +150,52 @@ class DefinitionRepositoryTest {
             read = ItemDetailRead(
                 habit = habit(),
                 todayFact = null,
-                answeredForToday = true,
+                answeredForDate = today,
             ),
         )
 
-        f.repository.hydrate(ref, today)
+        f.repository.hydrate(ref)
 
         assertNull(f.facts.get(ItemKind.Habit, "h", today), "a placeholder is not a stored resolution")
         assertTrue(f.coverage.get(ItemKind.Habit, "h").single().covers(today), "but the day WAS answered for")
+    }
+
+    /**
+     * Coverage lands on the date the SERVER answered for, never on the device's idea of today.
+     *
+     * The request carries no date and no zone, so the server picks the day in the account's zone. The
+     * two diverge routinely — a device in another zone, or a session that has outlived midnight (the
+     * shell's `today` is a constructor-time snapshot, #392). Recording the device's day would mark a day
+     * the server was never asked about as **synced**, and coverage is exactly what turns a missing
+     * resolution from *unknown* into *unresolved*: the Calendar would then render a confident **Missed**
+     * for a day nothing was ever queried. Unlike a stale render, that one persists in the table.
+     */
+    @Test
+    fun hydrateRecordsCoverageAtTheServersDateNotTheDevicesToday() = runTest {
+        val serverDay = LocalDate(2026, 6, 16) // the account's zone is already on the next day
+        val f = Fixture(
+            habitRows = mapOf(HabitId("h") to habit()),
+            read = ItemDetailRead(habit = habit(), answeredForDate = serverDay),
+        )
+
+        f.repository.hydrate(ref)
+
+        val recorded = f.coverage.get(ItemKind.Habit, "h").single()
+        assertTrue(recorded.covers(serverDay), "the day the server actually answered for")
+        assertEquals(false, recorded.covers(today), "and emphatically not the device's today")
+    }
+
+    /** No `today_occurrence` at all: nothing was answered for, so nothing may be claimed as synced. */
+    @Test
+    fun hydrateRecordsNoCoverageWhenTheServerAnsweredForNoDay() = runTest {
+        val f = Fixture(
+            habitRows = mapOf(HabitId("h") to habit()),
+            read = ItemDetailRead(habit = habit(), answeredForDate = null),
+        )
+
+        f.repository.hydrate(ref)
+
+        assertTrue(f.coverage.get(ItemKind.Habit, "h").isEmpty())
     }
 
     /** Offline: nothing is written, nothing is claimed, and the cached row still reads. */
@@ -165,7 +203,7 @@ class DefinitionRepositoryTest {
     fun hydrateWritesNothingWhenTheNetworkIsGone() = runTest {
         val f = Fixture(habitRows = mapOf(HabitId("h") to habit()), read = null)
 
-        val extras = f.repository.hydrate(ref, today)
+        val extras = f.repository.hydrate(ref)
 
         assertNull(extras, "an unavailable read yields no extras")
         assertNull(f.facts.get(ItemKind.Habit, "h", today))
@@ -185,7 +223,7 @@ class DefinitionRepositoryTest {
             read = ItemDetailRead(habit = habit(), chain = chain, originLabel = "acme/repo#4"),
         )
 
-        val extras = f.repository.hydrate(ref, today)
+        val extras = f.repository.hydrate(ref)
 
         assertEquals(chain, extras?.chain)
         assertEquals("acme/repo#4", extras?.originLabel)
@@ -199,7 +237,7 @@ class DefinitionRepositoryTest {
             read = ItemDetailRead(habit = habit(title = "fresh")),
         )
 
-        f.repository.hydrate(ref, today)
+        f.repository.hydrate(ref)
 
         assertEquals("fresh", f.habits.get(HabitId("h"))?.title)
     }
@@ -218,7 +256,7 @@ class DefinitionRepositoryTest {
     fun hydrateLandsADefinitionThisDeviceHasNeverCached() = runTest {
         val f = Fixture(habitRows = emptyMap(), read = ItemDetailRead(habit = habit(title = "first sight")))
 
-        f.repository.hydrate(ref, today)
+        f.repository.hydrate(ref)
 
         val row = assertNotNull(f.habits.get(HabitId("h")), "the detail read must land an uncached row")
         assertEquals("first sight", row.title)

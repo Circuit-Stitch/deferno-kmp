@@ -156,7 +156,11 @@ fun definitionTodayCell(today: TodayOccurrence): DefinitionTodayCell {
             DefinitionTodayCell("tasks_detail_today_not_firing", isState = false, isDone = false)
         firing is DayFiring.Fires && firing.firing.isCancelled ->
             DefinitionTodayCell("tasks_detail_today_cancelled", isState = false, isDone = false)
-        firing is DayFiring.Unavailable && today.state == OccurrenceState.Unknown ->
+        // `isStateKnown`, NOT `state == Unknown`. Every successful hydrate lands coverage for the day
+        // (the server always answers), and a covered day with no stored record DERIVES `Scheduled` — so
+        // testing the state value rendered the confident "Scheduled" chip for a grid this build could
+        // not expand. That is the same lie as "not scheduled today", with the sign flipped.
+        !today.isStateKnown ->
             DefinitionTodayCell("tasks_detail_today_unavailable", isState = false, isDone = false)
         else -> DefinitionTodayCell(
             token = occurrenceStateToken(today.state),

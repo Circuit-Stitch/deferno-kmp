@@ -191,16 +191,24 @@ data class TodayCell(
  *
  * An `Unavailable` grid that *does* carry a synced fact still reads that fact: we cannot say whether the
  * rule fires today, but we do know the day was resolved, and staying silent about it would throw away a
- * true answer to the other question.
+ * true answer to the other question. That test is [TodayOccurrence.isStoredResolution] and not
+ * `state != Unknown` — the two are not the same predicate, and the difference is the whole bug: a day
+ * this device has coverage for but no record *derives* `Scheduled` with no fact behind it at all.
  */
 fun todayCell(today: TodayOccurrence): TodayCell = when (val firing = today.firing) {
     DayFiring.NotFiring -> TodayCell("tasks_detail_today_not_firing", isStatus = false, isDone = false)
     is DayFiring.Fires ->
         if (firing.firing.isCancelled) TodayCell("tasks_detail_today_cancelled", isStatus = false, isDone = false)
         else statusCell(today.state)
+    // `isStateKnown`, NOT `state == Unknown`. Every successful hydrate lands coverage for the day (the
+    // server always answers), and a covered day with no stored record DERIVES `Scheduled` — so testing
+    // the state value rendered the confident "Scheduled" chip for a grid this build could not expand.
+    // That is the same lie as "not scheduled today", with the sign flipped. The shared predicate rather
+    // than a local `isStoredResolution` test, which is equivalent only inside this arm: all three
+    // surfaces spelling the rule differently is how all three came to be wrong in the same way.
     DayFiring.Unavailable ->
-        if (today.state == OccurrenceState.Unknown) TodayCell("tasks_detail_today_unavailable", isStatus = false, isDone = false)
-        else statusCell(today.state)
+        if (today.isStateKnown) statusCell(today.state)
+        else TodayCell("tasks_detail_today_unavailable", isStatus = false, isDone = false)
 }
 
 private fun statusCell(state: OccurrenceState): TodayCell =

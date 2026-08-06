@@ -185,7 +185,7 @@ class DefaultDefinitionDetailComponent(
             // Best-effort: offline this returns null and the cached row still renders. It is also the
             // only thing that writes Occurrence coverage for this definition, so without it today's
             // reading is permanently Unknown — see DefinitionRepository.hydrate.
-            val fetched = definitionRepository.hydrate(ref, today())
+            val fetched = definitionRepository.hydrate(ref)
             extras.update {
                 it.copy(
                     isHydrating = false,

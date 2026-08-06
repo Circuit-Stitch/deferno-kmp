@@ -24,8 +24,14 @@ final class TodayCellTests: XCTestCase {
         )
     }
 
-    private func cell(_ firing: DayFiring, _ state: OccurrenceState) -> TodayCell {
-        BridgeKt.todayCell(today: TodayOccurrence(firing: firing, state: state))
+    private func cell(
+        _ firing: DayFiring,
+        _ state: OccurrenceState,
+        stored: Bool = true
+    ) -> TodayCell {
+        BridgeKt.todayCell(
+            today: TodayOccurrence(firing: firing, state: state, isStoredResolution: stored)
+        )
     }
 
     /// The grid **was** reproduced and puts nothing on today — the only case that may say "not scheduled".
@@ -67,7 +73,7 @@ final class TodayCellTests: XCTestCase {
 
     /// Unavailable **and** nothing synced is the honest "this device cannot say" arm.
     func testAnUnreproducibleGridWithNothingSyncedSaysSo() {
-        let reading = cell(DayFiringUnavailable.shared, .unknown)
+        let reading = cell(DayFiringUnavailable.shared, .unknown, stored: false)
         XCTAssertEqual(reading.labelKey, "tasks_detail_today_unavailable")
         XCTAssertFalse(reading.isStatus)
     }
@@ -78,6 +84,41 @@ final class TodayCellTests: XCTestCase {
         let reading = cell(DayFiringUnavailable.shared, .doneLate)
         XCTAssertEqual(reading.labelKey, "common_status_done_late")
         XCTAssertTrue(reading.isStatus)
+    }
+
+    /// **The regression this arm actually shipped.** The guard used to test `state == .unknown`, but a
+    /// *derived* `Scheduled` is not `.unknown`: every successful hydrate records coverage for the day
+    /// (the server always answers), and a covered day with no stored record derives `Scheduled` from
+    /// nothing but "today has not passed". So an unexpandable grid rendered the confident "Scheduled"
+    /// chip — the same lie as "not scheduled today", with the sign flipped, and the one this file's
+    /// sibling test could not catch because it only asserts the label is not *not_firing*.
+    func testAnUnreproducibleGridNeverClaimsSomethingIsScheduled() {
+        let reading = cell(DayFiringUnavailable.shared, .scheduled, stored: false)
+        XCTAssertEqual(reading.labelKey, "tasks_detail_today_unavailable")
+        XCTAssertFalse(reading.isStatus)
+    }
+
+    /// The provenance split the arm now turns on: the identical `.scheduled` value reads as a status
+    /// when a resolution really was stored (a `?scope=this` reschedule writes exactly such a row), and
+    /// as "not available" when it was merely derived.
+    func testADerivedScheduledAndAStoredOneReadDifferently() {
+        XCTAssertEqual(cell(DayFiringUnavailable.shared, .scheduled, stored: true).labelKey,
+                       "common_status_scheduled")
+        XCTAssertEqual(cell(DayFiringUnavailable.shared, .scheduled, stored: false).labelKey,
+                       "tasks_detail_today_unavailable")
+    }
+
+    /// No derived state may reach the status chip on an unexpandable grid — the general form of the two
+    /// above, so a new `OccurrenceState` cannot quietly reopen this.
+    func testNoDerivedStateEverRendersAsAStatusOnAnUnreproducibleGrid() {
+        for state in OccurrenceState.allCases {
+            let reading = cell(DayFiringUnavailable.shared, state, stored: false)
+            XCTAssertEqual(
+                reading.labelKey, "tasks_detail_today_unavailable",
+                "an Unavailable grid with derived state \(state) claimed to know the day"
+            )
+            XCTAssertFalse(reading.isStatus)
+        }
     }
 
     /// What an unopened definition reads as, through the shared model's own constant rather than a
@@ -183,5 +224,56 @@ final class DefinitionStateTokenTests: XCTestCase {
     func testActiveAndArchivedReadTheDefinitionNouns() {
         XCTAssertEqual(BridgeKt.definitionStateToken(state: .active), "tasks_definition_state_active")
         XCTAssertEqual(BridgeKt.definitionStateToken(state: .archived), "tasks_definition_state_archived")
+    }
+}
+
+/// The tree row's recurrence **cursor** clause (#384), and the one place #383's `cursorDay` split could
+/// change what an existing surface says.
+///
+/// `cursor` wraps its day in `tasks_recurrence_next_due` ("Next: %@"); `cursorDay` returns the day bare
+/// for the detail's NEXT DUE row, whose label already says "next". EXHAUSTED is the value that is not a
+/// day at all — it is a whole clause — so only one of the two may wrap it.
+final class RecurrenceCursorClauseTests: XCTestCase {
+
+    private func tokens(cursor: String?, count: Int? = nil) -> RecurrenceLineTokens {
+        RecurrenceLineTokens(
+            cadence: "WEEKLY",
+            cadenceCount: nil,
+            weekdays: [1],
+            bound: nil,
+            boundCount: nil,
+            boundEpochDays: nil,
+            cursor: cursor,
+            cursorCount: count.map { KotlinInt(int: Int32($0)) }
+        )
+    }
+
+    /// **The regression.** Splitting `cursorDay` out left the EXHAUSTED guard below the wrapper, so an
+    /// ended series' tree-row subtitle read "Next: Series ended" — which contradicts itself — in all five
+    /// locales. The iOS twin kept its guard, so this was macOS-only and no shared test could see it.
+    func testAnEndedSeriesIsNotWrappedInTheNextDuePhrase() {
+        let line = L.cursor(tokens(cursor: "EXHAUSTED"))
+        XCTAssertEqual(line, L.string("tasks_recurrence_series_ended"))
+        XCTAssertNotEqual(line, L.format("tasks_recurrence_next_due", L.string("tasks_recurrence_series_ended")))
+    }
+
+    /// A real day still takes the wrapper — the split must not have cost the tree row its "Next:".
+    func testARealCursorDayStillTakesTheNextDueWrapper() {
+        XCTAssertEqual(
+            L.cursor(tokens(cursor: "TOMORROW")),
+            L.format("tasks_recurrence_next_due", L.string("tasks_detail_due_tomorrow"))
+        )
+    }
+
+    /// …and the bare form never wraps, which is the whole reason it exists.
+    func testTheBareFormIsUnwrappedForBothArms() {
+        XCTAssertEqual(L.cursorDay(tokens(cursor: "EXHAUSTED")), L.string("tasks_recurrence_series_ended"))
+        XCTAssertEqual(L.cursorDay(tokens(cursor: "TOMORROW")), L.string("tasks_detail_due_tomorrow"))
+    }
+
+    /// No cursor at all — a Task, or an Archived definition whose stale cursor the reading refuses.
+    func testNoCursorRendersNothingEitherWay() {
+        XCTAssertNil(L.cursor(tokens(cursor: nil)))
+        XCTAssertNil(L.cursorDay(tokens(cursor: nil)))
     }
 }

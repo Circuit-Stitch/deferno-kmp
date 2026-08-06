@@ -67,11 +67,11 @@ interface ItemDetailRemoteSource {
  * `ItemSync` reconciles a snapshot into, so carrying it through costs nothing and makes the upsert a
  * plain insert-or-replace.
  *
- * **[answeredForToday] is not the same as `todayFact != null`.** The server answers for today either
- * way; it signals "no stored record" with an all-zeroes id rather than by omitting the field. That
- * distinction is the entire point of [[Occurrence coverage]] — a day the server answered for with
- * nothing recorded is *unresolved*, while a day it was never asked about is *unknown* — so coverage is
- * recorded on this flag and never on the presence of a fact.
+ * **[answeredForDate] being non-null is not the same as `todayFact != null`.** The server answers for
+ * the day either way; it signals "no stored record" with an all-zeroes id rather than by omitting the
+ * field. That distinction is the entire point of [[Occurrence coverage]] — a day the server answered
+ * for with nothing recorded is *unresolved*, while a day it was never asked about is *unknown* — so
+ * coverage is recorded off this field and never off the presence of a fact.
  */
 data class ItemDetailRead(
     val habit: Habit? = null,
@@ -79,7 +79,23 @@ data class ItemDetailRead(
     val event: Event? = null,
     val task: Task? = null,
     val todayFact: OccurrenceFact? = null,
-    val answeredForToday: Boolean = false,
+    /**
+     * The date the server actually answered for — its `today_occurrence.scheduled_date` — or `null`
+     * when it sent no `today_occurrence` at all.
+     *
+     * **This is the date coverage must be recorded at, and it is NOT the caller's `today`.** The request
+     * carries no date and no zone, so the server picks the day, in the account's zone; the caller's
+     * `today` comes from the device's. They diverge routinely — a device in a different zone, a session
+     * that has outlived midnight (the shell's `today` is a constructor-time snapshot, #392). Recording
+     * the caller's day would mark a day the server was never asked about as **synced**, and coverage is
+     * exactly what turns a missing resolution from *unknown* into *unresolved*: the Calendar would then
+     * render a confident **Missed** for a day nothing was ever queried. That is the accusatory reading
+     * ADR-0053 exists to stop a client inventing, and unlike a stale render it persists in the table.
+     *
+     * The fact two fields up is already keyed on this same wire date, so taking coverage from anywhere
+     * else also means the two tables disagree about which day the read was about.
+     */
+    val answeredForDate: LocalDate? = null,
     val chain: SeriesChain? = null,
     val originLabel: String? = null,
 )
@@ -121,21 +137,21 @@ internal fun ItemView.toItemDetailRead(requestedKind: ItemKind): ItemDetailRead 
         chain = seriesChain.toDomain(),
         originLabel = originLabel,
         todayFact = todayOccurrence.toFactOrNull(requestedKind, id),
-        answeredForToday = todayOccurrence != null,
+        answeredForDate = todayOccurrence.answeredDateOrNull(),
     )
     is ItemView.Chore -> ItemDetailRead(
         chore = asChoreOrNull()!!,
         chain = seriesChain.toDomain(),
         originLabel = originLabel,
         todayFact = todayOccurrence.toFactOrNull(requestedKind, id),
-        answeredForToday = todayOccurrence != null,
+        answeredForDate = todayOccurrence.answeredDateOrNull(),
     )
     is ItemView.Event -> ItemDetailRead(
         event = asEventOrNull()!!,
         chain = seriesChain.toDomain(),
         originLabel = originLabel,
         todayFact = todayOccurrence.toFactOrNull(requestedKind, id),
-        answeredForToday = todayOccurrence != null,
+        answeredForDate = todayOccurrence.answeredDateOrNull(),
     )
 }
 
@@ -143,7 +159,7 @@ internal fun ItemView.toItemDetailRead(requestedKind: ItemKind): ItemDetailRead 
  * `today_occurrence` → the **stored** half of that firing, or `null` when there is nothing stored.
  *
  * Two arms return `null`, and they mean different things to the caller — which is why
- * [ItemDetailRead.answeredForToday] is a separate flag rather than being inferred from this being
+ * [ItemDetailRead.answeredForDate] is carried separately rather than being inferred from this being
  * `null`:
  *
  * - **the all-zeroes placeholder.** The backend fills `id` with a zero UUID when no record exists for
@@ -181,3 +197,13 @@ private fun OccurrenceDto?.toFactOrNull(kind: ItemKind, definitionId: String): O
  * because the wire value is compared, never constructed, and this client has no UUID type.
  */
 private const val PLACEHOLDER_OCCURRENCE_ID = "00000000-0000-0000-0000-000000000000"
+
+/**
+ * The date this `today_occurrence` answers for — the server's own, in the account's zone — or `null`
+ * when the field is absent or its date unreadable.
+ *
+ * Deliberately **not** the caller's `today`: see [ItemDetailRead.answeredForDate]. It is read here, off
+ * the same wire field the fact is keyed on, so the two can never disagree about the day.
+ */
+private fun OccurrenceDto?.answeredDateOrNull(): LocalDate? =
+    this?.let { runCatching { LocalDate.parse(it.scheduledDate) }.getOrNull() }

@@ -89,7 +89,9 @@ class KtorItemDetailRemoteSourceTest {
         val read = (source.fetch(ref) as RemoteSnapshot.Available).value
 
         assertNull(read.todayFact, "a placeholder is not a stored resolution")
-        assertTrue(read.answeredForToday, "but the server did answer for the day")
+        // And the day it answered for is the SERVER's, taken off the same wire field the fact is keyed
+        // on — never the caller's `today`, which the request never sent and the server never saw.
+        assertEquals(LocalDate(2026, 8, 5), read.answeredForDate, "but the server did answer for the day")
     }
 
     @Test
@@ -106,7 +108,7 @@ class KtorItemDetailRemoteSourceTest {
         // The wire's Event vocabulary spells the called-off outcome `dropped`; the domain keeps one
         // name for it across both kind vocabularies (`Skipped`).
         assertEquals(OccurrenceResolution.Skipped, fact.resolution)
-        assertTrue(read.answeredForToday)
+        assertEquals(LocalDate(2026, 8, 5), read.answeredForDate)
     }
 
     @Test

@@ -185,6 +185,60 @@ class TodayOccurrenceReadingTest {
         assertEquals(LocalDate(2026, 6, 14), firing.factDateFor(today))
     }
 
+    /**
+     * The same contract at a distance the old ±1-day expansion window could not see, which is what made
+     * that window wrong rather than merely narrow.
+     *
+     * [expandOccurrenceGrid] filters its window on the **slot**, by design — a firing moved out of the
+     * window still comes back. So asking for slots `[today-1, today+1]` and then matching on the
+     * *rendered* date cannot find a firing moved onto today from further out: the slot was never
+     * generated. Today read `NotFiring` — a confident "nothing is scheduled today" on the exact day the
+     * user moved it to — and [factDateFor] never saw the firing whose fact it exists to relocate, so a
+     * completed occurrence also read as unresolved. A reschedule has no bounded distance, so the window
+     * is derived from `overrides` instead of from a constant.
+     */
+    @Test
+    fun aFiringMovedOntoTodayFromWellOutsideTheWindowIsStillFound() {
+        // Sundays, anchored 3 May. The slot on 7 June — EIGHT days before today — was moved onto today.
+        val movedFar = SeriesInputs(
+            anchorLocal = LocalDateTime.parse("2026-05-03T09:00:00"),
+            tzid = la,
+            overrides = listOf(
+                SeriesOverride(
+                    recurrenceId = LocalDateTime.parse("2026-06-07T09:00:00"),
+                    movedToLocal = LocalDateTime.parse("2026-06-15T14:00:00"),
+                ),
+            ),
+        )
+        val sundays = Recurrence(Cadence.Weekly(listOf("Sun")))
+        val firing = assertIs<DayFiring.Fires>(dayFiring(sundays, movedFar, today))
+
+        assertEquals(today, firing.firing.date, "it renders on today")
+        assertEquals(LocalDate(2026, 6, 7), firing.firing.slotDate, "and is identified eight days back")
+        assertEquals(LocalDate(2026, 6, 7), firing.factDateFor(today), "which is where its fact lives")
+        assertTrue(read(recurrence = sundays, series = movedFar).isDue)
+    }
+
+    /**
+     * The other direction, unchanged: a slot IN the window that was moved AWAY does not fire today. The
+     * widened window must not turn every nearby slot into a hit.
+     */
+    @Test
+    fun aFiringMovedAwayFromTodayDoesNotFireToday() {
+        val movedAway = SeriesInputs(
+            anchorLocal = LocalDateTime.parse("2026-06-15T09:00:00"),
+            tzid = la,
+            overrides = listOf(
+                SeriesOverride(
+                    recurrenceId = LocalDateTime.parse("2026-06-15T09:00:00"),
+                    movedToLocal = LocalDateTime.parse("2026-06-29T14:00:00"),
+                ),
+            ),
+        )
+        val mondays = Recurrence(Cadence.Weekly(listOf("Mon")))
+        assertEquals(DayFiring.NotFiring, dayFiring(mondays, movedAway, today))
+    }
+
     @Test
     fun anUnmovedFiringIsLookedUpUnderTheDayItself() {
         assertEquals(today, dayFiring(daily, series, today).factDateFor(today))
@@ -260,10 +314,42 @@ class TodayOccurrenceReadingTest {
             TodayOccurrence(DayFiring.NotFiring, OccurrenceState.Scheduled),
             read(recurrence = wednesdays),
         )
+        // A stored resolution on an unreproducible grid: the state stands AND is marked as stored, which
+        // is what lets a renderer show it instead of the "not available" line.
         assertEquals(
-            TodayOccurrence(DayFiring.Unavailable, OccurrenceState.DoneOnTime),
+            TodayOccurrence(DayFiring.Unavailable, OccurrenceState.DoneOnTime, isStoredResolution = true),
             read(series = null, fact = fact(OccurrenceResolution.DoneOnTime)),
         )
+    }
+
+    /**
+     * The provenance split, and the reason it is a field rather than something a renderer infers.
+     *
+     * `Scheduled` arrives two ways that mean opposite things to a TODAY cell: derived (the day is
+     * covered, nothing is recorded, and it has not passed) and stored (a `?scope=this` reschedule really
+     * did write a `scheduled` row). Only the second is a fact this device holds. A renderer that guessed
+     * would pick the confident reading and announce "Scheduled" for a grid nobody could expand — the
+     * mirror image of the "Not scheduled today" lie [DayFiring] exists to prevent.
+     */
+    @Test
+    fun aDerivedScheduledIsDistinguishableFromAStoredOne() {
+        val derived = read(series = null, fact = null, covered = true)
+        assertEquals(OccurrenceState.Scheduled, derived.state)
+        assertFalse(derived.isStoredResolution, "covered-with-no-record is derived, not a stored fact")
+        assertFalse(derived.isStateKnown, "and with no grid either, the day's state is simply not known")
+
+        val stored = read(series = null, fact = fact(OccurrenceResolution.Scheduled), covered = true)
+        assertEquals(OccurrenceState.Scheduled, stored.state, "identical value…")
+        assertTrue(stored.isStoredResolution, "…opposite provenance")
+        assertTrue(stored.isStateKnown)
+    }
+
+    /** A reproducible grid always knows the day's state, fact or no fact — there is nothing to hedge. */
+    @Test
+    fun aReproducibleGridAlwaysKnowsTheDaysState() {
+        val wednesdays = Recurrence(Cadence.Weekly(listOf("Wed")))
+        assertTrue(read(recurrence = wednesdays, covered = true).isStateKnown)
+        assertTrue(read(recurrence = wednesdays, covered = false).isStateKnown)
     }
 
     /** The zero value: no grid, no fact, no coverage — what an unopened definition reads as. */

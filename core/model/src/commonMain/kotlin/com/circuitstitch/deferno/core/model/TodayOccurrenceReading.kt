@@ -54,9 +54,33 @@ sealed interface DayFiring {
 data class TodayOccurrence(
     val firing: DayFiring,
     val state: OccurrenceState,
+    /**
+     * Whether [state] is a **stored** resolution rather than one derived from coverage and the date.
+     *
+     * A renderer needs this and cannot recover it from [state], which is the whole reason it is a field.
+     * When the grid is [DayFiring.Unavailable] the honest line is "this device cannot say what fires
+     * today" — *unless* a resolution was actually recorded, in which case that fact still stands and
+     * should be shown. Every surface's TODAY cell documents exactly that rule.
+     *
+     * Inferring it from the value does not work: [OccurrenceState.Scheduled] is produced BOTH by
+     * `resolveOccurrenceState`'s derived arm (covered, no fact, the day has not passed) AND by a genuine
+     * stored [OccurrenceResolution.Scheduled] — a `?scope=this` reschedule writes exactly such a row. The
+     * two are indistinguishable downstream, and guessing picks the confident reading, which is the wrong
+     * direction: it renders "Scheduled" for a grid nobody could expand.
+     */
+    val isStoredResolution: Boolean = false,
 ) {
     /** Whether a firing lands on the day and was not called off — the plain "is something due" reading. */
     val isDue: Boolean get() = (firing as? DayFiring.Fires)?.firing?.isCancelled == false
+
+    /**
+     * Whether the day's *state* is something this device actually knows — a stored resolution, or a
+     * derivation over a grid it could reproduce. False means the only honest line is "not available".
+     *
+     * The one predicate every TODAY cell needs, kept here so the three renderers cannot each write their
+     * own slightly-different version of it (they did, and all three were wrong the same way).
+     */
+    val isStateKnown: Boolean get() = isStoredResolution || firing !is DayFiring.Unavailable
 
     companion object {
         /** Nothing known: no grid, no fact, no coverage. What an unopened definition reads as. */
@@ -113,6 +137,8 @@ fun readTodayOccurrence(
         date = today,
         today = today,
     ),
+    // The provenance the resolver's return value cannot carry — see [TodayOccurrence.isStoredResolution].
+    isStoredResolution = fact != null,
 )
 
 /**
@@ -129,19 +155,43 @@ fun DayFiring.factDateFor(date: LocalDate): LocalDate =
 /**
  * Whether the grid puts a firing on [date], and which.
  *
- * **The window is ±1 day, deliberately.** [expandOccurrenceGrid] reads its window in the series' frozen
- * zone — *"expand in the frozen zone, then project"* — which need not be the reader's zone, and an
- * override can move a firing's [Firing.date] off its own [Firing.slotDate]. A single-day window read in
- * the wrong zone would drop the very firing being asked about.
- *
  * The match is on [Firing.date] (where the firing *renders*), not [Firing.slotDate] (what it is
  * *identified* by), because the question this answers is "is something happening today".
+ *
+ * **That mismatch is why the window cannot be a fixed ±1 day.** [expandOccurrenceGrid] filters its
+ * window on the **slot**, deliberately — *"the window is filtered on the ORIGINAL slot, so a firing
+ * moved outside it still comes back"*, matching the crate, which applies its range before it applies
+ * overrides. So asking for slots `[date-1, date+1]` and then matching on the rendered date answers a
+ * different question than the one posed: a firing rescheduled ONTO [date] from a slot further out is
+ * never generated, and the day reads [DayFiring.NotFiring] — a confident "nothing is scheduled today"
+ * on the exact day the user moved the occurrence to, and one that also strands [factDateFor], whose
+ * entire job is to look that firing's fact up under the slot it moved from.
+ *
+ * A reschedule can be any distance, so no constant is large enough. The bound comes from the data
+ * instead: [SeriesInputs.overrides] states every move the series has, so the window is widened to reach
+ * the slot of any override that lands on [date]. Exact, and bounded by the overrides that exist.
+ *
+ * The residual ±1 is still needed and is a different concern — [expandOccurrenceGrid] reads its window
+ * in the series' **frozen zone**, which need not be the reader's, so a slot can resolve a day either
+ * side of its nominal date.
  */
 fun dayFiring(recurrence: Recurrence?, series: SeriesInputs?, date: LocalDate): DayFiring {
     val rule = recurrence ?: return DayFiring.Unavailable
     // The backend's ELISION, not an empty grid — see the class KDoc on SeriesInputs.
     val inputs = series ?: return DayFiring.Unavailable
-    return when (val expansion = expandOccurrenceGrid(rule, inputs, date.addDays(-1), date.addDays(1))) {
+
+    // ±1 for frozen-zone skew, then widened to the slot of every override that MOVES onto `date`.
+    var from = date.addDays(-1)
+    var to = date.addDays(1)
+    for (override in inputs.overrides) {
+        if (override.movedToLocal?.date != date) continue
+        val slot = override.recurrenceId.date
+        // The slot gets its own ±1 for the same zone-skew reason the base window has one.
+        if (slot.addDays(-1) < from) from = slot.addDays(-1)
+        if (slot.addDays(1) > to) to = slot.addDays(1)
+    }
+
+    return when (val expansion = expandOccurrenceGrid(rule, inputs, from, to)) {
         is Expansion.NotExpandable -> DayFiring.Unavailable
         is Expansion.Firings ->
             expansion.firings.firstOrNull { it.date == date }

@@ -338,10 +338,13 @@ private fun NextDueCell(item: Item?, cursorAt: Instant?, zone: TimeZone, now: Lo
  *   is no occurrence to have a state.
  * - A **cancelled** firing — the slot existed and was called off, which is a different statement from the
  *   rule never having fired, so it must not read as "not scheduled".
- * - [DayFiring.Unavailable] with nothing else known — this device cannot reproduce the grid (a `Custom` rule,
- *   a cadence this build cannot model, an unresolvable anchor, or a backend-**elided** series block).
- *   Rendering "Not scheduled today" here is the exact lie this slice exists to prevent: absent inputs are not
- *   an empty schedule.
+ * - [DayFiring.Unavailable] with **no stored resolution** ([TodayOccurrence.isStateKnown]) — this device
+ *   cannot reproduce the grid (a `Custom` rule, a cadence this build cannot model, an unresolvable anchor,
+ *   or a backend-**elided** series block) and nothing was recorded for the day either. Rendering "Not
+ *   scheduled today" here is the exact lie this slice exists to prevent: absent inputs are not an empty
+ *   schedule. So is rendering "Scheduled", which asserts the opposite with the same missing evidence — and
+ *   that one is the arm this cell actually shipped wrong, because a covered day with no record *derives*
+ *   `Scheduled`, so testing `state == Unknown` never caught it.
  * - Otherwise the [OccurrenceState] chip, which includes the [OccurrenceState.Unknown] "Not synced" reading —
  *   an unreproducible grid whose day nonetheless has a stored fact (a completed firing, say) should report
  *   that fact rather than shrug.
@@ -352,8 +355,12 @@ private fun TodayCell(today: TodayOccurrence) {
     val plain = when {
         firing is DayFiring.NotFiring -> stringResource(Res.string.tasks_detail_today_not_firing)
         firing is DayFiring.Fires && firing.firing.isCancelled -> stringResource(Res.string.tasks_detail_today_cancelled)
-        firing is DayFiring.Unavailable && today.state == OccurrenceState.Unknown ->
-            stringResource(Res.string.tasks_detail_today_unavailable)
+        // `isStateKnown`, NOT `state == Unknown`. Once the detail read lands coverage for the day — which
+        // it does on every successful hydrate, because the server always answers — a day with no stored
+        // record derives `Scheduled`, purely from "covered, and today has not passed". Testing the state
+        // value let that through and rendered the confident "Scheduled" chip for a grid this build could
+        // not expand: the same lie as "Not scheduled today", with the sign flipped.
+        !today.isStateKnown -> stringResource(Res.string.tasks_detail_today_unavailable)
         else -> null
     }
     if (plain != null) {

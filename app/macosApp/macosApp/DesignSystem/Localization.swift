@@ -386,6 +386,12 @@ enum L {
     /// tasks_recurrence_next_due.
     static func cursor(_ tokens: RecurrenceLineTokens) -> String? {
         guard let day = cursorDay(tokens) else { return nil }
+        // EXHAUSTED is already a whole clause ("Series ended"), not a day, so it must NOT take the
+        // "Next: %@" wrapper — that renders "Next: Series ended", which contradicts itself. This guard
+        // used to be an early return inside `cursor`; splitting `cursorDay` out for #383's detail row
+        // left it below the wrapper and the tree row said exactly that, in all five locales. The iOS
+        // twin kept it (`Localization.swift`, same line) — keep the two shaped identically.
+        if tokens.cursor == "EXHAUSTED" { return day }
         return format("tasks_recurrence_next_due", day)
     }
 
