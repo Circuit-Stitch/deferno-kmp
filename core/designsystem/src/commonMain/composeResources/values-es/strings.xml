@@ -671,6 +671,29 @@ Gracias.</string>
         <item quantity="one">Cada mes</item>
         <item quantity="other">Cada %1$d meses</item>
     </plurals>
+    <!-- Gramática del ancla mensual (#383) — el «cuándo exactamente» que la fila del árbol omite. Sigue la familia «Cada …» de arriba. El caso «one» de los plurales es inalcanzable: con intervalo 1 se usa la variante sin número -->
+    <!-- Seis ordinales fijos (1..5 y «último»), no una API de ordinales ni un plurals: son posiciones, no cantidades. Solo aparecen delante de un día de la semana, y en español todos los días son masculinos, así que se apocopan «primer» y «tercer» -->
+    <string name="tasks_cadence_nth_first">primer</string>
+    <string name="tasks_cadence_nth_second">segundo</string>
+    <string name="tasks_cadence_nth_third">tercer</string>
+    <string name="tasks_cadence_nth_fourth">cuarto</string>
+    <string name="tasks_cadence_nth_fifth">quinto</string>
+    <!-- nth = -1: el último que coincida en el mes, nunca «quinto» -->
+    <string name="tasks_cadence_nth_last">último</string>
+    <!-- %1$s = ordinal, %2$s = abreviatura del día (datos CLDR de la plataforma) -->
+    <string name="tasks_cadence_monthly_on_weekday">Cada mes el %1$s %2$s</string>
+    <!-- %1$d = intervalo en meses, %2$s = ordinal, %3$s = día -->
+    <plurals name="tasks_cadence_monthly_every_n_on_weekday">
+        <item quantity="one">Cada %1$d mes el %2$s %3$s</item>
+        <item quantity="other">Cada %1$d meses el %2$s %3$s</item>
+    </plurals>
+    <!-- «el día 15», no «el decimoquinto»: la regla SALTA los meses demasiado cortos en vez de ajustar el día, así que la forma llana también es la honesta -->
+    <string name="tasks_cadence_monthly_on_day">Cada mes el día %1$d</string>
+    <!-- %1$d = intervalo en meses, %2$d = día del mes -->
+    <plurals name="tasks_cadence_monthly_every_n_on_day">
+        <item quantity="one">Cada %1$d mes el día %2$d</item>
+        <item quantity="other">Cada %1$d meses el día %2$d</item>
+    </plurals>
     <plurals name="tasks_cadence_times">
         <item quantity="one">%1$d vez</item>
         <item quantity="other">%1$d veces</item>
@@ -690,6 +713,18 @@ Gracias.</string>
         <item quantity="one">Cada año</item>
         <item quantity="other">Cada %1$d años</item>
     </plurals>
+    <!-- Ancla anual (#383) — mes + día, que la fila omite. La fecha llega ya formateada con tasks_cadence_month_day_pattern -->
+    <!-- PATRÓN de java.time, no texto: traducir el ORDEN de los campos y los separadores, nunca las letras -->
+    <string name="tasks_cadence_month_day_pattern">d 'de' MMMM</string>
+    <string name="tasks_cadence_yearly_on">Cada año el %1$s</string>
+    <!-- %1$d = intervalo en años, %2$s = mes y día ya formateados -->
+    <plurals name="tasks_cadence_yearly_every_n_on">
+        <item quantity="one">Cada %1$d año el %2$s</item>
+        <item quantity="other">Cada %1$d años el %2$s</item>
+    </plurals>
+    <!-- Estado de la definición: el interruptor de un hábito/quehacer/evento, que nunca está «hecho». Adjetivos en masculino singular — los tres tipos son masculinos en español —, distintos del filtro tasks_filter_active («Activas», tareas). InReview reutiliza common_status_in_review -->
+    <string name="tasks_definition_state_active">Activo</string>
+    <string name="tasks_definition_state_archived">Archivado</string>
     <!-- El borrado es en cadena (toda la regla, no solo el tramo visible) pero es un borrado SUAVE: no elimina las ocurrencias registradas. No prometer ninguna cascada -->
     <string name="tasks_delete_definition_confirm_body">Esto quita toda la serie repetida de cada lista y plan. Sus ocurrencias pasadas ya registradas se conservan.</string>
     <string name="tasks_delete_item_confirm_title">¿Eliminar «%1$s»?</string>
@@ -724,6 +759,9 @@ Gracias.</string>
     <string name="tasks_detail_no_description">Aún no hay descripción.</string>
     <string name="tasks_detail_not_found_body">Puede que esta tarea se haya quitado. Vuelve a tu lista.</string>
     <string name="tasks_detail_not_found_title">Tarea no encontrada</string>
+    <!-- Variante neutra en cuanto al tipo (#383): la pantalla llega aquí sin saber si faltaba una tarea, un hábito, un quehacer o un evento, así que dice «elemento» (common_kind_item) -->
+    <string name="tasks_detail_item_not_found_body">Puede que este elemento se haya quitado. Vuelve a tu lista.</string>
+    <string name="tasks_detail_item_not_found_title">Elemento no encontrado</string>
     <string name="tasks_detail_pane_empty_body">Elige una tarea a la izquierda para ver sus detalles aquí.</string>
     <string name="tasks_detail_pane_empty_title">Nada abierto</string>
     <string name="tasks_detail_play">Reproducir</string>
@@ -734,6 +772,22 @@ Gracias.</string>
     <string name="tasks_detail_property_owner">Propietario</string>
     <string name="tasks_detail_property_source">Origen</string>
     <string name="tasks_detail_property_time">Hora</string>
+    <!-- Filas de la tabla del detalle recurrente (#383): son ETIQUETAS, los valores vienen de otras claves -->
+    <string name="tasks_detail_property_kind">Tipo</string>
+    <!-- Sustantivo: aquí hace falta el nombre, no la frase verbal de tasks_cadence_unknown («Se repite») -->
+    <string name="tasks_detail_property_repeats">Repetición</string>
+    <!-- Va a juego con tasks_detail_property_due («Vencimiento») -->
+    <string name="tasks_detail_property_next_due">Próximo vencimiento</string>
+    <string name="tasks_detail_property_today">Hoy</string>
+    <!-- Celda de la ocurrencia de hoy (#383): «¿toca hoy?» y «¿cómo fue hoy?» son preguntas distintas; lo segundo lo dicen las claves common_status_* -->
+    <!-- La regla SÍ se pudo calcular y hoy no cae ninguna repetición -->
+    <string name="tasks_detail_today_not_firing">Hoy no está programado</string>
+    <!-- Este dispositivo no puede calcular la programación; no significa «no hay nada programado» -->
+    <string name="tasks_detail_today_unavailable">Programación no disponible sin conexión</string>
+    <!-- La repetición sí caía hoy, pero se anuló: «cancelado» como algo suspendido, no el botón common_cancel -->
+    <string name="tasks_detail_today_cancelled">Cancelado hoy</string>
+    <!-- Solo lectura: sin «Toca para cambiar» -->
+    <string name="tasks_detail_today_row_a11y">Hoy: %1$s</string>
     <string name="tasks_detail_remove_caption_a11y">Quitar leyenda de %1$s</string>
     <string name="tasks_detail_remove_label_a11y">Quitar etiqueta %1$s</string>
     <string name="tasks_detail_section_activity">Actividad</string>

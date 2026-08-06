@@ -188,7 +188,7 @@ struct PlanView: View {
         // that hands off to Focus and must then disappear — a sheet is exactly right. Focus arguably wants
         // ADR-0033's auxiliary-scene treatment ("one task, everything else put away" is a sustained working
         // mode, not a modal), but a scene cannot inherit `\.defernoColors` across the boundary and would
-        // have to mirror the theme itself like `TaskDetailWindowView` does, and its `WindowGroup(for:)`
+        // have to mirror the theme itself like `ItemDetailWindowView` does, and its `WindowGroup(for:)`
         // payload would have to be a Codable id re-resolved against a root this pane doesn't hold. That is
         // a bigger surface than this port should take on; sheets first, a Focus scene as a follow-up.
         //

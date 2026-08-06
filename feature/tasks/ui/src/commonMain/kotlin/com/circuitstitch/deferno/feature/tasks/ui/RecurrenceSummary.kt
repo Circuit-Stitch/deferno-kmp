@@ -9,7 +9,18 @@ import com.circuitstitch.deferno.core.designsystem.resources.settings_security_d
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_custom
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_daily
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_every_n_days
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_month_day_pattern
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_monthly
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_monthly_every_n_on_day
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_monthly_every_n_on_weekday
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_monthly_on_day
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_monthly_on_weekday
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_nth_fifth
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_nth_first
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_nth_fourth
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_nth_last
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_nth_second
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_nth_third
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_times
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_unknown
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_until
@@ -18,16 +29,23 @@ import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_weekl
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_weekly_on
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_with_bound
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_yearly
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_yearly_every_n_on
+import com.circuitstitch.deferno.core.designsystem.resources.tasks_cadence_yearly_on
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_recurrence_a11y_prefix
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_recurrence_next_due
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_recurrence_series_ended
+import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.Item
+import com.circuitstitch.deferno.core.model.MonthlyAnchor
 import com.circuitstitch.deferno.core.model.RecurrenceBound
 import com.circuitstitch.deferno.core.model.RecurrenceCursor
+import com.circuitstitch.deferno.core.model.wireWeekday
 import com.circuitstitch.deferno.feature.tasks.CadenceReading
 import com.circuitstitch.deferno.feature.tasks.recurrenceReading
 import java.util.Locale
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.isoDayNumber
 import org.jetbrains.compose.resources.PluralStringResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
@@ -102,6 +120,146 @@ internal fun recurrenceSummary(
 }
 
 /**
+ * The **detail's** rule line (#383) — the cadence and its bound, with the monthly/yearly ANCHOR the tree
+ * row deliberately drops. `null` when there is nothing to say (a Task, or a rule that did not survive the
+ * wire), exactly as [recurrenceSummary] uses `null`.
+ *
+ * Two things make this a peer of [recurrenceSummary] rather than a flag on it:
+ *
+ * 1. **It carries no next-due clause.** The detail gives that its own `NEXT DUE` row, so folding it in
+ *    here would print the same reading twice on one screen.
+ * 2. **It reaches past [CadenceReading] for the anchor.**
+ *    [RecurrenceReading][com.circuitstitch.deferno.feature.tasks.RecurrenceReading]'s KDoc (lines 61-70)
+ *    drops [Cadence.Monthly.on] and [Cadence.Yearly]'s month/day on purpose — "a one-line row says how
+ *    **often** a thing repeats — #383's detail surface is where exactly *when* belongs" — and names this
+ *    surface as their owner. So the anchor is read from the wire [Cadence] while the *normalisation*
+ *    (the floored interval, the folds) still comes from the shared reading: this adds a clause, it does
+ *    not re-derive a cadence.
+ *
+ * Anything the anchor cannot be read from — a nulled-out monthly `on`, an `nth` outside its closed set, a
+ * weekday token this build cannot place, an impossible month/day pair — falls back to the plain cadence
+ * phrase. Saying less is right where a fuller sentence would have to be invented; the same posture
+ * [cadencePhrase]'s empty-weekday arm already takes.
+ */
+@Composable
+internal fun recurrenceRulePhrase(
+    item: Item,
+    zone: TimeZone = TimeZone.currentSystemDefault(),
+    locale: Locale = Locale.getDefault(),
+): String? {
+    val cadence = item.recurrence?.cadence ?: return null
+    val reading = item.recurrenceReading(zone, currentToday(zone)) ?: return null
+    return joinedWithSeparator(
+        anchoredCadencePhrase(cadence, reading.cadence, locale),
+        boundPhrase(reading.bound, locale),
+    )
+}
+
+/**
+ * [cadencePhrase] with the wire [cadence]'s anchor folded in where there is one — a whole sentence per
+ * arm, never the cadence with a suffix glued on (the catalog says so at `tasks_cadence_monthly_on_weekday`:
+ * "Every 3 months on the second Wed" is one clause in every locale, and only the translator can shape it).
+ *
+ * [reading] supplies the interval, so the shared normalisation (floored at 1) is the one that reaches the
+ * plural — the raw [Cadence.Monthly.interval] is not floored and could print "Every 0 months".
+ */
+@Composable
+private fun anchoredCadencePhrase(cadence: Cadence, reading: CadenceReading, locale: Locale): String {
+    val anchored = when {
+        cadence is Cadence.Monthly && reading is CadenceReading.Monthly ->
+            monthlyAnchorPhrase(cadence.on, reading.interval, locale)
+        cadence is Cadence.Yearly && reading is CadenceReading.Yearly ->
+            yearlyAnchorPhrase(cadence.month, cadence.day, reading.interval, locale)
+        else -> null
+    }
+    return anchored ?: cadencePhrase(reading, locale)
+}
+
+/**
+ * "Monthly on the second Wed" / "Every 3 months on day 15", or `null` when the anchor cannot be read —
+ * which includes a rule that simply has none ([Cadence.Monthly.on] is nullable because an unreadable
+ * anchor still leaves a usable monthly rule).
+ *
+ * The `interval == 1` split is the catalog's own RENDERER RULE: the plain adverb already says "every
+ * month", so the `every_n` plurals' `one` arm is unreachable and exists only to be well-formed.
+ */
+@Composable
+private fun monthlyAnchorPhrase(anchor: MonthlyAnchor?, interval: Int, locale: Locale): String? = when (anchor) {
+    null -> null
+    is MonthlyAnchor.DayOfMonth ->
+        if (interval == 1) {
+            stringResource(Res.string.tasks_cadence_monthly_on_day, anchor.day)
+        } else {
+            pluralStringResource(
+                Res.plurals.tasks_cadence_monthly_every_n_on_day,
+                interval,
+                interval,
+                anchor.day,
+            )
+        }
+    is MonthlyAnchor.NthWeekday -> {
+        val ordinal = nthOrdinal(anchor.nth)
+        // The wire's `chrono::Weekday` token → CLDR, the same crossing the weekly arm makes; an
+        // unplaceable token drops the whole clause rather than the day (#382's degrade-don't-die posture).
+        val weekday = wireWeekday(anchor.weekday)?.let { weekdayLabel(it.isoDayNumber, locale) }
+        when {
+            ordinal == null || weekday == null -> null
+            interval == 1 -> stringResource(Res.string.tasks_cadence_monthly_on_weekday, ordinal, weekday)
+            else -> pluralStringResource(
+                Res.plurals.tasks_cadence_monthly_every_n_on_weekday,
+                interval,
+                interval,
+                ordinal,
+                weekday,
+            )
+        }
+    }
+}
+
+/**
+ * [MonthlyAnchor.NthWeekday.nth] as its localized ordinal word, or `null` for a value outside the closed
+ * set the model declares (`1..5`, or `-1` for "last").
+ *
+ * Six fixed keys and **not** a CLDR ordinal API: these are positions in a month, not counts, and each is
+ * rendered only inside `tasks_cadence_monthly_on_weekday`/`_every_n_on_weekday` so a locale can inflect it
+ * for that frame (es apocopates before a masculine noun, de takes the dative after "am"). `-1` is "last",
+ * never "fifth" — the rule takes the final matching weekday of each month, which is the fourth in most.
+ */
+@Composable
+private fun nthOrdinal(nth: Int): String? = when (nth) {
+    1 -> stringResource(Res.string.tasks_cadence_nth_first)
+    2 -> stringResource(Res.string.tasks_cadence_nth_second)
+    3 -> stringResource(Res.string.tasks_cadence_nth_third)
+    4 -> stringResource(Res.string.tasks_cadence_nth_fourth)
+    5 -> stringResource(Res.string.tasks_cadence_nth_fifth)
+    -1 -> stringResource(Res.string.tasks_cadence_nth_last)
+    else -> null
+}
+
+/**
+ * "Yearly on 14 June" / "Every 2 years on June 14", or `null` when [month]/[day] are not a real calendar
+ * day (the wire types them as plain integers, so `(2, 31)` is representable and must not crash a detail).
+ *
+ * The month+day goes through `tasks_cadence_month_day_pattern`, a java.time pattern supplied per locale, so
+ * the FIELD ORDER localizes ("June 14" vs "14. Juni") inside a sentence the translator never has to
+ * reorder — and the month name comes from the JDK's CLDR data rather than a hand-rolled table (CLAUDE.md).
+ */
+@Composable
+private fun yearlyAnchorPhrase(month: Int, day: Int, interval: Int, locale: Locale): String? {
+    // A leap year, so 29 February is a representable anchor. The year is not in the pattern, so which one
+    // it is never reaches the screen.
+    val anchor = runCatching { LocalDate(LeapYearForAnchor, month, day) }.getOrNull() ?: return null
+    val monthDay = formatDate(anchor, stringResource(Res.string.tasks_cadence_month_day_pattern), locale)
+    return if (interval == 1) {
+        stringResource(Res.string.tasks_cadence_yearly_on, monthDay)
+    } else {
+        pluralStringResource(Res.plurals.tasks_cadence_yearly_every_n_on, interval, interval, monthDay)
+    }
+}
+
+private const val LeapYearForAnchor = 2024
+
+/**
  * Appends [tail] to [head] with the catalog's " · " joiner, or returns [head] alone when there is no
  * tail. `tasks_cadence_with_bound` is documented as the cadence↔bound joiner and is reused verbatim for
  * the cadence↔next-due join: it is the only "%1$s · %2$s" template in the catalog, and the two joins are
@@ -160,6 +318,15 @@ private fun weekdayLabels(isoDays: List<Int>, locale: Locale): List<String> {
     val labels = shortWeekdayLabels(locale)
     return isoDays.map { labels[it - 1] }
 }
+
+/**
+ * One ISO day number's localized short label — [weekdayLabels] for the single day a monthly `NthWeekday`
+ * anchor names. Short, not full-width, because that is what the catalog's own renderer note pins for
+ * `tasks_cadence_monthly_on_weekday`'s `%2$s` — and it is what the two Apple twins read there
+ * (`Calendar.shortWeekdaySymbols`), so the four platforms say the same words.
+ */
+@Composable
+private fun weekdayLabel(isoDay: Int, locale: Locale): String = shortWeekdayLabels(locale)[isoDay - 1]
 
 /**
  * The upper bound as a trailing clause, or `null` when the rule is open-ended — the *default* and by far

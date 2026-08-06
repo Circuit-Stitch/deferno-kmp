@@ -38,6 +38,24 @@ enum L {
         }
     }
 
+    /// The **[[Definition state]]** noun from its enum name ("Archived" → tasks_definition_state_archived)
+    /// — the light switch on a recurring definition, read by #383's detail STATUS row.
+    ///
+    /// Emphatically not a `WorkingState`: a Habit/Chore/Event is never "done", it is switched on or off,
+    /// and `WorkingState.label` (DesignSystem.swift) speaks the Tasks vocabulary. `InReview` deliberately
+    /// has no key of its own and reads the shared `common_status_in_review` — the API carries the value
+    /// faithfully but its meaning on a definition is unresolved, so it borrows rather than inventing a
+    /// word. The other two are their own keys even though English repeats `tasks_filter_active`'s word,
+    /// because a locale that inflects the Task-list preset for gender or number would get it wrong here.
+    static func definitionStateLabel(_ name: String) -> String {
+        switch name {
+        case "Active": return string("tasks_definition_state_active")
+        case "Archived": return string("tasks_definition_state_archived")
+        case "InReview": return string("common_status_in_review")
+        default: return name
+        }
+    }
+
     // MARK: Chrome title (typed ChromeTitle)
 
     /// The top-bar title for a `ChromeSpec`: user-authored text renders verbatim; a Destination /
@@ -410,18 +428,34 @@ enum L {
         return formatter
     }()
 
-    /// The next-due phrase: "Next: Tomorrow" for a live series, "Series ended" for one that hit its bound,
-    /// nil for no cursor at all (a Task, or an Archived definition whose stale cursor the reading
-    /// deliberately refuses to believe).
+    /// The **cadence clause** of a recurrence line — the phrase plus its end bound, joined by the one
+    /// joiner this vocabulary has (`tasks_cadence_with_bound`). [recurrenceLine]'s first half, without the
+    /// next-due reading.
+    ///
+    /// It exists because #383's detail puts the cadence and the cursor in **two separate table rows**,
+    /// where the composed line would read "Weekly · Next: Tomorrow" under a row labelled REPEATS. The
+    /// composition rule stays here rather than in that View for the reason this whole section states: a
+    /// phrase assembled in a View is a phrase the other three platforms do not have.
+    static func cadenceWithBound(_ tokens: RecurrenceLineTokens) -> String {
+        let phrase = cadence(tokens).phrase
+        guard let bound = cadenceBound(tokens) else { return phrase }
+        return format("tasks_cadence_with_bound", phrase, bound)
+    }
+
+    /// The **bare** next-firing reading — "Tomorrow", "3 days ago", "Series ended" — or nil when there is
+    /// nothing honest to say: no cursor at all (a Task, or an Archived definition whose stale cursor the
+    /// reading deliberately refuses to believe), or a relative arm that arrived without its day count.
     ///
     /// The five relative-day arms are the SAME tokens the Task-detail WHEN row uses, so they pass straight
     /// through [relativeDay] and the `tasks_detail_due_*` keys instead of being re-mapped here. A cursor
     /// pointing *backwards* is normal rather than corrupt — a missed Habit's cursor sits where it stopped
     /// advancing — so "3 days ago" is an honest reading, not an error state. "Series ended" stays factual
     /// for the same reason: the server also reports it when its 400-day lookahead finds nothing, so a rare
-    /// enough rule can read as ended while still being live. Uses: tasks_recurrence_series_ended,
-    /// tasks_recurrence_next_due.
-    static func cursor(_ tokens: RecurrenceLineTokens) -> String? {
+    /// enough rule can read as ended while still being live.
+    ///
+    /// Split out of [cursor] for #383's NEXT DUE table row, whose label already says "next" — one guard,
+    /// two phrasings, rather than the guard copied into a View. Uses: tasks_recurrence_series_ended.
+    static func cursorDay(_ tokens: RecurrenceLineTokens) -> String? {
         guard let token = tokens.cursor else { return nil }
         if token == "EXHAUSTED" { return string("tasks_recurrence_series_ended") }
         let days = tokens.cursorCount?.intValue
@@ -429,7 +463,17 @@ enum L {
         // one ever arrives without it there is no honest number to say, so drop the clause entirely rather
         // than let a placeholder render "in 0 days" — the cadence still carries the row.
         if days == nil, token == "DAYS_AWAY" || token == "DAYS_AGO" { return nil }
-        return format("tasks_recurrence_next_due", relativeDay(token, days ?? 0))
+        return relativeDay(token, days ?? 0)
+    }
+
+    /// The next-due **clause** for an inline tree-row subtitle: "Next: Tomorrow" for a live series, and
+    /// the bare "Series ended" for one that hit its bound — that arm *replaces* the phrase rather than
+    /// filling it, which is why it is not wrapped. nil exactly when [cursorDay] is.
+    /// Uses: tasks_recurrence_next_due (+ [cursorDay]'s keys).
+    static func cursor(_ tokens: RecurrenceLineTokens) -> String? {
+        guard let day = cursorDay(tokens) else { return nil }
+        if tokens.cursor == "EXHAUSTED" { return day }
+        return format("tasks_recurrence_next_due", day)
     }
 
     /// The whole recurrence subtitle for an Item-tree row (#384) — the visible line and its VoiceOver

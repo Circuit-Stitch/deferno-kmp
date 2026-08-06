@@ -482,15 +482,12 @@ fun calendarItemIsHabit(item: CalendarItem): Boolean = item.kind == ItemKind.Hab
  *
  * [OccurrenceState.Unknown] renders as absent information ("Not synced"), never as an error and never
  * as the Scheduled dash: this device has simply never synced that date (ADR-0053 decision 4).
+ *
+ * The reading arms moved one hop into [occurrenceStateToken] (#383) so the recurring detail's Today row
+ * reads the same table. The exhaustiveness argument above is unchanged — it is now that function's `when`
+ * the compiler checks, and the `else` here can only be reached with a non-null [OccurrenceState].
  */
-fun occurrenceStatusToken(firing: CalendarFiring): String = when (firing.occurrence) {
-    OccurrenceState.Scheduled -> "common_status_scheduled"
-    OccurrenceState.InProgress -> "common_status_in_progress"
-    OccurrenceState.DoneOnTime -> "common_status_done_on_time"
-    OccurrenceState.DoneLate -> "common_status_done_late"
-    OccurrenceState.Skipped -> "common_status_skipped"
-    OccurrenceState.Missed -> "common_status_missed"
-    OccurrenceState.Unknown -> "common_status_unknown"
+fun occurrenceStatusToken(firing: CalendarFiring): String = when (val occurrence = firing.occurrence) {
     null -> when (firing.item.status) {
         WorkingState.Open -> "common_status_scheduled"
         WorkingState.InProgress -> "common_status_in_progress"
@@ -498,6 +495,25 @@ fun occurrenceStatusToken(firing: CalendarFiring): String = when (firing.occurre
         WorkingState.Done -> "common_status_done"
         WorkingState.Dropped -> "common_status_skipped"
     }
+    else -> occurrenceStateToken(occurrence)
+}
+
+/**
+ * The reading → catalog-key half of [occurrenceStatusToken], over the enum alone.
+ *
+ * `internal` and extracted (not inlined above) because the recurring detail's Today row needs exactly
+ * this map and nothing else — no `CalendarFiring`, no `WorkingState` fallback (`Bridge.definitionTodayCell`,
+ * #383). Two copies of a seven-arm reading→word table is the drift this seam's own KDoc was written
+ * about; one `when` in one module is what makes the calendar chip and the detail row say the same word.
+ */
+internal fun occurrenceStateToken(state: OccurrenceState): String = when (state) {
+    OccurrenceState.Scheduled -> "common_status_scheduled"
+    OccurrenceState.InProgress -> "common_status_in_progress"
+    OccurrenceState.DoneOnTime -> "common_status_done_on_time"
+    OccurrenceState.DoneLate -> "common_status_done_late"
+    OccurrenceState.Skipped -> "common_status_skipped"
+    OccurrenceState.Missed -> "common_status_missed"
+    OccurrenceState.Unknown -> "common_status_unknown"
 }
 
 /**

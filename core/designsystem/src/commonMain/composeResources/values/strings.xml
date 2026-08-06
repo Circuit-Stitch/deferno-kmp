@@ -883,6 +883,29 @@ Thank you.</string>
         <item quantity="one">Monthly</item>
         <item quantity="other">Every %1$d months</item>
     </plurals>
+    <!-- Monthly ANCHOR grammar (#383) — the “exactly when in the month” a tree row deliberately drops (see feature/tasks RecurrenceReading.kt:61-70, which names this detail as the surface that owns it). One whole sentence per MonthlyAnchor arm × interval, not a cadence with a suffix glued on: “Every 3 months on the second Wed” is one clause in every locale. RENDERER RULE: an interval of 1 takes the tasks_cadence_monthly_on_* form (the plain adverb already says it), so the every_n plurals' 'one' arm is unreachable and exists only so the plural is well-formed — the same rule tasks_cadence_every_n_days documents -->
+    <!-- MonthlyAnchor.NthWeekday.nth is a CLOSED set — 1..5, or -1 for LAST — so it is six fixed ordinals: NOT a CLDR ordinal API and NOT a plurals block (these are positions, not counts). Each is rendered ONLY in front of a weekday inside the two templates below, so a locale inflects it for that frame (es apocopates before a masculine noun, de takes the dative after “am”, hi takes the oblique before “को”) and never as a standalone word -->
+    <string name="tasks_cadence_nth_first">first</string>
+    <string name="tasks_cadence_nth_second">second</string>
+    <string name="tasks_cadence_nth_third">third</string>
+    <string name="tasks_cadence_nth_fourth">fourth</string>
+    <string name="tasks_cadence_nth_fifth">fifth</string>
+    <!-- nth = -1. “Last”, never “fifth”: the rule takes the final matching weekday of each month, which is the fourth one in most months -->
+    <string name="tasks_cadence_nth_last">last</string>
+    <!-- MonthlyAnchor.NthWeekday at interval 1. %1$s = a tasks_cadence_nth_* ordinal, %2$s = the weekday abbreviation from the platform's CLDR data (LocalizedDateFormats.shortWeekdayLabels() on Compose, Calendar.shortWeekdaySymbols on Apple) — never a hand-rolled per-locale table (CLAUDE.md) -->
+    <string name="tasks_cadence_monthly_on_weekday">Monthly on the %1$s %2$s</string>
+    <!-- Args: %1$d = the month interval (the plural count), %2$s = the ordinal, %3$s = the weekday -->
+    <plurals name="tasks_cadence_monthly_every_n_on_weekday">
+        <item quantity="one">Every %1$d month on the %2$s %3$s</item>
+        <item quantity="other">Every %1$d months on the %2$s %3$s</item>
+    </plurals>
+    <!-- MonthlyAnchor.DayOfMonth at interval 1. “day 15”, deliberately NOT “the 15th”: a 1..31 ordinal needs grammar de/es/hi/pt have no key family for, and 31 more strings would buy one line of polish. The plainer form is also the honest one — the rule SKIPS a month too short for the day rather than clamping to its end, so “day 31” must not read as a promise about February -->
+    <string name="tasks_cadence_monthly_on_day">Monthly on day %1$d</string>
+    <!-- Args: %1$d = the month interval (the plural count), %2$d = the day of the month -->
+    <plurals name="tasks_cadence_monthly_every_n_on_day">
+        <item quantity="one">Every %1$d month on day %2$d</item>
+        <item quantity="other">Every %1$d months on day %2$d</item>
+    </plurals>
     <!-- RecurrenceBound.AfterCount — arg = firings in the series; a bound, so it renders inside tasks_cadence_with_bound -->
     <plurals name="tasks_cadence_times">
         <item quantity="one">%1$d time</item>
@@ -905,6 +928,19 @@ Thank you.</string>
         <item quantity="one">Yearly</item>
         <item quantity="other">Every %1$d years</item>
     </plurals>
+    <!-- Yearly ANCHOR grammar (#383) — Cadence.Yearly carries month (1..12) + day (1..31), which the row drops and the detail says. Same interval split as the monthly anchors above, same unreachable 'one' arm. The day itself arrives pre-formatted through tasks_cadence_month_day_pattern, so no locale has to reorder a date field inside these sentences -->
+    <!-- java.time pattern for the yearly anchor's month+day — a PATTERN, not prose: translate the FIELD ORDER and separators (de “d. MMMM”), never the letters; month names come from the JDK's CLDR data. Deliberately its own key rather than a reuse of calendar_day_pattern, so the calendar heading can change field order without silently rewording every yearly rule -->
+    <string name="tasks_cadence_month_day_pattern">MMMM d</string>
+    <!-- Cadence.Yearly at interval 1; %1$s = the formatted month+day -->
+    <string name="tasks_cadence_yearly_on">Yearly on %1$s</string>
+    <!-- Args: %1$d = the year interval (the plural count), %2$s = the formatted month+day -->
+    <plurals name="tasks_cadence_yearly_every_n_on">
+        <item quantity="one">Every %1$d year on %2$s</item>
+        <item quantity="other">Every %1$d years on %2$s</item>
+    </plurals>
+    <!-- Definition state (#383) — the light switch on a recurring definition (core/model DefinitionState), which is emphatically NOT a Task WorkingState: a Habit/Chore/Event is never “done”, it is switched on or off. Only the menu VERBS existed (tasks_menu_activate / tasks_menu_archive); these are the NOUNS the detail's state row reads. Same English word as tasks_filter_active, a different one in any locale that inflects the Task-list preset for gender/number — hence separate keys. DefinitionState.InReview deliberately has NO key here: it reads the shared common_status_in_review -->
+    <string name="tasks_definition_state_active">Active</string>
+    <string name="tasks_definition_state_archived">Archived</string>
     <!-- Body of the destructive confirm when the row is a recurring definition (Habit/Chore/Event), under tasks_delete_item_confirm_title. EVERY CLAUSE IS LOAD-BEARING and none of it may be softened into a promise the write cannot keep: the client sends the kind-neutral chain-wide DELETE /items/{id} (what the webui calls for every kind), so it retires EVERY segment of the rule, not just the era on screen — hence 'the whole repeating series'. But the server's delete is a SOFT delete: it leaves the occurrence records and the recurrence series rows in place. So this copy states what is kept instead of promising a cascade. Never write 'and all its occurrences' here -->
     <string name="tasks_delete_definition_confirm_body">This removes the whole repeating series from every list and plan. Its recorded past occurrences are kept.</string>
     <!-- Curly quotes — adapt quote style per locale -->
@@ -947,6 +983,9 @@ Thank you.</string>
     <string name="tasks_detail_no_description">No description yet.</string>
     <string name="tasks_detail_not_found_body">This task may have been removed. Head back to your list.</string>
     <string name="tasks_detail_not_found_title">Task not found</string>
+    <!-- Kind-neutral twin of the two Task-worded keys above (#383), for the detail that opens ANY item — Habit/Chore/Event as well as Task. Says “item”, the generic glossary noun (common_kind_item), because a surface reaches this arm before it can know which kind went missing. The Task-worded pair stays: a Task-only surface that knows it lost a Task should still say so -->
+    <string name="tasks_detail_item_not_found_body">This item may have been removed. Head back to your list.</string>
+    <string name="tasks_detail_item_not_found_title">Item not found</string>
     <!-- 'left' assumes LTR pane order — reconsider for RTL later -->
     <string name="tasks_detail_pane_empty_body">Pick a task on the left to see its details here.</string>
     <!-- Two-pane detail placeholder (Android tablet + desktop) -->
@@ -962,6 +1001,23 @@ Thank you.</string>
     <string name="tasks_detail_property_owner">Owner</string>
     <string name="tasks_detail_property_source">Source</string>
     <string name="tasks_detail_property_time">Time</string>
+    <!-- Property rows for #383's kind-neutral recurring detail — peers of the four above, added as a set because a definition's table answers questions a Task's does not: WHAT it is, HOW it repeats, WHEN it fires next, how TODAY reads. All four are row LABELS only; the values come from elsewhere (common_kind_*, the tasks_cadence_* phrase, a formatted date, the today cell below) -->
+    <string name="tasks_detail_property_kind">Kind</string>
+    <!-- Label of the row whose value is the cadence phrase. Same English word as tasks_cadence_unknown — but that key is the vague cadence VALUE, which several locales read as a verb phrase (“Se repite”), and a row label wants the noun. Deliberately two keys -->
+    <string name="tasks_detail_property_repeats">Repeats</string>
+    <!-- Row label; the value is the same next-firing day tasks_recurrence_next_due renders inline on a tree row. Worded off tasks_detail_property_due so the two deadline-ish rows read as a pair -->
+    <string name="tasks_detail_property_next_due">Next due</string>
+    <!-- Row label for today's reading; the same day-word as tasks_detail_due_today -->
+    <string name="tasks_detail_property_today">Today</string>
+    <!-- Today's-occurrence cell (#383, ADR-0053 decision 4). The detail answers two orthogonal questions and must never conflate them: does anything FIRE today (the offline-expanded grid, DayFiring) and how did today GO (the OccurrenceState reading, which speaks the shared common_status_* vocabulary). These three arms are the ones the status vocabulary has no word for; a firing that landed and resolved reads common_status_* as usual -->
+    <!-- DayFiring.NotFiring — the grid WAS reproduced and puts nothing on today. Never render this for a grid we merely failed to expand: that states a fact we do not have, and is the next key -->
+    <string name="tasks_detail_today_not_firing">Not scheduled today</string>
+    <!-- DayFiring.Unavailable — this device cannot reproduce the grid (a Custom rule, a cadence this build cannot model, an unresolvable anchor, or a backend-elided series block). States the device fact and promises nothing about the schedule; it does NOT mean “nothing is scheduled” -->
+    <string name="tasks_detail_today_unavailable">Schedule not available offline</string>
+    <!-- A firing that landed on today and was called off (Firing.isCancelled) — the slot existed, which is a different statement from the rule never having fired. “Cancelled” as in an event called off, NOT the common_cancel dialog button -->
+    <string name="tasks_detail_today_cancelled">Cancelled today</string>
+    <!-- Screen-reader wrapper for the Today row; %1$s = the rendered cell. Read-only twin of tasks_detail_status_row_a11y — this detail is read-only (#383), so it must NOT end in “Tap to change” -->
+    <string name="tasks_detail_today_row_a11y">Today: %1$s</string>
     <string name="tasks_detail_remove_caption_a11y">Remove caption for %1$s</string>
     <string name="tasks_detail_remove_label_a11y">Remove label %1$s</string>
     <!-- Comment/history section heading — kept separate from shell_destination_activity in case translations diverge -->

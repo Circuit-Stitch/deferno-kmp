@@ -390,9 +390,14 @@ private val PropLabelWidth = 116.dp
 /**
  * One properties-table row: a tinted small-caps label cell ruled off from the content cell. When [onClick] is
  * set the whole row is tappable (the STATUS row → status picker) and announced as one node via [rowSemantics].
+ *
+ * `internal` since #383: the recurring-definition detail builds its own table (KIND · REPEATS · NEXT DUE ·
+ * TODAY · STATUS · LABELS) out of these rows. It takes no [Task] and is entirely kind-agnostic already, so
+ * sharing it is a widening of visibility and nothing else — and it is what keeps the two details looking
+ * like one screen family rather than two tables that drifted apart.
  */
 @Composable
-private fun PropertyTableRow(
+internal fun PropertyTableRow(
     label: String,
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
@@ -446,7 +451,7 @@ private fun PropertyTableRow(
 
 /** The hairline between two properties-table rows. */
 @Composable
-private fun PropertyTableDivider() {
+internal fun PropertyTableDivider() {
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
 
@@ -975,9 +980,13 @@ private fun LabelsCell(labels: List<String>, onSetLabels: (List<String>) -> Unit
     }
 }
 
-/** A calm read-only label pill (ADR-0044 mockup): the label text in a filled, rounded chip. */
+/**
+ * A calm read-only label pill (ADR-0044 mockup): the label text in a filled, rounded chip. `internal` since
+ * #383 — the recurring detail renders labels read-only *only*, so it reuses this pill with no [AddLabelField]
+ * or [InputChip] edit affordance around it.
+ */
 @Composable
-private fun LabelChip(label: String) {
+internal fun LabelChip(label: String) {
     Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
         Text(
             text = label,

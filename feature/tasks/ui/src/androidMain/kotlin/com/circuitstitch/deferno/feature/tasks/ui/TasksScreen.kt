@@ -26,16 +26,16 @@ import com.circuitstitch.deferno.core.designsystem.resources.Res
 import com.circuitstitch.deferno.core.designsystem.resources.common_close
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_pane_empty_body
 import com.circuitstitch.deferno.core.designsystem.resources.tasks_detail_pane_empty_title
-import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import org.jetbrains.compose.resources.stringResource
 
 /**
  * The Tasks feature host — the **adaptive tier-2 Pane layout** for the Tasks Destination (#29, ADR-0007).
  * Since ADR-0049 the primary pane is the nested **Item tree** ([TasksComponent.tree]) — the old flat list +
- * one-level drill pane are subsumed — and the secondary pane is the lone Task [TasksComponent.detail]. It
- * renders them as **one or two panes by window size class** via M3 `ListDetailPaneScaffold`: the tree on
- * compact width, a side-by-side tree + detail on regular/expanded width.
+ * one-level drill pane are subsumed — and the secondary pane is the open [TasksComponent.detail], which since
+ * #383 is a Task's detail **or** a recurring definition's. It renders them as **one or two panes by window
+ * size class** via M3 `ListDetailPaneScaffold`: the tree on compact width, a side-by-side tree + detail on
+ * regular/expanded width.
  *
  * **Adaptive off continuous window metrics, never device checks (ADR-0008 G1)** via
  * [calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth] over [currentWindowAdaptiveInfo]. **Resizable
@@ -83,34 +83,44 @@ fun TasksScreen(
 }
 
 /**
- * The detail (secondary) pane: the Task detail when one is open, else a gentle placeholder (the two-pane
- * "pick a task" state). The desktop screen renders the same choice in its own layout. On two-pane
- * ([showClose]) the detail carries a trailing **close ×** (wired to [TaskDetailComponent.onCloseClicked]) —
- * the compact fold's back lives in the shell drilled bar instead, so this affordance would double there
- * (ADR-0044, PaneHeader removed).
+ * The detail (secondary) pane: whichever detail is open, else a gentle placeholder (the two-pane "pick a
+ * task" state). The desktop screen renders the same choice in its own layout. On two-pane ([showClose]) the
+ * detail carries a trailing **close ×** — the compact fold's back lives in the shell drilled bar instead, so
+ * this affordance would double there (ADR-0044, PaneHeader removed).
+ *
+ * Two arms since #383, read off [TasksComponent.DetailChild]'s own `asTask`/`asDefinition` accessors (the
+ * house idiom for this type — the two SwiftUI hosts cannot `when` over the sealed hierarchy and ask the same
+ * pair). The **definition** arm gets no overflow write menu and places the close inside its own body, which
+ * is where its header has a free trailing slot: it is read-only, so it has no ⋮ kebab to sit beside.
  */
 @Composable
 private fun TasksDetailPane(
-    detail: TaskDetailComponent?,
+    detail: TasksComponent.DetailChild?,
     showClose: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (detail != null) {
-        if (showClose) {
-            Column(modifier) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    IconButton(onClick = detail::onCloseClicked) {
-                        Icon(DefernoIcons.Close, contentDescription = stringResource(Res.string.common_close))
+    val task = detail?.asTask
+    val definition = detail?.asDefinition
+    when {
+        task != null ->
+            if (showClose) {
+                Column(modifier) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        IconButton(onClick = task::onCloseClicked) {
+                            Icon(DefernoIcons.Close, contentDescription = stringResource(Res.string.common_close))
+                        }
                     }
+                    TaskDetailScreen(task)
                 }
-                TaskDetailScreen(detail)
+            } else {
+                // Compact single-pane: the shell drilled bar owns the ⋮ overflow, so the body suppresses its own.
+                TaskDetailScreen(task, modifier, showHeaderOverflow = false)
             }
-        } else {
-            // Compact single-pane: the shell drilled bar owns the ⋮ overflow, so the body suppresses its own.
-            TaskDetailScreen(detail, modifier, showHeaderOverflow = false)
-        }
-    } else {
-        EmptyState(
+
+        definition != null ->
+            DefinitionDetailScreen(definition, modifier, showClose = showClose)
+
+        else -> EmptyState(
             title = stringResource(Res.string.tasks_detail_pane_empty_title),
             body = stringResource(Res.string.tasks_detail_pane_empty_body),
             modifier = modifier,

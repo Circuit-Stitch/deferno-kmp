@@ -78,6 +78,19 @@ sealed interface ItemView {
         // reader ignores it), so it is inert outside a Backup file. Task-only: on-device attachments link to
         // a Task (`local_attachment.task_id`, brain-dump → Task); the other kinds carry no local attachments.
         @SerialName("local_attachments") val localAttachments: List<LocalAttachmentDto> = emptyList(),
+        // The two detail-only derived fields of the `ItemDetail` envelope (`GET /items/{id}`, #383).
+        // `/items` sends neither — the snapshot collapses chains server-side
+        // (`SegmentRetention::DropSuperseded`) and derives no origin label — hence the defaults.
+        // DECLARED, NOT ASSUMED: `ignoreUnknownKeys` swallows an unmodelled field silently, so it is
+        // invisible to the contract-fixture harness; that is exactly how #381 (`subtask_template`) and
+        // #382 (`recurrence.end`) each shipped. `series_chain` can never populate on THIS variant (a
+        // Task is backed by no series), but it is declared alongside its three siblings so the union
+        // has one shape and the harness sees the key wherever it lands.
+        @SerialName("series_chain") val seriesChain: SeriesChainDto? = null,
+        // The server-derived Source label — a tracker ref (`owner/repo#N`) or a calendar's display name
+        // (#518). It is the `/items/{id}` envelope's alone: `/tasks/{id}` carries the raw `external`
+        // block instead and the client derives the label itself (see [TaskDetailDto.external]).
+        @SerialName("origin_label") val originLabel: String? = null,
     ) : ItemView
 
     /** The `habit` variant — a recurring definition with no extra kind-specific fields. */
@@ -122,6 +135,18 @@ sealed interface ItemView {
         // *reading* rather than a stored fact (see [OccurrenceDto]); ADR-0053 forbids persisting that,
         // so this is render-only and never reaches a table.
         @SerialName("today_occurrence") val todayOccurrence: OccurrenceDto? = null,
+        // The chain of underlying records this item has been split into by its rule changes — see
+        // [SeriesChainDto]. Detail-only (`GET /items/{id}`, #383): `/items` collapses chains
+        // server-side with `SegmentRetention::DropSuperseded`, hence the default. DECLARED, NOT
+        // ASSUMED — `ignoreUnknownKeys` swallows an unmodelled field silently, making it invisible to
+        // the contract-fixture harness, which is exactly how #381 (`subtask_template`) and #382
+        // (`recurrence.end`) each shipped. Render-only like `today_occurrence`: an era no cold boot
+        // could refresh must never reach a table (ADR-0053).
+        @SerialName("series_chain") val seriesChain: SeriesChainDto? = null,
+        // The server-derived Source label — a tracker ref (`owner/repo#N`) for an imported item, or the
+        // calendar's `display_name` for a calendar event (#518). Absent when the calendar cannot be
+        // resolved (toggled off / dropped), and the client falls back to the provider label.
+        @SerialName("origin_label") val originLabel: String? = null,
     ) : ItemView
 
     /** The `chore` variant — adds `cadence_mode` over the shared recurring base. */
@@ -167,6 +192,18 @@ sealed interface ItemView {
         // *reading* rather than a stored fact (see [OccurrenceDto]); ADR-0053 forbids persisting that,
         // so this is render-only and never reaches a table.
         @SerialName("today_occurrence") val todayOccurrence: OccurrenceDto? = null,
+        // The chain of underlying records this item has been split into by its rule changes — see
+        // [SeriesChainDto]. Detail-only (`GET /items/{id}`, #383): `/items` collapses chains
+        // server-side with `SegmentRetention::DropSuperseded`, hence the default. DECLARED, NOT
+        // ASSUMED — `ignoreUnknownKeys` swallows an unmodelled field silently, making it invisible to
+        // the contract-fixture harness, which is exactly how #381 (`subtask_template`) and #382
+        // (`recurrence.end`) each shipped. Render-only like `today_occurrence`: an era no cold boot
+        // could refresh must never reach a table (ADR-0053).
+        @SerialName("series_chain") val seriesChain: SeriesChainDto? = null,
+        // The server-derived Source label — a tracker ref (`owner/repo#N`) for an imported item, or the
+        // calendar's `display_name` for a calendar event (#518). Absent when the calendar cannot be
+        // resolved (toggled off / dropped), and the client falls back to the provider label.
+        @SerialName("origin_label") val originLabel: String? = null,
     ) : ItemView
 
     /** The `event` variant — adds `all_day` + `end_time` + start/end time-of-day over the recurring base. */
@@ -214,6 +251,18 @@ sealed interface ItemView {
         // *reading* rather than a stored fact (see [OccurrenceDto]); ADR-0053 forbids persisting that,
         // so this is render-only and never reaches a table.
         @SerialName("today_occurrence") val todayOccurrence: OccurrenceDto? = null,
+        // The chain of underlying records this item has been split into by its rule changes — see
+        // [SeriesChainDto]. Detail-only (`GET /items/{id}`, #383): `/items` collapses chains
+        // server-side with `SegmentRetention::DropSuperseded`, hence the default. DECLARED, NOT
+        // ASSUMED — `ignoreUnknownKeys` swallows an unmodelled field silently, making it invisible to
+        // the contract-fixture harness, which is exactly how #381 (`subtask_template`) and #382
+        // (`recurrence.end`) each shipped. Render-only like `today_occurrence`: an era no cold boot
+        // could refresh must never reach a table (ADR-0053).
+        @SerialName("series_chain") val seriesChain: SeriesChainDto? = null,
+        // The server-derived Source label — a tracker ref (`owner/repo#N`) for an imported item, or the
+        // calendar's `display_name` for a calendar event (#518). Absent when the calendar cannot be
+        // resolved (toggled off / dropped), and the client falls back to the provider label.
+        @SerialName("origin_label") val originLabel: String? = null,
     ) : ItemView
 }
 

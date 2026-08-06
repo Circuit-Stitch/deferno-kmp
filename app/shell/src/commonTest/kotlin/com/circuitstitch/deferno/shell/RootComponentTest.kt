@@ -318,7 +318,7 @@ class RootComponentTest {
         val tasks = (main.stack.value.active.instance as MainShellComponent.DestinationChild.Tasks).component
         tasks.tree.onOpenDetail("t-1", ItemKind.Task)
 
-        tasks.detail.value.child?.instance?.onAddToPlanClicked()
+        tasks.detail.value.child?.instance?.asTask?.onAddToPlanClicked()
 
         assertEquals(listOf(TaskId("t-1")), session.addedToPlan)
     }

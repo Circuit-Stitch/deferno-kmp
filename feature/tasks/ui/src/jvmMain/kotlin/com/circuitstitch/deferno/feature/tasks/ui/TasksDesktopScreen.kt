@@ -42,7 +42,8 @@ import java.nio.file.Files
  * Both render the component's panes as **1 or 2 panes by window size class** (ADR-0007 tier-2): Android via
  * M3 `ListDetailPaneScaffold`, desktop via `BoxWithConstraints` here. Since ADR-0049 the primary pane is the
  * nested **Item tree** ([TasksComponent.tree]) — the flat list + one-level drill pane are subsumed — and the
- * secondary pane is the lone Task [TasksComponent.detail].
+ * secondary pane is the open [TasksComponent.detail], which since #383 is a Task's detail **or** a recurring
+ * definition's read-only twin.
  *
  * It is adaptive off the continuous available width (ADR-0008 G1 — never a device-type check): at
  * [TasksTwoPaneMinWidth]+ it shows two panes (tree + detail); narrower, it collapses to a single pane. The
@@ -76,7 +77,7 @@ fun TasksDesktopScreen(
             }
         } else {
             // One pane: render the detail when open, else the tree (the home state when nothing is open).
-            if (detail != null) TaskDetailScreen(detail) else TreePane(component.tree, onSearch = onSearch)
+            if (detail != null) DetailPaneBody(detail) else TreePane(component.tree, onSearch = onSearch)
         }
     }
 }
@@ -87,16 +88,35 @@ internal val TasksTwoPaneMinWidth = 720.dp
 /** Fixed width of the tree pane in the two-pane layout; the secondary pane takes the rest. */
 private val TasksListPaneWidth = 360.dp
 
-/** The right-hand pane in the two-pane layout: the Task detail when one is open, else a gentle placeholder. */
+/** The right-hand pane in the two-pane layout: the open detail, else a gentle placeholder. */
 @Composable
-private fun SecondaryPane(detail: TaskDetailComponent?) {
+private fun SecondaryPane(detail: TasksComponent.DetailChild?) {
     if (detail != null) {
-        TaskDetailScreen(detail)
+        DetailPaneBody(detail)
     } else {
         EmptyState(
             title = stringResource(Res.string.tasks_detail_pane_empty_title),
             body = stringResource(Res.string.tasks_detail_pane_empty_body),
         )
+    }
+}
+
+/**
+ * Whichever detail is open (#383) — a Task's, or a recurring definition's read-only twin — read off
+ * [TasksComponent.DetailChild]'s own `asTask`/`asDefinition` accessors, the house idiom for this type (the
+ * two SwiftUI hosts cannot `when` over the sealed hierarchy and ask the very same pair).
+ *
+ * The definition arm passes `showClose = false` so the two arms stay identical here: on desktop a pane is
+ * dismissed by shell back (Esc → `RootComponent.onBackClicked()`, Main.kt), which is kind-blind, and the Task
+ * arm has never drawn an in-body ×. Android is where the × earns its place — its two-pane layout has no Esc.
+ */
+@Composable
+private fun DetailPaneBody(detail: TasksComponent.DetailChild, modifier: Modifier = Modifier) {
+    val task = detail.asTask
+    val definition = detail.asDefinition
+    when {
+        task != null -> TaskDetailScreen(task, modifier)
+        definition != null -> DefinitionDetailDesktopScreen(definition, modifier, showClose = false)
     }
 }
 

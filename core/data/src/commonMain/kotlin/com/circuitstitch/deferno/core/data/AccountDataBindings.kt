@@ -38,7 +38,10 @@ import com.circuitstitch.deferno.core.data.item.ItemSync
 import com.circuitstitch.deferno.core.data.item.ItemWriter
 import com.circuitstitch.deferno.core.data.item.OfflineItemRepository
 import com.circuitstitch.deferno.core.data.item.OutboxItemWriter
+import com.circuitstitch.deferno.core.data.definition.DefinitionRepository
+import com.circuitstitch.deferno.core.data.definition.OfflineDefinitionRepository
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.item.ItemDetailRemoteSource
 import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
@@ -306,6 +309,25 @@ interface AccountDataBindings {
     @SingleIn(AccountScope::class)
     fun occurrenceCoverageLocalStore(db: DefernoDatabase): OccurrenceCoverageLocalStore =
         SqlDelightOccurrenceCoverageLocalStore(db)
+
+    // The kind-neutral recurring-definition read (#383): the three per-kind stores fanned out over
+    // kind, hydrated through the one detail route that exists (`GET /items/{id}` — the shipped contract
+    // has no `get` on `/habits/{id}` and friends at all). Per-Account, because it closes over this
+    // Account's stores; the remote source it takes is AppScope, like every other Ktor source, since the
+    // shared client resolves the Active Account per request.
+    //
+    // It is the ONLY writer of occurrence coverage in this client, so it is what makes a recurring
+    // detail's "today" readable at all rather than permanently Unknown.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun definitionRepository(
+        habits: HabitLocalStore,
+        chores: ChoreLocalStore,
+        events: EventLocalStore,
+        remote: ItemDetailRemoteSource,
+        facts: OccurrenceFactLocalStore,
+        coverage: OccurrenceCoverageLocalStore,
+    ): DefinitionRepository = OfflineDefinitionRepository(habits, chores, events, remote, facts, coverage)
 
     // The third reading input: a definition's Active/Archived light switch, read kind-neutrally so no
     // consumer fans a `when (kind)` over the three per-kind stores (#385's dispatch, removed). It gates

@@ -18,19 +18,30 @@ import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.activity.ActivityEntry
 import com.circuitstitch.deferno.core.data.comment.CommentRepository
 import com.circuitstitch.deferno.core.data.comment.CommentWriter
+import com.circuitstitch.deferno.core.data.definition.DefinitionRepository
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
+import com.circuitstitch.deferno.core.data.occurrence.InertOccurrenceCoverageLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.InertOccurrenceFactLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRepository
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemRef
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.UserId
+import kotlin.time.Clock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlin.coroutines.CoroutineContext
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
 import kotlin.time.Instant
 
 /** Which pane is foregrounded — the Item [Tree] (the primary Tasks pane) or a Task [Detail]. */
@@ -49,17 +60,51 @@ enum class TaskPane { Tree, Detail }
  */
 interface TasksComponent {
     val tree: ItemTreeComponent
-    val detail: Value<ChildSlot<*, TaskDetailComponent>>
+    val detail: Value<ChildSlot<*, DetailChild>>
 
     /** The most-recently-foregrounded pane (see [TaskPane]); updated as the detail slot activates/dismisses. */
     val activePane: Value<TaskPane>
 
     /**
-     * [detail], flattened to its nullable open [TaskDetailComponent] and mirrored as a [StateFlow] for
+     * [detail], flattened to its nullable open [DetailChild] and mirrored as a [StateFlow] for
      * the SwiftUI Views to observe via SKIE (which bridges `StateFlow` but not Decompose's
      * [Value]/[ChildSlot]). The Compose/Android side keeps observing [detail] directly.
      */
-    val activeDetail: StateFlow<TaskDetailComponent?>
+    val activeDetail: StateFlow<DetailChild?>
+
+    /**
+     * Which detail is open (#383). Two arms, not four: a [[Task]] has a full read/write detail, and the
+     * three recurring kinds share one read-only definition detail — they project identically for reading
+     * and differ only in writes, which this slice does not have.
+     *
+     * Sealed rather than a widened `TaskDetailComponent` because that component's `taskId` is SwiftUI
+     * view identity and its constructor fires five Task-scoped side effects; see
+     * [DefinitionDetailComponent]'s KDoc for the full reasoning. This mirrors
+     * `MainShellComponent.PlanChild`, already the same shape.
+     */
+    sealed interface DetailChild {
+
+        /** Dismiss whichever detail is open — the one action the host shell needs kind-blind. */
+        fun onCloseClicked()
+
+        /**
+         * The open Task detail, or `null` when a definition is open — and its twin below.
+         *
+         * Flat accessors beside the sealed arms because the two SwiftUI apps cannot `when` over a
+         * Kotlin sealed hierarchy through the bridge, and their Views need exactly this question
+         * answered. One pair of accessors here beats an `as?` repeated at every Swift and test site.
+         */
+        val asTask: TaskDetailComponent? get() = (this as? Task)?.component
+        val asDefinition: DefinitionDetailComponent? get() = (this as? Definition)?.component
+
+        class Task(val component: TaskDetailComponent) : DetailChild {
+            override fun onCloseClicked() = component.onCloseClicked()
+        }
+
+        class Definition(val component: DefinitionDetailComponent) : DetailChild {
+            override fun onCloseClicked() = component.onCloseClicked()
+        }
+    }
 
     sealed interface Output {
         data class AddToPlanRequested(val id: TaskId) : Output
@@ -74,8 +119,16 @@ class DefaultTasksComponent(
     // The cross-kind Item read + device-local fold store the tree pane renders (ADR-0049, #226/#227).
     private val itemRepository: ItemRepository,
     private val foldStore: ItemFoldStore,
-    // The Task read seam the detail slot observes/hydrates (still Task-centric; detail is Task-only).
+    // The Task read seam the Task arm of the detail slot observes/hydrates.
     private val taskRepository: TaskRepository,
+    // The recurring-definition read seam the Definition arm observes/hydrates (#383), plus the two
+    // occurrence stores its "today" reading is derived from and the reader's local today. All defaulted
+    // so every existing caller and test constructs unchanged; the inert defaults render "not synced",
+    // which is the honest reading for a host that has wired no stores.
+    private val definitionRepository: DefinitionRepository = DefinitionRepository.NONE,
+    private val occurrenceFacts: OccurrenceFactLocalStore = InertOccurrenceFactLocalStore,
+    private val occurrenceCoverage: OccurrenceCoverageLocalStore = InertOccurrenceCoverageLocalStore,
+    private val today: () -> LocalDate = { Clock.System.todayIn(TimeZone.currentSystemDefault()) },
     private val output: (TasksComponent.Output) -> Unit = {},
     // The working-state write seam (#73), threaded down into the detail slot so the detail can issue
     // lifecycle Commands. Defaults to a no-op so existing shell/component tests build without it.
@@ -138,7 +191,7 @@ class DefaultTasksComponent(
     // initialTask seeds the detail's first frame from a row the opener already had in memory (no DB read).
     // The tree opens by id only (its rows are the cross-kind Item projection, not full Tasks), so a
     // tree-opened detail has no seed and its title pops in one frame later; a subtask-drill still seeds.
-    private data class DetailConfig(val taskId: TaskId, val initialTask: Task? = null)
+    private data class DetailConfig(val ref: ItemRef, val initialTask: Task? = null)
 
     private val detailNavigation = SlotNavigation<DetailConfig>()
 
@@ -168,48 +221,74 @@ class DefaultTasksComponent(
             coroutineContext = coroutineContext,
         )
 
-    override val detail: Value<ChildSlot<*, TaskDetailComponent>> =
+    override val detail: Value<ChildSlot<*, TasksComponent.DetailChild>> =
         childSlot(
             source = detailNavigation,
             serializer = null,
             key = "detail",
             handleBackButton = false,
         ) { config, childContext ->
-            DefaultTaskDetailComponent(
-                componentContext = childContext,
-                taskId = config.taskId,
-                taskRepository = taskRepository,
-                output = ::onDetailOutput,
-                workingStateEditor = workingStateEditor,
-                initialTask = config.initialTask,
-                detailRepository = taskDetailRepository,
-                commentRepository = commentRepository,
-                historyRepository = itemHistoryRepository,
-                observeItemLedger = observeItemLedger,
-                itemRepository = itemRepository,
-                commentWriter = commentWriter,
-                currentUserId = currentUserId,
-                createSubtask = createSubtask,
-                setDeadline = setDeadline,
-                setDeadlineTime = setDeadlineTime,
-                setTargetDate = setTargetDate,
-                setPriority = setPriority,
-                setLabels = setLabels,
-                delete = deleteTask,
-                onDeviceAttachments = onDeviceAttachments,
-                foldStore = foldStore,
-                coroutineContext = coroutineContext,
+            // The kind decides the detail. `taskId` is non-null exactly when the ref is a Task, so the
+            // two arms are total and the recurring id can never reach a TaskId-typed seam (ItemRef).
+            val taskId = config.ref.taskId
+                ?: return@childSlot TasksComponent.DetailChild.Definition(
+                    DefaultDefinitionDetailComponent(
+                        componentContext = childContext,
+                        ref = config.ref,
+                        definitionRepository = definitionRepository,
+                        occurrenceFacts = occurrenceFacts,
+                        occurrenceCoverage = occurrenceCoverage,
+                        today = today,
+                        output = ::onDefinitionDetailOutput,
+                        coroutineContext = coroutineContext,
+                    ),
+                )
+            TasksComponent.DetailChild.Task(
+                DefaultTaskDetailComponent(
+                    componentContext = childContext,
+                    taskId = taskId,
+                    taskRepository = taskRepository,
+                    output = ::onDetailOutput,
+                    workingStateEditor = workingStateEditor,
+                    initialTask = config.initialTask,
+                    detailRepository = taskDetailRepository,
+                    commentRepository = commentRepository,
+                    historyRepository = itemHistoryRepository,
+                    observeItemLedger = observeItemLedger,
+                    itemRepository = itemRepository,
+                    commentWriter = commentWriter,
+                    currentUserId = currentUserId,
+                    createSubtask = createSubtask,
+                    setDeadline = setDeadline,
+                    setDeadlineTime = setDeadlineTime,
+                    setTargetDate = setTargetDate,
+                    setPriority = setPriority,
+                    setLabels = setLabels,
+                    delete = deleteTask,
+                    onDeviceAttachments = onDeviceAttachments,
+                    foldStore = foldStore,
+                    coroutineContext = coroutineContext,
+                ),
             )
         }
 
-    override val activeDetail: StateFlow<TaskDetailComponent?> =
+    override val activeDetail: StateFlow<TasksComponent.DetailChild?> =
         detail.asStateFlow(scope) { it.child?.instance }
 
     private fun onTreeOutput(output: ItemTreeComponent.Output) {
         when (output) {
             is ItemTreeComponent.Output.ItemSelected -> {
-                detailNavigation.activate(DetailConfig(output.id))
+                detailNavigation.activate(DetailConfig(output.ref))
                 _activePane.value = TaskPane.Detail
+            }
+        }
+    }
+
+    private fun onDefinitionDetailOutput(output: DefinitionDetailComponent.Output) {
+        when (output) {
+            DefinitionDetailComponent.Output.Closed -> {
+                detailNavigation.dismiss()
+                _activePane.value = TaskPane.Tree
             }
         }
     }
@@ -224,9 +303,12 @@ class DefaultTasksComponent(
             // detail's in-memory subtask outline (the visible row it just tapped) so the re-keyed title
             // shows now.
             is TaskDetailComponent.Output.SubtaskSelected -> {
-                val seed = detail.value.child?.instance?.state?.value
+                // A subtask is always a Task — the outline is typed `SubtaskRow(task: Task)` — so this
+                // re-key stays on the Task arm by construction.
+                val seed = (detail.value.child?.instance as? TasksComponent.DetailChild.Task)
+                    ?.component?.state?.value
                     ?.subtaskRows?.firstOrNull { it.task.id == output.id }?.task
-                detailNavigation.activate(DetailConfig(output.id, seed))
+                detailNavigation.activate(DetailConfig(ItemRef(output.id.value, ItemKind.Task), seed))
                 _activePane.value = TaskPane.Detail
             }
             is TaskDetailComponent.Output.AddToPlanRequested ->

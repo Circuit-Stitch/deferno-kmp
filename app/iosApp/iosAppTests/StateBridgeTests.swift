@@ -11,6 +11,12 @@ import Deferno
 /// `SkieSwiftOptionalStateFlow` → `OptionalStateFlowObserver`. These tests prove both deliver the real
 /// component state on the main thread, driving the genuine shared components through the same
 /// `DefernoDemo` harness the simulator app runs — only the data is a fixture.
+///
+/// Since #383 that child is a **sealed pair** (`DetailChild.Task` | `.Definition`), which Swift cannot
+/// take apart, so the arm-discriminating bridge seams — `taskDetailOrNull` / `definitionDetailOrNull` /
+/// `detailChildKey` — are pinned here too. They are worth pinning precisely because their failure modes
+/// are quiet: a wrong arm renders the wrong View, and a colliding `detailChildKey` carries stale
+/// SwiftUI `@State` across a re-key rather than failing to compile.
 @MainActor
 final class StateBridgeTests: XCTestCase {
 
@@ -48,10 +54,13 @@ final class StateBridgeTests: XCTestCase {
     }
 
     /// Opening a tree row's detail drives the retained shared component to open its co-resident **detail**
-    /// slot (ADR-0007) — the slot the two-pane `TasksScreen` observes goes from nil to the selected Task,
+    /// slot (ADR-0007) — the slot the two-pane `TasksScreen` observes goes from nil to the selected item,
     /// all on the main thread. This exercises the thin-view contract end to end: the View forwards an
     /// intent, the shared component owns the navigation, and the slot bridge publishes the result.
-    func testItemSelectionOpensDetailSlot() {
+    ///
+    /// Since #383 the slot's child is the sealed pair `TasksComponent.DetailChild`, so the assertion is
+    /// now two-part: the right **arm**, and the right item inside it.
+    func testItemSelectionOpensTheTaskArmOfTheDetailSlot() {
         // 1) Let the tree load so we can open a real row by the same id + kind the View forwards.
         let treeObserver = StateFlowObserver(demo.tasks.tree.state)
         var target: ItemRow?
@@ -68,24 +77,105 @@ final class StateBridgeTests: XCTestCase {
         guard let target else { return XCTFail("the demo tree never delivered \"Water the plants\"") }
 
         // 2) The detail slot is empty until a selection; opening the row's detail opens it on that Task.
+        guard let child = openDetail(id: target.item.id, kind: target.item.kind) else { return }
+
+        guard let task = BridgeKt.taskDetailOrNull(child: child) else {
+            return XCTFail("a Task row must open the Task arm of the detail slot")
+        }
+        XCTAssertNil(
+            BridgeKt.definitionDetailOrNull(child: child),
+            "the two arms are exclusive — a Task row must not also read as a definition"
+        )
+        XCTAssertEqual(
+            BridgeKt.detailKey(component: task),
+            target.item.id,
+            "the opened detail slot should be rooted at the opened Task"
+        )
+        // The Task arm's widened key is byte-identical to `detailKey`, which is what lets the Plan stack
+        // (still `detailKey`) and this screen agree on a Task's SwiftUI identity.
+        XCTAssertEqual(BridgeKt.detailChildKey(child: child), target.item.id)
+    }
+
+    /// **The #383 regression guard.** A Habit/Chore/Event ref opens the *definition* arm rather than being
+    /// refused — which is what the bug was: the tree's open callback carried the kind, the slot discarded
+    /// it, and the only safe thing left to do with a bare id was to refuse every non-Task row.
+    ///
+    /// The ref is synthesised rather than taken from the fixture, deliberately: `SampleData` holds only
+    /// Tasks, and which arm the slot builds is a function of `ItemRef.kind` **alone** — no repository is
+    /// consulted to decide it (`DefaultTasksComponent.detail`). Using an id the fixture does not contain
+    /// keeps the test from implying a recurring row exists there. The definition it opens then hydrates
+    /// through `DefinitionRepository.NONE` and reads as missing, which is the honest cold state and is not
+    /// what this test is about.
+    func testRecurringSelectionOpensTheDefinitionArm() {
+        guard let child = openDetail(id: "habit-1", kind: ItemKind.habit) else { return }
+
+        guard let definition = BridgeKt.definitionDetailOrNull(child: child) else {
+            return XCTFail("a Habit ref must open the definition arm, not be refused")
+        }
+        XCTAssertNil(
+            BridgeKt.taskDetailOrNull(child: child),
+            "a recurring id must never reach a TaskId-typed detail — that is the silent-loss shape ItemRef guards"
+        )
+        XCTAssertEqual(definition.ref.id, "habit-1")
+        XCTAssertTrue(definition.ref.kind == ItemKind.habit, "the kind survives the navigation intent")
+        // Keyed on the whole ref: a bare id would let a Task and a Habit sharing a UUID inherit each
+        // other's SwiftUI @State, which fails silently rather than loudly.
+        XCTAssertEqual(BridgeKt.detailChildKey(child: child), "Habit:habit-1")
+        XCTAssertNotEqual(
+            BridgeKt.detailChildKey(child: child),
+            "habit-1",
+            "the definition arm's view identity must carry the kind"
+        )
+    }
+
+    /// The ADR-0053 honesty contract for the detail's TODAY row, at the state this device is in most
+    /// often: nothing synced, no grid reproducible. It must read **"Schedule not available offline"** and
+    /// never "Not scheduled today" — the second states a fact about the schedule that this device does not
+    /// have, and the two are one `if` apart in any View that re-derives them.
+    ///
+    /// Read off the real component's state rather than a hand-built `TodayOccurrence`: with the inert
+    /// occurrence stores and no cached definition there is no rule to expand and no coverage, so both the
+    /// seeded frame and every emission after it are `Unavailable` + `Unknown`.
+    func testAnUnreproducibleGridReadsAsUnavailableNotAsNotScheduled() {
+        guard let child = openDetail(id: "habit-1", kind: ItemKind.habit),
+              let definition = BridgeKt.definitionDetailOrNull(child: child) else {
+            return XCTFail("the definition arm never opened")
+        }
+
+        let state = StateFlowObserver(definition.state)
+        let cell = BridgeKt.definitionTodayCell(today: state.value.today)
+
+        XCTAssertEqual(cell.token, "tasks_detail_today_unavailable")
+        XCTAssertNotEqual(
+            cell.token,
+            "tasks_detail_today_not_firing",
+            "an un-expandable grid is absent information, never an empty schedule"
+        )
+        XCTAssertFalse(cell.isState, "a grid answer is not an Occurrence-state reading and takes no chip")
+        XCTAssertFalse(cell.isDone)
+    }
+
+    /// Open a ref through the tree's real navigation intent and hand back the slot's child. Asserts the
+    /// slot starts empty, so every caller gets that check for free.
+    private func openDetail(id: String, kind: ItemKind) -> TasksComponentDetailChild? {
         let detail = OptionalStateFlowObserver(demo.tasks.activeDetail)
         XCTAssertNil(detail.value, "no detail pane is open before a selection")
 
-        let opened = expectation(description: "opening a row's detail opens its detail slot")
+        var opened: TasksComponentDetailChild?
+        let arrived = expectation(description: "the detail slot opens on \(kind.name) \(id)")
         detail.$value
             .compactMap { $0 }
-            .sink { component in
-                XCTAssertEqual(
-                    BridgeKt.detailKey(component: component),
-                    target.item.id,
-                    "the opened detail slot should be rooted at the opened Task"
-                )
-                opened.fulfill()
+            .sink { child in
+                guard opened == nil else { return }   // the slot may re-emit; fulfil once
+                opened = child
+                arrived.fulfill()
             }
             .store(in: &cancellables)
 
-        demo.tasks.tree.onOpenDetail(id: target.item.id, kind: target.item.kind)
-        wait(for: [opened], timeout: 5)
+        demo.tasks.tree.onOpenDetail(id: id, kind: kind)
+        wait(for: [arrived], timeout: 5)
+        if opened == nil { XCTFail("the detail slot never opened for \(kind.name) \(id)") }
+        return opened
     }
 }
 

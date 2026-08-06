@@ -28,7 +28,10 @@ import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.data.connectivity.AssumeOnlineConnectivity
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
+import com.circuitstitch.deferno.core.data.definition.DefinitionRepository
 import com.circuitstitch.deferno.core.data.definition.DefinitionStateSource
+import com.circuitstitch.deferno.core.data.occurrence.InertOccurrenceCoverageLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.InertOccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
@@ -163,6 +166,10 @@ class DefaultMainShellComponent(
     private val occurrenceFactLocalStore: OccurrenceFactLocalStore = InertOccurrenceFactLocalStore,
     private val occurrenceCoverageLocalStore: OccurrenceCoverageLocalStore = InertOccurrenceCoverageLocalStore,
     private val definitionStateSource: DefinitionStateSource = InertDefinitionStateSource,
+    // The recurring-definition detail read (#383) — the kind-neutral `GET /items/{id}` seam the Tasks
+    // Destination's detail slot hydrates a Habit/Chore/Event through. Inert default for the same reason
+    // as the three above: a shell test without it renders the cached row and no dated answer.
+    private val definitionRepository: DefinitionRepository = DefinitionRepository.NONE,
     // The Tasks working-state write seam (#73), threaded into the Tasks Destination's component so its
     // detail can issue lifecycle Commands. Defaults to a no-op so the many shell tests build without it.
     private val workingStateEditor: WorkingStateEditor = WorkingStateEditor.NONE,
@@ -594,6 +601,13 @@ class DefaultMainShellComponent(
                         itemRepository = itemRepository,
                         foldStore = foldStore,
                         taskRepository = taskRepository,
+                        // The recurring-definition detail seam (#383) and the two stores its "today"
+                        // reading derives from. `today` is the shell's own injected date, not a clock
+                        // read — the whole reading is a function of it.
+                        definitionRepository = definitionRepository,
+                        occurrenceFacts = occurrenceFactLocalStore,
+                        occurrenceCoverage = occurrenceCoverageLocalStore,
+                        today = { today },
                         output = ::onTasksOutput,
                         workingStateEditor = workingStateEditor,
                         definitionStateEditor = definitionStateEditor,

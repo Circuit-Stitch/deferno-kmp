@@ -137,7 +137,7 @@ class MainShellComponentTest {
         shell.selectDestination(Destination.Tasks)
         val tasks = shell.tasks()
         tasks.tree.onOpenDetail("t-1", ItemKind.Task)
-        assertEquals(TaskId("t-1"), tasks.detail.value.child?.instance?.taskId)
+        assertEquals(TaskId("t-1"), tasks.detail.value.child?.instance?.asTask?.taskId)
 
         // Leave Tasks for Plan, then come back — the ADR-0007 tier-1 acceptance scenario.
         shell.selectDestination(Destination.Plan)
@@ -147,7 +147,7 @@ class MainShellComponentTest {
         // Same Tasks instance, detail still open on the same Task — multiple back stacks, no reset.
         val tasksAgain = shell.tasks()
         assertSame(tasks, tasksAgain, "the Tasks Destination is retained across the switch")
-        assertEquals(TaskId("t-1"), tasksAgain.detail.value.child?.instance?.taskId)
+        assertEquals(TaskId("t-1"), tasksAgain.detail.value.child?.instance?.asTask?.taskId)
     }
 
     @Test
@@ -156,7 +156,7 @@ class MainShellComponentTest {
         shell.selectDestination(Destination.Tasks)
         val tasks = shell.tasks()
         tasks.tree.onOpenDetail("t-1", ItemKind.Task)
-        assertEquals(TaskId("t-1"), tasks.detail.value.child?.instance?.taskId)
+        assertEquals(TaskId("t-1"), tasks.detail.value.child?.instance?.asTask?.taskId)
 
         // Not just one round-trip: the Tasks Destination must stay the same instance with its detail
         // intact across many lateral switches (multiple back stacks survive rapid nav — ADR-0007 t1).
@@ -165,7 +165,7 @@ class MainShellComponentTest {
             assertEquals(Destination.Plan, shell.activeDestination())
             shell.selectDestination(Destination.Tasks)
             assertSame(tasks, shell.tasks())
-            assertEquals(TaskId("t-1"), shell.tasks().detail.value.child?.instance?.taskId)
+            assertEquals(TaskId("t-1"), shell.tasks().detail.value.child?.instance?.asTask?.taskId)
         }
     }
 
@@ -227,7 +227,7 @@ class MainShellComponentTest {
         val tasks = shell.tasks()
         tasks.tree.onOpenDetail("t-1", ItemKind.Task)
 
-        tasks.detail.value.child?.instance?.onAddToPlanClicked()
+        tasks.detail.value.child?.instance?.asTask?.onAddToPlanClicked()
 
         assertEquals(
             listOf<MainShellComponent.Output>(MainShellComponent.Output.AddToPlanRequested(TaskId("t-1"))),
@@ -716,7 +716,7 @@ class MainShellComponentTest {
         // Mirrors the Plan-tap routing: switch to Tasks, open the Task, and pop the overlay.
         assertNull(shell.overlay.value.child, "the overlay is dismissed on result tap")
         assertEquals(Destination.Tasks, shell.activeDestination())
-        assertEquals(TaskId("t-1"), shell.tasks().detail.value.child?.instance?.taskId)
+        assertEquals(TaskId("t-1"), shell.tasks().detail.value.child?.instance?.asTask?.taskId)
     }
 
     @Test

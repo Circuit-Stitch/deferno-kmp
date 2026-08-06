@@ -766,21 +766,22 @@ private fun ItemTreeRow(
             // from whether the per-row Task state has joined: a Task whose [menuState] hasn't loaded yet (the
             // tree rows come from the Item repo, [menuState] from the Task+plan repos — independent Flows) is
             // still a Task. The status block, Pin and Add-to-plan are Task-only writes (the native command
-            // layer is Task-centric there), so a non-Task row gets the cross-kind subset: Add subtask · Move ·
-            // its own definition-state block · Delete (Open routes to the Task-only detail). Pin/plan/status
-            // need the joined values, so they render once [menuState] is present; Open needs only the id, so
-            // it gates on kind alone. Delete is offered for EVERY kind since #389 — it hangs below both status
-            // blocks, and the component (not this menu) resolves which route the row's kind takes. "Set
-            // aside"/"Delete" are destructive (error-tinted; the word, not just colour, carries the signal —
-            // a11y). The arbitrary-parent "Move to…" entry + picker land together in #229; the menu opens by
-            // long-press (a TalkBack custom action) — keyboard open is #300.
+            // layer is Task-centric there), so a non-Task row gets the cross-kind subset: Open · Add subtask ·
+            // Move · its own definition-state block · Delete. Pin/plan/status need the joined values, so they
+            // render once [menuState] is present. Delete is offered for EVERY kind since #389 — it hangs below
+            // both status blocks, and the component (not this menu) resolves which route the row's kind takes.
+            // "Set aside"/"Delete" are destructive (error-tinted; the word, not just colour, carries the
+            // signal — a11y). The arbitrary-parent "Move to…" entry + picker land together in #229; the menu
+            // opens by long-press (a TalkBack custom action) — keyboard open is #300.
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                if (isTask) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.tasks_menu_open)) },
-                        onClick = { menuOpen = false; onOpenDetail(item.id, item.kind) },
-                    )
-                }
+                // Open is kind-NEUTRAL since #383: the detail slot now has a recurring-definition arm, so a
+                // Habit/Chore/Event id no longer routes to a Task-only screen. The row's trailing chevron was
+                // already kind-neutral, and this entry is its keyboard/TalkBack twin — gating one and not the
+                // other left the menu's users with no reachable way to open a recurring row at all.
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.tasks_menu_open)) },
+                    onClick = { menuOpen = false; onOpenDetail(item.id, item.kind) },
+                )
                 DropdownMenuItem(
                     text = { Text(stringResource(Res.string.tasks_menu_add_subtask)) },
                     onClick = { menuOpen = false; addSubtaskOpen = true },

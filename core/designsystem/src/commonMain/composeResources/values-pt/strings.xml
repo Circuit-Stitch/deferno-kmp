@@ -687,6 +687,29 @@ Agradeço.</string>
         <item quantity="one">Mensalmente</item>
         <item quantity="other">A cada %1$d meses</item>
     </plurals>
+    <!-- Gramática da âncora mensal (#383) — o 'quando exatamente' que a linha do item omite. O caso 'one' dos plurais é inalcançável: com intervalo 1 usa-se a variante sem número -->
+    <!-- Seis ordinais fixos (1..5 e 'última'), não um plurals nem uma API de ordinais: são posições, não contagens. Vêm em forma numérica e FEMININA porque concordam com 'ocorrência' no modelo abaixo — não com o dia da semana, que em português alterna gênero (seg–sex femininos, sáb/dom masculinos), o mesmo motivo dos dois-pontos em tasks_cadence_weekly_on. A forma numérica também evita confundir 'segunda/quarta/quinta' ordinal com o nome do dia -->
+    <string name="tasks_cadence_nth_first">1ª</string>
+    <string name="tasks_cadence_nth_second">2ª</string>
+    <string name="tasks_cadence_nth_third">3ª</string>
+    <string name="tasks_cadence_nth_fourth">4ª</string>
+    <string name="tasks_cadence_nth_fifth">5ª</string>
+    <!-- nth = -1: a última do mês que coincidir, nunca 'a quinta' -->
+    <string name="tasks_cadence_nth_last">última</string>
+    <!-- %1$s = ordinal, %2$s = abreviatura do dia (dados CLDR da plataforma). 'ocorrência' é o substantivo com que o ordinal concorda -->
+    <string name="tasks_cadence_monthly_on_weekday">Mensalmente: %1$s ocorrência de %2$s</string>
+    <!-- %1$d = intervalo em meses, %2$s = ordinal, %3$s = dia -->
+    <plurals name="tasks_cadence_monthly_every_n_on_weekday">
+        <item quantity="one">A cada %1$d mês: %2$s ocorrência de %3$s</item>
+        <item quantity="other">A cada %1$d meses: %2$s ocorrência de %3$s</item>
+    </plurals>
+    <!-- 'no dia 15' e não 'no décimo quinto': a regra PULA os meses curtos demais em vez de ajustar o dia, então a forma simples também é a honesta -->
+    <string name="tasks_cadence_monthly_on_day">Mensalmente no dia %1$d</string>
+    <!-- %1$d = intervalo em meses, %2$d = dia do mês -->
+    <plurals name="tasks_cadence_monthly_every_n_on_day">
+        <item quantity="one">A cada %1$d mês no dia %2$d</item>
+        <item quantity="other">A cada %1$d meses no dia %2$d</item>
+    </plurals>
     <plurals name="tasks_cadence_times">
         <item quantity="one">%1$d vez</item>
         <item quantity="other">%1$d vezes</item>
@@ -706,6 +729,18 @@ Agradeço.</string>
         <item quantity="one">Anualmente</item>
         <item quantity="other">A cada %1$d anos</item>
     </plurals>
+    <!-- Âncora anual (#383) — mês + dia, que a linha omite. A data chega já formatada por tasks_cadence_month_day_pattern -->
+    <!-- PADRÃO do java.time, não texto corrido: traduzir a ORDEM dos campos e os separadores, nunca as letras -->
+    <string name="tasks_cadence_month_day_pattern">d 'de' MMMM</string>
+    <string name="tasks_cadence_yearly_on">Anualmente em %1$s</string>
+    <!-- %1$d = intervalo em anos, %2$s = mês e dia já formatados -->
+    <plurals name="tasks_cadence_yearly_every_n_on">
+        <item quantity="one">A cada %1$d ano em %2$s</item>
+        <item quantity="other">A cada %1$d anos em %2$s</item>
+    </plurals>
+    <!-- Estado da definição: o interruptor de um hábito/afazer/evento, que nunca fica 'concluído'. Adjetivos no masculino singular — os três tipos são masculinos em português —, distintos do filtro tasks_filter_active ('Ativas', tarefas). InReview continua usando common_status_in_review -->
+    <string name="tasks_definition_state_active">Ativo</string>
+    <string name="tasks_definition_state_archived">Arquivado</string>
     <!-- A exclusão vale para a cadeia inteira (todas as versões da regra), mas é uma exclusão SUAVE: as ocorrências registradas permanecem. Não prometer cascata -->
     <string name="tasks_delete_definition_confirm_body">Isso remove a série repetida inteira de todas as listas e planos. As ocorrências passadas já registradas são mantidas.</string>
     <string name="tasks_delete_item_confirm_title">Excluir “%1$s”?</string>
@@ -740,6 +775,9 @@ Agradeço.</string>
     <string name="tasks_detail_no_description">Nenhuma descrição ainda.</string>
     <string name="tasks_detail_not_found_body">Esta tarefa pode ter sido removida. Volte para a sua lista.</string>
     <string name="tasks_detail_not_found_title">Tarefa não encontrada</string>
+    <!-- Variante neutra quanto ao tipo (#383): a tela chega aqui sem saber se faltava uma tarefa, um hábito, um afazer ou um evento, então diz 'item' (common_kind_item) -->
+    <string name="tasks_detail_item_not_found_body">Este item pode ter sido removido. Volte para a sua lista.</string>
+    <string name="tasks_detail_item_not_found_title">Item não encontrado</string>
     <string name="tasks_detail_pane_empty_body">Escolha uma tarefa à esquerda para ver os detalhes aqui.</string>
     <string name="tasks_detail_pane_empty_title">Nada aberto</string>
     <string name="tasks_detail_play">Reproduzir</string>
@@ -751,6 +789,22 @@ Agradeço.</string>
     <string name="tasks_detail_property_owner">Responsável</string>
     <string name="tasks_detail_property_source">Origem</string>
     <string name="tasks_detail_property_time">Hora</string>
+    <!-- Linhas da tabela do detalhe recorrente (#383): são RÓTULOS, os valores vêm de outras chaves -->
+    <string name="tasks_detail_property_kind">Tipo</string>
+    <!-- Substantivo: aqui é o nome, não a frase verbal de tasks_cadence_unknown ('Se repete') -->
+    <string name="tasks_detail_property_repeats">Repetição</string>
+    <!-- Faz par com tasks_detail_property_due ('Prazo') -->
+    <string name="tasks_detail_property_next_due">Próximo prazo</string>
+    <string name="tasks_detail_property_today">Hoje</string>
+    <!-- Célula da ocorrência de hoje (#383): 'cai algo hoje?' e 'como foi hoje?' são perguntas diferentes; a segunda é respondida pelas chaves common_status_* -->
+    <!-- A programação foi calculada e hoje não cai nenhuma repetição -->
+    <string name="tasks_detail_today_not_firing">Hoje não está agendado</string>
+    <!-- Este dispositivo não consegue calcular a programação — não significa 'não há nada agendado' -->
+    <string name="tasks_detail_today_unavailable">Programação indisponível sem conexão</string>
+    <!-- A ocorrência caía hoje, mas foi cancelada — 'cancelado' como algo desmarcado, não o botão common_cancel -->
+    <string name="tasks_detail_today_cancelled">Cancelado hoje</string>
+    <!-- Somente leitura: sem 'Toque para alterar' -->
+    <string name="tasks_detail_today_row_a11y">Hoje: %1$s</string>
     <string name="tasks_detail_remove_caption_a11y">Remover legenda de %1$s</string>
     <string name="tasks_detail_remove_label_a11y">Remover etiqueta %1$s</string>
     <string name="tasks_detail_section_activity">Atividade</string>

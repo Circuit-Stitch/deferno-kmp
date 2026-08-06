@@ -2,7 +2,6 @@ package com.circuitstitch.deferno.macos
 
 import com.circuitstitch.deferno.feature.plan.PlanComponent
 import com.circuitstitch.deferno.feature.tasks.ItemTreeComponent
-import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TasksComponent
 import kotlinx.coroutines.flow.StateFlow
 
@@ -13,12 +12,17 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * The Swift-facing handle for the Tasks Destination. Exposes the always-present Item [tree] component
  * (the primary pane since #227/ADR-0049) and the co-resident detail slot, flattened to its nullable open
- * [TaskDetailComponent] as a SKIE-bridged [activeDetail] `StateFlow` (the component's `Value.asStateFlow`
- * mirror), so SwiftUI never touches the Decompose `Value`/`ChildSlot` generics.
+ * child as a SKIE-bridged [activeDetail] `StateFlow` (the component's `Value.asStateFlow` mirror), so
+ * SwiftUI never touches the Decompose `Value`/`ChildSlot` generics.
+ *
+ * [activeDetail] carries a [TasksComponent.DetailChild] rather than a `TaskDetailComponent` since #383:
+ * the slot opens a Task's read/write detail **or** a recurring definition's read-only one. Swift cannot
+ * take a Kotlin sealed type apart, so the View asks `BridgeKt.taskDetailOrNull`/`definitionDetailOrNull`
+ * which arm it got — mirroring how it already reads `MainShellComponent.PlanChild`.
  */
 class TasksRoot internal constructor(private val component: TasksComponent) {
     val tree: ItemTreeComponent get() = component.tree
-    val activeDetail: StateFlow<TaskDetailComponent?> = component.activeDetail
+    val activeDetail: StateFlow<TasksComponent.DetailChild?> = component.activeDetail
 }
 
 /**

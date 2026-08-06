@@ -42,7 +42,9 @@ import com.circuitstitch.deferno.core.data.plan.KtorPlanRemoteSource
 import com.circuitstitch.deferno.core.data.plan.PlanRemoteSource
 import com.circuitstitch.deferno.core.data.settings.KtorSettingsRemoteSource
 import com.circuitstitch.deferno.core.data.settings.SettingsRemoteSource
+import com.circuitstitch.deferno.core.data.item.ItemDetailRemoteSource
 import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
+import com.circuitstitch.deferno.core.data.item.KtorItemDetailRemoteSource
 import com.circuitstitch.deferno.core.data.item.KtorItemSnapshotSource
 import com.circuitstitch.deferno.core.data.task.KtorTaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
@@ -186,6 +188,15 @@ interface DataBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun itemSnapshotSource(client: HttpClient): ItemSnapshotSource = KtorItemSnapshotSource(client)
+
+    // The kind-neutral single-item read (`GET /items/{id}`, #383) — this client's FIRST call to that
+    // route. It is what a recurring detail hydrates through: the shipped contract has no `get` on
+    // `/habits/{id}`, `/chores/{id}` or `/events/{id}`, only `delete` and `patch`, so there is no
+    // per-kind read to widen. AppScope, like the other Ktor sources.
+    @Provides
+    @SingleIn(AppScope::class)
+    fun itemDetailRemoteSource(client: HttpClient): ItemDetailRemoteSource =
+        KtorItemDetailRemoteSource(client)
 
     @Provides
     @SingleIn(AppScope::class)

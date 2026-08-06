@@ -570,8 +570,11 @@ private val BranchCurrentCy = 16.dp
  * The short human ref (`#123`) from a full `{org_slug}-{sequence}` ref (ADR-0044) — the trailing numeric
  * sequence only, since the org slug is implied on a single-item screen. `null` when there is no ref (a
  * just-created row) or the tail isn't the expected numeric sequence.
+ *
+ * `internal` since #383: a recurring definition carries the same `ref` and its detail heads with the same
+ * mono meta line, and two parsers of one ref format is one more than the format has.
  */
-private fun shortRef(ref: String?): String? =
+internal fun shortRef(ref: String?): String? =
     ref?.substringAfterLast('-')?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) }?.let { "#$it" }
 
 /**

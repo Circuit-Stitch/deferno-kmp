@@ -20,6 +20,7 @@ import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.feedback.FeedbackRepository
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRemoteSource
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
+import com.circuitstitch.deferno.core.data.item.ItemDetailRemoteSource
 import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.outbox.OutboxRequestSender
@@ -263,6 +264,11 @@ abstract class AppComponent(
     // The item-wide cold-snapshot source (`GET /items`, ADR-0049 #226): the AccountScope ItemSync pulls
     // the windowed snapshot through it, reconciling every kind into its store on refresh.
     abstract val itemSnapshotSource: ItemSnapshotSource
+    // The kind-neutral single-item read (`GET /items/{id}`, #383): the AccountScope DefinitionRepository
+    // hydrates a recurring definition's detail through it. Re-exposed for the same reason as its
+    // siblings — the source is AppScope (the shared client resolves the Active Account per request)
+    // while its only consumer is per-Account.
+    abstract val itemDetailRemoteSource: ItemDetailRemoteSource
     // The bare presigned-upload client (no base URL, no bearer — an Authorization header would break S3
     // SigV4). Re-exposed because the AccountScope attachment repository builds its Ktor wire half inline
     // (AccountDataBindings.taskDetailRepository) and so needs the same client the AppScope feedback upload uses.

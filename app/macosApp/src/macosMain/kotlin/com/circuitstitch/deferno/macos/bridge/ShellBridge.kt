@@ -511,7 +511,27 @@ fun calendarItemIsHabit(item: CalendarItem): Boolean = item.kind == ItemKind.Hab
  * [OccurrenceState.Unknown] renders as absent information ("Not synced"), never as an error and never
  * as the Scheduled dash: this device has simply never synced that date (ADR-0053 decision 4).
  */
-fun occurrenceStatusToken(firing: CalendarFiring): String = when (firing.occurrence) {
+fun occurrenceStatusToken(firing: CalendarFiring): String =
+    firing.occurrence?.let(::occurrenceStateToken) ?: when (firing.item.status) {
+        WorkingState.Open -> "common_status_scheduled"
+        WorkingState.InProgress -> "common_status_in_progress"
+        WorkingState.InReview -> "common_status_in_review"
+        WorkingState.Done -> "common_status_done"
+        WorkingState.Dropped -> "common_status_skipped"
+    }
+
+/**
+ * The [OccurrenceState] half of [occurrenceStatusToken], on its own — an exhaustive `when` over the
+ * reading, with none of the calendar row's `null`/`WorkingState` fallback.
+ *
+ * Extracted because the recurring detail's TODAY cell (#383, `Bridge.todayCell`) answers the same
+ * question about the same enum: *how did this firing go?* Copying the seven arms into that bridge would
+ * be the second Apple-side copy of one vocabulary — the exact drift this seam was written to end (see
+ * the KDoc above). The two callers differ only in what they do when there is no reading at all, and
+ * that difference is genuinely theirs: a calendar row falls back to its own item's working state, while
+ * a definition's TODAY cell has three *grid* answers the status vocabulary has no word for.
+ */
+internal fun occurrenceStateToken(state: OccurrenceState): String = when (state) {
     OccurrenceState.Scheduled -> "common_status_scheduled"
     OccurrenceState.InProgress -> "common_status_in_progress"
     OccurrenceState.DoneOnTime -> "common_status_done_on_time"
@@ -519,13 +539,6 @@ fun occurrenceStatusToken(firing: CalendarFiring): String = when (firing.occurre
     OccurrenceState.Skipped -> "common_status_skipped"
     OccurrenceState.Missed -> "common_status_missed"
     OccurrenceState.Unknown -> "common_status_unknown"
-    null -> when (firing.item.status) {
-        WorkingState.Open -> "common_status_scheduled"
-        WorkingState.InProgress -> "common_status_in_progress"
-        WorkingState.InReview -> "common_status_in_review"
-        WorkingState.Done -> "common_status_done"
-        WorkingState.Dropped -> "common_status_skipped"
-    }
 }
 
 /**
@@ -538,9 +551,12 @@ fun occurrenceStatusToken(firing: CalendarFiring): String = when (firing.occurre
  * day is absent information rather than a failure, so tinting it would be asserting something this
  * device does not know.
  */
-fun occurrenceStatusIsDone(firing: CalendarFiring): Boolean = when (firing.occurrence) {
+fun occurrenceStatusIsDone(firing: CalendarFiring): Boolean =
+    firing.occurrence?.let(::occurrenceStateIsDone) ?: (firing.item.status == WorkingState.Done)
+
+/** The [OccurrenceState] half of [occurrenceStatusIsDone] — shared with the TODAY cell, see [occurrenceStateToken]. */
+internal fun occurrenceStateIsDone(state: OccurrenceState): Boolean = when (state) {
     OccurrenceState.DoneOnTime, OccurrenceState.DoneLate -> true
-    null -> firing.item.status == WorkingState.Done
     else -> false
 }
 

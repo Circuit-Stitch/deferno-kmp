@@ -6,7 +6,9 @@ import UserNotifications
 /// `RootComponent` to SwiftUI. That tree is now the **real** shared shell over the DI graph
 /// (`DefernoRoot` — the iOS analogue of `DefernoApplication` + `MainActivity`), not the in-memory
 /// `DefernoDemo` scaffold: the Views render `RootComponent → Auth/Main → the Destination graph`
-/// (ADR-0013/0017). Bridged by the hand-written SKIE-free bridge until SKIE supports Kotlin 2.4.0.
+/// (ADR-0013/0017). Kotlin state reaches SwiftUI through SKIE (ADR-0003, #130) — Flow/suspend/sealed/
+/// enum bridge natively; the hand-written bridge that remains covers only what SKIE does not, the
+/// Decompose `Value`/`ChildStack`/`ChildSlot` navigation types.
 @main
 struct DefernoApp: App {
     // The Brain dump mic recorder (#267) is shared: the Kotlin host drives it (record → on-device pipeline),
