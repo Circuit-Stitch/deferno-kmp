@@ -174,6 +174,19 @@ fun DayFiring.factDateFor(date: LocalDate): LocalDate =
  * The residual ±1 is still needed and is a different concern — [expandOccurrenceGrid] reads its window
  * in the series' **frozen zone**, which need not be the reader's, so a slot can resolve a day either
  * side of its nominal date.
+ *
+ * **This is not a divergence from the Rust (ADR-0053 decision 5), and the distinction is worth keeping
+ * straight because it reads like one.** [expandOccurrenceGrid] is untouched: it still applies its range
+ * to the slot before overrides, exactly as `expand_series` does, and the generated corpus still pins
+ * that (`override-moved-outside-the-window-still-returns`). What changes is only *which window this
+ * function asks for*. A range query over the grid and "is something happening today" are different
+ * questions, and this one has always been documented as the second — it matches on [Firing.date]. Asking
+ * a slot-range wide enough to contain the answer is how a caller of the first gets the second; it is
+ * not a second specification of the grid.
+ *
+ * The [factDateFor] guard depends on it. That guard exists to look a moved firing's fact up under the
+ * slot it came from — and it can only ever fire on a firing this function actually returned, so with a
+ * constant window it was unreachable for every move past a day.
  */
 fun dayFiring(recurrence: Recurrence?, series: SeriesInputs?, date: LocalDate): DayFiring {
     val rule = recurrence ?: return DayFiring.Unavailable
