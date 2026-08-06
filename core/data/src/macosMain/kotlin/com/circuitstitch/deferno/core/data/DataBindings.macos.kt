@@ -14,9 +14,9 @@ import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpNotificati
 import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpSalvageCounter
 import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
 import com.russhwolf.settings.NSUserDefaultsSettings
-import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
+import com.circuitstitch.deferno.core.data.item.SettingsItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
 import com.circuitstitch.deferno.core.data.auth.BrowserAuthenticator
@@ -129,11 +129,14 @@ interface MacosDataBindings {
     fun shakeToUndoPreference(): ShakeToUndoPreference = InMemoryShakeToUndoPreference()
 
     /**
-     * Item-tree fold-override store (ADR-0049, #227, [[App setting]]). In-memory placeholder (the twin of
-     * [IosDataBindings]) — the native macOS SwiftUI tree + its NSUserDefaults fold store are an Apple
-     * follow-up; this keeps the graph complete and the macOS klib compiling.
+     * The device-local Item-tree fold-override store (ADR-0049, #227, [[App setting]]) — explicit
+     * expand/collapse choices keyed by item id, shared by the Tasks tree (`ItemTreeView`) and the detail
+     * subtask outline. `NSUserDefaults`-backed now that the native SwiftUI tree has shipped, joining the
+     * three brain-dump bindings above in the `deferno_storage` bag (a distinct, namespaced key) — the twin
+     * of the iOS binding, so a fold survives relaunch on both Apple targets as it does on Android.
      */
     @Provides
     @SingleIn(AppScope::class)
-    fun itemFoldStore(): ItemFoldStore = InMemoryItemFoldStore()
+    fun itemFoldStore(): ItemFoldStore =
+        SettingsItemFoldStore(NSUserDefaultsSettings.Factory().create("deferno_storage"))
 }

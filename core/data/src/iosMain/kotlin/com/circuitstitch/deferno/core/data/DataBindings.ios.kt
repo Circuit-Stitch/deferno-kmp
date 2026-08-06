@@ -13,9 +13,9 @@ import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpNotificati
 import com.circuitstitch.deferno.core.data.braindump.KeepBrainDumpRecordingsPreference
 import com.circuitstitch.deferno.core.data.braindump.SettingsBrainDumpSalvageCounter
 import com.circuitstitch.deferno.core.data.braindump.SettingsKeepBrainDumpRecordingsPreference
-import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.data.item.InMemoryShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
+import com.circuitstitch.deferno.core.data.item.SettingsItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderPreference
 import com.circuitstitch.deferno.core.data.auth.AuthRedirectInbox
@@ -123,11 +123,14 @@ interface IosDataBindings {
     fun shakeToUndoPreference(): ShakeToUndoPreference = InMemoryShakeToUndoPreference()
 
     /**
-     * Item-tree fold-override store (ADR-0049, #227, [[App setting]]). In-memory placeholder — the native
-     * iOS SwiftUI tree (and its NSUserDefaults-backed fold store) is a deferred fast-follow; this keeps the
-     * graph complete and the iOS klib compiling.
+     * The device-local Item-tree fold-override store (ADR-0049, #227, [[App setting]]) — explicit
+     * expand/collapse choices keyed by item id, shared by the Tasks tree (`ItemTreeView`) and the detail
+     * subtask outline. `NSUserDefaults`-backed now that the native SwiftUI tree has shipped, sharing the
+     * device-local `deferno_storage` bag with the other iOS App settings (a distinct, namespaced key) —
+     * the twin of the Android SharedPreferences binding, so a fold survives relaunch on both.
      */
     @Provides
     @SingleIn(AppScope::class)
-    fun itemFoldStore(): ItemFoldStore = InMemoryItemFoldStore()
+    fun itemFoldStore(): ItemFoldStore =
+        SettingsItemFoldStore(NSUserDefaultsSettings.Factory().create("deferno_storage"))
 }
