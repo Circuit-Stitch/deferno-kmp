@@ -33,8 +33,11 @@ interface ItemFoldStore {
 }
 
 /**
- * A non-persistent [ItemFoldStore] for tests, previews, and the Apple targets whose native tree is a
- * deferred fast-follow (ADR-0049). **Measured** (commonTest) — round-trips overrides in memory.
+ * A non-persistent [ItemFoldStore] for tests, previews (the iOS `DefernoDemo` harness), and as the
+ * constructor default that lets a component be built without one. **No longer any platform's DI binding**
+ * — every shipping app binds [SettingsItemFoldStore] (ADR-0049), the two Apple targets having caught up
+ * with Android and desktop once their native SwiftUI trees landed, so a fold survives relaunch everywhere.
+ * **Measured** (commonTest) — round-trips overrides in memory.
  */
 class InMemoryItemFoldStore(initial: Map<String, Boolean> = emptyMap()) : ItemFoldStore {
     private val _overrides = MutableStateFlow(initial)
@@ -46,8 +49,10 @@ class InMemoryItemFoldStore(initial: Map<String, Boolean> = emptyMap()) : ItemFo
 
 /**
  * The production [ItemFoldStore] over a multiplatform-settings [Settings] (#227): one commonMain impl over
- * the platform-backed store (Android SharedPreferences / desktop Preferences), each override a namespaced
- * boolean key. The live [overrides] flow is seeded once from the persisted keys, then kept in lockstep with
+ * the platform-backed store (Android SharedPreferences / desktop Preferences / Apple `NSUserDefaults`), each
+ * override a namespaced boolean key — which is why the `KEY_PREFIX` filter below is load-bearing on Apple,
+ * where the suite's `dictionaryRepresentation()` also surfaces Apple's own global-domain keys.
+ * The live [overrides] flow is seeded once from the persisted keys, then kept in lockstep with
  * each [setOverride] write. Excluded from the coverage gate (a thin store adapter exercised through the
  * platform store, not the headless JVM gate, ADR-0006) — like `SettingsKeepBrainDumpRecordingsPreference`.
  */
