@@ -10,11 +10,15 @@ import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.MonthlyAnchor
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.RecurrenceBound
+import com.circuitstitch.deferno.core.model.SeriesInputs
+import com.circuitstitch.deferno.core.model.SeriesOverride
 import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.dto.ItemView
 import com.circuitstitch.deferno.core.network.mapper.asChoreOrNull
+import com.circuitstitch.deferno.core.network.mapper.asHabitOrNull
 import com.circuitstitch.deferno.core.network.mapper.toDomain
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import kotlinx.serialization.encodeToString
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -257,5 +261,43 @@ class BackupRecurrenceMapperTest {
     fun aNonRecurringItemStillExportsNoRuleAtAll() {
         // The null-domain → null-wire case must stay distinct from "a rule we could not name".
         assertNull(habitWith(null).toItemView().recurrence)
+    }
+
+    @Test
+    fun theSeriesExpansionInputsSurviveTheExportRoundTripUnchanged() {
+        // ADR-0041: `items.json` IS the API's own JSON, so a field the exporter omits is a field the
+        // file claims the item never had. The inputs are the ONLY record of which wall times a series
+        // fires on — the rule plus the cursor cannot reconstruct them — so dropping them silently
+        // produces a Backup whose recurring items can never have their grid reproduced (#410).
+        val series = SeriesInputs(
+            anchorLocal = LocalDateTime.parse("2026-08-04T23:59:59"),
+            tzid = "America/Los_Angeles",
+            untilUtc = Instant.parse("2026-09-16T06:59:59Z"),
+            exdates = listOf(LocalDateTime.parse("2026-08-18T23:59:59")),
+            overrides = listOf(
+                SeriesOverride(LocalDateTime.parse("2026-08-11T23:59:59"), isCancelled = true),
+                SeriesOverride(
+                    recurrenceId = LocalDateTime.parse("2026-08-25T23:59:59"),
+                    movedToLocal = LocalDateTime.parse("2026-08-26T18:30:00"),
+                ),
+            ),
+        )
+        val exported = habitWith(Recurrence(Cadence.Weekly(listOf("Tue")))).copy(series = series).toItemView()
+        val json = DefernoJson.encodeToString(ItemView.serializer(), exported)
+
+        // The wire's spelling goes back out, not the domain's: the file has to be readable by anything
+        // that reads the API, so `movedToLocal` re-emits under the overloaded `dtstart_local` key.
+        assertTrue(json.contains(""""dtstart_local":"2026-08-26T18:30:00""""), json)
+        // Re-read through the SHIPPING import path (`asHabitOrNull`), not a hand-called sub-mapper, so
+        // this is the same journey a restore actually takes.
+        val restored = DefernoJson.decodeFromString(ItemView.serializer(), json).asHabitOrNull()
+        assertEquals(series, restored?.series)
+    }
+
+    @Test
+    fun anItemWithNoSeriesBlockExportsNoneRatherThanAnEmptyOne() {
+        // Absent means "this device cannot reproduce that grid". An exporter that helpfully wrote
+        // `{"exdates":[],"overrides":[]}` would upgrade "unknown" to "known and empty" in the file.
+        assertNull(habitWith(Recurrence(Cadence.Daily)).toItemView().series)
     }
 }

@@ -12,6 +12,7 @@ import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.EventId
+import com.circuitstitch.deferno.core.model.Expansion
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.HydrationState
@@ -20,17 +21,22 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.RecurrenceBound
 import com.circuitstitch.deferno.core.model.RecurrenceCursor
+import com.circuitstitch.deferno.core.model.SeriesInputs
+import com.circuitstitch.deferno.core.model.SeriesOverride
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.expandOccurrenceGrid
 import com.circuitstitch.deferno.core.model.recurrenceCursor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -266,6 +272,68 @@ class OfflineItemRepositoryTest {
             listOf("h", "c", "e").forEach { assertEquals(cursor, byId.getValue(it).recurrenceCursorAt, "cursor on $it") }
             assertNull(byId.getValue("t").recurrence, "a Task has no recurrence rule")
             assertNull(byId.getValue("t").recurrenceCursorAt, "a Task's deadline is NOT a recurrence cursor")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun aTreeRowCanExpandItsOwnGridWithoutOpeningTheItem() = runTest {
+        // #410's reason for putting the inputs on this projection rather than only on the concrete kinds.
+        // The wire ships `series` on every `/items` row, so the tree already has what an expansion needs;
+        // a detail-only projection would have forced a per-row fetch on the Plan (#385) to reach a grid.
+        // The assertion is the whole claim, end to end: rule + cursor + inputs off ONE tree row, straight
+        // into the expander, real firing dates out — no concrete Habit loaded, no network.
+        val inputs = SeriesInputs(
+            anchorLocal = LocalDateTime.parse("2026-08-03T09:00:00"),
+            tzid = "America/Los_Angeles",
+            overrides = listOf(
+                SeriesOverride(
+                    recurrenceId = LocalDateTime.parse("2026-08-10T09:00:00"),
+                    movedToLocal = LocalDateTime.parse("2026-08-12T18:00:00"),
+                ),
+            ),
+        )
+        val f = Fixture(
+            habits = FakeHabitLocalStore(
+                mapOf(
+                    HabitId("h") to habit("h", recurrence = Recurrence(Cadence.Weekly(listOf("Mon"))))
+                        .copy(seriesId = "s-1", series = inputs),
+                ),
+            ),
+        )
+
+        f.repository.observeItems().test {
+            val row = awaitItem().single()
+            assertEquals("s-1", row.seriesId)
+            assertEquals(inputs, row.series)
+
+            val expansion = expandOccurrenceGrid(
+                recurrence = requireNotNull(row.recurrence),
+                series = requireNotNull(row.series),
+                from = LocalDate(2026, 8, 1),
+                to = LocalDate(2026, 8, 24),
+            )
+            assertEquals(
+                // Mondays from the 3rd, with the 10th moved to the Wednesday evening — so it renders on
+                // the 12th while still keyed on the slot it came from.
+                listOf("2026-08-03", "2026-08-12", "2026-08-17", "2026-08-24"),
+                assertIs<Expansion.Firings>(expansion).firings.map { it.date.toString() },
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun aTaskCarriesNeitherASeriesIdNorInputs() = runTest {
+        // `null` means two different things on this projection and only one of them is about series: for
+        // a Task it means "not a series at all", for a recurring kind it is the backend's elision. The
+        // Task arm must never acquire either field by accident.
+        val f = Fixture(tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))))
+
+        f.repository.observeItems().test {
+            val item = awaitItem().single()
+            assertNull(item.seriesId)
+            assertNull(item.series)
             cancelAndIgnoreRemainingEvents()
         }
     }

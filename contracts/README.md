@@ -21,3 +21,17 @@ re-reverse-engineered per agent. See `CONTRACT-NOTES.md` for the facts to cite.
 the staging origin (`app2.defernowork.com`). Free-text (`title`/`description`/`comment`) and the
 `/auth/me` identity are scrubbed to placeholders; **every structural field — ids, `kind`/`type`,
 status enums, nullability, timestamps — is preserved verbatim.** Refresh with `./refresh.sh`.
+
+**Re-pinning the spec without a running backend.** `refresh.sh` needs a live server, and the staging
+origin does **not** serve the spec — its SPA catch-all answers `/openapi.json` with `200 text/html`,
+so a naive `curl` "succeeds" and writes a web page over the contract. The backend repo commits its own
+copy at `docs/api/openapi.json`, generated from the same router that serves traffic and guarded on
+every CI run by `scripts/check-openapi-spec-current.sh`, so it cannot silently rot. That file is the
+better source, and it needs no build:
+
+```sh
+python3 -m json.tool ../Deferno/docs/api/openapi.json > contracts/openapi-0.1.json
+```
+
+Pinned at #410 from that copy (the `series` block — `SeriesInputs` + `SeriesOverrideView` — plus
+`SegmentView` and `/admin/activity/queue`; purely additive, nothing removed).

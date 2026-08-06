@@ -124,6 +124,7 @@ fun HabitDetailDto.toDomain(): Habit = Habit(
     ownerOrgId = ownerOrgId?.let(::OrgId),
     description = description,
     seriesId = seriesId,
+    series = series.toDomain(),
     blocked = blocked,
     isBlocker = isBlocker,
 )
@@ -151,6 +152,7 @@ fun ItemView.asHabitOrNull(): Habit? = (this as? ItemView.Habit)?.let { v ->
         ownerOrgId = v.ownerOrgId?.let(::OrgId),
         description = v.description,
         seriesId = v.seriesId,
+        series = v.series.toDomain(),
         blocked = v.blocked,
         isBlocker = v.isBlocker,
     )
@@ -188,6 +190,7 @@ fun ChoreDetailDto.toDomain(): Chore = Chore(
     ownerOrgId = ownerOrgId?.let(::OrgId),
     description = description,
     seriesId = seriesId,
+    series = series.toDomain(),
     blocked = blocked,
     isBlocker = isBlocker,
 )
@@ -216,6 +219,7 @@ fun ItemView.asChoreOrNull(): Chore? = (this as? ItemView.Chore)?.let { v ->
         ownerOrgId = v.ownerOrgId?.let(::OrgId),
         description = v.description,
         seriesId = v.seriesId,
+        series = v.series.toDomain(),
         blocked = v.blocked,
         isBlocker = v.isBlocker,
     )
@@ -247,6 +251,7 @@ fun EventDetailDto.toDomain(): Event = Event(
     ownerOrgId = ownerOrgId?.let(::OrgId),
     description = description,
     seriesId = seriesId,
+    series = series.toDomain(),
     blocked = blocked,
     isBlocker = isBlocker,
 )
@@ -277,6 +282,7 @@ fun ItemView.asEventOrNull(): Event? = (this as? ItemView.Event)?.let { v ->
         ownerOrgId = v.ownerOrgId?.let(::OrgId),
         description = v.description,
         seriesId = v.seriesId,
+        series = v.series.toDomain(),
         blocked = v.blocked,
         isBlocker = v.isBlocker,
     )

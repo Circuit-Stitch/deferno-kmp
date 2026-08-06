@@ -71,5 +71,6 @@ mechanical half of this on the `check` path.
 | [0051](0051-client-when-decomposition-day-plus-optional-clock.md) | WHEN decomposes to day + optional clock; all-day is derived, and the offline-first client normalizes locally | Accepted | 2026-08-02 |
 | [0052](0052-soft-target-date-and-stored-priority-bucket.md) | The soft Target date and the stored Priority bucket are read on all four kinds and written on Task | Accepted | 2026-08-02 |
 | [0053](0053-client-reproduces-occurrence-grid-offline.md) | The client reproduces the Occurrence grid offline, and the server ships the expansion inputs it needs | Accepted | 2026-08-03 |
+| [0054](0054-item-projection-carries-series-expansion-inputs.md) | The Item projection carries the series expansion inputs, so a tree row expands its grid cold | Accepted | 2026-08-05 |
 
-_53 records. Next free number: **0054**._
+_54 records. Next free number: **0055**._

@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Recurrence
+import com.circuitstitch.deferno.core.model.SeriesInputs
 import com.circuitstitch.deferno.core.model.Task
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -105,9 +106,14 @@ internal fun Task.toItem() = Item(
 // is there to say this is a series at all. It lands on the projection as `recurrenceCursorAt`, not
 // `completeBy`, precisely because the Task arm above deliberately projects NEITHER: a Task's `completeBy`
 // is a plain deadline, and forwarding it here would make every dated Task read as a series.
-internal fun Habit.toItem() = recurringItem(id.value, ItemKind.Habit, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
-internal fun Chore.toItem() = recurringItem(id.value, ItemKind.Chore, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
-internal fun Event.toItem() = recurringItem(id.value, ItemKind.Event, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy)
+// The pair became a TRIPLE at #410: the rule says how often, the cursor says how far along, and only
+// `series` says which wall times. Projecting it here is what lets a tree row — and the Plan, which
+// consumes this same mapping — hand `expandOccurrenceGrid` real inputs and get firing dates back with
+// no detail fetch and no network. The wire ships the block on every `/items` row precisely so a client
+// can do that; a detail-only projection would have left the tree unable to reach a grid at all.
+internal fun Habit.toItem() = recurringItem(id.value, ItemKind.Habit, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy, seriesId, series)
+internal fun Chore.toItem() = recurringItem(id.value, ItemKind.Chore, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy, seriesId, series)
+internal fun Event.toItem() = recurringItem(id.value, ItemKind.Event, title, parentId?.value, sequence, definitionState, blocked, isBlocker, recurrence, completeBy, seriesId, series)
 
 private fun recurringItem(
     id: String,
@@ -120,6 +126,8 @@ private fun recurringItem(
     isBlocker: Boolean,
     recurrence: Recurrence?,
     recurrenceCursorAt: Instant?,
+    seriesId: String?,
+    series: SeriesInputs?,
 ) = Item(
     id = id,
     kind = kind,
@@ -137,4 +145,8 @@ private fun recurringItem(
     // [recurrenceCursor]. Carry the facts; let the View derive the phrase.
     recurrence = recurrence,
     recurrenceCursorAt = recurrenceCursorAt,
+    // The expansion inputs, verbatim and uncondensed for the same reason: an [[Occurrence grid]] is
+    // computed for a *window*, and this Flow does not know which one the caller wants.
+    seriesId = seriesId,
+    series = series,
 )

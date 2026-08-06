@@ -53,6 +53,21 @@ import kotlin.time.Instant
  * and *nothing at all* for the fourth — a Task's deadline is deliberately **not** projected here,
  * because conflating the two would make every dated Task read as an exhausted-or-due series. A future
  * row decoration that wants the deadline must project it as its own field; the name says so.
+ *
+ * [seriesId]/[series] complete that pair (#410, ADR-0053). The rule says *how often*; the cursor says
+ * *how far along*; only the inputs say **which wall times** — the frozen anchor, the zone it was frozen
+ * in, the [[Segment]] bound and the per-instance exceptions. With all three a tree row can hand
+ * [expandOccurrenceGrid] everything it needs and get real firing dates back **cold**, off the cached
+ * snapshot, with no detail fetch and no network. That is a deliberate choice and not an incidental one:
+ * the wire carries `series` on every `/items` row, not merely on `/items/{id}`, so projecting it here
+ * costs one cached column set and saves a per-row round trip the Plan (#385) would otherwise need.
+ * Inheriting the detail-only assumption instead would have left the tree and the Plan unable to reach
+ * a grid at all — the gap #410 was opened to close.
+ *
+ * **[series] is `null` in two very different situations, and a caller must not conflate them.** For a
+ * [Task] it means *nothing at all* (a Task has no series). For a recurring kind it is the backend's
+ * **elision** — "no series row backs this item, this device cannot reproduce that grid" — which is not
+ * the same as a grid with no exclusions. [SeriesInputs] carries the full reasoning.
  */
 data class Item(
     val id: String,
@@ -80,6 +95,12 @@ data class Item(
     // all (a Task's deadline is not a cursor, and is not projected here). Read the pair through
     // [recurrenceCursor] — never this field raw.
     val recurrenceCursorAt: Instant? = null,
+    // The series this row's firings belong to (#410). Names the series; is NEVER a path key (#380) —
+    // every kind-scoped route keys on the DEFINITION id, which is [id].
+    val seriesId: String? = null,
+    // The offline expansion inputs (#410) — see the class KDoc. Present on the `/items` snapshot, so a
+    // tree/Plan row reaches a real grid cold. `null` for a Task; for a recurring kind, the elision.
+    val series: SeriesInputs? = null,
 )
 
 /** An item's external provenance — the system it was synced/created from (drives the row's source mark). */

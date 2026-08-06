@@ -42,6 +42,9 @@ data class HabitDetailDto(
     val description: String? = null,
     val recurrence: RecurrenceDto? = null,
     @SerialName("series_id") val seriesId: String? = null,
+    // The offline expansion inputs (#410) — see [SeriesInputsDto]. `null` is the backend's deliberate
+    // ELISION ("no series row backs this item"), never an empty grid.
+    val series: SeriesInputsDto? = null,
     // The occurrence subtask template (#381) — an array of OBJECTS. The detail DTOs used to omit it
     // entirely, so `ignoreUnknownKeys` dropped it silently: not a crash, but exactly the wire-vs-DTO
     // drift ADR-0011 exists to prevent. Modelled here so the "faithful full single-item shape" claim
@@ -77,6 +80,9 @@ data class ChoreDetailDto(
     val description: String? = null,
     val recurrence: RecurrenceDto? = null,
     @SerialName("series_id") val seriesId: String? = null,
+    // The offline expansion inputs (#410) — see [SeriesInputsDto]. `null` is the backend's deliberate
+    // ELISION ("no series row backs this item"), never an empty grid.
+    val series: SeriesInputsDto? = null,
     // The occurrence subtask template (#381) — see [HabitDetailDto].
     @SerialName("subtask_template") val subtaskTemplate: List<SubtaskTemplateDto> = emptyList(),
     @SerialName("cadence_mode") val cadenceMode: String? = null,
@@ -109,6 +115,9 @@ data class EventDetailDto(
     val description: String? = null,
     val recurrence: RecurrenceDto? = null,
     @SerialName("series_id") val seriesId: String? = null,
+    // The offline expansion inputs (#410) — see [SeriesInputsDto]. `null` is the backend's deliberate
+    // ELISION ("no series row backs this item"), never an empty grid.
+    val series: SeriesInputsDto? = null,
     // The occurrence subtask template (#381) — see [HabitDetailDto].
     @SerialName("subtask_template") val subtaskTemplate: List<SubtaskTemplateDto> = emptyList(),
     @SerialName("all_day") val allDay: Boolean = false,

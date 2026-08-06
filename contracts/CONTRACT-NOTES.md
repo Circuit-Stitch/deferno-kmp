@@ -157,6 +157,42 @@ the single-call `/items` decode and reproduce the #381 cold-sync stall.
   (nested `task`), still wrapped in `ItemEnvelope`. `/tasks/plan` is a flat ordered list of
   `TaskSummary` envelopes.
 
+### The `series` block — the offline expansion inputs (ADR-0053, backend #643) — verified live 2026-08-05
+
+Every recurring row carries a nullable `series` object **on the list read as well as the detail read**
+(`GET /items`, `GET /items/{id}`, `GET /items/plan`), beside the `series_id` it has always had. So an
+Item-tree row can reproduce its own [[Occurrence grid]] cold, with no detail fetch:
+
+```jsonc
+"series": {
+  "dtstart_local": "2026-08-10T23:59:59",   // WALL TIME in `tzid`; the FROZEN anchor
+  "tzid": "America/Los_Angeles",            // the zone the series was frozen in, not the reader's
+  "until_utc": null,                        // Segment bound, EXCLUSIVE, set only by a split
+  "exdates": [],                            // local wall times
+  "overrides": [                            // ascending by recurrence_id
+    { "recurrence_id": "2026-08-17T23:59:59", "is_cancelled": false,
+      "dtstart_local": "2026-08-18T19:30:00" }   // ← the MOVED time
+  ]
+}
+```
+
+Four things the spec cannot tell you, all verified against a throwaway staging event:
+
+- **`dtstart_local` means two different things one nesting level apart.** On the block it is the frozen
+  anchor; on an override it is the *moved* start (`null` when the exception only relabels). Confirmed
+  live: two `scope=this` patches moved one occurrence and left the anchor at `2026-08-10T23:59:59`
+  untouched. `core/model` renames the inner one `movedToLocal` for exactly this reason.
+- **Absent ≠ empty.** The backend elides the whole block when no series row backs the item rather than
+  repairing one, because `series_repair` re-anchors from the live `complete_by` — which on a recurring
+  definition is a *walked cursor*, so a repair would bake the cursor in as the anchor. A `null` block
+  means "this device cannot reproduce that grid".
+- **`series` is absent on the create response.** `POST /events` returned `"series": null` for an item
+  whose `GET /items/{id}` a moment later carried a full block. Never seed a cache from the create echo.
+- **Three fields are structurally reachable but practically dead today** — `exdates` is never
+  populated by any handler, `is_cancelled` is only ever written by `cancel_recurrence_instance` which
+  **no route calls**, and `until_utc` is set only by a split (which replaces the item). Decode all
+  three; do not expect to see them on the wire, and do not treat their absence as proof of the shape.
+
 ## Status: six enums, condensed at the edge (ADR-0011, CONTEXT.md → "Item state")
 
 Six wire enums with inconsistent casing — model each with explicit `@SerialName` + an `Unknown`

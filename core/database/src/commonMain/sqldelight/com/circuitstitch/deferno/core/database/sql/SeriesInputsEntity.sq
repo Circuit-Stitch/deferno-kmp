@@ -1,0 +1,56 @@
+-- The local table of **series expansion inputs** (ADR-0053 decision 2, #410): the frozen anchor, the
+-- zone it was frozen in, the Segment bound and the excluded wall times behind one recurring
+-- definition. Paired with that definition's cached recurrence rule it is everything
+-- `expandOccurrenceGrid` needs to reproduce the server's [[Occurrence grid]] with the network gone —
+-- which is the whole point of caching it: the grid itself is a function of a *window*, so what gets
+-- stored is the INPUTS, never a computed answer (ADR-0001 offline-first).
+--
+-- **A dedicated table, not three parallel column sets.** `exdates` and `overrides` are unbounded, so
+-- bolting them onto `habitEntity`/`choreEntity`/`eventEntity` would have tripled a codec that already
+-- carries fourteen recurrence columns per kind — and the three generated entity types share no
+-- supertype, so "triple" means three literal copies. One kind-neutral table also matches how the data
+-- is read: the Item projection (#410) spans all four kinds in a single pass.
+--
+-- Keyed `(kind, definition_id)` — deliberately the same identity as `occurrenceFactEntity`, including
+-- its rule: **`definition_id` is the recurring item id, never the series id.** A series id names the
+-- series but is no item's id (#380), so a table keyed on it could not be joined against anything else
+-- this client stores. The definition's own `series_id` column still holds the name; this holds the
+-- inputs.
+--
+-- **A row's absence is meaningful.** The backend elides the whole `series` block when no series row
+-- backs an item rather than repairing one on read, so "no row here" decodes to a `null`
+-- `SeriesInputs` — "this device cannot reproduce that grid" — and never to an empty one. That is why
+-- there is no `has_series` flag and no all-NULL placeholder row: absence IS the encoding.
+--
+-- `anchor_local` is a local wall time (`2026-08-10T23:59:59`, no offset) and `tzid` the IANA zone it is
+-- read in; `until_utc` is the EXCLUSIVE Segment bound as an RFC3339 instant, NULL when open-ended (not
+-- to be confused with the rule's own inclusive `recurrence_end_date`, which lives on the definition).
+-- `exdates` is a `\n`-joined list of local wall times, the `labels`/`recurrence_days` idiom — a list of
+-- scalars with no internal delimiter, so it needs no child table and keeps this table adapter-free.
+-- Conversion lives in core:data (`SeriesInputsEntityMapping.kt`).
+CREATE TABLE seriesInputsEntity (
+    kind          TEXT NOT NULL,
+    definition_id TEXT NOT NULL,
+    anchor_local  TEXT NOT NULL,
+    tzid          TEXT NOT NULL,
+    until_utc     TEXT,
+    exdates       TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (kind, definition_id)
+);
+
+-- One kind's rows, for the list read that stitches inputs onto every cached definition of that kind.
+selectByKind:
+SELECT * FROM seriesInputsEntity WHERE kind = ? ORDER BY definition_id;
+
+selectOne:
+SELECT * FROM seriesInputsEntity WHERE kind = ? AND definition_id = ?;
+
+-- Binds the whole row as one parameter, so the generated signature is `insertOrReplace(SeriesInputsEntity)`
+-- and adding a column never touches the Kotlin call site (the sibling recurring tables' idiom).
+insertOrReplace:
+INSERT OR REPLACE INTO seriesInputsEntity VALUES ?;
+
+-- Paired with `seriesOverrideEntity.deleteFor` on every write: a definition whose block has gone away
+-- must lose its inputs, not keep a stale grid that outlived the series behind it.
+deleteFor:
+DELETE FROM seriesInputsEntity WHERE kind = ? AND definition_id = ?;
