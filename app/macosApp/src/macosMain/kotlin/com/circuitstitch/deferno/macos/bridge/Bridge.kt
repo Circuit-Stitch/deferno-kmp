@@ -5,15 +5,22 @@ import com.circuitstitch.deferno.core.model.ActivityField
 import com.circuitstitch.deferno.core.model.ActivityFieldChange
 import com.circuitstitch.deferno.core.model.ActivityFieldValue
 import com.circuitstitch.deferno.core.model.Comment
+import com.circuitstitch.deferno.core.model.DayFiring
+import com.circuitstitch.deferno.core.model.DefinitionState
+import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemHistoryEvent
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemRef
 import com.circuitstitch.deferno.core.model.ItemSource
 import com.circuitstitch.deferno.core.model.JourneyLabel
 import com.circuitstitch.deferno.core.model.JourneyStyle
+import com.circuitstitch.deferno.core.model.OccurrenceState
 import com.circuitstitch.deferno.core.model.RelativeDay
 import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.TodayOccurrence
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.model.journeyStatus
+import com.circuitstitch.deferno.core.model.ref
 import com.circuitstitch.deferno.core.model.relativeDay
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ByteVar
@@ -35,9 +42,11 @@ import platform.Foundation.NSData
 import platform.Foundation.create
 import kotlin.time.Instant
 import com.circuitstitch.deferno.feature.tasks.ActivityItem
+import com.circuitstitch.deferno.feature.tasks.DefinitionDetailComponent
 import com.circuitstitch.deferno.feature.tasks.ParentSummary
 import com.circuitstitch.deferno.feature.tasks.TaskDetailComponent
 import com.circuitstitch.deferno.feature.tasks.TaskDetailState
+import com.circuitstitch.deferno.feature.tasks.TasksComponent
 
 /**
  * The **Decompose half of the bridge** the SwiftUI Views observe (#51). SKIE (ADR-0003) bridges each
@@ -49,7 +58,14 @@ import com.circuitstitch.deferno.feature.tasks.TaskDetailState
  * in `ShellBridge.kt`.)
  */
 
-/** Whether a row's [kind] is a Task — the only kind with a detail surface today (the trailing `›`). */
+/**
+ * Whether a row's [kind] is a Task.
+ *
+ * It is **no longer the gate on having a detail surface** (#383): every kind opens now, a Task into the
+ * full read/write [TaskDetailComponent] and the three recurring kinds into the read-only
+ * [DefinitionDetailComponent]. What is left Task-only is the *write* vocabulary — the tree menu's
+ * Pin/plan/working-state block, and the wording of the delete confirm — so those are what still ask.
+ */
 fun itemKindIsTask(kind: ItemKind): Boolean = kind == ItemKind.Task
 
 /**
@@ -61,6 +77,155 @@ fun taskKey(task: Task): String = task.id.value
 
 /** The String identity of the Task a detail pane shows — for SwiftUI view identity (see [taskKey]). */
 fun detailKey(component: TaskDetailComponent): String = component.taskId.value
+
+// ---------------------------------------------------------------------------------------------------
+// The kind-aware detail slot (#383). `TasksComponent.DetailChild` is a Kotlin sealed interface, and
+// Swift cannot take one apart across the bridge — it arrives as an opaque protocol it can neither
+// `switch` over nor cast. So the choice crosses as the pair of flat accessors the sealed type documents
+// on itself (`asTask`/`asDefinition`), in the same shape `ShellBridge.planChildDashboard`/`planChildDetail`
+// already use for `MainShellComponent.PlanChild`.
+// ---------------------------------------------------------------------------------------------------
+
+/** The open Task detail, or `null` when a recurring definition is open. */
+fun taskDetailOrNull(child: TasksComponent.DetailChild): TaskDetailComponent? = child.asTask
+
+/** The open recurring-definition detail — a Habit/Chore/Event — or `null` when a Task is open. */
+fun definitionDetailOrNull(child: TasksComponent.DetailChild): DefinitionDetailComponent? = child.asDefinition
+
+/**
+ * The `.id(…)` identity of whichever detail is open — [itemRefToken], so it is **kind-qualified**.
+ *
+ * A bare id would be the wrong identity now that the slot holds two shapes: `.id()` re-keys a SwiftUI
+ * subtree, and two details sharing an id string (a Task and the definition a convert produced from it,
+ * say) would be one view identity, which is exactly how stale state survives a re-key.
+ *
+ * [detailKey] above is deliberately untouched: eight Task-only Swift call sites read it as view
+ * identity, and retyping it would break them silently rather than at compile time — reason 1 in
+ * [DefinitionDetailComponent]'s KDoc for why the two components stayed separate.
+ */
+fun detailChildKey(child: TasksComponent.DetailChild): String = when (child) {
+    is TasksComponent.DetailChild.Task -> itemRefToken(ItemRef(child.component.taskId.value, ItemKind.Task))
+    is TasksComponent.DetailChild.Definition -> itemRefToken(child.component.ref)
+}
+
+// ---------------------------------------------------------------------------------------------------
+// The kind-carrying item token (#383) — `"<Kind>:<raw id>"`, the ONE string shape that addresses an item
+// across a boundary Swift can only carry text over: SwiftUI view identity (above) and the detached
+// detail window's `WindowGroup(for: String.self)` scene payload (`ItemDetailWindowRoot`).
+//
+// Encoder and decoder sit together on purpose. The payload used to be a bare id, and the opener re-wrapped
+// it as a `TaskId` — so a Habit in a detached window went down a Task-typed path (a 404 the outbox posture
+// reads as success, the silent-loss shape `ItemRef`'s KDoc warns about). Carrying the kind is the fix, and
+// a codec split across two files is how the two halves drift.
+// ---------------------------------------------------------------------------------------------------
+
+/** [ref] as its token. Neither an [ItemKind] name nor a raw UUID contains `:`, so the split is unambiguous. */
+fun itemRefToken(ref: ItemRef): String = "${ref.kind.name}:${ref.id}"
+
+/** This tree row's token — Swift holds the [Item], so Kotlin reads its `(id, kind)` pair. */
+fun itemDetailToken(item: Item): String = itemRefToken(item.ref())
+
+/**
+ * The [ItemRef] a token names, or `null` when it names nothing this build can address.
+ *
+ * **A token with no `:` is read as a Task id, and that is a fact rather than a guess.** macOS restores
+ * `WindowGroup` scenes across launches, so a payload written by a build that predates this codec can
+ * still arrive — and every one of those is a Task id, because the opener that wrote them was gated to
+ * Task rows (`ItemRowContainer.openDetailWindow`'s old `guard isTask`). Refusing them instead would
+ * dismiss a restored Task window for no reason.
+ *
+ * An unrecognised kind name returns `null` (the window closes itself) rather than falling back to Task:
+ * a kind this build has never heard of is precisely the case where guessing Task would reopen the bug.
+ */
+fun itemRefFromToken(token: String): ItemRef? {
+    val trimmed = token.trim()
+    if (trimmed.isBlank()) return null
+    if (!trimmed.contains(':')) return ItemRef(trimmed, ItemKind.Task)
+    val kind = ItemKind.entries.firstOrNull { it.name == trimmed.substringBefore(':') } ?: return null
+    return trimmed.substringAfter(':').takeIf { it.isNotBlank() }?.let { ItemRef(it, kind) }
+}
+
+// ---------------------------------------------------------------------------------------------------
+// The recurring detail's TODAY cell (#383, ADR-0053 decision 4) — the one reading on that surface where
+// a rendering shortcut would state something untrue, so the whole mapping lives here in one `when`
+// rather than as an `if` chain in the View.
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * What the TODAY row shows, resolved once.
+ *
+ * One value rather than three accessors, for the reason `RecurrenceLineTokens` gives: the three answers
+ * come out of a single `when` over [DayFiring], and returning them separately would be three parallel
+ * `when`s that must agree, with nothing to catch them drifting.
+ */
+data class TodayCell(
+    /** The string-catalog key the View renders through `L.string` — the `journeyLabelToken` idiom. */
+    val labelKey: String,
+    /**
+     * Whether [labelKey] is an [OccurrenceState] reading, and so renders as the status **chip**. False
+     * for the three grid answers below, which are plain muted words: they are statements about the
+     * *schedule*, not about how a firing went, and a chip would present them as the latter.
+     */
+    val isStatus: Boolean,
+    /** Whether that chip takes the success tint — see `occurrenceStatusIsDone` for why it is its own axis. */
+    val isDone: Boolean,
+)
+
+/**
+ * Today's reading for one recurring definition, as the cell that renders it.
+ *
+ * The two questions [TodayOccurrence] holds apart — *does anything fire today?* and *how did today go?* —
+ * are answered by different halves of the record, and this is the only place they meet. Three of the four
+ * arms have no word in the [OccurrenceState] vocabulary at all:
+ *
+ * - [DayFiring.NotFiring] — the grid **was** reproduced and puts nothing on today.
+ * - [DayFiring.Fires] with `isCancelled` — the slot existed and was called off, which is a different
+ *   statement from the rule never having fired (and is why a cancelled firing is present-and-flagged in
+ *   the expansion rather than absent).
+ * - [DayFiring.Unavailable] with nothing synced — this device cannot reproduce the grid (a `Custom` rule,
+ *   an unresolvable anchor, or a backend-**elided** series block).
+ *
+ * **`Unavailable` must never render "Not scheduled today".** That would state a fact this device does not
+ * have; "absent, not empty" is the whole posture ADR-0053 is built on. The `when` below is exhaustive over
+ * [DayFiring], so an arm added there is a compile error here rather than a sentence invented at runtime.
+ *
+ * An `Unavailable` grid that *does* carry a synced fact still reads that fact: we cannot say whether the
+ * rule fires today, but we do know the day was resolved, and staying silent about it would throw away a
+ * true answer to the other question. That test is [TodayOccurrence.isStoredResolution] and not
+ * `state != Unknown` — the two are not the same predicate, and the difference is the whole bug: a day
+ * this device has coverage for but no record *derives* `Scheduled` with no fact behind it at all.
+ */
+fun todayCell(today: TodayOccurrence): TodayCell = when (val firing = today.firing) {
+    DayFiring.NotFiring -> TodayCell("tasks_detail_today_not_firing", isStatus = false, isDone = false)
+    is DayFiring.Fires ->
+        if (firing.firing.isCancelled) TodayCell("tasks_detail_today_cancelled", isStatus = false, isDone = false)
+        else statusCell(today.state)
+    // `isStateKnown`, NOT `state == Unknown`. Every successful hydrate lands coverage for the day (the
+    // server always answers), and a covered day with no stored record DERIVES `Scheduled` — so testing
+    // the state value rendered the confident "Scheduled" chip for a grid this build could not expand.
+    // That is the same lie as "not scheduled today", with the sign flipped. The shared predicate rather
+    // than a local `isStoredResolution` test, which is equivalent only inside this arm: all three
+    // surfaces spelling the rule differently is how all three came to be wrong in the same way.
+    DayFiring.Unavailable ->
+        if (today.isStateKnown) statusCell(today.state)
+        else TodayCell("tasks_detail_today_unavailable", isStatus = false, isDone = false)
+}
+
+private fun statusCell(state: OccurrenceState): TodayCell =
+    TodayCell(occurrenceStateToken(state), isStatus = true, isDone = occurrenceStateIsDone(state))
+
+/**
+ * The [[Definition state]] light switch as a catalog key — the recurring detail's STATUS row.
+ *
+ * Emphatically not a [WorkingState]: a Habit/Chore/Event is never "done", it is switched on or off, so
+ * this speaks its own two nouns. `InReview` is the one value the two axes genuinely share, and it reads
+ * the shared `common_status_in_review` rather than growing a third key that says the same word.
+ */
+fun definitionStateToken(state: DefinitionState): String = when (state) {
+    DefinitionState.Active -> "tasks_definition_state_active"
+    DefinitionState.InReview -> "common_status_in_review"
+    DefinitionState.Archived -> "tasks_definition_state_archived"
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Task detail PROPERTIES + subtask drill (#195) — value-class unwraps + the Instant↔epoch codec the

@@ -686,6 +686,29 @@
         <item quantity="one">हर महीने</item>
         <item quantity="other">हर %1$d महीने</item>
     </plurals>
+    <!-- महीने के भीतर 'ठीक कब' (#383) — पंक्ति यह जानबूझकर छोड़ देती है, विवरण बताता है। 'हर …' परिवार वैसा ही रहता है; अंतराल 1 पर बिना संख्या वाला रूप चलता है, इसलिए बहुवचन का 'one' रूप अगम्य है -->
+    <!-- छह निश्चित क्रमसूचक (1..5 और 'आख़िरी') — यह गिनती नहीं, स्थान हैं, इसलिए न plurals और न कोई CLDR ordinal API। ये केवल वार के ठीक पहले आते हैं और उसके बाद 'को' परसर्ग लगता है, इसलिए तिर्यक रूप में हैं — अकेले कभी न दिखाएँ -->
+    <string name="tasks_cadence_nth_first">पहले</string>
+    <string name="tasks_cadence_nth_second">दूसरे</string>
+    <string name="tasks_cadence_nth_third">तीसरे</string>
+    <string name="tasks_cadence_nth_fourth">चौथे</string>
+    <string name="tasks_cadence_nth_fifth">पाँचवें</string>
+    <!-- nth = -1: महीने का आख़िरी मिलता-जुलता वार, 'पाँचवें' नहीं -->
+    <string name="tasks_cadence_nth_last">आख़िरी</string>
+    <!-- %1$s = क्रमसूचक, %2$s = वार का संक्षिप्त नाम (प्लेटफ़ॉर्म के CLDR डेटा से) -->
+    <string name="tasks_cadence_monthly_on_weekday">हर महीने %1$s %2$s को</string>
+    <!-- %1$d = महीनों का अंतराल, %2$s = क्रमसूचक, %3$s = वार; 'हर' के बाद संज्ञा एकवचन रहती है, इसलिए दोनों रूप एक जैसे -->
+    <plurals name="tasks_cadence_monthly_every_n_on_weekday">
+        <item quantity="one">हर %1$d महीने %2$s %3$s को</item>
+        <item quantity="other">हर %1$d महीने %2$s %3$s को</item>
+    </plurals>
+    <!-- सादा '15 तारीख़', क्योंकि नियम छोटे महीनों को छोड़ देता है, तारीख़ को घटाता नहीं -->
+    <string name="tasks_cadence_monthly_on_day">हर महीने की %1$d तारीख़ को</string>
+    <!-- %1$d = महीनों का अंतराल, %2$d = महीने की तारीख़ -->
+    <plurals name="tasks_cadence_monthly_every_n_on_day">
+        <item quantity="one">हर %1$d महीने की %2$d तारीख़ को</item>
+        <item quantity="other">हर %1$d महीने की %2$d तारीख़ को</item>
+    </plurals>
     <!-- 'बार' का रूप नहीं बदलता — दोनों रूप एक जैसे -->
     <plurals name="tasks_cadence_times">
         <item quantity="one">%1$d बार</item>
@@ -706,6 +729,18 @@
         <item quantity="one">हर साल</item>
         <item quantity="other">हर %1$d साल</item>
     </plurals>
+    <!-- सालाना नियम का महीना + तारीख़ (#383) — पंक्ति इसे छोड़ देती है। तारीख़ tasks_cadence_month_day_pattern से पहले ही बन कर आती है -->
+    <!-- यह java.time का पैटर्न है, वाक्य नहीं: क्रम और विभाजक बदलें, अक्षर कभी नहीं -->
+    <string name="tasks_cadence_month_day_pattern">d MMMM</string>
+    <string name="tasks_cadence_yearly_on">हर साल %1$s को</string>
+    <!-- %1$d = सालों का अंतराल, %2$s = बना-बनाया महीना + तारीख़ -->
+    <plurals name="tasks_cadence_yearly_every_n_on">
+        <item quantity="one">हर %1$d साल %2$s को</item>
+        <item quantity="other">हर %1$d साल %2$s को</item>
+    </plurals>
+    <!-- परिभाषा की स्थिति: आदत/काम/इवेंट का स्विच, जो कभी 'पूर्ण' नहीं होता — कार्य की कार्य-स्थिति से अलग। InReview के लिए common_status_in_review ही चलता है -->
+    <string name="tasks_definition_state_active">सक्रिय</string>
+    <string name="tasks_definition_state_archived">संग्रहित</string>
     <!-- हटाना पूरी शृंखला पर लागू होता है (नियम का हर संस्करण), पर यह नरम विलोपन है: दर्ज बारियाँ बनी रहती हैं — किसी कैस्केड का वादा न करें -->
     <string name="tasks_delete_definition_confirm_body">इससे पूरी दोहराने वाली शृंखला हर सूची और योजना से हट जाती है। पहले दर्ज हो चुकी पिछली बारियाँ बनी रहती हैं।</string>
     <string name="tasks_delete_item_confirm_title">“%1$s” हटाएँ?</string>
@@ -740,6 +775,9 @@
     <string name="tasks_detail_no_description">अभी कोई विवरण नहीं।</string>
     <string name="tasks_detail_not_found_body">हो सकता है यह कार्य हटाया जा चुका हो। अपनी सूची पर वापस जाएँ।</string>
     <string name="tasks_detail_not_found_title">कार्य नहीं मिला</string>
+    <!-- प्रकार-निरपेक्ष रूप (#383): स्क्रीन यहाँ तब पहुँचती है जब यह पता ही नहीं होता कि कार्य था, आदत, काम या इवेंट — इसलिए 'आइटम' (common_kind_item) -->
+    <string name="tasks_detail_item_not_found_body">हो सकता है यह आइटम हटाया जा चुका हो। अपनी सूची पर वापस जाएँ।</string>
+    <string name="tasks_detail_item_not_found_title">आइटम नहीं मिला</string>
     <string name="tasks_detail_pane_empty_body">बाईं ओर से कोई कार्य चुनें — उसका विवरण यहाँ दिखेगा।</string>
     <string name="tasks_detail_pane_empty_title">कुछ खुला नहीं</string>
     <string name="tasks_detail_play">चलाएँ</string>
@@ -750,6 +788,22 @@
     <string name="tasks_detail_property_owner">स्वामी</string>
     <string name="tasks_detail_property_source">स्रोत</string>
     <string name="tasks_detail_property_time">समय</string>
+    <!-- दोहराने वाले विवरण की तालिका की पंक्तियाँ (#383): ये केवल लेबल हैं, मान दूसरी कुंजियों से आते हैं -->
+    <string name="tasks_detail_property_kind">प्रकार</string>
+    <!-- संज्ञा चाहिए, tasks_cadence_unknown की क्रिया-पदावली ('दोहराता है') नहीं -->
+    <string name="tasks_detail_property_repeats">दोहराव</string>
+    <!-- tasks_detail_property_due ('नियत तिथि') के जोड़ का शब्द -->
+    <string name="tasks_detail_property_next_due">अगली नियत तिथि</string>
+    <string name="tasks_detail_property_today">आज</string>
+    <!-- आज की बारी वाली कोशिका (#383): 'आज कुछ पड़ता है क्या?' और 'आज कैसा रहा?' अलग सवाल हैं; दूसरा common_status_* कुंजियाँ बताती हैं -->
+    <!-- शेड्यूल निकल आया और आज कोई बारी नहीं पड़ती -->
+    <string name="tasks_detail_today_not_firing">आज के लिए निर्धारित नहीं</string>
+    <!-- यह डिवाइस शेड्यूल निकाल ही नहीं सकता — इसका मतलब 'कुछ निर्धारित नहीं है' नहीं है -->
+    <string name="tasks_detail_today_unavailable">ऑफ़लाइन शेड्यूल उपलब्ध नहीं</string>
+    <!-- बारी आज पड़ती तो थी, पर रद्द हो गई — यह common_cancel बटन ('रद्द करें') नहीं है -->
+    <string name="tasks_detail_today_cancelled">आज रद्द किया गया</string>
+    <!-- केवल पढ़ने के लिए: 'बदलने के लिए टैप करें' नहीं -->
+    <string name="tasks_detail_today_row_a11y">आज: %1$s</string>
     <string name="tasks_detail_remove_caption_a11y">%1$s का कैप्शन निकालें</string>
     <string name="tasks_detail_remove_label_a11y">लेबल %1$s निकालें</string>
     <string name="tasks_detail_section_activity">गतिविधि</string>

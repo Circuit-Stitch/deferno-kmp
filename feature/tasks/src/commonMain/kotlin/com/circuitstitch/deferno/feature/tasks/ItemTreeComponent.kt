@@ -10,6 +10,7 @@ import com.circuitstitch.deferno.core.data.item.ShakeToUndoPreference
 import com.circuitstitch.deferno.core.data.task.BlockedByResult
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemRef
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.Dispatchers
@@ -150,8 +151,10 @@ interface ItemTreeComponent {
     fun onToggleExpand(id: String, currentlyExpanded: Boolean)
 
     /**
-     * Open a row's detail — the trailing `›`. Only **Task** rows have a detail surface today (ADR-0049);
-     * a tap on another [kind] is a no-op until per-kind detail lands (a deferred fast-follow).
+     * Open a row's detail — the trailing `›`. Every [kind] has one (#383): a Task opens its full
+     * read/write detail, a Habit/Chore/Event its read-only definition detail. [kind] is carried through
+     * to the [Output.ItemSelected] rather than discarded, which is the whole fix — with it gone, the
+     * only safe thing the detail slot could do was refuse the row.
      */
     fun onOpenDetail(id: String, kind: ItemKind)
 
@@ -276,7 +279,8 @@ interface ItemTreeComponent {
     fun onDismissBlockedByError()
 
     sealed interface Output {
-        data class ItemSelected(val id: TaskId) : Output
+        /** A row was opened. Carries the kind, so the parent can pick the right detail (#383). */
+        data class ItemSelected(val ref: ItemRef) : Output
     }
 }
 
@@ -387,7 +391,7 @@ class DefaultItemTreeComponent(
     }
 
     override fun onOpenDetail(id: String, kind: ItemKind) {
-        if (kind == ItemKind.Task) output(ItemTreeComponent.Output.ItemSelected(TaskId(id)))
+        output(ItemTreeComponent.Output.ItemSelected(ItemRef(id, kind)))
     }
 
     override fun onRefresh() {

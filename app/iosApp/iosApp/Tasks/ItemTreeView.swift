@@ -263,9 +263,10 @@ struct ItemTreeView: View {
 ///
 /// Kind drives the menu shape, read from the row (never from `menuState`'s presence): a **Task** gets the
 /// full set (Open · Add subtask · Move · [Undo move] · Pin/plan + status block); a **non-Task**
-/// (Habit/Chore/Event) gets the cross-kind subset (Add subtask · Move · [Undo move]) plus the #299 status
-/// block (Activate / Send to review / Archive on its `definitionState`). Status/Pin/plan need the joined `menuState`, so they
-/// render once it's present; Open/Archive gate on kind alone.
+/// (Habit/Chore/Event) gets the cross-kind subset (Open · Add subtask · Move · [Undo move]) plus the #299
+/// status block (Activate / Send to review / Archive on its `definitionState`). Status/Pin/plan need the
+/// joined `menuState`, so they render once it's present. **Open is no longer kind-gated** (#383): every
+/// kind has a detail surface now, so it joins Add subtask / Move / Delete as a shared entry.
 ///
 /// **Delete is NOT kind-gated (#389).** It is the menu's shared tail, below whichever status block the row
 /// got, so a Habit/Chore/Event can be deleted from the tree exactly as a Task can. That ordering —
@@ -365,11 +366,11 @@ private struct TreeRow: View {
     private var rowMenu: some View {
         let item = row.item
 
-        // 1. Open — Task only (the other kinds have no detail surface yet).
-        if isTask {
-            Button { component.onOpenDetail(id: item.id, kind: item.kind) } label: {
-                Label(L.string("tasks_menu_open"), systemImage: "chevron.right")
-            }
+        // 1. Open — EVERY kind (#383). It was Task-gated while a Habit/Chore/Event had no detail surface;
+        // they open a read-only definition detail now, and the kind travels with the id so the slot can
+        // pick the arm. Ungated like Delete below, and for the same reason: nothing here needs the kind.
+        Button { component.onOpenDetail(id: item.id, kind: item.kind) } label: {
+            Label(L.string("tasks_menu_open"), systemImage: "chevron.right")
         }
         // 2. Add subtask (any kind — the child is always a Task).
         Button { addSubtaskText = ""; showingAddSubtask = true } label: {

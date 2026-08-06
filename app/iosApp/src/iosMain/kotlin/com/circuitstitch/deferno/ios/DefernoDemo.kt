@@ -99,12 +99,16 @@ class DefernoDemo {
 /**
  * The Swift-facing handle for the Tasks Destination. Exposes the always-present Item [tree] component
  * (the primary pane) and the co-resident detail slot — flattened to its nullable open
- * [TaskDetailComponent] as a SKIE-bridged [activeDetail] `StateFlow` (the component's `Value.asStateFlow`
- * mirror), so SwiftUI never touches the Decompose `Value`/`ChildSlot` generics.
+ * [TasksComponent.DetailChild] as a SKIE-bridged [activeDetail] `StateFlow` (the component's
+ * `Value.asStateFlow` mirror), so SwiftUI never touches the Decompose `Value`/`ChildSlot` generics.
+ *
+ * The child is the **sealed pair** since #383 (a Task detail or a recurring-definition detail), not a
+ * bare [TaskDetailComponent]: the slot now opens for every kind. Swift discriminates it through
+ * `BridgeKt.taskDetailOrNull`/`definitionDetailOrNull`.
  */
 class TasksRoot internal constructor(private val component: TasksComponent) {
     val tree: ItemTreeComponent get() = component.tree
-    val activeDetail: StateFlow<TaskDetailComponent?> = component.activeDetail
+    val activeDetail: StateFlow<TasksComponent.DetailChild?> = component.activeDetail
 }
 
 /**

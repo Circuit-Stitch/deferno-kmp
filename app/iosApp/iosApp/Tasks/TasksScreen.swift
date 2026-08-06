@@ -30,7 +30,10 @@ struct TasksScreen: View {
     /// drive the trailing toolbar items via `ChromeToolbar`).
     var chromeSpec: ChromeSpec
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @StateObject private var detail: OptionalStateFlowObserver<TaskDetailComponent>
+    /// The open detail, whichever of the two arms it is (#383): `TasksComponent.DetailChild` is the sealed
+    /// choice between the Task detail and the read-only recurring-definition detail. Swift cannot take a
+    /// bridged sealed type apart, so `detailPane` discriminates it through the flat bridge accessors.
+    @StateObject private var detail: OptionalStateFlowObserver<TasksComponentDetailChild>
     /// The native search text — inline-filters the loaded forest (#263). Lives here so it sits on the
     /// nav bar that owns the tree; passed down to `ItemTreeView` for the actual filtering.
     @State private var query = ""
@@ -131,14 +134,14 @@ struct TasksScreen: View {
         tasksNavPath(hasDetail: detail.value != nil)
     }
 
-    /// A pushed secondary pane on compact width: the detail's View with its in-pane `PaneHeader` suppressed,
+    /// A pushed secondary pane on compact width: the detail's View with its in-pane header suppressed,
     /// so the native bar owns the title + back chevron.
     @ViewBuilder
     private func pushedPane(_ route: TaskRoute) -> some View {
         switch route {
         case .detail:
-            if let detail = detail.value {
-                TaskDetailView(component: detail, showsHeader: false).id(BridgeKt.detailKey(component: detail))
+            if let child = detail.value {
+                detailPane(child, showsHeader: false)
             }
         }
     }
@@ -147,13 +150,33 @@ struct TasksScreen: View {
     /// placeholder when nothing is open.
     @ViewBuilder
     private func secondaryPane() -> some View {
-        if let detail = detail.value {
-            TaskDetailView(component: detail).id(BridgeKt.detailKey(component: detail))
+        if let child = detail.value {
+            detailPane(child, showsHeader: true)
         } else {
             EmptyStateView(
                 title: L.string("tasks_detail_pane_empty_title"),
                 message: L.string("tasks_detail_pane_empty_body")
             )
         }
+    }
+
+    /// Render whichever arm of the detail slot is open (#383): a Task's full read/write detail, or the
+    /// read-only detail of a recurring definition. Two `if let`s over the flat bridge accessors rather than
+    /// a `switch` — Swift cannot pattern-match a bridged Kotlin sealed type, so this is the house idiom
+    /// (`PlanHostView` reads its own sealed child exactly this way).
+    ///
+    /// The `.id(…)` is `detailChildKey`, **not** `detailKey`: the two arms share one identity namespace on
+    /// this screen, so the key has to carry the kind. Keying only the id would let a Task and a Habit that
+    /// happen to share a UUID inherit each other's `@State`, which fails silently rather than loudly.
+    @ViewBuilder
+    private func detailPane(_ child: TasksComponentDetailChild, showsHeader: Bool) -> some View {
+        Group {
+            if let task = BridgeKt.taskDetailOrNull(child: child) {
+                TaskDetailView(component: task, showsHeader: showsHeader)
+            } else if let definition = BridgeKt.definitionDetailOrNull(child: child) {
+                DefinitionDetailView(component: definition, showsHeader: showsHeader)
+            }
+        }
+        .id(BridgeKt.detailChildKey(child: child))
     }
 }

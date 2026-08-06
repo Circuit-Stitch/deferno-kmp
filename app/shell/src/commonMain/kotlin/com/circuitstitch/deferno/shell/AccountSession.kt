@@ -6,7 +6,10 @@ import com.circuitstitch.deferno.core.data.attachment.OnDeviceStorageUsage
 import com.circuitstitch.deferno.core.data.backup.ImportResult
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.definition.DefinitionRef
+import com.circuitstitch.deferno.core.data.definition.DefinitionRepository
 import com.circuitstitch.deferno.core.data.definition.DefinitionStateSource
+import com.circuitstitch.deferno.core.data.occurrence.InertOccurrenceCoverageLocalStore
+import com.circuitstitch.deferno.core.data.occurrence.InertOccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
@@ -277,6 +280,16 @@ interface AccountSession {
     val definitionStateSource: DefinitionStateSource get() = InertDefinitionStateSource
 
     /**
+     * The kind-neutral read of one recurring definition (#383) — the seam the Tasks detail slot opens a
+     * [[Habit]]/[[Chore]]/[[Event]] through. It is the only thing in this client that writes
+     * [[Occurrence coverage]], so without it every recurring detail's "today" reads Unknown forever.
+     *
+     * Inert default like the three above, and for the same reason: a session with no data behind it
+     * should say it does not know, not guess.
+     */
+    val definitionRepository: DefinitionRepository get() = DefinitionRepository.NONE
+
+    /**
      * The Assistant Destination's on-device Conversation cache (ADR-0040, #282): the source of truth for
      * readable chat history — the component persists each turn as it streams and reads it back offline.
      * Local-only, never synced (turns are never outbox-queued — online-only to extend, ADR-0040).
@@ -352,33 +365,6 @@ interface AccountSession {
  * that reports full coverage and no facts, which would derive Missed for every past day.
  */
 
-internal object InertOccurrenceFactLocalStore : OccurrenceFactLocalStore {
-    override fun observeOn(date: LocalDate) = flowOf(emptyList<OccurrenceFact>())
-    override fun observeInRange(kind: ItemKind, definitionId: String, from: LocalDate, to: LocalDate) =
-        flowOf(emptyList<OccurrenceFact>())
-
-    override fun observe(kind: ItemKind, definitionId: String, date: LocalDate) = flowOf<OccurrenceFact?>(null)
-    override suspend fun get(kind: ItemKind, definitionId: String, date: LocalDate): OccurrenceFact? = null
-    override suspend fun upsert(fact: OccurrenceFact) {}
-    override suspend fun delete(kind: ItemKind, definitionId: String, date: LocalDate) {}
-    override suspend fun replaceRange(
-        kind: ItemKind,
-        definitionId: String,
-        from: LocalDate,
-        to: LocalDate,
-        facts: List<OccurrenceFact>,
-    ) {}
-
-    override suspend fun transaction(block: suspend (OccurrenceFactLocalStore) -> Unit) = block(this)
-}
-
-internal object InertOccurrenceCoverageLocalStore : OccurrenceCoverageLocalStore {
-    override fun observeCovering(date: LocalDate) = flowOf(emptyList<OccurrenceCoverage>())
-    override suspend fun get(kind: ItemKind, definitionId: String) = emptyList<OccurrenceCoverage>()
-    override suspend fun record(coverage: OccurrenceCoverage) {}
-    override suspend fun clear(kind: ItemKind, definitionId: String) {}
-}
-
 internal object InertDefinitionStateSource : DefinitionStateSource {
     override fun observeAll() = flowOf(emptyMap<DefinitionRef, DefinitionState>())
     override suspend fun get(kind: ItemKind, definitionId: String): DefinitionState? = null
@@ -431,6 +417,7 @@ class AccountComponentSession(private val component: AccountComponent) : Account
     override val occurrenceCoverageLocalStore: OccurrenceCoverageLocalStore
         get() = component.occurrenceCoverageLocalStore
     override val definitionStateSource: DefinitionStateSource get() = component.definitionStateSource
+    override val definitionRepository: DefinitionRepository get() = component.definitionRepository
     override val conversationStore: ConversationStore get() = component.conversationStore
 
     override fun observeBrainDumpDrafts() = component.brainDumpDraftRepository.observeDrafts()

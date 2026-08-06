@@ -7,6 +7,7 @@ import com.circuitstitch.deferno.core.data.task.SearchSeed
 import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemRef
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -118,25 +119,33 @@ class SearchComponentTest {
     }
 
     @Test
-    fun resultTapEmitsTheOpenTaskIntent() = runTest {
+    fun resultTapEmitsTheOpenItemIntent() = runTest {
         val outputs = mutableListOf<SearchComponent.Output>()
         val component = component(RecordingSearch(), output = outputs::add)
 
         component.onResultClicked(hit("x"))
 
-        assertEquals(listOf<SearchComponent.Output>(SearchComponent.Output.OpenTask(TaskId("x"))), outputs)
+        assertEquals(
+            listOf<SearchComponent.Output>(SearchComponent.Output.OpenItem(ItemRef("x", ItemKind.Task))),
+            outputs,
+        )
     }
 
     @Test
-    fun tappingANonTaskHitDoesNotOpenAnything() = runTest {
-        // No v1 detail screen exists for habit/chore/event, so a non-Task tap is a calm no-op (#231) —
-        // mirrors the Tasks tree, which only opens Task rows.
+    fun tappingARecurringHitOpensItWithItsKindIntact() = runTest {
+        // The inversion of #231's `tappingANonTaskHitDoesNotOpenAnything`. Search was the LAST surface
+        // with no escape hatch: a user could find a habit here and still not open it (#383). The kind
+        // must ride the intent — a bare id would put a Habit down the Task-typed detail path, which is
+        // the 404-read-as-success shape ItemRef exists to make unrepresentable.
         val outputs = mutableListOf<SearchComponent.Output>()
         val component = component(RecordingSearch(), output = outputs::add)
 
         component.onResultClicked(hit("h", kind = ItemKind.Habit))
 
-        assertTrue(outputs.isEmpty())
+        assertEquals(
+            listOf<SearchComponent.Output>(SearchComponent.Output.OpenItem(ItemRef("h", ItemKind.Habit))),
+            outputs,
+        )
     }
 
     @Test

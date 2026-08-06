@@ -299,15 +299,20 @@ struct ItemTreeView: View {
 /// `DropdownMenu` (`ItemTreeUi.kt`). A dedicated view so it can own the two menu-spawned dialogs' `@State`
 /// (the Add-subtask prompt + the Delete confirmation), which a `@ViewBuilder` func on the parent can't.
 ///
-/// The menu is **kind-aware** (ADR-0049 decision 7): a Task row gets Open · Open in New Window · Add
-/// subtask · Move · Undo move · Pin/Unpin · Add/Remove from plan · the working-state block (Start working /
-/// Mark done / Set aside); a recurring (non-Task) row gets the cross-kind subset Add subtask ·
-/// Move · Undo move plus the **definition-state block** Activate / Send to review / Archive (#299). `Pin`,
-/// plan and the working-state block stay Task-only (mirrors Android). Each handler computes its
-/// target from the row's current value — the "args from the row" rule — since the tree row is a cross-kind
-/// `Item` projection that may have no joined state. `isTask` is the shared bridge helper
-/// (`BridgeKt.itemKindIsTask`); per-row status comes from the joined `menuState` (Task) or
-/// `item.definitionState` (non-Task, `nil` for a Task).
+/// The menu is **kind-aware** (ADR-0049 decision 7): every row gets Open · Open in New Window · Add
+/// subtask · Move · Undo move; a Task row adds Pin/Unpin · Add/Remove from plan · the working-state block
+/// (Start working / Mark done / Set aside), and a recurring (non-Task) row adds the **definition-state
+/// block** Activate / Send to review / Archive (#299) instead. `Pin`, plan and the working-state block stay
+/// Task-only (mirrors Android). Each handler computes its target from the row's current value — the "args
+/// from the row" rule — since the tree row is a cross-kind `Item` projection that may have no joined state.
+/// `isTask` is the shared bridge helper (`BridgeKt.itemKindIsTask`); per-row status comes from the joined
+/// `menuState` (Task) or `item.definitionState` (non-Task, `nil` for a Task).
+///
+/// **Open is no longer Task-only (#383).** Both open verbs used to sit behind an `isTask` gate because the
+/// other three kinds had no detail surface at all — opening a Habit was a no-op on every platform, which
+/// is the bug #383 fixes. The shared detail slot now holds either a Task's read/write detail or the
+/// recurring kinds' read-only one, so the gate is gone from both verbs and from the double-click and
+/// VoiceOver-rotor accelerators that share `openDetailWindow()`.
 ///
 /// **Delete is NOT kind-gated (#389).** It is the menu's shared tail, below whichever status block the row
 /// got, so a Habit/Chore/Event can be deleted from the tree exactly as a Task can. Archive *then* Delete is
@@ -320,7 +325,7 @@ struct ItemTreeView: View {
 /// sits under the pointer, so a tap-driven destructive affordance on the row itself would be unsafe here.
 ///
 /// This row is also the **entry point for the detached detail window** (#196, ADR-0033) — the `task-detail`
-/// scene in `DefernoApp` and `TaskDetailWindowRoot.openTaskDetailWindow` were both live but unreachable
+/// scene in `DefernoApp` and `ItemDetailWindowRoot.openItemDetailWindow` were both live but unreachable
 /// after the flat `TaskListView` that used to carry the trigger was subsumed by the tree (#227): the
 /// context-menu item, the double-click accelerator and the VoiceOver rotor action below are that restored
 /// trigger, all three routed through `openDetailWindow()` so they share one set of gates (#368).
@@ -335,7 +340,8 @@ private struct ItemRowContainer: View {
 
     @Environment(\.defernoColors) private var colors
     /// Opens the `task-detail` scene declared in `DefernoApp` (#196, ADR-0033). Value-based (`String`, the
-    /// raw item id), so re-opening an already-open task raises its existing window instead of duplicating it.
+    /// kind-carrying `"<Kind>:<raw id>"` token since #383 — see `openDetailWindow()`), so re-opening an
+    /// already-open item raises its existing window instead of duplicating it.
     @Environment(\.openWindow) private var openWindow
 
     /// The two menu-spawned dialogs (#231): the destructive Delete confirm and the Add-subtask title prompt.
@@ -359,14 +365,17 @@ private struct ItemRowContainer: View {
     }
 
     /// The single detached-window trigger (#196, ADR-0033), shared by all three entry points — the context
-    /// menu item, the double-click accelerator and the VoiceOver rotor action — so the gates can't drift
-    /// apart between them: Task rows only (nothing else has a detail surface) and never mid-move (the move
-    /// bar owns the surface). The `openWindow` payload is the raw item id, which `openTaskDetailWindow`
-    /// re-wraps as a `TaskId` over the live account session, so the window shares this shell's SQLite
-    /// driver and edits sync between them.
+    /// menu item, the double-click accelerator and the VoiceOver rotor action — so the one remaining gate
+    /// can't drift apart between them: never mid-move (the move bar owns the surface).
+    ///
+    /// **The Task-only gate is gone (#383)**, along with the reason for it: every kind has a detail now.
+    /// What replaced it is the payload — `BridgeKt.itemDetailToken` carries the row's `(kind, id)` pair, and
+    /// `openItemDetailWindow` decodes it to an `ItemRef` over the live account session, so the window opens
+    /// the detail the kind actually has. Handing over the bare id (what this used to do) is what made the
+    /// opener re-wrap a Habit as a `TaskId`; the gate was hiding that, not preventing it.
     private func openDetailWindow() {
-        guard isTask, !inMoveMode else { return }
-        openWindow(id: "task-detail", value: row.item.id)
+        guard !inMoveMode else { return }
+        openWindow(id: "task-detail", value: BridgeKt.itemDetailToken(item: row.item))
     }
 
     var body: some View {
@@ -405,13 +414,13 @@ private struct ItemRowContainer: View {
         // other tree surfaces) rather than a modifier out here, so it is deferred to #368 rather than
         // bodged from this side.
         //
-        // Task rows only (nothing else has a detail surface) and never mid-move — see `openDetailWindow()`,
-        // which owns those gates for all three triggers.
+        // Never mid-move — see `openDetailWindow()`, which owns that gate for all three triggers (and which
+        // no longer gates on kind at all, #383).
         .simultaneousGesture(TapGesture(count: 2).onEnded { openDetailWindow() })
         // The non-pointer equivalent of that accelerator (#368): a VoiceOver rotor action. The context-menu
         // item is the keyboard route, but VoiceOver reaches per-row commands through the rotor, not a
-        // right-click, so without this "Open in New Window" was mouse-or-menu only. Gated identically to
-        // the double-click, so on a non-Task row it is inert exactly as the double-click is.
+        // right-click, so without this "Open in New Window" was mouse-or-menu only. Routed through the same
+        // function, so it opens whatever the double-click would.
         .accessibilityAction(named: Text(L.string("tasks_menu_open_in_new_window"))) { openDetailWindow() }
         // Delete confirm (destructive, #231) — mirrors the Task-detail kebab's confirm. The title and the
         // write are kind-agnostic — only the row's title and id — but the BODY is not (#389): a recurring
@@ -456,18 +465,19 @@ private struct ItemRowContainer: View {
     private func rowMenu() -> some View {
         // Empty in move mode so a mid-move right-click is inert.
         if !inMoveMode {
-            // Open routes to the Task-only detail surface (the other kinds have no detail yet).
-            if isTask {
-                Button { component.onOpenDetail(id: row.item.id, kind: row.item.kind) } label: {
-                    Label(L.string("tasks_menu_open"), systemImage: "arrow.up.right.square")
-                }
-                // …and the macOS-only sibling: the same detail in its own detached, navigable window
-                // (#196, ADR-0033) instead of the inline pane. Routed through `openDetailWindow()` — the
-                // one place that owns the Task-only / not-mid-move gates — even though this branch is
-                // already inside both, so the three triggers can never diverge.
-                Button { openDetailWindow() } label: {
-                    Label(L.string("tasks_menu_open_in_new_window"), systemImage: "macwindow.badge.plus")
-                }
+            // Open routes to the shared detail slot, which since #383 holds a detail for EVERY kind — the
+            // Task's read/write one or the recurring kinds' read-only one. `onOpenDetail` already took the
+            // kind; what changed is that the shared component now keeps it instead of discarding it one
+            // frame later, which is the whole fix.
+            Button { component.onOpenDetail(id: row.item.id, kind: row.item.kind) } label: {
+                Label(L.string("tasks_menu_open"), systemImage: "arrow.up.right.square")
+            }
+            // …and the macOS-only sibling: the same detail in its own detached, navigable window
+            // (#196, ADR-0033) instead of the inline pane. Routed through `openDetailWindow()` — the
+            // one place that owns the not-mid-move gate — even though this branch is already inside it,
+            // so the three triggers can never diverge.
+            Button { openDetailWindow() } label: {
+                Label(L.string("tasks_menu_open_in_new_window"), systemImage: "macwindow.badge.plus")
             }
             Button { addSubtaskOpen = true } label: {
                 Label(L.string("tasks_menu_add_subtask"), systemImage: "plus")

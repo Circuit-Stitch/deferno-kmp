@@ -282,15 +282,6 @@ struct TaskDetailView: View {
         return prefixAttr + title
     }
 
-    /// The short human ref (`#123`) from a full `{org}-{sequence}` ref: the trailing segment, rendered
-    /// `#N` when it is the numeric sequence, else the ref verbatim; `nil` for a just-created (ref-less) row.
-    private func shortRef(_ ref: String?) -> String? {
-        guard let ref, !ref.isEmpty else { return nil }
-        let tail = ref.split(separator: "-").last.map(String.init) ?? ref
-        if !tail.isEmpty && tail.allSatisfy(\.isNumber) { return "#\(tail)" }
-        return ref
-    }
-
     /// The detail's ⋮ more-actions kebab: Break this down and the destructive Delete (gated behind a
     /// confirm). "Add subtask" moved to the FAB add sheet — parity with Android dropping it from the kebab
     /// once the FAB owns the add actions (externalAddActions). Icon-only trigger; self-describing label.
@@ -1053,7 +1044,11 @@ private let PropLabelWidth: CGFloat = 116
 /// One properties-table row: a tinted mono small-caps label cell ruled off from the content cell. When
 /// [onTap] is set the whole row is tappable (the STATUS row → status picker) and announced as one node via
 /// [rowA11y]. Mirrors the Compose `PropertyTableRow` (a11y + geometry) in `TaskDetailSections.kt`.
-private struct PropertyTableRow<Content: View>: View {
+///
+/// Module-internal rather than file-private since #383: `DefinitionDetailView` builds the same table for a
+/// recurring definition, and the two details render into the *same* pane — a second copy of the row would
+/// be a second chance for the label column, the hairlines and the a11y grouping to drift apart on screen.
+struct PropertyTableRow<Content: View>: View {
     let label: String
     var onTap: (() -> Void)?
     var rowA11y: String?
@@ -1247,7 +1242,9 @@ private struct PriorityIndicator: View {
 /// clamped to the first lines with the rest one tap away in a sheet, selectable + copyable, links live. A
 /// known platform delta from the Compose `MarkdownDescription`: `AttributedString(markdown:)` supports
 /// inline syntax only (no block tables / task lists) — the "Show more" sheet still carries the full text.
-private struct MarkdownDescription: View {
+///
+/// Module-internal since #383: the recurring detail renders a definition's notes through the same body.
+struct MarkdownDescription: View {
     let markdown: String
     let sheetTitle: String
     @State private var showingFull = false
@@ -1706,7 +1703,8 @@ final class OnDeviceAudioPlayer: NSObject, ObservableObject, AVAudioPlayerDelega
 /// only a leading Back affordance. It renders on the regular-width split / iPad-regular column; on the
 /// compact push the native `NavigationStack` bar owns Back and this is dropped (`showsHeader == false`).
 /// A `nil` `onBack` hides the control (the macOS-inline root case), matching `PaneHeader`'s optional back.
-private struct DrilledBackBar: View {
+/// Module-internal since #383: the recurring detail is hosted in the same slot and needs the same bar.
+struct DrilledBackBar: View {
     let onBack: (() -> Void)?
 
     @Environment(\.defernoColors) private var colors

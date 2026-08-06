@@ -7,7 +7,7 @@ import com.circuitstitch.deferno.core.data.task.SearchSort
 import com.circuitstitch.deferno.core.data.task.TaskRepository
 import com.circuitstitch.deferno.core.data.task.TaskSearchQuery
 import com.circuitstitch.deferno.core.data.task.hasRunnableConstraint
-import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemRef
 import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -67,7 +67,7 @@ data class SearchState(
  * The global-search component (#73, #311, ADR-0042): the shared, Compose-free logic behind the search
  * overlay route. It is **offline and one-shot** — it drives [TaskRepository.search] (a suspend local read
  * over the cache, NOT the observed `Flow`), so search results are never confused with the live task list
- * (ADR-0001). Selecting a result emits an [Output.OpenTask] intent the shell routes into the Tasks
+ * (ADR-0001). Selecting a result emits an [Output.OpenItem] intent the shell routes into the Tasks
  * Destination; [onDismiss] emits [Output.Dismissed] for the shell to pop the overlay.
  *
  * The search guard lives here ([SearchState.canSearch]) so every platform binding inherits it. Opening
@@ -91,16 +91,23 @@ interface SearchComponent {
     fun onSubmit()
 
     /**
-     * A result row was tapped (#231). Kind-aware: a Task hit emits [Output.OpenTask] (the Tasks
-     * Destination has a Task detail); a non-Task hit is a no-op for now, since habit/chore/event have no
-     * v1 detail screen — mirrors the Tasks tree, which only opens Task rows.
+     * A result row was tapped (#231). Emits [Output.OpenItem] for **every** kind (#383) — the Tasks
+     * Destination now has a detail for all four, so the hit's kind is carried through rather than used
+     * to refuse the tap. Mirrors the Tasks tree, whose open intent is kind-neutral for the same reason.
      */
     fun onResultClicked(hit: SearchHit)
     fun onDismiss()
 
     sealed interface Output {
-        /** A result row was tapped — open it in the Tasks Destination (the shell routes + dismisses). */
-        data class OpenTask(val id: TaskId) : Output
+        /**
+         * A result row was tapped — open it in the Tasks Destination (the shell routes + dismisses).
+         *
+         * Carries an [ItemRef] rather than a [TaskId] (#383): every kind has a detail surface now, and
+         * the shell hands this straight to the tree's kind-neutral `onOpenDetail`. A `TaskId` here would
+         * be the same discard that *was* the bug — with the kind gone, the only safe thing to do with a
+         * Habit hit was nothing, which is why Search was the last surface with no escape hatch.
+         */
+        data class OpenItem(val ref: ItemRef) : Output
 
         /** The overlay was dismissed (the shell pops it back to origin). */
         data object Dismissed : Output
@@ -178,8 +185,11 @@ class DefaultSearchComponent(
     }
 
     override fun onResultClicked(hit: SearchHit) {
-        // Only Task hits have a v1 detail screen; a non-Task tap is a calm no-op (mirrors the tree).
-        if (hit.kind == ItemKind.Task) output(SearchComponent.Output.OpenTask(TaskId(hit.id)))
+        // EVERY kind opens (#383) — a Task into its full detail, a Habit/Chore/Event into the read-only
+        // definition detail. This was `if (hit.kind == ItemKind.Task)` while the recurring kinds had no
+        // detail surface, and it made Search the one place a user could *find* a habit and still not be
+        // able to open it.
+        output(SearchComponent.Output.OpenItem(ItemRef(hit.id, hit.kind)))
     }
 
     override fun onDismiss() {

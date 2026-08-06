@@ -385,6 +385,25 @@ enum L {
     /// enough rule can read as ended while still being live. Uses: tasks_recurrence_series_ended,
     /// tasks_recurrence_next_due.
     static func cursor(_ tokens: RecurrenceLineTokens) -> String? {
+        guard let day = cursorDay(tokens) else { return nil }
+        // EXHAUSTED is already a whole clause ("Series ended"), not a day, so it must NOT take the
+        // "Next: %@" wrapper — that renders "Next: Series ended", which contradicts itself. This guard
+        // used to be an early return inside `cursor`; splitting `cursorDay` out for #383's detail row
+        // left it below the wrapper and the tree row said exactly that, in all five locales. The iOS
+        // twin kept it (`Localization.swift`, same line) — keep the two shaped identically.
+        if tokens.cursor == "EXHAUSTED" { return day }
+        return format("tasks_recurrence_next_due", day)
+    }
+
+    /// The next-due **day on its own** — "Tomorrow", "3 days ago", "Series ended" — without the
+    /// `tasks_recurrence_next_due` ("Next: %@") wrapper [cursor] puts around it.
+    ///
+    /// Split out for #383's recurring detail, whose NEXT DUE row already carries
+    /// `tasks_detail_property_next_due` as its label: wrapping there would read "Next due — Next:
+    /// Tomorrow". The tree row still wants the wrapper, because its cadence subtitle is one running line
+    /// with no labels in it. Same reading either way, phrased for its frame — which is why this is one
+    /// function with two wrappers rather than two mappings of the same six tokens.
+    static func cursorDay(_ tokens: RecurrenceLineTokens) -> String? {
         guard let token = tokens.cursor else { return nil }
         if token == "EXHAUSTED" { return string("tasks_recurrence_series_ended") }
         let days = tokens.cursorCount?.intValue
@@ -392,7 +411,7 @@ enum L {
         // one ever arrives without it there is no honest number to say, so drop the clause entirely rather
         // than let a placeholder render "in 0 days" — the cadence still carries the row.
         if days == nil, token == "DAYS_AWAY" || token == "DAYS_AGO" { return nil }
-        return format("tasks_recurrence_next_due", relativeDay(token, days ?? 0))
+        return relativeDay(token, days ?? 0)
     }
 
     /// The whole recurrence subtitle for an Item-tree row (#384) — the visible line and its VoiceOver

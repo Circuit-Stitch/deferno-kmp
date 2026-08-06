@@ -15,6 +15,7 @@ import com.circuitstitch.deferno.core.data.activity.summaryInfo
 import com.circuitstitch.deferno.core.model.ActivityFieldChange
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -126,8 +127,13 @@ interface ActivityComponent {
     fun openItem(id: String)
 
     sealed interface Output {
-        /** Open the item [id] a change touched — the shell switches to Tasks and drills into it. */
-        data class OpenItem(val id: String) : Output
+        /**
+         * Open the item a change touched — the shell switches to Tasks and drills into it.
+         *
+         * Carries the kind (#383). The shell used to append `ItemKind.Task` at the routing site, so a
+         * Habit's activity row deep-linked into the Task-typed detail and read as not-found.
+         */
+        data class OpenItem(val ref: ItemRef) : Output
     }
 }
 
@@ -157,7 +163,23 @@ class DefaultActivityComponent(
             ActivityFeedState(entries.map { it.toRow(byId) })
         }.stateIn(componentScope(coroutineContext), SharingStarted.WhileSubscribed(5_000L), ActivityFeedState())
 
-    override fun openItem(id: String) = output(ActivityComponent.Output.OpenItem(id))
+    /**
+     * The kind is resolved HERE, from this component's own joined rows, rather than being passed back in
+     * by the View (#383). Two reasons, and the second is the load-bearing one: the row already carries
+     * [ActivityFeedRow.itemKind] from the item-cache join, so asking three Views to hand it back is asking
+     * three Views to get it right; and the shell used to supply `ItemKind.Task` at the routing site, which
+     * sent a Habit's activity row into the Task-typed detail path — the fabricated-kind shape this whole
+     * issue is about.
+     *
+     * An unresolved kind falls back to Task, unchanged from before. It means the id is not in the item
+     * cache at all (a row whose item aged out or was deleted), so no kind would open it — and Task is the
+     * arm that renders the plain not-found rather than attempting a definition read for an id the device
+     * has never seen.
+     */
+    override fun openItem(id: String) {
+        val kind = state.value.rows.firstOrNull { it.itemId == id }?.itemKind ?: ItemKind.Task
+        output(ActivityComponent.Output.OpenItem(ItemRef(id, kind)))
+    }
 }
 
 private fun ActivityEntry.toRow(byId: Map<String, Item>): ActivityFeedRow {

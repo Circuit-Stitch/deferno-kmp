@@ -10,6 +10,7 @@ import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemRef
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,8 +29,8 @@ import kotlin.test.assertTrue
 
 /**
  * The Item-tree pane component (ADR-0049, #227): it flattens the cross-kind Item forest into the
- * observable [ItemTreeState], persists fold toggles to the device-local store (re-flattening live), opens
- * detail only for Task rows, and delegates refresh. Run against the fakes on the ADR-0006 JVM-fast path.
+ * observable [ItemTreeState], persists fold toggles to the device-local store (re-flattening live), emits
+ * a kind-carrying detail intent for EVERY kind (#383), and delegates refresh. Run against the fakes on the ADR-0006 JVM-fast path.
  */
 @OptIn(ExperimentalCoroutinesApi::class) // advanceUntilIdle() — drive the WhileSubscribed state flow
 class ItemTreeComponentTest {
@@ -165,17 +166,33 @@ class ItemTreeComponentTest {
 
         c.onOpenDetail("root", ItemKind.Task)
 
-        assertEquals(listOf<ItemTreeComponent.Output>(ItemTreeComponent.Output.ItemSelected(TaskId("root"))), outputs)
+        assertEquals(
+            listOf<ItemTreeComponent.Output>(
+                ItemTreeComponent.Output.ItemSelected(ItemRef("root", ItemKind.Task)),
+            ),
+            outputs,
+        )
     }
 
+    /**
+     * The inversion of `openingANonTaskRowEmitsNothing` (#383). That test pinned the defect: the tree
+     * discarded the kind and refused to emit for anything but a Task, so a Habit row was a dead tap on
+     * every platform. The kind now rides the intent, which is the whole fix — the parent decides which
+     * detail to open, and the tree stops deciding that a recurring row has none.
+     */
     @Test
-    fun openingANonTaskRowEmitsNothing() = runTest {
+    fun openingARecurringRowEmitsItsDetailIntentCarryingTheKind() = runTest {
         val outputs = mutableListOf<ItemTreeComponent.Output>()
         val c = component(rootAndChild(), output = outputs::add)
 
         c.onOpenDetail("some-habit", ItemKind.Habit)
 
-        assertTrue(outputs.isEmpty())
+        assertEquals(
+            listOf<ItemTreeComponent.Output>(
+                ItemTreeComponent.Output.ItemSelected(ItemRef("some-habit", ItemKind.Habit)),
+            ),
+            outputs,
+        )
     }
 
     @Test

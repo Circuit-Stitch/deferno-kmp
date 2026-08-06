@@ -133,8 +133,16 @@ happened. Seven rules follow, and the first two are cross-repository:
 **Consequences.** The client gains a real recurrence engine, which is the largest single piece of
 logic in the core and the one most exposed to silent drift. The `deferno.contract-fixtures`
 convention already exists and is wired only into `core:network`, so extending it to carry the
-generated corpus is the mechanism that keeps the port honest. Neither Apple application has a Swift
-test target, which is a further argument for keeping every rule in shared Kotlin.
+generated corpus is the mechanism that keeps the port honest. Keeping every rule in shared Kotlin is
+what puts it under the corpus in the first place — a rule reimplemented in Swift would be outside it,
+and both Apple applications' Swift suites (`iosAppTests`, `macosAppTests`, each run by its CI job's
+`xcodebuild … test`) exercise bridges and view state rather than recurrence arithmetic.
+
+> **Corrected 6 Aug 2026 (#383).** This paragraph previously read *"Neither Apple application has a
+> Swift test target"*. That was false when written: both targets existed and both ran in CI. The
+> argument it supported survives on its own terms — those suites do not and should not carry the
+> expander — but the premise did not, and the epic (#397) repeats it, so it is corrected here rather
+> than left to be cited again.
 
 Three changes in the `Deferno` repository become prerequisites: the `series` block, the
 `SeriesChainView` widening, and per-entry plan provenance. This contradicts the epic's opening claim

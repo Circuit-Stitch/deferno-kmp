@@ -243,9 +243,13 @@ struct PlanView: View {
     /// - **No completion control.** A firing's done-state is a *reading* against today, not a stored fact
     ///   (ADR-0053), and the fact table it will be derived from does not exist yet (#390). An unchecked
     ///   dot would assert "not done" on no evidence, so a `KindDot` marks the row instead.
-    /// - **No tap.** No recurring kind has a detail surface on any platform (#383), so neither the tap
-    ///   gesture nor the "opens the tree" hint is attached — a row that cannot be opened must not
-    ///   announce that it can.
+    /// - **No tap.** Still nowhere to go from *here* — though no longer for the original reason. A
+    ///   recurring definition does have a detail surface since #383, but it opens off the **Tasks**
+    ///   Destination's slot, which takes an `ItemRef`; the Plan stack's own open seam is
+    ///   `PlanComponent.onTaskClicked(id: TaskId)`, and `TaskId` is exactly what a recurring id must never
+    ///   be minted into (it applies nothing locally and 404s as a write the outbox reads as success).
+    ///   Widening that seam is shared-shell work, not this View's. So neither the tap gesture nor the
+    ///   "opens the tree" hint is attached — a row that cannot be opened must not announce that it can.
     @ViewBuilder
     private func dayRow(row: PlanRow, highlighted: Bool) -> some View {
         let item = row.item

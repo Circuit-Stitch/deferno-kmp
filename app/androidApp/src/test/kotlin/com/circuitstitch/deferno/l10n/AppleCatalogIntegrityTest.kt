@@ -59,6 +59,40 @@ class AppleCatalogIntegrityTest {
     private fun localizationsOf(entry: JsonObject): Map<String, JsonObject> =
         entry["localizations"]?.jsonObject?.mapValues { it.value.jsonObject } ?: emptyMap()
 
+    /**
+     * Every `plural` category map a localization carries, labelled by where it came from.
+     *
+     * Two shapes, and the second one is why this helper exists. A single-argument plural puts its
+     * arms directly under `variations.plural`. A plural that has to agree with a count while *other*
+     * arguments are interpolated alongside it (`"%#@interval@ on the %2$@ %3$@"`) cannot use that
+     * shape at all — Xcode represents it as a top-level `stringUnit` pattern plus a `substitutions`
+     * map, with the arms nested one level deeper under each substitution. Both are real plurals;
+     * only the first was ever inspected here, so an arm missing from a substitution-shaped entry
+     * (#383 added the first three) slipped through both this ratchet and the translated/non-blank
+     * one — the outer pattern is a perfectly valid `stringUnit`, so nothing looked further in.
+     */
+    private fun pluralCategoriesOf(localization: JsonObject): List<Pair<String, Set<String>>> {
+        val direct = localization["variations"]?.jsonObject?.get("plural")?.jsonObject
+            ?.let { listOf("" to it.keys) }.orEmpty()
+        val substituted = localization["substitutions"]?.jsonObject.orEmpty().mapNotNull { (name, sub) ->
+            sub.jsonObject["variations"]?.jsonObject?.get("plural")?.jsonObject?.let { "%#@$name@" to it.keys }
+        }
+        return direct + substituted
+    }
+
+    /** Every `stringUnit` a localization carries, including those nested inside `substitutions`. */
+    private fun stringUnitsOf(localization: JsonObject): List<Pair<String, JsonObject>> {
+        val direct = localization["stringUnit"]?.let { listOf("" to it.jsonObject) }.orEmpty()
+        val variations = localization["variations"]?.jsonObject?.get("plural")?.jsonObject
+            ?.map { (category, unit) -> category to unit.jsonObject["stringUnit"]!!.jsonObject }.orEmpty()
+        val substituted = localization["substitutions"]?.jsonObject.orEmpty().flatMap { (name, sub) ->
+            sub.jsonObject["variations"]?.jsonObject?.get("plural")?.jsonObject
+                ?.map { (category, unit) -> "$name.$category" to unit.jsonObject["stringUnit"]!!.jsonObject }
+                .orEmpty()
+        }
+        return direct + variations + substituted
+    }
+
     @Test
     fun appleCatalogsAreSymlinksIntoTheSharedCatalog() {
         val shared = sharedCatalog.toPath().toRealPath()
@@ -104,10 +138,10 @@ class AppleCatalogIntegrityTest {
     fun everyAppleStringUnitIsTranslatedAndNonBlank() {
         val bad = strings.entries.flatMap { (key, entry) ->
             localizationsOf(entry).flatMap { (locale, localization) ->
-                val units = localization["stringUnit"]?.let { listOf("" to it.jsonObject) }
-                    ?: localization["variations"]?.jsonObject?.get("plural")?.jsonObject
-                        ?.map { (category, unit) -> category to unit.jsonObject["stringUnit"]!!.jsonObject }
-                    ?: return@flatMap listOf("$key/$locale has neither stringUnit nor plural variations")
+                val units = stringUnitsOf(localization)
+                if (units.isEmpty()) {
+                    return@flatMap listOf("$key/$locale has neither stringUnit nor plural variations")
+                }
                 units.mapNotNull { (category, unit) ->
                     val where = if (category.isEmpty()) "$key/$locale" else "$key/$locale[$category]"
                     val state = unit["state"]?.jsonPrimitive?.content
@@ -131,17 +165,19 @@ class AppleCatalogIntegrityTest {
     fun everyApplePluralCarriesOneAndOtherInEveryLocale() {
         val bad = strings.entries.flatMap { (key, entry) ->
             val localizations = localizationsOf(entry)
-            val pluralLocales = localizations.filterValues { it.containsKey("variations") }.keys
+            val pluralLocales = localizations.filterValues { pluralCategoriesOf(it).isNotEmpty() }.keys
             when {
                 pluralLocales.isEmpty() -> emptyList()
                 pluralLocales != localizations.keys ->
                     listOf("$key is a plural in ${pluralLocales.sorted()} but a plain string elsewhere")
-                else -> localizations.mapNotNull { (locale, localization) ->
-                    val categories = localization["variations"]!!.jsonObject["plural"]!!.jsonObject.keys
-                    // en/es/de/hi/pt are all CLDR one+other; a `few`/`many` bucket here would be a
-                    // locale the Compose `<plurals>` twin cannot express.
-                    if (categories == setOf("one", "other")) null
-                    else "$key/$locale has categories ${categories.sorted()}, expected [one, other]"
+                else -> localizations.flatMap { (locale, localization) ->
+                    pluralCategoriesOf(localization).mapNotNull { (where, categories) ->
+                        // en/es/de/hi/pt are all CLDR one+other; a `few`/`many` bucket here would be a
+                        // locale the Compose `<plurals>` twin cannot express.
+                        val at = if (where.isEmpty()) "$key/$locale" else "$key/$locale[$where]"
+                        if (categories == setOf("one", "other")) null
+                        else "$at has categories ${categories.sorted()}, expected [one, other]"
+                    }
                 }
             }
         }.sorted()

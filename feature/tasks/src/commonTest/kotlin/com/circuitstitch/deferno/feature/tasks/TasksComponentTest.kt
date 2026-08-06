@@ -5,6 +5,7 @@ import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.circuitstitch.deferno.core.data.item.InMemoryItemFoldStore
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.ItemRef
 import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -62,28 +63,36 @@ class TasksComponentTest {
         component.tree.onOpenDetail("root", ItemKind.Task)
 
         // detail is now active *alongside* the always-present tree — co-resident, not a replacement.
-        assertEquals(TaskId("root"), component.detail.value.child?.instance?.taskId)
+        assertEquals(TaskId("root"), component.detail.value.child?.instance?.asTask?.taskId)
         assertNotNull(component.tree)
 
         // opening another row re-points the same slot
         component.tree.onOpenDetail("b", ItemKind.Task)
-        assertEquals(TaskId("b"), component.detail.value.child?.instance?.taskId)
+        assertEquals(TaskId("b"), component.detail.value.child?.instance?.asTask?.taskId)
     }
 
+    /**
+     * The inversion of `openingANonTaskRowDoesNotOpenDetail` (#383), which asserted the bug: a Habit,
+     * Chore or Event could not be opened on any platform because this slot only ever activated for a
+     * Task. It now activates the read-only definition detail, addressed by a kind-carrying [ItemRef].
+     */
     @Test
-    fun openingANonTaskRowDoesNotOpenDetail() = runTest {
+    fun openingARecurringRowOpensTheDefinitionDetail() = runTest {
         val component = tasksComponent(items(), tasks())
 
         component.tree.onOpenDetail("h", ItemKind.Habit)
 
-        assertNull(component.detail.value.child, "no detail surface for a Habit yet (ADR-0049 fast-follow)")
+        val child = assertNotNull(component.detail.value.child?.instance, "a Habit row opens a detail")
+        val definition = assertNotNull(child.asDefinition, "and it is the definition arm, not the Task one")
+        assertEquals(ItemRef("h", ItemKind.Habit), definition.ref)
+        assertNull(child.asTask, "a definition never reaches the TaskId-typed detail")
     }
 
     @Test
     fun drillingIntoAnInlineSubtaskSeedsTheReKeyedDetail() = runTest {
         val component = tasksComponent(items(), tasks())
         component.tree.onOpenDetail("root", ItemKind.Task)
-        val parent = assertNotNull(component.detail.value.child?.instance)
+        val parent = assertNotNull(component.detail.value.child?.instance?.asTask)
         // The parent detail is on screen (subscribed) when its subtask is tapped, so its subtask tree is
         // built — mirror that here so the seed has a row to hand over (WhileSubscribed needs a collector).
         backgroundScope.launch { parent.state.collect {} }
@@ -91,7 +100,7 @@ class TasksComponentTest {
 
         parent.onSubtaskClicked(TaskId("c1"))
 
-        val child = assertNotNull(component.detail.value.child?.instance)
+        val child = assertNotNull(component.detail.value.child?.instance?.asTask)
         assertEquals(TaskId("c1"), child.taskId)
         // Seeded from the parent detail's in-memory subtask tree → the row (and its title) is on the
         // first frame, before any collection of the re-keyed detail's flow.
@@ -118,7 +127,7 @@ class TasksComponentTest {
         val component = tasksComponent(items(), tasks(), outputs::add)
         component.tree.onOpenDetail("root", ItemKind.Task)
 
-        component.detail.value.child?.instance?.onAddToPlanClicked()
+        component.detail.value.child?.instance?.asTask?.onAddToPlanClicked()
 
         assertEquals(listOf<TasksComponent.Output>(TasksComponent.Output.AddToPlanRequested(TaskId("root"))), outputs)
     }

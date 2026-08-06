@@ -909,7 +909,10 @@ private struct ConnectedParentHeader<Overflow: View>: View {
 
 /// The title-less drilled Back bar (ADR-0044) — the connected-parent node is the heading, so this carries
 /// only the Back affordance (`nil` at a detached window's root, #196). Replaces the old titled `PaneHeader`.
-private struct DrilledBackBar: View {
+///
+/// Internal rather than file-private since #383: `DefinitionDetailView` is a second detail pane in the
+/// same slot with the same chrome, and a private copy there would be two bars to keep in step.
+struct DrilledBackBar: View {
     let onBack: (() -> Void)?
     @Environment(\.defernoColors) private var colors
 
@@ -1111,7 +1114,8 @@ private struct SubtaskOutlineRow: View {
 }
 
 /// A calm section header: a heading title with an optional trailing count (e.g. "2/5").
-private struct SectionTitle: View {
+/// Internal since #383 — shared with `DefinitionDetailView`'s PROPERTIES table (see `DrilledBackBar`).
+struct SectionTitle: View {
     let title: String
     var trailing: String?
     @Environment(\.defernoColors) private var colors
@@ -1317,7 +1321,11 @@ private struct DiffPresentation: Identifiable {
 ///
 /// A known platform delta from the Compose `MarkdownDescription`: `AttributedString(markdown:)` handles
 /// inline syntax only — no block tables or task lists. The "Show more" sheet still carries the full text.
-private struct MarkdownDescription: View {
+///
+/// Internal since #383: a recurring definition's NOTES is the same user-authored (or tracker-imported)
+/// prose in the same column, so it renders through this rather than a plain `Text` that would print raw
+/// `**` at whichever detail you happened to open (see `DrilledBackBar`).
+struct MarkdownDescription: View {
     let markdown: String
     let sheetTitle: String
     @State private var showingFull = false

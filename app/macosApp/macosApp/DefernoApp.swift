@@ -98,7 +98,7 @@ struct DefernoApp: App {
                 // the `RootView(...)` value from outside, while `.defernoTheme` is applied *inside*
                 // `RootView`'s own body — so a sheet presented here would resolve `\.defernoColors` to
                 // the `EnvironmentKey` default (`defernoLight`) no matter what the person picked. Same
-                // shape as the detached `task-detail` scene (TaskDetailWindowView), which observes
+                // shape as the detached `task-detail` scene (ItemDetailWindowView), which observes
                 // `root.themeSettings` for the same reason (#368 G18).
                 .sheet(isPresented: $showExtractor) {
                     ThemedSheet(root: host.root) { DraftExtractorView(bridge: host.draftTasks) }
@@ -110,14 +110,22 @@ struct DefernoApp: App {
         // Honour the content's min frame as the window's minimum size (the window still resizes up).
         .windowResizability(.contentMinSize)
 
-        // Detached, navigable per-task detail windows (#196, ADR-0033): a SECOND scene, opened by a task
-        // row's double-click / "Open in New Window" via `openWindow(id:value:)` carrying the raw task id.
-        // It coexists with the main window's inline pane and NEVER handles auth — the `main` Window stays
-        // the sole owner of `onOpenURL` + sign-in (#189). Value-based, so opening an already-open task
-        // brings its existing window to the front (native dedupe) rather than duplicating it.
-        WindowGroup(id: "task-detail", for: String.self) { $rawId in
-            if let rawId {
-                TaskDetailWindowView(host: host, rawId: rawId)
+        // Detached, navigable per-item detail windows (#196, ADR-0033): a SECOND scene, opened by a tree
+        // row's double-click / "Open in New Window" via `openWindow(id:value:)`. It coexists with the main
+        // window's inline pane and NEVER handles auth — the `main` Window stays the sole owner of
+        // `onOpenURL` + sign-in (#189). Value-based, so opening an already-open item brings its existing
+        // window to the front (native dedupe) rather than duplicating it.
+        //
+        // **The payload is the KIND-CARRYING token** `"<Kind>:<raw id>"` (`BridgeKt.itemDetailToken`), not
+        // the bare id it used to be (#383). A `WindowGroup` value has to be a single `Codable` — and the
+        // dedupe above is *value* equality — so the pair travels as one string; `openItemDetailWindow`
+        // decodes it back to an `ItemRef` and picks the detail the kind actually has. The scene id stays
+        // "task-detail": macOS restores windows by scene id across launches, and a payload written by an
+        // older build decodes correctly (see `BridgeKt.itemRefFromToken`), so renaming it would orphan
+        // those restorations to buy nothing.
+        WindowGroup(id: "task-detail", for: String.self) { $token in
+            if let token {
+                ItemDetailWindowView(host: host, token: token)
             }
         }
         .windowResizability(.contentMinSize)

@@ -11,6 +11,7 @@ import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
 import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.comment.CommentRepository
 import com.circuitstitch.deferno.core.data.comment.CommentWriter
+import com.circuitstitch.deferno.core.data.definition.DefinitionRepository
 import com.circuitstitch.deferno.core.data.definition.DefinitionStateSource
 import com.circuitstitch.deferno.core.data.event.EventLocalStore
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
@@ -131,6 +132,16 @@ abstract class AccountComponent(
     abstract val occurrenceFactLocalStore: OccurrenceFactLocalStore
     abstract val occurrenceCoverageLocalStore: OccurrenceCoverageLocalStore
     abstract val definitionStateSource: DefinitionStateSource
+
+    /**
+     * The kind-neutral recurring-definition read (#383): the three per-kind local stores fanned out
+     * over kind, hydrated through `GET /items/{id}`. Per-Account because it holds the Account's own
+     * stores (ADR-0002 hard isolation, ADR-0014) — binding it in `AppScope` would be the breach.
+     *
+     * It is also the only writer of [occurrenceCoverageLocalStore] in the client, which is why the
+     * recurring detail's dated reading depends on it existing rather than on a new endpoint.
+     */
+    abstract val definitionRepository: DefinitionRepository
 
     /**
      * The Calendar feed read repository (#74): the windowed month grid + day agenda source, observed

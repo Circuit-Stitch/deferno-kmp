@@ -3,6 +3,7 @@ package com.circuitstitch.deferno.core.network
 import com.circuitstitch.deferno.core.network.dto.AuthenticatedUserDto
 import com.circuitstitch.deferno.core.network.dto.DefStatusWire
 import com.circuitstitch.deferno.core.network.dto.ItemView
+import com.circuitstitch.deferno.core.network.dto.OccurrenceStatusWire
 import com.circuitstitch.deferno.core.network.dto.TaskDetailDto
 import com.circuitstitch.deferno.core.network.dto.TaskStatusWire
 import com.circuitstitch.deferno.core.network.dto.TaskSummaryDto
@@ -309,6 +310,87 @@ class ContractFixtureParseTest {
         assertEquals("77dd6a6e-b936-4f61-9807-c3a6b647f9f1", detail.blockedBy.single().item)
     }
 
+    // --- item-detail-event.json → Envelope<ItemView>: the single-item detail body (#383) ---
+
+    @Test
+    fun itemDetailEventParsesTheChainAndAStoredTodayOccurrence() = runTest {
+        // `GET /items/{id}` — captured live from staging on 2026-08-05. It is the SAME flattened,
+        // `type`-discriminated shape as an `/items` element with three derived fields appended, so it
+        // decodes through the same sealed [ItemView] rather than a detail-only DTO.
+        val event = assertIs<ItemView.Event>(parseData<ItemView>("item-detail-event.json"))
+        assertEquals("1489006f-78d6-4262-8de9-c2e049a3dbaf", event.id)
+
+        // The ADR-0053 decision-3 chain: this row's rule was changed once, so the wire carries TWO
+        // eras. `segments.size >= 2` whenever the block is present at all — a one-era item sends no
+        // chain rather than a chain of one (which is what item-detail-chore.json pins).
+        val chain = assertNotNull(event.seriesChain)
+        assertEquals("1489006f-78d6-4262-8de9-c2e049a3dbaf", chain.head)
+        assertEquals("1489006f-78d6-4262-8de9-c2e049a3dbaf", chain.requested)
+        assertEquals(false, chain.truncated)
+        assertEquals(2, chain.segments.size)
+
+        // The ROOT era is the superseded one, and the ONLY thing that stops it is its own
+        // `until_utc` — an exclusive Segment bound. Its `recurrence` still reads open-ended (no
+        // `end` key), which is precisely the trap SegmentDto's KDoc warns about: expand the rule
+        // without applying the bound and this era runs straight through the split, minting dates the
+        // second era already owns. Captured proof that the two really do disagree on the wire.
+        val root = chain.segments[0]
+        assertEquals("d4f26212-07ac-4ebc-b5d9-fe4649a69a3e", root.id)
+        assertEquals("weekly", root.recurrence?.type)
+        assertNull(root.recurrence?.end)
+        assertEquals("2026-04-18T16:00:00Z", root.series?.untilUtc)
+        assertNull(root.deletedAt)
+
+        // The head era carries the live rule + bound, and no Segment bound of its own.
+        val head = chain.segments[1]
+        assertEquals("1489006f-78d6-4262-8de9-c2e049a3dbaf", head.id)
+        assertEquals("on_date", head.recurrence?.end?.type)
+        assertNull(head.series?.untilUtc)
+
+        // A REAL stored occurrence: a non-placeholder id, so the detail read lands it as a fact.
+        val occurrence = assertNotNull(event.todayOccurrence)
+        assertEquals("ca02ee6e-bea4-4ce6-a7ef-248806615370", occurrence.id)
+        assertEquals("2026-08-05", occurrence.scheduledDate)
+        assertEquals(OccurrenceStatusWire.Dropped, occurrence.status)
+
+        // `origin_label` is ABSENT on a first-party row — the backend derives it from an `external`
+        // block (a tracker ref or a calendar's display name) and skips the key otherwise. Absent, not
+        // null-valued, so the default is what makes this row decode at all.
+        assertNull(event.originLabel)
+    }
+
+    // --- item-detail-chore.json → the placeholder occurrence + the ABSENT chain ---
+
+    @Test
+    fun itemDetailChoreParsesThePlaceholderOccurrenceAndCarriesNoChain() = runTest {
+        val chore = assertIs<ItemView.Chore>(parseData<ItemView>("item-detail-chore.json"))
+        assertEquals("2975f1a1-7657-4b2e-82c6-8e98f8bf5fa8", chore.id)
+
+        // A rule that has never been changed carries NO `series_chain` key at all. Absent is the
+        // one-era statement; it is NOT an empty chain, and nothing may render it as "no history".
+        assertNull(chore.seriesChain)
+
+        // The all-zeroes PLACEHOLDER: the backend fills `id` with a zero UUID when nothing is stored
+        // for the date rather than omitting `today_occurrence`, and pairs it with a `scheduled`
+        // status that is a READING, not a stored value. Both halves are captured here because the
+        // distinction is load-bearing downstream — the field's presence records Occurrence coverage
+        // (the server answered for the day) while the zero id withholds the fact (nothing recorded).
+        // Collapse the two and every never-yet-resolved day reads Unknown forever, or worse, a
+        // resolution the server never had gets manufactured into the fact table.
+        val occurrence = assertNotNull(chore.todayOccurrence)
+        assertEquals("00000000-0000-0000-0000-000000000000", occurrence.id)
+        assertEquals("2026-08-05", occurrence.scheduledDate)
+        assertEquals(OccurrenceStatusWire.Scheduled, occurrence.status)
+        assertEquals("2026-08-06T06:59:59Z", occurrence.completeBy)
+
+        // `complete_by` on the DEFINITION is the walked cursor, and it is a month out while the
+        // occurrence above answers for today — the two are captured together so nothing starts
+        // deriving today's state from the cursor (the mis-read the recurring epic keeps tripping on).
+        assertEquals("2026-08-23T06:59:59Z", chore.completeBy)
+        assertEquals("every_n_days", chore.recurrence?.type)
+        assertNull(chore.originLabel)
+    }
+
     // --- error-404.json → ApiError.Endpoint via the shipping error path ---
 
     @Test
@@ -356,6 +438,7 @@ class ContractFixtureParseTest {
                 "plan.json" -> parseData<List<TaskSummaryDto>>(name)
                 "today-sample.json" -> parseData<List<TodayTaskDto>>(name)
                 "items-sample.json" -> parseData<List<ItemView>>(name)
+                "item-detail-event.json", "item-detail-chore.json" -> parseData<ItemView>(name)
                 "error-404.json" -> {
                     val result = fixtureClient(name, HttpStatusCode.NotFound).requestApi<TaskSummaryDto>()
                     assertIs<ApiError.Endpoint>(assertIs<ApiResult.Failure>(result).error)

@@ -36,17 +36,15 @@ struct SessionExpiredBanner: View {
 /// parent's fold (a leaf node is decorative). A collapsed Task parent shows a `done of total` MonoMeta + a
 /// thin progress bar; a **recurring** row shows a one-line cadence subtitle instead (#384 — "Weekly on
 /// Mon, Wed · Next: Tomorrow"), the two being mutually exclusive since only Tasks carry subtree counts and
-/// only the recurring kinds carry a rule. The trailing › opens detail (Task kind only — the other kinds
-/// have no detail surface yet). A terminal (Done/Dropped/Archived) row is de-emphasized. Stateless: the
-/// handlers take their params from the row, never from observed state.
+/// only the recurring kinds carry a rule. The trailing › opens detail for **every** kind (#383 — it was
+/// Task-gated while the three recurring kinds had no detail surface). A terminal (Done/Dropped/Archived)
+/// row is de-emphasized. Stateless: the handlers take their params from the row, never from observed state.
 struct ItemRowView: View {
     let row: ItemRow
     let onToggleExpand: (String, Bool) -> Void
     let onOpenDetail: (String, ItemKind) -> Void
 
     @Environment(\.defernoColors) private var colors
-
-    private var isTask: Bool { BridgeKt.itemKindIsTask(kind: row.item.kind) }
 
     /// The connecting-rail / node accent — the row's kind colour (also tinted for the rail spine).
     private var accent: Color { kindColor(row.item.kind, colors) }
@@ -168,19 +166,19 @@ struct ItemRowView: View {
                 SourceMark(source: source).padding(.horizontal, 4)
             }
 
-            // Trailing › — opens detail; Task kind only (the other kinds have no detail surface yet).
-            if isTask {
-                Button {
-                    onOpenDetail(row.item.id, row.item.kind)
-                } label: {
-                    DefernoIcon.chevronRight.image(size: 20)
-                        .foregroundStyle(colors.inkMuted)
-                        .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L.format("common_open_named_cd", row.item.title))
+            // Trailing › — opens detail, for EVERY kind (#383). It used to be gated on `isTask` because the
+            // three recurring kinds had no detail surface; they have one now, and the kind rides the
+            // callback (`ItemRef`) rather than being discarded, which is what lets the slot pick the arm.
+            Button {
+                onOpenDetail(row.item.id, row.item.kind)
+            } label: {
+                DefernoIcon.chevronRight.image(size: 20)
+                    .foregroundStyle(colors.inkMuted)
+                    .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L.format("common_open_named_cd", row.item.title))
         }
         .padding(.horizontal, Layout.gutter)
         .frame(minHeight: Layout.rowMinHeight)
@@ -354,4 +352,18 @@ extension Task {
     /// Stable String identity for SwiftUI list diffing. `Task.id` is an erased value class (opaque
     /// `Any` in Swift), so the Kotlin bridge unwraps it to the underlying UUID String.
     var stableKey: String { BridgeKt.taskKey(task: self) }
+}
+
+/// The short human ref (`#123`) from a full `{org}-{sequence}` ref: the trailing segment, rendered `#N`
+/// when it is the numeric sequence, else the ref verbatim; `nil` for a just-created (ref-less) row.
+///
+/// File-level since #383 — it was a `TaskDetailView` method until the recurring detail's heading needed
+/// the same meta line, and `Item.ref`/`RecurringDefinition.ref` are the same `{org}-{sequence}` string a
+/// Task's is. Pure string shaping over a value the server already formatted, so it is presentation rather
+/// than a reading, and there is no shared-model twin for it to drift from.
+func shortRef(_ ref: String?) -> String? {
+    guard let ref, !ref.isEmpty else { return nil }
+    let tail = ref.split(separator: "-").last.map(String.init) ?? ref
+    if !tail.isEmpty && tail.allSatisfy(\.isNumber) { return "#\(tail)" }
+    return ref
 }

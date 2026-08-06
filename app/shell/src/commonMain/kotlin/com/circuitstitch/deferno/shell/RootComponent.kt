@@ -428,6 +428,7 @@ class DefaultRootComponent(
                         occurrenceFactLocalStore = session.occurrenceFactLocalStore,
                         occurrenceCoverageLocalStore = session.occurrenceCoverageLocalStore,
                         definitionStateSource = session.definitionStateSource,
+                        definitionRepository = session.definitionRepository,
                         workingStateEditor = session.workingStateEditor,
                         // The Tasks Item-tree non-Task status seam (#299), routed through this Account's executor.
                         definitionStateEditor = session.definitionStateEditor,

@@ -685,6 +685,29 @@ Vielen Dank.</string>
         <item quantity="one">Monatlich</item>
         <item quantity="other">Alle %1$d Monate</item>
     </plurals>
+    <!-- Grammatik des Monatsankers (#383) — das „genau wann“, das die Zeile im Baum weglässt. Der „one“-Fall der Plurale ist unerreichbar: bei Intervall 1 greift die Variante ohne Zahl, deshalb lässt er die Zahl weg -->
+    <!-- Sechs feste Ordnungszahlen (1..5 und „letzten“), kein Plural und keine CLDR-Ordinal-API: das sind Positionen, keine Mengen. Sie stehen ausschließlich vor einem Wochentag hinter „am“, also stehen sie im Dativ — nie als eigenständiges Wort verwenden -->
+    <string name="tasks_cadence_nth_first">ersten</string>
+    <string name="tasks_cadence_nth_second">zweiten</string>
+    <string name="tasks_cadence_nth_third">dritten</string>
+    <string name="tasks_cadence_nth_fourth">vierten</string>
+    <string name="tasks_cadence_nth_fifth">fünften</string>
+    <!-- nth = -1: der letzte passende Wochentag des Monats, nie „fünften“ -->
+    <string name="tasks_cadence_nth_last">letzten</string>
+    <!-- %1$s = Ordnungszahl, %2$s = Wochentagskürzel aus den CLDR-Daten der Plattform. „am“ + Dativ passt zu allen deutschen Wochentagen (alle maskulin) -->
+    <string name="tasks_cadence_monthly_on_weekday">Monatlich am %1$s %2$s</string>
+    <!-- %1$d = Monatsintervall, %2$s = Ordnungszahl, %3$s = Wochentag -->
+    <plurals name="tasks_cadence_monthly_every_n_on_weekday">
+        <item quantity="one">Monatlich am %2$s %3$s</item>
+        <item quantity="other">Alle %1$d Monate am %2$s %3$s</item>
+    </plurals>
+    <!-- „am 15. Tag“ statt „am Fünfzehnten“: die Zahl + Punkt ist im Deutschen die vollständige Ordnungszahl, die Endung sitzt auf „Tag“. Die Regel ÜBERSPRINGT zu kurze Monate, statt den Tag anzupassen -->
+    <string name="tasks_cadence_monthly_on_day">Monatlich am %1$d. Tag</string>
+    <!-- %1$d = Monatsintervall, %2$d = Tag im Monat -->
+    <plurals name="tasks_cadence_monthly_every_n_on_day">
+        <item quantity="one">Monatlich am %2$d. Tag</item>
+        <item quantity="other">Alle %1$d Monate am %2$d. Tag</item>
+    </plurals>
     <!-- „Mal“ wird nicht gebeugt — beide Formen sind absichtlich identisch -->
     <plurals name="tasks_cadence_times">
         <item quantity="one">%1$d Mal</item>
@@ -705,6 +728,18 @@ Vielen Dank.</string>
         <item quantity="one">Jährlich</item>
         <item quantity="other">Alle %1$d Jahre</item>
     </plurals>
+    <!-- Jahresanker (#383) — Monat + Tag, die die Zeile weglässt. Das Datum kommt bereits mit tasks_cadence_month_day_pattern formatiert an -->
+    <!-- java.time-MUSTER, kein Fließtext: Feldreihenfolge und Trennzeichen übersetzen, nie die Buchstaben -->
+    <string name="tasks_cadence_month_day_pattern">d. MMMM</string>
+    <string name="tasks_cadence_yearly_on">Jährlich am %1$s</string>
+    <!-- %1$d = Jahresintervall, %2$s = fertig formatierter Monat + Tag -->
+    <plurals name="tasks_cadence_yearly_every_n_on">
+        <item quantity="one">Jährlich am %2$s</item>
+        <item quantity="other">Alle %1$d Jahre am %2$s</item>
+    </plurals>
+    <!-- Definitionsstatus: der Schalter einer Gewohnheit/Pflicht/eines Ereignisses, das nie „erledigt“ ist. Getrennt von tasks_filter_active, weil das dort der Aufgabenfilter ist. InReview nutzt weiter common_status_in_review -->
+    <string name="tasks_definition_state_active">Aktiv</string>
+    <string name="tasks_definition_state_archived">Archiviert</string>
     <!-- Das Löschen betrifft die ganze Kette (jede Fassung der Regel), ist aber ein SANFTES Löschen: erfasste Termine bleiben. Keine Kaskade versprechen -->
     <string name="tasks_delete_definition_confirm_body">Das entfernt die ganze wiederkehrende Serie aus allen Listen und Plänen. Bereits erfasste vergangene Termine bleiben erhalten.</string>
     <!-- Deutsche Anführungszeichen „…“ -->
@@ -740,6 +775,9 @@ Vielen Dank.</string>
     <string name="tasks_detail_no_description">Noch keine Beschreibung.</string>
     <string name="tasks_detail_not_found_body">Diese Aufgabe wurde vielleicht entfernt. Geh zurück zu deiner Liste.</string>
     <string name="tasks_detail_not_found_title">Aufgabe nicht gefunden</string>
+    <!-- Artneutrale Variante (#383): die Ansicht landet hier, bevor sie weiß, ob eine Aufgabe, eine Gewohnheit, eine Pflicht oder ein Ereignis fehlte — daher „Element“ (common_kind_item) -->
+    <string name="tasks_detail_item_not_found_body">Dieses Element wurde vielleicht entfernt. Geh zurück zu deiner Liste.</string>
+    <string name="tasks_detail_item_not_found_title">Element nicht gefunden</string>
     <string name="tasks_detail_pane_empty_body">Wähle links eine Aufgabe, um hier ihre Details zu sehen.</string>
     <string name="tasks_detail_pane_empty_title">Nichts geöffnet</string>
     <string name="tasks_detail_play">Abspielen</string>
@@ -750,6 +788,22 @@ Vielen Dank.</string>
     <string name="tasks_detail_property_owner">Zuständig</string>
     <string name="tasks_detail_property_source">Quelle</string>
     <string name="tasks_detail_property_time">Uhrzeit</string>
+    <!-- Zeilen der Tabelle im wiederkehrenden Detail (#383): reine BESCHRIFTUNGEN, die Werte kommen aus anderen Schlüsseln -->
+    <string name="tasks_detail_property_kind">Art</string>
+    <!-- Substantiv: hier steht der Name, nicht die Verbalphrase aus tasks_cadence_unknown („Wiederholt sich“) -->
+    <string name="tasks_detail_property_repeats">Wiederholung</string>
+    <!-- Passend zu tasks_detail_property_due („Fällig“) -->
+    <string name="tasks_detail_property_next_due">Nächste Fälligkeit</string>
+    <string name="tasks_detail_property_today">Heute</string>
+    <!-- Zelle für den heutigen Termin (#383): „fällt heute etwas an?“ und „wie lief heute?“ sind zwei Fragen; die zweite beantworten die common_status_*-Schlüssel -->
+    <!-- Der Zeitplan ließ sich berechnen und heute fällt nichts an -->
+    <string name="tasks_detail_today_not_firing">Heute nicht geplant</string>
+    <!-- Dieses Gerät kann den Zeitplan nicht berechnen — das heißt NICHT „es ist nichts geplant“ -->
+    <string name="tasks_detail_today_unavailable">Zeitplan offline nicht verfügbar</string>
+    <!-- Der Termin fiel auf heute und wurde abgesagt — „abgesagt“ wie ein ausgefallener Termin, nicht die Schaltfläche common_cancel („Abbrechen“) -->
+    <string name="tasks_detail_today_cancelled">Heute abgesagt</string>
+    <!-- Nur lesbar: kein „Zum Ändern tippen“ -->
+    <string name="tasks_detail_today_row_a11y">Heute: %1$s</string>
     <string name="tasks_detail_remove_caption_a11y">Beschriftung für %1$s entfernen</string>
     <string name="tasks_detail_remove_label_a11y">Label %1$s entfernen</string>
     <string name="tasks_detail_section_activity">Aktivität</string>

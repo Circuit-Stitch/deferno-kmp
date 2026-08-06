@@ -48,6 +48,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.circuitstitch.deferno.core.designsystem.component.StatusChip
+import com.circuitstitch.deferno.core.designsystem.component.StatusChipStyle
+import com.circuitstitch.deferno.core.designsystem.component.occurrenceStateChipStyle
 import com.circuitstitch.deferno.core.designsystem.format.formatDate
 import com.circuitstitch.deferno.core.designsystem.format.formatTime
 import com.circuitstitch.deferno.core.designsystem.format.shortWeekdayLabels
@@ -69,16 +72,11 @@ import com.circuitstitch.deferno.core.designsystem.resources.calendar_reschedule
 import com.circuitstitch.deferno.core.designsystem.resources.common_cancel
 import com.circuitstitch.deferno.core.designsystem.resources.common_clear
 import com.circuitstitch.deferno.core.designsystem.resources.common_start
-import com.circuitstitch.deferno.core.designsystem.resources.common_status_a11y
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_done
-import com.circuitstitch.deferno.core.designsystem.resources.common_status_done_late
-import com.circuitstitch.deferno.core.designsystem.resources.common_status_done_on_time
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_in_progress
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_in_review
-import com.circuitstitch.deferno.core.designsystem.resources.common_status_missed
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_scheduled
 import com.circuitstitch.deferno.core.designsystem.resources.common_status_skipped
-import com.circuitstitch.deferno.core.designsystem.resources.common_status_unknown
 import com.circuitstitch.deferno.core.designsystem.resources.common_time_pattern
 import com.circuitstitch.deferno.core.designsystem.theme.defernoColors
 import com.circuitstitch.deferno.core.model.CalendarFiring
@@ -486,63 +484,18 @@ private fun ActionChip(label: String, onClick: () -> Unit) {
  * there is no occurrence axis to read and the row's own [WorkingState] is the honest answer. That
  * status is a genuine fact about *that item*; it is only meaningless when stamped onto a firing.
  * [OccurrenceState.Unknown] is the entirely different claim "this device has never synced that date".
+ *
+ * The firing half of that choice now lives in `core/designsystem`'s [occurrenceStateChipStyle] — the
+ * recurring-definition detail renders the same vocabulary (#383) and a feature slice may not depend on
+ * another feature slice. The [WorkingState] half below stays here: it is not a cross-slice vocabulary,
+ * and it is the branch this agenda alone reaches.
  */
 @Composable
 private fun AgendaStatusChip(firing: CalendarFiring, modifier: Modifier = Modifier) {
     val occurrence = firing.occurrence
-    val (label, container, content) =
-        if (occurrence == null) datedRowChipStyle(firing.item.status) else firingChipStyle(occurrence)
-    val statusDescription = stringResource(Res.string.common_status_a11y, label)
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelMedium,
-        color = content,
-        modifier = modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(container)
-            .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clearAndSetSemantics { contentDescription = statusDescription },
-    )
-}
-
-/**
- * How a firing's reading paints: (label, container, content). Exhaustive over all seven
- * [OccurrenceState] members deliberately — a new state must break this build rather than fall through
- * to a generic label, which is exactly what the Apple side *cannot* have (a Kotlin enum bridges to
- * Swift as an Objective-C class, so a Swift match is an `if`-chain with a silent catch-all).
- *
- * Tone is spent only where it earns its keep:
- * - **Missed** is deliberately not an error colour. The word is already exact; painting it red would
- *   add the reproach ADR-0053 decision 7 says the register must not carry. It shares the muted
- *   past-tense tone with **Skipped**: both are days that have closed, and the difference between them
- *   is the word — which is precise — not the colour, which would only be a verdict.
- * - **Done late** shares Done-on-time's success tone. Both record that the work *happened*; the
- *   punctuality split belongs in the label, where it is information.
- * - **Not synced** ([OccurrenceState.Unknown]) gets no container at all. Absent information must read
- *   as an aside rather than as a badge announcing a state, and above all it must never look like the
- *   Scheduled chip: "we have never looked at that day" and "nothing was due yet" are different claims,
- *   and showing the second when we mean the first is the guess this whole slice exists to stop.
- */
-@Composable
-private fun firingChipStyle(occurrence: OccurrenceState): Triple<String, Color, Color> {
-    val scheme = MaterialTheme.colorScheme
-    val brand = MaterialTheme.defernoColors
-    return when (occurrence) {
-        OccurrenceState.Scheduled ->
-            Triple(stringResource(Res.string.common_status_scheduled), scheme.surfaceVariant, scheme.onSurfaceVariant)
-        OccurrenceState.InProgress ->
-            Triple(stringResource(Res.string.common_status_in_progress), scheme.primaryContainer, scheme.onPrimaryContainer)
-        OccurrenceState.DoneOnTime ->
-            Triple(stringResource(Res.string.common_status_done_on_time), brand.successContainer, brand.onSuccessContainer)
-        OccurrenceState.DoneLate ->
-            Triple(stringResource(Res.string.common_status_done_late), brand.successContainer, brand.onSuccessContainer)
-        OccurrenceState.Skipped ->
-            Triple(stringResource(Res.string.common_status_skipped), scheme.surfaceVariant, brand.inkMuted)
-        OccurrenceState.Missed ->
-            Triple(stringResource(Res.string.common_status_missed), scheme.surfaceVariant, brand.inkMuted)
-        OccurrenceState.Unknown ->
-            Triple(stringResource(Res.string.common_status_unknown), Color.Transparent, brand.inkMuted)
-    }
+    val style =
+        if (occurrence == null) datedRowChipStyle(firing.item.status) else occurrenceStateChipStyle(occurrence)
+    StatusChip(style = style, modifier = modifier)
 }
 
 /**
@@ -555,20 +508,20 @@ private fun firingChipStyle(occurrence: OccurrenceState): Triple<String, Color, 
  * on the branch above.
  */
 @Composable
-private fun datedRowChipStyle(status: WorkingState): Triple<String, Color, Color> {
+private fun datedRowChipStyle(status: WorkingState): StatusChipStyle {
     val scheme = MaterialTheme.colorScheme
     val brand = MaterialTheme.defernoColors
     return when (status) {
         WorkingState.Open ->
-            Triple(stringResource(Res.string.common_status_scheduled), scheme.surfaceVariant, scheme.onSurfaceVariant)
+            StatusChipStyle(stringResource(Res.string.common_status_scheduled), scheme.surfaceVariant, scheme.onSurfaceVariant)
         WorkingState.InProgress ->
-            Triple(stringResource(Res.string.common_status_in_progress), scheme.primaryContainer, scheme.onPrimaryContainer)
+            StatusChipStyle(stringResource(Res.string.common_status_in_progress), scheme.primaryContainer, scheme.onPrimaryContainer)
         WorkingState.InReview ->
-            Triple(stringResource(Res.string.common_status_in_review), scheme.secondaryContainer, scheme.onSecondaryContainer)
+            StatusChipStyle(stringResource(Res.string.common_status_in_review), scheme.secondaryContainer, scheme.onSecondaryContainer)
         WorkingState.Done ->
-            Triple(stringResource(Res.string.common_status_done), brand.successContainer, brand.onSuccessContainer)
+            StatusChipStyle(stringResource(Res.string.common_status_done), brand.successContainer, brand.onSuccessContainer)
         WorkingState.Dropped ->
-            Triple(stringResource(Res.string.common_status_skipped), scheme.surfaceVariant, brand.inkMuted)
+            StatusChipStyle(stringResource(Res.string.common_status_skipped), scheme.surfaceVariant, brand.inkMuted)
     }
 }
 

@@ -2,16 +2,21 @@ import Combine
 import Deferno
 import SwiftUI
 
-/// A **detached, navigable per-task detail window** (#196, ADR-0033). Owns a `TaskDetailWindowRoot`
-/// (the per-window Decompose stack over the **live** account session — same SQLite driver as the main
-/// shell, so edits sync across windows for free) and renders its foreground `TaskDetailComponent` as a
-/// `TaskDetailView`. Drilling a subtask pushes the child's detail; the detail's own header Back pops;
-/// at the root (depth 1) the Back control is hidden — the window's own chrome closes it.
+/// A **detached, navigable per-item detail window** (#196, ADR-0033). Owns an `ItemDetailWindowRoot` (the
+/// per-window Decompose tree over the **live** account session — same SQLite driver as the main shell, so
+/// edits sync across windows for free) and renders whichever detail its scene payload named.
+///
+/// **Either arm, since #383.** A Task opens the navigable `TaskDetailView` stack: drilling a subtask pushes
+/// the child's detail, the detail's own header Back pops, and at the root (depth 1) the Back control is
+/// hidden — the window's own chrome closes it. A Habit/Chore/Event opens the read-only
+/// `DefinitionDetailView`, which has no drill and so never shows Back at all. The window used to be
+/// Task-only *by gate* (`ItemRowContainer.openDetailWindow`'s `guard isTask`), and removing that gate is
+/// only safe because the payload now carries the kind — see `openItemDetailWindow`.
 ///
 /// The window closes itself when there is no active session at open (signed out → nothing to show) and
-/// on sign-out / account switch while open (account isolation — never leave another account's task up).
-struct TaskDetailWindowView: View {
-    @StateObject private var model: TaskDetailWindowModel
+/// on sign-out / account switch while open (account isolation — never leave another account's item up).
+struct ItemDetailWindowView: View {
+    @StateObject private var model: ItemDetailWindowModel
     @StateObject private var rootStack: StateFlowObserver<RootComponentChild>
     /// **Every scene themes itself** (#368). SwiftUI environment values do NOT cross a scene boundary:
     /// `RootView` applies `.defernoTheme` *inside* the `main` `Window` scene, and this `task-detail`
@@ -26,15 +31,19 @@ struct TaskDetailWindowView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var boundChild: RootComponentChild?
 
-    init(host: DefernoRoot, rawId: String) {
-        _model = StateObject(wrappedValue: TaskDetailWindowModel(host: host, rawId: rawId))
+    init(host: DefernoRoot, token: String) {
+        _model = StateObject(wrappedValue: ItemDetailWindowModel(host: host, token: token))
         _rootStack = StateObject(wrappedValue: StateFlowObserver(host.root.activeChild))
         _theme = StateObject(wrappedValue: StateFlowObserver(host.root.themeSettings))
     }
 
     var body: some View {
         Group {
-            if let active = model.active {
+            if let definition = model.definition {
+                // A read-only definition detail has nothing to pop and no window-internal navigation, so
+                // its Back is always hidden — the OS chrome is the only way out, as at a Task stack's root.
+                DefinitionDetailView(component: definition, hidesBackControl: true)
+            } else if let active = model.active {
                 // The root entry has nothing to pop to (the OS chrome closes the window), so hide its
                 // Back; a drilled entry keeps the header Back, which pops via the detail's Closed output.
                 // `hostsOverlays: false` — this scene has no shell overlay slot, and the window's stack
@@ -43,13 +52,13 @@ struct TaskDetailWindowView: View {
                 TaskDetailView(component: active, hidesBackControl: !model.canGoBack, hostsOverlays: false)
                     .id(BridgeKt.detailKey(component: active))
             } else {
-                // No active session at open (signed out) or an unusable id — nothing to show; close.
+                // No active session at open (signed out) or an unusable payload — nothing to show; close.
                 Color.clear.onAppear { dismiss() }
             }
         }
         .defernoTheme(theme.value)
         .frame(minWidth: 360, minHeight: 360)
-        // Title the window with the task's ref (e.g. "u-e4h2qk-1") so multiple detail windows are
+        // Title the window with the item's ref (e.g. "u-e4h2qk-1") so multiple detail windows are
         // distinguishable in the title bar / Window menu / Mission Control (#196).
         .navigationTitle(model.title)
         .onReceive(rootStack.$value) { child in
@@ -65,40 +74,49 @@ struct TaskDetailWindowView: View {
     }
 }
 
-/// Builds and OWNS one detached window's `TaskDetailWindowRoot` for the lifetime of its SwiftUI scene:
+/// Builds and OWNS one detached window's `ItemDetailWindowRoot` for the lifetime of its SwiftUI scene:
 /// constructed at init (over the active session — `nil` when signed out), torn down in `deinit`
 /// (`destroy()` → `lifecycle.destroy()`, so the window's component tree leaks nothing across open/close).
-/// Republishes the stack's foreground detail + whether a level can be popped, on the main actor (the
-/// component's `StateFlow` mirrors are bridged by SKIE, whose iterators run off the main thread).
-final class TaskDetailWindowModel: ObservableObject {
+/// Republishes what its arm needs, on the main actor (the components' `StateFlow` mirrors are bridged by
+/// SKIE, whose iterators run off the main thread).
+///
+/// Exactly one arm is live: [definition] is a stored constant (a read-only detail has no stack to
+/// observe), while the Task arm republishes the stack's foreground detail + whether a level can be popped.
+final class ItemDetailWindowModel: ObservableObject {
     @Published private(set) var active: TaskDetailComponent?
     @Published private(set) var canGoBack = false
-    /// The foreground entry's ref (e.g. "u-e4h2qk-1"), used as the window title. Falls back to the task
-    /// title when the task has no ref (so the window is never blank), and re-points as you drill.
+    /// The foreground entry's ref (e.g. "u-e4h2qk-1"), used as the window title. Falls back to the item
+    /// title when it has no ref (so the window is never blank), and re-points as you drill.
     @Published private(set) var title = ""
 
-    private let windowRoot: TaskDetailWindowRoot?
+    /// The recurring-definition arm, or nil for a Task window (or no session at all).
+    let definition: DefinitionDetailComponent?
+
+    private let windowRoot: ItemDetailWindowRoot?
     // `_Concurrency.Task`: `Deferno.Task` (the Kotlin model) shadows Swift's concurrency `Task` here.
     private var activeTask: _Concurrency.Task<Void, Never>?
     private var backTask: _Concurrency.Task<Void, Never>?
     private var titleTask: _Concurrency.Task<Void, Never>?
 
-    init(host: DefernoRoot, rawId: String) {
-        let root = TaskDetailWindowRootKt.openTaskDetailWindow(root: host.root, idValue: rawId)
+    init(host: DefernoRoot, token: String) {
+        let root = ItemDetailWindowRootKt.openItemDetailWindow(host: host, token: token)
         windowRoot = root
-        if let root {
-            active = root.activeDetail.value
-            canGoBack = root.canGoBack.value.boolValue
-            bindTitle(to: root.activeDetail.value)
+        definition = root?.definitionDetail
+        if let definition = root?.definitionDetail {
+            bindDefinitionTitle(to: definition)
+        } else if let stack = root?.taskStack {
+            active = stack.activeDetail.value
+            canGoBack = stack.canGoBack.value.boolValue
+            bindTitle(to: stack.activeDetail.value)
             activeTask = _Concurrency.Task { @MainActor [weak self] in
-                for await component in root.activeDetail {
+                for await component in stack.activeDetail {
                     guard !_Concurrency.Task.isCancelled, let self else { return }
                     self.active = component
                     self.bindTitle(to: component)
                 }
             }
             backTask = _Concurrency.Task { @MainActor [weak self] in
-                for await value in root.canGoBack {
+                for await value in stack.canGoBack {
                     guard !_Concurrency.Task.isCancelled, let self else { return }
                     self.canGoBack = value.boolValue
                 }
@@ -119,8 +137,25 @@ final class TaskDetailWindowModel: ObservableObject {
         }
     }
 
+    /// The definition arm's title. It never re-points (there is no drill), but it must still follow the
+    /// state: a window opened from a cached tree row has no `ref` until the detail read lands.
+    private func bindDefinitionTitle(to component: DefinitionDetailComponent) {
+        let flow = component.state
+        title = Self.titleFor(flow.value)
+        titleTask = _Concurrency.Task { @MainActor [weak self] in
+            for await state in flow {
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.title = Self.titleFor(state)
+            }
+        }
+    }
+
     private static func titleFor(_ state: TaskDetailState) -> String {
         state.task?.ref ?? state.task?.title ?? ""
+    }
+
+    private static func titleFor(_ state: DefinitionDetailState) -> String {
+        state.definition?.ref ?? state.definition?.title ?? ""
     }
 
     deinit {

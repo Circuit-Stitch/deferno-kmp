@@ -126,7 +126,17 @@ class DefernoRoot(
 
     private val lifecycle = LifecycleRegistry()
     private val timeZone = TimeZone.currentSystemDefault()
-    private val today = Clock.System.todayIn(timeZone)
+
+    /**
+     * The reader's local day, read from the clock **once, here** — this class is the app's composition
+     * root and therefore the one place allowed to (everything downstream takes it as a parameter).
+     *
+     * `internal` since #383 so [openItemDetailWindow] can hand the same day to a detached window's
+     * definition detail. A second `Clock.System.todayIn(...)` there would be a second "today" on screen
+     * beside the shell's, and they would disagree for anyone who leaves the Mac running past midnight —
+     * which is precisely the audience a "Not scheduled today" reading must not mislead.
+     */
+    internal val today = Clock.System.todayIn(timeZone)
 
     // In-process dictation (Phase 2): wrap the injected Swift transcriber, else the AppScope engine
     // (which resolves to the Unavailable floor until a macOS engine is bound — the mic stays hidden).

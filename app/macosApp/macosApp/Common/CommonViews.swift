@@ -75,8 +75,8 @@ struct DependencyBadge: View {
 /// One node of the Tasks **Item tree** (#227, ADR-0049), restyled to the "See the trees" connected-tree
 /// filigree (#237, the macOS twin of the iOS `ItemRowView`). A leading curvy **rail** + kind **node**
 /// (the leaf kind-dot or a parent fold-disc with a rotating chevron) drives the fold; a body tap also
-/// toggles a parent's fold (a leaf body is inert). The trailing › opens detail (Task kind only — the other
-/// kinds have no detail surface yet). A collapsed parent shows a `descendantDone/descendantTotal` meta +
+/// toggles a parent's fold (a leaf body is inert). The trailing › opens detail, on every kind since #383.
+/// A collapsed parent shows a `descendantDone/descendantTotal` meta +
 /// progress bar (Tasks only); a **recurring** row shows a one-line cadence subtitle instead (#384 —
 /// "Weekly on Mon, Wed · Next: Tomorrow"), the two being mutually exclusive since only Tasks carry subtree
 /// counts and only the recurring kinds carry a rule. A terminal (Done/Dropped/Archived) row is
@@ -88,8 +88,6 @@ struct ItemRowView: View {
     let onOpenDetail: (String, ItemKind) -> Void
 
     @Environment(\.defernoColors) private var colors
-
-    private var isTask: Bool { BridgeKt.itemKindIsTask(kind: row.item.kind) }
 
     /// The connecting-rail / node accent — the row's kind colour (also tinted for the rail spine).
     private var accent: Color { kindColor(row.item.kind, colors) }
@@ -208,19 +206,21 @@ struct ItemRowView: View {
                 SourceMark(source: source).padding(.horizontal, 4)
             }
 
-            // Trailing › — opens detail; Task kind only (the other kinds have no detail surface yet).
-            if isTask {
-                Button {
-                    onOpenDetail(row.item.id, row.item.kind)
-                } label: {
-                    DefernoIcon.chevronRight.image(size: 16)
-                        .foregroundStyle(colors.inkMuted)
-                        .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L.format("common_open_named_cd", row.item.title))
+            // Trailing › — opens detail. On EVERY kind since #383: the shared slot holds a Task's
+            // read/write detail or the recurring kinds' read-only one, so the `isTask` gate this used to
+            // carry (and the local `isTask` it was the only reader of) is gone. A Habit/Chore/Event row
+            // used to render no chevron at all, which is why the issue reads "could not be opened on any
+            // platform" — there was nothing to click.
+            Button {
+                onOpenDetail(row.item.id, row.item.kind)
+            } label: {
+                DefernoIcon.chevronRight.image(size: 16)
+                    .foregroundStyle(colors.inkMuted)
+                    .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L.format("common_open_named_cd", row.item.title))
         }
         .padding(.horizontal, Layout.gutter)
         .frame(minHeight: Layout.rowMinHeight)

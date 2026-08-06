@@ -239,12 +239,17 @@ private fun rememberPlanDetailComponent(active: MainShellComponent.DestinationCh
  * + a trailing contextual overflow, and NO title / search pill (the connected-parent node in the body is the
  * heading). Back reuses the same [MainShellComponent.onBack] the activity `BackHandler` and the drawer ← run
  * (it pops the foreground Tasks detail). The overflow binds to the LIVE foreground [TaskDetailComponent] read
- * off the detail slot; if it is momentarily null between activations, only the ← renders.
+ * off the detail slot via `asTask`; if it is momentarily null between activations, only the ← renders.
+ *
+ * A **recurring definition** detail (#383) therefore renders the ← alone, and that is the whole intent rather
+ * than an oversight: every item on this overflow is a Task write (Add subtask · Break this down · Delete), so
+ * `asTask` returning null is exactly "there is nothing here this detail can do". The bar itself stays — back
+ * is kind-blind, and `rememberTasksCompactDetail` gates on the slot, not on the kind.
  */
 @Composable
 private fun TasksDetailDrilledBar(shell: MainShellComponent, tasks: TasksComponent) {
     val slot by tasks.detail.subscribeAsState()
-    val detail = slot.child?.instance
+    val detail = slot.child?.instance?.asTask
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         // Reserve the ← from the OS back gesture so its taps aren't eaten at the left edge (as ShellTopBar does).
         IconButton(onClick = { shell.onBack() }, modifier = Modifier.systemGestureExclusionCompat()) {
