@@ -28,9 +28,7 @@ permissions:
 jobs:
   upload:
     name: Archive & upload to TestFlight (Xcode 26)
-    # macos-26 (Tahoe) carries the Xcode 26 line App Store Connect requires — the same image and the same
-    # Xcode selection ios.yml now uses, so a green PR gate actually predicts a successful archive here.
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64, deferno-ios]
     # Generous for the cold-cache first run: the Gradle Run Script downloads the Kotlin/Native compiler +
     # konan deps (~1 GB) before linking the framework.
     timeout-minutes: 60
