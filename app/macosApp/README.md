@@ -157,3 +157,20 @@ as build-setting substitutions, fed per configuration from the gitignored `Local
   via a partial `macosApp/Info.plist` merged into the generated one (`GENERATE_INFOPLIST_FILE` stays YES).
 - Ad-hoc code signing for local dev; TCC/notarization signing is a Mac-session concern kept out of git
   (ADR-0009/0029).
+
+## App Store export compliance (App Encryption Documentation)
+
+`macosApp` links the same `SQLCipher ~> 4.6` pod as `app/iosApp` and shares `core/secure`, so its
+cryptographic surface is identical and so is its answer to Apple's *"What type of encryption
+algorithms does your app implement?"* prompt: the **second** option, *"Standard encryption algorithms
+instead of, or in addition to, using or accessing the encryption within Apple's operating system."*
+
+Linking SQLCipher counts even though none of the cryptography is ours — Apple's "implement" means
+uses, contains or incorporates. Apple Intelligence inference (Phase 3) and the Sidecar/SidecarKit
+capabilities add no cryptography of their own.
+
+The reasoning, the full algorithm inventory, and the **unsettled** export-exemption question are
+recorded once in
+[`app/iosApp/README.md`](../iosApp/README.md#app-store-export-compliance--the-app-encryption-documentation-prompt).
+Keep the two platforms' answers identical: they ship the same crypto, so a divergence between them
+would be an inconsistency in what has been attested to Apple, not a platform difference.
