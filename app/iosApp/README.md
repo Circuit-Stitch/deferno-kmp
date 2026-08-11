@@ -96,6 +96,43 @@ are reproduced by `pod install` and are gitignored.
 > this section used to document was an Intel/Ventura artifact — Homebrew shipped no Ruby bottle for that
 > pair. It retired with the machine.)
 
+### App Store export compliance — the App Encryption Documentation prompt
+
+Every TestFlight upload asks *"What type of encryption algorithms does your app implement?"*. The
+answer is the **second** option: **"Standard encryption algorithms instead of, or in addition to,
+using or accessing the encryption within Apple's operating system."**
+
+Linking SQLCipher counts, even though none of the cryptography is ours. Apple's "implement" means
+uses, contains or incorporates — not authored. The pod's `sqlite3.c` compiles into the app binary
+and carries the whole scheme, and the fact that the AES primitive routes through CommonCrypto
+(`SQLCIPHER_CRYPTO_CC`, above) does not make it Apple's encryption. *"None of the algorithms
+mentioned above"* would only be correct if the app used Apple's own crypto APIs plus HTTPS and
+nothing else.
+
+The complete surface, which is what the question is really asking about:
+
+| What | Where | Algorithms |
+|---|---|---|
+| Per-Account database at rest | SQLCipher 4.10.0 pod (ADR-0009) | AES-256-CBC, HMAC-SHA512, PBKDF2 |
+| Database key storage | `KeychainSecretVault` (`core/secure`) | Apple Keychain |
+| OAuth PKCE challenge | `PkceCrypto.ios.kt` (`core/secure`) | SHA-256 |
+| API transport | Ktor | HTTPS / TLS |
+
+Everything there is standard, nothing is proprietary and nothing is hand-rolled, so the first and
+third options are both wrong.
+
+**The follow-up exemption question is deliberately not answered here.** Apple then asks whether the
+app qualifies for an exemption under Category 5 Part 2 of the US Export Administration Regulations.
+That is an export-compliance determination rather than an engineering one, and getting it wrong is a
+misstatement to Apple and to BIS rather than a bug. The facts to reason from are the table above:
+standard algorithms, protecting the user's own local data and an auth flow, in a mass-market app.
+Confirm the conclusion against Apple's export compliance documentation before attesting to it.
+
+**To stop being asked on every build**, declare `ITSAppUsesNonExemptEncryption` in `Info.plist`. It
+is deliberately absent today, because its value has to agree with the exemption answer above — so it
+stays absent until that is settled. A wrong value there is the same misstatement, made permanent and
+applied automatically to every future upload.
+
 ## Building & running (macOS + Xcode)
 
 The Xcode project is **committed** (`iosApp.xcodeproj`), verified on Xcode 26.6 / iOS 26 SDK. The one
