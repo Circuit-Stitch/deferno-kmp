@@ -131,7 +131,10 @@ object Clamp {
      *   done-ness is a timestamp and the resolution is synthesised at the wire boundary: ticked splits
      *   on punctuality, unticked is a stored `Scheduled`. There is no habit skip and no habit
      *   in-progress — `OutboxOccurrenceWriter.mark` refuses every non-`Complete` habit action, because
-     *   the only payload it could build is `{done:false}`, which *un-completes* rather than skips.
+     *   the only payload it could build is `{done:false}`, which *un-completes* rather than skips. Nor
+     *   is the projection hiding a richer store: the backend records that a dropped habit date "reads
+     *   as Scheduled not Dropped until habit storage gains a durable Dropped marker", so the narrowing
+     *   is the wire's, not this client's reading of it.
      * - **Chore.** `ChoreOccurrenceStatus` is the four written outcomes. `scheduled` and `missed` are
      *   *derived* rows over the requested window, condensed to `null` by the mapper: for a Chore,
      *   absence is the record, so a stored `Scheduled` does not exist.
