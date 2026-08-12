@@ -44,8 +44,8 @@ class PluginSealTest {
         is Progress, is Trackable -> "Enactment"
         is Blocker, is Succeeds, is Importable -> "Linkage"
         is Volition -> "Modal"
-        // The five the wire cannot carry (ADR-0057). They sit across four meaning families and
-        // share only a Reach, which is why they are listed apart rather than merged above.
+        // The five the wire cannot carry (ADR-0057). One per meaning family — five families, five
+        // members — sharing only a Reach, which is why they are listed apart rather than merged above.
         is Dynamics -> "Unfolding (shadowed)"
         is Evaluation -> "Enactment (shadowed)"
         is Purpose -> "Linkage (shadowed)"

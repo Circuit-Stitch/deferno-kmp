@@ -1,6 +1,10 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.plugin
 
 import com.circuitstitch.deferno.core.model.Priority
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 
 // The Content family — what the thing *is*.
 //
@@ -13,7 +17,14 @@ import com.circuitstitch.deferno.core.model.Priority
  * `String?` where the reference model's is `String = ""`: the four kinds carry `description: String?`
  * and a summary row's `null` means *not hydrated*, not *empty*.
  */
-data class Describable(val description: String? = null) : Content {
+@ObjCName("PluginDescribable")
+data class Describable(
+    // `description` collides with `-[NSObject description]` in the Apple export and would land as the
+    // compiler-picked (and therefore unstable) `description_`. Named at the declaration, exactly as
+    // the four kinds' own `description` is — and to the SAME Swift name, so a Phase-5 View reading a
+    // plugin and one reading a kind row spell it identically.
+    @property:ObjCName("itemDescription") val description: String? = null,
+) : Content {
     override val scope get() = Scope.Definition
     override val reach get() = Reach.Wire
     override val degenerate get() = Describable()
@@ -23,6 +34,7 @@ data class Describable(val description: String? = null) : Content {
  * Tags. Separate from [Describable] so the two can move independently — the backend's occurrence
  * record already carries `labels_override` alongside `description_override`.
  */
+@ObjCName("PluginTaggable")
 data class Taggable(val labels: List<String> = emptyList()) : Content {
     override val scope get() = Scope.Definition
     override val reach get() = Reach.Wire
@@ -41,6 +53,7 @@ data class Taggable(val labels: List<String> = emptyList()) : Content {
  * **Task-only today** — the recurring kinds carry no attachment metadata on the wire yet — so a
  * Habit, Chore or Event never loads it and always reads the degenerate `(0, 0)`.
  */
+@ObjCName("PluginAttachable")
 data class Attachable(
     val attachmentCount: Int = 0,
     val attachmentTotalSize: Long = 0,
@@ -74,6 +87,7 @@ data class Attachable(
  * omits `priority`/`pinned`. So an item with no Content plugin loaded reads the same as one that
  * explicitly said "normal", which is the property `Priority.Default` already asserts.
  */
+@ObjCName("PluginPrioritizable")
 data class Prioritizable(
     val priority: Priority = Priority.Default,
     val pinned: Boolean = false,

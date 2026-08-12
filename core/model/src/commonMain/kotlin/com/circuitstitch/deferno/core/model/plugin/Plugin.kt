@@ -1,5 +1,9 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.plugin
 
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 import kotlin.reflect.KClass
 
 /**
@@ -13,6 +17,7 @@ import kotlin.reflect.KClass
  * when a branch is deleted. As a field the check becomes [misplaced], a filter, and a plugin that
  * forgets to answer does not compile at all (there is no default).
  */
+@ObjCName("PluginScope")
 enum class Scope {
     /** The [Item] owns it. One value covers the thing however many times it happens. */
     Definition,
@@ -37,6 +42,7 @@ enum class Scope {
  * judgement a caller has to make — the outbox never sees a [DeviceLocal] plugin, a refresh never
  * clears one, and a surface a person can act on marks one as not synced.
  */
+@ObjCName("PluginReach")
 enum class Reach {
     /**
      * The four-kind wire has a field for this, so it round-trips and reaches the server. The
@@ -96,6 +102,7 @@ enum class Reach {
  * the type it wants through [PluginHost.plugin]. Reintroducing a type cascade is how ADR-0055's
  * predecessor experiment shipped a placement check that type-checked while being wrong.
  */
+@ObjCName("Plugin")
 sealed interface Plugin {
 
     /** Which record owns this plugin. Deliberately abstract — see [Scope]. */
@@ -158,6 +165,12 @@ sealed interface Plugin {
      * plugin equal to its [degenerate] value is already what an absent one reads as. Loading it
      * anyway would give one row two plugin lists that mean the same thing, and the round trip would
      * be equivalence rather than identity.
+     *
+     * **A sealed-parent family whose members can each be empty must override this.** The default
+     * compares against [degenerate], which is one *value*; in such a family a different member can
+     * hold no information and still not equal it. `Anchor` is the case in point and shows the shape
+     * — an exhaustive `when` on the family's own parent, so a new member is a compile error rather
+     * than a silent extra way to be empty.
      */
     val saysSomething: Boolean get() = this != degenerate
 
@@ -168,25 +181,33 @@ sealed interface Plugin {
 // ── The eight meaning families ─────────────────────────────────────────────────────────────────
 
 /** What the thing *is*: its predicate, its labels, the stuff hung on it. */
+@ObjCName("PluginContent")
 sealed interface Content : Plugin
 
 /** How the thing unfolds over time — the family an aspect reading is derived from. */
+@ObjCName("PluginUnfolding")
 sealed interface Unfolding : Plugin
 
 /** When it is committed to happen, and relative to what. */
+@ObjCName("PluginTemporal")
 sealed interface Temporal : Plugin
 
 /** Must versus want — deontic and volitive modality. */
+@ObjCName("PluginModal")
 sealed interface Modal : Plugin
 
 /** Who is expected to do it. Never modelled client-side; the marker exists so the axis is named. */
+@ObjCName("PluginParticipant")
 sealed interface Participant : Plugin
 
 /** What actually happened on one date. Records, never definitions. */
+@ObjCName("PluginEnactment")
 sealed interface Enactment : Plugin
 
 /** What becomes of it if it is *not* done. */
+@ObjCName("PluginPersistence")
 sealed interface Persistence : Plugin
 
 /** How it links to other Items. */
+@ObjCName("PluginLinkage")
 sealed interface Linkage : Plugin

@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.recipe
 
 import com.circuitstitch.deferno.core.model.CadenceMode
@@ -28,6 +30,8 @@ import com.circuitstitch.deferno.core.model.plugin.Taggable
 import com.circuitstitch.deferno.core.model.plugin.Targeted
 import com.circuitstitch.deferno.core.model.plugin.Trackable
 import com.circuitstitch.deferno.core.model.plugin.Volition
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 
 /**
  * The recipe that reproduces **today's behaviour exactly** — the one the migration is gated on.
@@ -63,6 +67,7 @@ import com.circuitstitch.deferno.core.model.plugin.Volition
  * copied across rather than mapped, which is the saving the re-cut exists for: the other 65% of
  * field declarations that repeat.
  */
+@ObjCName("PluginParityRecipe")
 object ParityRecipe : KindRecipe {
 
     // ── Read: a kind row becomes a Core plus a sparse plugin list ──────────────────────────────
@@ -359,18 +364,16 @@ object ParityRecipe : KindRecipe {
     /**
      * The deadline pair for the three kinds that have one.
      *
-     * A [Anchor.Deadline] is built even when only the clock time is present, because the wire can
-     * carry that and the round trip has to survive it. When neither is present the result is
-     * degenerate and [sparse] drops it, so the read is [Anchor.Unanchored].
+     * Built unconditionally, including when only the clock time is present — the wire can carry that
+     * and the round trip has to survive it. When neither is present the result says nothing and
+     * [sparse] drops it, so the read is [Anchor.Unanchored]. That emptiness test lives on `Anchor`
+     * itself rather than here, so a fourth member cannot arrive with a way of being empty this
+     * function does not know about.
      */
     private fun deadline(
         completeBy: kotlin.time.Instant?,
         timeOfDay: kotlinx.datetime.LocalTime?,
-    ): Anchor = if (completeBy == null && timeOfDay == null) {
-        Anchor.Unanchored
-    } else {
-        Anchor.Deadline(completeBy, timeOfDay)
-    }
+    ): Anchor = Anchor.Deadline(completeBy, timeOfDay)
 
     /**
      * The window for the one kind whose instant is a **start**.
@@ -381,8 +384,8 @@ object ParityRecipe : KindRecipe {
      * gives the two claims separate names; changing what either means is #420's decision, and
      * `TemporalConflationTest` pins this reproduction as deliberate rather than overlooked.
      *
-     * Degenerate when the Event says nothing about time at all — including the `all_day` flag, which
-     * is a stored column here rather than the derived reading it is on the server.
+     * Dropped by [sparse] when the Event says nothing about time at all — including the `all_day`
+     * flag, which is a stored column here rather than the derived reading it is on the server.
      */
     private fun appointment(event: Event): Anchor = Anchor.Appointment(
         start = event.completeBy,
@@ -390,7 +393,7 @@ object ParityRecipe : KindRecipe {
         startTimeOfDay = event.startTimeOfDay,
         endTimeOfDay = event.endTimeOfDay,
         allDayFlag = event.allDay,
-    ).let { if (it == Anchor.Appointment()) Anchor.Unanchored else it }
+    )
 
     /** This item's anchor read as a deadline, or an empty one — for the three kinds that have one. */
     private fun Item.anchorAsDeadline(): Anchor.Deadline =

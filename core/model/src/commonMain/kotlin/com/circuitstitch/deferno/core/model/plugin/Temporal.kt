@@ -1,8 +1,12 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.plugin
 
-import kotlinx.datetime.LocalTime
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 import kotlin.reflect.KClass
 import kotlin.time.Instant
+import kotlinx.datetime.LocalTime
 
 /**
  * When the thing is committed to happen — **the valuable family**, and the one that makes the
@@ -28,6 +32,7 @@ import kotlin.time.Instant
  * answers to one question that it is. [Targeted] is a *different* exclusive family under the same
  * Temporal meaning — a soft target and a hard deadline compose, and always have.
  */
+@ObjCName("PluginAnchor")
 sealed class Anchor : Temporal {
 
     override val scope get() = Scope.Definition
@@ -36,6 +41,26 @@ sealed class Anchor : Temporal {
 
     /** Silence in this family is a real member: wanted, not scheduled. Answered once, here. */
     override val degenerate: Plugin get() = Unanchored
+
+    /**
+     * Overridden because in *this* family a member can be silent without being [Unanchored].
+     *
+     * The inherited rule — `this != degenerate` — is right wherever a family's members each carry
+     * their own information. Here both dated members are fully nullable (see [Deadline]), so an
+     * all-null `Deadline` is a different *value* from `Unanchored` while making the same *claim*.
+     * Left to the inherited rule it would load, and a sparse list would carry a plugin that says
+     * nothing — which is what makes two plugin lists mean one row.
+     *
+     * The `when` is exhaustive with no `else`, so a fourth member is a compile error here rather
+     * than a silent fourth way to be empty. That is the same trade the abstract [degenerate] makes:
+     * a table, but one the compiler maintains.
+     */
+    override val saysSomething: Boolean
+        get() = when (this) {
+            Unanchored -> false
+            is Deadline -> this != Deadline()
+            is Appointment -> this != Appointment()
+        }
 
     /** Wanted, not scheduled. The degenerate value — what an item with no Anchor loaded reads as. */
     data object Unanchored : Anchor()
@@ -97,6 +122,7 @@ sealed class Anchor : Temporal {
  *
  * Date-granular by intent — there is no target time-of-day, and the wire has no field for one.
  */
+@ObjCName("PluginTargeted")
 data class Targeted(val targetDate: Instant? = null) : Temporal {
     override val scope get() = Scope.Definition
     override val reach get() = Reach.Wire

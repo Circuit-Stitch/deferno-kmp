@@ -117,18 +117,20 @@ class TemporalConflationTest {
 
     @Test
     fun aClockTimeWithNoDaySurvivesRatherThanBeingTidiedAway() {
-        // A deadline whose day is absent is meaningless and the corpus does not generate it — but
-        // the wire can carry it, so the plugin's fields are both nullable and the recipe builds a
-        // Deadline whenever EITHER is present. Asserted directly, because the round-trip gate
-        // cannot see a case the corpus does not contain.
-        val anchor = assertIs<Anchor.Deadline>(
-            ParityRecipe.read(
-                KindShapes.ALL.filterIsInstance<KindShape.OfTask>().first().task
-                    .copy(completeBy = null, deadlineTimeOfDay = kotlinx.datetime.LocalTime(17, 0)),
-            ).anchor,
-        )
+        // A deadline whose day is absent is meaningless and the corpus deliberately does not
+        // generate it — but the wire can carry it, so the plugin's fields are both nullable and the
+        // recipe builds a Deadline whenever EITHER is present. Asserted directly, because the
+        // round-trip gate cannot see a case the corpus does not contain.
+        val dangling = KindShapes.ALL.filterIsInstance<KindShape.OfTask>().first().task
+            .copy(completeBy = null, deadlineTimeOfDay = kotlinx.datetime.LocalTime(17, 0))
+
+        val anchor = assertIs<Anchor.Deadline>(ParityRecipe.read(dangling).anchor)
         assertEquals(null, anchor.completeBy)
         assertEquals(kotlinx.datetime.LocalTime(17, 0), anchor.timeOfDay)
+
+        // BOTH directions, not just the read — the whole justification for the nullable pair is that
+        // the field comes back, and only the write half can say so.
+        assertEquals(dangling, ParityRecipe.writeTask(ParityRecipe.read(dangling)))
     }
 
     // ── Reading a shape ────────────────────────────────────────────────────────────────────────

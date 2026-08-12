@@ -1,5 +1,9 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.plugin
 
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 // Everything derived from which plugins are loaded — aspect, lapse, attainment and drive.
 //
 // **Store the evidence, derive the label.** That is ADR-0055's central rule and it is not new here:
@@ -26,6 +30,7 @@ package com.circuitstitch.deferno.core.model.plugin
  * [Endeavor] and [Performance]. It emits the least-committed node covering what it knows, and later
  * evidence pushes *down* the lattice, never sideways. [narrows] is that contract in one function.
  */
+@ObjCName("PluginAspect")
 sealed class Aspect(val label: String) {
 
     /** Dynamic, nothing further known. The top of the lattice, and what no bound reads as. */
@@ -77,11 +82,19 @@ sealed class Aspect(val label: String) {
  * doing is a `Performance`. Recurrence and telos are orthogonal, and reading them at two levels is
  * how both survive — which is the cut today's model gets wrong by having no bound axis at all.
  *
- * **Every item reads [Aspect.Process] today** unless a [Dynamics] has been set in memory, because
- * the bound is shadowed and nothing persists it yet. That is the honest answer rather than a
+ * ### It reads the rule, not the plugin
+ *
+ * The test is [Repeats.hasRule] and deliberately **not** whether a [Repeats] is loaded. The parity
+ * recipe loads one on every Chore whether or not a rule survived the wire — a Chore's `cadenceMode`
+ * is non-null, so the plugin always says *something* — and keying on presence would give a
+ * rule-less Chore `Habitual` while its identically-evidenced Habit sibling read `Process`. Same
+ * evidence, different answer, purely because of a Chore-only wire column.
+ *
+ * **Anything with no rule reads [Aspect.Process] today** unless a [Dynamics] has been set in memory,
+ * because the bound is shadowed and nothing persists it yet. That is the honest answer rather than a
  * degraded one: nobody has said.
  */
-fun Item.aspect(): Aspect = if (has<Repeats>()) Aspect.Habitual else aspectOf(dynamics)
+fun Item.aspect(): Aspect = if (repeats.hasRule) Aspect.Habitual else aspectOf(dynamics)
 
 /** The aspect of **one doing**, ignoring recurrence. */
 fun Occurrence.aspect(): Aspect = aspectOf(dynamics)
@@ -118,6 +131,7 @@ fun Dynamics.narrows(previous: Dynamics): Boolean = aspectOf(this).narrows(aspec
  * (see [PersistencePolicy]), so this reading answers exactly what the kind-derived bit answers — by
  * construction, which is what the parity seed is for.
  */
+@ObjCName("PluginLapse")
 sealed class Lapse(val label: String) {
 
     /** Rolls forward. The same occurrence, a later day. */
@@ -176,6 +190,7 @@ fun satisfied(item: Item, occurrence: Occurrence): Attainment {
 }
 
 /** The verdict on a criterion, read across the two records. Derived, like [Aspect] and [Lapse]. */
+@ObjCName("PluginAttainment")
 sealed class Attainment(val label: String) {
 
     /** The bound is a timebox or atelic, so there is no goal state: stopping is all there is. */
@@ -207,6 +222,7 @@ sealed class Attainment(val label: String) {
  * empty. #419 lands the reading, not the data. When the device-local store arrives the same function
  * starts returning real answers with no change here.
  */
+@ObjCName("PluginDrive")
 sealed class Drive(val label: String) {
 
     /** No [Purpose] loaded, so nothing says what this is for. */
@@ -226,11 +242,13 @@ sealed class Drive(val label: String) {
 }
 
 /** The most wanted thing on the chain. [Strength.None] is reported, not dropped. */
+@ObjCName("PluginWanted")
 data class Wanted(val toward: String, val strength: Strength) {
     val label get() = "$strength — $toward"
 }
 
 /** The most binding thing on the chain. */
+@ObjCName("PluginRequired")
 data class Required(val toward: String, val force: Force) {
     val label get() = "$force — $toward"
 }
@@ -288,8 +306,10 @@ private fun Item.reachableCarrots(lookup: (String) -> Item?): List<Carrot> {
     return out
 }
 
-// Strongest first on both axes, written out because the two enums declare in opposite orders —
-// neither ordinal can be trusted.
+// Strongest first on both axes. Both enums happen to declare weakest-first today, so both of these
+// are the same reversal — written out rather than derived from `ordinal` because a rank that reads
+// itself off declaration order silently inverts the moment somebody reorders a member for an
+// unrelated reason, and nothing would fail.
 
 private fun rank(s: Strength): Int = when (s) {
     Strength.Strong -> 0

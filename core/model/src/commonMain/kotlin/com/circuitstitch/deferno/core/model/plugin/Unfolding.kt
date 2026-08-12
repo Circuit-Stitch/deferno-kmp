@@ -1,8 +1,12 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.plugin
 
 import com.circuitstitch.deferno.core.model.CadenceMode
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.SeriesInputs
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 
 /**
  * The thing happens many times on a rule — the wire-backed half of [Unfolding].
@@ -35,6 +39,7 @@ import com.circuitstitch.deferno.core.model.SeriesInputs
  *   fires on. Chore-only on the wire, so `null` here means *this kind has no such field* rather than
  *   *unknown*: a Chore's own absent token already means `Rolling`, which the Chore recipe supplies.
  */
+@ObjCName("PluginRepeats")
 data class Repeats(
     val recurrence: Recurrence? = null,
     val seriesId: String? = null,

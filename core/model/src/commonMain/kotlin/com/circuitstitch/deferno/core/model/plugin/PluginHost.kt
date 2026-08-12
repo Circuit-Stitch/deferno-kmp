@@ -1,5 +1,9 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.plugin
 
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 /**
  * Something that carries a sparse list of [Plugin]s. Both records do — the [Item] definition and one
  * dated [Occurrence] of it — so every reader below is written once.
@@ -46,6 +50,7 @@ package com.circuitstitch.deferno.core.model.plugin
  * **Add the accessor in the same commit as the Family.** A Family without one is unreachable from
  * Swift, and the gap is invisible until Phase 5.
  */
+@ObjCName("PluginHost")
 interface PluginHost {
 
     val plugins: List<Plugin>

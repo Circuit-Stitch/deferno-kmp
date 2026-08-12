@@ -1,5 +1,9 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.plugin
 
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 /**
  * Volitive modality — how much the person wants to do this.
  *
@@ -29,6 +33,7 @@ package com.circuitstitch.deferno.core.model.plugin
  * The other half of [Modal] — deontic obligation, the need-versus-want answer `capture_item` already
  * asks and discards — has no wire field anywhere and is shadowed under ADR-0057. It lands in #419.
  */
+@ObjCName("PluginVolition")
 data class Volition(val desire: Double? = null) : Modal {
 
     override val scope get() = Scope.Definition
@@ -68,6 +73,7 @@ data class Volition(val desire: Double? = null) : Modal {
  * Volitive force as a surface reads it. Four members, not the reference model's three, because
  * *nobody was asked* is a different answer from *asked, and no* — see [Volition.strength].
  */
+@ObjCName("PluginStrength")
 enum class Strength {
     /** No [Volition] loaded, or one carrying no value. The question was never put. */
     Unstated,

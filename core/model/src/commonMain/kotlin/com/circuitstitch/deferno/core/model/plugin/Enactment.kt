@@ -1,7 +1,11 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.plugin
 
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.WorkingState
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 import kotlin.time.Instant
 
 /**
@@ -30,6 +34,7 @@ import kotlin.time.Instant
  * this type. It lands with the Occurrence corpus; the round-trip gate today sweeps definition rows,
  * which is what the four kinds are.
  */
+@ObjCName("PluginProgress")
 data class Progress(
     val lifecycle: Lifecycle = Lifecycle.Unstated,
     /**
@@ -48,6 +53,7 @@ data class Progress(
 }
 
 /** Which lifecycle a row has, and where it has got to. See [Progress] for why this is sealed. */
+@ObjCName("PluginLifecycle")
 sealed interface Lifecycle {
 
     /** No lifecycle stated. The degenerate value; no row the four-kind wire carries reads as this. */
@@ -85,6 +91,7 @@ sealed interface Lifecycle {
  * Separate from [Progress] because the two compose freely — a row can record that it stopped without
  * recording how it felt, and the wire has always allowed either without the other.
  */
+@ObjCName("PluginTrackable")
 data class Trackable(val productive: Double? = null) : Enactment {
     override val scope get() = Scope.Definition
     override val reach get() = Reach.Wire

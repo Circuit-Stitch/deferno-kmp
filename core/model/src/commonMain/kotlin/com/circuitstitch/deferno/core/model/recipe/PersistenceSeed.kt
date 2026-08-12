@@ -1,7 +1,11 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.recipe
 
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.plugin.PersistencePolicy
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 
 /**
  * The **Persistence parity seed** — the one place the client answers *"what becomes of this if the
@@ -20,8 +24,8 @@ import com.circuitstitch.deferno.core.model.plugin.PersistencePolicy
  * against, so the two halves are justified separately —
  *
  * - **Chore carries forward, Habit does not.** Directly from the capture tree: those two kinds *are*
- *   the two answers to that question, and `CaptureInput`'s KDoc says a missing answer is an error
- *   rather than a default because "there is no safe Chore/Habit default".
+ *   the two answers to that question, and a missing answer there is an error rather than a
+ *   default — `CaptureInputTest` pins that, "there is no safe Chore/Habit default".
  * - **Task carries forward, Event does not.** Not asked at capture — the tree reaches them by other
  *   questions — so this half comes from what the rest of the client does. A Task with a past
  *   deadline stays on the plan and is counted as overdue; an Event's occurrence for a past day is
@@ -37,6 +41,7 @@ import com.circuitstitch.deferno.core.model.plugin.PersistencePolicy
  * logged") — the reference fixtures reach for the latter, and adopting it would start writing
  * history nobody asked for while claiming to be a re-model.
  */
+@ObjCName("PluginPersistenceSeed")
 object PersistenceSeed {
 
     /**

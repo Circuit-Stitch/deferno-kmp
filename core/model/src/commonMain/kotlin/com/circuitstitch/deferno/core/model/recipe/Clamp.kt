@@ -1,9 +1,13 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.recipe
 
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.plugin.Item
 import com.circuitstitch.deferno.core.model.plugin.Plugin
 import com.circuitstitch.deferno.core.model.plugin.Reach
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 
 /**
  * The **clamp**: what stops the model writing cheques the wire cannot cash (ADR-0056/0057).
@@ -30,6 +34,7 @@ import com.circuitstitch.deferno.core.model.plugin.Reach
  * round-trip gate proves this never fires for anything the recipes produce; the clamp is what keeps
  * it true for sets a *caller* assembles.
  */
+@ObjCName("PluginClamp")
 object Clamp {
 
     /**
@@ -52,20 +57,22 @@ object Clamp {
             ItemKind.Event -> recipe.read(recipe.writeEvent(wireOnly))
         }
 
-        val lost = wireBacked.filterNot { it in roundTripped.plugins }
-        val gained = roundTripped.plugins.filterNot { it in wireBacked }
-        if (lost.isNotEmpty() || gained.isNotEmpty()) {
+        // What the caller SAID is the non-degenerate half of what they handed over. A plugin equal
+        // to its family's silence claims nothing, so losing it loses nothing — and refusing over it
+        // would mean a caller had to assemble a set already in the recipe's canonical form, which is
+        // the opposite of what a facade is for.
+        val claimed = wireBacked.filter { it.saysSomething }
+        val lost = claimed.filterNot { it in roundTripped.plugins }
+        if (lost.isNotEmpty()) {
             return Admission.Refused(
-                buildList {
-                    if (lost.isNotEmpty()) {
-                        add("$kind has no wire field for: " + lost.joinToString { it::class.simpleName ?: "?" })
-                    }
-                    if (gained.isNotEmpty()) {
-                        add("$kind would invent: " + gained.joinToString { it::class.simpleName ?: "?" })
-                    }
-                },
+                listOf("$kind has no wire field for: " + lost.joinToString { it::class.simpleName ?: "?" }),
             )
         }
+
+        // Deliberately NOT the converse. A round trip that comes back carrying a plugin the caller
+        // never mentioned is the kind supplying its own wire default — a Task's `Open`, a Chore's
+        // `Rolling` — which is normalisation, not invention. The caller said nothing there and the
+        // wire has an answer; refusing would reject every set that did not pre-state every default.
         if (roundTripped.core != item.core) {
             return Admission.Refused(listOf("$kind cannot carry this Core unchanged"))
         }
@@ -75,6 +82,7 @@ object Clamp {
 }
 
 /** Whether a plugin set may be held as a row of some kind, and what of it cannot be sent. */
+@ObjCName("PluginAdmission")
 sealed interface Admission {
 
     /**

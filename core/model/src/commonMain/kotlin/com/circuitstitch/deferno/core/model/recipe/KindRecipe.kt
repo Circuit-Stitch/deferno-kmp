@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.recipe
 
 import com.circuitstitch.deferno.core.model.Chore
@@ -5,6 +7,8 @@ import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.plugin.Item
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 
 /**
  * Translation between a plugin [Item] and one of the four kinds the wire still speaks (ADR-0056).
@@ -35,8 +39,9 @@ import com.circuitstitch.deferno.core.model.plugin.Item
  * An [Item] names no kind — that is the point of it — so nothing in a plugin list says which of the
  * four rows to rebuild. The caller knows, because it is holding the row it read. Four typed methods
  * say so at the type level instead of taking a kind token and returning something the caller has to
- * cast, and they make the round trip `writeTask(readTask(t)) == t` state itself.
+ * cast, and they make the round trip `writeTask(read(t)) == t` state itself.
  */
+@ObjCName("PluginKindRecipe")
 interface KindRecipe {
 
     fun read(task: Task): Item

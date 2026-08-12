@@ -1,7 +1,9 @@
 package com.circuitstitch.deferno.core.model.recipe
 
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.plugin.Anchor
 import com.circuitstitch.deferno.core.model.plugin.Carrot
+import com.circuitstitch.deferno.core.model.plugin.Describable
 import com.circuitstitch.deferno.core.model.plugin.Dynamics
 import com.circuitstitch.deferno.core.model.plugin.Evaluation
 import com.circuitstitch.deferno.core.model.plugin.Force
@@ -128,6 +130,37 @@ class ShadowFamilyTest {
             assertIs<Admission.Admitted>(admission, "${shape.label} was refused by the clamp")
             assertTrue(!admission.hasUnsynced, "${shape.label}: a recipe produced a device-local plugin")
         }
+    }
+
+    @Test
+    fun theClampAdmitsASetACallerAssembledFreehand() {
+        // The failure this test exists for: an earlier clamp compared the caller's list against the
+        // recipe's own canonical form, so anything not already in that exact shape was refused — an
+        // Item with no Progress, a Chore with no Repeats, an explicitly-degenerate Prioritizable —
+        // and blamed the wire for it. A facade that only accepts what its own read produces is not a
+        // facade. What must actually survive is what the caller SAID.
+        val core = readOf(KindShapes.ALL.first { it.kind == ItemKind.Task }).core
+
+        assertIs<Admission.Admitted>(
+            Clamp.admit(Item(core), ItemKind.Task),
+            "a bare Core said nothing and must be admissible",
+        )
+        assertIs<Admission.Admitted>(
+            Clamp.admit(Item(core), ItemKind.Chore),
+            "a Chore that pre-states no cadence mode must be admissible — the wire has a default",
+        )
+        assertIs<Admission.Admitted>(
+            Clamp.admit(Item(core, listOf(Describable("just a note"))), ItemKind.Task),
+            "one Family stated freehand must be admissible",
+        )
+        assertIs<Admission.Admitted>(
+            Clamp.admit(Item(core, listOf(Prioritizable())), ItemKind.Task),
+            "a plugin at its degenerate value claims nothing and cannot be a reason to refuse",
+        )
+        assertIs<Admission.Admitted>(
+            Clamp.admit(Item(core, listOf(Anchor.Deadline())), ItemKind.Task),
+            "an empty anchor claims nothing and cannot be a reason to refuse",
+        )
     }
 
     @Test

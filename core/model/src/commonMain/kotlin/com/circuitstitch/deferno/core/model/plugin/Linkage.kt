@@ -1,7 +1,11 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.plugin
 
 import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.ExternalRef
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 
 /**
  * Items this one cannot be worked until they resolve, plus the two **server-derived** readiness flags
@@ -17,6 +21,7 @@ import com.circuitstitch.deferno.core.model.ExternalRef
  * carries the flags with an empty edge list. It is also empty on a summary row that has the flags,
  * which is the second reason the flags cannot be recomputed from it.
  */
+@ObjCName("PluginBlocker")
 data class Blocker(
     val blocked: Boolean = false,
     val isBlocker: Boolean = false,
@@ -35,6 +40,7 @@ data class Blocker(
  * the one edge on the wire, so that is all this carries; widening it to a list of typed relations is
  * a target-recipe change and needs a wire field to hold it.
  */
+@ObjCName("PluginSucceeds")
 data class Succeeds(val nextId: String? = null) : Linkage {
     override val scope get() = Scope.Definition
     override val reach get() = Reach.Wire
@@ -47,6 +53,7 @@ data class Succeeds(val nextId: String? = null) : Linkage {
  * Drives the row's source mark, the dimmed `[GitHub#N]` ref prefix and the detail Source cell.
  * `null` for a native Deferno item, which is the common case and the degenerate value.
  */
+@ObjCName("PluginImportable")
 data class Importable(val external: ExternalRef? = null) : Linkage {
     override val scope get() = Scope.Definition
     override val reach get() = Reach.Wire

@@ -57,14 +57,46 @@ class KindRecipeRoundTripTest {
         // Identity would still hold if the recipe loaded every Family unconditionally, but the
         // plugin list would then be a fixed-width record wearing a list's clothes — and two lists
         // meaning the same thing is exactly what makes "at most one member of a family" unenforceable
-        // later. A row that says nothing beyond its Core carries nothing.
-        for (shape in KindShapes.ALL.filter { it.label.contains("/minimal/") }) {
+        // later.
+        //
+        // Asserting `plugins.all { it.saysSomething }` would be a tautology: that predicate is what
+        // `sparse` filters on. So the assertion is over the DEGENERATE VALUES instead — a plugin
+        // whose family reads the same whether or not it is loaded has no business being loaded, and
+        // that comparison is independent of the filter that produced the list.
+        for (shape in KindShapes.ALL) {
             val item = readOf(shape)
-            assertTrue(
-                item.plugins.all { it.saysSomething },
-                "${shape.label} loaded a plugin equal to its own degenerate value: ${item.plugins}",
-            )
+            val silent = item.plugins.filter { it == it.degenerate }
+            assertEquals(emptyList(), silent, "${shape.label} loaded a plugin equal to its degenerate value")
         }
+        // And the strongest form of it: a row at every wire default carries its Core and exactly one
+        // plugin — the lifecycle.
+        //
+        // That one is not a leak. `Lifecycle.Unstated` means *no lifecycle at all*, which is a shape
+        // the plugin model admits and no four-kind row is: a Task with `workingState = Open` has
+        // genuinely said where it is. The write direction supplies `Open` as the wire default for the
+        // other case, so both round-trip — and collapsing them here would be the model pretending it
+        // knows a kind's default, which is exactly the knowledge the recipe layer exists to hold.
+        val bare = ParityRecipe.read(
+            KindShapes.ALL.filterIsInstance<KindShape.OfTask>().first().task.copy(
+                labels = emptyList(), completeBy = null, deadlineTimeOfDay = null, targetDate = null,
+                priority = com.circuitstitch.deferno.core.model.Priority.Normal, productive = null,
+                desire = null, pinned = false, finishedAt = null, description = null, nextTaskId = null,
+                blocked = false, isBlocker = false, blockedBy = emptyList(), external = null,
+                attachmentCount = 0, attachmentTotalSize = 0,
+                workingState = com.circuitstitch.deferno.core.model.WorkingState.Open,
+            ),
+        )
+        assertEquals(
+            listOf(
+                com.circuitstitch.deferno.core.model.plugin.Progress(
+                    com.circuitstitch.deferno.core.model.plugin.Lifecycle.Working(
+                        com.circuitstitch.deferno.core.model.WorkingState.Open,
+                    ),
+                ),
+            ),
+            bare.plugins,
+            "a row at every wire default should carry its lifecycle and nothing else",
+        )
     }
 
     @Test

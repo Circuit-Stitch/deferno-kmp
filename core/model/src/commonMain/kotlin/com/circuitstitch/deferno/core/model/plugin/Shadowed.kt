@@ -1,12 +1,16 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.plugin
 
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 import kotlin.reflect.KClass
 import kotlin.time.Instant
 
 // The five Family members the four-kind wire cannot carry (ADR-0057).
 //
 // They are gathered in one file because what they have in common is not a meaning family — they sit
-// across four different ones — but a *reach*: every one of them is `Reach.DeviceLocal`, none reaches
+// across five different ones (Unfolding, Enactment, Linkage, Modal, Persistence) — but a *reach*: every one of them is `Reach.DeviceLocal`, none reaches
 // the outbox, and all five are dropped together at the cutover. Keeping them in one place is what
 // makes "which parts of the model is this device holding alone?" a question a reader can answer by
 // opening a file.
@@ -36,6 +40,7 @@ import kotlin.time.Instant
  * a fact about the declaration rather than a fact repeated in every `when` that reads it, which is
  * what lets [narrows] read the lattice instead of a hand-written table.
  */
+@ObjCName("PluginDynamics")
 sealed class Dynamics : Unfolding {
 
     override val scope get() = Scope.Definition
@@ -96,6 +101,7 @@ sealed class Dynamics : Unfolding {
  * against a bound stating no criterion is not a verdict about anything, which no single record can
  * notice — see [verdictProblems].
  */
+@ObjCName("PluginEvaluation")
 data class Evaluation(val obtained: Boolean? = null) : Enactment {
     override val scope get() = Scope.Occurrence
     override val reach get() = Reach.DeviceLocal
@@ -108,6 +114,7 @@ data class Evaluation(val obtained: Boolean? = null) : Enactment {
  * A list, because one thing can serve several ends. Today the client has no field for any of it, so
  * every item reads no carrots and [Drive] answers `Unstated` until the shadow store lands.
  */
+@ObjCName("PluginPurpose")
 data class Purpose(val carrots: List<Carrot> = emptyList()) : Linkage {
 
     override val scope get() = Scope.Definition
@@ -127,6 +134,7 @@ data class Purpose(val carrots: List<Carrot> = emptyList()) : Linkage {
  * Sealed rather than two nullable fields: *neither* was a state only a runtime check could reject,
  * and *both* let stale prose outrank the item it had since been resolved to.
  */
+@ObjCName("PluginCarrot")
 sealed interface Carrot {
 
     /** The carrot is another item. */
@@ -147,6 +155,7 @@ sealed interface Carrot {
  * record what was said. This plugin is where it lands. Whether capture should start keeping the
  * answer is a #420 decision; that it *could* is what this member establishes.
  */
+@ObjCName("PluginObligation")
 data class Obligation(val force: Force? = null) : Modal {
     override val scope get() = Scope.Definition
     override val reach get() = Reach.DeviceLocal
@@ -154,6 +163,7 @@ data class Obligation(val force: Force? = null) : Modal {
 }
 
 /** Deontic force, weakest binding to strongest. `null` on [Obligation] means the question was never put. */
+@ObjCName("PluginForce")
 enum class Force { May, Should, Must }
 
 /**
@@ -174,6 +184,7 @@ enum class Force { May, Should, Must }
  * particular [SkippedIfMissed] is *not* what a Habit seeds: logging a miss is a stronger claim than
  * today's bit makes, and seeding it would start writing history nobody asked for.
  */
+@ObjCName("PluginPersistencePolicy")
 sealed class PersistencePolicy : Persistence {
 
     override val scope get() = Scope.Definition

@@ -1,7 +1,11 @@
+@file:OptIn(ExperimentalObjCName::class)
+
 package com.circuitstitch.deferno.core.model.plugin
 
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
+import kotlin.experimental.ExperimentalObjCName
+import kotlin.native.ObjCName
 import kotlin.time.Instant
 
 /**
@@ -37,6 +41,7 @@ import kotlin.time.Instant
  * [id] is the stable UUID and the reconcile key. [ref] (`{org_slug}-{sequence}`) is the human-facing
  * reference, `null` on a row the server has only just created, and never used as identity.
  */
+@ObjCName("PluginCore")
 data class Core(
     val id: String,
     /** The short org slug (`u-e4h2qk`) that [ref] is built from. Tenancy, and never optional. */
