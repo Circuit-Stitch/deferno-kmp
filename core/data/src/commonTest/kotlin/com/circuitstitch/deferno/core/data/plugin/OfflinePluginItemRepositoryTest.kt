@@ -42,10 +42,10 @@ import kotlin.time.Instant
  * The plugin-shaped read facade over the local stores (#421, ADR-0055/0056), on the ADR-0006 JVM-fast
  * path against the in-memory fakes.
  *
- * What is proved here is the *facade*: that it fans out over four tables and a fifth, that its output
- * is plugin-shaped and total, and that a caller never says which kind. That the translation itself is
- * faithful is `core:model`'s round-trip gate, and that the result agrees with what ships today is
- * [PluginReadParityTest] — neither is re-tested here.
+ * What is proved here is the *facade*: it fans out over four tables and a fifth, its output is
+ * plugin-shaped and total, and a caller never says which kind. Two neighbouring properties are not
+ * re-tested. That the translation is faithful belongs to `core:model`'s round-trip gate; that the
+ * result agrees with what ships today belongs to [PluginReadParityTest].
  */
 class OfflinePluginItemRepositoryTest {
 
@@ -66,10 +66,10 @@ class OfflinePluginItemRepositoryTest {
 
         val items = repository.observeItems().first()
 
-        // Same rows, same order as the shipped cross-kind read: each store's own order, concatenated
-        // Task → Habit → Chore → Event. A caller reading both projections sees the same list twice.
+        // Same rows and same order as the shipped cross-kind read: each store's own order,
+        // concatenated Task, Habit, Chore, Event. Both projections list the same rows in both places.
         assertContentEquals(listOf("t", "h", "c", "e"), items.map { it.core.id })
-        // And the kind is gone: what distinguishes them now is which lifecycle they carry.
+        // The kind is gone. What distinguishes these rows now is which lifecycle they carry.
         assertIs<Lifecycle.Working>(items[0].progress.lifecycle)
         assertIs<Lifecycle.Definition>(items[1].progress.lifecycle)
     }
@@ -95,8 +95,8 @@ class OfflinePluginItemRepositoryTest {
     @Test
     fun everyRowTheListEmitsIsAValidPluginRecord() = runTest {
         // The runtime half of what named fields gave for free (ADR-0055): one member per family, and
-        // each plugin on the record its scope names. Cheap to state here, and it is the assertion that
-        // would catch a future recipe loading an Occurrence-scoped plugin onto a definition.
+        // each plugin on the record its scope names. This is the assertion that would catch a future
+        // recipe loading an Occurrence-scoped plugin onto a definition.
         val repository = repository(
             tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))),
             habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h"))),
@@ -128,8 +128,8 @@ class OfflinePluginItemRepositoryTest {
 
     @Test
     fun anIdThisDeviceDoesNotHoldReadsAsNullRatherThanAnEmptyRecord() = runTest {
-        // Cold start, a deep link, a row outside the snapshot window. `null` is the honest answer and
-        // is the one read on this facade that has one — unlike a firing, an item has no key-only form.
+        // Cold start, a deep link, a row outside the snapshot window. This is the one read on the
+        // facade that returns null: unlike a firing, an item has no key-only form.
         assertNull(repository().observe("never-cached").first())
     }
 
@@ -138,7 +138,7 @@ class OfflinePluginItemRepositoryTest {
         val deleted = task("t").copy(deletedAt = Instant.parse("2026-08-01T00:00:00Z"))
         val repository = repository(tasks = FakeTaskLocalStore(mapOf(TaskId("t") to deleted)))
 
-        // A tombstone is not absent, and `core.isDeleted` is what says so — the per-kind stores' own
+        // A tombstone is not absent, and `core.isDeleted` says so. That is the per-kind stores' own
         // contract for a single-row observe, carried through the recipe unchanged.
         val row = assertNotNull(repository.observe("t").first())
         assertTrue(row.core.isDeleted)
@@ -151,8 +151,8 @@ class OfflinePluginItemRepositoryTest {
 
     @Test
     fun aStoredFactReadsAsAnOutcomeWhicheverKindsRowHoldsIt() = runTest {
-        // Once per kind that can store a firing at all, driven off the same clamp the facade fans out
-        // over — so a kind gaining stored firings is covered here without this test being edited.
+        // Once per kind that can store a firing, driven off the same clamp the facade fans out over.
+        // A kind gaining stored firings is therefore covered without editing this test.
         for (kind in listOf(ItemKind.Habit, ItemKind.Chore, ItemKind.Event)) {
             val facts = FakeFiringStore(
                 OccurrenceFact(kind, "def-1", day, OccurrenceResolution.DoneOnTime, doneAt = doneAt),
@@ -172,14 +172,14 @@ class OfflinePluginItemRepositoryTest {
     fun aDateWithNothingOnRecordIsAnOccurrenceCarryingNothingRatherThanAnAbsentOne() = runTest {
         val firing = repository().observeFiring("def-1", day).first()
 
-        // Absence is a value (ADR-0056, #436 amendment). The key always exists, so the read is total;
-        // what is empty is the record, and the Scheduled-versus-Missed reading over it stays derived.
+        // Absence is a value (ADR-0056, #436). The key always exists, so the read is total. What is
+        // empty is the record, and the Scheduled-versus-Missed reading over it stays derived.
         assertEquals("def-1", firing.itemId)
         assertEquals(day, firing.date)
         assertEquals(emptyList(), firing.plugins)
         assertFalse(firing.outcome.isOnRecord)
-        // Not the same claim as a stored `Scheduled`, which an Event row genuinely holds — the
-        // distinction the whole nullable-resolution design exists to keep, so read it raw here.
+        // Not the same claim as a stored `Scheduled`, which an Event row genuinely holds. Keeping
+        // those two apart is what the nullable resolution is for, so read the plugin raw here.
         assertNull(firing.plugin<Outcome>())
     }
 
@@ -191,7 +191,7 @@ class OfflinePluginItemRepositoryTest {
         val firing = repository(facts = facts).observeFiring("def-1", day).first()
 
         // The server holds a row that records no progress. `saysSomething` is true for it, so the
-        // plugin loads and the two absences never collapse into one.
+        // plugin loads and the two kinds of absence never collapse into one.
         assertEquals(Outcome(OccurrenceResolution.Scheduled), firing.plugin<Outcome>())
         assertTrue(firing.outcome.isOnRecord)
     }
@@ -201,8 +201,8 @@ class OfflinePluginItemRepositoryTest {
         val facts = FakeFiringStore()
         repository(facts = facts).observeFiring("def-1", day).first()
 
-        // Read off `Clamp.storedResolutions` rather than written out as the three recurring kinds, so
-        // a Task growing occurrences — which ADR-0055 expects — is one edit in the clamp and not two.
+        // Read off `Clamp.storedResolutions` rather than written out as the three recurring kinds.
+        // A Task growing occurrences, which ADR-0055 expects, is then one edit rather than two.
         assertEquals(setOf(ItemKind.Habit, ItemKind.Chore, ItemKind.Event), facts.asked)
     }
 
@@ -254,9 +254,10 @@ class OfflinePluginItemRepositoryTest {
 }
 
 /**
- * An in-memory [OccurrenceFactLocalStore] keyed as the real table is, `(kind, definitionId, date)`,
- * that also **records which kinds were asked about** — the fan-out is part of the facade's contract, so
- * it needs to be observable rather than inferred from a result that would look the same either way.
+ * An in-memory [OccurrenceFactLocalStore], keyed as the real table is: `(kind, definitionId, date)`.
+ *
+ * It also records **which kinds were asked about**. The fan-out is part of the facade's contract, and
+ * a result alone cannot show it — one would look the same however many kinds were queried.
  */
 private class FakeFiringStore(vararg initial: OccurrenceFact) : OccurrenceFactLocalStore {
 
@@ -281,9 +282,9 @@ private class FakeFiringStore(vararg initial: OccurrenceFact) : OccurrenceFactLo
         rows.value = rows.value - Triple(kind, definitionId, date)
     }
 
-    // The facade reads one firing and never a span, so the range reads stay unimplemented rather than
-    // faked — #421 adds a range read when a consumer needs one, and a fake answering more than the
-    // seam does would hide that.
+    // The facade reads one firing and never a span, so the range reads stay unimplemented rather
+    // than faked. #421 adds a range read when a consumer needs one, and a fake that answered more
+    // than the seam does would hide which reads the facade actually makes.
     override fun observeOn(date: LocalDate): Flow<List<OccurrenceFact>> = unsupported()
 
     override fun observeInRange(

@@ -379,10 +379,10 @@ interface AccountDataBindings {
         itemSync: ItemSync,
     ): ItemRepository = OfflineItemRepository(taskStore, habitStore, choreStore, eventStore, itemSync)
 
-    // The plugin-shaped read of the same four caches (ADR-0055/0056, #421) — read ALONGSIDE the
-    // projection above, never instead of it, for as long as the migration runs. Read-only: nothing
-    // writes through it, and the tables it reads do not move until Phase 3. The recipe stays defaulted
-    // to `ParityRecipe` — the target recipe lands behind the same interface, one Family at a time.
+    // The plugin-shaped read of the same four caches (ADR-0055/0056, #421). It runs alongside the
+    // projection above, never instead of it, for as long as the migration lasts. Nothing writes
+    // through it, and the tables it reads do not move until Phase 3. The recipe stays defaulted to
+    // `ParityRecipe`; the target recipe lands behind the same interface, one Family at a time.
     @Provides
     @SingleIn(AccountScope::class)
     fun pluginItemRepository(

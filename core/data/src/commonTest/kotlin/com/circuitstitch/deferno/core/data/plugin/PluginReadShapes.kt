@@ -33,22 +33,12 @@ import kotlin.time.Instant
 import com.circuitstitch.deferno.core.model.Item as TreeRow
 
 /**
- * The corpus the read facade's **sufficiency gate** runs over, and the two reconstructions it proves
- * (#421).
+ * The corpus and the two reconstructions behind the read facade's sufficiency gate (#421).
+ * `PluginReadParityTest` runs them and explains what the gate is for.
  *
- * Round-trip identity is Phase 0's gate and it is green: a kind row read into plugins and written back
- * is the same row. The risk this phase adds is a different one. The plugin read is *readable alongside*
- * two shipped projections — [TreeRow] and [RecurringDefinition] — and if the two readings disagree
- * about the same cached row, Phase 4 changes what a surface renders while claiming to re-model it.
- *
- * So the gate asks the question that actually blocks Phase 4: **is the plugin read sufficient?** Can
- * each shipped projection be rebuilt from it alone, field for field. [asTreeRow] and
- * [asRecurringDefinition] are those rebuilds, and `PluginReadParityTest` asserts each equals what the
- * shipped mapper produces from the same row.
- *
- * They live here rather than in `commonMain` deliberately. A bridge with no consumer is production code
- * nothing calls; Phase 4 lifts one if a surface wants it, and until then this is a gate rather than a
- * seam.
+ * [asTreeRow] and [asRecurringDefinition] rebuild the two shipped projections, [TreeRow] and
+ * [RecurringDefinition], from a plugin read alone. They live here rather than in `commonMain` because
+ * nothing yet calls them; Phase 4 lifts one into production if a surface wants it.
  */
 internal object PluginReadShapes {
 
@@ -67,10 +57,8 @@ internal object PluginReadShapes {
     private val GITHUB = ExternalRef(ItemSource.GitHub, "circuit-stitch/deferno#42", "https://example.invalid/42")
 
     /**
-     * One row of the corpus: a wire row, and the label a failure names it by.
-     *
-     * [KindRow] rather than a bespoke union — it is the recipe layer's own "one of the four", it
-     * carries the [ItemKind] the two reconstructions need, and it dies with the recipes at the cutover.
+     * One row of the corpus: a wire row, and the label a failure names it by. [KindRow] is the recipe
+     * layer's own "one of the four", so it carries the [ItemKind] both reconstructions need.
      */
     data class Shape(val label: String, val row: KindRow) {
         val kind: ItemKind get() = row.kind
@@ -79,11 +67,9 @@ internal object PluginReadShapes {
     /**
      * Every kind, spanning between them every field either shipped projection carries.
      *
-     * Wide rather than a cross product: the round-trip gate in `core:model` already runs the
-     * combinatorial corpus, and repeating it here would re-test the recipe rather than the facade. What
-     * this corpus has to guarantee instead is **non-vacuity** — that no projection field passes the
-     * gate by being null on every row — which `PluginReadParityTest` asserts field by field rather than
-     * leaving to the reader to eyeball.
+     * Wide rather than a cross product. `core:model` already runs the combinatorial corpus against the
+     * round-trip gate, so repeating it here would re-test the recipe rather than the facade. What this
+     * corpus must guarantee is **non-vacuity**, which `PluginReadParityTest` asserts field by field.
      */
     val ALL: List<Shape> = listOf(
         Shape("task/full", KindRow.OfTask(fullTask())),
@@ -220,12 +206,11 @@ internal object PluginReadShapes {
 
 /**
  * The shipped tree row, rebuilt from the plugin read alone — the sufficiency claim for
- * [com.circuitstitch.deferno.core.data.item.ItemRepository]'s consumers, stated as a function so it can
- * be checked against the mapper that ships.
+ * [com.circuitstitch.deferno.core.data.item.ItemRepository]'s consumers.
  *
- * [kind] is a parameter because [TreeRow] has a `kind` field and nothing in the plugin model does; that
- * much is by design and not a gap. The **cursor** below is the gap, and it is why this takes the kind
- * for a second reason.
+ * [kind] is a parameter for two reasons. [TreeRow] has a `kind` field and the plugin model has none,
+ * which is by design. The cursor is the second, and that one is a gap: see
+ * [completeByWhereverItLanded].
  */
 internal fun Item.asTreeRow(kind: ItemKind): TreeRow = TreeRow(
     id = core.id,
@@ -233,8 +218,8 @@ internal fun Item.asTreeRow(kind: ItemKind): TreeRow = TreeRow(
     title = core.title,
     parentId = core.parentId,
     sequence = core.sequence,
-    // The one point the two lifecycles agree, and `Lifecycle` already derives it — a Done/Dropped Task
-    // or an Archived definition. The shipped mappers say it twice, once per arm.
+    // A Done/Dropped Task or an Archived definition — the one point the two lifecycles agree, which
+    // `Lifecycle` already derives. The shipped mappers state it twice, once per arm.
     isTerminal = progress.lifecycle.isTerminal,
     descendantDone = core.descendantDone,
     descendantTotal = core.descendantTotal,
@@ -245,7 +230,7 @@ internal fun Item.asTreeRow(kind: ItemKind): TreeRow = TreeRow(
     blockedBy = blocker.blockedBy,
     definitionState = (progress.lifecycle as? Lifecycle.Definition)?.state,
     recurrence = repeats.recurrence,
-    // THE KIND IS LOAD-BEARING HERE, and that is a finding rather than an inconvenience. See
+    // The kind is load-bearing here, and that is a finding rather than an inconvenience. See
     // [completeByWhereverItLanded].
     recurrenceCursorAt = if (kind == ItemKind.Task) null else completeByWhereverItLanded(),
     seriesId = repeats.seriesId,
@@ -253,26 +238,16 @@ internal fun Item.asTreeRow(kind: ItemKind): TreeRow = TreeRow(
 )
 
 /**
- * The wire's `complete_by`, out of whichever [Anchor] member the parity recipe put it in — and the one
- * place the plugin read is **not** sufficient on its own.
+ * The wire's `complete_by`, out of whichever [Anchor] member the parity recipe put it in. This is the
+ * one place the plugin read is **not** sufficient on its own.
  *
- * One wire field carries three incompatible claims. On a Task it is a plain deadline. On a Habit or
- * Chore it is a moving recurrence **cursor** — where the series has walked to, never a bound (backend
- * ADR `2026-06-02-recurrence-anchor-and-bound`). On an Event it is a **start**. [Anchor] splits the
- * third off as [Anchor.Appointment], which is what `TemporalConflationTest` pins; the first two both
- * land in [Anchor.Deadline] and nothing distinguishes them.
+ * That field means a deadline on a Task, a recurrence cursor on a Habit or Chore, and a start on an
+ * Event. [Anchor] splits off only the start, as [Anchor.Appointment]. The other two both land in
+ * [Anchor.Deadline] with no field between them, so the kind is the only discriminator left.
  *
- * The shipped projection is emphatic about keeping the first two apart: it names its field
- * `recurrenceCursorAt` rather than `completeBy`, projects it on the recurring kinds only, and its KDoc
- * says conflating the two "would make every dated Task read as an exhausted-or-due series". So the
- * caller here has to supply the kind to get that distinction back — which means a Phase 4 atom
- * rendering "due by" off `anchor` would render a Habit's cursor as a deadline.
- *
- * Reproducing it is correct for a **parity** recipe: the storage genuinely is one field, and correcting
- * it is a target-recipe change with its own issue, exactly as ADR-0056 says of the Event half. The
- * shape of the fix is already known, because `Anchor` split the other claim the same way. Pinned as
- * deliberate by `PluginReadParityTest.theRecurrenceCursorIsIndistinguishableFromADeadline` so nobody
- * later reads the reproduction as an oversight.
+ * Reproducing that is correct for a **parity** recipe, since the storage genuinely is one column. The
+ * full argument is in ADR-0056, and closing it is #439.
+ * `theRecurrenceCursorIsIndistinguishableFromADeadline` pins the gap meanwhile.
  */
 internal fun Item.completeByWhereverItLanded(): Instant? = when (val held = anchor) {
     is Anchor.Deadline -> held.completeBy
@@ -281,11 +256,9 @@ internal fun Item.completeByWhereverItLanded(): Instant? = when (val held = anch
 }
 
 /**
- * The shipped kind-neutral definition read, rebuilt from the plugin read alone — the same claim for
- * [com.circuitstitch.deferno.core.data.definition.DefinitionRepository]'s consumers.
- *
- * Only meaningful for the three recurring kinds; a Task is not a definition, and the shipped
- * `toDefinition` has no Task arm either.
+ * The shipped kind-neutral definition read, rebuilt the same way, for
+ * [com.circuitstitch.deferno.core.data.definition.DefinitionRepository]'s consumers. Only meaningful
+ * for the three recurring kinds — a Task is not a definition, and `toDefinition` has no Task arm.
  */
 internal fun Item.asRecurringDefinition(kind: ItemKind): RecurringDefinition = RecurringDefinition(
     id = core.id,
@@ -295,8 +268,8 @@ internal fun Item.asRecurringDefinition(kind: ItemKind): RecurringDefinition = R
     description = describable.description,
     labels = taggable.labels,
     recurrence = repeats.recurrence,
-    // The same conflation, read on a surface that only ever holds recurring kinds — so here the anchor
-    // IS the cursor whichever member holds it, and no kind branch is needed.
+    // The same conflation, on a surface that only ever holds recurring kinds. Here the anchor is the
+    // cursor whichever member holds it, so no kind branch is needed.
     cursorAt = completeByWhereverItLanded(),
     seriesId = repeats.seriesId,
     series = repeats.series,
