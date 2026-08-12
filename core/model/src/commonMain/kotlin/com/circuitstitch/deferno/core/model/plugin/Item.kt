@@ -45,6 +45,10 @@ data class Item(
  * a firing *went* stays a render-time reading over the fact plus coverage plus today, exactly as
  * `resolveOccurrenceState` computes it now — derived readings are never stored.
  *
+ * What is on record is [Outcome], and carrying none is **the absence of a row** rather than an
+ * unresolved one: absence inside synced coverage is the honest record for a date nothing has happened
+ * on, and it is what the Scheduled-versus-Missed reading is derived from.
+ *
  * `PluginOccurrence` in Swift for the same collision hygiene as [Item]: `core:model` already exports
  * `OccurrenceFact`, `OccurrenceState`, `OccurrenceGrid` and `OccurrenceCoverage`.
  */

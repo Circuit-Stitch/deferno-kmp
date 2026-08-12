@@ -2,6 +2,7 @@ package com.circuitstitch.deferno.core.model.plugin
 
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.Cadence
+import com.circuitstitch.deferno.core.model.OccurrenceResolution
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -175,6 +176,32 @@ class ReadingsTest {
         // The counterpart of Aspect.Process: a reader that has not decided has not thereby claimed
         // the thing has no endpoint.
         assertEquals(Attainment.Undetermined, satisfied(item(), occurrence()))
+    }
+
+    @Test
+    fun onlyThePairCanCatchAFiringThatIsLateAgainstNothing() {
+        // The second rule that spans the two records, and the kind-free restatement of one the wire
+        // enforces by kind: `validate_for_event` 400s a late event because an appointment happens *at*
+        // a time rather than *by* one. Stated over the anchor, it outlives the kinds' deletion.
+        val appointment = item(Anchor.Appointment(start = Instant.parse("2026-03-01T17:00:00Z")))
+        val late = occurrence(Outcome(OccurrenceResolution.DoneLate, doneAt = Instant.parse("2026-03-01T18:00:00Z")))
+
+        // Each record is faultless alone: an appointment is a legal anchor and a late firing is a legal
+        // record — of something anchored by a deadline.
+        assertEquals(emptyList(), appointment.validate())
+        assertEquals(emptyList(), late.validate())
+
+        val problems = problemsAcross(appointment, late)
+        assertEquals(1, problems.size, "expected exactly one cross-record problem, got $problems")
+        assertTrue(problems.single().contains("late"), problems.single())
+
+        // The same firing under a deadline is unremarkable — being late is what a deadline makes
+        // sayable — and an on-time firing of an appointment is fine either way.
+        assertEquals(emptyList(), problemsAcross(item(Anchor.Deadline()), late))
+        assertEquals(
+            emptyList(),
+            problemsAcross(appointment, occurrence(Outcome(OccurrenceResolution.DoneOnTime))),
+        )
     }
 
     @Test

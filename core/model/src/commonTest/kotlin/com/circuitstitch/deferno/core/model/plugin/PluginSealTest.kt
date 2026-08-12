@@ -4,15 +4,18 @@ import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.ExternalRef
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.ItemSource
+import com.circuitstitch.deferno.core.model.OccurrenceResolution
 import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.model.recipe.Admission
 import com.circuitstitch.deferno.core.model.recipe.Clamp
+import com.circuitstitch.deferno.core.model.recipe.FiringAdmission
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 
@@ -67,6 +70,7 @@ class PluginSealTest {
         is Repeats -> Described("Unfolding", Repeats(recurrence = Recurrence(Cadence.Daily)))
         is Progress -> Described("Enactment", Progress(Lifecycle.Working(WorkingState.Done)))
         is Trackable -> Described("Enactment", Trackable(productive = 0.75))
+        is Outcome -> Described("Enactment", Outcome(OccurrenceResolution.DoneOnTime, doneAt = doneAt))
         is Blocker -> Described("Linkage", Blocker(blocked = true))
         is Succeeds -> Described("Linkage", Succeeds(nextId = "11111111-0000-4000-8000-000000000003"))
         is Importable -> Described("Linkage", Importable(github))
@@ -86,6 +90,7 @@ class PluginSealTest {
         assertEquals("Temporal", describe(Anchor.Unanchored).label)
         assertEquals("Unfolding", describe(Repeats()).label)
         assertEquals("Enactment", describe(Progress()).label)
+        assertEquals("Enactment", describe(Outcome()).label)
         assertEquals("Linkage", describe(Blocker()).label)
         assertEquals("Modal", describe(Volition()).label)
         assertEquals("Unfolding (shadowed)", describe(Dynamics.Unstated).label)
@@ -99,14 +104,14 @@ class PluginSealTest {
     fun everyPluginSaysHowFarItsValueCanTravel() {
         // `Plugin.reach` is abstract because neither default is safe: Wire would enqueue a mutation
         // that can never drain, DeviceLocal would silently stop sending a Family that has a field.
-        // What this asserts is the split itself — fifteen wire-backed members (thirteen plugin types,
+        // What this asserts is the split itself — sixteen wire-backed members (fourteen plugin types,
         // of which `Anchor` contributes three) against five shadowed — so a Family that answers
         // wrongly shows up as a count that moved.
         //
         // The two literals are updated deliberately when a member is added, the same convention
         // `KindRecipeRoundTripTest` uses for the corpus counts. They are also the guard that a new
         // type reached [members] and not only the `when`.
-        assertEquals(15, samples.count { it.reach == Reach.Wire }, "the wire-backed set changed size")
+        assertEquals(16, samples.count { it.reach == Reach.Wire }, "the wire-backed set changed size")
         assertEquals(5, samples.count { it.reach == Reach.DeviceLocal }, "the shadowed set changed size")
     }
 
@@ -133,10 +138,20 @@ class PluginSealTest {
         //
         // "At least one kind", because several members are kind-specific and that is correct:
         // `Volition` and `Attachable` are Task-only, `Anchor.Appointment` is Event-only, `Repeats`
-        // never reaches a Task.
-        val dropped = samples.filter { it.reach == Reach.Wire }.filterNot { sample ->
+        // never reaches a Task, and a Task has no firings at all.
+        //
+        // The split is over `scope`, a field, rather than a `when` over types: a plugin belongs to one
+        // record, and each record has its own clamp entry point.
+        val (onOneDate, onTheDefinition) =
+            samples.filter { it.reach == Reach.Wire }.partition { it.scope == Scope.Occurrence }
+
+        val dropped = onTheDefinition.filterNot { sample ->
             ItemKind.entries.any { kind ->
                 Clamp.admit(Item(core, listOf(sample)), kind) is Admission.Admitted
+            }
+        } + onOneDate.filterNot { sample ->
+            ItemKind.entries.any { kind ->
+                Clamp.admit(firing(sample), kind) is FiringAdmission.Admitted
             }
         }
         assertEquals(emptyList(), dropped, "no kind's write direction kept these plugins")
@@ -145,8 +160,8 @@ class PluginSealTest {
     @Test
     fun everyShadowedSampleComesBackAsUnsynced() {
         // The other half of the same sweep: a value with no wire field is reported rather than sent
-        // or dropped. The filter is over `reach` and `scope`, both fields — `Evaluation` belongs to a
-        // date, so it is checked on the record it sits on rather than on an Item.
+        // or dropped. Both records answer it now — `Evaluation` belongs to a date, so it is admitted
+        // as a firing rather than merely found valid there.
         for (sample in samples.filter { it.reach == Reach.DeviceLocal && it.scope == Scope.Definition }) {
             val admitted = assertIs<Admission.Admitted>(
                 Clamp.admit(Item(core, listOf(sample)), ItemKind.Task),
@@ -158,12 +173,18 @@ class PluginSealTest {
                 "${sample::class.simpleName} was not reported as unsynced",
             )
         }
-        val onOneDate = samples.filter { it.reach == Reach.DeviceLocal && it.scope == Scope.Occurrence }
-        assertEquals(
-            emptyList(),
-            onOneDate.flatMap { Occurrence(core.id, LocalDate(2026, 3, 1), listOf(it)).validate() },
-            "an Occurrence-scoped shadowed sample is invalid on the record it belongs to",
-        )
+        for (sample in samples.filter { it.reach == Reach.DeviceLocal && it.scope == Scope.Occurrence }) {
+            val admitted = assertIs<FiringAdmission.Admitted>(
+                Clamp.admit(firing(sample), ItemKind.Chore),
+                "${sample::class.simpleName} was refused",
+            )
+            assertEquals(
+                listOf(sample),
+                admitted.notSynced,
+                "${sample::class.simpleName} was not reported as unsynced",
+            )
+            assertNull(admitted.fact, "a device-local value alone is not a row the server holds")
+        }
     }
 
     @Test
@@ -212,8 +233,12 @@ class PluginSealTest {
     )
 
     private val deadline = Instant.parse("2026-03-01T17:00:00Z")
+    private val doneAt = Instant.parse("2026-03-01T16:30:00Z")
     private val target = Instant.parse("2026-02-20T00:00:00Z")
     private val github = ExternalRef(ItemSource.GitHub, "Circuit-Stitch/deferno-kmp#1", "https://example.invalid/1")
+
+    /** One dated firing of [core], carrying [sample] — the Occurrence-scoped half of every sweep. */
+    private fun firing(sample: Plugin) = Occurrence(core.id, LocalDate(2026, 3, 1), listOf(sample))
 
     /**
      * Every Family member, one seed instance each, put through [describe].
@@ -224,7 +249,7 @@ class PluginSealTest {
     private val members: List<Described> = listOf(
         Describable(), Taggable(), Attachable(), Prioritizable(),
         Anchor.Unanchored, Anchor.Deadline(), Anchor.Appointment(), Targeted(),
-        Repeats(), Progress(), Trackable(),
+        Repeats(), Progress(), Trackable(), Outcome(),
         Blocker(), Succeeds(), Importable(), Volition(),
         Dynamics.Unstated, Evaluation(), Purpose(), Obligation(), PersistencePolicy.UntilComplete,
     ).map(::describe)

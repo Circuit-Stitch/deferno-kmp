@@ -1,5 +1,7 @@
 package com.circuitstitch.deferno.core.model.plugin
 
+import com.circuitstitch.deferno.core.model.OccurrenceResolution
+
 /**
  * Which plugin *values* may coexist — the rules that read two families at once. A plugin's own
  * `validate` sees only itself, so none of these live on one: [unfoldingProblems] reads a bound against
@@ -34,9 +36,32 @@ fun verdictProblems(bound: Dynamics, evaluation: Evaluation): List<String> = bui
 }
 
 /**
- * Everything a pair can be wrong about: each record on its own, plus the rule that spans them. Neither
- * `validate` can reach [verdictProblems] — each record sees half the evidence, the same shape as
- * [satisfied].
+ * **Lateness needs something to be late against**, and the two live on different records: the
+ * commitment is an [Anchor] on the definition, the verdict on it an [Outcome] for one date. Being
+ * late is only a distinguishable outcome under a [Anchor.Deadline] — an [Anchor.Appointment] happens
+ * *at* a time and is never satisfiable after it.
+ *
+ * This is the kind-free restatement of a rule the wire enforces by kind: `validate_for_event` refuses
+ * `DoneLate` at the event handler's boundary, and the client's own occurrence mutation branches
+ * `ItemKind.Event -> DoneOnTime` to match. Stated over the anchor, it survives the kinds' deletion —
+ * and it says the same thing about an item that is *anchored like an appointment* whatever it used to
+ * be called.
+ *
+ * A disagreement *within* one firing — a stored punctuality the timestamps beside it do not support —
+ * is [Outcome.punctualityDisagrees], and is a reading rather than a problem.
+ */
+fun latenessProblems(anchor: Anchor, outcome: Outcome): List<String> = buildList {
+    if (outcome.resolution == OccurrenceResolution.DoneLate && !anchor.latenessIsMeaningful) {
+        add("this happens at a time rather than by one, so a firing of it cannot be late")
+    }
+}
+
+/**
+ * Everything a pair can be wrong about: each record on its own, plus the rules that span them. Neither
+ * `validate` can reach [verdictProblems] or [latenessProblems] — each record sees half the evidence,
+ * the same shape as [satisfied].
  */
 fun problemsAcross(item: Item, occurrence: Occurrence): List<String> =
-    item.validate() + occurrence.validate() + verdictProblems(item.dynamics, occurrence.evaluation)
+    item.validate() + occurrence.validate() +
+        verdictProblems(item.dynamics, occurrence.evaluation) +
+        latenessProblems(item.anchor, occurrence.outcome)

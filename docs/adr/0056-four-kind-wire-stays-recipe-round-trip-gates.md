@@ -99,3 +99,31 @@ ports cadence advancement is its own issue.
 **Consequence.** The parity seed is not evidence about what a missed item does; it is evidence about
 what the vocabulary of kinds stood in for. The behaviour-parity gate keeps its meaning either way —
 it was always asserting that the seed is derivable from one bit, never that the bit was right.
+
+## Amendment (2026-08, #436): the gate covers a second record, and the vocabulary narrows per kind
+
+**What this ADR says.** Round-trip is identity *"for every kind crossed with every field combination
+the wire can carry"*. Written against the four definition rows, which were the only rows the recipe
+layer translated.
+
+**What is added.** One dated firing is the second record ADR-0055 models, and it now has a
+wire-backed [[Family]] of its own — the [[Occurrence]]-scoped half of Enactment, holding what an
+`OccurrenceFact` records. So the gate runs twice, over two corpora, on the same terms.
+
+Two properties are specific to the firing half and have no analogue over a definition.
+
+- **Absence is a value.** A fact is wholly its plugin, with no `Core` beneath it, so a firing carrying
+  nothing on record is the *absence of a row* rather than an empty one. The recipe writes no fact for
+  it, and a stored `Scheduled` stays distinguishable from that absence — the distinction the derived
+  Scheduled-versus-Missed reading rests on.
+- **The stored vocabulary is narrower per kind than the type.** `OccurrenceResolution` is the union of
+  three endpoints, and no kind holds all five: a habit row has no status column at all, a chore has no
+  stored `Scheduled` because absence is its record, and an event has no late arm because its handler
+  refuses one. A resolution can therefore round-trip perfectly and still be unsendable, which the
+  definition half never had to say. `Clamp` states each kind's set, and the firing corpus is generated
+  from it rather than from a table beside it.
+
+**Consequence.** The representable set is now pinned on both records, so the ADR-0057 boundary is
+checkable for a value recorded against a date as well as for one recorded against an item. The
+narrowing also gives Phase 4 a kind-free form to build toward: *"an appointment cannot be late"* is a
+claim about the anchor, which outlives the kind that enforces it today.

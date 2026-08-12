@@ -6,13 +6,17 @@ import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.OccurrenceFact
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.plugin.Item
+import com.circuitstitch.deferno.core.model.plugin.Occurrence
 import kotlin.experimental.ExperimentalObjCName
 import kotlin.native.ObjCName
 
 /**
- * Translation between a plugin [Item] and one of the four kinds the wire still speaks (ADR-0056).
+ * Translation between the plugin model and the four kinds the wire still speaks (ADR-0056) — an
+ * [Item] definition through the eight typed methods below, and one dated firing of it through
+ * [read] and [writeFact].
  *
  * The four-kind wire survives only until the backend's own port lands. Everything that knows about
  * kinds lives in this one package and does nothing else, so the cutover deletes a directory. Wire
@@ -53,6 +57,25 @@ interface KindRecipe {
     fun writeChore(item: Item): Chore
 
     fun writeEvent(item: Item): Event
+
+    /**
+     * One dated firing's stored fact, read into the plugin-shaped record that owns it.
+     *
+     * `OccurrenceFact` is keyed `(kind, definitionId, date)` and an [Occurrence] `(itemId, date)`, so
+     * the kind is the one part of the key that does not cross — it is the wire's discriminator, and
+     * this package is where knowledge of it is allowed to live. The write direction takes it back.
+     */
+    fun read(fact: OccurrenceFact): Occurrence
+
+    /**
+     * [occurrence] written back as a firing of [kind], or **`null` when nothing is on record**.
+     *
+     * Unlike the four `writeX` methods there is no row to fall back on: a fact *is* its plugin, so an
+     * [Occurrence] carrying only device-local plugins — or none — is not an unresolved row, it is the
+     * absence of one. Absence is the honest record for a date with nothing on it, and the
+     * Scheduled-versus-Missed reading over it is derived at render time.
+     */
+    fun writeFact(occurrence: Occurrence, kind: ItemKind): OccurrenceFact?
 
     /** Read whichever of the four rows [row] holds. The typed overloads above are the primitive. */
     fun read(row: KindRow): Item = when (row) {

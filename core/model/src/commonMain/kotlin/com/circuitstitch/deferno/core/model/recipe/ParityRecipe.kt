@@ -10,6 +10,8 @@ import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.EventId
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.OccurrenceFact
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
@@ -21,6 +23,8 @@ import com.circuitstitch.deferno.core.model.plugin.Describable
 import com.circuitstitch.deferno.core.model.plugin.Importable
 import com.circuitstitch.deferno.core.model.plugin.Item
 import com.circuitstitch.deferno.core.model.plugin.Lifecycle
+import com.circuitstitch.deferno.core.model.plugin.Occurrence
+import com.circuitstitch.deferno.core.model.plugin.Outcome
 import com.circuitstitch.deferno.core.model.plugin.Plugin
 import com.circuitstitch.deferno.core.model.plugin.Prioritizable
 import com.circuitstitch.deferno.core.model.plugin.Progress
@@ -56,6 +60,11 @@ import kotlin.native.ObjCName
  * 3. **A field a kind does not have is not invented.** `desire` is Task-only on the wire, so a Habit
  *    never loads [Volition] and [writeHabit] never looks for one. The plugin model is wider than any
  *    single kind; keeping the client from writing what the wire cannot carry is [Clamp]'s job.
+ *
+ * The same three rules govern the firing half — [read] of an `OccurrenceFact` and [writeFact] — with
+ * one addition rule 2 does not cover: a firing carrying nothing on record is the **absence of a row**
+ * rather than an empty one, so the write direction is nullable. There is no [Core] beneath a firing to
+ * fall back on, which is why an [Item] at every wire default is still a row and a firing is not.
  *
  * Identity, org, title, tree position and sync bookkeeping cross in [Core] rather than in a Family —
  * ten fields all four kinds declare identically, plus the two subtree counts, which roll up over the
@@ -177,7 +186,43 @@ object ParityRecipe : KindRecipe {
         ),
     )
 
+    /**
+     * A firing's stored fact into the record that owns it — the whole of it beyond the key, in one
+     * [Outcome].
+     *
+     * Nothing is condensed and nothing is recomputed on the way through, which is the same rule the
+     * three DTO mappers upstream already follow: the server decided the punctuality split for a Chore
+     * and an Event, and this client synthesised it once for a Habit at the wire boundary. Re-deriving
+     * it here could only introduce a disagreement with the row it is reading.
+     */
+    override fun read(fact: OccurrenceFact): Occurrence = Occurrence(
+        itemId = fact.definitionId,
+        date = fact.date,
+        plugins = sparse(Outcome(fact.resolution, fact.doneAt, fact.completeBy)),
+    )
+
     // ── Write: a plugin list becomes a kind row again ──────────────────────────────────────────
+
+    /**
+     * The firing half of the write direction. Total and pure like the other four, and `null` where
+     * the read direction would have had no fact to read — see [KindRecipe.writeFact].
+     *
+     * [Occurrence.itemId] is the fact's `definitionId`: both name the chain **Head** the firing
+     * projects from, never a series or segment id, which is the identity the write path has always
+     * keyed on.
+     */
+    override fun writeFact(occurrence: Occurrence, kind: ItemKind): OccurrenceFact? {
+        val outcome = occurrence.outcome
+        val resolution = outcome.resolution ?: return null
+        return OccurrenceFact(
+            kind = kind,
+            definitionId = occurrence.itemId,
+            date = occurrence.date,
+            resolution = resolution,
+            doneAt = outcome.doneAt,
+            completeBy = outcome.carriedDeadline,
+        )
+    }
 
     override fun writeTask(item: Item): Task {
         val core = item.core
