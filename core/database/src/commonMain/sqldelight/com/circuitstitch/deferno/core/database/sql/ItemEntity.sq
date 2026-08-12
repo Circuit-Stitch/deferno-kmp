@@ -1,0 +1,189 @@
+-- The local source-of-truth Item table (ADR-0001, ADR-0055, issue #422). One table replaces
+-- `taskEntity`, `habitEntity`, `choreEntity` and `eventEntity`.
+--
+-- The columns are the union of those four, declared once. Eighteen of them were declared four times
+-- and one more three times, which is the duplication the re-cut exists to remove. Every column stays a
+-- SQL primitive (TEXT/INTEGER/REAL), so the generated `DefernoDatabase` still needs no column adapters
+-- and the in-memory test driver still constructs adapter-free. The row<->domain conversion lives in
+-- Kotlin in core:data (`ItemEntityMapping.kt`), and the domain side of it is the plugin-shaped record
+-- ADR-0055 models.
+--
+-- `kind` is SYNC BOOKKEEPING, not a domain field. It records which of the four endpoints this row
+-- round-trips to while the wire still speaks kinds (ADR-0056). It is not a field on the plugin-shaped
+-- `Item`, and nothing above `ItemLocalStore` reads it.
+--
+-- It is stored rather than derived because a plugin set does not determine it. A Task and a Habit both
+-- load `Anchor.Deadline`. A Habit and a Chore differ only by a `cadenceMode` a Habit never carries. An
+-- Item with no plugins at all answers to every kind.
+--
+-- The columns stay WIRE-SHAPED rather than holding an encoded plugin list. An encoded list would need
+-- a hand-rolled codec for eighteen plugin members, because core:model carries no serialization in
+-- production (ADR-0011). `KindRecipe` is already the one translation and round-trip identity already
+-- gates it; a second encoding would need a second gate, and a codec bug there is silent corruption.
+--
+-- A column a kind does not have is NULL on that kind's rows. `working_state` is Task-only,
+-- `definition_state` recurring-only, `cadence_mode` Chore-only, and the four window columns Event-only.
+-- Both state columns were NOT NULL on their old tables and are nullable here; the decoders already
+-- defaulted an unrecognised token, so an absent one reads the same way.
+CREATE TABLE itemEntity (
+    -- Identity and tree position. `id` is the backend UUID and the reconcile key. `deleted_at` is the
+    -- soft-delete tombstone, kept rather than purged so a full-snapshot reconcile is idempotent
+    -- (ADR-0001 LWW). `hydration_state` records summary-versus-full, so an opened row can be hydrated
+    -- on demand and a summary refresh never downgrades a full one.
+    id                    TEXT NOT NULL PRIMARY KEY,
+    kind                  TEXT NOT NULL,
+    org_slug              TEXT NOT NULL,
+    owner_org_id          TEXT,
+    ref                   TEXT,
+    sequence              INTEGER,
+    title                 TEXT NOT NULL,
+    parent_id             TEXT,
+    date_created          TEXT NOT NULL,
+    deleted_at            TEXT,
+    hydration_state       TEXT NOT NULL,
+
+    -- Carried identically by all four kinds. `labels` is a `\n`-joined list; labels never contain
+    -- newlines, so the join is lossless. `priority` stores the Priority enum name. `blocked` and
+    -- `is_blocker` are server-derived dependency flags — a recurring row inherits `blocked` from a
+    -- blocked ancestor — and are nullable, decoding to false.
+    description           TEXT,
+    labels                TEXT NOT NULL DEFAULT '',
+    complete_by           TEXT,
+    target_date           TEXT,
+    priority              TEXT,
+    pinned                INTEGER NOT NULL DEFAULT 0,
+    blocked               INTEGER,
+    is_blocker            INTEGER,
+
+    -- Carried by Task, Habit and Chore. The one instant field whose meaning differs per kind sits
+    -- above: on a Task `complete_by` is a deadline, on a Habit or Chore the recurrence cursor, and on
+    -- an Event a start. The plugin model separates only the third today, which is #439.
+    deadline_time_of_day  TEXT,
+
+    -- Task-only. `child_ids` and `blocked_by` are `\n`-joined lists; `blocked_by` entries are `item` or
+    -- `item|occurrence` pairs, and UUIDs and dates contain neither separator. The two descendant counts
+    -- are server-computed subtree progress and are never re-derived on device, because the snapshot is
+    -- windowed. The three `external_*` columns are provenance for a synced or imported row.
+    working_state         TEXT,
+    finished_at           TEXT,
+    child_ids             TEXT NOT NULL DEFAULT '',
+    descendant_done       INTEGER,
+    descendant_total      INTEGER,
+    blocked_by            TEXT,
+    next_task_id          TEXT,
+    productive            REAL,
+    desire                REAL,
+    external_source       TEXT,
+    external_id           TEXT,
+    external_url          TEXT,
+    attachment_count      INTEGER,
+    attachment_total_size INTEGER,
+
+    -- Recurring kinds only (Habit, Chore, Event). `definition_state` is the light switch the
+    -- occurrence-state reading keys on. The fourteen `recurrence_*` columns are the whole rule, flat
+    -- and deliberately not a JSON blob: a blob would breach this table's no-adapters rule and make
+    -- "find every item recurring monthly" a full-table Kotlin scan. Which of them are meaningful is
+    -- decided by `recurrence_type`, and all are NULL for a cadence that does not use them.
+    --
+    -- `recurrence_interval` is the cycle multiplier and carries both wire spellings in one column;
+    -- they can never co-occur. The `anchor_*` trio is the monthly anchor and stays separate from the
+    -- yearly `recurrence_month`/`recurrence_day` pair, because a shared day column would make the
+    -- decode ambiguous. A NULL `recurrence_end_type` reads as the Never bound, matching the wire.
+    -- `recurrence_raw_type` holds the wire token of a cadence this build cannot model, so it survives
+    -- instead of becoming the string "Unknown".
+    --
+    -- The expansion inputs are NOT here. They are unbounded lists and live in `seriesInputsEntity` and
+    -- `seriesOverrideEntity`.
+    definition_state          TEXT,
+    series_id                 TEXT,
+    recurrence_type           TEXT,
+    recurrence_days           TEXT NOT NULL DEFAULT '',
+    recurrence_interval       INTEGER,
+    recurrence_anchor_type    TEXT,
+    recurrence_anchor_day     INTEGER,
+    recurrence_anchor_nth     INTEGER,
+    recurrence_anchor_weekday TEXT,
+    recurrence_month          INTEGER,
+    recurrence_day            INTEGER,
+    recurrence_rrule          TEXT,
+    recurrence_end_type       TEXT,
+    recurrence_end_date       TEXT,
+    recurrence_end_count      INTEGER,
+    recurrence_raw_type       TEXT,
+
+    -- Chore-only. An absent wire token IS `Rolling`, the backend's own default.
+    cadence_mode          TEXT,
+
+    -- Event-only: the one occurrence's fixed window, distinct from the series bound above. `all_day`
+    -- is a stored column here rather than the derived reading it is on the server.
+    all_day               INTEGER NOT NULL DEFAULT 0,
+    end_time              TEXT,
+    start_time_of_day     TEXT,
+    end_time_of_day       TEXT
+);
+
+-- The reads this table serves: the kind-scoped list, the tombstone scan the reconcile walks, the
+-- cross-kind children lookup, and the Task-only working-state filter.
+CREATE INDEX itemEntity_kind ON itemEntity(kind);
+CREATE INDEX itemEntity_owner_org_id ON itemEntity(owner_org_id);
+CREATE INDEX itemEntity_parent_id ON itemEntity(parent_id);
+CREATE INDEX itemEntity_deleted_at ON itemEntity(deleted_at);
+CREATE INDEX itemEntity_working_state ON itemEntity(working_state);
+
+-- All rows, including tombstones. The reconcile needs to see tombstones.
+selectAll:
+SELECT * FROM itemEntity;
+
+-- The live rows, the UI-facing list (ADR-0001 observe-via-Flow).
+--
+-- Ordered by `sequence` across every kind, where the four stores each ordered their own rows and the
+-- reader concatenated the results. `sequence` is unique per org across kinds — it is what the
+-- `{org}-{sequence}` ref is built from — so one order is coherent where four concatenated ones were an
+-- artifact of four tables. Nothing rendered depended on the old order: `ItemTree` sorts siblings by
+-- sequence, then title, then id, and the Plan takes its order from the plan rows.
+selectAllActive:
+SELECT * FROM itemEntity WHERE deleted_at IS NULL ORDER BY sequence;
+
+-- The same list narrowed to one kind, for a caller that genuinely wants one — the Task list and the
+-- Backup exporter. Filtering in SQL rather than in Kotlin so the rows of the other three kinds are
+-- never decoded only to be discarded. `itemEntity_kind` is the index it walks.
+selectActiveOfKind:
+SELECT * FROM itemEntity WHERE kind = ? AND deleted_at IS NULL ORDER BY sequence;
+
+selectById:
+SELECT * FROM itemEntity WHERE id = ?;
+
+-- Just the ids. The reconcile loads these to diff against a fresh snapshot and deletes the
+-- locally-present-but-absent rows in Kotlin, which avoids the empty `NOT IN ()` footgun.
+selectAllIds:
+SELECT id FROM itemEntity;
+
+-- The children of one row, of any kind. The forest nests a child of any kind under a parent of any
+-- kind, so this read was always cross-kind and could only ever see Tasks while the tables were split.
+selectChildren:
+SELECT * FROM itemEntity WHERE parent_id = ? AND deleted_at IS NULL ORDER BY sequence;
+
+-- Just the light switch, for the occurrence-state reading (ADR-0053 decision 4). That reading needs a
+-- definition's Active/Archived switch and nothing else, and rebuilding a whole domain row to reach one
+-- enum is waste on a flow the day agenda re-collects on every write. Tombstones are excluded: a deleted
+-- definition has no light switch, and the reading treats an absent state as Unknown rather than
+-- deriving Missed for it. A Task has no definition state, so its NULL excludes it here too.
+-- `kind` rides along because a DefinitionRef is keyed on it, and it was three kind-qualified queries
+-- over three tables before #422 — which query answered was how the caller knew.
+selectDefinitionStates:
+SELECT id, kind, definition_state FROM itemEntity WHERE deleted_at IS NULL AND definition_state IS NOT NULL;
+
+selectDefinitionStateById:
+SELECT definition_state FROM itemEntity WHERE id = ? AND deleted_at IS NULL AND definition_state IS NOT NULL;
+
+-- Binds the whole row as one parameter, so the generated signature is `insertOrReplace(ItemEntity)` and
+-- adding a column never touches the Kotlin call site. The caller merges full-only fields off an
+-- existing row before writing a summary, so a summary refresh never clobbers them.
+insertOrReplace:
+INSERT OR REPLACE INTO itemEntity VALUES ?;
+
+deleteById:
+DELETE FROM itemEntity WHERE id = ?;
+
+deleteAll:
+DELETE FROM itemEntity;

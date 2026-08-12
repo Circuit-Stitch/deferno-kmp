@@ -14,8 +14,6 @@ import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.backup.BackupExporter
 import com.circuitstitch.deferno.core.data.backup.BackupImporter
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
-import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
-import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
 import com.circuitstitch.deferno.core.data.create.CreateWriter
 import com.circuitstitch.deferno.core.data.create.DefaultCreateReplayListener
@@ -30,11 +28,11 @@ import com.circuitstitch.deferno.core.data.definition.DefinitionStateSource
 import com.circuitstitch.deferno.core.data.definition.DefinitionWriter
 import com.circuitstitch.deferno.core.data.definition.OutboxDefinitionWriter
 import com.circuitstitch.deferno.core.data.definition.SqlDelightDefinitionStateSource
-import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
 import com.circuitstitch.deferno.core.data.item.ItemSnapshotSource
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
 import com.circuitstitch.deferno.core.data.item.ItemSync
+import com.circuitstitch.deferno.core.data.item.SqlDelightItemLocalStore
 import com.circuitstitch.deferno.core.data.item.ItemWriter
 import com.circuitstitch.deferno.core.data.item.OfflineItemRepository
 import com.circuitstitch.deferno.core.data.item.OutboxItemWriter
@@ -42,9 +40,7 @@ import com.circuitstitch.deferno.core.data.plugin.OfflinePluginItemRepository
 import com.circuitstitch.deferno.core.data.plugin.PluginItemRepository
 import com.circuitstitch.deferno.core.data.definition.DefinitionRepository
 import com.circuitstitch.deferno.core.data.definition.OfflineDefinitionRepository
-import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.item.ItemDetailRemoteSource
-import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.SqlDelightOccurrenceCoverageLocalStore
@@ -99,8 +95,6 @@ import com.circuitstitch.deferno.core.data.task.KtorTaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.LedgerRecordingTaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.OfflineTaskRepository
 import com.circuitstitch.deferno.core.data.task.OutboxTaskWriter
-import com.circuitstitch.deferno.core.data.task.SqlDelightTaskLocalStore
-import com.circuitstitch.deferno.core.data.task.TaskLocalStore
 import com.circuitstitch.deferno.core.data.task.TaskDetailRepository
 import com.circuitstitch.deferno.core.data.task.TaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.TaskRepository
@@ -131,7 +125,7 @@ interface AccountDataBindings {
 
     @Provides
     @SingleIn(AccountScope::class)
-    fun taskLocalStore(db: DefernoDatabase): TaskLocalStore = SqlDelightTaskLocalStore(db)
+    fun itemLocalStore(db: DefernoDatabase): ItemLocalStore = SqlDelightItemLocalStore(db)
 
     @Provides
     @SingleIn(AccountScope::class)
@@ -249,17 +243,8 @@ interface AccountDataBindings {
 
     // The recurring-kind local stores (#71): the per-Account SQLDelight caches a created Habit/Chore/
     // Event seeds into, so the row joins the observe Flow exactly as a Task does (ADR-0001).
-    @Provides
-    @SingleIn(AccountScope::class)
-    fun habitLocalStore(db: DefernoDatabase): HabitLocalStore = SqlDelightHabitLocalStore(db)
 
-    @Provides
-    @SingleIn(AccountScope::class)
-    fun choreLocalStore(db: DefernoDatabase): ChoreLocalStore = SqlDelightChoreLocalStore(db)
 
-    @Provides
-    @SingleIn(AccountScope::class)
-    fun eventLocalStore(db: DefernoDatabase): EventLocalStore = SqlDelightEventLocalStore(db)
 
     // The on-device export engine (#313/#315, ADR-0041): reads the four per-kind local stores + the
     // on-device attachment repository and serializes the Backup zip (items + embedded attachment bytes).
@@ -268,12 +253,9 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun backupExporter(
-        taskStore: TaskLocalStore,
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
+        items: ItemLocalStore,
         localAttachments: LocalAttachmentRepository,
-    ): BackupExporter = BackupExporter(taskStore, habitStore, choreStore, eventStore, localAttachments)
+    ): BackupExporter = BackupExporter(items, localAttachments)
 
     // The on-device import/restore engine (#314/#315, ADR-0041): the inverse of [backupExporter]. Parses a
     // Backup zip, version-gates it, and replays each item as an id-preserving create on this Account's
@@ -283,15 +265,11 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun backupImporter(
-        taskStore: TaskLocalStore,
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
+        items: ItemLocalStore,
         outbox: OutboxStore,
         pendingCreateStore: PendingCreateStore,
         localAttachments: LocalAttachmentRepository,
-    ): BackupImporter =
-        BackupImporter(taskStore, habitStore, choreStore, eventStore, outbox, pendingCreateStore, localAttachments)
+    ): BackupImporter = BackupImporter(items, outbox, pendingCreateStore, localAttachments)
 
     // The occurrence FACT cache (#390, ADR-0053 decision 4): the per-Account SQLDelight table an
     // occurrence read from the kind-scoped endpoint seeds into, holding only what the server has on
@@ -323,13 +301,11 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun definitionRepository(
-        habits: HabitLocalStore,
-        chores: ChoreLocalStore,
-        events: EventLocalStore,
+        items: ItemLocalStore,
         remote: ItemDetailRemoteSource,
         facts: OccurrenceFactLocalStore,
         coverage: OccurrenceCoverageLocalStore,
-    ): DefinitionRepository = OfflineDefinitionRepository(habits, chores, events, remote, facts, coverage)
+    ): DefinitionRepository = OfflineDefinitionRepository(items, remote, facts, coverage)
 
     // The third reading input: a definition's Active/Archived light switch, read kind-neutrally so no
     // consumer fans a `when (kind)` over the three per-kind stores (#385's dispatch, removed). It gates
@@ -347,24 +323,18 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun itemSync(
-        taskStore: TaskLocalStore,
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
+        items: ItemLocalStore,
         source: ItemSnapshotSource,
         pendingCreateStore: PendingCreateStore,
-    ): ItemSync = ItemSync(taskStore, habitStore, choreStore, eventStore, source, pendingCreateStore)
+    ): ItemSync = ItemSync(items, source, pendingCreateStore)
 
     @Provides
     @SingleIn(AccountScope::class)
     fun taskRepository(
-        localStore: TaskLocalStore,
+        items: ItemLocalStore,
         remoteSource: TaskRemoteSource,
         itemSync: ItemSync,
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
-    ): TaskRepository = OfflineTaskRepository(localStore, remoteSource, itemSync, habitStore, choreStore, eventStore)
+    ): TaskRepository = OfflineTaskRepository(items, remoteSource, itemSync)
 
     // The unified cross-kind read of the Item store (ADR-0049, #226): merges the four per-kind caches
     // into one Item list so the Tasks Item tree (#227) renders the whole catalog as one parent_id
@@ -372,12 +342,9 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun itemRepository(
-        taskStore: TaskLocalStore,
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
+        items: ItemLocalStore,
         itemSync: ItemSync,
-    ): ItemRepository = OfflineItemRepository(taskStore, habitStore, choreStore, eventStore, itemSync)
+    ): ItemRepository = OfflineItemRepository(items, itemSync)
 
     // The plugin-shaped read of the same four caches (ADR-0055/0056, #421). It runs alongside the
     // projection above, never instead of it, for as long as the migration lasts. Nothing writes
@@ -386,13 +353,10 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun pluginItemRepository(
-        taskStore: TaskLocalStore,
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
+        items: ItemLocalStore,
         factStore: OccurrenceFactLocalStore,
     ): PluginItemRepository =
-        OfflinePluginItemRepository(taskStore, habitStore, choreStore, eventStore, factStore)
+        OfflinePluginItemRepository(items, factStore)
 
     @Provides
     @SingleIn(AccountScope::class)
@@ -401,12 +365,9 @@ interface AccountDataBindings {
     fun planRepository(
         planStore: PlanLocalStore,
         remoteSource: PlanRemoteSource,
-        taskStore: TaskLocalStore,
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
+        items: ItemLocalStore,
     ): PlanRepository =
-        OfflinePlanRepository(planStore, remoteSource, taskStore, habitStore, choreStore, eventStore)
+        OfflinePlanRepository(planStore, remoteSource, items)
 
     // The Calendar feed cache (#74): the local source of truth the month grid + day agenda observe; a
     // window refresh full-replaces the span and a write applies optimistically here.
@@ -445,19 +406,13 @@ interface AccountDataBindings {
     fun createWriter(
         connectivity: Connectivity,
         converter: ItemConverter,
-        taskStore: TaskLocalStore,
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
+        items: ItemLocalStore,
         outbox: OutboxStore,
         pendingCreateStore: PendingCreateStore,
     ): CreateWriter = OfflineCreateWriter(
         connectivity = connectivity,
         converter = converter,
-        taskStore = taskStore,
-        habitStore = habitStore,
-        choreStore = choreStore,
-        eventStore = eventStore,
+        items = items,
         outbox = outbox,
         pendingCreateStore = pendingCreateStore,
     )
@@ -468,15 +423,11 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun itemIdHealer(
-        taskStore: TaskLocalStore,
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
+        items: ItemLocalStore,
         planStore: PlanLocalStore,
         outbox: OutboxStore,
         localAttachments: LocalAttachmentRepository,
-    ): ItemIdHealer =
-        ItemIdHealer(taskStore, habitStore, choreStore, eventStore, planStore, outbox, localAttachments::rekeyTask)
+    ): ItemIdHealer = ItemIdHealer(items, planStore, outbox, localAttachments::rekeyTask)
 
     @Provides
     @SingleIn(AccountScope::class)
@@ -495,8 +446,8 @@ interface AccountDataBindings {
 
     @Provides
     @SingleIn(AccountScope::class)
-    fun taskWriter(localStore: TaskLocalStore, outbox: OutboxStore): TaskWriter =
-        OutboxTaskWriter(localStore, outbox)
+    fun taskWriter(items: ItemLocalStore, outbox: OutboxStore): TaskWriter =
+        OutboxTaskWriter(items, outbox)
 
     // The offline-first comment write path (ADR-0043): optimistic apply to the comment cache + enqueue.
     // [author] stamps an optimistic post with the Active Account's user id (device-local; Account.id ==
@@ -514,8 +465,8 @@ interface AccountDataBindings {
     fun blockedByWriter(
         client: HttpClient,
         connectivity: Connectivity,
-        localStore: TaskLocalStore,
-    ): BlockedByWriter = KtorBlockedByWriter(client, connectivity, localStore)
+        items: ItemLocalStore,
+    ): BlockedByWriter = KtorBlockedByWriter(client, connectivity, items)
 
     // The recurring-definition write seam (#299): optimistic per-kind apply (Habit/Chore/Event) + outbox
     // enqueue of `PATCH {kind}/{id} {"status":…}`. Offline-first like the Task writer (it targets an
@@ -523,23 +474,18 @@ interface AccountDataBindings {
     @Provides
     @SingleIn(AccountScope::class)
     fun definitionWriter(
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
+        items: ItemLocalStore,
         outbox: OutboxStore,
-    ): DefinitionWriter = OutboxDefinitionWriter(habitStore, choreStore, eventStore, outbox)
+    ): DefinitionWriter = OutboxDefinitionWriter(items, outbox)
 
     // The cross-kind Item move write seam (ADR-0049 decision 5, #228): optimistic reorder across the four
     // per-kind stores + outbox enqueue of `POST items/{id}/move`. Offline-first like the Task writer.
     @Provides
     @SingleIn(AccountScope::class)
     fun itemWriter(
-        taskStore: TaskLocalStore,
-        habitStore: HabitLocalStore,
-        choreStore: ChoreLocalStore,
-        eventStore: EventLocalStore,
+        items: ItemLocalStore,
         outbox: OutboxStore,
-    ): ItemWriter = OutboxItemWriter(taskStore, habitStore, choreStore, eventStore, outbox)
+    ): ItemWriter = OutboxItemWriter(items, outbox)
 
     @Provides
     @SingleIn(AccountScope::class)

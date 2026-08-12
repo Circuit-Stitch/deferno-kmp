@@ -14,10 +14,8 @@ import kotlin.time.Instant
  * `SeriesInputsEntityMapping` sibling of `RecurringEntityCodec.kt`, and the reason `seriesInputsEntity`
  * and `seriesOverrideEntity` can stay adapter-free TEXT/INTEGER tables.
  *
- * One codec for all three recurring kinds, not three: the tables are kind-neutral (`kind` is a column,
- * not a table) precisely so this conversion exists once. The generated `HabitEntity`/`ChoreEntity`/
- * `EventEntity` types share no supertype and forced `RecurringEntityCodec` into a columns-struct dance;
- * nothing here needs it.
+ * One codec for every kind, and it always was: both tables are keyed on the item id alone since #422,
+ * where they carried a `kind` column beside it before.
  *
  * **Decode is defensive in the same direction the network mapper is.** A row whose anchor or override
  * slot cannot be parsed yields `null` — no inputs — rather than a partially-read grid, because a grid
@@ -50,23 +48,21 @@ private fun SeriesOverrideEntity.toDomainOrNull(): SeriesOverride? {
 }
 
 /**
- * The parent row for one definition's inputs. [kind] is the `ItemKind` name and [definitionId] the
- * recurring **item** id — never the series id, which names the series but is no item's id (#380).
+ * The parent row for one item's inputs. [itemId] is the recurring **item** id — never the series id,
+ * which names the series but is no item's id (#380).
  */
-internal fun SeriesInputs.toEntity(kind: String, definitionId: String) = SeriesInputsEntity(
-    kind = kind,
-    definition_id = definitionId,
+internal fun SeriesInputs.toEntity(itemId: String) = SeriesInputsEntity(
+    item_id = itemId,
     anchor_local = anchorLocal.toWireString(),
     tzid = tzid,
     until_utc = untilUtc?.toString(),
     exdates = exdates.map { it.toWireString() }.encodeNewlineList(),
 )
 
-/** The child rows for the same definition — one per exception, written as a set (clear then re-seed). */
-internal fun SeriesInputs.toOverrideEntities(kind: String, definitionId: String) = overrides.map {
+/** The child rows for the same item — one per exception, written as a set (clear then re-seed). */
+internal fun SeriesInputs.toOverrideEntities(itemId: String) = overrides.map {
     SeriesOverrideEntity(
-        kind = kind,
-        definition_id = definitionId,
+        item_id = itemId,
         recurrence_id = it.recurrenceId.toWireString(),
         is_cancelled = if (it.isCancelled) 1L else 0L,
         moved_to_local = it.movedToLocal?.toWireString(),

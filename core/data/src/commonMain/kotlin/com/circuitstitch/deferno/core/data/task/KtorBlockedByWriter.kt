@@ -1,9 +1,12 @@
 package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
+import com.circuitstitch.deferno.core.data.item.CachedItem
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
 import com.circuitstitch.deferno.core.model.BlockedByRef
-import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.plugin.Blocker
+import com.circuitstitch.deferno.core.model.plugin.replacingFamilyOf
 import com.circuitstitch.deferno.core.network.ApiError
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.BlockedByRefDto
@@ -34,7 +37,7 @@ import io.ktor.http.contentType
 class KtorBlockedByWriter(
     private val client: HttpClient,
     private val connectivity: Connectivity,
-    private val localStore: TaskLocalStore,
+    private val items: ItemLocalStore,
 ) : BlockedByWriter {
 
     override suspend fun setBlockedBy(id: TaskId, blockers: List<BlockedByRef>): BlockedByResult {
@@ -43,11 +46,9 @@ class KtorBlockedByWriter(
         // Optimistic apply, capturing the pre-edit row the revert restores (same transaction seam the
         // reconcile uses, so this read-modify-write can't interleave with one). An uncached row still
         // PATCHes (the write isn't lost) — there is just nothing to apply or revert locally.
-        var previous: Task? = null
-        localStore.transaction { store ->
-            previous = store.get(id)?.also { current ->
-                store.upsert(current.copy(blockedBy = blockers, blocked = blockers.isNotEmpty()))
-            }
+        var previous: CachedItem? = null
+        items.transaction { store ->
+            previous = store.get(id.value)?.also { current -> store.upsert(current.withBlockers(blockers)) }
         }
 
         val result = client.requestApi<TaskDetailDto> {
@@ -59,11 +60,32 @@ class KtorBlockedByWriter(
         return when (result) {
             is ApiResult.Success -> BlockedByResult.Applied
             is ApiResult.Failure -> {
-                previous?.let { prev -> localStore.transaction { store -> store.upsert(prev) } }
+                previous?.let { prev -> items.transaction { store -> store.upsert(prev) } }
                 result.error.toResult()
             }
         }
     }
+
+    /**
+     * The optimistic edge set, as a Linkage swap: unload whatever [Blocker] is there and load one
+     * carrying the new edges (#422). It was a two-field `copy` on a `Task` before the cache went
+     * plugin-shaped, and it is the same edit either way — the difference is that the record it applies
+     * to names no kind, so nothing here has to be a Task.
+     *
+     * `isBlocker` is carried across untouched: it says this row gates something *else*, which is not
+     * what was edited.
+     */
+    private fun CachedItem.withBlockers(blockers: List<BlockedByRef>): CachedItem = copy(
+        item = item.copy(
+            plugins = item.plugins.replacingFamilyOf(
+                Blocker(
+                    blocked = blockers.isNotEmpty(),
+                    isBlocker = item.blocker.isBlocker,
+                    blockedBy = blockers,
+                ),
+            ),
+        ),
+    )
 
     /** Transport failure → the gentle Offline; any server verdict → Failed (retrying won't help). */
     private fun ApiError.toResult(): BlockedByResult = when (this) {

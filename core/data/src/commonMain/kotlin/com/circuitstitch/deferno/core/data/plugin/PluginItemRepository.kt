@@ -1,15 +1,8 @@
 package com.circuitstitch.deferno.core.data.plugin
 
-import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
-import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
-import com.circuitstitch.deferno.core.data.task.TaskLocalStore
-import com.circuitstitch.deferno.core.model.ChoreId
-import com.circuitstitch.deferno.core.model.EventId
-import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.ItemKind
-import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.plugin.Item
 import com.circuitstitch.deferno.core.model.plugin.Occurrence
 import com.circuitstitch.deferno.core.model.recipe.Clamp
@@ -17,6 +10,7 @@ import com.circuitstitch.deferno.core.model.recipe.KindRecipe
 import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.datetime.LocalDate
 
 /**
@@ -26,12 +20,12 @@ import kotlinx.datetime.LocalDate
  * It reads alongside `core.model.Item` and `RecurringDefinition`, not instead of them. Surfaces move
  * across one at a time in Phase 4. `PluginReadParityTest` asserts the two readings agree.
  *
- * **Nothing writes through it, and no table moves.** The drop-and-recreate is Phase 3's (ADR-0055),
- * and a refresh goes through the repository that already owns one, so there is no `hydrate` here.
+ * **Nothing writes through it.** A refresh goes through the repository that already owns one, so there
+ * is no `hydrate` here. Writes go through `ItemLocalStore`, which is plugin-shaped since #422.
  *
- * **The kind stops here.** Every method takes a raw id, and none takes an `ItemRef`. Which of the four
- * tables holds a row is storage bookkeeping until the wire drops kinds (ADR-0056), so this seam
- * resolves it rather than every caller. The cost is a fan-out over four primary-key reads.
+ * **The kind stops here.** Every method takes a raw id, and none takes an `ItemRef`. Which endpoint a
+ * row round-trips to is storage bookkeeping until the wire drops kinds (ADR-0056), and the store is
+ * where that ends.
  *
  * **Both reads are total.** An absent plugin reads as its family's degenerate value, so no caller
  * handles "absent". A date with nothing on record is an [Occurrence] carrying no `Outcome` — the
@@ -41,19 +35,18 @@ import kotlinx.datetime.LocalDate
 interface PluginItemRepository {
 
     /**
-     * Every live row this device holds, across all four kinds, as one plugin-shaped list. Tombstone-free
-     * and `sequence`-ordered within each kind, concatenated in the order
-     * `OfflineItemRepository.observeItems` uses, so both readings list the same rows in the same
-     * places. Re-emits when any kind's store changes (ADR-0001).
+     * Every live row this device holds, as one plugin-shaped list. Tombstone-free and `sequence`-ordered,
+     * which is the order `OfflineItemRepository.observeItems` also lists, so both readings put the same
+     * rows in the same places. Re-emits when the cache changes (ADR-0001).
      */
     fun observeItems(): Flow<List<Item>>
 
     /**
-     * One row by its raw UUID, from whichever of the four tables holds it. `null` when this device
-     * holds none, which is a normal cold-start answer rather than an error.
+     * One row by its raw UUID. `null` when this device holds none, which is a normal cold-start answer
+     * rather than an error.
      *
-     * A tombstone is emitted rather than filtered, and `Core.isDeleted` says so — the per-kind stores'
-     * own contract for a single-row observe.
+     * A tombstone is emitted rather than filtered, and `Core.isDeleted` says so — the store's own
+     * contract for a single-row observe.
      */
     fun observe(id: String): Flow<Item?>
 
@@ -66,54 +59,30 @@ interface PluginItemRepository {
 }
 
 /**
- * The offline-first [PluginItemRepository] (ADR-0001). The local stores are the source of truth, reads
- * are their `Flow`s, and nothing here writes or reaches the network.
+ * The offline-first [PluginItemRepository] (ADR-0001). The local store is the source of truth, reads are
+ * its `Flow`s, and nothing here writes or reaches the network.
+ *
+ * **This is what the flip left of it.** #421 built the definition reads by fanning out over four
+ * per-kind stores and translating each row through the recipe. The cache is plugin-shaped since #422,
+ * so the store already hands back the record and both reads are a projection off it — the seam earned
+ * its keep by absorbing that change entirely.
+ *
+ * The firing read still fans out, because `occurrenceFactEntity` is still keyed on the kind. It loses
+ * that key when the reading over it stops dispatching on the kind, which is Phase 4.
  *
  * [recipe] is a constructor seam because ADR-0056 puts two recipes behind one interface. The target
  * recipe lands later, one Family at a time, and swaps in here.
  */
 class OfflinePluginItemRepository(
-    private val tasks: TaskLocalStore,
-    private val habits: HabitLocalStore,
-    private val chores: ChoreLocalStore,
-    private val events: EventLocalStore,
+    private val items: ItemLocalStore,
     private val facts: OccurrenceFactLocalStore,
     private val recipe: KindRecipe = ParityRecipe,
 ) : PluginItemRepository {
 
     override fun observeItems(): Flow<List<Item>> =
-        combine(
-            tasks.observeActive(),
-            habits.observeActive(),
-            chores.observeActive(),
-            events.observeActive(),
-        ) { taskRows, habitRows, choreRows, eventRows ->
-            buildList(taskRows.size + habitRows.size + choreRows.size + eventRows.size) {
-                taskRows.forEach { add(recipe.read(it)) }
-                habitRows.forEach { add(recipe.read(it)) }
-                choreRows.forEach { add(recipe.read(it)) }
-                eventRows.forEach { add(recipe.read(it)) }
-            }
-        }
+        items.observeActive().map { rows -> rows.map { it.item } }
 
-    override fun observe(id: String): Flow<Item?> =
-        combine(
-            tasks.observe(TaskId(id)),
-            habits.observe(HabitId(id)),
-            chores.observe(ChoreId(id)),
-            events.observe(EventId(id)),
-        ) { task, habit, chore, event ->
-            // At most one arm can be non-null: the four tables partition one UUID space, and a row
-            // changing kind is rewritten under the same server id. First-non-null rather than an
-            // assertion, because throwing on an inconsistent cache would lose a renderable row.
-            when {
-                task != null -> recipe.read(task)
-                habit != null -> recipe.read(habit)
-                chore != null -> recipe.read(chore)
-                event != null -> recipe.read(event)
-                else -> null
-            }
-        }
+    override fun observe(id: String): Flow<Item?> = items.observe(id).map { it?.item }
 
     override fun observeFiring(itemId: String, date: LocalDate): Flow<Occurrence> =
         combine(FIRING_KINDS.map { facts.observe(it, itemId, date) }) { rows ->

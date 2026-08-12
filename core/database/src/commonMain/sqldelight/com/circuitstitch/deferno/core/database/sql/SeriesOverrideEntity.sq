@@ -4,14 +4,15 @@
 -- A child TABLE rather than a delimited column on the parent, unlike its `exdates` sibling, because an
 -- override is a 3-tuple and not a scalar: packing `recurrence_id|is_cancelled|moved_to_local` into one
 -- string would need an escape convention, and a blob would breach the adapter-free invariant every
--- table here holds (see `habitEntity`'s header on why the recurrence rule is twelve flat columns and
+-- table here holds (see `itemEntity`'s header on why the recurrence rule is fourteen flat columns and
 -- not one `recurrence_json`).
 --
--- Keyed `(kind, definition_id, recurrence_id)`, extending the parent's key by the slot — the same
--- shape, and the same "definition id, never series id" rule. `recurrence_id` is the firing's
--- **ORIGINAL** local wall time (RFC 5545 `RECURRENCE-ID`): it is how an exception finds the rule slot
--- it belongs to, so it is neither the moved time nor a bare date. Keying on the moved time would lose
--- the slot a rescheduled firing came from and let two moves onto the same day collide.
+-- Keyed `(item_id, recurrence_id)`, extending the parent's key by the slot — the same shape, and the
+-- same "item id, never series id" rule. It was `(kind, definition_id, recurrence_id)` before #422.
+-- `recurrence_id` is the firing's **ORIGINAL** local wall time (RFC 5545 `RECURRENCE-ID`): it is how an
+-- exception finds the rule slot it belongs to, so it is neither the moved time nor a bare date. Keying
+-- on the moved time would lose the slot a rescheduled firing came from and let two moves onto the same
+-- day collide.
 --
 -- `moved_to_local` is the rescheduled local start, NULL when the exception did not move the firing.
 -- The wire calls it `dtstart_local` — the same key the parent block uses for its anchor, one nesting
@@ -21,28 +22,27 @@
 -- `is_cancelled` stores 0/1. A cancelled firing is still **emitted** by the expander, flagged, not
 -- dropped — it is a hole in the grid the user can see, not a hole in the data.
 CREATE TABLE seriesOverrideEntity (
-    kind           TEXT NOT NULL,
-    definition_id  TEXT NOT NULL,
+    item_id        TEXT NOT NULL,
     recurrence_id  TEXT NOT NULL,
     is_cancelled   INTEGER NOT NULL DEFAULT 0,
     moved_to_local TEXT,
-    PRIMARY KEY (kind, definition_id, recurrence_id)
+    PRIMARY KEY (item_id, recurrence_id)
 );
 
 -- Both reads sort by `recurrence_id`, which restores the wire's own guarantee ("ascending by
 -- recurrence_id") for free: the column holds an ISO local wall time, so lexicographic order IS
 -- chronological order. The primary key supplies the index both walk.
-selectByKind:
-SELECT * FROM seriesOverrideEntity WHERE kind = ? ORDER BY definition_id, recurrence_id;
+selectAll:
+SELECT * FROM seriesOverrideEntity ORDER BY item_id, recurrence_id;
 
 selectFor:
-SELECT * FROM seriesOverrideEntity WHERE kind = ? AND definition_id = ? ORDER BY recurrence_id;
+SELECT * FROM seriesOverrideEntity WHERE item_id = ? ORDER BY recurrence_id;
 
 insertOrReplace:
 INSERT OR REPLACE INTO seriesOverrideEntity VALUES ?;
 
 -- A full replace of one definition's exceptions: the write path clears the set before re-seeding it,
 -- so an override the server no longer reports does not linger (the `deleteInRange` idiom on
--- `occurrenceFactEntity`, scoped to a definition rather than a window).
+-- `occurrenceFactEntity`, scoped to an item rather than a window).
 deleteFor:
-DELETE FROM seriesOverrideEntity WHERE kind = ? AND definition_id = ?;
+DELETE FROM seriesOverrideEntity WHERE item_id = ?;
