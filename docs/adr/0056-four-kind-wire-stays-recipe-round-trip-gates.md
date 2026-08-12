@@ -156,8 +156,9 @@ of the fix is known, because `Anchor.Appointment` is the worked example of it.
 **What is added.** The gap is asserted rather than left to a reader.
 `PluginReadParityTest.theRecurrenceCursorIsIndistinguishableFromADeadline` pins the two as byte
 identical in the plugin read, and names retiring itself as the signal that the target recipe closed
-the gap. Until then a Phase 4 atom that renders "due by" off `anchor` renders a Habit's cursor as a
-deadline, which is the mis-read the whole recurring epic keeps tripping over.
+the gap. Closing it is #439, which wants to land before a Phase 4 surface renders a date: until then
+an atom reading "due by" off `anchor` renders a Habit's cursor as a deadline, which is the mis-read
+the whole recurring epic keeps tripping over.
 
 **Consequence.** Sufficiency is not the same property as round-trip identity, and this is the case
 that separates them. A row can round-trip perfectly — nothing is lost, and the gate is green — while
