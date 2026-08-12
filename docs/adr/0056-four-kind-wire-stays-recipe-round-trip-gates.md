@@ -127,3 +127,55 @@ Two properties are specific to the firing half and have no analogue over a defin
 checkable for a value recorded against a date as well as for one recorded against an item. The
 narrowing also gives Phase 4 a kind-free form to build toward: *"an appointment cannot be late"* is a
 claim about the anchor, which outlives the kind that enforces it today.
+
+## Amendment (2026-08, #421): `complete_by` carries three claims, and the split named only one
+
+**What this ADR says.** The parity gate freezes today's behaviour, *"including the parts that are
+wrong"*, and it names one: the time-of-day conflation between a deadline and a start time. `Anchor`
+splitting `Deadline` from `Appointment` gives those two claims separate names, and
+`TemporalConflationTest` pins the reproduction as deliberate.
+
+**What the read facade found.** There are three claims on that field, not two.
+
+| On a | `complete_by` means | Member |
+|---|---|---|
+| Task | a deadline | `Anchor.Deadline` |
+| [[Habit]], [[Chore]] | the [[Recurrence cursor]] | `Anchor.Deadline` |
+| [[Event]] | a start | `Anchor.Appointment` |
+
+The cursor is where the series has walked to, and never a bound. Only the third claim got its own
+[[Family]] member. The first two share one, with no field between them, so nothing in a plugin set
+says which a row is holding.
+
+The shipped projection guards that distinction hard. `Item` names its field `recurrenceCursorAt`
+rather than `completeBy` and projects it on the recurring kinds only, because conflating the two would
+make every dated Task read as an exhausted-or-due series. The reading being replaced is therefore
+*more* discriminating than the model replacing it, which is a direction this migration is otherwise
+never allowed to travel.
+
+**Why it stands for now.** Reproducing the conflation is what a parity recipe is for. Deciding what an
+existing instant *meant* changes what a person sees, which is #420's kind of decision and gets its own
+issue — exactly as this record already argues for the Event half.
+
+**The `DefernoPlugins` experiment did not see this.** It states the conflation as exactly two claims,
+and the word "cursor" appears nowhere in it. Its baseline models a Habit's `complete_by` as an
+ordinary nullable instant, and its destination fixtures give a recurring chore both a weekly `Repeats`
+and an `Anchor.Deadline` holding that instant. The two-claim framing this record inherited is the
+experiment's own, and the third claim was never in scope for it.
+
+**Its cut does settle where the fix goes, and it is not `Anchor`.** Both of its plugin models put
+series liveness on the recurrence plugin, as an `emitting` flag, and its Settled list gives the
+reason: *"a retired rule is not a completed one"*. A [[Recurrence cursor]] is the richer form of that
+same fact, because it says whether the rule is still walking and also how far it got. It belongs
+beside the rule on `Repeats`, which keeps `latenessIsMeaningful` correct: a recurring definition holds
+its `Deadline` shape and only the instant moves out. This client can already express that, since
+`Anchor.Deadline` is fully nullable here where the prototype's is not.
+
+**What is added.** `PluginReadParityTest.theRecurrenceCursorIsIndistinguishableFromADeadline` pins
+the two as identical in the plugin read, and names retiring itself as the signal that the gap closed.
+Closing it is #439, which wants to land before a Phase 4 surface renders a date.
+
+**Consequence.** Sufficiency and round-trip identity are different properties, and this is the case
+that separates them. A row can round-trip perfectly while the plugin read of it still cannot answer a
+question the shipped projection answers. Every phase that moves a surface onto plugins has to check
+the second property, which is why the read facade landed with a sufficiency gate of its own.
