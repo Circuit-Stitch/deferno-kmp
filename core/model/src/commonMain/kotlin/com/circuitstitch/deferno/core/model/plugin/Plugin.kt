@@ -85,6 +85,40 @@ sealed interface Plugin {
      */
     val family: KClass<out Plugin> get() = this::class
 
+    /**
+     * What this plugin's family reads as when **nothing** is loaded — the value the non-generic
+     * accessor on [PluginHost] returns for an absent plugin.
+     *
+     * Abstract with no default, so a new Family cannot land without answering *"what does silence
+     * mean here?"*. That is the second half of the seal's teeth and the one that matters for
+     * translation: a recipe decides whether to load a plugin by asking whether it differs from this,
+     * so a Family that got it wrong would either load nothing it should or load everything it should
+     * not — both of which the round-trip gate sees.
+     *
+     * A family whose members sit under a sealed parent answers **once, on the parent**, naming the
+     * member that means silence. That is why the answer is a value rather than a type: `Unanchored`
+     * is a real member, not the absence of one, and every other member is measured against it.
+     *
+     * ### Not a `when` over plugin types, deliberately
+     *
+     * The obvious alternative is one exhaustive `when (plugin)` in the recipe layer mapping each
+     * type to its degenerate value. It would compile and it would have the same teeth. It would also
+     * be a type cascade over the plugin hierarchy sitting in production code — the exact shape
+     * ADR-0055 rejects for placement — and the next such `when` would have precedent. Asking the
+     * plugin keeps the answer beside the data that defines it.
+     */
+    val degenerate: Plugin
+
+    /**
+     * Whether this plugin claims anything beyond its family's silence.
+     *
+     * The sparseness rule in one line: a recipe loads a plugin only when this is `true`, because a
+     * plugin equal to its [degenerate] value is already what an absent one reads as. Loading it
+     * anyway would give one row two plugin lists that mean the same thing, and the round trip would
+     * be equivalence rather than identity.
+     */
+    val saysSomething: Boolean get() = this != degenerate
+
     /** Reasons this plugin's own data is invalid. Empty when valid. */
     fun validate(): List<String> = emptyList()
 }

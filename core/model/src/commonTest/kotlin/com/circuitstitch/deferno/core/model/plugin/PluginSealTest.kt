@@ -33,14 +33,48 @@ class PluginSealTest {
     /**
      * Exhaustive over every [Plugin]. No `else` branch, deliberately — an `else` is what would let a
      * new plugin type land unnoticed, and it is the only thing that could break this witness.
+     *
+     * The string is the plugin's **Family**, which makes this list double as the one readable
+     * inventory of the cut: eight axes, and which members of each have a wire field behind them.
      */
     private fun describe(plugin: Plugin): String = when (plugin) {
-        is Prioritizable -> "Content/Prioritizable"
+        is Describable, is Taggable, is Attachable, is Prioritizable -> "Content"
+        is Anchor, is Targeted -> "Temporal"
+        is Repeats -> "Unfolding"
+        is Progress, is Trackable -> "Enactment"
+        is Blocker, is Succeeds, is Importable -> "Linkage"
+        is Volition -> "Modal"
     }
 
     @Test
     fun everyPluginTypeIsNamedBySomethingThatMustHandleIt() {
-        assertEquals("Content/Prioritizable", describe(Prioritizable(Priority.Fire)))
+        assertEquals("Content", describe(Prioritizable(Priority.Fire)))
+        assertEquals("Temporal", describe(Anchor.Unanchored))
+        assertEquals("Unfolding", describe(Repeats()))
+        assertEquals("Enactment", describe(Progress()))
+        assertEquals("Linkage", describe(Blocker()))
+        assertEquals("Modal", describe(Volition()))
+    }
+
+    @Test
+    fun everyPluginSaysWhatItsSilenceMeans() {
+        // `Plugin.degenerate` is abstract, so a Family that lands without answering does not compile.
+        // What this asserts is that the answer is a member of that plugin's OWN family — the mistake
+        // an inherited default would let through, and the one that would make the recipe's
+        // sparseness rule silently drop the wrong thing.
+        val everyMember = listOf(
+            Describable(), Taggable(), Attachable(), Prioritizable(),
+            Anchor.Unanchored, Anchor.Deadline(), Anchor.Appointment(), Targeted(),
+            Repeats(), Progress(), Trackable(),
+            Blocker(), Succeeds(), Importable(), Volition(),
+        )
+        for (plugin in everyMember) {
+            assertEquals(
+                plugin.family,
+                plugin.degenerate.family,
+                "${plugin::class.simpleName} names a degenerate value from another family",
+            )
+        }
     }
 
     @Test

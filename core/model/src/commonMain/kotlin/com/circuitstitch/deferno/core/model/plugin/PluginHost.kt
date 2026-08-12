@@ -48,16 +48,69 @@ interface PluginHost {
 
     val plugins: List<Plugin>
 
+    // ── Content ────────────────────────────────────────────────────────────────────────────────
+
+    /** Prose. Degenerate: no description — which on a summary row means *not hydrated*. */
+    val describable: Describable get() = plugin<Describable>() ?: Describable()
+
+    /** Tags. Degenerate: none. */
+    val taggable: Taggable get() = plugin<Taggable>() ?: Taggable()
+
+    /** The backend-hosted attachment rollup. Degenerate: no files, no bytes. */
+    val attachable: Attachable get() = plugin<Attachable>() ?: Attachable()
+
     /**
      * This record's urgency bucket and pin flag — degenerate value: `Priority.Normal`, unpinned.
      *
      * The worked example the convention above is written from, and deliberately the dullest Family
      * member there is: [Prioritizable] wraps the shipped `Priority` enum, whose three values are
      * already exactly the reference model's, so nothing here is mapped and nothing here is a
-     * decision. What it demonstrates is the shape — non-generic, total, degenerate-valued — for the
-     * Families that land in #418 and #419.
+     * decision.
      */
     val priority: Prioritizable get() = plugin<Prioritizable>() ?: Prioritizable()
+
+    // ── Temporal ───────────────────────────────────────────────────────────────────────────────
+
+    /** When this is committed to happen. Degenerate: [Anchor.Unanchored] — wanted, not scheduled. */
+    val anchor: Anchor get() = plugin<Anchor>() ?: Anchor.Unanchored
+
+    /** The soft "want done by" date. Degenerate: none. */
+    val targeted: Targeted get() = plugin<Targeted>() ?: Targeted()
+
+    // ── Unfolding ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * The rule this happens on. Degenerate: no rule — and unlike the bound (#419) that is a
+     * **determinate** answer, not an underspecified one.
+     */
+    val repeats: Repeats get() = plugin<Repeats>() ?: Repeats()
+
+    // ── Enactment ──────────────────────────────────────────────────────────────────────────────
+
+    /** Where this has got to, and when it stopped. Degenerate: [Lifecycle.Unstated], unfinished. */
+    val progress: Progress get() = plugin<Progress>() ?: Progress()
+
+    /** How the doing felt. Degenerate: unrecorded. */
+    val trackable: Trackable get() = plugin<Trackable>() ?: Trackable()
+
+    // ── Linkage ────────────────────────────────────────────────────────────────────────────────
+
+    /** Readiness and the edges behind it. Degenerate: unblocked, gating nothing. */
+    val blocker: Blocker get() = plugin<Blocker>() ?: Blocker()
+
+    /** The forward hand-off edge. Degenerate: none. */
+    val succeeds: Succeeds get() = plugin<Succeeds>() ?: Succeeds()
+
+    /** Upstream provenance. Degenerate: a native Deferno item. */
+    val importable: Importable get() = plugin<Importable>() ?: Importable()
+
+    // ── Modal ──────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * How much the person wants to. Degenerate: `null` desire, which reads as
+     * [Strength.Unstated] — the question was never put, which is not the same as "no".
+     */
+    val volition: Volition get() = plugin<Volition>() ?: Volition()
 }
 
 /**

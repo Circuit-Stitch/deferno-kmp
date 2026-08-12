@@ -45,6 +45,18 @@ data class Core(
      * is a fact about the wire, not about the tree, so it is not a reason to shape Core around it.
      */
     val childIds: List<String> = emptyList(),
+    /**
+     * Tree position: the server-computed subtree progress a collapsed node's badge renders — done
+     * and total descendants (ADR-0049).
+     *
+     * Core rather than a plugin because they are a rollup **over the tree**, and the tree is what
+     * Core owns. Never re-derived client-side: the `/items` snapshot is windowed, so counting the
+     * rows this device happens to hold would give a different and quieter-wrong answer. `null` on a
+     * source that omits them — a `/tasks/{id}` detail — and on the recurring kinds, which the
+     * snapshot does not compute them for.
+     */
+    val descendantDone: Long? = null,
+    val descendantTotal: Long? = null,
     val sequence: Long? = null,
     val ref: String? = null,
     val dateCreated: Instant,

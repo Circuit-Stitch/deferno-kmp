@@ -1,28 +1,23 @@
 package com.circuitstitch.deferno.core.model.recipe
 
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.plugin.Item
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /**
  * The ADR-0056 **round-trip gate**: for every kind crossed with every field combination the wire can
  * carry, reading into plugins and writing back reproduces the input *unchanged*.
  *
- * ### This slice lands the harness, not the assertion (#417)
+ * ### What identity buys over equivalence
  *
- * There is no [Recipe][com.circuitstitch.deferno.core.model.plugin.Plugin] layer yet — #418 is the
- * slice that writes one, and until it exists there is nothing to round-trip through. What is here is
- * everything the assertion will stand on: the corpus in [KindShapes], its guards, and this file
- * wired onto `check` across all four KMP test targets so #418 adds a body rather than a build.
- *
- * When the recipes land, the identity test is one method here:
- *
- * ```
- * for (shape in KindShapes.ALL) {
- *     assertEquals(shape, parityRecipe.write(parityRecipe.read(shape)), shape.label)
- * }
- * ```
+ * The gate is `writeX(read(x)) == x`, not "the two agree about what matters". A recipe that dropped
+ * a field on the way out and re-derived a plausible value on the way back would satisfy the weaker
+ * claim and would silently rewrite rows in production. So the assertion is data-class equality over
+ * the whole row, and the corpus varies every field the wire can carry — which is what makes a
+ * dropped field impossible to miss rather than merely unlikely.
  *
  * ### Why the corpus is guarded rather than merely used
  *
@@ -34,6 +29,55 @@ import kotlin.test.assertTrue
  * the way this gate would otherwise rot: silently, by covering less than it claims.
  */
 class KindRecipeRoundTripTest {
+
+    @Test
+    fun readingIntoPluginsAndWritingBackReproducesTheInput() {
+        // THE gate. Failures accumulate and are reported together, the way `RecurrenceCorpusTest`
+        // reports the corpus: one field that stopped surviving typically breaks dozens of shapes at
+        // once, and the first of them alone does not say which field it was.
+        val failures = mutableListOf<String>()
+        for (shape in KindShapes.ALL) {
+            val roundTripped: Any = when (shape) {
+                is KindShape.OfTask -> ParityRecipe.writeTask(ParityRecipe.read(shape.task))
+                is KindShape.OfHabit -> ParityRecipe.writeHabit(ParityRecipe.read(shape.habit))
+                is KindShape.OfChore -> ParityRecipe.writeChore(ParityRecipe.read(shape.chore))
+                is KindShape.OfEvent -> ParityRecipe.writeEvent(ParityRecipe.read(shape.event))
+            }
+            if (roundTripped != rowOf(shape)) {
+                failures += "── ${shape.label}\n  in:  ${rowOf(shape)}\n  out: $roundTripped"
+            }
+        }
+        if (failures.isNotEmpty()) {
+            fail("${failures.size} of ${KindShapes.ALL.size} shapes did not round-trip:\n\n" + failures.joinToString("\n\n"))
+        }
+    }
+
+    @Test
+    fun theListStaysSparseSoOneRowHasOnePluginList() {
+        // Identity would still hold if the recipe loaded every Family unconditionally, but the
+        // plugin list would then be a fixed-width record wearing a list's clothes — and two lists
+        // meaning the same thing is exactly what makes "at most one member of a family" unenforceable
+        // later. A row that says nothing beyond its Core carries nothing.
+        for (shape in KindShapes.ALL.filter { it.label.contains("/minimal/") }) {
+            val item = readOf(shape)
+            assertTrue(
+                item.plugins.all { it.saysSomething },
+                "${shape.label} loaded a plugin equal to its own degenerate value: ${item.plugins}",
+            )
+        }
+    }
+
+    @Test
+    fun everyReadItemIsValid() {
+        // Placement and exclusivity are runtime checks (ADR-0055's stated cost), so the recipe is
+        // the first thing that could violate them at scale — two members of one family loaded, or a
+        // definition plugin landing on the wrong record.
+        val problems = KindShapes.ALL
+            .map { it to readOf(it).validate() }
+            .filter { (_, p) -> p.isNotEmpty() }
+            .map { (shape, p) -> "${shape.label}: $p" }
+        assertEquals(emptyList(), problems, "the recipe produced invalid plugin lists")
+    }
 
     @Test
     fun everyKindContributesShapesToTheGate() {
@@ -160,6 +204,14 @@ class KindRecipeRoundTripTest {
         is KindShape.OfHabit -> shape.habit
         is KindShape.OfChore -> shape.chore
         is KindShape.OfEvent -> shape.event
+    }
+
+    /** The shape read into plugins, whichever kind it is. */
+    private fun readOf(shape: KindShape): Item = when (shape) {
+        is KindShape.OfTask -> ParityRecipe.read(shape.task)
+        is KindShape.OfHabit -> ParityRecipe.read(shape.habit)
+        is KindShape.OfChore -> ParityRecipe.read(shape.chore)
+        is KindShape.OfEvent -> ParityRecipe.read(shape.event)
     }
 
 
