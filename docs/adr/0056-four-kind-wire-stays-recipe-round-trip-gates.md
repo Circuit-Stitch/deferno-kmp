@@ -150,8 +150,23 @@ direction this migration is otherwise never allowed to travel.
 
 **Why it stands for now.** Reproducing it is what a parity recipe is for. The storage genuinely is one
 column, and deciding what an existing instant *meant* is a change to what a person sees — #420's kind
-of decision, with its own issue, exactly as this record already argues for the Event half. The shape
-of the fix is known, because `Anchor.Appointment` is the worked example of it.
+of decision, with its own issue, exactly as this record already argues for the Event half.
+
+**The `DefernoPlugins` experiment did not see this, and its own cut says where the fix goes.** The
+prototype states the conflation as exactly two claims — *"completeBy means deadline on three kinds and
+start on Event"* — and the word "cursor" appears nowhere in it. Its baseline models a Habit's
+`completeBy` as an ordinary nullable instant, and its destination fixtures give a recurring chore both
+a weekly `Repeats` and an `Anchor.Deadline` holding that instant. So the two-claim framing this record
+inherited is the experiment's, and the third claim was never in scope for it.
+
+What the experiment *does* settle is which [[Family]] owns series liveness, and it is Unfolding rather
+than Temporal. Both of its plugin cuts put an `emitting` flag on the recurrence plugin, and its Settled
+list gives the reason: *"a retired rule is not a completed one"*. A [[Recurrence cursor]] is the
+richer form of the same fact — it says whether the rule is still walking **and** how far it got — so
+it belongs beside the rule on `Repeats`, not as a third `Anchor` member. That also keeps
+`latenessIsMeaningful` intact, since a recurring definition stays `Deadline`-shaped while its instant
+moves out. This client can already express that: `Anchor.Deadline` is fully nullable here, unlike the
+prototype's, so a rule-driven row is a deadline carrying only a time of day.
 
 **What is added.** The gap is asserted rather than left to a reader.
 `PluginReadParityTest.theRecurrenceCursorIsIndistinguishableFromADeadline` pins the two as byte
