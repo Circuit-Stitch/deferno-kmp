@@ -66,3 +66,40 @@ The four kinds do not disappear at once. They survive as the wire shape under AD
 backend port lands, so the saving in duplicated field declarations arrives later than the modelling
 change does. Dogfood installs lose their local database at the flip, which is accepted rather than
 mitigated, because the app ships to nobody yet.
+
+## Amendment (2026-08, #420): Persistence is two axes, and the per-doing bound has no home yet
+
+Ratifying the target recipes surfaced two places where the eight-family cut, as written, promises more
+than the model currently delivers. Both are recorded here rather than fixed silently, because each
+changes what a reader should expect a Family to answer.
+
+**Persistence answers two questions, not one.** The family is described as *"what becomes of an
+occurrence that reaches its horizon unresolved"*, and its five members run two independent questions
+together:
+
+1. *What does the past day show?* — `Missed` on a live definition, `Skipped` on a shelved one. Already
+   computed on-device by `resolveOccurrenceState`, kind-blind, keyed on the light switch. This is what
+   `SkippedIfMissed` and `ExpiresAfterWindow` are about.
+2. *Does the undone thing follow me into today?* — the carry-forward coordinate, which
+   `UntilComplete` is about. Still **fetched**: `OfflinePlanRepository.refreshPlan` pulls the day's
+   plan and full-replaces, so the client caches a server-derived answer rather than recomputing it —
+   the one thing ADR-0001's offline-first posture rules out.
+
+The two are independent: an Active definition logs its misses *and* a Task rolls forward, and neither
+implies the other. `TargetRecipe.persistenceAtHorizon` decides the first and keys on `Lifecycle`.
+The second stays on the kind-derived bit until it is ported offline against the Rust, the way
+`nextDeadlineAfter` ports cadence advancement — its own issue, and the reason the target recipe
+deliberately does not claim to answer it.
+
+**Derived readings are never stored — but one of them cannot be derived yet.** `Item.aspect()` and
+`Occurrence.aspect()` are justified as a two-level reading: *"take the bins out weekly" is a Habitual
+item whose every doing is a Performance*. The second level is not reachable. `Dynamics.scope` is
+`Scope.Definition`, so `Occurrence.validate()` rejects a bound outright and `Occurrence.aspect()` can
+only ever return `Process`. What closes it is the per-date **override** channel `Placement.kt` already
+names as unmodelled — a plugin checked against `Definition` while sitting on an `Occurrence`. Until
+that lands, the per-doing aspect is a stated intention rather than a working reading, and
+`ReadingsTest` pins it as such rather than asserting it against a record `validate()` refuses.
+
+**Unchanged.** Both corrections are about what the families currently reach, not about the cut itself.
+Eight axes, a closed sealed set, sparse lists with total reads, placement as a field, and a dropped
+and recreated local schema all stand.

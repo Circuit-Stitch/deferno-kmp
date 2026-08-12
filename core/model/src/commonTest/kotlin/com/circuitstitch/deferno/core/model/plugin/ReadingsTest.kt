@@ -45,13 +45,38 @@ class ReadingsTest {
     }
 
     @Test
-    fun recurrenceSetsTheDefinitionsAspectAndLeavesEachDoingToTheBound() {
-        // "Take the bins out weekly" — the Item is Habitual, each doing is a Performance. Recurrence
-        // and telos are orthogonal, and reading them at two levels is how both survive.
+    fun recurrenceSetsTheDefinitionsAspectAndTheBoundIsReadBesideIt() {
+        // "Take the bins out weekly" — recurrence and telos are orthogonal, and both are carried on
+        // the definition without either overwriting the other. A rule wins the *definition's* aspect;
+        // the bound is still there to be read.
         val weekly = Repeats(Recurrence(Cadence.Daily))
         val telic = Dynamics.Telic("bins are out")
-        assertEquals(Aspect.Habitual, item(weekly, telic).aspect())
-        assertEquals(Aspect.Performance, occurrence(telic).aspect())
+        val definition = item(weekly, telic)
+
+        assertEquals(emptyList(), definition.validate(), "a rule and a bound coexist on a definition")
+        assertEquals(Aspect.Habitual, definition.aspect())
+        assertEquals(telic, definition.dynamics, "the bound survives beside the rule")
+    }
+
+    @Test
+    fun aDoingCannotCarryItsOwnBoundYetSoItsAspectIsTheTopOfTheLattice() {
+        // The two-level reading — "a Habitual item whose every doing is a Performance" — is NOT
+        // reachable today, and this pins that rather than letting the gap read as a passing assertion.
+        // `Dynamics.scope` is `Scope.Definition`, so `Occurrence.validate()` rejects a bound outright
+        // and `Occurrence.aspect()` can only ever return the degenerate answer. The per-date override
+        // channel `Placement.kt` anticipates is what closes this; until it lands, an occurrence-scoped
+        // bound is an invalid record, not a supported shape (#420).
+        val telic = Dynamics.Telic("bins are out")
+
+        assertTrue(
+            occurrence(telic).validate().any { it.contains("Telic") },
+            "a definition-scoped bound on an Occurrence must be reported as misplaced",
+        )
+        assertEquals(
+            Aspect.Process,
+            occurrence().aspect(),
+            "with no legal way to carry a bound, every doing reads the top of the lattice",
+        )
     }
 
     @Test
