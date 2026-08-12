@@ -49,14 +49,8 @@ class ShadowFamilyTest {
         // in. A recipe that noticed the extra plugins at all would fail here.
         val failures = mutableListOf<String>()
         for (shape in KindShapes.ALL) {
-            val withShadow = readOf(shape).let { it.copy(plugins = it.plugins + shadowed) }
-            val roundTripped: Any = when (shape.kind) {
-                ItemKind.Task -> ParityRecipe.writeTask(withShadow)
-                ItemKind.Habit -> ParityRecipe.writeHabit(withShadow)
-                ItemKind.Chore -> ParityRecipe.writeChore(withShadow)
-                ItemKind.Event -> ParityRecipe.writeEvent(withShadow)
-            }
-            if (roundTripped != rowOf(shape)) failures += shape.label
+            val withShadow = shape.read().let { it.copy(plugins = it.plugins + shadowed) }
+            if (shape.write(withShadow) != shape.row) failures += shape.label
         }
         assertEquals(emptyList(), failures, "shadowed families disturbed the wire-backed round trip")
     }
@@ -67,7 +61,7 @@ class ShadowFamilyTest {
         // Replacing the cached item wholesale is the naive move and it silently destroys the four
         // values below on the next pull.
         val shape = KindShapes.ALL.first { it.label.startsWith("Task/saturated") }
-        val held = readOf(shape).let { it.copy(plugins = it.plugins + shadowed) }
+        val held = shape.read().let { it.copy(plugins = it.plugins + shadowed) }
 
         // What comes back from a refresh: the same row, wire-backed only, with one field changed.
         val fromServer = ParityRecipe.read(
@@ -95,7 +89,7 @@ class ShadowFamilyTest {
         // careful: the server IS authoritative for its own half, so a field it stops sending is a
         // field that is gone. Preserving it "just in case" would resurrect deleted values.
         val shape = KindShapes.ALL.first { it.label.startsWith("Task/saturated") }
-        val held = readOf(shape)
+        val held = shape.read()
         val stripped = ParityRecipe.read(ParityRecipe.writeTask(held).copy(labels = emptyList()))
 
         val merged = held.refreshedFrom(stripped)
@@ -109,7 +103,7 @@ class ShadowFamilyTest {
         // silently sending. What comes back is exactly the two lists a caller needs: the row to
         // enqueue, and the values to mark as unsynced wherever a person can act on them.
         val shape = KindShapes.ALL.first { it.label.startsWith("Task/saturated") }
-        val held = readOf(shape).let { it.copy(plugins = it.plugins + shadowed) }
+        val held = shape.read().let { it.copy(plugins = it.plugins + shadowed) }
 
         val admission = assertIs<Admission.Admitted>(Clamp.admit(held, ItemKind.Task))
         assertTrue(admission.hasUnsynced, "a set carrying four shadowed values reported none")
@@ -117,6 +111,13 @@ class ShadowFamilyTest {
         assertTrue(
             admission.synced.plugins.none { it.reach == Reach.DeviceLocal },
             "a device-local plugin reached the half that goes to the server",
+        )
+        // The row comes back rather than being rebuilt by the caller — and it is the one the clamp
+        // proved, built from the wire-backed half alone.
+        assertEquals(
+            ParityRecipe.write(admission.synced, ItemKind.Task),
+            admission.row,
+            "the admitted row is not the one the clamp checked",
         )
     }
 
@@ -126,9 +127,10 @@ class ShadowFamilyTest {
         // output. If it did, the round-trip gate and the clamp would disagree about what is
         // representable, and the clamp would be refusing rows the app itself created.
         for (shape in KindShapes.ALL) {
-            val admission = Clamp.admit(readOf(shape), shape.kind)
+            val admission = Clamp.admit(shape.read(), shape.kind)
             assertIs<Admission.Admitted>(admission, "${shape.label} was refused by the clamp")
             assertTrue(!admission.hasUnsynced, "${shape.label}: a recipe produced a device-local plugin")
+            assertEquals(shape.row, admission.row, "${shape.label}: the clamp handed back a different row")
         }
     }
 
@@ -139,7 +141,7 @@ class ShadowFamilyTest {
         // Item with no Progress, a Chore with no Repeats, an explicitly-degenerate Prioritizable —
         // and blamed the wire for it. A facade that only accepts what its own read produces is not a
         // facade. What must actually survive is what the caller SAID.
-        val core = readOf(KindShapes.ALL.first { it.kind == ItemKind.Task }).core
+        val core = KindShapes.ALL.first { it.kind == ItemKind.Task }.read().core
 
         assertIs<Admission.Admitted>(
             Clamp.admit(Item(core), ItemKind.Task),
@@ -169,7 +171,7 @@ class ShadowFamilyTest {
         // rollup on the wire, so a set claiming them cannot be held as a Habit — and the refusal
         // names each value rather than quietly writing a row that loses them.
         val habit = KindShapes.ALL.first { it.kind == ItemKind.Habit && it.label.contains("minimal") }
-        val overreaching = readOf(habit).let {
+        val overreaching = habit.read().let {
             it.copy(
                 plugins = it.plugins +
                     com.circuitstitch.deferno.core.model.plugin.Volition(0.5) +
@@ -187,7 +189,7 @@ class ShadowFamilyTest {
         // Two members of one family is a defect regardless of which kind it is being held as, so it
         // is caught as itself rather than reported as a wire limitation.
         val shape = KindShapes.ALL.first { it.kind == ItemKind.Task }
-        val doubled = readOf(shape).let {
+        val doubled = shape.read().let {
             it.copy(plugins = it.plugins + Prioritizable(Priority.Fire) + Prioritizable(Priority.Backlog))
         }
         val refused = assertIs<Admission.Refused>(Clamp.admit(doubled, ItemKind.Task))
@@ -200,26 +202,10 @@ class ShadowFamilyTest {
         // definition, and placement is checked the same way it is for everything else — by a filter
         // over `scope`, with no special case for being shadowed.
         val shape = KindShapes.ALL.first { it.kind == ItemKind.Task }
-        val misplaced = readOf(shape).let { it.copy(plugins = it.plugins + Evaluation(obtained = true)) }
+        val misplaced = shape.read().let { it.copy(plugins = it.plugins + Evaluation(obtained = true)) }
         assertTrue(
             misplaced.validate().any { it.contains("Evaluation") },
             "a verdict on the definition was accepted: ${misplaced.validate()}",
         )
-    }
-
-    // ── Reading a shape ────────────────────────────────────────────────────────────────────────
-
-    private fun readOf(shape: KindShape): Item = when (shape) {
-        is KindShape.OfTask -> ParityRecipe.read(shape.task)
-        is KindShape.OfHabit -> ParityRecipe.read(shape.habit)
-        is KindShape.OfChore -> ParityRecipe.read(shape.chore)
-        is KindShape.OfEvent -> ParityRecipe.read(shape.event)
-    }
-
-    private fun rowOf(shape: KindShape): Any = when (shape) {
-        is KindShape.OfTask -> shape.task
-        is KindShape.OfHabit -> shape.habit
-        is KindShape.OfChore -> shape.chore
-        is KindShape.OfEvent -> shape.event
     }
 }

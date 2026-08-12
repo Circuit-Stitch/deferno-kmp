@@ -5,6 +5,7 @@ package com.circuitstitch.deferno.core.model.recipe
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.Event
 import com.circuitstitch.deferno.core.model.Habit
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.plugin.Item
 import kotlin.experimental.ExperimentalObjCName
@@ -13,33 +14,26 @@ import kotlin.native.ObjCName
 /**
  * Translation between a plugin [Item] and one of the four kinds the wire still speaks (ADR-0056).
  *
- * ### This package is written to be deleted
- *
  * The four-kind wire survives only until the backend's own port lands. Everything that knows about
- * kinds lives in this one package with no other responsibility, so the cutover removes a directory
- * rather than unpicking a layer spread across 62 mapper files. Nothing here may acquire a second job:
- * wire *encoding* stays in `core:network`, and `core:data` is what calls these.
+ * kinds lives in this one package and does nothing else, so the cutover deletes a directory. Wire
+ * *encoding* stays in `core:network`; `core:data` is what calls these.
  *
- * ### Two recipes per kind, not one
+ * There are two recipes per kind:
  *
  * - The **parity recipe** ([ParityRecipe]) reproduces today's behaviour exactly, including the parts
  *   that are wrong, and is what the migration is gated on. Round-trip identity over it is a `check`
- *   gate; behaviour parity is asserted rather than reviewed.
+ *   gate, so behaviour parity is asserted rather than reviewed.
  * - The **target recipe** is the shape the model actually wants. It lands later, one Family at a
- *   time, once #420 ratifies what each Family should say. It implements this same interface, which is
- *   why the interface exists at all rather than the parity functions being top-level.
+ *   time. It implements this same interface, which is why the interface exists rather than the parity
+ *   functions being top-level.
  *
- * The distinction is load-bearing. The reference fixtures in `AspectualShapes.kt` give a recurring
- * chore a skipped-if-missed policy and an appointment a creates-follow-up policy; neither is what
- * this client does, and building the translation from them would have shipped a behaviour change
- * disguised as a refactor.
+ * The distinction is load-bearing: the reference fixtures in `AspectualShapes.kt` give a recurring
+ * chore a skipped-if-missed policy and an appointment a creates-follow-up policy. Neither is what this
+ * client does, so building the translation from them would ship a behaviour change as a refactor.
  *
- * ### Why the write direction is four methods
- *
- * An [Item] names no kind — that is the point of it — so nothing in a plugin list says which of the
- * four rows to rebuild. The caller knows, because it is holding the row it read. Four typed methods
- * say so at the type level instead of taking a kind token and returning something the caller has to
- * cast, and they make the round trip `writeTask(read(t)) == t` state itself.
+ * The write direction is four typed methods because an [Item] names no kind. The caller knows which
+ * row it is rebuilding, four methods say so at the type level, and they make the round trip
+ * `writeTask(read(t)) == t` state itself. A caller holding a kind token instead uses [write].
  */
 @ObjCName("PluginKindRecipe")
 interface KindRecipe {
@@ -59,4 +53,24 @@ interface KindRecipe {
     fun writeChore(item: Item): Chore
 
     fun writeEvent(item: Item): Event
+
+    /** Read whichever of the four rows [row] holds. The typed overloads above are the primitive. */
+    fun read(row: KindRow): Item = when (row) {
+        is KindRow.OfTask -> read(row.task)
+        is KindRow.OfHabit -> read(row.habit)
+        is KindRow.OfChore -> read(row.chore)
+        is KindRow.OfEvent -> read(row.event)
+    }
+
+    /**
+     * Write [item] as a row of [kind] — for a caller holding a kind token rather than a static type.
+     *
+     * The four `writeX` methods stay the primitive; this only picks between them.
+     */
+    fun write(item: Item, kind: ItemKind): KindRow = when (kind) {
+        ItemKind.Task -> KindRow.OfTask(writeTask(item))
+        ItemKind.Habit -> KindRow.OfHabit(writeHabit(item))
+        ItemKind.Chore -> KindRow.OfChore(writeChore(item))
+        ItemKind.Event -> KindRow.OfEvent(writeEvent(item))
+    }
 }

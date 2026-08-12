@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /**
  * The time-of-day conflation, **reproduced on purpose** — this file exists so that nobody later
@@ -42,14 +43,14 @@ class TemporalConflationTest {
         val timed = KindShapes.ALL.filter { it.label.contains("timed-deadline") }
         assertTrue(timed.isNotEmpty(), "no timed-deadline shapes to read")
         for (shape in timed) {
-            val anchor = anchorOf(shape)
+            val anchor = shape.read().anchor
             assertIs<Anchor.Deadline>(anchor, "${shape.label} should carry a deadline")
         }
 
         val events = KindShapes.ALL.filter { it.kind == ItemKind.Event && it.label.contains("start-only") }
         assertTrue(events.isNotEmpty(), "no Event window shapes to read")
         for (shape in events) {
-            val anchor = anchorOf(shape)
+            val anchor = shape.read().anchor
             assertIs<Anchor.Appointment>(anchor, "${shape.label} should carry an appointment")
         }
     }
@@ -61,8 +62,8 @@ class TemporalConflationTest {
         // shifted an Event's start to end-of-day, or moved a deadline's clock time onto its day,
         // would fail here before it reached the round-trip gate.
         for (shape in KindShapes.ALL) {
-            val expected = completeByOf(shape)
-            val actual = when (val anchor = anchorOf(shape)) {
+            val expected = shape.row.completeBy
+            val actual = when (val anchor = shape.read().anchor) {
                 is Anchor.Deadline -> anchor.completeBy
                 is Anchor.Appointment -> anchor.start
                 Anchor.Unanchored -> null
@@ -78,7 +79,7 @@ class TemporalConflationTest {
         // one — an Event is never late, the other three can be — over every dated shape in the
         // corpus rather than over one example of each.
         for (shape in KindShapes.ALL) {
-            val anchor = anchorOf(shape)
+            val anchor = shape.read().anchor
             if (anchor == Anchor.Unanchored) continue
             val shipped = shape.kind != ItemKind.Event
             assertEquals(
@@ -99,16 +100,16 @@ class TemporalConflationTest {
         // at its default is entirely degenerate and reads as `Unanchored`, so there is no stored
         // flag there to be faithful to.
         val disagreeing = KindShapes.ALL
-            .filterIsInstance<KindShape.OfEvent>()
-            .filter { it.event.allDay != (it.event.startTimeOfDay == null && it.event.endTimeOfDay == null) }
-            .filter { anchorOf(it) is Anchor.Appointment }
+            .mapNotNull { shape -> (shape.row as? KindRow.OfEvent)?.let { shape to it.event } }
+            .filter { (_, event) -> event.allDay != (event.startTimeOfDay == null && event.endTimeOfDay == null) }
+            .filter { (shape, _) -> shape.read().anchor is Anchor.Appointment }
         assertTrue(disagreeing.isNotEmpty(), "the corpus stopped generating a disagreeing all-day flag")
 
-        for (shape in disagreeing) {
-            val anchor = assertIs<Anchor.Appointment>(anchorOf(shape))
-            assertEquals(shape.event.allDay, anchor.allDayFlag, "${shape.label} rewrote the stored flag")
+        for ((shape, event) in disagreeing) {
+            val anchor = assertIs<Anchor.Appointment>(shape.read().anchor)
+            assertEquals(event.allDay, anchor.allDayFlag, "${shape.label} rewrote the stored flag")
             assertEquals(
-                shape.event.startTimeOfDay == null && shape.event.endTimeOfDay == null,
+                event.startTimeOfDay == null && event.endTimeOfDay == null,
                 anchor.isAllDay,
                 "${shape.label}: the derived reading is not derived from the times",
             )
@@ -121,7 +122,7 @@ class TemporalConflationTest {
         // generate it — but the wire can carry it, so the plugin's fields are both nullable and the
         // recipe builds a Deadline whenever EITHER is present. Asserted directly, because the
         // round-trip gate cannot see a case the corpus does not contain.
-        val dangling = KindShapes.ALL.filterIsInstance<KindShape.OfTask>().first().task
+        val dangling = KindShapes.ALL.firstNotNullOf { it.row as? KindRow.OfTask }.task
             .copy(completeBy = null, deadlineTimeOfDay = kotlinx.datetime.LocalTime(17, 0))
 
         val anchor = assertIs<Anchor.Deadline>(ParityRecipe.read(dangling).anchor)
@@ -133,19 +134,13 @@ class TemporalConflationTest {
         assertEquals(dangling, ParityRecipe.writeTask(ParityRecipe.read(dangling)))
     }
 
-    // ── Reading a shape ────────────────────────────────────────────────────────────────────────
-
-    private fun anchorOf(shape: KindShape): Anchor = when (shape) {
-        is KindShape.OfTask -> ParityRecipe.read(shape.task).anchor
-        is KindShape.OfHabit -> ParityRecipe.read(shape.habit).anchor
-        is KindShape.OfChore -> ParityRecipe.read(shape.chore).anchor
-        is KindShape.OfEvent -> ParityRecipe.read(shape.event).anchor
-    }
-
-    private fun completeByOf(shape: KindShape) = when (shape) {
-        is KindShape.OfTask -> shape.task.completeBy
-        is KindShape.OfHabit -> shape.habit.completeBy
-        is KindShape.OfChore -> shape.chore.completeBy
-        is KindShape.OfEvent -> shape.event.completeBy
-    }
 }
+
+/** The one wire field this file is about: `complete_by`, whichever of the four rows is holding it. */
+private val KindRow.completeBy: Instant?
+    get() = when (this) {
+        is KindRow.OfTask -> task.completeBy
+        is KindRow.OfHabit -> habit.completeBy
+        is KindRow.OfChore -> chore.completeBy
+        is KindRow.OfEvent -> event.completeBy
+    }

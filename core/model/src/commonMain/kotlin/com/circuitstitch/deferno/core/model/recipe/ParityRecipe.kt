@@ -37,35 +37,30 @@ import kotlin.native.ObjCName
  * The recipe that reproduces **today's behaviour exactly** — the one the migration is gated on.
  *
  * Every field the four-kind wire can carry has a home in some Family, and reading a row into plugins
- * and writing it back produces the same row. That is asserted over the whole kind × field-combination
- * corpus by `KindRecipeRoundTripTest`, and it is what makes the re-cut checkable rather than
- * reviewable.
+ * and writing it back produces the same row. `KindRecipeRoundTripTest` asserts that over the whole
+ * kind × field-combination corpus, which makes the re-cut checkable rather than reviewable.
  *
- * ### The three rules everything here follows
+ * Three rules govern everything here:
  *
- * 1. **Nothing is corrected on the way through.** The time-of-day that means "due at 5" on three
- *    kinds and "starts at 5" on an Event crosses unchanged; a `finishedAt` on a row that is not
- *    `Done` crosses unchanged; an `allDay` flag disagreeing with the clock times beside it crosses
- *    unchanged. Correcting any of them is a target-recipe change with its own issue (#420), and
- *    doing it here would make the gate meaningless — a green round trip would prove only that the
- *    two directions agreed on the same rewrite.
+ * 1. **Nothing is corrected on the way through.** The time-of-day that means "due at 5" on three kinds
+ *    and "starts at 5" on an Event crosses unchanged. So does a `finishedAt` on a row that is not
+ *    `Done`, and an `allDay` flag disagreeing with the clock times beside it. Correcting any of them
+ *    belongs to the target recipe; doing it here would make the gate meaningless, since a green round
+ *    trip would prove only that the two directions agreed on the same rewrite.
  *
- * 2. **The list stays sparse: a plugin loads only when it says something.** A Family whose fields
- *    all sit at their degenerate values loads nothing, because the total read already returns that
- *    value. This is what keeps [read] deterministic — there is exactly one plugin list per row —
- *    and it is why the round trip is identity rather than merely equivalence.
+ * 2. **The list stays sparse — a plugin loads only when it says something.** A Family whose fields all
+ *    sit at their degenerate values loads nothing, because the total read already returns that value.
+ *    That keeps [read] deterministic, with exactly one plugin list per row, and makes the round trip
+ *    identity rather than merely equivalence.
  *
  * 3. **A field a kind does not have is not invented.** `desire` is Task-only on the wire, so a Habit
  *    never loads [Volition] and [writeHabit] never looks for one. The plugin model is wider than any
- *    single kind, and the clamp that keeps the client from writing what the wire cannot carry is
- *    #419's job.
+ *    single kind; keeping the client from writing what the wire cannot carry is [Clamp]'s job.
  *
- * ### What crosses in Core rather than in a Family
- *
- * Identity, org, title, tree position and sync bookkeeping — ten fields all four kinds declare
- * identically, plus the two subtree counts, which are a rollup over the tree Core owns. They are
- * copied across rather than mapped, which is the saving the re-cut exists for: the other 65% of
- * field declarations that repeat.
+ * Identity, org, title, tree position and sync bookkeeping cross in [Core] rather than in a Family —
+ * ten fields all four kinds declare identically, plus the two subtree counts, which roll up over the
+ * tree Core owns. They are copied across rather than mapped, which is the saving the re-cut exists
+ * for: the other 65% of field declarations that repeat.
  */
 @ObjCName("PluginParityRecipe")
 object ParityRecipe : KindRecipe {
@@ -93,7 +88,7 @@ object ParityRecipe : KindRecipe {
             Taggable(task.labels),
             Attachable(task.attachmentCount, task.attachmentTotalSize),
             Prioritizable(task.priority, task.pinned),
-            deadline(task.completeBy, task.deadlineTimeOfDay),
+            Anchor.Deadline(task.completeBy, task.deadlineTimeOfDay),
             Targeted(task.targetDate),
             Progress(Lifecycle.Working(task.workingState), task.finishedAt),
             Trackable(task.productive),
@@ -105,7 +100,7 @@ object ParityRecipe : KindRecipe {
     )
 
     override fun read(habit: Habit): Item = Item(
-        core = definitionCore(
+        core = Core(
             id = habit.id.value,
             orgSlug = habit.orgSlug,
             title = habit.title,
@@ -121,7 +116,7 @@ object ParityRecipe : KindRecipe {
             Describable(habit.description),
             Taggable(habit.labels),
             Prioritizable(habit.priority, habit.pinned),
-            deadline(habit.completeBy, habit.deadlineTimeOfDay),
+            Anchor.Deadline(habit.completeBy, habit.deadlineTimeOfDay),
             Targeted(habit.targetDate),
             Repeats(habit.recurrence, habit.seriesId, habit.series),
             Progress(Lifecycle.Definition(habit.definitionState)),
@@ -130,7 +125,7 @@ object ParityRecipe : KindRecipe {
     )
 
     override fun read(chore: Chore): Item = Item(
-        core = definitionCore(
+        core = Core(
             id = chore.id.value,
             orgSlug = chore.orgSlug,
             title = chore.title,
@@ -146,11 +141,11 @@ object ParityRecipe : KindRecipe {
             Describable(chore.description),
             Taggable(chore.labels),
             Prioritizable(chore.priority, chore.pinned),
-            deadline(chore.completeBy, chore.deadlineTimeOfDay),
+            Anchor.Deadline(chore.completeBy, chore.deadlineTimeOfDay),
             Targeted(chore.targetDate),
             // The one kind carrying a cadence mode. It is non-null on a Chore — an absent wire token
             // IS `Rolling`, the backend's `#[default]` — so this Repeats always says something and
-            // therefore always loads, even on a Chore whose rule did not survive the wire.
+            // always loads, even on a Chore whose rule did not survive the wire.
             Repeats(chore.recurrence, chore.seriesId, chore.series, chore.cadenceMode),
             Progress(Lifecycle.Definition(chore.definitionState)),
             Blocker(chore.blocked, chore.isBlocker),
@@ -158,7 +153,7 @@ object ParityRecipe : KindRecipe {
     )
 
     override fun read(event: Event): Item = Item(
-        core = definitionCore(
+        core = Core(
             id = event.id.value,
             orgSlug = event.orgSlug,
             title = event.title,
@@ -323,66 +318,21 @@ object ParityRecipe : KindRecipe {
     /**
      * Keep only the plugins that say something — rule 2 in the class KDoc.
      *
-     * Each plugin answers for itself through [Plugin.saysSomething], so there is no `when` over
-     * plugin types here and no table for a new Family to be forgotten from. A Family that lands
-     * without deciding what its silence means does not compile, because [Plugin.degenerate] is
-     * abstract.
+     * Each plugin answers for itself through [Plugin.saysSomething], so there is no `when` over plugin
+     * types here and no table a new Family can be forgotten from. [Plugin.degenerate] is abstract, so
+     * a Family that lands without deciding what its silence means does not compile.
      */
     private fun sparse(vararg plugins: Plugin): List<Plugin> = plugins.filter { it.saysSomething }
 
     // ── Small readers the four directions share ────────────────────────────────────────────────
 
-    /** The three deadline-bearing kinds' Core, which differs from a Task's only in what it lacks. */
-    private fun definitionCore(
-        id: String,
-        orgSlug: String,
-        title: String,
-        parentId: String?,
-        sequence: Long?,
-        ref: String?,
-        dateCreated: kotlin.time.Instant,
-        deletedAt: kotlin.time.Instant?,
-        hydration: com.circuitstitch.deferno.core.model.HydrationState,
-        ownerOrgId: com.circuitstitch.deferno.core.model.OrgId?,
-    ) = Core(
-        id = id,
-        orgSlug = orgSlug,
-        title = title,
-        parentId = parentId,
-        // The three recurring kinds carry neither a child array nor the subtree counts on the wire —
-        // the `/items` snapshot computes the counts on Tasks only. Left at their degenerate values
-        // rather than derived, because deriving them from a windowed snapshot is the quietly-wrong
-        // answer `Core`'s KDoc warns about.
-        sequence = sequence,
-        ref = ref,
-        dateCreated = dateCreated,
-        deletedAt = deletedAt,
-        hydration = hydration,
-        ownerOrgId = ownerOrgId,
-    )
-
-    /**
-     * The deadline pair for the three kinds that have one.
-     *
-     * Built unconditionally, including when only the clock time is present — the wire can carry that
-     * and the round trip has to survive it. When neither is present the result says nothing and
-     * [sparse] drops it, so the read is [Anchor.Unanchored]. That emptiness test lives on `Anchor`
-     * itself rather than here, so a fourth member cannot arrive with a way of being empty this
-     * function does not know about.
-     */
-    private fun deadline(
-        completeBy: kotlin.time.Instant?,
-        timeOfDay: kotlinx.datetime.LocalTime?,
-    ): Anchor = Anchor.Deadline(completeBy, timeOfDay)
-
     /**
      * The window for the one kind whose instant is a **start**.
      *
-     * THE conflation, crossing unchanged: an Event's `completeBy` is the moment it *begins*, under
-     * the same wire field name that means a deadline on the other three kinds, with no conversion
-     * between the two claims. Splitting [Anchor.Deadline] from [Anchor.Appointment] is what finally
-     * gives the two claims separate names; changing what either means is #420's decision, and
-     * `TemporalConflationTest` pins this reproduction as deliberate rather than overlooked.
+     * An Event's `completeBy` is the moment it *begins*, under the same wire field name that means a
+     * deadline on the other three kinds. It crosses unchanged, with no conversion between the two
+     * claims. Splitting [Anchor.Deadline] from [Anchor.Appointment] is what gives the two claims
+     * separate names; `TemporalConflationTest` pins the reproduction as deliberate.
      *
      * Dropped by [sparse] when the Event says nothing about time at all — including the `all_day`
      * flag, which is a stored column here rather than the derived reading it is on the server.
@@ -402,9 +352,9 @@ object ParityRecipe : KindRecipe {
     /**
      * A Task's lifecycle, or the wire default.
      *
-     * `Open` rather than a thrown error: an [Item] carrying no [Progress] is a legal plugin shape —
-     * the plugin model does not require a lifecycle — and `Open` is what a Task row with no status
-     * decodes to. Making this total is what lets the write direction stay a pure function.
+     * `Open` rather than a thrown error: an [Item] carrying no [Progress] is a legal plugin shape, and
+     * `Open` is what a Task row with no status decodes to. Being total is what lets the write
+     * direction stay a pure function.
      */
     private fun Lifecycle.workingStateOrDefault(): WorkingState =
         (this as? Lifecycle.Working)?.state ?: WorkingState.Open

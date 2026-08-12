@@ -10,29 +10,28 @@ import kotlin.experimental.ExperimentalObjCName
 import kotlin.native.ObjCName
 
 /**
- * The **clamp**: what stops the model writing cheques the wire cannot cash (ADR-0056/0057).
+ * The clamp: what stops the model holding a value the wire cannot carry (ADR-0057).
  *
- * The plugin model is strictly more expressive than the four kinds. Offline-first makes that binding
- * rather than incidental — the outbox holds pending mutations that replay against whatever the
- * server accepts, so a shape the client can hold but cannot send is a row that never syncs.
- *
- * ### Three things it is not
+ * The plugin model is strictly more expressive than the four kinds, and the outbox replays pending
+ * mutations against whatever the server accepts, so a shape the client can hold but cannot send never
+ * syncs. Three things the clamp is not:
  *
  * - **Not a drop.** A set carrying a shadowed value is admitted, and the shadowed part comes back in
- *   [Admission.Admitted.notSynced] so a surface can mark it. Silently destroying what a person
- *   recorded is rejected outright.
- * - **Not a send.** Nothing in [Admission.Admitted.notSynced] reaches the outbox. The row that goes
- *   to the server is built from the wire-backed half alone.
- * - **Not a type check.** Which half a plugin belongs to is [Plugin.reach], a field, so the split is
- *   a `partition` and a Family that forgot to answer does not compile.
+ *   [Admission.Admitted.notSynced] for a surface to mark. Silently destroying what a person recorded
+ *   is refused.
+ * - **Not a send.** Nothing in [Admission.Admitted.notSynced] reaches the outbox. The row sent to the
+ *   server is built from the wire-backed half alone.
+ * - **Not a type check.** Which half a plugin belongs to is [Plugin.reach], a field, so the split is a
+ *   `partition` and a Family that forgot to answer does not compile.
  *
- * ### What "round-trips" means here
+ * The test is a round trip: write the wire-backed half to a kind row, read it straight back. A plugin
+ * that does not come back has no wire field behind it, so the clamp refuses rather than let it become a
+ * mutation that can never drain. The recipes never produce such a set, which the round-trip gate proves,
+ * so the clamp is for sets a *caller* assembles.
  *
- * The wire-backed half is written to a kind row and read straight back. If the plugins that come
- * back are not the plugins that went out, some value the model can hold has no wire field behind it
- * — and the clamp refuses rather than letting it become a mutation that can never drain. The
- * round-trip gate proves this never fires for anything the recipes produce; the clamp is what keeps
- * it true for sets a *caller* assembles.
+ * [admit] is the checked entry point, and it hands back the row it proved. The four [KindRecipe]
+ * `writeX` methods are the unchecked primitive underneath: a caller that reaches for one directly gets
+ * a row with no loss detection at all.
  */
 @ObjCName("PluginClamp")
 object Clamp {
@@ -40,8 +39,8 @@ object Clamp {
     /**
      * Admit [item] as a row of [kind], or refuse it.
      *
-     * The kind is a parameter because an [Item] names none — that is the point of it — so the caller
-     * says which of the four rows it is holding, exactly as it does for the write direction.
+     * An [Item] names no kind, so the caller says which of the four rows it is holding — the same way
+     * it does for the write direction.
      */
     fun admit(item: Item, kind: ItemKind, recipe: KindRecipe = ParityRecipe): Admission {
         val problems = item.validate()
@@ -50,17 +49,11 @@ object Clamp {
         val (wireBacked, deviceLocal) = item.plugins.partition { it.reach == Reach.Wire }
         val wireOnly = item.copy(plugins = wireBacked)
 
-        val roundTripped = when (kind) {
-            ItemKind.Task -> recipe.read(recipe.writeTask(wireOnly))
-            ItemKind.Habit -> recipe.read(recipe.writeHabit(wireOnly))
-            ItemKind.Chore -> recipe.read(recipe.writeChore(wireOnly))
-            ItemKind.Event -> recipe.read(recipe.writeEvent(wireOnly))
-        }
+        val row = recipe.write(wireOnly, kind)
+        val roundTripped = recipe.read(row)
 
-        // What the caller SAID is the non-degenerate half of what they handed over. A plugin equal
-        // to its family's silence claims nothing, so losing it loses nothing — and refusing over it
-        // would mean a caller had to assemble a set already in the recipe's canonical form, which is
-        // the opposite of what a facade is for.
+        // Only the non-degenerate half counts as a claim. A plugin equal to its family's silence
+        // claims nothing, so losing it loses nothing.
         val claimed = wireBacked.filter { it.saysSomething }
         val lost = claimed.filterNot { it in roundTripped.plugins }
         if (lost.isNotEmpty()) {
@@ -69,15 +62,14 @@ object Clamp {
             )
         }
 
-        // Deliberately NOT the converse. A round trip that comes back carrying a plugin the caller
-        // never mentioned is the kind supplying its own wire default — a Task's `Open`, a Chore's
-        // `Rolling` — which is normalisation, not invention. The caller said nothing there and the
-        // wire has an answer; refusing would reject every set that did not pre-state every default.
+        // The converse is deliberately not checked. A plugin that comes back unmentioned is the kind
+        // supplying its own wire default — a Task's `Open`, a Chore's `Rolling` — which is
+        // normalisation, not invention.
         if (roundTripped.core != item.core) {
             return Admission.Refused(listOf("$kind cannot carry this Core unchanged"))
         }
 
-        return Admission.Admitted(wireOnly, deviceLocal)
+        return Admission.Admitted(row, wireOnly, deviceLocal)
     }
 }
 
@@ -88,11 +80,11 @@ sealed interface Admission {
     /**
      * The set is representable.
      *
-     * [synced] is what goes to the server — the wire-backed half, proven to round-trip.
-     * [notSynced] is what stays on this device, and every one of them is something a surface a
-     * person can act on must mark as unsynced rather than present as saved.
+     * [row] is the wire row to enqueue, proven to lose nothing the caller claimed. [synced] is the
+     * wire-backed half that goes to the server. [notSynced] stays on this device, and a surface must
+     * mark each one as unsynced rather than present it as saved.
      */
-    data class Admitted(val synced: Item, val notSynced: List<Plugin>) : Admission {
+    data class Admitted(val row: KindRow, val synced: Item, val notSynced: List<Plugin>) : Admission {
         /** Whether anything here is device-local, and therefore expected to be lost at the cutover. */
         val hasUnsynced: Boolean get() = notSynced.isNotEmpty()
     }
@@ -104,12 +96,10 @@ sealed interface Admission {
 /**
  * A refresh from the server, applied without touching what only this device holds.
  *
- * ADR-0057's second promise, as a function: the server is authoritative for everything it has a
- * field for, and authoritative for **nothing else**. Naively replacing the cached item with the
- * refreshed one would clear every shadowed value on the next sync, which is the silent destruction
- * the ADR rejects outright.
+ * The server is authoritative for everything it has a field for, and for nothing else. Replacing the
+ * cached item with the refreshed one outright would clear every shadowed value on the next sync.
  *
- * Receiver is the row this device holds; [fromServer] is what came back.
+ * The receiver is the row this device holds; [fromServer] is what came back.
  */
 fun Item.refreshedFrom(fromServer: Item): Item = fromServer.copy(
     plugins = fromServer.plugins.filter { it.reach == Reach.Wire } +

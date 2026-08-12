@@ -1,8 +1,10 @@
 package com.circuitstitch.deferno.core.model.plugin
 
+import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Priority
+import com.circuitstitch.deferno.core.model.Recurrence
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -151,6 +153,29 @@ class PluginSubstrateTest {
     @Test
     fun oneMemberOfEachOfSeveralFamiliesIsFine() {
         assertEquals(emptyList(), exclusivityProblems(listOf(Prioritizable(Priority.Fire))))
+    }
+
+    // ── Values that cannot coexist ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun aConditionCarryingARecurrenceRuleIsRejectedByValidate() {
+        // `unfoldingProblems` is enforced here rather than merely stated: a queue of completable
+        // rows for something that is never completed is the permanently-open Task the bound axis
+        // exists to stop faking, and `Clamp.admit` routes through this call.
+        val problems = item(
+            Dynamics.Maintained("inbox below 20"),
+            Repeats(Recurrence(Cadence.Daily)),
+        ).validate()
+        assertEquals(1, problems.size, "expected exactly one coherence problem, got $problems")
+        assertTrue(problems.single().contains("Maintained"), problems.single())
+    }
+
+    @Test
+    fun aConditionWithNoRuleIsFine() {
+        // The check reads the RULE, not the plugin. A Chore always loads a `Repeats` whether or not
+        // a rule survived the wire, so keying on presence would flag a rule-less one.
+        assertEquals(emptyList(), item(Dynamics.Maintained("inbox below 20")).validate())
+        assertEquals(emptyList(), item(Dynamics.Maintained("inbox below 20"), Repeats()).validate())
     }
 
     // ── The conversion primitive ───────────────────────────────────────────────────────────────

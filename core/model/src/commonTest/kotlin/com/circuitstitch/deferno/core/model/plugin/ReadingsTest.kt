@@ -120,6 +120,22 @@ class ReadingsTest {
     }
 
     @Test
+    fun onlyThePairCanCatchAVerdictWithNoCriterionToBeAbout() {
+        // Each record is faultless read alone — a timebox is a legal bound and a verdict is a legal
+        // thing to record — so `problemsAcross` is the only place the pairing can be rejected.
+        val timeboxed = item(Dynamics.Timeboxed(20))
+        val verdict = occurrence(Evaluation(obtained = true))
+        assertEquals(emptyList(), timeboxed.validate())
+        assertEquals(emptyList(), verdict.validate())
+
+        val problems = problemsAcross(timeboxed, verdict)
+        assertEquals(1, problems.size, "expected exactly one cross-record problem, got $problems")
+        assertTrue(problems.single().contains("criterion"), problems.single())
+
+        assertEquals(emptyList(), problemsAcross(item(Dynamics.Telic("passed the test")), verdict))
+    }
+
+    @Test
     fun stoppingAndAttainingAreDifferentClaims() {
         // Sit the driving test, fail it, record that you left at 11am: a reader consulting only the
         // finish timestamp hands you a licence. The verdict is what separates the two.

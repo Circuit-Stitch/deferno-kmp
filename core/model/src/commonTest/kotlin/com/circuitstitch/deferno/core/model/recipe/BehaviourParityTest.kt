@@ -3,11 +3,14 @@ package com.circuitstitch.deferno.core.model.recipe
 import com.circuitstitch.deferno.core.model.CadenceMode
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.RecurringDefinition
 import com.circuitstitch.deferno.core.model.plugin.Item
 import com.circuitstitch.deferno.core.model.plugin.Lapse
+import com.circuitstitch.deferno.core.model.plugin.Lifecycle
 import com.circuitstitch.deferno.core.model.plugin.PersistencePolicy
 import com.circuitstitch.deferno.core.model.plugin.Strength
 import com.circuitstitch.deferno.core.model.plugin.atHorizon
+import com.circuitstitch.deferno.core.model.toDefinition
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -62,15 +65,13 @@ class BehaviourParityTest {
         // and one rule, restated wherever a row is de-emphasized. Asserted over every shape rather
         // than one of each, so a lifecycle value added to either enum has to be answered for.
         for (shape in KindShapes.ALL) {
-            val shipped = when (shape) {
-                is KindShape.OfTask -> shape.task.workingState.isTerminal
-                is KindShape.OfHabit -> shape.habit.definitionState == DefinitionState.Archived
-                is KindShape.OfChore -> shape.chore.definitionState == DefinitionState.Archived
-                is KindShape.OfEvent -> shape.event.definitionState == DefinitionState.Archived
+            val shipped = when (val row = shape.row) {
+                is KindRow.OfTask -> row.task.workingState.isTerminal
+                else -> row.definition?.definitionState == DefinitionState.Archived
             }
             assertEquals(
                 shipped,
-                readOf(shape).progress.lifecycle.isTerminal,
+                shape.read().progress.lifecycle.isTerminal,
                 "${shape.label}: terminality disagrees with what ships today",
             )
         }
@@ -81,17 +82,10 @@ class BehaviourParityTest {
         // `resolveOccurrenceState` reads the definition state to split a past unresolved firing into
         // Missed (Active) or Skipped (InReview / Archived), and returns Unknown when it is null. So
         // the exact three-valued answer has to survive the recipe, not merely a terminal/not bit.
-        for (shape in KindShapes.ALL.filter { it.kind != ItemKind.Task }) {
-            val shipped = when (shape) {
-                is KindShape.OfHabit -> shape.habit.definitionState
-                is KindShape.OfChore -> shape.chore.definitionState
-                is KindShape.OfEvent -> shape.event.definitionState
-                is KindShape.OfTask -> error("filtered out")
-            }
-            val plugin = readOf(shape).progress.lifecycle
+        for ((shape, definition) in definitionShapes()) {
             assertEquals(
-                com.circuitstitch.deferno.core.model.plugin.Lifecycle.Definition(shipped),
-                plugin,
+                Lifecycle.Definition(definition.definitionState),
+                shape.read().progress.lifecycle,
                 "${shape.label}: the definition state a firing's reading turns on did not survive",
             )
         }
@@ -103,17 +97,18 @@ class BehaviourParityTest {
         // its four arguments off the row. Both are in one plugin now, and both have to arrive
         // unchanged or a rolling chore would advance to a different day — including the `Unmodelled`
         // token, which is a real wire value and must not collapse into Rolling.
-        for (shape in KindShapes.ALL.filterIsInstance<KindShape.OfChore>()) {
-            val repeats = ParityRecipe.read(shape.chore).repeats
-            assertEquals(shape.chore.cadenceMode, repeats.cadenceMode, "${shape.label}: cadence mode moved")
-            assertEquals(shape.chore.recurrence, repeats.recurrence, "${shape.label}: the rule moved")
+        for (shape in KindShapes.ALL) {
+            val chore = (shape.row as? KindRow.OfChore)?.chore ?: continue
+            val repeats = shape.read().repeats
+            assertEquals(chore.cadenceMode, repeats.cadenceMode, "${shape.label}: cadence mode moved")
+            assertEquals(chore.recurrence, repeats.recurrence, "${shape.label}: the rule moved")
         }
         // And the three kinds with no such field never acquire one — a Habit that started advancing
         // on a rolling cadence would be a behaviour change nobody asked for.
         for (shape in KindShapes.ALL.filter { it.kind == ItemKind.Habit || it.kind == ItemKind.Event }) {
             assertEquals(
                 null,
-                readOf(shape).repeats.cadenceMode,
+                shape.read().repeats.cadenceMode,
                 "${shape.label} acquired a cadence mode it has no wire field for",
             )
         }
@@ -125,22 +120,16 @@ class BehaviourParityTest {
         // reference. Identity of the *same objects* is the assertion, because a plugin that rebuilt
         // an equal-looking cadence would be a second definition of "every other Tuesday" for the
         // generated corpus to disagree with.
-        for (shape in KindShapes.ALL.filter { it.kind != ItemKind.Task }) {
-            val (rule, series, seriesId) = when (shape) {
-                is KindShape.OfHabit -> Triple(shape.habit.recurrence, shape.habit.series, shape.habit.seriesId)
-                is KindShape.OfChore -> Triple(shape.chore.recurrence, shape.chore.series, shape.chore.seriesId)
-                is KindShape.OfEvent -> Triple(shape.event.recurrence, shape.event.series, shape.event.seriesId)
-                is KindShape.OfTask -> error("filtered out")
-            }
-            val repeats = readOf(shape).repeats
-            assertEquals(rule, repeats.recurrence, "${shape.label}: the rule was rebuilt rather than wrapped")
-            assertEquals(series, repeats.series, "${shape.label}: the expansion inputs were rebuilt")
-            assertEquals(seriesId, repeats.seriesId, "${shape.label}: the series id moved")
+        for ((shape, definition) in definitionShapes()) {
+            val repeats = shape.read().repeats
+            assertEquals(definition.recurrence, repeats.recurrence, "${shape.label}: the rule was rebuilt rather than wrapped")
+            assertEquals(definition.series, repeats.series, "${shape.label}: the expansion inputs were rebuilt")
+            assertEquals(definition.seriesId, repeats.seriesId, "${shape.label}: the series id moved")
             // The elision must stay an elision. `series == null` means "this device cannot reproduce
             // that grid", which is not an empty grid, and `isExpandable` is the reading that keeps
             // the two apart.
             assertEquals(
-                rule != null && series != null,
+                definition.recurrence != null && definition.series != null,
                 repeats.isExpandable,
                 "${shape.label}: the wire's elision was read as an empty grid",
             )
@@ -153,18 +142,19 @@ class BehaviourParityTest {
         // `ItemView.Task` and back into `CreateTaskPayload`. Bucketing it to the reference model's
         // three values would be lossy AND would change what an exported-then-imported item holds, so
         // the plugin carries the Double and derives the buckets.
-        for (shape in KindShapes.ALL.filterIsInstance<KindShape.OfTask>()) {
+        for (shape in KindShapes.ALL) {
+            val task = (shape.row as? KindRow.OfTask)?.task ?: continue
             assertEquals(
-                shape.task.desire,
-                ParityRecipe.read(shape.task).volition.desire,
+                task.desire,
+                shape.read().volition.desire,
                 "${shape.label}: desire was bucketed on the way in",
             )
         }
         // The three kinds with no `desire` on the wire never acquire one — the degenerate read is
         // "nobody was asked", which is not "no".
         for (shape in KindShapes.ALL.filter { it.kind != ItemKind.Task }) {
-            assertEquals(null, readOf(shape).volition.desire, "${shape.label} acquired a desire")
-            assertEquals(Strength.Unstated, readOf(shape).volition.strength, shape.label)
+            assertEquals(null, shape.read().volition.desire, "${shape.label} acquired a desire")
+            assertEquals(Strength.Unstated, shape.read().volition.strength, shape.label)
         }
     }
 
@@ -172,21 +162,19 @@ class BehaviourParityTest {
     fun theDerivedReadingsOverAPluginAnswerTheSameQuestionTheKindRowDid() {
         // The small readers each Family carries, checked against the shipped predicate they replace,
         // so none of them drifts into a differently-shaped answer under the same name.
-        for (shape in KindShapes.ALL.filterIsInstance<KindShape.OfTask>()) {
+        for (shape in KindShapes.ALL) {
+            val task = (shape.row as? KindRow.OfTask)?.task ?: continue
             assertEquals(
-                shape.task.hasAttachment,
-                ParityRecipe.read(shape.task).attachable.hasAttachment,
+                task.hasAttachment,
+                shape.read().attachable.hasAttachment,
                 "${shape.label}: hasAttachment disagrees with Task.hasAttachment",
             )
         }
+        // A Task has no rule on the wire at all, so its definition projection is absent and the
+        // shipped answer is `false` — the same one arm the three definitions share.
         for (shape in KindShapes.ALL) {
-            val shipped = when (shape) {
-                is KindShape.OfTask -> false
-                is KindShape.OfHabit -> shape.habit.recurrence != null
-                is KindShape.OfChore -> shape.chore.recurrence != null
-                is KindShape.OfEvent -> shape.event.recurrence != null
-            }
-            assertEquals(shipped, readOf(shape).repeats.hasRule, "${shape.label}: hasRule disagrees with the row")
+            val shipped = shape.row.definition?.recurrence != null
+            assertEquals(shipped, shape.read().repeats.hasRule, "${shape.label}: hasRule disagrees with the row")
         }
     }
 
@@ -195,7 +183,7 @@ class BehaviourParityTest {
         // The reading a surface would ask for if it wanted the reference model's three buckets. The
         // fourth member is the one that matters: `null` is "nobody was asked" and `0.0` is "asked,
         // and no", and collapsing them is what makes an unanswered question read as evidence.
-        val task = KindShapes.ALL.filterIsInstance<KindShape.OfTask>().first().task
+        val task = KindShapes.ALL.firstNotNullOf { it.row as? KindRow.OfTask }.task
         fun strengthOf(desire: Double?) = ParityRecipe.read(task.copy(desire = desire)).volition.strength
         assertEquals(Strength.Unstated, strengthOf(null))
         assertEquals(Strength.None, strengthOf(0.0))
@@ -211,19 +199,19 @@ class BehaviourParityTest {
         // plugin that derived the flag from its own edges would read such a row as ready. The client
         // has never computed the readiness rules and this asserts it still does not.
         for (shape in KindShapes.ALL) {
-            val (blocked, isBlocker) = when (shape) {
-                is KindShape.OfTask -> shape.task.blocked to shape.task.isBlocker
-                is KindShape.OfHabit -> shape.habit.blocked to shape.habit.isBlocker
-                is KindShape.OfChore -> shape.chore.blocked to shape.chore.isBlocker
-                is KindShape.OfEvent -> shape.event.blocked to shape.event.isBlocker
+            val (blocked, isBlocker) = when (val row = shape.row) {
+                is KindRow.OfTask -> row.task.blocked to row.task.isBlocker
+                is KindRow.OfHabit -> row.habit.blocked to row.habit.isBlocker
+                is KindRow.OfChore -> row.chore.blocked to row.chore.isBlocker
+                is KindRow.OfEvent -> row.event.blocked to row.event.isBlocker
             }
-            val blocker = readOf(shape).blocker
+            val blocker = shape.read().blocker
             assertEquals(blocked, blocker.blocked, "${shape.label}: the blocked flag was recomputed")
             assertEquals(isBlocker, blocker.isBlocker, "${shape.label}: the blocker flag was recomputed")
         }
         // The inherited case, stated directly: blocked with no edges is representable and must stay
         // blocked. The corpus generates it on all four kinds.
-        val inherited = KindShapes.ALL.map(::readOf).filter { it.blocker.blocked && it.blocker.blockedBy.isEmpty() }
+        val inherited = KindShapes.ALL.map { it.read() }.filter { it.blocker.blocked && it.blocker.blockedBy.isEmpty() }
         assertTrue(inherited.isNotEmpty(), "the corpus stopped generating an inherited-blocked row")
     }
 
@@ -271,7 +259,7 @@ class BehaviourParityTest {
         // And the reading over the seed answers exactly the bit, so nothing downstream can diverge.
         for (kind in ItemKind.entries) {
             val expected = if (PersistenceSeed.carriesForward(kind)) Lapse.Persists else Lapse.Vanishes
-            assertEquals(expected, Item(coreOf(kind), listOf(PersistenceSeed.of(kind))).atHorizon(), "$kind")
+            assertEquals(expected, Item(anyCore(), listOf(PersistenceSeed.of(kind))).atHorizon(), "$kind")
         }
     }
 
@@ -313,21 +301,32 @@ class BehaviourParityTest {
         // The Chore cadence-mode assertion above relies on `Unmodelled` surviving, which is only
         // interesting if it is actually generated.
         assertTrue(
-            KindShapes.ALL.filterIsInstance<KindShape.OfChore>().any { it.chore.cadenceMode is CadenceMode.Unmodelled },
+            KindShapes.ALL.any { (it.row as? KindRow.OfChore)?.chore?.cadenceMode is CadenceMode.Unmodelled },
             "the corpus stopped generating an unmodelled cadence mode",
         )
     }
 
     // ── Reading a shape ────────────────────────────────────────────────────────────────────────
 
-    /** A Core for a kind, for the seed assertions — which read a policy, not a row. */
-    private fun coreOf(kind: ItemKind) =
-        ParityRecipe.read(KindShapes.ALL.first { it.kind == ItemKind.Task }.let { (it as KindShape.OfTask).task }).core
+    /** Any Core at all — the seed assertions read a policy, not a row, so which one it is does not matter. */
+    private fun anyCore() = KindShapes.ALL.first().read().core
 
-    private fun readOf(shape: KindShape): Item = when (shape) {
-        is KindShape.OfTask -> ParityRecipe.read(shape.task)
-        is KindShape.OfHabit -> ParityRecipe.read(shape.habit)
-        is KindShape.OfChore -> ParityRecipe.read(shape.chore)
-        is KindShape.OfEvent -> ParityRecipe.read(shape.event)
-    }
+    /** Every shape whose row is a recurring definition, paired with its kind-neutral projection. */
+    private fun definitionShapes(): List<Pair<KindShape, RecurringDefinition>> =
+        KindShapes.ALL.mapNotNull { shape -> shape.row.definition?.let { shape to it } }
 }
+
+/**
+ * The kind-neutral definition behind a row, or `null` for a Task — which is not one.
+ *
+ * The three definition kinds already share [RecurringDefinition], so the fields these tests read off
+ * a row (`definitionState`, `recurrence`, `series`, `seriesId`) come from one projection instead of a
+ * `when` with an unreachable Task arm.
+ */
+private val KindRow.definition: RecurringDefinition?
+    get() = when (this) {
+        is KindRow.OfTask -> null
+        is KindRow.OfHabit -> habit.toDefinition()
+        is KindRow.OfChore -> chore.toDefinition()
+        is KindRow.OfEvent -> event.toDefinition()
+    }

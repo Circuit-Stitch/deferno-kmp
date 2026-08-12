@@ -10,40 +10,21 @@ import kotlin.time.Instant
 
 /**
  * Where an item has got to in its own lifecycle, and when it stopped — the **definition-scoped** half
- * of Enactment.
+ * of Enactment. The occurrence-scoped half (`OccurrenceFact`'s resolution, `doneAt` and the deadline
+ * the firing carried) is [Scope.Occurrence], and a plugin instance answers exactly one [Scope].
  *
- * ### Why the lifecycle is a sealed type rather than two nullable enums
- *
- * Today's four kinds carry two unrelated lifecycles that no type relates: a Task has a
- * [WorkingState] (`Open`/`InProgress`/`InReview`/`Done`/`Dropped`) and a Habit, Chore or Event has a
- * [DefinitionState] (`Active`/`InReview`/`Archived`), the "light switch". Every row has exactly one,
- * and which one it has is a fact about its kind — which is precisely the shape the re-cut is
- * deleting.
- *
- * A parity recipe may not merge them: `Dropped` and `Archived` are different claims today and code
- * branches on both. So [Lifecycle] carries whichever one the row had, faithfully, and the *merge*
- * becomes a target-recipe question (#420) with a name to be asked about. Two nullable enum fields
- * would have said the same thing while admitting the two states nothing can be in — both set, and
- * neither.
- *
- * ### What is deliberately not here yet
- *
- * The #418 table also lists "the Occurrence resolution" under this family. That half is
- * [Scope.Occurrence] — it maps `OccurrenceFact`'s resolution, `doneAt` and the deadline the firing
- * carried when it resolved — and a plugin instance answers exactly one [Scope], so it cannot share
- * this type. It lands with the Occurrence corpus; the round-trip gate today sweeps definition rows,
- * which is what the four kinds are.
+ * [Lifecycle] is sealed because the four kinds carry two unrelated lifecycles: a Task has a
+ * [WorkingState] (`Open`/`InProgress`/`InReview`/`Done`/`Dropped`), a Habit, Chore or Event a
+ * [DefinitionState] (`Active`/`InReview`/`Archived`). Every row has exactly one, and a parity recipe
+ * carries whichever it had — `Dropped` and `Archived` are different claims and code branches on both.
  */
 @ObjCName("PluginProgress")
 data class Progress(
     val lifecycle: Lifecycle = Lifecycle.Unstated,
     /**
-     * When the doing stopped. Task-only on the wire.
-     *
-     * **Producted against every [WorkingState] in the corpus on purpose.** The wire can carry a
-     * finish timestamp on a row that is not `Done`, so the round trip has to survive that rather
-     * than tidy it away — and a reader that infers doneness from this field alone is the defect
-     * ADR-0055 cites (a licence handed out for a driving test that was failed).
+     * When the doing stopped. Task-only on the wire, and paired against every [WorkingState] in the
+     * corpus: the wire can carry a finish timestamp on a row that is not `Done`, so the round trip
+     * survives it. Doneness is read from [lifecycle], never inferred from this field.
      */
     val finishedAt: Instant? = null,
 ) : Enactment {
@@ -52,7 +33,7 @@ data class Progress(
     override val degenerate get() = Progress()
 }
 
-/** Which lifecycle a row has, and where it has got to. See [Progress] for why this is sealed. */
+/** Which lifecycle a row has, and where it has got to. */
 @ObjCName("PluginLifecycle")
 sealed interface Lifecycle {
 
@@ -66,11 +47,8 @@ sealed interface Lifecycle {
     data class Definition(val state: DefinitionState) : Lifecycle
 
     /**
-     * Whether this row has reached an end of its lifecycle — the de-emphasis signal the Item tree
-     * already renders (`Item.isTerminal`): a Done/Dropped Task or an Archived definition.
-     *
-     * The one place the two lifecycles genuinely agree, derived here rather than restated at each
-     * call site the way it is today.
+     * Whether this row has reached an end of its lifecycle — a Done/Dropped Task or an Archived
+     * definition. The one point the two lifecycles agree, derived here rather than at each call site.
      */
     val isTerminal: Boolean
         get() = when (this) {
@@ -81,15 +59,9 @@ sealed interface Lifecycle {
 }
 
 /**
- * The felt quality of the doing — how productive it was.
- *
- * Task-only on the wire, and carried on the **definition** row rather than per firing, which is
- * faithful to today and is *not* what the reference model does (it puts affect on the Occurrence,
- * arguing that a definition-level mood is a prediction rather than a record). That disagreement is
- * real and is left standing: moving it is a target-recipe change, not a translation.
- *
- * Separate from [Progress] because the two compose freely — a row can record that it stopped without
- * recording how it felt, and the wire has always allowed either without the other.
+ * The felt quality of the doing — how productive it was. Task-only on the wire, and carried on the
+ * **definition** row rather than per firing. Separate from [Progress] because the two compose freely:
+ * the wire has always allowed a row to record that it stopped without recording how it felt.
  */
 @ObjCName("PluginTrackable")
 data class Trackable(val productive: Double? = null) : Enactment {

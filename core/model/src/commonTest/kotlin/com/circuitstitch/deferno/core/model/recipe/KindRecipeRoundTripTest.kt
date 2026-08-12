@@ -1,7 +1,10 @@
 package com.circuitstitch.deferno.core.model.recipe
 
 import com.circuitstitch.deferno.core.model.ItemKind
-import com.circuitstitch.deferno.core.model.plugin.Item
+import com.circuitstitch.deferno.core.model.Priority
+import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.plugin.Lifecycle
+import com.circuitstitch.deferno.core.model.plugin.Progress
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -37,14 +40,9 @@ class KindRecipeRoundTripTest {
         // once, and the first of them alone does not say which field it was.
         val failures = mutableListOf<String>()
         for (shape in KindShapes.ALL) {
-            val roundTripped: Any = when (shape) {
-                is KindShape.OfTask -> ParityRecipe.writeTask(ParityRecipe.read(shape.task))
-                is KindShape.OfHabit -> ParityRecipe.writeHabit(ParityRecipe.read(shape.habit))
-                is KindShape.OfChore -> ParityRecipe.writeChore(ParityRecipe.read(shape.chore))
-                is KindShape.OfEvent -> ParityRecipe.writeEvent(ParityRecipe.read(shape.event))
-            }
-            if (roundTripped != rowOf(shape)) {
-                failures += "── ${shape.label}\n  in:  ${rowOf(shape)}\n  out: $roundTripped"
+            val roundTripped = shape.write(shape.read())
+            if (roundTripped != shape.row) {
+                failures += "── ${shape.label}\n  in:  ${shape.row}\n  out: $roundTripped"
             }
         }
         if (failures.isNotEmpty()) {
@@ -64,7 +62,7 @@ class KindRecipeRoundTripTest {
         // whose family reads the same whether or not it is loaded has no business being loaded, and
         // that comparison is independent of the filter that produced the list.
         for (shape in KindShapes.ALL) {
-            val item = readOf(shape)
+            val item = shape.read()
             val silent = item.plugins.filter { it == it.degenerate }
             assertEquals(emptyList(), silent, "${shape.label} loaded a plugin equal to its degenerate value")
         }
@@ -77,23 +75,17 @@ class KindRecipeRoundTripTest {
         // other case, so both round-trip — and collapsing them here would be the model pretending it
         // knows a kind's default, which is exactly the knowledge the recipe layer exists to hold.
         val bare = ParityRecipe.read(
-            KindShapes.ALL.filterIsInstance<KindShape.OfTask>().first().task.copy(
+            KindShapes.ALL.firstNotNullOf { it.row as? KindRow.OfTask }.task.copy(
                 labels = emptyList(), completeBy = null, deadlineTimeOfDay = null, targetDate = null,
-                priority = com.circuitstitch.deferno.core.model.Priority.Normal, productive = null,
+                priority = Priority.Normal, productive = null,
                 desire = null, pinned = false, finishedAt = null, description = null, nextTaskId = null,
                 blocked = false, isBlocker = false, blockedBy = emptyList(), external = null,
                 attachmentCount = 0, attachmentTotalSize = 0,
-                workingState = com.circuitstitch.deferno.core.model.WorkingState.Open,
+                workingState = WorkingState.Open,
             ),
         )
         assertEquals(
-            listOf(
-                com.circuitstitch.deferno.core.model.plugin.Progress(
-                    com.circuitstitch.deferno.core.model.plugin.Lifecycle.Working(
-                        com.circuitstitch.deferno.core.model.WorkingState.Open,
-                    ),
-                ),
-            ),
+            listOf(Progress(Lifecycle.Working(WorkingState.Open))),
             bare.plugins,
             "a row at every wire default should carry its lifecycle and nothing else",
         )
@@ -105,7 +97,7 @@ class KindRecipeRoundTripTest {
         // the first thing that could violate them at scale — two members of one family loaded, or a
         // definition plugin landing on the wrong record.
         val problems = KindShapes.ALL
-            .map { it to readOf(it).validate() }
+            .map { it to it.read().validate() }
             .filter { (_, p) -> p.isNotEmpty() }
             .map { (shape, p) -> "${shape.label}: $p" }
         assertEquals(emptyList(), problems, "the recipe produced invalid plugin lists")
@@ -151,7 +143,7 @@ class KindRecipeRoundTripTest {
         // coverage and is not. Counting DISTINCT rows is what notices: adding an inert axis raises
         // the total above and leaves this number alone.
         val distinct = ItemKind.entries.associateWith { kind ->
-            KindShapes.ALL.filter { it.kind == kind }.map(::rowOf).toSet().size
+            KindShapes.ALL.filter { it.kind == kind }.map { it.row }.toSet().size
         }
         assertEquals(
             mapOf(
@@ -228,24 +220,7 @@ class KindRecipeRoundTripTest {
         }
     }
 
-    // ── Reading a shape ────────────────────────────────────────────────────────────────────────
-
-    /** The row inside a shape, for equality. Exhaustive — a fifth kind is a compile error here too. */
-    private fun rowOf(shape: KindShape): Any = when (shape) {
-        is KindShape.OfTask -> shape.task
-        is KindShape.OfHabit -> shape.habit
-        is KindShape.OfChore -> shape.chore
-        is KindShape.OfEvent -> shape.event
-    }
-
-    /** The shape read into plugins, whichever kind it is. */
-    private fun readOf(shape: KindShape): Item = when (shape) {
-        is KindShape.OfTask -> ParityRecipe.read(shape.task)
-        is KindShape.OfHabit -> ParityRecipe.read(shape.habit)
-        is KindShape.OfChore -> ParityRecipe.read(shape.chore)
-        is KindShape.OfEvent -> ParityRecipe.read(shape.event)
-    }
-
+    // ── Reading a label ────────────────────────────────────────────────────────────────────────
 
     /** `Task/saturated/temporal:timed-deadline+target` → `[saturated, timed-deadline, target]`. */
     private fun axisNames(label: String): List<String> {
