@@ -70,6 +70,15 @@ interface PluginHost {
     /** How the doing felt. Degenerate: unrecorded. */
     val trackable: Trackable get() = plugin<Trackable>() ?: Trackable()
 
+    /**
+     * What is on record for one date. Degenerate: **nothing on record** — which is not the stored
+     * `Scheduled` an Event row can hold, and [Outcome]'s KDoc says why the two must stay apart.
+     *
+     * Declared on the host rather than on [Occurrence] so it reads the same on both records; an
+     * [Item] never carries one, which [misplaced] is what enforces.
+     */
+    val outcome: Outcome get() = plugin<Outcome>() ?: Outcome()
+
     // ── Linkage ────────────────────────────────────────────────────────────────────────────────
 
     /** Readiness and the edges behind it. Degenerate: unblocked, gating nothing. */
