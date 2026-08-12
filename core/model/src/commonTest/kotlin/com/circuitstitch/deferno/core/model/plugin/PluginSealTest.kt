@@ -44,6 +44,13 @@ class PluginSealTest {
         is Progress, is Trackable -> "Enactment"
         is Blocker, is Succeeds, is Importable -> "Linkage"
         is Volition -> "Modal"
+        // The five the wire cannot carry (ADR-0057). They sit across four meaning families and
+        // share only a Reach, which is why they are listed apart rather than merged above.
+        is Dynamics -> "Unfolding (shadowed)"
+        is Evaluation -> "Enactment (shadowed)"
+        is Purpose -> "Linkage (shadowed)"
+        is Obligation -> "Modal (shadowed)"
+        is PersistencePolicy -> "Persistence (shadowed)"
     }
 
     @Test
@@ -54,6 +61,26 @@ class PluginSealTest {
         assertEquals("Enactment", describe(Progress()))
         assertEquals("Linkage", describe(Blocker()))
         assertEquals("Modal", describe(Volition()))
+        assertEquals("Unfolding (shadowed)", describe(Dynamics.Unstated))
+        assertEquals("Enactment (shadowed)", describe(Evaluation()))
+        assertEquals("Linkage (shadowed)", describe(Purpose()))
+        assertEquals("Modal (shadowed)", describe(Obligation()))
+        assertEquals("Persistence (shadowed)", describe(PersistencePolicy.UntilComplete))
+    }
+
+    @Test
+    fun everyPluginSaysHowFarItsValueCanTravel() {
+        // `Plugin.reach` is abstract because neither default is safe: Wire would enqueue a mutation
+        // that can never drain, DeviceLocal would silently stop sending a Family that has a field.
+        // What this asserts is the split itself — fifteen wire-backed instances (thirteen plugin
+        // types, of which `Anchor` contributes three members) against five shadowed — so a Family
+        // that answers wrongly shows up as a count that moved.
+        val everyMember = wireBackedMembers + shadowedMembers
+        assertEquals(15, everyMember.count { it.reach == Reach.Wire }, "the wire-backed set changed size")
+        assertEquals(5, everyMember.count { it.reach == Reach.DeviceLocal }, "the shadowed set changed size")
+        for (plugin in shadowedMembers) {
+            assertEquals(Reach.DeviceLocal, plugin.reach, "${plugin::class.simpleName} claims a wire field")
+        }
     }
 
     @Test
@@ -62,13 +89,7 @@ class PluginSealTest {
         // What this asserts is that the answer is a member of that plugin's OWN family — the mistake
         // an inherited default would let through, and the one that would make the recipe's
         // sparseness rule silently drop the wrong thing.
-        val everyMember = listOf(
-            Describable(), Taggable(), Attachable(), Prioritizable(),
-            Anchor.Unanchored, Anchor.Deadline(), Anchor.Appointment(), Targeted(),
-            Repeats(), Progress(), Trackable(),
-            Blocker(), Succeeds(), Importable(), Volition(),
-        )
-        for (plugin in everyMember) {
+        for (plugin in wireBackedMembers + shadowedMembers) {
             assertEquals(
                 plugin.family,
                 plugin.degenerate.family,
@@ -76,6 +97,19 @@ class PluginSealTest {
             )
         }
     }
+
+    /** Every wire-backed member, one instance each. `Anchor` contributes all three of its. */
+    private val wireBackedMembers: List<Plugin> = listOf(
+        Describable(), Taggable(), Attachable(), Prioritizable(),
+        Anchor.Unanchored, Anchor.Deadline(), Anchor.Appointment(), Targeted(),
+        Repeats(), Progress(), Trackable(),
+        Blocker(), Succeeds(), Importable(), Volition(),
+    )
+
+    /** Every shadowed member (ADR-0057), one instance each. */
+    private val shadowedMembers: List<Plugin> = listOf(
+        Dynamics.Unstated, Evaluation(), Purpose(), Obligation(), PersistencePolicy.UntilComplete,
+    )
 
     @Test
     fun everyPluginAnswersWhichRecordOwnsIt() {

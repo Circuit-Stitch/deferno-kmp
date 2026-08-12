@@ -31,6 +31,7 @@ import kotlin.time.Instant
 sealed class Anchor : Temporal {
 
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val family: KClass<out Plugin> get() = Anchor::class
 
     /** Silence in this family is a real member: wanted, not scheduled. Answered once, here. */
@@ -98,5 +99,6 @@ sealed class Anchor : Temporal {
  */
 data class Targeted(val targetDate: Instant? = null) : Temporal {
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Targeted()
 }

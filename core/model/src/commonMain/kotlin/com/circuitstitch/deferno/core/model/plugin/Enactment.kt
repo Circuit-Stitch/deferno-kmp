@@ -43,6 +43,7 @@ data class Progress(
     val finishedAt: Instant? = null,
 ) : Enactment {
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Progress()
 }
 
@@ -86,5 +87,6 @@ sealed interface Lifecycle {
  */
 data class Trackable(val productive: Double? = null) : Enactment {
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Trackable()
 }

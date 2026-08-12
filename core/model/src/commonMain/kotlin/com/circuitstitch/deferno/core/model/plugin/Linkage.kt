@@ -23,6 +23,7 @@ data class Blocker(
     val blockedBy: List<BlockedByRef> = emptyList(),
 ) : Linkage {
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Blocker()
 }
 
@@ -36,6 +37,7 @@ data class Blocker(
  */
 data class Succeeds(val nextId: String? = null) : Linkage {
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Succeeds()
 }
 
@@ -47,5 +49,6 @@ data class Succeeds(val nextId: String? = null) : Linkage {
  */
 data class Importable(val external: ExternalRef? = null) : Linkage {
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Importable()
 }

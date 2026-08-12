@@ -47,3 +47,34 @@ fun exclusivityProblems(plugins: List<Plugin>): List<String> =
             "${family.simpleName} is exclusive but ${loaded.size} are loaded: " +
                 loaded.joinToString { it::class.simpleName ?: "?" }
         }
+
+/**
+ * A **condition may not have dates generated ahead of it**.
+ *
+ * Not *"a maintained condition has no dated engagements"* — it has them, chosen one at a time or
+ * recorded after the fact. The offence is a rule sitting on a condition minting future rows, because
+ * a queue of completable rows for something that is never completed is precisely the permanently-open
+ * Task the bound axis exists to stop faking.
+ */
+fun unfoldingProblems(bound: Dynamics, repeats: Boolean): List<String> = buildList {
+    if (bound is Dynamics.Maintained && repeats) {
+        add("Maintained is a condition to hold; it cannot also repeat on a rule")
+    }
+}
+
+/**
+ * A verdict needs a **criterion to be a verdict on**, and the two live on different records.
+ *
+ * [Evaluation] says *the goal state obtained, or it did not*; which goal state is [Dynamics.Telic]'s
+ * business, on the definition. So a verdict recorded against a bound stating no criterion — a
+ * timebox, an atelic bound, or none at all — is not a verdict about anything, and neither record
+ * alone can say so.
+ *
+ * What makes it a defect rather than a curiosity is that a reader would act on it: a maintained
+ * condition could otherwise be terminally failed, and a condition cannot fail — it can be in breach.
+ */
+fun verdictProblems(bound: Dynamics, evaluation: Evaluation): List<String> = buildList {
+    if (evaluation.obtained != null && bound !is Dynamics.Telic) {
+        add("a verdict needs a criterion to be about; the bound for this date states none")
+    }
+}

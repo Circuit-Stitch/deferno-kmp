@@ -32,6 +32,7 @@ package com.circuitstitch.deferno.core.model.plugin
 data class Volition(val desire: Double? = null) : Modal {
 
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Volition()
 
     /**

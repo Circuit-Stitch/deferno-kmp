@@ -1,7 +1,5 @@
 package com.circuitstitch.deferno.core.model.plugin
 
-import kotlin.reflect.KClass
-
 /**
  * Something that carries a sparse list of [Plugin]s. Both records do — the [Item] definition and one
  * dated [Occurrence] of it — so every reader below is written once.
@@ -23,18 +21,22 @@ import kotlin.reflect.KClass
  *  2. **The Apple bridge.** [plugin] and [has] are `inline fun <reified T>`. An inline function has
  *     no callable symbol in the compiled binary, so it never reaches the Obj-C API surface — and
  *     SKIE sits on that surface, so it cannot recover them either. A generic-only reader is
- *     therefore **invisible to Swift**: `app/iosApp` and `app/macosApp` (27 Swift files, Phase 5)
- *     could not read a single plugin.
+ *     therefore **invisible to Swift**: the 95 hand-written Swift files across `app/iosApp` and
+ *     `app/macosApp` (Phase 5) could not read a single plugin.
  *
  * ### Why the accessors are members here rather than extension properties
  *
- * The reference model in `DefernoPlugins` writes them as top-level extensions, which reads better in
- * Kotlin. It is the wrong choice on this side of the fence: `core:model` is exported into
- * `Deferno.framework`, an exported Kotlin interface becomes an Obj-C `@protocol`, and a member is
- * unambiguously a property on that protocol — `item.priority` in Swift. An extension on an interface
- * has no protocol to hang off and lands in a file-facade class at best. Coupling this interface to
- * every Family is the price, and it is cheap because the plugin set is closed anyway (ADR-0055): one
- * file to check that no Family arrived without a way for Swift to read it.
+ * **Not for reachability** — a top-level extension property on an interface reaches Swift perfectly
+ * well through SKIE, which re-exposes it as an extension property on the generated protocol. The
+ * proof is already in this module: `val Cadence.intervalAsDays` is a top-level extension on a sealed
+ * *interface* and the generated framework surfaces it as `extension Cadence { var intervalAsDays }`.
+ * Either form gives Swift `item.priority`.
+ *
+ * The reason is duller and is about this file rather than about Swift: a Family with no accessor is
+ * unreachable from Swift, and the gap is invisible until Phase 5. As members they are all in one
+ * place, so "did every Family get one?" is a question answered by scrolling rather than by grepping
+ * the module. The coupling that costs — this interface naming every Family — is not a leak, because
+ * the plugin set is closed and lives in this one package anyway (ADR-0055).
  *
  * `AppleFrameworkConfig` deliberately refuses a blanket name-collision suppression for this package —
  * *"that is the package the gate most needs to keep policing"* — so an accessor whose name collides
@@ -111,6 +113,34 @@ interface PluginHost {
      * [Strength.Unstated] — the question was never put, which is not the same as "no".
      */
     val volition: Volition get() = plugin<Volition>() ?: Volition()
+
+    // ── The shadowed families (ADR-0057) ───────────────────────────────────────────────────────
+    //
+    // Accessors on the same terms as the wire-backed ones, deliberately: a reader should not have to
+    // know which side of the wire boundary a Family sits on to read it. Which values cannot be sent
+    // is answered once, by the clamp in `recipe/Clamp.kt`, rather than bolted onto every read.
+
+    /**
+     * Whether one doing of this has an endpoint, and what sort. Degenerate: [Dynamics.Unstated] —
+     * **underspecified**, not defaulted. Nobody has said, which is not "it has none".
+     */
+    val dynamics: Dynamics get() = plugin<Dynamics>() ?: Dynamics.Unstated
+
+    /** The verdict on the criterion for one date. Degenerate: nobody has evaluated it. */
+    val evaluation: Evaluation get() = plugin<Evaluation>() ?: Evaluation()
+
+    /** What this is for. Degenerate: nothing says. */
+    val purpose: Purpose get() = plugin<Purpose>() ?: Purpose()
+
+    /** How obligatory this is. Degenerate: the question was never put. */
+    val obligation: Obligation get() = plugin<Obligation>() ?: Obligation()
+
+    /**
+     * What becomes of an unresolved occurrence at its horizon. Degenerate:
+     * [PersistencePolicy.UntilComplete] — a **default**, and unlike [dynamics] a real claim.
+     */
+    val persistence: PersistencePolicy
+        get() = plugin<PersistencePolicy>() ?: PersistencePolicy.UntilComplete
 }
 
 /**
@@ -144,6 +174,14 @@ inline fun <reified T : Plugin> PluginHost.has(): Boolean = plugin<T>() != null
 fun List<Plugin>.replacingFamilyOf(replacement: Plugin): List<Plugin> =
     filterNot { it.family == replacement.family } + replacement
 
-/** Unload every member of [family], returning readers of it to that family's degenerate value. */
-fun List<Plugin>.withoutFamily(family: KClass<out Plugin>): List<Plugin> =
-    filterNot { it.family == family }
+/**
+ * Unload the whole family [member] belongs to, returning readers of it to its degenerate value.
+ *
+ * Takes a **member instance** rather than a `KClass`, for the same reason [replacingFamilyOf] keys
+ * off [Plugin.family]: in a sealed-parent family the member's own class is *not* the family key, so
+ * a `KClass`-taking version handed `Deadline::class` would match nothing, remove nothing, report
+ * nothing, and leave the reader still returning the loaded value. Asking an instance means the key
+ * comes from the same place the loaded plugins' keys do.
+ */
+fun List<Plugin>.withoutFamilyOf(member: Plugin): List<Plugin> =
+    filterNot { it.family == member.family }

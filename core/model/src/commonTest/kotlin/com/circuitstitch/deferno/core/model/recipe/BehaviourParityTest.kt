@@ -4,7 +4,10 @@ import com.circuitstitch.deferno.core.model.CadenceMode
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.plugin.Item
+import com.circuitstitch.deferno.core.model.plugin.Lapse
+import com.circuitstitch.deferno.core.model.plugin.PersistencePolicy
 import com.circuitstitch.deferno.core.model.plugin.Strength
+import com.circuitstitch.deferno.core.model.plugin.atHorizon
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -39,9 +42,11 @@ import kotlin.test.assertTrue
  *    capture-time input that **derives the kind** (carries-forward → Chore, lapses → Habit), not a
  *    reading over an existing row. So the parity claim cannot be "reproduce `carriesForward`"; it is
  *    "reproduce the one-bit answer the kind stands in for", which the epic states as Task and Chore
- *    roll forward while Habit and Event do not. That bit is **unwritten today** and becomes a
- *    function for the first time in #419's Persistence seed. Nothing is asserted about it here,
- *    because there is no shipped answer to be faithful to — see the note on #419.
+ *    roll forward while Habit and Event do not. That bit is **unwritten today** and `PersistenceSeed`
+ *    is the first place this codebase says it out loud. With nothing to diff against, what is
+ *    asserted instead is that the seed is derivable from that one bit alone and that the three richer
+ *    policies stay unreachable — which is what "no behaviour changes" means when the shipped answer
+ *    exists only in the shape of the kind vocabulary.
  *
  * `resolveOccurrenceState` is the fifth reading ADR-0056 names, and it is per **firing**: its inputs
  * are a fact, coverage, the definition state, a date and today. Its plugin-side counterpart is the
@@ -223,6 +228,54 @@ class BehaviourParityTest {
     }
 
     @Test
+    fun thePersistenceSeedReproducesTheOneBitTheKindStandsInForAndChangesNothing() {
+        // The parity claim for a Family the wire cannot carry at all. There is nothing to diff
+        // against — `carriesForward` is not a function in this client, only a discarded capture-time
+        // input — so what is asserted is that the seed is *derivable from that one bit alone*, which
+        // is what "no behaviour changes" means when the shipped answer is unwritten.
+        for (kind in ItemKind.entries) {
+            val expected = if (PersistenceSeed.carriesForward(kind)) {
+                PersistencePolicy.UntilComplete
+            } else {
+                PersistencePolicy.ExpiresAfterWindow
+            }
+            assertEquals(expected, PersistenceSeed.of(kind), "$kind seeds a policy the bit does not imply")
+        }
+
+        // The bit itself, pinned as literals: Task and Chore roll forward, Habit and Event lapse.
+        // Deliberately not re-derived from `PersistenceSeed.of` — a rule inverted in both places
+        // would otherwise agree with itself.
+        assertEquals(
+            mapOf(
+                ItemKind.Task to true,
+                ItemKind.Chore to true,
+                ItemKind.Habit to false,
+                ItemKind.Event to false,
+            ),
+            ItemKind.entries.associateWith { PersistenceSeed.carriesForward(it) },
+        )
+    }
+
+    @Test
+    fun theSeedLeavesTheThreeRicherPoliciesUnreachable() {
+        // The trap ADR-0056 names: the reference fixtures give a recurring chore a skipped-if-missed
+        // policy, which LOGS the miss. Today nothing is logged. Seeding it would start writing
+        // history nobody asked for while claiming to be a re-model, so a lapsing kind seeds
+        // "gone, unrecorded" and the richer three wait for #420.
+        val seeded = ItemKind.entries.map { PersistenceSeed.of(it) }.toSet()
+        assertEquals(
+            setOf(PersistencePolicy.UntilComplete, PersistencePolicy.ExpiresAfterWindow),
+            seeded,
+            "the parity seed reached a policy that changes behaviour",
+        )
+        // And the reading over the seed answers exactly the bit, so nothing downstream can diverge.
+        for (kind in ItemKind.entries) {
+            val expected = if (PersistenceSeed.carriesForward(kind)) Lapse.Persists else Lapse.Vanishes
+            assertEquals(expected, Item(coreOf(kind), listOf(PersistenceSeed.of(kind))).atHorizon(), "$kind")
+        }
+    }
+
+    @Test
     fun everyKindIsRepresentedInTheParityCorpus() {
         // The parity claim is per kind, so a corpus missing one would pass while asserting nothing
         // about it. Over `ItemKind.entries`, so a fifth kind cannot slip past this gate either.
@@ -266,6 +319,10 @@ class BehaviourParityTest {
     }
 
     // ── Reading a shape ────────────────────────────────────────────────────────────────────────
+
+    /** A Core for a kind, for the seed assertions — which read a policy, not a row. */
+    private fun coreOf(kind: ItemKind) =
+        ParityRecipe.read(KindShapes.ALL.first { it.kind == ItemKind.Task }.let { (it as KindShape.OfTask).task }).core
 
     private fun readOf(shape: KindShape): Item = when (shape) {
         is KindShape.OfTask -> ParityRecipe.read(shape.task)

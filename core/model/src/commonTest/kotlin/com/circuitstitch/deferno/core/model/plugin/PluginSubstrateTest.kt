@@ -169,7 +169,7 @@ class PluginSubstrateTest {
     @Test
     fun unloadingAFamilyReturnsTheReaderToItsDegenerateValue() {
         val loaded = item(Prioritizable(Priority.Fire, pinned = true))
-        val unloaded = loaded.copy(plugins = loaded.plugins.withoutFamily(Prioritizable::class))
+        val unloaded = loaded.copy(plugins = loaded.plugins.withoutFamilyOf(Prioritizable()))
         assertEquals(Prioritizable(), unloaded.priority)
     }
 

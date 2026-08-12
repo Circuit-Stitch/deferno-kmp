@@ -12,12 +12,18 @@ import kotlin.time.Instant
  * often, how strongly, or what became of it?". That is why [title] is here and a description is not:
  * a row with no title is not addressable, a row with no description is ordinary.
  *
- * ### Every field here is on all four of today's kinds
+ * ### Almost every field here is declared four times over today
  *
- * `Task`, `Habit`, `Chore` and `Event` each declare all ten of these identically — they are ten of
- * the 24 fields the `DefernoPlugins` experiment measured as declared four times over. Core is where
- * that repetition stops, and the parity recipes (#418) copy these across untouched in both
+ * `Task`, `Habit`, `Chore` and `Event` each declare [id], [orgSlug], [title], [parentId],
+ * [sequence], [ref], [dateCreated], [deletedAt], [hydration] and [ownerOrgId] identically — ten of
+ * the 24 fields the `DefernoPlugins` experiment measured as repeated across all four structs. Core
+ * is where that repetition stops, and the parity recipes (#418) copy them across untouched in both
  * directions rather than mapping them.
+ *
+ * The two exceptions are [childIds] and the [descendantDone]/[descendantTotal] pair, which only the
+ * Task wire carries. They are here because of what they *are* — tree position, which Core owns — and
+ * not because of how many kinds happen to ship them; each says in its own KDoc why the recurring
+ * kinds leave it at its degenerate value.
  *
  * ### Ids are raw UUID strings, deliberately
  *

@@ -15,6 +15,7 @@ import com.circuitstitch.deferno.core.model.Priority
  */
 data class Describable(val description: String? = null) : Content {
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Describable()
 }
 
@@ -24,6 +25,7 @@ data class Describable(val description: String? = null) : Content {
  */
 data class Taggable(val labels: List<String> = emptyList()) : Content {
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Taggable()
 }
 
@@ -44,6 +46,7 @@ data class Attachable(
     val attachmentTotalSize: Long = 0,
 ) : Content {
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Attachable()
 
     /** Whether this item has at least one backend-hosted attachment. The read `Task.hasAttachment` gives. */
@@ -76,5 +79,6 @@ data class Prioritizable(
     val pinned: Boolean = false,
 ) : Content {
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Prioritizable()
 }

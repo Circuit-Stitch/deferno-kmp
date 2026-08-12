@@ -42,6 +42,7 @@ data class Repeats(
     val cadenceMode: CadenceMode? = null,
 ) : Unfolding {
     override val scope get() = Scope.Definition
+    override val reach get() = Reach.Wire
     override val degenerate get() = Repeats()
 
     /** Whether a rule survived the wire, and therefore whether a grid can be asked for at all. */

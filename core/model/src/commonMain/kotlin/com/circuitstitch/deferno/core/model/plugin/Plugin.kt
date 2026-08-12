@@ -22,6 +22,38 @@ enum class Scope {
 }
 
 /**
+ * How far a plugin's value can travel — **a field, not a type**, for the same reason [Scope] is
+ * (ADR-0057).
+ *
+ * The plugin model is strictly more expressive than the four kinds the wire still speaks. Five
+ * Family members fall outside what the wire can carry at all: the bound that says whether a thing
+ * has an endpoint, the verdict on whether a goal obtained, the purpose edges an item points at,
+ * deontic obligation, and persistence policy. Withholding all five until the backend's port lands
+ * would leave the migration unable to demonstrate the point of itself, so they are held on the
+ * device instead.
+ *
+ * The boundary is mechanical and runs along Family *members*: a member is wire-backed or it is not,
+ * and nothing is both. That is what makes this a field a reader can filter on rather than a
+ * judgement a caller has to make — the outbox never sees a [DeviceLocal] plugin, a refresh never
+ * clears one, and a surface a person can act on marks one as not synced.
+ */
+enum class Reach {
+    /**
+     * The four-kind wire has a field for this, so it round-trips and reaches the server. The
+     * representable set is pinned to exactly this (ADR-0056), which is why nothing a person creates
+     * offline can fail to sync.
+     */
+    Wire,
+
+    /**
+     * No wire field exists. The value lives in the device-local shadow store, never reaches the
+     * outbox, and is **expected to be lost** at the cutover — a deliberate pre-launch trade, not an
+     * oversight, and the reason it is surfaced as unsynced wherever a person can act on it.
+     */
+    DeviceLocal,
+}
+
+/**
  * One slice of an [Item]'s data plus the behaviour over it: the data class **is** the plugin,
  * presence in the list **is** the composition, and the set is **closed** (ADR-0055).
  *
@@ -68,6 +100,16 @@ sealed interface Plugin {
 
     /** Which record owns this plugin. Deliberately abstract — see [Scope]. */
     val scope: Scope
+
+    /**
+     * How far this plugin's value can travel — see [Reach] (ADR-0057).
+     *
+     * Abstract, like [scope] and [degenerate], and for the sharpest of the three reasons: neither
+     * default is safe. Defaulting to [Reach.Wire] would let a Family the server has no field for be
+     * enqueued as a mutation that can never drain; defaulting to [Reach.DeviceLocal] would silently
+     * stop sending a Family that has a field. So a new Family answers, or it does not compile.
+     */
+    val reach: Reach
 
     /**
      * The exclusive family this plugin belongs to. At most one member of a family may be loaded;
