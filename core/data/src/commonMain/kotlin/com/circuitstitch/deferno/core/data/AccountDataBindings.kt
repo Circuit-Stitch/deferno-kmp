@@ -38,6 +38,8 @@ import com.circuitstitch.deferno.core.data.item.ItemSync
 import com.circuitstitch.deferno.core.data.item.ItemWriter
 import com.circuitstitch.deferno.core.data.item.OfflineItemRepository
 import com.circuitstitch.deferno.core.data.item.OutboxItemWriter
+import com.circuitstitch.deferno.core.data.plugin.OfflinePluginItemRepository
+import com.circuitstitch.deferno.core.data.plugin.PluginItemRepository
 import com.circuitstitch.deferno.core.data.definition.DefinitionRepository
 import com.circuitstitch.deferno.core.data.definition.OfflineDefinitionRepository
 import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
@@ -376,6 +378,21 @@ interface AccountDataBindings {
         eventStore: EventLocalStore,
         itemSync: ItemSync,
     ): ItemRepository = OfflineItemRepository(taskStore, habitStore, choreStore, eventStore, itemSync)
+
+    // The plugin-shaped read of the same four caches (ADR-0055/0056, #421) — read ALONGSIDE the
+    // projection above, never instead of it, for as long as the migration runs. Read-only: nothing
+    // writes through it, and the tables it reads do not move until Phase 3. The recipe stays defaulted
+    // to `ParityRecipe` — the target recipe lands behind the same interface, one Family at a time.
+    @Provides
+    @SingleIn(AccountScope::class)
+    fun pluginItemRepository(
+        taskStore: TaskLocalStore,
+        habitStore: HabitLocalStore,
+        choreStore: ChoreLocalStore,
+        eventStore: EventLocalStore,
+        factStore: OccurrenceFactLocalStore,
+    ): PluginItemRepository =
+        OfflinePluginItemRepository(taskStore, habitStore, choreStore, eventStore, factStore)
 
     @Provides
     @SingleIn(AccountScope::class)

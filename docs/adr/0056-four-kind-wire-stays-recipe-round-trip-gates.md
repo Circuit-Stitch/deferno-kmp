@@ -127,3 +127,40 @@ Two properties are specific to the firing half and have no analogue over a defin
 checkable for a value recorded against a date as well as for one recorded against an item. The
 narrowing also gives Phase 4 a kind-free form to build toward: *"an appointment cannot be late"* is a
 claim about the anchor, which outlives the kind that enforces it today.
+
+## Amendment (2026-08, #421): `complete_by` carries three claims, and the split named only one
+
+**What this ADR says.** The parity gate freezes today's behaviour, *"including the parts that are
+wrong"*, and it names one: *"the time-of-day conflation between a deadline and a start time is
+reproduced faithfully by the parity recipe"*. `Anchor` splitting `Deadline` from `Appointment` is what
+gives those two claims separate names, and `TemporalConflationTest` pins the reproduction as
+deliberate.
+
+**What the read facade found.** There are **three** claims on that field, not two. On a Task
+`complete_by` is a plain deadline. On an [[Event]] it is a start. On a [[Habit]] or a [[Chore]] it is
+the [[Recurrence cursor]] — where the series has walked to, and never a bound. Only the third claim
+got its own [[Family]] member. The first two both read as `Anchor.Deadline`, with no field between
+them, so nothing in a plugin set says which one a row is holding.
+
+The shipped projection guards that distinction hard. `Item` names its field `recurrenceCursorAt`
+rather than `completeBy`, projects it on the recurring kinds only, and its own KDoc says that
+conflating the two would make every dated Task read as an exhausted-or-due series. So the reading the
+plugin model replaces is *more* discriminating here than the model that replaces it, which is a
+direction this migration is otherwise never allowed to travel.
+
+**Why it stands for now.** Reproducing it is what a parity recipe is for. The storage genuinely is one
+column, and deciding what an existing instant *meant* is a change to what a person sees — #420's kind
+of decision, with its own issue, exactly as this record already argues for the Event half. The shape
+of the fix is known, because `Anchor.Appointment` is the worked example of it.
+
+**What is added.** The gap is asserted rather than left to a reader.
+`PluginReadParityTest.theRecurrenceCursorIsIndistinguishableFromADeadline` pins the two as byte
+identical in the plugin read, and names retiring itself as the signal that the target recipe closed
+the gap. Until then a Phase 4 atom that renders "due by" off `anchor` renders a Habit's cursor as a
+deadline, which is the mis-read the whole recurring epic keeps tripping over.
+
+**Consequence.** Sufficiency is not the same property as round-trip identity, and this is the case
+that separates them. A row can round-trip perfectly — nothing is lost, and the gate is green — while
+the plugin read of it still cannot answer a question the shipped projection answers. Every phase that
+moves a surface onto plugins has to check the second property too, which is why the read facade landed
+with a sufficiency gate of its own rather than leaning on the round trip alone.
