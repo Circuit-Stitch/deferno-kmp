@@ -240,6 +240,47 @@ longer **global** window (all lists) and a shorter **dashboard** window, each se
 client honors it by syncing the **server-windowed** [[Item]] snapshot rather than re-deriving it.
 _Avoid_: archive, retention, auto-delete (the item is only *hidden*, never removed).
 
+### Item shape (the plugin re-cut)
+
+The four [[Item kind]]s are being replaced by one shape — a `Core` plus a sparse list of capabilities
+(ADR-0055). These four terms name that shape's parts; they describe the *client domain model*, not the
+wire, which stays four-kind until the backend port lands (ADR-0056).
+
+**Plugin** *(client)*:
+One unit of Item capability — a data class holding the fields for exactly one concern, loaded onto an
+[[Item]] or onto one [[Occurrence]]. The set is **closed** (a sealed hierarchy), so a `when` over it is
+exhaustive and a new member breaks compilation everywhere it must be handled. The list is **sparse**:
+it carries only what is non-degenerate, and every read is **total** — an absent plugin reads as its
+degenerate value, so no caller handles "absent". Which record a plugin may sit on is a `Scope` *field*,
+never a supertype.
+_Avoid_: component, trait, mixin, capability flag, aspect (that word names a derived *reading* here,
+not a part); "extension" (it is not optional or third-party — the set is closed and shipped).
+
+**Family** *(client)*:
+One of the eight axes a [[Plugin]] is cut along — Content, Unfolding, Temporal, Modal, Participant,
+Enactment, Persistence, Linkage. A family is **exclusive**: at most one member loads at a time, so
+changing which member is loaded is the whole of a conversion along that axis, and every other family is
+untouched. The axes are asserted independent, never claimed complete.
+_Avoid_: category, group (collides with the backend's [[Group]]), type, namespace; and do not call a
+family a "plugin kind" — [[Item kind]] is the thing being removed.
+
+**Recipe** *(client; migration-only)*:
+The translation between a plugin set and one of the four [[Item kind]]s, in both directions. There are
+**two per kind and they are not interchangeable**: the *parity recipe* reproduces today's behavior
+exactly and is what every migration step is gated on, and the *target recipe* is the shape the model
+actually wants, landing later per [[Family]] with its own interface. Recipes are written to be deleted
+at the backend cutover.
+_Avoid_: mapper (that is the DTO↔domain layer in `core/data`, a different seam), adapter, converter,
+shim; and never "the recipe" unqualified — which of the two is always load-bearing.
+
+**Shadow store** *(client; migration-only)*:
+The device-local table holding the [[Family]] values the four-kind wire cannot carry — the bound, the
+verdict, purpose edges, obligation, and persistence policy (ADR-0057). It never reaches the outbox and
+a refresh never clears it. Data here is **single-device and expected to be lost** at the cutover, which
+is why a value backed only by it is marked as not synced wherever a person can act on it.
+_Avoid_: local cache (the cache mirrors the server, this deliberately does not), draft, staging table,
+pending (nothing here is queued to send).
+
 ### Trail (per-item) vs Activity (global): comments + item history (disambiguation)
 
 The per-item Task-detail **Trail** tab and the global **Activity** Destination are distinct surfaces — the

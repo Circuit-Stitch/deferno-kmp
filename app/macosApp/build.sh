@@ -130,7 +130,19 @@ if [ "$OPEN" = yes ]; then
   # -configuration must be repeated here: BUILT_PRODUCTS_DIR is per-configuration, so without it this
   # would resolve the scheme's default (Debug) path and `--config ProdDebug --open` would launch the
   # PREVIOUSLY built staging app — silently, and looking exactly like the build had done nothing.
-  APP=$(xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration "$CONFIGURATION" -showBuildSettings \
-    | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{d=$2} / FULL_PRODUCT_NAME /{n=$2} END{print d"/"n}')
+  #
+  # Two statements rather than one pipeline, and awk prints nothing unless BOTH settings matched. A
+  # pipeline takes awk's status, so a failed -showBuildSettings would reach `open` as the bare "/" that
+  # two unset variables concatenate to — a Finder window at the root, and the script still exits 0.
+  # `set -e` catches the failure here instead, because an assignment carries its substitution's status.
+  # (POSIX sh, so no `set -o pipefail`: /bin/sh is bash here but the shebang does not promise it.)
+  SETTINGS=$(xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" \
+    -configuration "$CONFIGURATION" -showBuildSettings)
+  APP=$(printf '%s\n' "$SETTINGS" \
+    | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{d=$2} / FULL_PRODUCT_NAME /{n=$2} END{if (d != "" && n != "") print d"/"n}')
+  if [ -z "$APP" ]; then
+    echo "could not resolve the built .app: -showBuildSettings named no BUILT_PRODUCTS_DIR/FULL_PRODUCT_NAME" >&2
+    exit 1
+  fi
   open "$APP"
 fi
