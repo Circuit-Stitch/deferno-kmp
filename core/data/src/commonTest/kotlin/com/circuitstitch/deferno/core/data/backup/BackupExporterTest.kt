@@ -1,9 +1,8 @@
 package com.circuitstitch.deferno.core.data.backup
 
-import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
-import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
+import com.circuitstitch.deferno.core.data.item.FakeItemLocalStore
+import com.circuitstitch.deferno.core.data.item.cacheOf
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.CadenceMode
 import com.circuitstitch.deferno.core.model.Chore
@@ -100,11 +99,19 @@ class BackupExporterTest {
         habits: List<Habit> = emptyList(),
         chores: List<Chore> = emptyList(),
         events: List<Event> = emptyList(),
-    ) = BackupExporter(
-        taskStore = FakeTaskLocalStore(tasks.associateBy { it.id }),
-        habitStore = FakeHabitLocalStore(habits.associateBy { it.id }),
-        choreStore = FakeChoreLocalStore(chores.associateBy { it.id }),
-        eventStore = FakeEventLocalStore(events.associateBy { it.id }),
+    ) = BackupExporter(itemStore(tasks, habits, chores, events))
+
+    /** The one item cache, seeded from the four wire-row lists a Backup file is written from. */
+    private fun itemStore(
+        tasks: List<Task>,
+        habits: List<Habit>,
+        chores: List<Chore>,
+        events: List<Event>,
+    ) = FakeItemLocalStore(
+        cacheOf(
+            *(tasks.map { it.cached() } + habits.map { it.cached() } +
+                chores.map { it.cached() } + events.map { it.cached() }).toTypedArray(),
+        ),
     )
 
     private fun decode(json: String): Envelope<List<ItemView>> =

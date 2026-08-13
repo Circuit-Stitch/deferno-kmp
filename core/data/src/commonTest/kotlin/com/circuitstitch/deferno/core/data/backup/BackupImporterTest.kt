@@ -1,11 +1,10 @@
 package com.circuitstitch.deferno.core.data.backup
 
-import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
+import com.circuitstitch.deferno.core.data.item.FakeItemLocalStore
+import com.circuitstitch.deferno.core.data.item.cacheOf
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
 import com.circuitstitch.deferno.core.data.outbox.FakeOutboxStore
-import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
 import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.CadenceMode
 import com.circuitstitch.deferno.core.model.Chore
@@ -16,11 +15,13 @@ import com.circuitstitch.deferno.core.model.EventId
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.HydrationState
+import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.OrgId
 import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -87,26 +88,28 @@ class BackupImporterTest {
         chores: List<Chore> = emptyList(),
         events: List<Event> = emptyList(),
     ): ByteArray = BackupExporter(
-        taskStore = FakeTaskLocalStore(tasks.associateBy { it.id }),
-        habitStore = FakeHabitLocalStore(habits.associateBy { it.id }),
-        choreStore = FakeChoreLocalStore(chores.associateBy { it.id }),
-        eventStore = FakeEventLocalStore(events.associateBy { it.id }),
+        FakeItemLocalStore(
+            cacheOf(
+                *(tasks.map { it.cached() } + habits.map { it.cached() } +
+                    chores.map { it.cached() } + events.map { it.cached() }).toTypedArray(),
+            ),
+        ),
     ).buildBackupZip()
 
     private fun zipOf(manifest: String): ByteArray =
         zipStored(listOf(BackupExporter.ITEMS_ENTRY to manifest.encodeToByteArray()))
 
     private class Fixture {
-        val taskStore = FakeTaskLocalStore()
-        val habitStore = FakeHabitLocalStore()
-        val choreStore = FakeChoreLocalStore()
-        val eventStore = FakeEventLocalStore()
+        val items = FakeItemLocalStore()
         val outbox = FakeOutboxStore()
         val pending = FakePendingCreateStore()
         val importer = BackupImporter(
-            taskStore, habitStore, choreStore, eventStore, outbox, pending,
+            items, outbox, pending,
             now = { Instant.parse("2026-06-28T00:00:00Z") },
         )
+
+        /** The restored row for [id], read back as the wire Task it round-trips to. */
+        fun task(id: String): Task? = items.all[id]?.let { ParityRecipe.writeTask(it.item) }
     }
 
     @Test
@@ -123,11 +126,11 @@ class BackupImporterTest {
 
         assertEquals(ImportResult.Restored(4), result)
         // Optimistic local upsert preserves the original id + fidelity (status, dateCreated).
-        assertEquals(WorkingState.Done, f.taskStore.all[TaskId("t1")]?.workingState)
-        assertEquals(created, f.taskStore.all[TaskId("t1")]?.dateCreated)
-        assertTrue(f.habitStore.all.containsKey(HabitId("h1")))
-        assertTrue(f.choreStore.all.containsKey(ChoreId("c1")))
-        assertTrue(f.eventStore.all.containsKey(EventId("e1")))
+        assertEquals(WorkingState.Done, f.task("t1")?.workingState)
+        assertEquals(created, f.task("t1")?.dateCreated)
+        assertEquals(ItemKind.Habit, f.items.all["h1"]?.kind)
+        assertEquals(ItemKind.Chore, f.items.all["c1"]?.kind)
+        assertEquals(ItemKind.Event, f.items.all["e1"]?.kind)
         // Each item enqueues an id-preserving create the outbox replays when online.
         assertEquals(
             setOf("create:Task:t1", "create:Habit:h1", "create:Chore:c1", "create:Event:e1"),
@@ -145,7 +148,7 @@ class BackupImporterTest {
 
         f.importer.import(zip)
 
-        assertEquals("keep-me", f.taskStore.all[TaskId("keep-me")]?.id?.value)
+        assertEquals("keep-me", f.items.all["keep-me"]?.id)
     }
 
     @Test
@@ -157,8 +160,8 @@ class BackupImporterTest {
         f.importer.import(zip)
 
         // Ids preserved → upsert replaces, never duplicates (the backend dedupes the replayed create).
-        assertEquals(1, f.taskStore.all.size)
-        assertEquals(1, f.habitStore.all.size)
+        assertEquals(1, f.items.all.values.count { it.kind == ItemKind.Task })
+        assertEquals(1, f.items.all.values.count { it.kind == ItemKind.Habit })
     }
 
     @Test
@@ -168,7 +171,7 @@ class BackupImporterTest {
 
         assertEquals(ImportResult.ForceUpgrade, result)
         assertTrue(f.outbox.all.isEmpty())
-        assertTrue(f.taskStore.all.isEmpty())
+        assertTrue(f.items.all.isEmpty())
     }
 
     @Test
@@ -189,7 +192,7 @@ class BackupImporterTest {
         assertEquals(ImportResult.Malformed, f.importer.import(zipStored(listOf("readme.txt" to "hi".encodeToByteArray())))) // no manifest
 
         assertTrue(f.outbox.all.isEmpty())
-        assertTrue(f.taskStore.all.isEmpty())
+        assertTrue(f.items.all.isEmpty())
     }
 
     @Test

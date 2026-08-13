@@ -1,11 +1,11 @@
 package com.circuitstitch.deferno.core.data.plugin
 
 import app.cash.turbine.test
-import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
+import com.circuitstitch.deferno.core.data.item.CachedItem
+import com.circuitstitch.deferno.core.data.item.FakeItemLocalStore
+import com.circuitstitch.deferno.core.data.item.cacheOf
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
-import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
@@ -42,10 +42,15 @@ import kotlin.time.Instant
  * The plugin-shaped read facade over the local stores (#421, ADR-0055/0056), on the ADR-0006 JVM-fast
  * path against the in-memory fakes.
  *
- * What is proved here is the *facade*: it fans out over four tables and a fifth, its output is
- * plugin-shaped and total, and a caller never says which kind. Two neighbouring properties are not
- * re-tested. That the translation is faithful belongs to `core:model`'s round-trip gate; that the
- * result agrees with what ships today belongs to [PluginReadParityTest].
+ * What is proved here is the *facade*: its output is plugin-shaped and total, and a caller never says
+ * which kind. Two neighbouring properties are not re-tested. That the translation is faithful belongs
+ * to `core:model`'s round-trip gate; that the result agrees with what ships today belongs to
+ * [PluginReadParityTest].
+ *
+ * **The definition reads stopped fanning out at #422.** They combined four per-kind stores and
+ * translated each row through the recipe; the cache is plugin-shaped now, so both are a projection off
+ * one store — the seam earned its keep by absorbing that change entirely, with no test above it moving.
+ * The firing read still fans out, because `occurrenceFactEntity` is still keyed on the kind.
  */
 class OfflinePluginItemRepositoryTest {
 
@@ -58,16 +63,13 @@ class OfflinePluginItemRepositoryTest {
     @Test
     fun theWholeCatalogReadsAsOnePluginShapedListAcrossAllFourKinds() = runTest {
         val repository = repository(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))),
-            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h"))),
-            chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c"))),
-            events = FakeEventLocalStore(mapOf(EventId("e") to event("e"))),
+            cacheOf(task("t").cached(), habit("h").cached(), chore("c").cached(), event("e").cached()),
         )
 
         val items = repository.observeItems().first()
 
-        // Same rows and same order as the shipped cross-kind read: each store's own order,
-        // concatenated Task, Habit, Chore, Event. Both projections list the same rows in both places.
+        // Same rows and same order as the shipped cross-kind read: one `sequence` order across every
+        // kind. Both projections list the same rows in the same places.
         assertContentEquals(listOf("t", "h", "c", "e"), items.map { it.core.id })
         // The kind is gone. What distinguishes these rows now is which lifecycle they carry.
         assertIs<Lifecycle.Working>(items[0].progress.lifecycle)
@@ -75,17 +77,14 @@ class OfflinePluginItemRepositoryTest {
     }
 
     @Test
-    fun theListReEmitsWhenAnySingleKindsCacheChanges() = runTest {
-        val habits = FakeHabitLocalStore()
-        val repository = repository(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))),
-            habits = habits,
-        )
+    fun theListReEmitsWhenTheCacheChanges() = runTest {
+        val items = FakeItemLocalStore(cacheOf(task("t").cached()))
+        val repository = OfflinePluginItemRepository(items, FakeFiringStore())
 
         repository.observeItems().test {
             assertContentEquals(listOf("t"), awaitItem().map { it.core.id })
 
-            habits.upsert(habit("h"))
+            items.upsert(habit("h").cached())
 
             assertContentEquals(listOf("t", "h"), awaitItem().map { it.core.id })
             cancelAndIgnoreRemainingEvents()
@@ -98,10 +97,7 @@ class OfflinePluginItemRepositoryTest {
         // each plugin on the record its scope names. This is the assertion that would catch a future
         // recipe loading an Occurrence-scoped plugin onto a definition.
         val repository = repository(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))),
-            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h"))),
-            chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c"))),
-            events = FakeEventLocalStore(mapOf(EventId("e") to event("e"))),
+            cacheOf(task("t").cached(), habit("h").cached(), chore("c").cached(), event("e").cached()),
         )
 
         for (item in repository.observeItems().first()) {
@@ -112,15 +108,13 @@ class OfflinePluginItemRepositoryTest {
     // ── The single-row read ────────────────────────────────────────────────────────────────────
 
     @Test
-    fun oneRowIsFoundInWhicheverTableHoldsIt() = runTest {
+    fun oneRowIsFoundWhicheverKindItRoundTripsTo() = runTest {
         val repository = repository(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))),
-            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h"))),
-            chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c"))),
-            events = FakeEventLocalStore(mapOf(EventId("e") to event("e"))),
+            cacheOf(task("t").cached(), habit("h").cached(), chore("c").cached(), event("e").cached()),
         )
 
-        // The point of the facade in one assertion: four tables, four raw ids, no kind from the caller.
+        // The point of the facade in one assertion: four raw ids, no kind from the caller — and since
+        // #422, no four tables underneath either.
         for (id in listOf("t", "h", "c", "e")) {
             assertEquals(id, repository.observe(id).first()?.core?.id, "$id was not found")
         }
@@ -136,10 +130,10 @@ class OfflinePluginItemRepositoryTest {
     @Test
     fun aTombstoneIsEmittedByTheSingleReadAndFilteredFromTheList() = runTest {
         val deleted = task("t").copy(deletedAt = Instant.parse("2026-08-01T00:00:00Z"))
-        val repository = repository(tasks = FakeTaskLocalStore(mapOf(TaskId("t") to deleted)))
+        val repository = repository(cacheOf(deleted.cached()))
 
-        // A tombstone is not absent, and `core.isDeleted` says so. That is the per-kind stores' own
-        // contract for a single-row observe, carried through the recipe unchanged.
+        // A tombstone is not absent, and `core.isDeleted` says so. That is the store's own contract for
+        // a single-row observe, carried through the recipe unchanged.
         val row = assertNotNull(repository.observe("t").first())
         assertTrue(row.core.isDeleted)
 
@@ -209,12 +203,9 @@ class OfflinePluginItemRepositoryTest {
     // ── Fixtures ───────────────────────────────────────────────────────────────────────────────
 
     private fun repository(
-        tasks: FakeTaskLocalStore = FakeTaskLocalStore(),
-        habits: FakeHabitLocalStore = FakeHabitLocalStore(),
-        chores: FakeChoreLocalStore = FakeChoreLocalStore(),
-        events: FakeEventLocalStore = FakeEventLocalStore(),
+        rows: Map<String, CachedItem> = emptyMap(),
         facts: OccurrenceFactLocalStore = FakeFiringStore(),
-    ) = OfflinePluginItemRepository(tasks, habits, chores, events, facts)
+    ) = OfflinePluginItemRepository(FakeItemLocalStore(rows), facts)
 
     private fun task(id: String) = Task(
         id = TaskId(id),

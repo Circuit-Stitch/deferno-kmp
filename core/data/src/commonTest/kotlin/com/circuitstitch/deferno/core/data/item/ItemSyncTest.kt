@@ -1,11 +1,7 @@
 package com.circuitstitch.deferno.core.data.item
 
 import app.cash.turbine.test
-import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
 import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
-import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
@@ -18,6 +14,7 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.plugin.Lifecycle
 import kotlinx.coroutines.test.runTest
 import kotlin.time.Instant
 import kotlin.test.Test
@@ -27,10 +24,16 @@ import kotlin.test.assertTrue
 
 /**
  * The cross-kind reconcile of [ItemSync] (ADR-0049, #226) — the heart of the `/tasks` -> `/items`
- * migration, run against the in-memory fakes on the ADR-0006 JVM-fast path. Proves the cold `/items`
- * snapshot is reconciled into all four per-kind stores (upsert + per-kind orphan-purge), that the
- * server-windowed snapshot honours the done-visibility window with no client-side window math, that
- * offline creates are protected from the purge, and that an unavailable pull leaves every cache intact.
+ * migration, run against the in-memory fake on the ADR-0006 JVM-fast path. Proves the cold `/items`
+ * snapshot is reconciled into the one item cache (upsert + orphan-purge), that the server-windowed
+ * snapshot honours the done-visibility window with no client-side window math, that offline creates are
+ * protected from the purge, and that an unavailable pull leaves the cache intact.
+ *
+ * **One reconcile, where there were four (#422).** The snapshot still arrives as four typed lists,
+ * because the wire still speaks four kinds, and each row crosses into the plugin-shaped record at that
+ * boundary. What went with the four stores is the four separate transactions: a row whose kind changed
+ * server-side used to be an insert in one table and an orphan purge in another, and nothing made those
+ * two atomic.
  */
 class ItemSyncTest {
 
@@ -74,20 +77,17 @@ class ItemSyncTest {
     )
 
     private class Fixture(
-        val tasks: FakeTaskLocalStore = FakeTaskLocalStore(),
-        val habits: FakeHabitLocalStore = FakeHabitLocalStore(),
-        val chores: FakeChoreLocalStore = FakeChoreLocalStore(),
-        val events: FakeEventLocalStore = FakeEventLocalStore(),
+        val items: FakeItemLocalStore = FakeItemLocalStore(),
         val source: FakeItemSnapshotSource = FakeItemSnapshotSource(),
         val pending: FakePendingCreateStore = FakePendingCreateStore(),
     ) {
-        val sync = ItemSync(tasks, habits, chores, events, source, pending)
+        val sync = ItemSync(items, source, pending)
     }
 
-    // --- upsert: every kind into its own store ---
+    // --- upsert: every kind into the one store, each noting which endpoint it came from ---
 
     @Test
-    fun refreshUpsertsEveryKindIntoItsOwnStore() = runTest {
+    fun refreshUpsertsEveryKindIntoTheOneStore() = runTest {
         val f = Fixture()
         f.source.snapshot = ItemSnapshot(
             tasks = listOf(task("t")),
@@ -98,26 +98,29 @@ class ItemSyncTest {
 
         f.sync.refresh()
 
-        assertEquals(setOf(TaskId("t")), f.tasks.allIds())
-        assertEquals(setOf(HabitId("h")), f.habits.allIds())
-        assertEquals(setOf(ChoreId("c")), f.chores.allIds())
-        assertEquals(setOf(EventId("e")), f.events.allIds())
+        assertEquals(setOf("t", "h", "c", "e"), f.items.allIds())
+        // The kind rides along as sync bookkeeping — which endpoint the row round-trips to — and is the
+        // only thing that still distinguishes the four.
+        assertEquals(
+            mapOf("t" to ItemKind.Task, "h" to ItemKind.Habit, "c" to ItemKind.Chore, "e" to ItemKind.Event),
+            f.items.all.mapValues { (_, row) -> row.kind },
+        )
     }
 
-    // --- per-kind orphan purge ---
+    // --- orphan purge ---
 
     @Test
-    fun refreshPurgesPerKindTheRowsAbsentFromTheSnapshot() = runTest {
+    fun refreshPurgesTheRowsAbsentFromTheSnapshot() = runTest {
         val f = Fixture(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("keep") to task("keep"), TaskId("gone") to task("gone"))),
-            habits = FakeHabitLocalStore(mapOf(HabitId("keep") to habit("keep"), HabitId("gone") to habit("gone"))),
+            items = FakeItemLocalStore(
+                cacheOf(task("keep").cached(), task("gone").cached(), habit("h-gone").cached()),
+            ),
         )
-        f.source.snapshot = ItemSnapshot(tasks = listOf(task("keep")), habits = listOf(habit("keep")))
+        f.source.snapshot = ItemSnapshot(tasks = listOf(task("keep")), habits = listOf(habit("h-keep")))
 
         f.sync.refresh()
 
-        assertEquals(setOf(TaskId("keep")), f.tasks.allIds())
-        assertEquals(setOf(HabitId("keep")), f.habits.allIds())
+        assertEquals(setOf("keep", "h-keep"), f.items.allIds())
     }
 
     // --- AC3: the done-visibility window is honoured by the server-windowed snapshot (no client math) ---
@@ -126,13 +129,13 @@ class ItemSyncTest {
     fun aDoneTaskAgedOutOfTheWindowIsAbsentAfterRefreshWhileARecentlyDoneOneAndRecurringKindsRemain() = runTest {
         // Local cache holds a long-aged Done task, a recently-Done task, and a recurring habit.
         val f = Fixture(
-            tasks = FakeTaskLocalStore(
-                mapOf(
-                    TaskId("old-done") to task("old-done", WorkingState.Done),
-                    TaskId("recent-done") to task("recent-done", WorkingState.Done),
+            items = FakeItemLocalStore(
+                cacheOf(
+                    task("old-done", WorkingState.Done).cached(),
+                    task("recent-done", WorkingState.Done).cached(),
+                    habit("daily").cached(),
                 ),
             ),
-            habits = FakeHabitLocalStore(mapOf(HabitId("daily") to habit("daily"))),
         )
         // The server applies the window: the long-aged Done task falls out of the snapshot; the
         // recently-Done one and the (never-aging) recurring habit stay. No client-side window math.
@@ -143,18 +146,19 @@ class ItemSyncTest {
 
         f.sync.refresh()
 
-        assertFalse(f.tasks.all.containsKey(TaskId("old-done"))) // aged out -> purged
-        assertTrue(f.tasks.all.containsKey(TaskId("recent-done"))) // within window -> kept
-        assertTrue(f.habits.all.containsKey(HabitId("daily"))) // recurring -> never ages out
+        assertFalse(f.items.all.containsKey("old-done")) // aged out -> purged
+        assertTrue(f.items.all.containsKey("recent-done")) // within window -> kept
+        assertTrue(f.items.all.containsKey("daily")) // recurring -> never ages out
     }
 
-    // --- offline creates are protected from the purge (#185), per kind ---
+    // --- offline creates are protected from the purge (#185), whatever their kind ---
 
     @Test
     fun refreshDoesNotPurgeAnOfflineCreatedRowStillAwaitingReplay() = runTest {
         val f = Fixture(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("offline-task") to task("offline-task"))),
-            habits = FakeHabitLocalStore(mapOf(HabitId("offline-habit") to habit("offline-habit"))),
+            items = FakeItemLocalStore(
+                cacheOf(task("offline-task").cached(), habit("offline-habit").cached()),
+            ),
         )
         f.pending.add("offline-task", ItemKind.Task)
         f.pending.add("offline-habit", ItemKind.Habit)
@@ -162,60 +166,68 @@ class ItemSyncTest {
 
         f.sync.refresh()
 
-        assertEquals(setOf(TaskId("offline-task")), f.tasks.allIds())
-        assertEquals(setOf(HabitId("offline-habit")), f.habits.allIds())
+        assertEquals(setOf("offline-task", "offline-habit"), f.items.allIds())
     }
 
-    // --- offline-first: an unavailable pull is a no-op across every cache ---
+    // --- offline-first: an unavailable pull is a no-op ---
 
     @Test
-    fun anUnavailablePullLeavesEveryCacheIntact() = runTest {
+    fun anUnavailablePullLeavesTheCacheIntact() = runTest {
         val f = Fixture(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))),
-            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h"))),
-            chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c"))),
-            events = FakeEventLocalStore(mapOf(EventId("e") to event("e"))),
+            items = FakeItemLocalStore(
+                cacheOf(task("t").cached(), habit("h").cached(), chore("c").cached(), event("e").cached()),
+            ),
         )
         f.source.failNext = true // couldn't reach the server
 
         f.sync.refresh()
 
-        assertEquals(setOf(TaskId("t")), f.tasks.allIds())
-        assertEquals(setOf(HabitId("h")), f.habits.allIds())
-        assertEquals(setOf(ChoreId("c")), f.chores.allIds())
-        assertEquals(setOf(EventId("e")), f.events.allIds())
+        assertEquals(setOf("t", "h", "c", "e"), f.items.allIds())
     }
 
     @Test
-    fun aGenuinelyEmptyAvailableSnapshotPurgesEveryNonPendingCache() = runTest {
+    fun aGenuinelyEmptyAvailableSnapshotPurgesEveryNonPendingRow() = runTest {
         val f = Fixture(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))),
-            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h"))),
-            chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c"))),
-            events = FakeEventLocalStore(mapOf(EventId("e") to event("e"))),
+            items = FakeItemLocalStore(
+                cacheOf(task("t").cached(), habit("h").cached(), chore("c").cached(), event("e").cached()),
+            ),
         )
         f.source.snapshot = ItemSnapshot() // reachable, genuinely-empty server
 
         f.sync.refresh()
 
-        assertTrue(f.tasks.allIds().isEmpty())
-        assertTrue(f.habits.allIds().isEmpty())
-        assertTrue(f.chores.allIds().isEmpty())
-        assertTrue(f.events.allIds().isEmpty())
+        assertTrue(f.items.allIds().isEmpty())
     }
 
     // --- a Full /items row replaces wholesale; a snapshot tombstone is kept ---
 
     @Test
     fun aFullSnapshotRowReplacesTheCachedRow() = runTest {
-        val f = Fixture(tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t", WorkingState.Open))))
+        val f = Fixture(items = FakeItemLocalStore(cacheOf(task("t", WorkingState.Open).cached())))
         f.source.snapshot = ItemSnapshot(tasks = listOf(task("t", WorkingState.Done).copy(title = "renamed")))
 
         f.sync.refresh()
 
-        val row = f.tasks.all.getValue(TaskId("t"))
-        assertEquals(WorkingState.Done, row.workingState)
-        assertEquals("renamed", row.title)
+        val row = f.items.all.getValue("t")
+        assertEquals(Lifecycle.Working(WorkingState.Done), row.item.progress.lifecycle)
+        assertEquals("renamed", row.item.core.title)
+    }
+
+    /**
+     * A row whose kind changed server-side is one upsert in place, not a delete plus an insert (#422).
+     * The four-store version could not express it as one act: the row arrived in the new kind's snapshot
+     * list and vanished from the old kind's, so it was an insert in one table and an orphan purge in
+     * another, across two transactions.
+     */
+    @Test
+    fun aRowWhoseKindChangedServerSideIsUpsertedInPlace() = runTest {
+        val f = Fixture(items = FakeItemLocalStore(cacheOf(task("x").cached())))
+        f.source.snapshot = ItemSnapshot(habits = listOf(habit("x")))
+
+        f.sync.refresh()
+
+        assertEquals(setOf("x"), f.items.allIds())
+        assertEquals(ItemKind.Habit, f.items.all.getValue("x").kind)
     }
 
     @Test
@@ -227,25 +239,25 @@ class ItemSyncTest {
 
         f.sync.refresh()
 
-        assertTrue(f.tasks.all.getValue(TaskId("gone")).isDeleted)
-        f.tasks.observeActive().test {
-            assertEquals(listOf(TaskId("a")), awaitItem().map { it.id })
+        assertTrue(f.items.all.getValue("gone").item.core.isDeleted)
+        f.items.observeActive().test {
+            assertEquals(listOf("a"), awaitItem().map { it.id })
             cancelAndIgnoreRemainingEvents()
         }
     }
 
-    // --- the reconcile commits as one transaction per kind (single observe emission) ---
+    // --- the reconcile commits as one transaction (single observe emission) ---
 
     @Test
-    fun aReconcileReEmitsTheTaskListOnceAtCommit() = runTest {
+    fun aReconcileReEmitsTheListOnceAtCommit() = runTest {
         val f = Fixture()
-        f.tasks.observeActive().test {
+        f.items.observeActive().test {
             assertTrue(awaitItem().isEmpty()) // empty cache
 
-            f.source.snapshot = ItemSnapshot(tasks = listOf(task("a"), task("b")))
+            f.source.snapshot = ItemSnapshot(tasks = listOf(task("a"), task("b")), habits = listOf(habit("h")))
             f.sync.refresh()
-            // One commit-time emission carrying both rows, not one per upsert.
-            assertEquals(setOf(TaskId("a"), TaskId("b")), awaitItem().map { it.id }.toSet())
+            // One commit-time emission carrying every row, not one per upsert and not one per kind.
+            assertEquals(setOf("a", "b", "h"), awaitItem().map { it.id }.toSet())
             cancelAndIgnoreRemainingEvents()
         }
     }
