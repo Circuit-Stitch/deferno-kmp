@@ -6,7 +6,7 @@ import com.circuitstitch.deferno.core.data.item.ItemLocalStore
 import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.plugin.Blocker
-import com.circuitstitch.deferno.core.model.plugin.replacingFamilyOf
+import com.circuitstitch.deferno.core.model.plugin.loading
 import com.circuitstitch.deferno.core.network.ApiError
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.BlockedByRefDto
@@ -74,10 +74,14 @@ class KtorBlockedByWriter(
      *
      * `isBlocker` is carried across untouched: it says this row gates something *else*, which is not
      * what was edited.
+     *
+     * Through [loading], not `replacingFamilyOf`. Clearing the last edge on a row that gates nothing
+     * leaves a [Blocker] equal to its own silence, and a list holding one of those is what makes two
+     * plugin lists correspond to a single row — the sparseness rule the recipe round trip rests on.
      */
     private fun CachedItem.withBlockers(blockers: List<BlockedByRef>): CachedItem = copy(
         item = item.copy(
-            plugins = item.plugins.replacingFamilyOf(
+            plugins = item.plugins.loading(
                 Blocker(
                     blocked = blockers.isNotEmpty(),
                     isBlocker = item.blocker.isBlocker,
