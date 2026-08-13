@@ -51,6 +51,13 @@ kotlin {
             implementation(libs.multiplatform.settings)
         }
 
+        // The kind × field-combination corpus `core:model` gates its recipe round trip on, compiled
+        // into this module's tests as well (#422). The storage-fidelity gate asserts that a row written
+        // to `itemEntity` and read straight back is unchanged, and it has to sweep the same shapes: two
+        // corpora would drift, and the weaker one would decide what the gate covers. KMP publishes no
+        // test artifact, so the sources are compiled here rather than depended on.
+        commonTest { kotlin.srcDir(rootProject.file("core/model/src/testFixtures/kotlin")) }
+
         commonTest.dependencies {
             // Flow test stack (ADR-0006): runTest + Turbine for the AccountManager emission tests
             // and the reconcile/hydration/observe tests (#22).

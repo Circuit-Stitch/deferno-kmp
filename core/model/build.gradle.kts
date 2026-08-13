@@ -18,6 +18,14 @@ kotlin {
     }
 
     sourceSets {
+        // The kind × field-combination corpus (`KindShapes.kt`) is compiled into this module's tests and
+        // into `core:data`'s, which is what lets the storage-fidelity gate (#422) run over the same
+        // shapes the recipe round trip does rather than over a second corpus that can drift. It sits in
+        // its own directory rather than in `commonTest` so the sharing is a single named file set, and
+        // it is a plain directory rather than a Gradle source set because KMP publishes no test
+        // artifact — each consumer compiles the sources into its own test compilation.
+        commonTest { kotlin.srcDir("src/testFixtures/kotlin") }
+
         commonMain.dependencies {
             // Domain timestamps (Instant) + Plan dates (LocalDate). The model is the shared
             // contract the network mapper (#18) and repositories (#22) both map onto, so the
