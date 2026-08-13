@@ -8,16 +8,14 @@ import com.circuitstitch.deferno.core.data.backup.BackupExporter
 import com.circuitstitch.deferno.core.data.backup.BackupImporter
 import com.circuitstitch.deferno.core.data.braindump.BrainDumpDraftRepository
 import com.circuitstitch.deferno.core.data.calendar.CalendarRepository
-import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.comment.CommentRepository
 import com.circuitstitch.deferno.core.data.comment.CommentWriter
 import com.circuitstitch.deferno.core.data.definition.DefinitionRepository
 import com.circuitstitch.deferno.core.data.definition.DefinitionStateSource
-import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.history.ItemHistoryRepository
 import com.circuitstitch.deferno.core.data.item.ItemFoldStore
 import com.circuitstitch.deferno.core.data.item.ItemRepository
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
@@ -107,15 +105,14 @@ abstract class AccountComponent(
     abstract val securityRepository: SecurityRepository
 
     /**
-     * The recurring-kind read seams (#71): the local stores are the read interface — reads are local
-     * `Flow`s only (ADR-0001), and the former one-impl repository wrappers added nothing over them
-     * (#171). Exposing the stores anchors anvil's compile-time validation of the create flow's
-     * AccountScope chain (the CreateWriter seeds these same stores), and lets the shell observe a
-     * freshly created Habit/Chore/Event like a Task.
+     * The local item cache (ADR-0055, #422): the read interface for every kind, since reads are local
+     * `Flow`s only (ADR-0001) and the former one-impl repository wrappers added nothing over the stores
+     * (#171). It replaces the three recurring-kind seams exposed here before the flip.
+     *
+     * Exposing it anchors anvil's compile-time validation of the create flow's AccountScope chain — the
+     * CreateWriter seeds this same store — and lets the shell observe a freshly created row of any kind.
      */
-    abstract val habitLocalStore: HabitLocalStore
-    abstract val choreLocalStore: ChoreLocalStore
-    abstract val eventLocalStore: EventLocalStore
+    abstract val itemLocalStore: ItemLocalStore
 
     /**
      * The three inputs of the render-time [Occurrence state] reading (ADR-0053 decision 4, #390):
