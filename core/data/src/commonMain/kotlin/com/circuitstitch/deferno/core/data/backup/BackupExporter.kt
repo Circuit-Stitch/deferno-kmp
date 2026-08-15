@@ -1,10 +1,11 @@
 package com.circuitstitch.deferno.core.data.backup
 
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
-import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
-import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
-import com.circuitstitch.deferno.core.data.task.TaskLocalStore
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
+import com.circuitstitch.deferno.core.data.item.asKindRow
+import com.circuitstitch.deferno.core.model.recipe.KindRecipe
+import com.circuitstitch.deferno.core.model.recipe.KindRow
+import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.Envelope
 import com.circuitstitch.deferno.core.network.SupportedApiVersions
@@ -34,12 +35,10 @@ import kotlinx.serialization.json.Json
  * `commonTest` fast path); present (prod, per-Account) → on-device attachment bytes are embedded too.
  */
 class BackupExporter(
-    private val taskStore: TaskLocalStore,
-    private val habitStore: HabitLocalStore,
-    private val choreStore: ChoreLocalStore,
-    private val eventStore: EventLocalStore,
+    private val items: ItemLocalStore,
     private val localAttachments: LocalAttachmentRepository? = null,
     private val json: Json = DefernoJson,
+    private val recipe: KindRecipe = ParityRecipe,
 ) {
     /** The `items.json` body: the `{ version, data }` envelope of cross-kind item DTOs. */
     suspend fun buildItemsJson(): String = encodeEnvelope(collect().items)
@@ -63,29 +62,42 @@ class BackupExporter(
     }
 
     /**
-     * Reads the four per-kind stores into DTOs and, for each Task, embeds its on-device attachments: the
-     * bytes are collected for the zip and the metadata nested under the Task. An attachment whose bytes have
-     * gone missing is silently skipped — the file only claims what it actually carries.
+     * Reads the cache into DTOs and, for each Task, embeds its on-device attachments: the bytes are
+     * collected for the zip and the metadata nested under the Task. An attachment whose bytes have gone
+     * missing is silently skipped — the file only claims what it actually carries.
+     *
+     * **The four kinds survive here as computed inputs, which is exactly what ADR-0056 leaves them as.**
+     * A Backup file is a wire-shaped document: its envelope is versioned against the API and its items
+     * are `ItemView`s. So each cached record crosses back through the recipe on the way out, and the
+     * exporter is one of the two places that still names a kind at all.
      */
     private suspend fun collect(): Collected {
         val blobs = mutableListOf<Pair<String, ByteArray>>()
-        val tasks = taskStore.observeActive().first()
-            .filter { it.external == null } // external items are re-created on sync — never exported
-            .map { task ->
-                val view = task.toItemView()
-                val local = localAttachments?.forTask(task.id.value).orEmpty()
-                if (local.isEmpty()) return@map view
-                val dtos = local.mapNotNull { att ->
-                    val bytes = localAttachments?.bytes(att.id) ?: return@mapNotNull null // bytes gone → skip
-                    blobs += att.id to bytes
-                    att.toDto()
+        val views = items.observeActive().first().mapNotNull { row ->
+            when (val kindRow = row.asKindRow(recipe)) {
+                is KindRow.OfTask -> {
+                    // External items are re-created on sync and are never exported.
+                    val task = kindRow.task.takeIf { it.external == null } ?: return@mapNotNull null
+                    val view = task.toItemView()
+                    val local = localAttachments?.forTask(task.id.value).orEmpty()
+                    if (local.isEmpty()) {
+                        view
+                    } else {
+                        val dtos = local.mapNotNull { att ->
+                            // Bytes gone: skip.
+                            val bytes = localAttachments?.bytes(att.id) ?: return@mapNotNull null
+                            blobs += att.id to bytes
+                            att.toDto()
+                        }
+                        view.copy(localAttachments = dtos)
+                    }
                 }
-                view.copy(localAttachments = dtos)
+                is KindRow.OfHabit -> kindRow.habit.toItemView()
+                is KindRow.OfChore -> kindRow.chore.toItemView()
+                is KindRow.OfEvent -> kindRow.event.toItemView()
             }
-        val habits = habitStore.observeActive().first().map { it.toItemView() }
-        val chores = choreStore.observeActive().first().map { it.toItemView() }
-        val events = eventStore.observeActive().first().map { it.toItemView() }
-        return Collected(tasks + habits + chores + events, blobs)
+        }
+        return Collected(views, blobs)
     }
 
     private class Collected(val items: List<ItemView>, val attachmentBlobs: List<Pair<String, ByteArray>>)

@@ -1,10 +1,14 @@
 package com.circuitstitch.deferno.core.data.task
 
 import com.circuitstitch.deferno.core.data.create.FakeConnectivity
+import com.circuitstitch.deferno.core.data.item.FakeItemLocalStore
+import com.circuitstitch.deferno.core.data.item.cacheOf
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.model.BlockedByRef
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.plugin.Blocker
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -59,7 +63,7 @@ class KtorBlockedByWriterTest {
     @Test
     fun appliesOptimisticallyAndPatchesTheOrderedEdgeList() = runTest {
         var captured: HttpRequestData? = null
-        val store = FakeTaskLocalStore(mapOf(id to task()))
+        val store = FakeItemLocalStore(cacheOf(task().cached()))
         val writer = KtorBlockedByWriter(client { req -> captured = req; respondJson(okEnvelope) }, FakeConnectivity(), store)
 
         val result = writer.setBlockedBy(id, listOf(BlockedByRef("b-1"), BlockedByRef("b-2")))
@@ -72,28 +76,32 @@ class KtorBlockedByWriterTest {
             (captured?.body as TextContent).text,
         )
         // The optimistic apply stands: edges cached in order, the provisional blocked flag set.
-        assertEquals(listOf(BlockedByRef("b-1"), BlockedByRef("b-2")), store.all[id]?.blockedBy)
-        assertEquals(true, store.all[id]?.blocked)
+        assertEquals(listOf(BlockedByRef("b-1"), BlockedByRef("b-2")), store.all[id.value]?.item?.blocker?.blockedBy)
+        assertEquals(true, store.all[id.value]?.item?.blocker?.blocked)
     }
 
     @Test
     fun anEmptyListClearsEveryEdgeWithAnAlwaysPresentField() = runTest {
         var captured: HttpRequestData? = null
-        val store = FakeTaskLocalStore(mapOf(id to task(blocked = true, blockedBy = listOf(BlockedByRef("b-1")))))
+        val store = FakeItemLocalStore(cacheOf(task(blocked = true, blockedBy = listOf(BlockedByRef("b-1"))).cached()))
         val writer = KtorBlockedByWriter(client { req -> captured = req; respondJson(okEnvelope) }, FakeConnectivity(), store)
 
         assertEquals(BlockedByResult.Applied, writer.setBlockedBy(id, emptyList()))
 
         // ADR-0011: an empty array, never an absent field.
         assertEquals("""{"blocked_by":[]}""", (captured?.body as TextContent).text)
-        assertEquals(emptyList(), store.all[id]?.blockedBy)
-        assertEquals(false, store.all[id]?.blocked)
+        assertEquals(emptyList(), store.all[id.value]?.item?.blocker?.blockedBy)
+        assertEquals(false, store.all[id.value]?.item?.blocker?.blocked)
+        // …and the record says it by carrying no Blocker at all (#422). Clearing the last edge on a row
+        // that gates nothing leaves the family silent, and a plugin equal to its own silence is what the
+        // sparseness rule forbids — so the swap unloads rather than loads an empty member.
+        assertTrue(store.all.getValue(id.value).item.plugins.none { it is Blocker })
     }
 
     @Test
     fun aServer400RevertsTheOptimisticApplyAndSurfacesTheMessage() = runTest {
         val before = task(blocked = false, blockedBy = emptyList())
-        val store = FakeTaskLocalStore(mapOf(id to before))
+        val store = FakeItemLocalStore(cacheOf(before.cached()))
         val writer = KtorBlockedByWriter(
             client { respondJson(cycleEnvelope, HttpStatusCode.BadRequest) },
             FakeConnectivity(),
@@ -104,13 +112,13 @@ class KtorBlockedByWriterTest {
 
         assertEquals(BlockedByResult.Failed("cannot add a blocked_by edge that would form a cycle"), result)
         // The revert restored the exact pre-edit row — no locally-created cycle survives a rejection.
-        assertEquals(before, store.all[id])
+        assertEquals(before.cached(), store.all[id.value])
     }
 
     @Test
     fun offlineRefusesBeforeAnyApplyOrRequest() = runTest {
         val before = task()
-        val store = FakeTaskLocalStore(mapOf(id to before))
+        val store = FakeItemLocalStore(cacheOf(before.cached()))
         var requests = 0
         val writer = KtorBlockedByWriter(
             client { requests++; respondJson(okEnvelope) },
@@ -120,13 +128,13 @@ class KtorBlockedByWriterTest {
 
         assertEquals(BlockedByResult.Offline, writer.setBlockedBy(id, listOf(BlockedByRef("b-1"))))
         assertEquals(0, requests, "offline must not reach the network")
-        assertEquals(before, store.all[id], "offline must not touch the cache")
+        assertEquals(before.cached(), store.all[id.value], "offline must not touch the cache")
     }
 
     @Test
     fun anUncachedRowStillPatchesWithNothingToApplyLocally() = runTest {
         var captured: HttpRequestData? = null
-        val store = FakeTaskLocalStore()
+        val store = FakeItemLocalStore()
         val writer = KtorBlockedByWriter(client { req -> captured = req; respondJson(okEnvelope) }, FakeConnectivity(), store)
 
         assertEquals(BlockedByResult.Applied, writer.setBlockedBy(id, listOf(BlockedByRef("b-1"))))

@@ -1,17 +1,18 @@
 package com.circuitstitch.deferno.core.data.backup
 
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
-import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.create.PendingCreateStore
-import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.item.CachedItem
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
 import com.circuitstitch.deferno.core.data.outbox.CreateChoreItem
 import com.circuitstitch.deferno.core.data.outbox.CreateEventItem
 import com.circuitstitch.deferno.core.data.outbox.CreateHabitItem
 import com.circuitstitch.deferno.core.data.outbox.CreateMutation
 import com.circuitstitch.deferno.core.data.outbox.CreateTaskItem
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
-import com.circuitstitch.deferno.core.data.task.TaskLocalStore
+import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.recipe.KindRecipe
+import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import com.circuitstitch.deferno.core.network.ApiVersion
 import com.circuitstitch.deferno.core.network.DefernoJson
 import com.circuitstitch.deferno.core.network.Envelope
@@ -22,10 +23,10 @@ import com.circuitstitch.deferno.core.network.mapper.asChoreOrNull
 import com.circuitstitch.deferno.core.network.mapper.asEventOrNull
 import com.circuitstitch.deferno.core.network.mapper.asHabitOrNull
 import com.circuitstitch.deferno.core.network.mapper.asTaskOrNull
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 import kotlin.time.Clock
 import kotlin.time.Instant
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 
 /**
  * The on-device import/restore engine (#314, ADR-0041): the inverse of [BackupExporter]. It parses a
@@ -43,21 +44,19 @@ import kotlin.time.Instant
  * attachment id + an overwrite of its bytes, so re-import replaces rather than duplicates.
  *
  * Shared KMP core so Android/desktop inherit it; iOS contributes only the document picker. Mirrors
- * [BackupExporter]'s constructor (the four per-kind stores + the optional [localAttachments] repository)
+ * [BackupExporter]'s constructor (the item store plus the optional [localAttachments] repository)
  * plus the outbox + pending-create side table the create path writes — the same two lines
  * [com.circuitstitch.deferno.core.data.create.OfflineCreateWriter] uses, kept local here rather than
  * coupling the importer to that writer's id-minting create methods.
  */
 class BackupImporter(
-    private val taskStore: TaskLocalStore,
-    private val habitStore: HabitLocalStore,
-    private val choreStore: ChoreLocalStore,
-    private val eventStore: EventLocalStore,
+    private val items: ItemLocalStore,
     private val outbox: OutboxStore,
     private val pendingCreateStore: PendingCreateStore,
     private val localAttachments: LocalAttachmentRepository? = null,
     private val json: Json = DefernoJson,
     private val now: () -> Instant = { Clock.System.now() },
+    private val recipe: KindRecipe = ParityRecipe,
 ) {
     /**
      * Restore a [Backup file] zip's items. Reports the outcome rather than throwing: [ImportResult.Malformed]
@@ -95,25 +94,25 @@ class BackupImporter(
      */
     private fun restoreOp(item: ItemView, entries: Map<String, ByteArray>): suspend () -> Unit = when (item) {
         is ItemView.Task -> {
-            val row = item.asTaskOrNull()!!
+            val row = CachedItem(recipe.read(item.asTaskOrNull()!!), ItemKind.Task)
             val mutation = CreateTaskItem(item.id, item.toCreatePayload())
             val attachments = resolveAttachments(item.localAttachments, entries)
-            suspend { taskStore.upsert(row); enqueueCreate(mutation); restoreAttachments(item.id, attachments) }
+            suspend { items.upsert(row); enqueueCreate(mutation); restoreAttachments(item.id, attachments) }
         }
         is ItemView.Habit -> {
-            val row = item.asHabitOrNull()!!
+            val row = CachedItem(recipe.read(item.asHabitOrNull()!!), ItemKind.Habit)
             val mutation = CreateHabitItem(item.id, item.toCreatePayload())
-            suspend { habitStore.upsert(row); enqueueCreate(mutation) }
+            suspend { items.upsert(row); enqueueCreate(mutation) }
         }
         is ItemView.Chore -> {
-            val row = item.asChoreOrNull()!!
+            val row = CachedItem(recipe.read(item.asChoreOrNull()!!), ItemKind.Chore)
             val mutation = CreateChoreItem(item.id, item.toCreatePayload())
-            suspend { choreStore.upsert(row); enqueueCreate(mutation) }
+            suspend { items.upsert(row); enqueueCreate(mutation) }
         }
         is ItemView.Event -> {
-            val row = item.asEventOrNull()!!
+            val row = CachedItem(recipe.read(item.asEventOrNull()!!), ItemKind.Event)
             val mutation = CreateEventItem(item.id, item.toCreatePayload())
-            suspend { eventStore.upsert(row); enqueueCreate(mutation) }
+            suspend { items.upsert(row); enqueueCreate(mutation) }
         }
     }
 

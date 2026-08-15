@@ -1,44 +1,36 @@
 package com.circuitstitch.deferno.core.data.item
 
-import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
-import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
 import com.circuitstitch.deferno.core.data.outbox.DeleteItem
 import com.circuitstitch.deferno.core.data.outbox.Move
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
-import com.circuitstitch.deferno.core.data.task.TaskLocalStore
-import com.circuitstitch.deferno.core.model.ChoreId
-import com.circuitstitch.deferno.core.model.EventId
-import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.Item
 import com.circuitstitch.deferno.core.model.ItemKind
-import com.circuitstitch.deferno.core.model.TaskId
 import kotlinx.coroutines.flow.first
 import kotlin.time.Clock
 import kotlin.time.Instant
 
 /**
  * The offline-first [ItemWriter] (ADR-0001, ADR-0049 #228) — the cross-kind sibling of
- * [com.circuitstitch.deferno.core.data.task.OutboxTaskWriter]. A move spans all four kinds, so it holds
- * the four per-kind stores (like [com.circuitstitch.deferno.core.data.create.OfflineCreateWriter]) plus
- * the outbox.
+ * [com.circuitstitch.deferno.core.data.task.OutboxTaskWriter]. It held the four per-kind stores until
+ * #422 flipped the cache onto plugins; it holds the one store and the outbox now.
  *
  * [move] applies optimistically — [planMove] computes the destination group's new `sequence`s from a
- * fresh cross-kind snapshot, then each touched kind commits in one transaction (one observe re-emit) so
- * the tree re-flattens at once — and enqueues a [Move] (`POST items/{id}/move`) for replay. A server
- * **400** (cycle) is a terminal rejection the next cold-snapshot reconcile corrects (LWW).
+ * fresh snapshot, then commits them in one transaction so the tree re-flattens at once — and enqueues a
+ * [Move] (`POST items/{id}/move`) for replay. A server **400** (a cycle) is a terminal rejection the next
+ * cold-snapshot reconcile corrects (LWW).
  *
- * [delete] tombstones the row in whichever of the four stores holds it and enqueues a [DeleteItem]
- * (`DELETE items/{id}`). Holding all four stores already is what makes this the right home for the
- * kind-neutral delete rather than the kind-scoped `DefinitionWriter` (#389).
+ * [delete] tombstones the row and enqueues a [DeleteItem] (`DELETE items/{id}`).
+ *
+ * **A move and a delete were always kind-neutral acts, and now the writes are too.** Both addressed a
+ * raw id, because the tree row they act on is the cross-kind projection; underneath, each had to probe
+ * or dispatch across four stores, and a delete cost three empty reads every time. One cache removes all
+ * of it, and every edit here touches nothing but `Core` — id, tree position, tombstone — which is the
+ * shape ADR-0055 predicts, since a move is not a Family.
  *
  * [now] is injected (default the system clock) so the enqueue time is deterministic under test (ADR-0006).
  */
 class OutboxItemWriter(
-    private val taskStore: TaskLocalStore,
-    private val habitStore: HabitLocalStore,
-    private val choreStore: ChoreLocalStore,
-    private val eventStore: EventLocalStore,
+    private val items: ItemLocalStore,
     private val outbox: OutboxStore,
     private val now: () -> Instant = { Clock.System.now() },
 ) : ItemWriter {
@@ -49,53 +41,47 @@ class OutboxItemWriter(
     }
 
     /**
-     * A **tombstone**, not a row removal — the `DeleteTask` model (`task.copy(deletedAt = …)`), even
-     * though all three recurring stores also expose a hard `delete(id)`. A tombstoned row still exists to
-     * reconcile against if the replay ever fails terminally; a hard-deleted one leaves nothing behind and
-     * the next snapshot would resurrect it as if it were new. All four kinds carry `deletedAt` and every
-     * `observeActive` filters on it, so the tree drops the row immediately either way.
+     * A **tombstone**, not a row removal, even though the store also exposes a hard `delete(id)`. A
+     * tombstoned row still exists to reconcile against if the replay ever fails terminally; a
+     * hard-deleted one leaves nothing behind and the next snapshot would resurrect it as if it were new.
+     * `observeActive` filters on `deletedAt`, so the tree drops the row immediately either way.
      *
      * One `now()` for both the tombstone and the enqueue, so the local delete time and the queued write
-     * agree. An Item id is unique across the four kinds, so at most one of the four probes finds a row —
-     * the other three are empty reads. That is what the kind-neutral seam costs, and it is what lets the
-     * caller pass no [ItemKind]: the tree row it addresses is the cross-kind Item projection.
+     * agree.
      */
     override suspend fun delete(id: String) {
         val deletedAt = now()
-        taskStore.transaction { s -> s.get(TaskId(id))?.let { s.upsert(it.copy(deletedAt = deletedAt)) } }
-        habitStore.transaction { s -> s.get(HabitId(id))?.let { s.upsert(it.copy(deletedAt = deletedAt)) } }
-        choreStore.transaction { s -> s.get(ChoreId(id))?.let { s.upsert(it.copy(deletedAt = deletedAt)) } }
-        eventStore.transaction { s -> s.get(EventId(id))?.let { s.upsert(it.copy(deletedAt = deletedAt)) } }
+        items.transaction { s ->
+            s.get(id)?.let { s.upsert(it.copy(item = it.item.copy(core = it.item.core.copy(deletedAt = deletedAt)))) }
+        }
         DeleteItem(id).let { outbox.enqueue(it.target, it.toRequest(), deletedAt) }
     }
 
-    /** The current cross-kind Item set — only the fields [planMove] orders on (id/kind/title/parent/seq). */
-    private suspend fun snapshot(): List<Item> = buildList {
-        taskStore.observeActive().first().forEach { add(Item(it.id.value, ItemKind.Task, it.title, it.parentId?.value, it.sequence)) }
-        habitStore.observeActive().first().forEach { add(Item(it.id.value, ItemKind.Habit, it.title, it.parentId?.value, it.sequence)) }
-        choreStore.observeActive().first().forEach { add(Item(it.id.value, ItemKind.Chore, it.title, it.parentId?.value, it.sequence)) }
-        eventStore.observeActive().first().forEach { add(Item(it.id.value, ItemKind.Event, it.title, it.parentId?.value, it.sequence)) }
+    /** The current Item set — only the fields [planMove] orders on (id, kind, title, parent, sequence). */
+    private suspend fun snapshot(): List<Item> = items.observeActive().first().map { row ->
+        Item(row.id, row.kind, row.item.core.title, row.item.core.parentId, row.item.core.sequence)
     }
 
     /**
-     * Writes the planned [assignments] back per kind. Only the moved row is reparented ([newParentId]); a
-     * non-moved sibling keeps its own `parentId` (its raw pointer — possibly an orphan's absent parent —
-     * is never rewritten) and only shifts its `sequence`. All four kinds carry `parentId: TaskId?`.
+     * Writes the planned [assignments] back. Only the moved row is reparented ([newParentId]); a
+     * non-moved sibling keeps its own `parentId` — its raw pointer, possibly an orphan's absent parent,
+     * is never rewritten — and only shifts its `sequence`.
      */
     private suspend fun applyOptimistically(assignments: List<MoveAssignment>, movedId: String, newParentId: String?) {
-        val parent = newParentId?.let(::TaskId)
-        for ((kind, group) in assignments.groupBy { it.kind }) when (kind) {
-            ItemKind.Task -> taskStore.transaction { s ->
-                group.forEach { a -> s.get(TaskId(a.id))?.let { s.upsert(it.copy(sequence = a.sequence, parentId = if (a.id == movedId) parent else it.parentId)) } }
-            }
-            ItemKind.Habit -> habitStore.transaction { s ->
-                group.forEach { a -> s.get(HabitId(a.id))?.let { s.upsert(it.copy(sequence = a.sequence, parentId = if (a.id == movedId) parent else it.parentId)) } }
-            }
-            ItemKind.Chore -> choreStore.transaction { s ->
-                group.forEach { a -> s.get(ChoreId(a.id))?.let { s.upsert(it.copy(sequence = a.sequence, parentId = if (a.id == movedId) parent else it.parentId)) } }
-            }
-            ItemKind.Event -> eventStore.transaction { s ->
-                group.forEach { a -> s.get(EventId(a.id))?.let { s.upsert(it.copy(sequence = a.sequence, parentId = if (a.id == movedId) parent else it.parentId)) } }
+        items.transaction { s ->
+            for (assignment in assignments) {
+                val row = s.get(assignment.id) ?: continue
+                val core = row.item.core
+                s.upsert(
+                    row.copy(
+                        item = row.item.copy(
+                            core = core.copy(
+                                sequence = assignment.sequence,
+                                parentId = if (assignment.id == movedId) newParentId else core.parentId,
+                            ),
+                        ),
+                    ),
+                )
             }
         }
     }

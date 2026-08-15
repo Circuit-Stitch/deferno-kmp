@@ -1,20 +1,20 @@
 package com.circuitstitch.deferno.core.data.definition
 
 import com.circuitstitch.deferno.core.data.RemoteSnapshot
-import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
-import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.item.CachedItem
 import com.circuitstitch.deferno.core.data.item.ItemDetailRemoteSource
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
+import com.circuitstitch.deferno.core.data.item.asKindRow
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
-import com.circuitstitch.deferno.core.model.ChoreId
-import com.circuitstitch.deferno.core.model.EventId
-import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.ItemRef
 import com.circuitstitch.deferno.core.model.OccurrenceCoverage
 import com.circuitstitch.deferno.core.model.RecurringDefinition
 import com.circuitstitch.deferno.core.model.SeriesChain
+import com.circuitstitch.deferno.core.model.recipe.KindRecipe
+import com.circuitstitch.deferno.core.model.recipe.KindRow
+import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import com.circuitstitch.deferno.core.model.toDefinition
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -24,12 +24,14 @@ import kotlinx.datetime.LocalDate
 /**
  * The kind-neutral read of one recurring definition (#383) — a [[Habit]], [[Chore]] or [[Event]].
  *
- * **Why this exists over the three local stores**, which #171 deliberately stripped their repository
- * wrappers from. It does three things none of them can, and all three are the reason #383 could not
- * just lift the gates: it fans out over kind so a caller holding an [ItemRef] needs no `when`; it
- * hydrates through the kind-neutral `GET /items/{id}` (there *is* no per-kind detail route); and it
- * lands the detail read's dated answer as a **fact plus coverage** rather than as a reading, which is
- * the ADR-0053 decision-4 rule that the rest of this client already obeys and nothing was yet feeding.
+ * **Why this exists over the local store.** It does two things the store does not, and both are the
+ * reason #383 could not just lift the gates: it hydrates through the kind-neutral `GET /items/{id}`
+ * (there *is* no per-kind detail route), and it lands the detail read's dated answer as a **fact plus
+ * coverage** rather than as a reading, which is the ADR-0053 decision-4 rule the rest of this client
+ * already obeys and nothing was yet feeding.
+ *
+ * Its third job was fanning out over kind so a caller holding an [ItemRef] needed no `when`. The store
+ * absorbed that at #422, which is the point of the flip.
  *
  * It is a *read* seam only. Every write on a recurring definition — the rule, the per-field patches,
  * delete — is #378/#388/#389's, and the existing write seams are all `TaskId`-typed for now.
@@ -87,19 +89,29 @@ data class DefinitionExtras(
  * refreshes them (ADR-0001).
  */
 class OfflineDefinitionRepository(
-    private val habits: HabitLocalStore,
-    private val chores: ChoreLocalStore,
-    private val events: EventLocalStore,
+    private val items: ItemLocalStore,
     private val remote: ItemDetailRemoteSource,
     private val facts: OccurrenceFactLocalStore,
     private val coverage: OccurrenceCoverageLocalStore,
+    private val recipe: KindRecipe = ParityRecipe,
 ) : DefinitionRepository {
 
-    override fun observe(ref: ItemRef): Flow<RecurringDefinition?> = when (ref.kind) {
-        ItemKind.Task -> flowOf(null)
-        ItemKind.Habit -> habits.observe(HabitId(ref.id)).map { it?.toDefinition() }
-        ItemKind.Chore -> chores.observe(ChoreId(ref.id)).map { it?.toDefinition() }
-        ItemKind.Event -> events.observe(EventId(ref.id)).map { it?.toDefinition() }
+    /**
+     * The `when (ref.kind)` fan-out over three stores is gone since #422: one store answers by id and
+     * the stored row says which kind it is. The ref's own kind is no longer consulted, which makes a
+     * stale one harmless — a ref whose kind the server has since converted used to read `null` because
+     * it queried the wrong table.
+     */
+    override fun observe(ref: ItemRef): Flow<RecurringDefinition?> =
+        items.observe(ref.id).map { it?.toDefinitionOrNull() }
+
+    private fun CachedItem.toDefinitionOrNull(): RecurringDefinition? = when (val row = asKindRow(recipe)) {
+        // A Task is not a definition, and answering "not found" is the honest reading rather than
+        // throwing at a caller that holds a generic ref.
+        is KindRow.OfTask -> null
+        is KindRow.OfHabit -> row.habit.toDefinition()
+        is KindRow.OfChore -> row.chore.toDefinition()
+        is KindRow.OfEvent -> row.event.toDefinition()
     }
 
     override suspend fun hydrate(ref: ItemRef): DefinitionExtras? {
@@ -114,9 +126,9 @@ class OfflineDefinitionRepository(
         // row outside the snapshot window), which is the one case the detail read exists to answer and
         // the one a merge-onto-cached could not: it would drop the record and render "not found" while
         // holding the server's answer.
-        read.habit?.let { habits.upsert(it) }
-        read.chore?.let { chores.upsert(it) }
-        read.event?.let { events.upsert(it) }
+        read.habit?.let { items.upsert(CachedItem(recipe.read(it), ItemKind.Habit)) }
+        read.chore?.let { items.upsert(CachedItem(recipe.read(it), ItemKind.Chore)) }
+        read.event?.let { items.upsert(CachedItem(recipe.read(it), ItemKind.Event)) }
 
         // A stored resolution is a fact and is cached. An all-zeroes PLACEHOLDER is not — the server
         // answered "nothing recorded for that date", which is a different statement from a resolution

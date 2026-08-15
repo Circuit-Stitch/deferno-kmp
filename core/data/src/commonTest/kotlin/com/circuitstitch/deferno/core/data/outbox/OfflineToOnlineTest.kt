@@ -1,14 +1,13 @@
 package com.circuitstitch.deferno.core.data.outbox
 
 import app.cash.turbine.test
-import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
 import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
+import com.circuitstitch.deferno.core.data.item.FakeItemLocalStore
 import com.circuitstitch.deferno.core.data.item.FakeItemSnapshotSource
 import com.circuitstitch.deferno.core.data.item.ItemSnapshot
 import com.circuitstitch.deferno.core.data.item.ItemSync
-import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
+import com.circuitstitch.deferno.core.data.item.cacheOf
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.data.task.FakeTaskRemoteSource
 import com.circuitstitch.deferno.core.data.task.OfflineTaskRepository
 import com.circuitstitch.deferno.core.data.task.OutboxTaskWriter
@@ -16,6 +15,7 @@ import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.plugin.Lifecycle
 import kotlinx.coroutines.test.runTest
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -46,16 +46,16 @@ class OfflineToOnlineTest {
         hydration = HydrationState.Summary,
     )
 
+    /** The cached row's lifecycle — what the optimistic apply and the reconcile both write. */
+    private fun FakeItemLocalStore.lifecycleOf(id: TaskId) = all.getValue(id.value).item.progress.lifecycle
+
     @Test
     fun writesApplyOptimisticallyOfflineThenReplayAndReconcileOnline() = runTest {
         // Local source of truth (the UI reads this); the "server" is the /items snapshot source.
-        val local = FakeTaskLocalStore(mapOf(a to task(a), b to task(b)))
+        val local = FakeItemLocalStore(cacheOf(task(a).cached(), task(b).cached()))
         val source = FakeItemSnapshotSource(ItemSnapshot(tasks = listOf(task(a), task(b))))
-        val habit = FakeHabitLocalStore()
-        val chore = FakeChoreLocalStore()
-        val event = FakeEventLocalStore()
-        val itemSync = ItemSync(local, habit, chore, event, source, FakePendingCreateStore())
-        val repository = OfflineTaskRepository(local, FakeTaskRemoteSource(), itemSync, habit, chore, event)
+        val itemSync = ItemSync(local, source, FakePendingCreateStore())
+        val repository = OfflineTaskRepository(local, FakeTaskRemoteSource(), itemSync)
         val outbox = FakeOutboxStore()
         val writer = OutboxTaskWriter(local, outbox, now = { t0 })
 
@@ -72,15 +72,15 @@ class OfflineToOnlineTest {
         // --- OFFLINE: user completes A and deletes B. Optimism shows immediately. ---
         writer.setWorkingState(a, WorkingState.Done)
         writer.delete(b)
-        assertEquals(WorkingState.Done, local.all.getValue(a).workingState)
-        assertTrue(local.all.getValue(b).isDeleted)
+        assertEquals(Lifecycle.Working(WorkingState.Done), local.lifecycleOf(a))
+        assertTrue(local.all.getValue(b.value).item.core.isDeleted)
         assertEquals(2, outbox.all.size)
 
         // A flush while offline makes no progress: the head backs off, the queue is intact, no reconcile.
         val offline = processor.flush(t0)
         assertEquals(0, offline.succeeded)
         assertEquals(2L, outbox.count())
-        assertEquals(WorkingState.Done, local.all.getValue(a).workingState) // optimism still stands
+        assertEquals(Lifecycle.Working(WorkingState.Done), local.lifecycleOf(a)) // optimism still stands
 
         // --- ONLINE: connectivity returns; the server has since applied both intents. ---
         online = true
@@ -97,8 +97,8 @@ class OfflineToOnlineTest {
         assertEquals(0L, outbox.count())
 
         // Reconcile ran (LWW): cache matches the server; the tombstone is honoured.
-        assertEquals(WorkingState.Done, local.all.getValue(a).workingState)
-        assertTrue(local.all.getValue(b).isDeleted)
+        assertEquals(Lifecycle.Working(WorkingState.Done), local.lifecycleOf(a))
+        assertTrue(local.all.getValue(b.value).item.core.isDeleted)
 
         // The UI-facing active list shows only A.
         repository.observeTasks().test {

@@ -1,16 +1,14 @@
 package com.circuitstitch.deferno.core.data.create
 
-import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
 import com.circuitstitch.deferno.core.data.connectivity.Connectivity
-import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.item.CachedItem
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
 import com.circuitstitch.deferno.core.data.outbox.CreateChoreItem
 import com.circuitstitch.deferno.core.data.outbox.CreateEventItem
 import com.circuitstitch.deferno.core.data.outbox.CreateHabitItem
 import com.circuitstitch.deferno.core.data.outbox.CreateMutation
 import com.circuitstitch.deferno.core.data.outbox.CreateTaskItem
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
-import com.circuitstitch.deferno.core.data.task.TaskLocalStore
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
@@ -24,6 +22,8 @@ import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.model.cadenceModeFromWire
+import com.circuitstitch.deferno.core.model.recipe.KindRecipe
+import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import com.circuitstitch.deferno.core.network.ApiError
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
@@ -68,20 +68,19 @@ import kotlin.time.Instant
 class OfflineCreateWriter(
     private val connectivity: Connectivity,
     private val converter: ItemConverter,
-    private val taskStore: TaskLocalStore,
-    private val habitStore: HabitLocalStore,
-    private val choreStore: ChoreLocalStore,
-    private val eventStore: EventLocalStore,
+    private val items: ItemLocalStore,
     private val outbox: OutboxStore,
     private val pendingCreateStore: PendingCreateStore,
     private val newId: () -> String = ::newItemId,
     private val now: () -> Instant = { Clock.System.now() },
     private val orgSlug: () -> String = { "" },
+    private val recipe: KindRecipe = ParityRecipe,
 ) : CreateWriter {
 
     override suspend fun createTask(payload: CreateTaskPayload): CreateResult {
         val id = newId()
-        taskStore.upsert(
+        seed(
+            ItemKind.Task,
             Task(
                 id = TaskId(id),
                 orgSlug = orgSlug(),
@@ -103,7 +102,8 @@ class OfflineCreateWriter(
 
     override suspend fun createHabit(payload: CreateHabitPayload): CreateResult {
         val id = newId()
-        habitStore.upsert(
+        seed(
+            ItemKind.Habit,
             Habit(
                 id = HabitId(id),
                 orgSlug = orgSlug(),
@@ -122,7 +122,8 @@ class OfflineCreateWriter(
 
     override suspend fun createChore(payload: CreateChorePayload): CreateResult {
         val id = newId()
-        choreStore.upsert(
+        seed(
+            ItemKind.Chore,
             Chore(
                 id = ChoreId(id),
                 orgSlug = orgSlug(),
@@ -145,7 +146,8 @@ class OfflineCreateWriter(
 
     override suspend fun createEvent(payload: CreateEventPayload): CreateResult {
         val id = newId()
-        eventStore.upsert(
+        seed(
+            ItemKind.Event,
             Event(
                 id = EventId(id),
                 orgSlug = orgSlug(),
@@ -164,6 +166,22 @@ class OfflineCreateWriter(
         return enqueue(id, ItemKind.Event, CreateEventItem(id, payload))
     }
 
+    /**
+     * Writes the optimistic row into the cache, translating the wire-shaped row the New form built into
+     * the plugin-shaped record the cache holds (ADR-0055).
+     *
+     * The four `create*` methods still assemble a [Task], [Habit], [Chore] or [Event], because their
+     * payloads are wire payloads and each one becomes a `POST` to that kind's endpoint (ADR-0056). This
+     * is the one line where that stops mattering.
+     */
+    private suspend fun seed(kind: ItemKind, row: Task) = items.upsert(CachedItem(recipe.read(row), kind))
+
+    private suspend fun seed(kind: ItemKind, row: Habit) = items.upsert(CachedItem(recipe.read(row), kind))
+
+    private suspend fun seed(kind: ItemKind, row: Chore) = items.upsert(CachedItem(recipe.read(row), kind))
+
+    private suspend fun seed(kind: ItemKind, row: Event) = items.upsert(CachedItem(recipe.read(row), kind))
+
     /** Records the pending create + enqueues its replayable outbox entry, then reports the new id. */
     private suspend fun enqueue(id: String, kind: ItemKind, mutation: CreateMutation): CreateResult {
         pendingCreateStore.add(id, kind)
@@ -174,28 +192,32 @@ class OfflineCreateWriter(
     override suspend fun convert(id: String, fromKind: ItemKind, payload: ConvertItemPayload): CreateResult {
         if (!connectivity.isOnline()) return CreateResult.Offline
         return when (val result = converter.convert(id, payload)) {
-            is ApiResult.Success -> {
-                removeOldKindRow(id, fromKind)
-                seedConverted(result.data)
-            }
+            is ApiResult.Success -> seedConverted(id, result.data)
             is ApiResult.Failure -> result.error.toResult()
         }
     }
 
-    /** Seeds the converted item's new-kind row and reports the kind + id. */
-    private suspend fun seedConverted(item: ConvertedItem): CreateResult = when (item) {
-        is ConvertedItem.AsTask -> { taskStore.upsert(item.task); CreateResult.Created(ItemKind.Task, item.task.id.value) }
-        is ConvertedItem.AsHabit -> { habitStore.upsert(item.habit); CreateResult.Created(ItemKind.Habit, item.habit.id.value) }
-        is ConvertedItem.AsChore -> { choreStore.upsert(item.chore); CreateResult.Created(ItemKind.Chore, item.chore.id.value) }
-        is ConvertedItem.AsEvent -> { eventStore.upsert(item.event); CreateResult.Created(ItemKind.Event, item.event.id.value) }
-    }
-
-    /** Removes the pre-convert row from whichever store held its old kind. */
-    private suspend fun removeOldKindRow(id: String, fromKind: ItemKind) = when (fromKind) {
-        ItemKind.Task -> taskStore.delete(TaskId(id))
-        ItemKind.Habit -> habitStore.delete(HabitId(id))
-        ItemKind.Chore -> choreStore.delete(ChoreId(id))
-        ItemKind.Event -> eventStore.delete(EventId(id))
+    /**
+     * Seeds the converted item and reports its kind and id.
+     *
+     * **The pre-convert row no longer has to be removed first.** It did while the four kinds lived in
+     * four tables: a convert was a delete from one and an insert into another, and forgetting the delete
+     * left the item rendered twice. One cache keyed by id makes the same convert an upsert in place — the
+     * plugin swap ADR-0055 describes, where content, labels and modality never move.
+     *
+     * The delete below is only for a server that minted a *different* id, which would otherwise leave the
+     * original row behind.
+     */
+    private suspend fun seedConverted(originalId: String, converted: ConvertedItem): CreateResult {
+        val row = when (converted) {
+            is ConvertedItem.AsTask -> CachedItem(recipe.read(converted.task), ItemKind.Task)
+            is ConvertedItem.AsHabit -> CachedItem(recipe.read(converted.habit), ItemKind.Habit)
+            is ConvertedItem.AsChore -> CachedItem(recipe.read(converted.chore), ItemKind.Chore)
+            is ConvertedItem.AsEvent -> CachedItem(recipe.read(converted.event), ItemKind.Event)
+        }
+        items.upsert(row)
+        if (row.id != originalId) items.delete(originalId)
+        return CreateResult.Created(row.kind, row.id)
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.circuitstitch.deferno.core.data.task
 
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
 import com.circuitstitch.deferno.core.data.outbox.ClearDeadline
 import com.circuitstitch.deferno.core.data.outbox.ClearDescription
 import com.circuitstitch.deferno.core.data.outbox.DeleteTask
@@ -28,7 +29,7 @@ import kotlin.time.Instant
  * queueing its idempotent wire request — so the local source of truth (and the UI `Flow`s observing
  * it) reflects the change immediately, and the server catches up on the next flush ([OutboxProcessor]).
  *
- * **Atomicity (ADR-0001).** The optimistic apply runs inside [TaskLocalStore.transaction], so a
+ * **Atomicity (ADR-0001).** The optimistic apply runs inside [ItemLocalStore.transaction], so a
  * concurrent reconcile (`refresh`) can't interleave with this read-modify-write and lose the update —
  * the same transaction seam the reconcile itself uses. The enqueue then happens just after: a crash in
  * that tiny window leaves an optimistic change with no queued request, which the next reconcile reverts
@@ -41,7 +42,7 @@ import kotlin.time.Instant
  * deterministic under test (ADR-0006).
  */
 class OutboxTaskWriter(
-    private val localStore: TaskLocalStore,
+    private val items: ItemLocalStore,
     private val outbox: OutboxStore,
     private val now: () -> Instant = { Clock.System.now() },
 ) : TaskWriter {
@@ -75,10 +76,10 @@ class OutboxTaskWriter(
         // uses), right before applyTo overwrites them, so the ledger can show a true old->new diff (#260).
         // Null when the target row isn't cached (nothing to diff) or the intent has no field diff (delete).
         var before: String? = null
-        localStore.transaction { store ->
-            store.get(mutation.taskId)?.let { current ->
-                before = mutation.beforeValues(current)?.toString()
-                store.upsert(mutation.applyTo(current))
+        items.transaction { store ->
+            store.get(mutation.taskId.value)?.let { current ->
+                before = mutation.beforeValues(current.item)?.toString()
+                store.upsert(current.copy(item = mutation.applyTo(current.item)))
             }
         }
         outbox.enqueue(mutation.target, mutation.toRequest(), now(), before)
