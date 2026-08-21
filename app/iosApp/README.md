@@ -133,6 +133,62 @@ is deliberately absent today, because its value has to agree with the exemption 
 stays absent until that is settled. A wrong value there is the same misstatement, made permanent and
 applied automatically to every future upload.
 
+## Shipping to TestFlight
+
+`.github/workflows/testflight.yml` builds and uploads the build. Run it by hand: Actions → TestFlight
+→ Run workflow. It runs on the self-hosted macOS runner and takes about nine minutes.
+
+The workflow archives the Release device build unsigned, exports a signed IPA, verifies the signature,
+asks App Store Connect to validate the package, then uploads it. `CFBundleVersion` is the workflow run
+number, so every run produces a build strictly newer than the last for marketing version 1.0.
+
+Signing uses an App Store Connect API key with cloud-managed signing. Xcode mints the Apple
+Distribution certificate and the App Store provisioning profile at export time. The repo stores no
+certificates and no provisioning profiles. Three secrets supply the key:
+`APP_STORE_CONNECT_API_KEY_P8` (the .p8, base64-encoded), `APP_STORE_CONNECT_API_KEY_ID` and
+`APP_STORE_CONNECT_API_ISSUER_ID`.
+
+Signing happens at export rather than at archive time. Archiving under automatic signing picks an
+"iOS App Development" profile, which needs a device registered to the team. App Store distribution
+signing needs no devices, so the archive is built unsigned and export does the signing.
+
+### The verification gate
+
+The workflow proves the IPA is shippable before it uploads anything. It fails the run if any of these
+is wrong:
+
+| Check | Fails when |
+|---|---|
+| `codesign --verify --strict --deep` | the bundle is not validly signed |
+| Leaf certificate | the signature is ad-hoc, or from a development certificate |
+| Team identifier | the signing team is not `GDV76FJJZ5` |
+| `application-identifier` | the entitlement does not name `com.circuitstitch.deferno` |
+| `get-task-allow` | the binary is debuggable, which App Store review rejects |
+| Embedded profile | the profile lists provisioned devices, so it is ad-hoc or development |
+| Bundle id and build number | either disagrees with what the run intended to ship |
+
+`xcrun altool --validate-app` then runs App Store Connect's own validation, which catches rejected
+entitlements, an unsupported SDK and a duplicate build number. Only after that does the upload run.
+
+Each successful run keeps the signed IPA and its dSYMs as a workflow artifact for 30 days, so a
+question about a shipped build is answered by inspecting the artifact rather than rebuilding it.
+
+### Why builds before 2026-08-21 stopped at internal testing
+
+`ExportOptions.plist` set `testFlightInternalTestingOnly` to `true`. Apple's documentation for that
+key is exact: the build "cannot be distributed via external TestFlight or the App Store". Every upload
+reached internal testers, then could never be promoted to external testing or selected as a build for
+review.
+
+The flag travels with the upload and cannot be cleared in App Store Connect. A build marked this way
+is spent — the fix is a new upload with a new build number.
+
+The key is now absent, and Apple's default is `NO`. The workflow also fails at its first step if the
+key ever reappears set to `true`, so this cannot ship silently again.
+
+Note that a build also stalls before external testing while its **export compliance** answer is
+missing, which is a separate gate — see the App Encryption Documentation section above.
+
 ## Building & running (macOS + Xcode)
 
 The Xcode project is **committed** (`iosApp.xcodeproj`), verified on Xcode 26.6 / iOS 26 SDK. The one

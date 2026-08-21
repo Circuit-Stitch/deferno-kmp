@@ -1,17 +1,20 @@
-# TestFlight upload (manual). Since 2026-04-28 App Store Connect rejects any upload not built with the
-# iOS 26 SDK / Xcode 26+. That used to make this workflow the odd one out — the dev machine and ios.yml
-# were both on Xcode 15 — but the Apple toolchain floor has since risen to Xcode 26 everywhere, so this
-# now differs from the PR gate only in what it does (archive + sign + upload), not in what it builds
-# with. It archives the Release device build (the static Deferno.framework's iosArm64 slice + the SwiftUI
-# app + the SQLCipher pod), then signs + uploads to TestFlight using an App Store Connect API key with
-# cloud-managed signing — no certificates or provisioning profiles are stored in the repo.
+# TestFlight upload (manual). Archives the Release device build, signs it for App Store distribution,
+# verifies the signature, then uploads it to App Store Connect.
+#
+# The build number is the workflow run number (monotonic), so each run produces a TestFlight build
+# strictly newer than the last for marketing version 1.0.
+#
+# Since 2026-04-28 App Store Connect rejects any upload not built with the iOS 26 SDK / Xcode 26+. The
+# Apple toolchain floor is Xcode 26 everywhere now, so this workflow differs from the PR gate only in
+# what it does (archive + sign + verify + upload), not in what it builds with.
 #
 # Kotlin/Native 2.4.0's maxTested Xcode is 26.4; past that KGP only warns (XcodeVersionTooHighWarning)
 # and konan links against its own bundled toolchain regardless, so the framework links cleanly.
 #
-# Trigger it by hand: Actions → TestFlight → Run workflow. The build number is the workflow run number
-# (monotonic), so each run produces a TestFlight build strictly newer than the last for marketing
-# version 1.0. Internal testers (you) get it within minutes of processing — see app/iosApp/README.md.
+# Signing uses an App Store Connect API key with cloud-managed signing. No certificates or provisioning
+# profiles are stored in the repo.
+#
+# Trigger it by hand: Actions → TestFlight → Run workflow. See app/iosApp/README.md.
 name: TestFlight
 
 on:
@@ -25,9 +28,15 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # The bundle id and team the exported IPA must be signed for. The verify step fails the run on any
+  # mismatch, so a misconfigured cloud-signing result cannot reach App Store Connect.
+  EXPECTED_BUNDLE_ID: com.circuitstitch.deferno
+  EXPECTED_TEAM_ID: GDV76FJJZ5
+
 jobs:
   upload:
-    name: Archive & upload to TestFlight (Xcode 26)
+    name: Archive, sign & upload to TestFlight (Xcode 26)
     runs-on: [self-hosted, macOS, ARM64, deferno-ios]
     # Generous for the cold-cache first run: the Gradle Run Script downloads the Kotlin/Native compiler +
     # konan deps (~1 GB) before linking the framework.
@@ -44,6 +53,25 @@ jobs:
           # submodule checkout 403s. SUBMODULES_TOKEN: fine-grained PAT, Contents:read on deferno-kmp +
           # shacl-aio. checkout rewrites the SSH submodule URL to HTTPS and auths with it.
           token: ${{ secrets.SUBMODULES_TOKEN }}
+
+      # Guard the bug this workflow shipped for months. `testFlightInternalTestingOnly` marks an upload
+      # so it "cannot be distributed via external TestFlight or the App Store" (xcodebuild -help). The
+      # flag is permanent for that build number and cannot be cleared in App Store Connect. Fail here
+      # rather than discover it days later when the build refuses to move past internal testing.
+      - name: Assert the export is not marked internal-testing-only
+        run: |
+          set -euo pipefail
+          PLIST=app/iosApp/ExportOptions.plist
+          value="$(/usr/libexec/PlistBuddy -c 'Print :testFlightInternalTestingOnly' "$PLIST" 2>/dev/null || echo absent)"
+          case "$value" in
+            absent|false)
+              echo "testFlightInternalTestingOnly: $value — build is eligible for external TestFlight and App Store review."
+              ;;
+            *)
+              echo "::error file=$PLIST::testFlightInternalTestingOnly is '$value'. That permanently blocks this build from external TestFlight and App Store review. Remove the key (Apple's default is NO)."
+              exit 1
+              ;;
+          esac
 
       # Temurin 17 is the toolchain the build pins (ProjectConfig.JVM_TOOLCHAIN /
       # gradle-daemon-jvm.properties). The Gradle run inside the Xcode Run Script phase uses it as the
@@ -72,6 +100,7 @@ jobs:
       # uploading with an older SDK would just be rejected by App Store Connect anyway.
       - name: Select Xcode 26 (iOS 26 SDK)
         run: |
+          set -euo pipefail
           XC="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
           if [ -z "$XC" ]; then
             echo "::error::No Xcode 26 found on this runner — App Store Connect requires the iOS 26 SDK."
@@ -97,19 +126,30 @@ jobs:
         working-directory: app/iosApp
         run: pod install
 
-      # Materialize the App Store Connect API key (.p8) from the base64 secret. Used by both xcodebuild
-      # invocations below: -allowProvisioningUpdates uses it to create/reuse the Apple Distribution cert
-      # + App Store profile in the cloud, and destination=upload uses it to authenticate the upload.
+      # Materialize the App Store Connect API key (.p8) from the base64 secret. Two consumers need it:
+      # xcodebuild -allowProvisioningUpdates (mints the Apple Distribution cert + App Store profile in
+      # the cloud) and altool (authenticates the validate + upload calls).
+      #
+      # altool locates the key by filename, so it must be written as AuthKey_<KEY_ID>.p8 inside the
+      # directory named by API_PRIVATE_KEYS_DIR.
       - name: Write App Store Connect API key
         env:
           API_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
-          if [ -z "$API_KEY_P8_BASE64" ]; then
-            echo "::error::Secret APP_STORE_CONNECT_API_KEY_P8 is empty — see app/iosApp/README.md (TestFlight)."
-            exit 1
-          fi
-          mkdir -p "$RUNNER_TEMP/private_keys"
-          echo "$API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/private_keys/AuthKey.p8"
+          set -euo pipefail
+          for name in API_KEY_P8_BASE64 KEY_ID ISSUER_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret for $name is empty — see app/iosApp/README.md (TestFlight)."
+              exit 1
+            fi
+          done
+          KEYDIR="$RUNNER_TEMP/private_keys"
+          mkdir -p "$KEYDIR"
+          echo "$API_KEY_P8_BASE64" | base64 --decode > "$KEYDIR/AuthKey_${KEY_ID}.p8"
+          echo "API_PRIVATE_KEYS_DIR=$KEYDIR" >> "$GITHUB_ENV"
+          echo "API_KEY_PATH=$KEYDIR/AuthKey_${KEY_ID}.p8" >> "$GITHUB_ENV"
 
       # Archive the Release device build, UNSIGNED. xcodebuild runs the project's Run Script phase first
       # (./gradlew :app:iosApp:embedAndSignAppleFrameworkForXcode → the iosArm64 Release Deferno.framework),
@@ -123,6 +163,7 @@ jobs:
       # Store profile from the API key). So skip signing now — the same CODE_SIGNING_ALLOWED=NO the
       # simulator build in ios.yml uses, which the Kotlin Run Script handles. The Deferno framework and
       # SQLCipher are statically linked, so the .app has no embedded dylibs; export re-signs just the app.
+      # The verify step below proves the exported result carries a real distribution signature.
       # CURRENT_PROJECT_VERSION = the run number → a unique, increasing CFBundleVersion.
       - name: Archive (Release, generic iOS device) — unsigned
         working-directory: app/iosApp
@@ -140,22 +181,146 @@ jobs:
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             | "${FMT[@]}"
 
-      # Export + upload in one step (ExportOptions.plist sets destination=upload). Cloud signing again via
-      # the API key. On success the build appears in App Store Connect → TestFlight after processing.
-      - name: Export & upload to TestFlight
+      # Export a signed IPA to disk. Cloud-managed automatic signing mints the Apple Distribution cert +
+      # App Store profile from the API key. Exporting and uploading are separate steps so the signature
+      # can be inspected before anything reaches App Store Connect.
+      - name: Export signed IPA (App Store distribution)
         working-directory: app/iosApp
         env:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
+          set -euo pipefail
+          rm -rf "$PWD/build/export"
           xcodebuild -exportArchive \
             -archivePath "$PWD/build/Deferno.xcarchive" \
             -exportOptionsPlist ExportOptions.plist \
             -exportPath "$PWD/build/export" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
+            -authenticationKeyPath "$API_KEY_PATH" \
             -authenticationKeyID "$KEY_ID" \
             -authenticationKeyIssuerID "$ISSUER_ID"
+          ls -lh "$PWD/build/export"
+
+      # Prove the IPA is signed for App Store distribution before uploading it. Every check below has
+      # been a real-world silent failure: an ad-hoc or development signature, the wrong team, a profile
+      # carrying registered devices (that is an ad-hoc profile, not an App Store one), get-task-allow
+      # left on (a debuggable binary App Store review rejects), or a stale build number.
+      - name: Verify the exported IPA is signed for App Store distribution
+        working-directory: app/iosApp
+        run: |
+          set -euo pipefail
+
+          IPA="$(ls build/export/*.ipa | head -1)"
+          echo "Inspecting $IPA"
+
+          WORK="$RUNNER_TEMP/ipa-verify"
+          rm -rf "$WORK" && mkdir -p "$WORK"
+          unzip -q "$IPA" -d "$WORK"
+          APP="$(ls -d "$WORK"/Payload/*.app | head -1)"
+          echo "App bundle: $APP"
+
+          fail() { echo "::error::$1"; exit 1; }
+
+          # 1. The signature must be structurally valid, including nested code.
+          codesign --verify --strict --deep --verbose=2 "$APP" \
+            || fail "codesign --verify failed: the app bundle is not validly signed."
+
+          # 2. The leaf certificate must be an Apple Distribution one, on our team. An ad-hoc signature
+          #    reports 'Signature=adhoc' and no Authority line at all.
+          codesign -dvvv "$APP" > "$WORK/sig.txt" 2>&1
+          grep -E '^Authority=' "$WORK/sig.txt" || true
+          grep -qE '^Authority=(Apple Distribution|iPhone Distribution)' "$WORK/sig.txt" \
+            || fail "Not signed by an Apple Distribution certificate. codesign reported: $(grep -E '^(Authority|Signature)=' "$WORK/sig.txt" | head -3 | tr '\n' ' ')"
+          grep -qE "^TeamIdentifier=${EXPECTED_TEAM_ID}$" "$WORK/sig.txt" \
+            || fail "Wrong signing team. Expected ${EXPECTED_TEAM_ID}, got: $(grep -E '^TeamIdentifier=' "$WORK/sig.txt")"
+
+          # 3. Entitlements: the app must claim our app id and must NOT be debuggable.
+          codesign -d --entitlements - --xml "$APP" > "$WORK/entitlements.plist" 2>/dev/null \
+            || fail "Could not read entitlements from the signed app."
+          plutil -p "$WORK/entitlements.plist"
+          appid="$(/usr/libexec/PlistBuddy -c 'Print :application-identifier' "$WORK/entitlements.plist" 2>/dev/null || echo '')"
+          [ "$appid" = "${EXPECTED_TEAM_ID}.${EXPECTED_BUNDLE_ID}" ] \
+            || fail "Wrong application-identifier entitlement. Expected ${EXPECTED_TEAM_ID}.${EXPECTED_BUNDLE_ID}, got '${appid}'."
+          gta="$(/usr/libexec/PlistBuddy -c 'Print :get-task-allow' "$WORK/entitlements.plist" 2>/dev/null || echo false)"
+          [ "$gta" = "false" ] \
+            || fail "get-task-allow is '$gta'. That is a development signature; App Store review rejects a debuggable binary."
+
+          # 4. The embedded profile must be an App Store profile. App Store profiles provision no
+          #    devices; an ad-hoc or development profile lists them.
+          security cms -D -i "$APP/embedded.mobileprovision" > "$WORK/profile.plist" 2>/dev/null \
+            || fail "No embedded.mobileprovision in the exported app."
+          /usr/libexec/PlistBuddy -c 'Print :Name' "$WORK/profile.plist" 2>/dev/null || true
+          if /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$WORK/profile.plist" >/dev/null 2>&1; then
+            fail "The embedded provisioning profile lists provisioned devices, so it is an ad-hoc or development profile, not an App Store one."
+          fi
+
+          # 5. Identity and build number must be what this run intended to ship.
+          bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")"
+          build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")"
+          [ "$bundle_id" = "$EXPECTED_BUNDLE_ID" ] \
+            || fail "Wrong bundle id. Expected $EXPECTED_BUNDLE_ID, got $bundle_id."
+          [ "$build" = "${{ github.run_number }}" ] \
+            || fail "CFBundleVersion is '$build' but this run stamps '${{ github.run_number }}'."
+
+          echo "Verified: $bundle_id $version ($build), Apple Distribution, team $EXPECTED_TEAM_ID, App Store profile."
+          {
+            echo "### TestFlight build verified"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Bundle id | \`$bundle_id\` |"
+            echo "| Version | $version ($build) |"
+            echo "| Team | $EXPECTED_TEAM_ID |"
+            echo "| Signature | Apple Distribution, App Store profile |"
+            echo "| External TestFlight eligible | yes |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Run App Store Connect's own validation before uploading. It catches what local codesign cannot:
+      # rejected entitlements, an unsupported SDK, missing icons, a duplicate build number. A failure
+      # here stops the run without spending an upload.
+      - name: Validate with App Store Connect
+        working-directory: app/iosApp
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          IPA="$(ls build/export/*.ipa | head -1)"
+          xcrun altool --validate-app \
+            -f "$IPA" \
+            -t ios \
+            --api-key "$KEY_ID" \
+            --api-issuer "$ISSUER_ID"
+
+      - name: Upload to TestFlight
+        working-directory: app/iosApp
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          IPA="$(ls build/export/*.ipa | head -1)"
+          xcrun altool --upload-app \
+            -f "$IPA" \
+            -t ios \
+            --api-key "$KEY_ID" \
+            --api-issuer "$ISSUER_ID"
+          echo "Uploaded build ${{ github.run_number }}. App Store Connect processes it in a few minutes."
+
+      # Keep the signed IPA and its dSYMs. They are what was actually shipped, so a later question about
+      # a TestFlight build can be answered by inspecting the artifact instead of rebuilding.
+      - name: Upload the signed IPA
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: deferno-ios-${{ github.run_number }}
+          path: |
+            app/iosApp/build/export/*.ipa
+            app/iosApp/build/Deferno.xcarchive/dSYMs/**
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload xcodebuild logs on failure
         if: ${{ failure() }}

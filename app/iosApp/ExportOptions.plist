@@ -3,8 +3,10 @@
 <!--
   Export options for `xcodebuild -exportArchive`, used by .github/workflows/testflight.yml.
 
-  destination = upload          → exportArchive signs the .xcarchive and uploads it straight to
-                                  App Store Connect in one step (no separate altool/Transporter call).
+  destination = export          → write a signed Deferno.ipa to disk. The workflow then verifies its
+                                  signature and uploads it with `xcrun altool`. Exporting and uploading
+                                  used to be one step (destination = upload), which left no artifact to
+                                  check and no way to fail the run on a bad signature.
   method      = app-store-connect → the TestFlight / App Store distribution pipeline (Xcode 16+ name;
                                   the pre-16 alias was `app-store`).
   signingStyle = automatic + the workflow's `-allowProvisioningUpdates` + the App Store Connect API key
@@ -14,15 +16,19 @@
                                   an Apple Distribution authority for com.circuitstitch.deferno).
   manageAppVersionAndBuildNumber = false → keep the CFBundleVersion the workflow stamps from the run
                                   number (CURRENT_PROJECT_VERSION); don't let Xcode auto-bump it.
-  testFlightInternalTestingOnly = true → mark the build for internal testers only (App Store Connect
-                                  team members — i.e. you). Skips the external-tester Beta App Review
-                                  path. Flip to false (and re-upload) when you add external testers.
   uploadSymbols = true          → ship dSYMs so TestFlight crash reports are symbolicated.
+
+  There is deliberately NO `testFlightInternalTestingOnly` key. Apple's default is NO, which is what a
+  release build needs. Setting it to YES marks the uploaded build so it "cannot be distributed via
+  external TestFlight or the App Store" — permanently, for that build. The flag travels with the upload
+  and cannot be cleared in App Store Connect afterwards; the only fix is a fresh build number. This
+  file set it to YES until 2026-08-21, which is why every build so far reached internal testers and
+  then stopped. See app/iosApp/README.md.
 -->
 <plist version="1.0">
 <dict>
     <key>destination</key>
-    <string>upload</string>
+    <string>export</string>
     <key>method</key>
     <string>app-store-connect</string>
     <key>teamID</key>
@@ -31,8 +37,6 @@
     <string>automatic</string>
     <key>manageAppVersionAndBuildNumber</key>
     <false/>
-    <key>testFlightInternalTestingOnly</key>
-    <true/>
     <key>uploadSymbols</key>
     <true/>
 </dict>
