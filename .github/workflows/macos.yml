@@ -14,7 +14,7 @@
 # traps this gate must not re-introduce (chiefly `set -o pipefail` and failing loudly on a missing Xcode).
 #
 # Runner: macos-26 (Apple Silicon — the framework is macosArm64-only, so an Intel image could not link it
-# at all). Ruby 3 + CocoaPods + xcbeautify are preinstalled; XcodeGen is not, so brew installs it.
+# at all). xcbeautify is preinstalled; XcodeGen is not, so brew installs it.
 name: macOS
 
 on:
@@ -131,35 +131,42 @@ jobs:
           brew install --quiet xcodegen
           xcodegen --version
 
-      # CocoaPods is preinstalled on the runner. Cache the CDN spec data + the integrated Pods so repeat
-      # runs skip the network. Keyed on the committed Podfile.lock (Pods/ itself is gitignored).
-      #
-      # The `macosapp` discriminator is deliberate and must NOT be shortened back to `macos`: GitHub's
-      # cache key matching is CASE-INSENSITIVE, so a `pods-macos-…` key here collides with ios.yml's
-      # `pods-${{ runner.os }}-` restore-key (= `pods-macOS-`) — on an exact-key miss the iOS job would
-      # happily restore THIS job's macOS Pods into app/iosApp's cache slot while its own Pods/ stayed
-      # empty. Nothing breaks (pod install still runs) but both caches are wasted. runner.os is omitted
-      # for the same reason it is redundant: this job is pinned to macos-26.
-      - name: Cache CocoaPods
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cocoapods
-            app/macosApp/Pods
-          key: pods-macosapp-${{ hashFiles('app/macosApp/Podfile.lock') }}
-          restore-keys: pods-macosapp-
-
-      # ORDER MATTERS, and it is the one real difference from ios.yml: CocoaPods integrates by editing
-      # the generated .xcodeproj and layering the .xcworkspace on top, so regenerating the project DROPS
-      # the pod integration. `pod install` must therefore follow `xcodegen generate`, never precede it
-      # (app/macosApp/README.md documents the same two-step flow; build.sh runs it in this order).
       - name: xcodegen generate
         working-directory: app/macosApp
         run: xcodegen generate
 
-      - name: pod install (SQLCipher)
+      # SQLCipher ships as a binary xcframework inside its Swift package, so resolving it downloads a
+      # ~50 MB release artifact. Cache the resolved checkout so repeat runs skip that. Keyed on
+      # project.yml, which carries the EXACT SQLCipher version pin: this project is generated, so its
+      # Package.resolved is gitignored and can key nothing. Any project.yml edit refills the cache, which
+      # is broader than strictly necessary and always correct.
+      #
+      # The `macosapp` discriminator is deliberate and must NOT be shortened back to `macos`: GitHub's
+      # cache key matching is CASE-INSENSITIVE, and both Apple jobs run on macOS, so the two package
+      # caches are namespaced by APP (`spm-macosapp-` here, `spm-ios-` in ios.yml) rather than by OS.
+      # A shared prefix would let one job restore the other's packages into its own cache slot.
+      #
+      # The step sits after `xcodegen generate` because the resolve below needs the generated project.
+      - name: Cache resolved Swift packages
+        uses: actions/cache@v4
+        with:
+          path: app/macosApp/build/sourcePackages
+          key: spm-macosapp-${{ hashFiles('app/macosApp/project.yml') }}
+          restore-keys: spm-macosapp-
+
+      # Resolve in its OWN step rather than letting the build do it implicitly. A network or GitHub
+      # outage then fails here, named, in seconds — instead of deep inside a build whose log blames
+      # something else. ci-xcodebuild.sh passes the same -clonedSourcePackagesDirPath, so the build
+      # reuses exactly what this step resolved.
+      - name: Resolve Swift packages (SQLCipher)
         working-directory: app/macosApp
-        run: pod install
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project macosApp.xcodeproj \
+            -scheme macosApp \
+            -clonedSourcePackagesDirPath build/sourcePackages \
+            -resolvePackageDependencies
 
       # Both gated configurations run the SAME recipe — app/macosApp/ci-xcodebuild.sh, which owns the
       # xcodebuild invocation, the ⚠️ CI-only ad-hoc signing triple, the SWIFT_TREAT_WARNINGS_AS_ERRORS
@@ -170,7 +177,7 @@ jobs:
       #
       # The step below exercises the whole stack: xcodebuild runs the project's pre-build phase first
       # (./gradlew :app:macosApp:embedAndSignAppleFrameworkForXcode → the static Deferno.framework for this
-      # SDK/arch), then compiles the SwiftUI sources, links them against the framework + the SQLCipher pod,
+      # SDK/arch), then compiles the SwiftUI sources, links them against the framework + SQLCipher.framework,
       # and runs the macosAppTests suite in the app host — the real signal that the framework, the SKIE
       # bridge, SQLCipher and the tests all resolve and pass. The scheme's Test action is declared
       # explicitly in project.yml so the suite is genuinely part of `-scheme macosApp test`.
@@ -182,15 +189,17 @@ jobs:
       # item 3 blames a missing macOS CI gate for a regression that shipped and sat live for months; a build
       # configuration that nothing ever builds is exactly that vacuum again, one config down. This variant
       # differs from Debug in ways that can genuinely fail to build on their own — a distinct
-      # PRODUCT_BUNDLE_IDENTIFIER, the `KOTLIN_FRAMEWORK_BUILD_TYPE = debug` pin the Kotlin plugin cannot
-      # infer from a non-Debug/Release configuration name, and a CocoaPods `.proddebug.xcconfig` that only
-      # exists because the Podfile maps ProdDebug => :debug. Any of those silently missing is a broken
-      # variant nobody discovers until they try to dogfood prod.
+      # PRODUCT_BUNDLE_IDENTIFIER, and the `KOTLIN_FRAMEWORK_BUILD_TYPE = debug` pin the Kotlin plugin
+      # cannot infer from a non-Debug/Release configuration name. Either silently missing is a broken
+      # variant nobody discovers until they try to dogfood prod. (CocoaPods needed a third thing here: a
+      # generated `.proddebug.xcconfig`, which existed only because the Podfile mapped ProdDebug => :debug.
+      # SwiftPM has no per-configuration mapping to get wrong.)
       #
       # Not `test`: the suite is environment-agnostic (the same sources, the same host) and running it twice
       # would double the slowest step of this job to re-prove nothing. The Debug step above is the test gate.
-      # The shared script pins `-derivedDataPath build/dd`, so the framework + pod objects the Debug step
-      # produced are reused (a different CONFIGURATION inside the same derived data, not a cold rebuild).
+      # The shared script pins `-derivedDataPath build/dd` and `-clonedSourcePackagesDirPath
+      # build/sourcePackages`, so the framework and the resolved SQLCipher package the Debug step produced
+      # are reused (a different CONFIGURATION inside the same derived data, not a cold rebuild).
       #
       # `macosApp-ProdDebug` is deliberate over reusing the `macosApp` scheme: it also gates the SCHEME
       # itself, so a project.yml change that drops or mis-declares it fails here rather than the next time

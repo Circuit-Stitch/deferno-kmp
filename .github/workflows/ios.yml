@@ -1,13 +1,13 @@
 # iOS build CI (ADR-0006, the deliberate macOS follow-up flagged in ci.yml). The shared KMP core's
 # JVM-fast tests + coverage gate run on Linux in ci.yml; iOS *linking* and the SwiftUI app can only be
 # built on macOS (Kotlin/Native links the static `Deferno.framework`, then Xcode compiles the SwiftUI
-# layer + links it). This job builds that whole chain on a GitHub macOS runner: it integrates the
-# SQLCipher CocoaPod (ADR-0009 — the per-Account DB is encrypted at rest; the pod supplies the
-# `sqlite3_*` symbols the framework references *plus* `PRAGMA key`), drives the Gradle framework build
-# via the project's Run Script phase, and compiles + links the app for the iOS Simulator.
+# layer + links it). This job builds that whole chain on a GitHub macOS runner: it resolves the SQLCipher
+# Swift package (ADR-0009 — the per-Account DB is encrypted at rest; SQLCipher supplies the `sqlite3_*`
+# symbols the framework references *plus* `PRAGMA key`), drives the Gradle framework build via the
+# project's Run Script phase, and compiles + links the app for the iOS Simulator.
 #
-# Runner: macos-26 (Apple Silicon), which carries the Xcode 26 line. It ships Ruby 3 + CocoaPods +
-# xcbeautify preinstalled. The arm64 simulator uses the `iosSimulatorArm64` framework slice.
+# Runner: macos-26 (Apple Silicon), which carries the Xcode 26 line. It ships xcbeautify preinstalled.
+# The arm64 simulator uses the `iosSimulatorArm64` framework slice.
 #
 # It was macos-14 until the Apple toolchain floor rose to Xcode 26 (below): that image tops out at Xcode
 # 15.4 / the iOS 17 SDK, which cannot compile this app's sources at all — and it is deprecated besides
@@ -119,27 +119,37 @@ jobs:
           echo "Simulator destination: $(jq -r '"\(.name) (\(.udid))"' <<<"$DEVICE")"
           echo "SIM_ID=$(jq -r .udid <<<"$DEVICE")" >> "$GITHUB_ENV"
 
-      # CocoaPods is preinstalled on the runner. Cache the CDN spec data + the integrated Pods so repeat
-      # runs skip the network. Keyed on the committed Podfile.lock (Pods/ itself is gitignored).
-      - name: Cache CocoaPods
+      # SQLCipher ships as a binary xcframework inside its Swift package, so resolving it downloads a
+      # ~50 MB release artifact. Cache the resolved checkout so repeat runs skip that. Keyed on the
+      # committed Package.resolved, which pins the exact SQLCipher commit — a version bump changes the
+      # key and the cache refills. `-clonedSourcePackagesDirPath` below is what makes the path knowable;
+      # without it SwiftPM clones inside DerivedData, whose path no cache step can name.
+      - name: Cache resolved Swift packages
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cocoapods
-            app/iosApp/Pods
-          key: pods-${{ runner.os }}-${{ hashFiles('app/iosApp/Podfile.lock') }}
-          restore-keys: pods-${{ runner.os }}-
+          path: app/iosApp/build/sourcePackages
+          key: spm-ios-${{ hashFiles('app/iosApp/iosApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-ios-
 
-      - name: pod install (SQLCipher)
+      # Resolve in its OWN step rather than letting the build do it implicitly. A network or GitHub
+      # outage then fails here, named, in seconds — instead of thirty minutes into a build whose log
+      # blames something else.
+      - name: Resolve Swift packages (SQLCipher)
         working-directory: app/iosApp
-        run: pod install
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project iosApp.xcodeproj \
+            -scheme iosApp \
+            -clonedSourcePackagesDirPath build/sourcePackages \
+            -resolvePackageDependencies
 
       # The single command that exercises the whole stack: xcodebuild runs the project's Run Script
       # phase first (./gradlew :app:iosApp:embedAndSignAppleFrameworkForXcode → the static
       # Deferno.framework for this SDK/arch), then compiles the SwiftUI sources, links them against the
-      # framework + the SQLCipher pod, and runs the iosAppTests suite (#28) on the simulator — the real
+      # framework + SQLCipher.framework, and runs the iosAppTests suite (#28) on the simulator — the real
       # signal that the framework, the SKIE-free bridge, SQLCipher, and the tests all resolve and pass
-      # (#38). The Pods workspace (not the bare .xcodeproj) is required once a pod is integrated.
+      # (#38). `-project`, not `-workspace`: the workspace existed only because CocoaPods made one.
       # **Ad-hoc** signing (`CODE_SIGN_IDENTITY="-"`, no team, no profile) rather than the old
       # CODE_SIGNING_ALLOWED=NO. That flag's rationale — "the tests drive the in-memory DefernoDemo, which
       # touches no Keychain" — stopped being true when DefernoApp.init started building the REAL DI graph
@@ -163,11 +173,12 @@ jobs:
           set -o pipefail
           if command -v xcbeautify >/dev/null 2>&1; then FMT=(xcbeautify --renderer github-actions); else FMT=(cat); fi
           xcodebuild \
-            -workspace iosApp.xcworkspace \
+            -project iosApp.xcodeproj \
             -scheme iosApp \
             -configuration Debug \
             -destination "platform=iOS Simulator,id=$SIM_ID" \
             -derivedDataPath build/dd \
+            -clonedSourcePackagesDirPath build/sourcePackages \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="" \

@@ -62,39 +62,52 @@ auto-seeds a "Dev (staging)" account so a **Debug** build opens straight to the 
 value comes from the `DEV_STAGING_TOKEN` build setting, wired so the secret lives **on disk in
 the source tree, never in git, and survives a simulator erase** (the Keychain doesn't):
 
-- `Local.xcconfig` (committed) is the Debug base config — it `#include`s the CocoaPods config
-  and then `#include?`s an optional, git-ignored `Secrets.xcconfig`.
+- `Local.xcconfig` (committed) is the base config for Debug and ProdDebug. It `#include?`s an
+  optional, git-ignored `Secrets.xcconfig`.
 - **Put your token in `app/iosApp/Secrets.xcconfig`** (git-ignored; create it from the comment
   block if missing): `DEV_STAGING_TOKEN = <your staging PAT>`, then rebuild.
 - `Info.plist` carries `DevStagingToken = $(DEV_STAGING_TOKEN)`; empty (no `Secrets.xcconfig`,
   CI, or Release — which pins it empty) → nothing seeded, so the normal sign-in screen shows.
 
-`pod install` keeps quiet because `Local.xcconfig` includes the pod config; if it ever resets
-the Debug base config back to the pod xcconfig, re-point it at `Local.xcconfig`.
-
 ### Data layer: SQLCipher — encrypted at rest (ADR-0009)
 
 The per-Account database is opened by `IosSqlDriverFactory` (SQLiter / `native-driver`) with SQLiter's
-`Encryption` config, which applies the per-Account key via `PRAGMA key` — so the app must link a SQLite
-that understands it. That's **SQLCipher**, integrated as a **CocoaPod** (`Podfile` → `pod 'SQLCipher',
-'~> 4.6'`). It supplies the standard `sqlite3_*` symbols the static framework references — SQLiter's
-cinterop links system sqlite at the *klib* level, but Kotlin/Native does **not** propagate that linker
-opt into the consuming app for a static framework, so nothing else links sqlite and SQLCipher is the
-**sole** provider (no duplicate symbols) — **plus** real encryption-at-rest: the pod's `sqlite3.c`
-compiles with `SQLITE_HAS_CODEC` + `SQLCIPHER_CRYPTO_CC` (the CommonCrypto provider; no OpenSSL), so the
-app binary carries `sqlcipherCodecAttach` and `PRAGMA key` is real.
+`Encryption` config, which applies the per-Account key via `PRAGMA key`. The app must therefore link a
+SQLite that understands that pragma. That is **SQLCipher**, added as a **Swift package**: Zetetic's
+official [SQLCipher.swift](https://github.com/sqlcipher/SQLCipher.swift), pinned to an exact version in
+`iosApp.xcodeproj`. `app/macosApp` pins the same version.
 
-After `pod install`, **build the generated `iosApp.xcworkspace`, not the bare `.xcodeproj`** (a project
-with an integrated pod links only from its workspace). `Podfile` + `Podfile.lock` are committed (the
-lock pins the resolved pod version so local + CI match); the integrated `Pods/` and `iosApp.xcworkspace`
-are reproduced by `pod install` and are gitignored.
+SQLCipher is the app's ONLY sqlite implementation, and that is what makes the encryption real:
 
-> **CocoaPods is a Ruby gem.** Any Ruby ≥ 3.0 plus `gem install cocoapods` is the whole setup on Apple
-> Silicon (Homebrew Ruby is fine — the macOS *system* Ruby 2.6 is too old for modern CocoaPods' `ffi`).
-> **CI needs nothing extra** — GitHub's macOS runners ship Ruby 3 + CocoaPods preinstalled, so the iOS
-> workflow (`.github/workflows/ios.yml`) just runs `pod install`. (The rbenv-build-Ruby-from-source dance
-> this section used to document was an Intel/Ventura artifact — Homebrew shipped no Ruby bottle for that
-> pair. It retired with the machine.)
+- The static `Deferno.framework` references `sqlite3_*` and links no sqlite of its own. SQLiter's
+  cinterop links system sqlite at the *klib* level, but Kotlin/Native does not propagate that linker
+  option into a consuming app for a static framework.
+- Nothing in the app adds `-lsqlite3`. If anything did, the system SQLite has no codec, so `PRAGMA key`
+  would open the database UNENCRYPTED rather than fail — a silent failure, not a build error.
+- The package ships a dynamic `SQLCipher.framework`, which Xcode links and embeds in `Deferno.app`.
+  Two-level namespace binds every `sqlite3_*` import in the app to that framework by name, so the
+  system SQLite cannot substitute for it at load time.
+- The framework exports the deprecated `sqlite3_*` entry points the SQLiter cinterop wraps but never
+  calls (`sqlite3_trace`, `sqlite3_profile`, `sqlite3_expired`, `sqlite3_aggregate_count`,
+  `sqlite3_transfer_bindings`, `sqlite3_global_recover`, `sqlite3_thread_cleanup`,
+  `sqlite3_memory_alarm`), so the link needs no shim.
+
+To check the wiring yourself, read the linked symbol table of a built app:
+
+```sh
+nm -m build/dd/Build/Products/Debug-iphoneos/Deferno.app/Deferno \
+  | grep '_sqlite3_' | grep undefined | sed -E 's/.*\(from ([^)]*)\).*/\1/' | sort | uniq -c
+```
+
+Every line must say `SQLCipher`. A line naming `libsqlite3` means the app picked up the system SQLite
+and the database is not encrypted.
+
+The SQLCipher build is `SQLCIPHER_CRYPTO_CC` (the CommonCrypto provider; no OpenSSL), so the framework
+carries `sqlcipherCodecAttach` and `PRAGMA key` is real.
+
+There is no `.xcworkspace` and no `Podfile`. Build `iosApp.xcodeproj` directly. `xcodebuild` resolves
+the package itself; the first build needs network access. `Package.resolved` is committed inside the
+project, so a clone and a CI runner resolve the same SQLCipher commit.
 
 ### App Store export compliance — the App Encryption Documentation prompt
 
@@ -103,7 +116,7 @@ answer is the **second** option: **"Standard encryption algorithms instead of, o
 using or accessing the encryption within Apple's operating system."**
 
 Linking SQLCipher counts, even though none of the cryptography is ours. Apple's "implement" means
-uses, contains or incorporates — not authored. The pod's `sqlite3.c` compiles into the app binary
+uses, contains or incorporates — not authored. SQLCipher.framework ships inside the app bundle
 and carries the whole scheme, and the fact that the AES primitive routes through CommonCrypto
 (`SQLCIPHER_CRYPTO_CC`, above) does not make it Apple's encryption. *"None of the algorithms
 mentioned above"* would only be correct if the app used Apple's own crypto APIs plus HTTPS and
@@ -113,7 +126,7 @@ The complete surface, which is what the question is really asking about:
 
 | What | Where | Algorithms |
 |---|---|---|
-| Per-Account database at rest | SQLCipher 4.10.0 pod (ADR-0009) | AES-256-CBC, HMAC-SHA512, PBKDF2 |
+| Per-Account database at rest | SQLCipher 4.19.0 Swift package (ADR-0009) | AES-256-CBC, HMAC-SHA512, PBKDF2 |
 | Database key storage | `KeychainSecretVault` (`core/secure`) | Apple Keychain |
 | OAuth PKCE challenge | `PkceCrypto.ios.kt` (`core/secure`) | SHA-256 |
 | API transport | Ktor | HTTPS / TLS |
@@ -191,14 +204,13 @@ missing, which is a separate gate — see the App Encryption Documentation secti
 
 ## Building & running (macOS + Xcode)
 
-The Xcode project is **committed** (`iosApp.xcodeproj`), verified on Xcode 26.6 / iOS 26 SDK. The one
-setup step is **`pod install`** (SQLCipher, above) — it generates `iosApp.xcworkspace`, which you build
-from then on. Klibs cross-compile on any host, but **linking the framework + running the app require
+The Xcode project is **committed** (`iosApp.xcodeproj`), verified on Xcode 26.6 / iOS 26 SDK. There is
+no setup step: SQLCipher is a Swift package, and Xcode resolves it on the first build (that one needs
+network access). Klibs cross-compile on any host, but **linking the framework + running the app require
 macOS** (ADR-0006).
 
-**Xcode GUI:** run `pod install` once (from `app/iosApp`), then open `app/iosApp/iosApp.xcworkspace`
-(**not** the `.xcodeproj`), pick an iPhone or iPad simulator, and Run. The Run Script phase builds the
-shared framework via Gradle first.
+**Xcode GUI:** open `app/iosApp/iosApp.xcodeproj`, pick an iPhone or iPad simulator, and Run. The Run
+Script phase builds the shared framework via Gradle first.
 
 **Headless** (how the app was verified, on a booted simulator). Note: **do not pass
 `CODE_SIGNING_ALLOWED=NO`** when you intend to *run* the app — an unsigned iOS app has no
@@ -213,9 +225,9 @@ the iOS CI signs ad-hoc (`CODE_SIGN_IDENTITY="-"`, no cert needed). The product 
 still named `iosApp`).
 ```sh
 # from app/iosApp
-pod install   # once; regenerate after a Podfile change (see the Ruby caveat above)
-xcodebuild -workspace iosApp.xcworkspace -scheme iosApp -configuration Debug \
-  -destination 'platform=iOS Simulator,name=iPhone 15' -derivedDataPath build/dd build
+xcodebuild -project iosApp.xcodeproj -scheme iosApp -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 15' -derivedDataPath build/dd \
+  -clonedSourcePackagesDirPath build/sourcePackages build
 xcrun simctl install booted build/dd/Build/Products/Debug-iphonesimulator/Deferno.app
 xcrun simctl launch booted com.circuitstitch.deferno
 ```
@@ -274,8 +286,7 @@ scheme's Test action. Green on the iOS 26.5 simulator under Xcode 26.6:
 
 ```sh
 # from app/iosApp — builds the shared framework + app, then runs the suite on a simulator
-pod install   # once (generates iosApp.xcworkspace)
-xcodebuild test -workspace iosApp.xcworkspace -scheme iosApp -configuration Debug \
+xcodebuild test -project iosApp.xcodeproj -scheme iosApp -configuration Debug \
   -destination 'platform=iOS Simulator,name=iPhone 15'
 ```
 

@@ -20,9 +20,10 @@
 # CI builds a different config than every dev machine"). One home for them means that obligation has one
 # address, not one per gated configuration.
 #
-# Deliberately NOT a job-level matrix: both invocations share `-derivedDataPath build/dd`, so the second
-# reuses the Kotlin framework + pod objects the first produced. Separate jobs would re-run xcodegen, pod
-# install and Gradle from cold for each configuration.
+# Deliberately NOT a job-level matrix: both invocations share `-derivedDataPath build/dd` and
+# `-clonedSourcePackagesDirPath build/sourcePackages`, so the second reuses the Kotlin framework and the
+# resolved SQLCipher package the first produced. Separate jobs would re-run xcodegen, package resolution
+# and Gradle from cold for each configuration.
 set -euo pipefail
 
 if [ "$#" -ne 3 ]; then
@@ -46,11 +47,12 @@ if command -v xcbeautify >/dev/null 2>&1; then FMT=(xcbeautify --renderer github
 # us breaks CI loudly instead of silently reaccumulating warnings.
 echo "==> xcodebuild ($SCHEME, $CONFIGURATION, $ACTION)"
 xcodebuild \
-  -workspace macosApp.xcworkspace \
+  -project macosApp.xcodeproj \
   -scheme "$SCHEME" \
   -configuration "$CONFIGURATION" \
   -destination "platform=macOS,arch=arm64" \
   -derivedDataPath build/dd \
+  -clonedSourcePackagesDirPath build/sourcePackages \
   CODE_SIGN_IDENTITY="-" \
   CODE_SIGN_STYLE=Manual \
   DEVELOPMENT_TEAM="" \

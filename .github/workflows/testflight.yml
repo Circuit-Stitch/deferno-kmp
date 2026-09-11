@@ -111,20 +111,27 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
-      # CocoaPods is preinstalled on the macOS image. Cache the CDN spec data + the integrated Pods so
-      # repeat runs skip the network. Keyed on the committed Podfile.lock (Pods/ itself is gitignored).
-      - name: Cache CocoaPods
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cocoapods
-            app/iosApp/Pods
-          key: pods-${{ runner.os }}-${{ hashFiles('app/iosApp/Podfile.lock') }}
-          restore-keys: pods-${{ runner.os }}-
-
-      - name: pod install (SQLCipher)
+      # Resolve the SQLCipher Swift package before anything long-running starts.
+      #
+      # There is NO actions/cache step here, unlike ios.yml. This runner is SELF-HOSTED, so its SwiftPM
+      # caches may be warm, cold, or left over from an unrelated job, and a release build must not depend
+      # on which. `-clonedSourcePackagesDirPath build/sourcePackages` puts the checkout inside the
+      # workspace actions/checkout cleans at the start of every run, so this job always resolves from
+      # scratch into a known-empty directory. One ~50 MB download is a cheap price for a release that
+      # cannot inherit another run's state. The archive step passes the same path, so it links exactly
+      # what this step resolved.
+      #
+      # Resolving in its own step also means a network or GitHub outage fails here in seconds, named,
+      # rather than thirty minutes into the archive.
+      - name: Resolve Swift packages (SQLCipher)
         working-directory: app/iosApp
-        run: pod install
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project iosApp.xcodeproj \
+            -scheme iosApp \
+            -clonedSourcePackagesDirPath build/sourcePackages \
+            -resolvePackageDependencies
 
       # Materialize the App Store Connect API key (.p8) from the base64 secret. Two consumers need it:
       # xcodebuild -allowProvisioningUpdates (mints the Apple Distribution cert + App Store profile in
@@ -153,7 +160,8 @@ jobs:
 
       # Archive the Release device build, UNSIGNED. xcodebuild runs the project's Run Script phase first
       # (./gradlew :app:iosApp:embedAndSignAppleFrameworkForXcode → the iosArm64 Release Deferno.framework),
-      # then compiles + links the SwiftUI app against it + the SQLCipher pod.
+      # then compiles + links the SwiftUI app against it + SQLCipher.framework, which it also embeds into
+      # Deferno.app/Frameworks. `-project`, not `-workspace`: the workspace existed only for CocoaPods.
       #
       # Why unsigned here: signing the *archive* under automatic signing uses an "iOS App Development"
       # profile (the archive action's default), which requires a device registered to the team — a brand
@@ -161,9 +169,11 @@ jobs:
       # App Store / TestFlight distribution signing needs ZERO devices and belongs at *export* time, which
       # the next step does via cloud-managed automatic signing (it mints the Apple Distribution cert + App
       # Store profile from the API key). So skip signing now — the same CODE_SIGNING_ALLOWED=NO the
-      # simulator build in ios.yml uses, which the Kotlin Run Script handles. The Deferno framework and
-      # SQLCipher are statically linked, so the .app has no embedded dylibs; export re-signs just the app.
-      # The verify step below proves the exported result carries a real distribution signature.
+      # simulator build in ios.yml uses, which the Kotlin Run Script handles. The Deferno framework is
+      # static, but SQLCipher.framework is a DYNAMIC framework embedded in the .app, so export re-signs
+      # that nested framework as well as the app itself. The verify step below runs `codesign --deep`,
+      # which inspects the nested framework too, and proves the exported result carries a real
+      # distribution signature.
       # CURRENT_PROJECT_VERSION = the run number → a unique, increasing CFBundleVersion.
       - name: Archive (Release, generic iOS device) — unsigned
         working-directory: app/iosApp
@@ -171,11 +181,12 @@ jobs:
           set -o pipefail
           if command -v xcbeautify >/dev/null 2>&1; then FMT=(xcbeautify --renderer github-actions); else FMT=(cat); fi
           xcodebuild archive \
-            -workspace iosApp.xcworkspace \
+            -project iosApp.xcodeproj \
             -scheme iosApp \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$PWD/build/Deferno.xcarchive" \
+            -clonedSourcePackagesDirPath build/sourcePackages \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
@@ -222,7 +233,8 @@ jobs:
 
           fail() { echo "::error::$1"; exit 1; }
 
-          # 1. The signature must be structurally valid, including nested code.
+          # 1. The signature must be structurally valid, including nested code — which now means the
+          #    embedded SQLCipher.framework as well as the app itself.
           codesign --verify --strict --deep --verbose=2 "$APP" \
             || fail "codesign --verify failed: the app bundle is not validly signed."
 

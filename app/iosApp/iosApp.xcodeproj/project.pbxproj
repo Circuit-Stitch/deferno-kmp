@@ -55,7 +55,7 @@
 		DE000200000000000000049 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000049 /* SearchView.swift */; };
 		DE000200000000000000050 /* NewItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000050 /* NewItemView.swift */; };
 		DE000200000000000000051 /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000100000000000000051 /* FeedbackView.swift */; };
-		E11CDB876C6BB7C290AD7BBF /* libPods-iosApp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A284BEEB3E5CB9DC5DAA6943 /* libPods-iosApp.a */; };
+		DE000200000000000000090 /* SQLCipher in Frameworks */ = {isa = PBXBuildFile; productRef = DE000D000000000000000001 /* SQLCipher */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,12 +72,8 @@
 		2AC37618E2F12545CD35AA88 /* FoundationModelsClassifier.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FoundationModelsClassifier.swift; sourceTree = "<group>"; };
 		36899BF29966B0651819404F /* BreakdownView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownView.swift; sourceTree = "<group>"; };
 		46557F6D1755D00F5A110E02 /* BreakdownTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownTypes.swift; sourceTree = "<group>"; };
-		85FCC65B3A9A22AD7A207747 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
-		8F6CD701E892024FBD11D658 /* Pods-iosApp.proddebug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.proddebug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.proddebug.xcconfig"; sourceTree = "<group>"; };
-		A284BEEB3E5CB9DC5DAA6943 /* libPods-iosApp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-iosApp.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A814CF36BBC8D39E6948A223 /* BreakdownEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownEngine.swift; sourceTree = "<group>"; };
 		C348C4334E080672AAA79425 /* BreakdownEngineTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BreakdownEngineTests.swift; sourceTree = "<group>"; };
-		DC7FD732D8796105D096EC7A /* Pods-iosApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.release.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.release.xcconfig"; sourceTree = "<group>"; };
 		DE0001000000000000000001 /* DefernoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefernoApp.swift; sourceTree = "<group>"; };
 		DE0001000000000000000003 /* Deferno.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Deferno.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DE0001000000000000000010 /* ObservableState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservableState.swift; sourceTree = "<group>"; };
@@ -131,7 +127,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E11CDB876C6BB7C290AD7BBF /* libPods-iosApp.a in Frameworks */,
+				DE000200000000000000090 /* SQLCipher in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -145,16 +141,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		07AABB3785BF16BAA509C013 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				85FCC65B3A9A22AD7A207747 /* Pods-iosApp.debug.xcconfig */,
-				DC7FD732D8796105D096EC7A /* Pods-iosApp.release.xcconfig */,
-				8F6CD701E892024FBD11D658 /* Pods-iosApp.proddebug.xcconfig */,
-			);
-			path = Pods;
-			sourceTree = "<group>";
-		};
 		700FB7EA2B3E627C037381A3 /* Breakdown */ = {
 			isa = PBXGroup;
 			children = (
@@ -170,7 +156,6 @@
 		A389F3BE216A58B3EE17079C /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				A284BEEB3E5CB9DC5DAA6943 /* libPods-iosApp.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -181,7 +166,6 @@
 				DE0003000000000000000002 /* iosApp */,
 				DE0003000000000000000020 /* iosAppTests */,
 				DE0003000000000000000003 /* Products */,
-				07AABB3785BF16BAA509C013 /* Pods */,
 				A389F3BE216A58B3EE17079C /* Frameworks */,
 			);
 			sourceTree = "<group>";
@@ -397,18 +381,19 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = DE0007000000000000000002 /* Build configuration list for PBXNativeTarget "iosApp" */;
 			buildPhases = (
-				53C67C63287D0669A870EF1B /* [CP] Check Pods Manifest.lock */,
 				DE0004000000000000000001 /* Build Deferno framework (Kotlin/Native) */,
 				DE0004000000000000000002 /* Sources */,
 				DE0004000000000000000003 /* Frameworks */,
 				DE0004000000000000000004 /* Resources */,
-				BB8468E21AC91CF6C1544B7E /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			name = iosApp;
+			packageProductDependencies = (
+				DE000D000000000000000001 /* SQLCipher */,
+			);
 			productName = iosApp;
 			productReference = DE0001000000000000000003 /* Deferno.app */;
 			productType = "com.apple.product-type.application";
@@ -463,6 +448,9 @@
 				pt,
 			);
 			mainGroup = DE0003000000000000000001;
+			packageReferences = (
+				DE000C000000000000000001 /* XCRemoteSwiftPackageReference "SQLCipher.swift" */,
+			);
 			productRefGroup = DE0003000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -494,45 +482,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		53C67C63287D0669A870EF1B /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-iosApp-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		BB8468E21AC91CF6C1544B7E /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 		DE0004000000000000000001 /* Build Deferno framework (Kotlin/Native) */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -715,7 +664,6 @@
 		};
 		DE0008000000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DC7FD732D8796105D096EC7A /* Pods-iosApp.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
@@ -938,6 +886,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DE000C000000000000000001 /* XCRemoteSwiftPackageReference "SQLCipher.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sqlcipher/SQLCipher.swift";
+			requirement = {
+				kind = exactVersion;
+				version = 4.19.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DE000D000000000000000001 /* SQLCipher */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DE000C000000000000000001 /* XCRemoteSwiftPackageReference "SQLCipher.swift" */;
+			productName = SQLCipher;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DE0006000000000000000001 /* Project object */;
 }
