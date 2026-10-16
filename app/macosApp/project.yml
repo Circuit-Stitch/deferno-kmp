@@ -1,10 +1,13 @@
 # XcodeGen spec for the native macOS app (ADR-0029). Generates macosApp.xcodeproj from this
-# declarative source of truth — cleaner + less error-prone than a hand-edited .pbxproj. SQLCipher (for
-# the encrypted per-Account DB, ADR-0029 Phase 1b / #188) is linked via **CocoaPods** — the SAME pod
-# app/iosApp uses (Zetetic's stock `SQLCipher ~> 4.6` amalgamation), so the shared SQLiter driver's
-# `sqlite3_*` symbols (including the deprecated ones it still references) resolve with no shim. See the
-# Podfile. Because the pod integrates by editing the generated project, the build is a two-step flow:
-#   cd app/macosApp && xcodegen generate && pod install     # then build the .xcworkspace
+# declarative source of truth — cleaner + less error-prone than a hand-edited .pbxproj.
+#
+# SQLCipher backs the encrypted per-Account DB (ADR-0009, ADR-0029 Phase 1b / #188). It arrives as a
+# Swift package — Zetetic's official one, the same package app/iosApp uses at the same pinned version,
+# so macOS and iOS link an identical SQLCipher build. See `packages:` below.
+#
+# Nothing layers itself on top of the generated project any more, so generating IS the whole setup:
+#   cd app/macosApp && xcodegen generate     # then build macosApp.xcodeproj
+# There is no .xcworkspace. CocoaPods created it; Swift Package Manager needs none.
 name: macosApp
 options:
   bundleIdPrefix: com.circuitstitch.deferno
@@ -33,21 +36,22 @@ configs:
   ProdDebug: debug
   Release: release
 
-# Machine-local signing, applied as the PROJECT-level base config (the slot CocoaPods leaves alone — it
-# owns each target's base config, the Pods xcconfig). Carrying the identity here means Xcode-GUI builds
-# pick up the same stable signature as `build.sh`, so the login-Keychain ACL on the bearer token survives
-# rebuilds and stops re-prompting (see Local.xcconfig). The file is gitignored; build.sh seeds an ad-hoc
-# default ("-") when it's absent, so a fresh clone / CI still generates + builds with no Dev account.
+# Machine-local signing, applied as the PROJECT-level base config. Carrying the identity here means
+# Xcode-GUI builds pick up the same stable signature as `build.sh`, so the login-Keychain ACL on the
+# bearer token survives rebuilds and stops re-prompting (see Local.xcconfig). The file is gitignored;
+# build.sh seeds an ad-hoc default ("-") when it's absent, so a fresh clone / CI still generates +
+# builds with no Dev account. Nothing competes for the target-level base config slot now that the
+# CocoaPods xcconfigs are gone, so this one value reaches every target.
 # Every configuration gets it — a config with no entry would build unsigned-by-default and re-prompt.
 configFiles:
   Debug: Local.xcconfig
   ProdDebug: Local.xcconfig
   Release: Local.xcconfig
 
-# Give Local.xcconfig a parented file reference in the navigator. Without this, XcodeGen leaves the
-# config file in an orphan group (no parent), and `pod install`'s xcodeproj walk throws
-# "[Xcodeproj] Consistency issue: no parent for object Local.xcconfig". Listing it here dedups the
-# base-config reference onto a properly-grouped one, so CocoaPods can resolve its path.
+# Give Local.xcconfig a parented file reference in the navigator, so it is editable in Xcode instead of
+# sitting in an orphan group. This was also load-bearing under CocoaPods: `pod install`'s xcodeproj walk
+# threw "[Xcodeproj] Consistency issue: no parent for object Local.xcconfig" without it. That reason is
+# gone with the pods; the navigator placement is why the entry stays.
 fileGroups:
   - Local.xcconfig
 
@@ -63,7 +67,7 @@ settings:
     # The app name "Deferno" (the built product is Deferno.app, executable Deferno). This is the source
     # of CFBundleName, which the menu bar + Finder read (#189) — a partial-Info.plist CFBundleName gets
     # overwritten by GENERATE_INFOPLIST_FILE's synthesized $(PRODUCT_NAME), so it must be set here. The
-    # Xcode TARGET stays "macosApp" (so the scheme + CocoaPods `Pods-macosApp` integration are unchanged).
+    # Xcode TARGET stays "macosApp", so the scheme keeps its name.
     PRODUCT_NAME: Deferno
     # …but the Swift MODULE name must NOT become "Deferno": the Kotlin framework is also named `Deferno`,
     # so a "Deferno" app module shadows it — `import Deferno` self-imports and every framework symbol
@@ -94,19 +98,27 @@ settings:
     # Signing identity is NOT set here — it lives in the project-level Local.xcconfig (`configFiles`
     # above) so the same stable identity reaches Xcode-GUI builds, not just build.sh. A setting here would
     # OVERRIDE that base config, so CODE_SIGN_IDENTITY must stay out of this block. REQUIRED/ALLOWED stay:
-    # they gate only whether the app target signs (the static Pods/SidecarKit targets keep ALLOWED = NO),
+    # they gate only whether the app target signs (the static SidecarKit targets keep ALLOWED = NO),
     # and the ad-hoc-by-default path (no Dev account) is preserved by build.sh's seeded Local.xcconfig.
     CODE_SIGNING_REQUIRED: NO
     CODE_SIGNING_ALLOWED: YES
     # The shared Kotlin/Native static `Deferno.framework`, staged by the gradle pre-build phase into
     # $(SRCROOT)/build/xcode-frameworks (the iosApp pattern). Linked, plus the system libs the linked
-    # graph references: Security (Keychain vault), Network (NWPathMonitor). The `sqlite3_*` symbols the
-    # statically-linked SQLiter driver references are NOT satisfied by the system `-lsqlite3` (no codec) —
-    # the CocoaPods `SQLCipher` (Podfile) is their SOLE provider (its link flags flow in via $(inherited)
-    # from the Pods xcconfig), so there's exactly one sqlite implementation (no duplicate symbols) plus
-    # real `PRAGMA key` encryption-at-rest (ADR-0009). The SQLiter cinterop's own system-sqlite linker opt
-    # is not propagated into the app, so SQLCipher cleanly satisfies the undefined symbols (exactly as
-    # app/iosApp does — and the stock pod still ships the deprecated `sqlite3_*` the cinterop wraps).
+    # graph references: Security (Keychain vault), Network (NWPathMonitor).
+    #
+    # NEVER ADD `-lsqlite3` HERE. The statically-linked SQLiter driver references `sqlite3_*` and links no
+    # sqlite implementation of its own. Its cinterop's system-sqlite linker option is not propagated into
+    # the app. The app therefore supplies the one implementation, and it has to be SQLCipher: the system
+    # sqlite has no codec, so a build that links it opens the DB UNENCRYPTED rather than failing (ADR-0009).
+    #
+    # SQLCipher is that sole provider, and it is deliberately not named in this list. Xcode links it via
+    # the app target's package product dependency (`packages:` above, `dependencies:` below). The package
+    # ships a dynamic SQLCipher.framework, so two-level namespace binds every `sqlite3_*` import in the app
+    # to that framework by name — the system sqlite cannot substitute for it at load time, and there is no
+    # second implementation to produce duplicate symbols. The framework also exports the deprecated entry
+    # points the SQLiter cinterop wraps (sqlite3_trace, sqlite3_profile, sqlite3_expired,
+    # sqlite3_aggregate_count, sqlite3_transfer_bindings, sqlite3_global_recover, sqlite3_thread_cleanup,
+    # sqlite3_memory_alarm), so the link needs no shim. app/iosApp links the same package the same way.
     FRAMEWORK_SEARCH_PATHS:
       - "$(inherited)"
       # The CONFIG-QUALIFIED path, and ONLY that one — it is where the Gradle task actually stages:
@@ -181,12 +193,25 @@ settings:
       # Neither seed slot is mentioned, so a Release build seeds nothing regardless of any local
       # Secrets.xcconfig — by saying nothing rather than by remembering to say "" (#282, ADR-0012/0047).
 
-# The macOS Sidecar Helper's Swift package, linked as a LOCAL SwiftPM dependency (ADR-0029 Phase 2) so
-# the app reuses SpeechTranscriber / SidecarPermissions in-process. Path is relative to this spec.
-# (SQLCipher is CocoaPods, not SwiftPM — see the Podfile + the OTHER_LDFLAGS note above.)
+# The app's two Swift packages.
+#
+# SidecarKit is the macOS Sidecar Helper's own package, linked from a LOCAL path (ADR-0029 Phase 2) so
+# the app reuses SpeechTranscriber / SidecarPermissions in-process. The path is relative to this spec.
+#
+# SQLCipher is Zetetic's official package — the encrypted-SQLite provider for the per-Account DB
+# (ADR-0009). app/iosApp pins the same version, so both Apple apps link an identical SQLCipher build.
+#
+# The version is EXACT rather than a range, and that is deliberate. This project is generated and
+# gitignored, so the Package.resolved xcodebuild writes inside it is gitignored too and pins nothing
+# across clones. Podfile.lock used to do that job; SwiftPM's equivalent lock has nowhere to live here.
+# An exact pin is what makes a dev machine and a CI runner resolve the same SQLCipher. Bump it here and
+# in app/iosApp's project.pbxproj together — the two versions must not drift.
 packages:
   SidecarKit:
     path: ../../helpers/macos
+  SQLCipher:
+    url: https://github.com/sqlcipher/SQLCipher.swift
+    exactVersion: 4.19.0
 
 targets:
   macosApp:
@@ -197,6 +222,11 @@ targets:
     dependencies:
       - package: SidecarKit
         product: SidecarKit
+      # A binary target holding a dynamic SQLCipher.framework. Xcode links it and embeds it into
+      # Deferno.app/Contents/Frameworks automatically. No Swift file imports SQLCipher: its only consumer
+      # is the Kotlin framework's SQLiter driver, through the undefined `sqlite3_*` symbols it carries.
+      - package: SQLCipher
+        product: SQLCipher
     preBuildScripts:
       - name: "Build shared Kotlin framework"
         basedOnDependencyAnalysis: false
@@ -247,7 +277,8 @@ targets:
         # Do NOT re-link the shared Kotlin framework here. It is a *static* framework, so linking it
         # into the bundle as well as the host would load a second copy of the Kotlin/Native runtime and
         # duplicate every Obj-C class in the test process. BUNDLE_LOADER already resolves those symbols
-        # (and SQLCipher's) against the host executable, exactly as iosAppTests does.
+        # against the host executable, exactly as iosAppTests does. The host has also already loaded
+        # SQLCipher.framework from its own bundle by the time the test bundle is injected.
         OTHER_LDFLAGS: ""
         # The app's Obj-C bridging header (DFNExceptionCatcher) and its partial Info.plist (URL scheme,
         # single-instance keys) describe the *application*; a test bundle wants neither. Clearing

@@ -28,23 +28,24 @@ macOS target (ADR-0029).
 
 ```sh
 cd app/macosApp
-./build.sh                          # xcodegen generate + pod install + xcodebuild (Debug = Staging)
+./build.sh                          # xcodegen generate + xcodebuild (Debug = Staging)
 ./build.sh --open                   # …then launch the built .app
 ./build.sh --test                   # …run the macosAppTests suite instead (quit a running Deferno first)
 ./build.sh --config ProdDebug --open  # build + launch the Production-backed debuggable install
 ```
 
-XcodeGen generates the `.xcodeproj`; CocoaPods (SQLCipher) layers a `.xcworkspace` on top, so it's a
-two-step setup — `pod install` must follow every `xcodegen generate` (regeneration drops the pod
-integration), and the **workspace** is what gets built. `build.sh` wraps exactly that; the equivalent
-by hand:
+XcodeGen generates the `.xcodeproj` and that project is what gets built. SQLCipher is a Swift package,
+so `xcodebuild` resolves it itself and there is no second integration step and no `.xcworkspace`.
+`build.sh` wraps the two commands; the equivalent by hand:
 
 ```sh
 xcodegen generate                                              # regenerate macosApp.xcodeproj from project.yml
-pod install                                                    # integrate SQLCipher → macosApp.xcworkspace
-xcodebuild -workspace macosApp.xcworkspace -scheme macosApp \
-  -configuration Debug -destination 'platform=macOS,arch=arm64' build
+xcodebuild -project macosApp.xcodeproj -scheme macosApp \
+  -configuration Debug -destination 'platform=macOS,arch=arm64' \
+  -clonedSourcePackagesDirPath build/sourcePackages build
 ```
+
+The first build downloads the SQLCipher package, so it needs network access.
 
 ## Build configurations — the three environment variants (ADR-0047)
 
@@ -68,8 +69,9 @@ dogfood daily driver. Pick one with `./build.sh --config <Debug|ProdDebug|Releas
 
 `ProdDebug` pins `KOTLIN_FRAMEWORK_BUILD_TYPE = debug` in `project.yml`: the Kotlin Gradle plugin infers
 the framework build type from the configuration NAME and only recognises literally `Debug`/`Release`, so
-without the pin a third configuration links the wrong build type. The Podfile maps it too
-(`project 'macosApp', 'ProdDebug' => :debug`) so CocoaPods doesn't treat the unknown name as a release.
+without the pin a third configuration links the wrong build type. (CocoaPods needed its own mapping for
+the same reason; SwiftPM has no per-configuration mapping, so the pin in `project.yml` is now the only
+place the third configuration has to be spelled out.)
 
 **Dev-PAT seeding** (ADR-0012) is **opt-in per configuration**, and the two secrets never cross. Put
 either key in a gitignored `Secrets.xcconfig` next to `Local.xcconfig` (which `#include?`s it):
@@ -145,14 +147,33 @@ seeding skips the typing: the committed `macosApp/Info.plist` carries `DevAccoun
 as build-setting substitutions, fed per configuration from the gitignored `Local.xcconfig` ←
 `Secrets.xcconfig` chain — see [Build configurations](#build-configurations--the-three-environment-variants-adr-0047).
 
-- **SQLCipher via CocoaPods** — the SAME pod `app/iosApp` uses (Zetetic's stock `SQLCipher ~> 4.6`), so
-  macOS and iOS link an identical, proven build. It exports the standard `sqlite3_*` symbols the shared
-  SQLiter driver references (including the deprecated ones the cinterop still wraps but never calls), so
-  there's no shim. It is the **sole** sqlite provider (the app links no `-lsqlite3`, so no duplicate
-  symbols) plus real `PRAGMA key` encryption-at-rest (ADR-0009) — so the moment an Account goes active,
-  the encrypted per-Account DB opens. (SwiftPM's skiptools/swift-sqlcipher was tried first per #188 but
-  its amalgamation drops deprecated APIs under `SQLITE_OMIT_DEPRECATED`, which would have needed link-time
-  stubs — CocoaPods avoids that, matching iOS exactly. SidecarKit stays a local SwiftPM package.)
+- **SQLCipher via Swift Package Manager** — Zetetic's official
+  [SQLCipher.swift](https://github.com/sqlcipher/SQLCipher.swift), pinned to the same exact version
+  `app/iosApp` pins, so macOS and iOS link an identical build. It exports the standard `sqlite3_*`
+  symbols the shared SQLiter driver references, including the deprecated ones the cinterop wraps but
+  never calls, so there is no shim. It is the **sole** sqlite provider (the app links no `-lsqlite3`, so
+  no duplicate symbols) plus real `PRAGMA key` encryption-at-rest (ADR-0009) — so the moment an Account
+  goes active, the encrypted per-Account DB opens.
+
+  Which SQLCipher package matters. `skiptools/swift-sqlcipher` was tried first per #188 and rejected:
+  its amalgamation drops deprecated APIs under `SQLITE_OMIT_DEPRECATED`, so the SQLiter cinterop's
+  wrappers fail to link without hand-written stubs. Zetetic's package keeps them
+  (`sqlite3_trace`, `sqlite3_profile`, `sqlite3_expired`, `sqlite3_aggregate_count`,
+  `sqlite3_transfer_bindings`, `sqlite3_global_recover`, `sqlite3_thread_cleanup`,
+  `sqlite3_memory_alarm`), which is what made the move off CocoaPods possible.
+
+  The package's product is a binary target holding a DYNAMIC `SQLCipher.framework`. Xcode links it and
+  embeds it in `Deferno.app/Contents/Frameworks`. Two-level namespace binds every `sqlite3_*` import in
+  the app to that framework by name, so the system SQLite — which has no codec — cannot substitute for
+  it at load time. To confirm on a built app, read its linked symbol table; every line must say
+  `SQLCipher`, and a line naming `libsqlite3` means the database is not encrypted:
+
+  ```sh
+  nm -m <BUILT_PRODUCTS_DIR>/Deferno.app/Contents/MacOS/Deferno \
+    | grep '_sqlite3_' | grep undefined | sed -E 's/.*\(from ([^)]*)\).*/\1/' | sort | uniq -c
+  ```
+
+  SidecarKit stays a local SwiftPM package; the two packages sit side by side in `project.yml`.
 - The custom URL scheme (`com.circuitstitch.deferno`, for the OAuth redirect fallback / #189) is registered
   via a partial `macosApp/Info.plist` merged into the generated one (`GENERATE_INFOPLIST_FILE` stays YES).
 - Ad-hoc code signing for local dev; TCC/notarization signing is a Mac-session concern kept out of git
@@ -160,7 +181,7 @@ as build-setting substitutions, fed per configuration from the gitignored `Local
 
 ## App Store export compliance (App Encryption Documentation)
 
-`macosApp` links the same `SQLCipher ~> 4.6` pod as `app/iosApp` and shares `core/secure`, so its
+`macosApp` links the same pinned SQLCipher package as `app/iosApp` and shares `core/secure`, so its
 cryptographic surface is identical and so is its answer to Apple's *"What type of encryption
 algorithms does your app implement?"* prompt: the **second** option, *"Standard encryption algorithms
 instead of, or in addition to, using or accessing the encryption within Apple's operating system."*

@@ -44,7 +44,7 @@ app/
     src/test/kotlin/…/{ui,demo,shell}/ ← Compose UI + Roborazzi screenshot tests + shell tests; demo/ holds the in-memory repository test fakes
     src/main/res/                     ← resources (strings, themes, adaptive launcher icons: flame foreground + monochrome)
   desktopApp/                         ← Compose Desktop (JVM) app — the cross-platform desktop target (ADR-0003/0017). On the real JVM DI graph (AppComponent + per-Account sessions, like Android) over the shared `app/shell` shell, with a desktop View for every Destination at Tier-A feature parity with Android (PR #288): most screens render the same commonMain Views the Android shell uses (Plan/Task-detail/Activity/Inbox/Search/New/Feedback). Deferred (platform-blocked): Brain dump dictation (needs a JVM speech/inference engine) + the Assistant chat (needs a JVM SSE transport). Browser-OAuth sign-in (ADR-0026) isn't wired against staging yet — a dev `run` exposes the paste-PAT fallback
-  macosApp/                           ← native macOS SwiftUI app (ADR-0029) — DISTINCT from desktopApp: a bespoke Kotlin/Native `macosArm64` Deferno.framework (twin of iosApp) linked by a SwiftUI/AppKit Xcode app, with in-process SidecarKit capabilities + Apple Intelligence inference. Built via `app/macosApp/build.sh` (XcodeGen + CocoaPods + xcodebuild), not `:app:desktopApp`
+  macosApp/                           ← native macOS SwiftUI app (ADR-0029) — DISTINCT from desktopApp: a bespoke Kotlin/Native `macosArm64` Deferno.framework (twin of iosApp) linked by a SwiftUI/AppKit Xcode app, with in-process SidecarKit capabilities + Apple Intelligence inference. Built via `app/macosApp/build.sh` (XcodeGen + xcodebuild), not `:app:desktopApp`
   iosApp/                             ← iOS umbrella framework (Kotlin) + Xcode project (added on macOS)
   shared-l10n/                        ← the ONE Apple string catalog `Localizable.xcstrings` (iosApp + macosApp hold symlinks to it) + `l10n-parity-overrides.txt`, the escape hatch for `L10nCatalogParityTest` (see Localization below)
 helpers/                              ← native per-OS Sidecar Helper processes (NOT Gradle modules — built/signed on their OS)
@@ -102,7 +102,7 @@ iOS-only framework and stays a hand-written build file.
 ./gradlew :app:androidApp:connectedAndroidTest  # instrumented tests (needs a device/emulator)
 ./gradlew :app:androidApp:lint             # Android Lint
 ./gradlew :app:desktopApp:run              # run the desktop (JVM) Compose app
-(cd app/macosApp && ./build.sh --open)     # build + run the native macOS SwiftUI app (Debug = Staging; macOS only; XcodeGen+CocoaPods+xcodebuild)
+(cd app/macosApp && ./build.sh --open)     # build + run the native macOS SwiftUI app (Debug = Staging; macOS only; XcodeGen+xcodebuild)
 (cd app/macosApp && ./build.sh --config ProdDebug --open)  # macOS Production + debuggable (…deferno.macos.debug) — Claude/prod repro
 ./gradlew :app:macosApp:linkDebugFrameworkMacosArm64  # just relink the Kotlin/Native framework for app/macosApp
 ```

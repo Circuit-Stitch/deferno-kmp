@@ -1,13 +1,13 @@
 #!/bin/sh
 # Builds (and optionally launches) the native macOS app (ADR-0029, #188).
 #
-# XcodeGen generates the .xcodeproj from project.yml and CocoaPods (SQLCipher) layers a .xcworkspace on
-# top — and regenerating the project drops the pod integration, so `pod install` must follow every
-# `xcodegen generate`. This script runs that two-step setup, then builds the workspace. The shared Kotlin
-# framework is built by the project's own pre-build phase (`embedAndSignAppleFrameworkForXcode`); to
-# iterate on the Kotlin side alone, run `./gradlew :app:macosApp:linkDebugFrameworkMacosArm64` instead.
+# XcodeGen generates the .xcodeproj from project.yml, and this script builds that project. SQLCipher is
+# a Swift package, so xcodebuild resolves it itself — there is no second integration step and no
+# .xcworkspace. The shared Kotlin framework is built by the project's own pre-build phase
+# (`embedAndSignAppleFrameworkForXcode`); to iterate on the Kotlin side alone, run
+# `./gradlew :app:macosApp:linkDebugFrameworkMacosArm64` instead.
 #
-#   ./build.sh           # generate + pod install + build
+#   ./build.sh           # generate + build
 #   ./build.sh --open    # …then launch the built .app
 #   ./build.sh --test    # …run the macosAppTests suite instead of a plain build (QUIT a running Deferno
 #                        #  first — the app hosts the tests and refuses a second instance)
@@ -25,16 +25,17 @@
 #
 #   ./build.sh --config ProdDebug --open    # build + launch the prod-repro install
 #
-# Requires xcodegen + cocoapods (`brew install xcodegen cocoapods`).
+# Requires xcodegen (`brew install xcodegen`). The first build needs network access: xcodebuild clones
+# the SQLCipher package into build/sourcePackages.
 set -eu
 
 cd "$(dirname "$0")"
 
-WORKSPACE=macosApp.xcworkspace
+PROJECT=macosApp.xcodeproj
 SCHEME=macosApp
 DESTINATION='platform=macOS,arch=arm64'
 
-# Parse EVERY flag ONCE, up front — a typo must fail BEFORE the minutes of xcodegen + pod install below.
+# Parse EVERY flag ONCE, up front — a typo must fail BEFORE the minutes of xcodegen + xcodebuild below.
 # `--test` swaps the plain build for the scheme's Test action: it builds the app AND the macosAppTests
 # bundle, then runs the suite inside the app host. Same action .github/workflows/macos.yml gates on, so a
 # green `./build.sh --test` locally is the same signal CI reports.
@@ -78,16 +79,16 @@ fi
 
 # Validate against the three configurations project.yml declares. Worth an explicit check: xcodebuild
 # accepts an unknown -configuration and fails deep inside the build with a far less obvious message, and
-# by then xcodegen + pod install have already run.
+# by then xcodegen has already run.
 case "$CONFIGURATION" in
   Debug|ProdDebug|Release) ;;
   *) echo "unknown configuration: $CONFIGURATION (expected Debug, ProdDebug or Release)" >&2; exit 2 ;;
 esac
 
 # Machine-local signing (gitignored Local.xcconfig) is wired as the PROJECT-level base config in
-# project.yml (`configFiles`) — the slot CocoaPods leaves alone — so its identity reaches Xcode-GUI builds
-# too, not just this script. A stable signature keeps the login-Keychain ACL on the bearer token across
-# rebuilds and stops the re-prompt (see Local.xcconfig). XcodeGen errors if the referenced file is
+# project.yml (`configFiles`), so its identity reaches Xcode-GUI builds too, not just this script. A
+# stable signature keeps the login-Keychain ACL on the bearer token across rebuilds and stops the
+# re-prompt (see Local.xcconfig). XcodeGen errors if the referenced file is
 # missing, so seed an ad-hoc default ("-") when absent: a fresh clone / CI then generates + builds with no
 # Dev account, exactly as before. An existing Local.xcconfig is never touched.
 #
@@ -105,9 +106,6 @@ fi
 echo "==> xcodegen generate"
 xcodegen generate
 
-echo "==> pod install"
-pod install
-
 # QUIT a running Deferno first: the tests are hosted by the real app, and Info.plist sets
 # LSMultipleInstancesProhibited, so LaunchServices refuses the test host while another instance is up —
 # surfacing as "Could not launch macosAppTests", which reads like a build/signing problem but isn't.
@@ -122,8 +120,11 @@ if [ "$ACTION" = test ] && pgrep -x Deferno >/dev/null 2>&1; then
 fi
 
 echo "==> xcodebuild ($SCHEME, $CONFIGURATION, $ACTION)"
-xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" -destination "$DESTINATION" "$ACTION"
+# -clonedSourcePackagesDirPath keeps the SQLCipher checkout inside app/macosApp/build (gitignored)
+# instead of the shared DerivedData, so `rm -rf build` really does reset this app to a cold state.
+xcodebuild -project "$PROJECT" -scheme "$SCHEME" \
+  -configuration "$CONFIGURATION" -destination "$DESTINATION" \
+  -clonedSourcePackagesDirPath build/sourcePackages "$ACTION"
 
 if [ "$OPEN" = yes ]; then
   echo "==> open"
@@ -136,7 +137,7 @@ if [ "$OPEN" = yes ]; then
   # two unset variables concatenate to — a Finder window at the root, and the script still exits 0.
   # `set -e` catches the failure here instead, because an assignment carries its substitution's status.
   # (POSIX sh, so no `set -o pipefail`: /bin/sh is bash here but the shebang does not promise it.)
-  SETTINGS=$(xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" \
+  SETTINGS=$(xcodebuild -project "$PROJECT" -scheme "$SCHEME" \
     -configuration "$CONFIGURATION" -showBuildSettings)
   APP=$(printf '%s\n' "$SETTINGS" \
     | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{d=$2} / FULL_PRODUCT_NAME /{n=$2} END{if (d != "" && n != "") print d"/"n}')

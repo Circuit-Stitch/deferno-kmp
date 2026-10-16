@@ -1,8 +1,8 @@
-// Debug base configuration for the iosApp target.
+// Base configuration for the iosApp target's Debug and ProdDebug configurations.
 //
-// It wraps CocoaPods' generated Debug xcconfig (so all pod build settings still apply — keeping this
-// as the base config is what stops `pod install` from complaining) and then pulls in an optional,
-// git-ignored `Secrets.xcconfig` for machine-local dev values that must never be committed.
+// It pulls in an optional, git-ignored `Secrets.xcconfig` for machine-local dev values that must never
+// be committed. It used to wrap CocoaPods' generated Debug xcconfig as well; SQLCipher is a Swift
+// package now, so there is no pod xcconfig to include and this file carries only the dev secret.
 //
 // The only such value today is DEV_STAGING_TOKEN: the dev Personal Access Token that
 // `DefernoRoot.seedDevAccounts()` reads from Info.plist (`DevStagingToken = $(DEV_STAGING_TOKEN)`) to
@@ -13,8 +13,6 @@
 //     DEV_STAGING_TOKEN = <your staging PAT>
 // then rebuild. Absent the file (CI, fresh clone, release), the default below leaves the token empty,
 // so nothing is seeded.
-
-#include "Pods/Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"
 
 // Empty default — overridden by Secrets.xcconfig when present (later assignment wins).
 DEV_STAGING_TOKEN =
